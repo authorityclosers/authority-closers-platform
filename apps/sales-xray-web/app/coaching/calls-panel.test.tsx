@@ -1,8 +1,8 @@
-import { act } from "react";
+import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CallsPanel } from "./calls-panel";
+import { CallsPanel, type CallsPanelHandle } from "./calls-panel";
 import type { CallSummary, ProgressPoint } from "./coaching-client";
 import { CallsOpenReports, TheirCoaching } from "./coaching-voice";
 
@@ -41,8 +41,92 @@ const button = (name: string) =>
     (control) => control.textContent === name,
   )!;
 const links = () => [...host.querySelectorAll<HTMLAnchorElement>("li a")];
+const findCall = () =>
+  host.querySelector<HTMLInputElement>('input[type="search"]')!;
+const searchFor = async (query: string) => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(findCall(), query);
+    findCall().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+};
 
 describe("calls on the current skill", () => {
+  it("finds a call beyond the compact history and combines name and saved-skill filters without changing shared Report links", async () => {
+    const calls = Array.from({ length: 10 }, (_, index) => call(index + 1));
+    calls[8] = { ...call(9, "pending"), call_label: "Meera · चर्चा" };
+    calls[9] = { ...call(10), call_label: "Meera · Follow-up" };
+    await act(async () =>
+      root.render(
+        <TheirCoaching.Provider value>
+          <CallsOpenReports.Provider value>
+            <CallsPanel
+              calls={calls}
+              focusLabel="Explore the consequence"
+              progress={[point(1, "suggested"), point(10, "no_suggestion")]}
+            />
+          </CallsOpenReports.Provider>
+        </TheirCoaching.Provider>,
+      ),
+    );
+    expect(findCall().getAttribute("aria-controls")).toBe(
+      host.querySelector('[aria-label="Their recent calls"]')!.parentElement!
+        .id,
+    );
+    await act(async () => button("Show all 10 calls").click());
+    await searchFor("  mEeRa  ");
+    expect(links().map((link) => link.textContent)).toEqual([
+      "Meera · चर्चा",
+      "Meera · Follow-up",
+    ]);
+    expect(links().map((link) => link.getAttribute("href"))).toEqual([
+      `/analysis/calls/${call(9).submission_id}`,
+      `/analysis/calls/${call(10).submission_id}`,
+    ]);
+    expect(host.querySelector("[data-expanded]")).toBeNull();
+    expect(host.textContent).toContain("Analysing…");
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("2 calls");
+    await act(async () => button("On this skill").click());
+    expect(links()).toHaveLength(1);
+    expect(host.textContent).toContain("Skill used, nothing to fix");
+    await searchFor("missing call");
+    expect(links()).toHaveLength(0);
+    expect(host.textContent).toContain("No matching calls");
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("0 calls");
+    await act(async () => button("Clear search").click());
+    expect(findCall().value).toBe("");
+    expect(document.activeElement).toBe(findCall());
+    expect(button("On this skill").getAttribute("aria-pressed")).toBe("true");
+    expect(links()).toHaveLength(2);
+    await act(async () => button("All calls").click());
+    await searchFor("चर्चा");
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toBe("Meera · चर्चा");
+  });
+
+  it("clears a prior search when the progress shortcut opens saved skill calls", async () => {
+    const ref = createRef<CallsPanelHandle>();
+    await act(async () =>
+      root.render(
+        <CallsPanel
+          ref={ref}
+          calls={Array.from({ length: 10 }, (_, index) => call(index + 1))}
+          focusLabel="Explore the consequence"
+          progress={[point(1, "suggested"), point(10, "no_suggestion")]}
+        />,
+      ),
+    );
+    await searchFor("missing call");
+    expect(links()).toHaveLength(0);
+    await act(async () => ref.current!.showSkill());
+    expect(findCall().value).toBe("");
+    expect(button("On this skill").getAttribute("aria-pressed")).toBe("true");
+    expect(links()).toHaveLength(2);
+    expect(document.activeElement).toBe(host.querySelector("#coaching-calls"));
+  });
+
   it("uses saved progress, excludes no-opportunity/unready/missing calls and preserves shared Report links", async () => {
     await act(async () =>
       root.render(

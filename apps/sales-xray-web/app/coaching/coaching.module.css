@@ -680,6 +680,16 @@
   flex-basis: 100%;
 }
 
+.callSearch {
+  flex: 1 1 220px;
+}
+
+@media (max-width: 600px) {
+  .callSearch {
+    flex-basis: 100%;
+  }
+}
+
 /* Segmented's inset is visual; each call filter keeps the full tap floor. */
 .callFilter button {
   min-height: var(--sx-control-h);
