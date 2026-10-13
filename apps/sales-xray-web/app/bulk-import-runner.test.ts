@@ -14,6 +14,7 @@ import {
   type ImportBatch,
 } from "./bulk-import-runner";
 import type { ImportSelection } from "./bulk-import-files";
+import { MAX_ACQUISITION_FILE_BYTES } from "./acquisition-client";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const person = "22222222-2222-4222-8222-222222222222";
@@ -88,6 +89,21 @@ function fetchWith(
 }
 
 describe("batch intake commands", () => {
+  it.each([32 * 1024 ** 2 + 1, MAX_ACQUISITION_FILE_BYTES])(
+    "keeps a confirmed %i-byte recording readable within the current upload limit",
+    (size) => {
+      const response = raw();
+      response.files[0]!.source_bytes = size;
+      response.total_bytes = size;
+      expect(readImportBatch(response)?.items[0]?.bytes).toBe(size);
+    },
+  );
+  it("refuses a file above the current upload limit", () => {
+    const response = raw();
+    response.files[0]!.source_bytes = MAX_ACQUISITION_FILE_BYTES + 1;
+    response.total_bytes = MAX_ACQUISITION_FILE_BYTES + 1;
+    expect(readImportBatch(response)).toBeNull();
+  });
   it("returns unavailable for sparse, invented or mismatched progress", () => {
     expect(readImportBatch({})).toBeNull();
     const invalid = raw();

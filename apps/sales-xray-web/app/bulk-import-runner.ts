@@ -1,4 +1,8 @@
-import { ACQUISITION, UUID } from "./acquisition-client";
+import {
+  ACQUISITION,
+  MAX_ACQUISITION_FILE_BYTES,
+  UUID,
+} from "./acquisition-client";
 import type { ImportPreview } from "./bulk-import-client";
 import type { ImportResult, ImportSelection } from "./bulk-import-files";
 import { parseProcessingPlan } from "./processing-plan-contract";
@@ -73,7 +77,7 @@ export function readImportBatch(value: unknown): ImportBatch | null {
       !sha(file.source_sha256) ||
       !Number.isSafeInteger(file.source_bytes) ||
       (file.source_bytes as number) < 1 ||
-      (file.source_bytes as number) > 32 * 1024 ** 2 ||
+      (file.source_bytes as number) > MAX_ACQUISITION_FILE_BYTES ||
       !uuid(file.upload_submission_id) ||
       (file.person_id !== null && !uuid(file.person_id)) ||
       (file.submission_id !== null && !uuid(file.submission_id)) ||
