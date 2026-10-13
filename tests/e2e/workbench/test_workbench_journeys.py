@@ -1363,6 +1363,109 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         }
 
 
+def test_fixture_team_skill_reps(browser: Browser, viewport: tuple[int, str]) -> None:
+    """A skill summary finds its current reps and clears conflicting list filters."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Skill-to-rep checks use the fictional dev fixture")
+    data = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox-team.json"
+        ).read_text()
+    )["team"]
+    skills = [
+        skill
+        for skill in data["suggestions"]
+        if any(rep["skill_id"] == skill["skill_id"] for rep in data["reps"])
+    ]
+    with _journey(browser, viewport, "team-skill-reps") as journey:
+        page = journey.page
+        journey.open("/review-fixture/coaching?data=sandbox&view=team")
+        team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
+        summary = page.get_by_role("region", name=re.compile(r"^What the team should work on"))
+        search = team.get_by_role("searchbox", name="Find a rep", exact=True)
+        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        links = team.get_by_role("list", name="Reps and their current focus").get_by_role("link")
+        expect(
+            summary.get_by_role("button", name=re.compile(r"^Find reps working on "))
+        ).to_have_count(len(skills))
+        expect(summary).to_contain_text("Find reps uses their current focus.")
+        summary.scroll_into_view_if_needed()
+        journey.snapshot("skills")
+        journey.unclipped_text(summary)
+
+        def assert_reps(skill: dict[str, object]) -> int:
+            matches = [rep for rep in data["reps"] if rep["skill_id"] == skill["skill_id"]]
+            expect(search).to_have_value("")
+            expect(search).to_be_focused()
+            expect(search).to_be_in_viewport()
+            expect(area).to_have_value(str(skill["skill_id"]))
+            expect(team.get_by_role("status")).to_have_text(f"{len(matches)} reps")
+            expect(links).to_have_count(min(8, len(matches)))
+            for index, rep in enumerate(matches[:8]):
+                expect(links.nth(index)).to_contain_text(rep["name"])
+                expect(links.nth(index)).to_contain_text(rep["focus_label"])
+                expect(links.nth(index)).to_have_attribute(
+                    "href", f"/coaching?person={rep['person_id']}"
+                )
+            if len(matches) > 8:
+                expect(
+                    team.get_by_role("button", name=f"Show all {len(matches)} people", exact=True)
+                ).to_have_attribute("aria-expanded", "false")
+            button = summary.get_by_role(
+                "button", name=f"Find reps working on {skill['label']}", exact=True
+            )
+            source_row = summary.get_by_role("listitem").filter(has=button)
+            expect(source_row).to_contain_text(
+                f"{skill['suggestion_calls']} of {data['analysed_calls']} calls"
+            )
+            return len(matches)
+
+        previous_count = len(data["reps"])
+        for index, skill in enumerate(skills):
+            if previous_count > 8:
+                team.get_by_role(
+                    "button", name=f"Show all {previous_count} people", exact=True
+                ).click()
+                expect(links).to_have_count(previous_count)
+            button = summary.get_by_role(
+                "button", name=f"Find reps working on {skill['label']}", exact=True
+            )
+            journey.control_target(button, f"find-{skill['skill_id']}")
+            button.click()
+            previous_count = assert_reps(skill)
+            if index == 0:
+                journey.snapshot("pointer-filtered")
+                journey.unclipped_text(team)
+                journey.control_target(links.first, "matched-rep")
+
+        last = skills[-1]
+        other = next(skill for skill in skills if skill["skill_id"] != last["skill_id"])
+        conflict = next(rep for rep in data["reps"] if rep["skill_id"] == last["skill_id"])
+        area.select_option(other["skill_id"])
+        search.fill(f"  {conflict['name'].swapcase()}  ")
+        expect(team.get_by_role("status")).to_have_text("0 reps")
+        expect(team.get_by_text("No reps match", exact=True)).to_be_visible()
+        button = summary.get_by_role(
+            "button", name=f"Find reps working on {last['label']}", exact=True
+        )
+        button.focus()
+        page.keyboard.press("Enter")
+        assert_reps(last)
+        journey.snapshot("keyboard-filtered")
+        journey.unclipped_text(team)
+        expect(page).to_have_url(re.compile(r"/review-fixture/coaching\?data=sandbox&view=team$"))
+        journey.observations[-1]["skill_reps"] = {
+            "skills_checked": len(skills),
+            "expanded_list_reset": True,
+            "conflicting_name_and_area_reset": True,
+            "pointer_and_enter_focus_search": True,
+            "current_focus_names_destinations_preserved": True,
+            "call_suggestion_counts_preserved": True,
+            "product_destinations_opened": False,
+        }
+
+
 @pytest.mark.parametrize("kind", ["review", "sandbox"])
 def test_fixture_coaching_focus_moments(
     browser: Browser, viewport: tuple[int, str], kind: str

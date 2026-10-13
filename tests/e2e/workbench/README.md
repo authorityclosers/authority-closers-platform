@@ -73,8 +73,8 @@ fully reload each choice, check Report/Document/Word and read the saved API valu
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
 path they skip. The original sixteen plus four each for format, persistence,
-quote, print, legacy-action, Team-search and supporting-moment checks, plus eight
-focus-to-moment cases, collect 52 cases. The original Report
+quote, print, legacy-action, Team-search, Team-skill and supporting-moment checks,
+plus eight focus-to-moment cases, collect 56 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -119,6 +119,12 @@ and themes. Pointer and Enter activation must reach the original evidence,
 focus its container and leave the next Tab inside that evidence. The first
 source quote/time/call destination and 32/44 px reachable controls are checked.
 No call destination, media playback or API mutation is invoked.
+
+For the Team skill-summary action, select `-k fixture_team_skill_reps`.
+Four cases exercise each Find reps action, preserve call suggestion counts,
+check the exact current-focus names/routes and reset an expanded rep list.
+Enter activation clears a conflicting name/area filter and brings keyboard
+focus back to Find a rep. No product destination is opened.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
