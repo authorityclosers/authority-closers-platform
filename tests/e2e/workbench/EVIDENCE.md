@@ -1,5 +1,21 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 03:40 UTC — secondary-lesson phone repair **4/4 PASS**,
+38.19 seconds/launcher0, unchanged `297441de` including D's `166c9940`
+CSS repair. Outer, recommended and nested takeaway summaries each measure44px
+with reachable centres in both fictional personal/rep views and light/dark.
+Source text/access/preview/mission/query and native pointer/Enter/nested
+independence/focus/next Tab remain intact. Runtime/server/font/overflow/
+refresh/media/API mutations0. No playback attempted.
+
+All12 new phone captures inspected: strike
+`shots/2026-10-13-secondary-lessons-phone-repair/`.
+Combined with the retained desktop4 pass/12 inspected step images at `df87dbc3`,
+this criterion is **8/8 final PASS** across the two explicit sources.
+Original40px target failure and initial caller setup error remain below.
+Audio startup/retry source sharing the builder commit is outside this readback;
+real playback/provider and authenticated hosted acceptance remain separate.
+
 13 October, 03:34–03:35 UTC — new secondary-lesson disclosure:
 **4 desktop PASS,1 phone FAIL,3 phone NOT RUN** (-x), unchanged `df87dbc3`,
 41.49 seconds/launcher1. Personal390/light nested “Read key takeaways”
