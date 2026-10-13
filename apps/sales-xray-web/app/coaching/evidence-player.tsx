@@ -2,7 +2,15 @@
 
 import { RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 import { ClipPlayIcon, ClipPlayState } from "../source-waveform";
 import { kitStyles } from "../ui/kit";
@@ -123,6 +131,15 @@ export function EvidencePlayer({
   const source = `/v1/conversation/acquisition/submissions/${evidence.submission_id}/source`;
   const span = `${timeLabel(evidence.start_ms)}–${timeLabel(evidence.end_ms)}`;
   const length = Math.max(1, evidence.end_ms - evidence.start_ms);
+  const stopCurrent = useCallback(() => {
+    active.current = false;
+    audio.current?.pause();
+  }, []);
+  useLayoutEffect(() => {
+    // Pause before React detaches the on-demand audio ref. Passive cleanup
+    // only cleared the flag, leaving a removed player's playback running.
+    return stopCurrent;
+  }, [stopCurrent]);
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
@@ -142,7 +159,6 @@ export function EvidencePlayer({
     return () => {
       window.removeEventListener("sx-coaching-play", stopOther);
       window.removeEventListener("sx-coaching-fold", stopFolded);
-      active.current = false;
     };
   }, [identity]);
   useEffect(() => {

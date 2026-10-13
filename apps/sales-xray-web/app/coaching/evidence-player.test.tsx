@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fictionalCoaching } from "./coaching.fixture";
@@ -262,6 +262,64 @@ describe("Evidence playback", () => {
     expect(vi.getTimerCount()).toBe(1);
     await act(async () => root.render(null));
     expect(vi.getTimerCount()).toBe(0);
+  });
+  it.each(["playing", "loading"] as const)(
+    "pauses a %s call moment before its view removes the audio",
+    async (state) => {
+      vi.useFakeTimers();
+      let resolvePlay = () => {};
+      if (state === "loading")
+        vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+          () => new Promise<void>((resolve) => (resolvePlay = resolve)),
+        );
+      await act(async () =>
+        root.render(<EvidencePlayer evidence={evidence} />),
+      );
+      const play = host.querySelector<HTMLButtonElement>("button")!;
+      await act(async () => play.click());
+      const audio = host.querySelector("audio")!;
+      await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+      expect(play.dataset.state).toBe(state);
+      await act(async () => root.render(null));
+      expect(audio.pause).toHaveBeenCalledOnce();
+      expect(host.querySelector("audio")).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+      // A late startup completion cannot bring the detached player back.
+      await act(async () => resolvePlay());
+      expect(host.textContent).toBe("");
+      await act(async () =>
+        root.render(<EvidencePlayer evidence={evidence} />),
+      );
+      expect(host.querySelector("audio")).toBeNull();
+      expect(host.querySelector("blockquote")?.textContent).toBe(
+        evidence.quote,
+      );
+      await act(async () =>
+        host.querySelector<HTMLButtonElement>("button")!.click(),
+      );
+      const next = host.querySelector("audio")!;
+      await act(async () => next.dispatchEvent(new Event("loadedmetadata")));
+      expect(next.currentTime).toBe(evidence.start_ms / 1000);
+      expect(next.getAttribute("src")).toBe(audio.getAttribute("src"));
+    },
+  );
+  it("keeps Strict Mode startup active and pauses the moment when its view closes", async () => {
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <EvidencePlayer evidence={evidence} />
+        </StrictMode>,
+      ),
+    );
+    const play = host.querySelector<HTMLButtonElement>("button")!;
+    await act(async () => play.click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    expect(play.dataset.state).toBe("playing");
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(audio.pause).not.toHaveBeenCalled();
+    await act(async () => root.render(null));
+    expect(audio.pause).toHaveBeenCalledOnce();
   });
   it("stops the previous moment when another evidence card starts", async () => {
     await act(async () =>
