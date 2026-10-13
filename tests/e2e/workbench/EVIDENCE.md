@@ -1,5 +1,21 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 00:24 UTC — Team skills/progress **4/4 PASS**, 53.77 seconds,
+launcher0, six captures per width/theme at recorded HEAD `2e4c192e`. All six
+Find reps actions preserve call counts and exact current-focus names/routes,
+reset disclosure/filters and focus search. Progress-to-call pointer/Enter
+select the saved-record filter, shorten expanded history, focus the panel and
+keep next Tab inside. Targets meet 32/44 px; no refresh/browser/server/visual
+faults. All 24 PNGs inspected/readable. Original four-case nested-locator
+failure remains in `shots/2026-10-13-team-skill-reps-0020Z/`; final receipts,
+JUnit/log/PNGs: `shots/2026-10-13-team-skill-continuation/` in the strike folder.
+Fictional UI only; product destinations and authenticated reads unexecuted.
+
+00:26 UTC post-ship original-Host health: staging web/API `e991cb3`, production
+web/API `fa846dc`, all four HTTP200. Ship log records staging/canary success
+00:21:45 and production promotion failure00:23:06. No production v0.41 claim.
+Health receipt is beside the final captures; no usable hosted context arrived.
+
 13 October, 00:05 UTC — focus-to-moments **8/8 PASS**, 37.22 seconds,
 launcher0. Personal/fictional rep at 1440/390 light/dark: pointer/Enter focus
 the saved evidence, next Tab stays inside it, first quote/time/call destination
