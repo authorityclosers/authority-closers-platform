@@ -72,7 +72,7 @@ class CustomerTerminalFailureReceipt(Snapshot):
         _uuid(self.source.recording_id, "recording id")
         require_sha256(self.duration_evidence_sha256, "duration evidence")
         require_sha256(self.failure_event_sha256, "failure event")
-        if type(self.reserved_seconds) is not int or not 1 <= self.reserved_seconds <= 6000:
+        if type(self.reserved_seconds) is not int or not 1 <= self.reserved_seconds <= 7200:
             raise ValueError("invalid reserved seconds")
         if type(self.recovery_generation) is not int or self.recovery_generation < 1:
             raise ValueError("invalid recovery generation")
