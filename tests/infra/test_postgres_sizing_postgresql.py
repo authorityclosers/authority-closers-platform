@@ -22,9 +22,11 @@ from psycopg import sql
 from sqlalchemy.engine import make_url
 
 from tests.infra.test_postgres_sizing import backup as backup_fixture
+from tests.infra.test_postgres_sizing import process_scratch as process_scratch_fixture
 from tests.infra.test_postgres_sizing import sizing, wait_for_exit
 
 backup = backup_fixture
+process_scratch = process_scratch_fixture
 
 
 class RuntimeEnvironment(dict):
@@ -63,7 +65,7 @@ except Exception:
 
 
 @pytest.fixture
-def database(backup, tmp_path):
+def database(backup, process_scratch):
     raw = (
         os.environ.get("AC_SIZING_TEST_ADMIN_URL")
         or os.environ.get("AC_TEST_DATABASE_URL")
@@ -133,13 +135,13 @@ def database(backup, tmp_path):
         connection.execute("REVOKE ALL ON SCHEMA public FROM PUBLIC")
         connection.execute("GRANT USAGE ON SCHEMA public TO ac_backup")
         connection.execute("GRANT SELECT ON ALL TABLES IN SCHEMA public TO ac_backup")
-        worker = tmp_path / "fictional_sizing_worker.py"
+        worker = process_scratch / "fictional_sizing_worker.py"
         worker.write_text(WORKER)
         test_url = url.set(database=name).render_as_string(hide_password=False)
         environment = RuntimeEnvironment(
             PATH=os.environ.get("PATH", ""), SIZING_TEST_URL=test_url, SIZING_TEST_APP=name
         )
-        yield connection, tables, [sys.executable, str(worker)], environment, tmp_path
+        yield connection, tables, [sys.executable, str(worker)], environment, process_scratch
     finally:
         if connection is not None:
             connection.close()
@@ -151,12 +153,13 @@ def database(backup, tmp_path):
 
 
 def run(database, *, seconds=60, extra=None):
-    _connection, tables, command, environment, _path = database
+    _connection, tables, command, environment, path = database
     result = sizing.bounded_process(
         command,
         sizing.fixed_sql(tables),
         {**environment, **(extra or {})},
         sizing.operation_clock() + seconds,
+        scratch=path,
     )
     return sizing.validate_output(result, tables)
 
@@ -323,6 +326,7 @@ time.sleep(20)
                     sizing.fixed_sql(tables),
                     {**environment, **extra, "SIZING_TEST_PID": str(reader_pid)},
                     deadline,
+                    scratch=path,
                 )
             wait_for_exit([int(remote_pid.read_text()), int(reader_pid.read_text())], deadline)
             if not cancel:

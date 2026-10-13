@@ -17,16 +17,26 @@ import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "infra/vps-foundation/scripts/ac-postgres-sizing.py"
+SCRIPT = ROOT / "scripts/ops/ac-postgres-sizing.py"
 SPEC = importlib.util.spec_from_file_location("ac_postgres_sizing", SCRIPT)
 assert SPEC and SPEC.loader
 sizing = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(sizing)
 SMALL_TABLES = ("alembic_version", "fictional_records")
+
+
+@pytest.fixture
+def process_scratch(tmp_path):
+    # Explicit private fictional run context; never depend on the operator's
+    # ambient Paperclip identity or scratch injection to exercise the supervisor.
+    directory = tmp_path / f"paperclip-run-fictional-{uuid4()}"
+    directory.mkdir(mode=0o700)
+    return directory
 
 
 @pytest.fixture
@@ -276,7 +286,25 @@ def test_duplicate_fields_and_unbounded_integer_are_rejected():
         sizing.validate_output(encoded(rows), SMALL_TABLES)
 
 
-def test_process_stderr_is_redacted_and_output_is_bounded(monkeypatch):
+def test_process_requires_scratch_without_ambient_context(monkeypatch, process_scratch):
+    for name in ("PAPERCLIP_RUN_ID", "PAPERCLIP_RUN_SCRATCH_DIR", "PAPERCLIP_SCRATCH_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    marker = process_scratch / "launched"
+    command = [sys.executable, "-c", "import sys;open(sys.argv[1],'w').close()", str(marker)]
+    with pytest.raises(sizing.Refusal, match="scratch_unavailable"):
+        sizing.bounded_process(command, b"", {}, sizing.operation_clock() + 3)
+    assert not marker.exists()
+    assert (
+        sizing.bounded_process(
+            command, b"", {}, sizing.operation_clock() + 3, scratch=process_scratch
+        )
+        == b""
+    )
+    assert marker.exists()
+    assert list(process_scratch.iterdir()) == [marker]  # temporary SQL input was closed/unlinked
+
+
+def test_process_stderr_is_redacted_and_output_is_bounded(monkeypatch, process_scratch):
     for code, reason in [
         ("import sys;sys.stderr.write('fictional-private-value')", "database_refused"),
         ("import sys;sys.stdout.write('x'*2048)", "output_limit"),
@@ -284,12 +312,16 @@ def test_process_stderr_is_redacted_and_output_is_bounded(monkeypatch):
         monkeypatch.setattr(sizing, "MAX_OUTPUT_BYTES", 1024)
         with pytest.raises(sizing.Refusal, match=reason) as error:
             sizing.bounded_process(
-                [sys.executable, "-c", code], b"", {}, sizing.operation_clock() + 3
+                [sys.executable, "-c", code],
+                b"",
+                {},
+                sizing.operation_clock() + 3,
+                scratch=process_scratch,
             )
         assert "fictional-private-value" not in str(error.value)
 
 
-def test_timeout_kills_descendant_even_after_leader_exit(tmp_path):
+def test_timeout_kills_descendant_even_after_leader_exit(tmp_path, process_scratch):
     marker = tmp_path / "descendant"
     code = """import os,time,sys
 child=os.fork()
@@ -301,7 +333,13 @@ else:
 """
     started = sizing.operation_clock()
     with pytest.raises(sizing.Refusal, match="total_timeout"):
-        sizing.bounded_process([sys.executable, "-c", code, str(marker)], b"", {}, started + 2)
+        sizing.bounded_process(
+            [sys.executable, "-c", code, str(marker)],
+            b"",
+            {},
+            started + 2,
+            scratch=process_scratch,
+        )
     assert sizing.operation_clock() - started < 3
     child = int(marker.read_text())
     # Wait for the kernel exit event; a killed child can briefly remain runnable.
@@ -380,7 +418,7 @@ def wait_for_exit(pids, deadline):
 
 @pytest.mark.parametrize("cancel", [False, True], ids=["delayed_start", "client_cancel"])
 def test_detached_remote_group_exits_within_shared_deadline(
-    tmp_path, monkeypatch, cancel, record_property
+    tmp_path, monkeypatch, cancel, record_property, process_scratch
 ):
     monkeypatch.setattr(sizing, "TOTAL_SECONDS", 4)  # scaled smaller, never enlarge limits
     ready_path = tmp_path / "ready"
@@ -432,6 +470,7 @@ time.sleep(20)
                     b"",
                     {},
                     deadline,
+                    scratch=process_scratch,
                 )
         if thread is not None:
             thread.join(timeout=1)
