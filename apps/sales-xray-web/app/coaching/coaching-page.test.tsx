@@ -86,7 +86,7 @@ describe("Coaching story", () => {
         expect(shortcut.getAttribute("aria-controls")).toBe(section.id);
         if (hasFocus) {
           await act(async () => button("On this skill").click());
-          expect(section.querySelectorAll("li a")).toHaveLength(1);
+          expect(section.querySelectorAll("li")).toHaveLength(1);
         }
         await act(async () => {
           Object.getOwnPropertyDescriptor(
@@ -95,7 +95,7 @@ describe("Coaching story", () => {
           )!.set!.call(search, "missing call");
           search.dispatchEvent(new Event("input", { bubbles: true }));
         });
-        expect(section.querySelectorAll("li a")).toHaveLength(0);
+        expect(section.querySelectorAll("li")).toHaveLength(0);
         await act(async () => shortcut.click());
         expect(search.value).toBe("");
         expect(document.activeElement).toBe(section);
@@ -105,8 +105,8 @@ describe("Coaching story", () => {
           "10 calls",
         );
         expect(
-          [...section.querySelectorAll("li a")].map((link) =>
-            link.getAttribute("href"),
+          [...section.querySelectorAll("li")].map((row) =>
+            row.querySelector("a")!.getAttribute("href"),
           ),
         ).toEqual(
           calls.map((call) =>
@@ -167,7 +167,10 @@ describe("Coaching story", () => {
         ),
       );
       const section = host.querySelector<HTMLElement>("#coaching-calls")!;
-      const links = () => [...section.querySelectorAll("li a")];
+      const links = () =>
+        [...section.querySelectorAll("li")].map(
+          (row) => row.querySelector("a")!,
+        );
       expect(links()).toHaveLength(10);
       const shortcut = button("See calls on this skill");
       expect(shortcut.closest("#coaching-progress")).not.toBeNull();

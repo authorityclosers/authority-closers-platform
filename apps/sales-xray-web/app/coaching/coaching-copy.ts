@@ -421,6 +421,8 @@ export const CALLS = {
   showFewer: "Show fewer calls",
   latestReady: "Latest call with coaching",
   openReport: "Open Report",
+  report: "Report",
+  reportFor: (label: string) => `Open Report for ${label}`,
   openCoaching: "Call coaching",
   seeCalls: "See calls",
   findCall: "Find a call",

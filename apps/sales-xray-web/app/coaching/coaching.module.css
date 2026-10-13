@@ -667,6 +667,12 @@
   scroll-margin-top: 80px;
 }
 
+/* Keep each saved call's full name beside its separate Report action. */
+.callTitle {
+  display: block;
+  white-space: normal;
+}
+
 .callFilter {
   display: flex;
   flex-wrap: wrap;

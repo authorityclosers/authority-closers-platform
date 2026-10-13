@@ -1,12 +1,24 @@
 "use client";
 
 import { ChevronRight, PhoneCall } from "lucide-react";
-import { useId, useImperativeHandle, useRef, useState, type Ref } from "react";
+import Link from "next/link";
+import {
+  useContext,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import { Empty, kitStyles, List, Panel, Row, Segmented } from "../ui/kit";
 import type { CallSummary, ProgressPoint } from "./coaching-client";
 import { CALLS, FOCUS, POINT_COPY, THEIR } from "./coaching-copy";
 import { callDate } from "./coaching-format";
-import { useCallHref, useTheirCoaching } from "./coaching-voice";
+import {
+  CallsOpenReports,
+  useCallHref,
+  useTheirCoaching,
+} from "./coaching-voice";
 import styles from "./coaching.module.css";
 
 /** Only retained ready calls with a saved opportunity on this focus. */
@@ -47,6 +59,7 @@ export function CallsPanel({
   const section = useRef<HTMLElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const they = useTheirCoaching();
+  const reportsOnly = useContext(CallsOpenReports);
   const callHref = useCallHref();
   const points = new Map(
     progress?.map((point) => [point.submission_id, point]),
@@ -150,7 +163,9 @@ export function CallsPanel({
                 <Row
                   key={call.submission_id}
                   icon={<PhoneCall size={15} aria-hidden="true" />}
-                  title={call.call_label}
+                  title={
+                    <span className={styles.callTitle}>{call.call_label}</span>
+                  }
                   href={
                     call.state === "ready"
                       ? callHref(call.submission_id)
@@ -170,7 +185,18 @@ export function CallsPanel({
                   ]}
                   end={
                     call.state === "ready" ? (
-                      <ChevronRight size={15} aria-hidden="true" />
+                      reportsOnly ? (
+                        <ChevronRight size={15} aria-hidden="true" />
+                      ) : (
+                        <Link
+                          className={kitStyles.button}
+                          href={`/analysis/calls/${call.submission_id}`}
+                          prefetch={false}
+                          aria-label={CALLS.reportFor(call.call_label)}
+                        >
+                          {CALLS.report}
+                        </Link>
+                      )
                     ) : null
                   }
                 />

@@ -40,7 +40,10 @@ const button = (name: string) =>
   [...host.querySelectorAll("button")].find(
     (control) => control.textContent === name,
   )!;
-const links = () => [...host.querySelectorAll<HTMLAnchorElement>("li a")];
+const links = () =>
+  [...host.querySelectorAll("li")].map(
+    (row) => row.querySelector<HTMLAnchorElement>("a")!,
+  );
 const findCall = () =>
   host.querySelector<HTMLInputElement>('input[type="search"]')!;
 const searchFor = async (query: string) => {
@@ -54,6 +57,67 @@ const searchFor = async (query: string) => {
 };
 
 describe("calls on the current skill", () => {
+  it("offers the matching Report beside ready personal and fictional calls, preserving shared and unready destinations", async () => {
+    const calls = [
+      call(1),
+      call(2, "pending"),
+      call(3, "unavailable"),
+      call(4),
+    ];
+    for (const [their, reports] of [
+      [false, false],
+      [true, false],
+      [true, true],
+    ]) {
+      await act(async () =>
+        root.render(
+          <TheirCoaching.Provider value={their}>
+            <CallsOpenReports.Provider value={reports}>
+              <CallsPanel
+                key={`${their}:${reports}`}
+                calls={calls}
+                focusLabel="Explore the consequence"
+                progress={[point(4, "suggested")]}
+              />
+            </CallsOpenReports.Provider>
+          </TheirCoaching.Provider>,
+        ),
+      );
+      const checkRows = (shown: CallSummary[]) => {
+        const rows = [...host.querySelectorAll("li")];
+        expect(rows).toHaveLength(shown.length);
+        rows.forEach((row, index) => {
+          const source = shown[index];
+          const anchors = [...row.querySelectorAll("a")];
+          const hasShortcut = source.state === "ready" && !reports;
+          expect(anchors).toHaveLength(hasShortcut ? 2 : 1);
+          expect(anchors[0].textContent).toBe(source.call_label);
+          expect(anchors[0].getAttribute("href")).toBe(
+            source.state === "ready" && !reports
+              ? `/coaching?call=${source.submission_id}`
+              : `/analysis/calls/${source.submission_id}`,
+          );
+          if (hasShortcut) {
+            expect(anchors[1].getAttribute("href")).toBe(
+              `/analysis/calls/${source.submission_id}`,
+            );
+            expect(anchors[1].getAttribute("aria-label")).toBe(
+              `Open Report for ${source.call_label}`,
+            );
+            expect(anchors[1].textContent).toBe("Report");
+          }
+        });
+      };
+      checkRows(calls);
+      await act(async () => button("On this skill").click());
+      checkRows([calls[3]]);
+      await searchFor("no matching call");
+      checkRows([]);
+      await act(async () => button("Clear search").click());
+      checkRows([calls[3]]);
+    }
+  });
+
   it("finds a call beyond the compact history and combines name and saved-skill filters without changing shared Report links", async () => {
     const calls = Array.from({ length: 10 }, (_, index) => call(index + 1));
     calls[8] = { ...call(9, "pending"), call_label: "Meera · चर्चा" };
