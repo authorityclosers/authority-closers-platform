@@ -8,6 +8,7 @@ import contextlib
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 import re
 import selectors
@@ -159,7 +160,47 @@ ROLLBACK;
     return sql.encode("ascii")
 
 
-def diagnostic_command(backup: types.ModuleType, target: Any) -> list[str]:
+def operation_clock() -> float:
+    # Linux Docker shares this kernel clock, also exposed by /proc/uptime.
+    return time.clock_gettime(time.CLOCK_BOOTTIME)
+
+
+def remote_guard(deadline: float, command: str) -> str:
+    if not math.isfinite(deadline) or deadline <= 0:
+        raise Refusal("total_timeout")
+    clock_namespace = os.readlink("/proc/self/ns/time")
+    if not re.fullmatch(r"time:\[[0-9]+\]", clock_namespace):
+        raise Refusal("clock_unavailable")
+    ticks = math.floor(deadline * 100)
+    # Recompute remaining time after transport, then watch the absolute deadline
+    # throughout execution. The relative watchdog is an additional 55s ceiling.
+    return f"""[ "$(readlink /proc/self/ns/time)" = '{clock_namespace}' ] || exit 3
+budget() {{
+ awk -v end={ticks} -v cap={REMOTE_SECONDS} 'NR == 1 {{
+   left=end/100-$1-1; if (left<=0) exit 3;
+   printf "%.2f", (left<cap ? left : cap)
+ }}' /proc/uptime
+}}
+duration=$(budget) || exit 3
+exec 3<&0
+timeout --signal=KILL "${{duration}}s" {command} <&3 &
+reader=$!
+exec 3<&-
+cleanup() {{
+ kill -KILL "-$reader" 2>/dev/null || kill -KILL "$reader" 2>/dev/null || :
+ wait "$reader" 2>/dev/null || :
+}}
+trap cleanup EXIT
+trap 'exit 3' HUP INT TERM
+while kill -0 "$reader" 2>/dev/null; do
+ budget >/dev/null || exit 3
+ sleep 0.05
+done
+wait "$reader"
+"""
+
+
+def diagnostic_command(backup: types.ModuleType, target: Any, deadline: float) -> list[str]:
     # Credentials stay inside the existing Infisical/compose runtime injection.
     # A remote watchdog is necessary: killing a Docker client alone leaves exec alive.
     return backup.compose_command(
@@ -173,9 +214,11 @@ def diagnostic_command(backup: types.ModuleType, target: Any) -> list[str]:
         "PGSERVICE PGSERVICEFILE PGOPTIONS PGPASSFILE; "
         'export PGPASSWORD="$AC_DB_BACKUP_PASSWORD"; '
         "export PGCONNECT_TIMEOUT=2 PGAPPNAME=ac-postgres-sizing; "
-        f"exec timeout --signal=KILL {REMOTE_SECONDS}s "
-        "psql --no-password --no-psqlrc --set=ON_ERROR_STOP=1 "
-        '-h 127.0.0.1 -p 5432 -U ac_backup -d "$POSTGRES_DB" -qAt -f -',
+        + remote_guard(
+            deadline,
+            "psql --no-password --no-psqlrc --set=ON_ERROR_STOP=1 "
+            '-h 127.0.0.1 -p 5432 -U ac_backup -d "$POSTGRES_DB" -qAt -f -',
+        ),
     )
 
 
@@ -187,16 +230,23 @@ def terminate_group(process: subprocess.Popen[bytes]) -> None:
 
 
 def bounded_process(
-    command: list[str], sql: bytes, environment: dict[str, str], deadline: float
+    command: list[str],
+    sql: bytes,
+    environment: dict[str, str],
+    deadline: float,
+    scratch: Path | None = None,
 ) -> bytes:
     process = None
     result = bytearray()
     try:
-        scratch = os.environ.get("PAPERCLIP_RUN_SCRATCH_DIR") or os.environ.get(
-            "PAPERCLIP_SCRATCH_DIR"
+        scratch = scratch or Path(
+            os.environ.get("PAPERCLIP_RUN_SCRATCH_DIR")
+            or os.environ.get("PAPERCLIP_SCRATCH_DIR", "")
         )
-        if not scratch or not Path(scratch).is_absolute():
+        if not scratch.is_absolute():
             raise Refusal("scratch_unavailable")
+        if deadline - operation_clock() <= 1:
+            raise Refusal("total_timeout")
         with (
             tempfile.TemporaryFile(dir=scratch) as input_file,
             selectors.DefaultSelector() as selector,
@@ -216,7 +266,7 @@ def bounded_process(
                 os.set_blocking(stream.fileno(), False)
                 selector.register(stream, selectors.EVENT_READ)
             while selector.get_map():
-                remaining = deadline - time.monotonic()
+                remaining = deadline - operation_clock()
                 if remaining <= 1:  # reserve one second for forced cleanup
                     raise Refusal("total_timeout")
                 for key, _ in selector.select(remaining - 1):
@@ -229,7 +279,7 @@ def bounded_process(
                     result.extend(chunk)
                     if len(result) > MAX_OUTPUT_BYTES:
                         raise Refusal("output_limit")
-            remaining = deadline - time.monotonic()
+            remaining = deadline - operation_clock()
             if remaining <= 1:
                 raise Refusal("total_timeout")
             if process.wait(timeout=remaining - 1) != 0:
@@ -327,7 +377,7 @@ def operation_limit() -> Iterator[float]:
     }
     previous_timer = signal.setitimer(signal.ITIMER_REAL, TOTAL_SECONDS)
     try:
-        yield time.monotonic() + TOTAL_SECONDS
+        yield operation_clock() + TOTAL_SECONDS
     finally:
         signal.setitimer(signal.ITIMER_REAL, *previous_timer)
         for signum, handler in previous.items():
@@ -373,6 +423,23 @@ def receipt(
     return data
 
 
+def validate_scratch(path: Path | None) -> Path:
+    run = os.environ.get("PAPERCLIP_RUN_ID", "")
+    if path is None or not path.is_absolute() or not re.fullmatch(r"[0-9a-f-]{36}", run):
+        raise Refusal("scratch_unavailable")
+    if (
+        path.resolve(strict=True) != path
+        or not path.is_dir()
+        or path.stat().st_mode & 0o022
+        or Path(__file__).is_symlink()
+        or Path(__file__).resolve().parent != path
+        or path.stat().st_uid != Path(__file__).stat().st_uid
+        or not any(run in p.name or run[:12] in p.name for p in (path, *path.parents))
+    ):
+        raise Refusal("scratch_unsafe")
+    return path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--environment", choices=("production", "staging"), default="production")
@@ -384,6 +451,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--read", action="store_true", help="one authorised read; default is validation only"
+    )
+    parser.add_argument(
+        "--scratch-dir", type=Path, help="run-owned script directory; required for read"
     )
     args = parser.parse_args()
     try:
@@ -399,11 +469,13 @@ def main() -> int:
             target = admit(backup, args.environment)
             measurements = None
             if args.read:
+                scratch = validate_scratch(args.scratch_dir)
                 output = bounded_process(
-                    diagnostic_command(backup, target),
+                    diagnostic_command(backup, target, deadline),
                     fixed_sql(tables),
                     backup.compose_environment(target),
                     deadline,
+                    scratch,
                 )
                 measurements = validate_output(output, tables)
                 # Refuse a release/policy switch during the observation, too.
@@ -417,7 +489,7 @@ def main() -> int:
                 tables,
                 measurements,
             )
-            if time.monotonic() >= deadline:
+            if operation_clock() >= deadline:
                 raise Refusal("total_timeout")
             sys.stdout.buffer.write(data)
         return 0

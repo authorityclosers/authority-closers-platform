@@ -10,6 +10,8 @@ import concurrent.futures
 import contextlib
 import os
 import select
+import shlex
+import shutil
 import sys
 import time
 from uuid import uuid4
@@ -20,7 +22,7 @@ from psycopg import sql
 from sqlalchemy.engine import make_url
 
 from tests.infra.test_postgres_sizing import backup as backup_fixture
-from tests.infra.test_postgres_sizing import sizing
+from tests.infra.test_postgres_sizing import sizing, wait_for_exit
 
 backup = backup_fixture
 
@@ -40,6 +42,8 @@ try:
                       application_name=os.environ['SIZING_TEST_APP'],
                       connect_timeout=2) as connection:
   connection.execute('SET ROLE ac_backup')
+  if os.environ.get('SIZING_TEST_PID'):
+   open(os.environ['SIZING_TEST_PID'],'w').write(str(os.getpid()))
   for statement in sys.stdin.read().split(';'):
    if not statement.strip(): continue
    cursor=connection.execute(statement,prepare=False)
@@ -152,7 +156,7 @@ def run(database, *, seconds=60, extra=None):
         command,
         sizing.fixed_sql(tables),
         {**environment, **(extra or {})},
-        time.monotonic() + seconds,
+        sizing.operation_clock() + seconds,
     )
     return sizing.validate_output(result, tables)
 
@@ -279,3 +283,62 @@ def test_total_timeout_closes_the_database_connection(database):
         (environment["SIZING_TEST_APP"],),
     ).fetchone()[0]
     assert active == 0
+
+
+@pytest.mark.parametrize("cancel", [False, True], ids=["transport_delay", "client_cancel"])
+def test_detached_postgres_connection_obeys_original_deadline(database, cancel, record_property):
+    connection, tables, command, environment, path = database
+    reader_pid, remote_pid = path / "reader_pid", path / "remote_pid"
+    started = sizing.operation_clock()
+    deadline = started + 4
+    with barrier(path) as (extra, _ready, _release):
+        guard = sizing.remote_guard(deadline, shlex.join(command))
+        bridge = """import os,select,subprocess,sys,time
+time.sleep(float(sys.argv[1]))
+remote=subprocess.Popen([sys.argv[2],'-euc',sys.argv[3]],stdin=sys.stdin,
+ stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+open(sys.argv[4],'w').write(str(remote.pid))
+if sys.argv[5]=='cancel':
+ fd=os.open(os.environ['SIZING_TEST_READY'],os.O_RDWR|os.O_NONBLOCK)
+ if select.select([fd],[],[],2)[0]:
+  os.read(fd,1);sys.stderr.write('fictional-client-cancelled');sys.stderr.flush()
+ os.close(fd)
+time.sleep(20)
+"""
+        try:
+            with pytest.raises(
+                sizing.Refusal, match="database_refused" if cancel else "total_timeout"
+            ):
+                sizing.bounded_process(
+                    [
+                        sys.executable,
+                        "-c",
+                        bridge,
+                        "0.5" if cancel else "1.0",
+                        shutil.which("sh"),
+                        guard,
+                        str(remote_pid),
+                        "cancel" if cancel else "wait",
+                    ],
+                    sizing.fixed_sql(tables),
+                    {**environment, **extra, "SIZING_TEST_PID": str(reader_pid)},
+                    deadline,
+                )
+            wait_for_exit([int(remote_pid.read_text()), int(reader_pid.read_text())], deadline)
+            if not cancel:
+                assert os.read(_ready, 1) == b"1", "remote read-only snapshot barrier not reached"
+            assert sizing.operation_clock() - started < 4
+            active = connection.execute(
+                "SELECT count(*) FROM pg_stat_activity WHERE application_name=%s",
+                (environment["SIZING_TEST_APP"],),
+            ).fetchone()[0]
+            assert active == 0
+            record_property("operation_bound_seconds", 4)
+            record_property(
+                "connection_and_remote_exit_seconds", sizing.operation_clock() - started
+            )
+        finally:
+            for marker in (reader_pid, remote_pid):
+                if marker.exists():
+                    with contextlib.suppress(ProcessLookupError):
+                        os.kill(int(marker.read_text()), 9)
