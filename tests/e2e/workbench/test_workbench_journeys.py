@@ -2104,6 +2104,12 @@ def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, s
         select.select_option("no_suggestion")
         verify(findings["no_suggestion"])
         section.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        listing.locator("li").last.evaluate(
+            "el => el.scrollIntoView({block: 'center', behavior: 'instant'})"
+        )
+        if journey.width == 1440:
+            for row in listing.locator("li").all():
+                expect(row).to_be_in_viewport(ratio=1)
         journey.snapshot("skill-used-no-fix")
         report = listing.get_by_role(
             "link", name=f"Open Report for {findings['no_suggestion'][0]['call_label']}", exact=True
