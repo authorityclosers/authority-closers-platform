@@ -223,9 +223,7 @@ describe("anonymous Team coaching", () => {
       "Closing",
       "Qualification",
     ]);
-    const search = host.querySelector<HTMLInputElement>(
-      'input[type="search"]',
-    )!;
+    let search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
     const setQuery = async (value: string) =>
       act(async () => {
         Object.getOwnPropertyDescriptor(
@@ -373,7 +371,39 @@ describe("anonymous Team coaching", () => {
         />,
       ),
     );
-    expect(host.querySelector("select")).toBeNull();
+    // A current skill remains findable even when absent from the historical
+    // suggestion totals. Adding its option must not invent a total or action.
+    search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    const currentAreas = host.querySelector<HTMLSelectElement>("select")!;
+    expect([...currentAreas.options].map((option) => option.value)).toEqual([
+      "all",
+      "qualification",
+      "closing_decision_management",
+    ]);
+    const totals = host.querySelector('ul[aria-label="Coaching areas"]')!;
+    expect(totals.querySelectorAll("li")).toHaveLength(1);
+    expect(totals.textContent).toContain("1 of 3 calls");
+    expect(totals.textContent).not.toContain("Closing");
+    expect(findArea("Closing & Decision Management")).toBeNull();
+    await act(async () => {
+      currentAreas.value = "closing_decision_management";
+      currentAreas.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(8);
+    expect(links().every((link) => link.textContent?.includes("Closer"))).toBe(
+      true,
+    );
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("9 reps");
+    await setQuery("  cLoSeR 9  ");
+    expect(links()).toHaveLength(1);
+    expect(links()[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[8].person_id}`,
+    );
+    await act(async () => clearFilters()!.click());
+    expect(search.value).toBe("");
+    expect(document.activeElement).toBe(search);
+    expect(currentAreas.value).toBe("all");
+    expect(links()).toHaveLength(8);
     await act(async () => findArea("Qualification").click());
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain("Asha Rao");
@@ -386,6 +416,48 @@ describe("anonymous Team coaching", () => {
       oneArea.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(links()).toHaveLength(8);
+    // No historical suggestions still permits current-focus filtering, and
+    // a rep without a known skill contributes no made-up area.
+    await act(async () =>
+      root.render(
+        <TeamCoachingStory
+          key="no-totals"
+          coaching={
+            parseTeamCoaching({
+              ...sandboxTeam,
+              suggestions: [],
+              reps: [
+                sandboxTeam.reps[0],
+                { ...sandboxTeam.reps[9], skill_id: null, focus_label: null },
+              ],
+            })!
+          }
+        />,
+      ),
+    );
+    search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    const withoutTotals = host.querySelector<HTMLSelectElement>("select")!;
+    expect([...withoutTotals.options].map((option) => option.value)).toEqual([
+      "all",
+      "closing_decision_management",
+    ]);
+    expect(host.querySelector('ul[aria-label="Coaching areas"]')).toBeNull();
+    expect(host.textContent).toContain("No team suggestions yet");
+    expect(findArea("Closing & Decision Management")).toBeNull();
+    await act(async () => {
+      withoutTotals.value = "closing_decision_management";
+      withoutTotals.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(1);
+    expect(links()[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[0].person_id}`,
+    );
+    await act(async () => clearFilters()!.click());
+    expect(withoutTotals.value).toBe("all");
+    expect(links()).toHaveLength(2);
+    expect(document.activeElement).toBe(
+      host.querySelector('input[type="search"]'),
+    );
     await act(async () => root.unmount());
     host.remove();
   });

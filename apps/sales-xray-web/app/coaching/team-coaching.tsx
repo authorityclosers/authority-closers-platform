@@ -111,8 +111,17 @@ function RepList({
       rep.name.toLocaleLowerCase().includes(name),
   );
   const visible = all ? shown : shown.slice(0, 8);
-  const areas = rows.filter((row) =>
-    reps.some((rep) => rep.skill_id === row.skill_id),
+  // Totals describe past call suggestions; named reps carry their current
+  // focus. Keep the existing option order, then include any other current
+  // skills without adding a suggestion to the totals.
+  const areas = [
+    ...new Set([
+      ...rows.map((row) => row.skill_id),
+      ...reps.map((rep) => rep.skill_id),
+    ]),
+  ].filter(
+    (skill): skill is string =>
+      skill !== null && reps.some((rep) => rep.skill_id === skill),
   );
   return (
     <Panel
@@ -135,7 +144,9 @@ function RepList({
             }}
           />
         </label>
-        {areas.length > 1 || area !== "all" ? (
+        {areas.length > 1 ||
+        (areas.length === 1 && reps.some((rep) => !rep.skill_id)) ||
+        area !== "all" ? (
           <span className={`${kitStyles.field} ${styles.repArea}`}>
             <select
               aria-label="Coaching area"
@@ -146,9 +157,9 @@ function RepList({
               }}
             >
               <option value="all">{TEAM.allAreas}</option>
-              {areas.map((row) => (
-                <option key={row.skill_id} value={row.skill_id}>
-                  {AREA[row.skill_id] ?? row.label}
+              {areas.map((skill) => (
+                <option key={skill} value={skill}>
+                  {AREA[skill] ?? "Other"}
                 </option>
               ))}
             </select>
