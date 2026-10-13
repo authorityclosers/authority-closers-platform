@@ -241,14 +241,17 @@
   gap: 6px;
 }
 .skillClips > button,
+.itemClips > button,
 .more.clipToggle {
   min-height: var(--sx-control-h, 32px);
 }
-.skillClips > button::after {
+.skillClips > button::after,
+.itemClips > button::after {
   inset: 0;
 }
 @media (pointer: coarse) {
   .skillClips > button,
+  .itemClips > button,
   .more.clipToggle {
     min-height: 44px;
   }

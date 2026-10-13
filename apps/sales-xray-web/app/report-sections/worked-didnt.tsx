@@ -2,7 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import {
   recurringIssue,
@@ -10,7 +10,7 @@ import {
 } from "../coaching/recurring-issue";
 import { useWorkspaceAccess } from "../workspace-access";
 
-import { COMMON, DEAL, WORKED_DIDNT } from "../report-copy";
+import { COMMON, DEAL, SKILLS, WORKED_DIDNT } from "../report-copy";
 import type { Item, StoryModel } from "../report-story-model";
 import { PlayChip, StoryCard, ToneDot } from "../report-visuals/visuals";
 import {
@@ -34,6 +34,9 @@ function ItemRow({
   whyLabel: string;
   onSelect?: Select;
 }) {
+  const [all, setAll] = useState(false);
+  const clipsId = useId();
+  const sources = all ? item.what.sources : item.what.sources.slice(0, 2);
   return (
     <li className={styles.item}>
       <p className={styles.itemTitle}>
@@ -49,12 +52,35 @@ function ItemRow({
           <Bullets items={item.areas} />
         </Field>
       ) : null}
-      <PlayChip
-        source={item.what.sources[0]}
-        title={item.title}
-        onSelect={onSelect}
-        label={COMMON.play}
-      />
+      {sources.length ? (
+        <div id={clipsId} className={`${styles.plays} ${styles.itemClips}`}>
+          {sources.map((source, index) => (
+            <PlayChip
+              key={`${source.segment_id}-${index}`}
+              source={source}
+              title={item.title}
+              onSelect={onSelect}
+              label={COMMON.play}
+            />
+          ))}
+        </div>
+      ) : null}
+      {item.what.sources.length > 2 ? (
+        <button
+          type="button"
+          className={`${styles.more} ${styles.clipToggle}`}
+          aria-controls={clipsId}
+          aria-expanded={all}
+          onClick={(event) => {
+            if (all) event.currentTarget.focus();
+            setAll((value) => !value);
+          }}
+        >
+          {all
+            ? SKILLS.showFewerClips
+            : SKILLS.showAllClips(item.what.sources.length)}
+        </button>
+      ) : null}
       {item.why ? (
         <Field label={whyLabel}>
           <p className={styles.line}>
