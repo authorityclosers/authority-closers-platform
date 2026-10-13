@@ -247,6 +247,9 @@ function ClipCard({
       .play()
       .then(() => {
         if (current()) setState("playing");
+        // A delayed start must stay stopped after switching or leaving.
+        // A newer resume may still be using this same audio element.
+        else if (!active.current || player.current !== audio) audio.pause();
       })
       .catch(() => {
         if (current()) {

@@ -300,6 +300,68 @@ describe("reviewed placeholder clips", () => {
       expect(button("Pause")).toBeTruthy();
     },
   );
+  it.each(["switch", "timeout", "leaving"] as const)(
+    "stops a late successful narration start after %s",
+    async (interruption) => {
+      vi.useFakeTimers();
+      let finish!: () => void;
+      vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+        () => new Promise<void>((resolve) => (finish = resolve)),
+      );
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      await act(async () => button("Play coaching clip").click());
+      const first = host.querySelector("audio")!;
+      await act(async () => first.dispatchEvent(new Event("loadedmetadata")));
+      if (interruption === "leaving") await act(async () => root.render(null));
+      else if (interruption === "timeout") {
+        await act(async () => vi.advanceTimersByTime(15_000));
+        await act(async () => button("Try clip again").click());
+        await act(async () =>
+          host
+            .querySelector("audio")!
+            .dispatchEvent(new Event("loadedmetadata")),
+        );
+      } else
+        await act(async () =>
+          window.dispatchEvent(
+            new CustomEvent("sx-coaching-play", { detail: "another-player" }),
+          ),
+        );
+      const words = host.textContent;
+      const pause = vi.spyOn(first, "pause").mockClear();
+      await act(async () => finish());
+      expect(pause).toHaveBeenCalledOnce();
+      expect(host.textContent).toBe(words);
+      if (interruption === "timeout") expect(button("Pause")).toBeTruthy();
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+  it("a late narration result leaves a newer resume on the same audio playing", async () => {
+    let finish!: () => void;
+    vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    );
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip]} />),
+    );
+    await act(async () => button("Play coaching clip").click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent("sx-coaching-play", { detail: "another-player" }),
+      ),
+    );
+    await act(async () => button("Resume clip").click());
+    expect(host.querySelector("audio")).toBe(audio);
+    expect(button("Pause")).toBeTruthy();
+    const pause = vi.spyOn(audio, "pause").mockClear();
+    await act(async () => finish());
+    expect(pause).not.toHaveBeenCalled();
+    expect(button("Pause")).toBeTruthy();
+  });
   it.each(["timeout", "error"] as const)(
     "keeps narration retry focused after %s and leaves another control focused",
     async (failure) => {

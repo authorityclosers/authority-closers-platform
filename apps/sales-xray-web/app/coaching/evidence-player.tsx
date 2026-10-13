@@ -183,6 +183,9 @@ export function EvidencePlayer({
       .play()
       .then(() => {
         if (current()) setState("playing");
+        // A delayed start must not revive an abandoned player. Another
+        // request can reuse this audio, so leave that newer replay alone.
+        else if (!active.current || audio.current !== player) player.pause();
       })
       .catch(() => {
         if (current()) {

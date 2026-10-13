@@ -205,6 +205,70 @@ describe("Evidence playback", () => {
       expect(play.dataset.state).toBe("playing");
     },
   );
+  it.each(["switch", "timeout", "leaving"] as const)(
+    "stops a late successful moment start after %s",
+    async (interruption) => {
+      vi.useFakeTimers();
+      let finish!: () => void;
+      vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+        () => new Promise<void>((resolve) => (finish = resolve)),
+      );
+      await act(async () =>
+        root.render(<EvidencePlayer evidence={evidence} />),
+      );
+      const play = host.querySelector<HTMLButtonElement>("button")!;
+      await act(async () => play.click());
+      const first = host.querySelector("audio")!;
+      await act(async () => first.dispatchEvent(new Event("loadedmetadata")));
+      if (interruption === "leaving") await act(async () => root.render(null));
+      else if (interruption === "timeout") {
+        await act(async () => vi.advanceTimersByTime(15_000));
+        await act(async () => play.click());
+        await act(async () =>
+          host
+            .querySelector("audio")!
+            .dispatchEvent(new Event("loadedmetadata")),
+        );
+      } else
+        await act(async () =>
+          window.dispatchEvent(
+            new CustomEvent("sx-coaching-play", { detail: "another-player" }),
+          ),
+        );
+      const state = play.dataset.state;
+      const words = host.textContent;
+      const pause = vi.spyOn(first, "pause").mockClear();
+      await act(async () => finish());
+      expect(pause).toHaveBeenCalledOnce();
+      expect(play.dataset.state).toBe(state);
+      expect(host.textContent).toBe(words);
+      if (interruption === "timeout") expect(state).toBe("playing");
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+  it("a late moment result leaves a newer replay on the same audio playing", async () => {
+    let finish!: () => void;
+    vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    );
+    await act(async () => root.render(<EvidencePlayer evidence={evidence} />));
+    const play = host.querySelector<HTMLButtonElement>("button")!;
+    await act(async () => play.click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent("sx-coaching-play", { detail: "another-player" }),
+      ),
+    );
+    await act(async () => play.click());
+    expect(host.querySelector("audio")).toBe(audio);
+    expect(play.dataset.state).toBe("playing");
+    const pause = vi.spyOn(audio, "pause").mockClear();
+    await act(async () => finish());
+    expect(pause).not.toHaveBeenCalled();
+    expect(play.dataset.state).toBe("playing");
+  });
   it.each(["timeout", "error"] as const)(
     "keeps keyboard focus on retry after %s, without blocking focus elsewhere",
     async (failure) => {
