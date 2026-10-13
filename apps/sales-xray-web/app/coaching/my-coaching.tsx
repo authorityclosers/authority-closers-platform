@@ -2,6 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useRef } from "react";
 
 import { StoryCard } from "../report-visuals/visuals";
 import { kitStyles } from "../ui/kit";
@@ -43,7 +44,7 @@ import { FocusFeedback, SharePanel } from "./sharing-ui";
 import type { SharingView } from "./sharing-client";
 import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
 import { RepCallLinks } from "./rep-call-links";
-import { CallsPanel } from "./calls-panel";
+import { CallsPanel, callsOnSkill, type CallsPanelHandle } from "./calls-panel";
 import styles from "./coaching.module.css";
 
 const JOURNEY: MasteryState[] = [
@@ -243,6 +244,7 @@ function Story({
   readOnly = false,
   sharing,
 }: StoryProps) {
+  const calls = useRef<CallsPanelHandle>(null);
   const { focus, mission, lesson, evidence, practice, mastery } = coaching;
   if (!focus || !mission || !lesson || !practice)
     return (
@@ -416,6 +418,19 @@ function Story({
             ))}
           </ol>
           <ProgressStrip points={coaching.progress} />
+          {callsOnSkill(coaching.calls, coaching.progress).length ? (
+            <div className={styles.actions}>
+              <button
+                type="button"
+                className={kitStyles.button}
+                aria-controls="coaching-calls"
+                onClick={() => calls.current?.showSkill()}
+              >
+                {PROGRESS.seeCalls}
+                <ArrowRight size={14} aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
           <details className={styles.more}>
             <summary>{PROGRESS.how}</summary>
             <div className={styles.moreBody}>
@@ -471,6 +486,7 @@ function Story({
       </Pillar>
       {readOnly ? null : <SharePanel initial={sharing} />}
       <CallsPanel
+        ref={calls}
         key={`${coaching.person_id}:${focus.skill_id}`}
         calls={coaching.calls}
         progress={coaching.progress}

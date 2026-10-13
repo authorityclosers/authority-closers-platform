@@ -377,7 +377,8 @@
   scroll-margin-top: 80px;
 }
 
-.evidenceTarget:focus-visible {
+.evidenceTarget:focus-visible,
+.callsSection:focus-visible {
   outline: 2px solid var(--sx-accent);
   outline-offset: 2px;
 }

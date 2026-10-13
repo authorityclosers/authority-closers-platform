@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, PhoneCall } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { kitStyles, List, Panel, Row, Segmented } from "../ui/kit";
 import type { CallSummary, ProgressPoint } from "./coaching-client";
 import { CALLS, FOCUS, POINT_COPY, THEIR } from "./coaching-copy";
@@ -9,15 +9,33 @@ import { callDate } from "./coaching-format";
 import { useCallHref, useTheirCoaching } from "./coaching-voice";
 import styles from "./coaching.module.css";
 
+/** Only retained ready calls with a saved opportunity on this focus. */
+export function callsOnSkill(
+  calls: CallSummary[] = [],
+  progress: ProgressPoint[] = [],
+) {
+  const points = new Map(progress.map((point) => [point.submission_id, point]));
+  return calls.filter(
+    (call) =>
+      call.state === "ready" &&
+      points.has(call.submission_id) &&
+      points.get(call.submission_id)!.state !== "not_covered",
+  );
+}
+
+export type CallsPanelHandle = { showSkill: () => void };
+
 /** Every call stays available; filter only from this focus's saved records. */
 export function CallsPanel({
   calls,
   progress,
   focusLabel,
+  ref,
 }: {
   calls?: CallSummary[];
   progress?: ProgressPoint[];
   focusLabel?: string;
+  ref?: Ref<CallsPanelHandle>;
 }) {
   const [filter, setFilter] = useState<"all" | "skill">("all");
   const [expanded, setExpanded] = useState(false);
@@ -25,17 +43,21 @@ export function CallsPanel({
   const section = useRef<HTMLElement>(null);
   const they = useTheirCoaching();
   const callHref = useCallHref();
-  if (!calls?.length) return null;
   const points = new Map(
     progress?.map((point) => [point.submission_id, point]),
   );
-  const onSkill = calls.filter(
-    (call) =>
-      call.state === "ready" &&
-      points.has(call.submission_id) &&
-      points.get(call.submission_id)!.state !== "not_covered",
-  );
+  const onSkill = callsOnSkill(calls, progress);
   const canFilter = Boolean(focusLabel && onSkill.length);
+  useImperativeHandle(ref, () => ({
+    showSkill() {
+      if (!canFilter) return;
+      setFilter("skill");
+      setExpanded(false);
+      section.current?.focus({ preventScroll: true });
+      section.current?.scrollIntoView({ block: "start", behavior: "instant" });
+    },
+  }));
+  if (!calls?.length) return null;
   const filtered = canFilter && filter === "skill";
   const shown = filtered ? onSkill : calls;
   return (
@@ -44,6 +66,7 @@ export function CallsPanel({
       id="coaching-calls"
       className={styles.callsSection}
       aria-label={CALLS.title}
+      tabIndex={-1}
     >
       <Panel title={CALLS.title} sub={CALLS.recent(calls.length)}>
         {canFilter ? (
