@@ -1,5 +1,29 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 01:03 UTC — rep shortcut/search/Report actions **12/12 PASS**,
+92.01 seconds, launcher/inner subprocess0, unchanged source `1af5922e`.
+Eight personal/fictional-rep search cases preserve source labels, ordering,
+primary routes and saved states beside the new Report actions. Every ready
+row has its same-ID Report destination and exact accessible name; pending
+rows have no extra Report action. Report targets meet 32/44 px and Tab from
+the primary call title reaches its Report action. Four rep shortcut cases
+restore All calls after a conflicting search/skill/expanded history, retain
+all forty source names/routes and native hash/query, focus the section and
+send the next Tab to Find a call. Runtime/server/font/clipping/overflow,
+Fast Refresh and API mutation errors0.
+
+All 44 capture contents inspected (six progress captures are byte-identical
+to already inspected cleared-state images); source labels, Report controls,
+phone wrapping and focus readable. Receipts/JUnit/log/PNGs:
+strike `shots/2026-10-13-rep-report-continuation/`.
+The initial four generic-link-count failures at `86fe95f5` remain in
+`shots/2026-10-13-rep-calls-reset-0100Z/`: a new ready row has two sibling
+links. `1af5922e` uses retained source title names; no product defect found.
+`8ad47316` applies the same tested selector to retained Team/progress
+journeys; their earlier full-wave receipts remain tied to their original
+sources. No extra broad suite/build. Fictional UI only; authenticated hosted
+acceptance remains pending. Coordinator owns production recovery.
+
 13 October, 00:42 UTC — saved-call name search **8/8 PASS**, 71.81 seconds.
 Personal/fictional rep at 1440/390 light/dark: full-label and partial-name
 matches preserve source order, routes and saved skill states. Search combines
