@@ -240,6 +240,19 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+.skillClips > button,
+.more.clipToggle {
+  min-height: var(--sx-control-h, 32px);
+}
+.skillClips > button::after {
+  inset: 0;
+}
+@media (pointer: coarse) {
+  .skillClips > button,
+  .more.clipToggle {
+    min-height: 44px;
+  }
+}
 .chevron {
   flex: none;
   color: var(--sx-muted);

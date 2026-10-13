@@ -2,9 +2,10 @@
 
 import { ArrowRight, ChevronDown } from "lucide-react";
 import Link from "next/link";
+import { useId, useState } from "react";
 
 import { COMMON, SKILLS } from "../report-copy";
-import type { StoryModel } from "../report-story-model";
+import type { SkillRow, StoryModel } from "../report-story-model";
 import { PlayChip, SkillStateMark, StoryCard } from "../report-visuals/visuals";
 import { Bullets, Field, Gap, LineText, Text, type Select } from "./shared";
 import styles from "./sections.module.css";
@@ -163,6 +164,51 @@ function Deeper({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
   );
 }
 
+/** Keep the first four clips compact, with every saved source reachable. */
+function SkillEvidence({
+  skill,
+  onSelect,
+}: {
+  skill: SkillRow;
+  onSelect?: Select;
+}) {
+  const [all, setAll] = useState(false);
+  const clipsId = useId();
+  if (!skill.sources.length) return null;
+  const shown = all ? skill.sources : skill.sources.slice(0, 4);
+  return (
+    <Field label={SKILLS.evidence}>
+      <div id={clipsId} className={`${styles.plays} ${styles.skillClips}`}>
+        {shown.map((source, index) => (
+          <PlayChip
+            key={`${source.segment_id}-${index}`}
+            source={source}
+            title={skill.label}
+            onSelect={onSelect}
+            label={COMMON.play}
+          />
+        ))}
+      </div>
+      {skill.sources.length > 4 ? (
+        <button
+          type="button"
+          className={`${styles.more} ${styles.clipToggle}`}
+          aria-controls={clipsId}
+          aria-expanded={all}
+          onClick={(event) => {
+            if (all) event.currentTarget.focus();
+            setAll((value) => !value);
+          }}
+        >
+          {all
+            ? SKILLS.showFewerClips
+            : SKILLS.showAllClips(skill.sources.length)}
+        </button>
+      ) : null}
+    </Field>
+  );
+}
+
 /** 5 Your Skills on This Call: eight rows; open one for its evidence. */
 export function Skills({
   model,
@@ -205,21 +251,7 @@ export function Skills({
                   ) : skill.state ? null : (
                     <p className={styles.line}>{SKILLS.notCoveredText}</p>
                   )}
-                  {skill.sources.length ? (
-                    <Field label={SKILLS.evidence}>
-                      <p className={styles.plays}>
-                        {skill.sources.slice(0, 4).map((source, index) => (
-                          <PlayChip
-                            key={`${source.segment_id}-${index}`}
-                            source={source}
-                            title={skill.label}
-                            onSelect={onSelect}
-                            label={COMMON.play}
-                          />
-                        ))}
-                      </p>
-                    </Field>
-                  ) : null}
+                  <SkillEvidence skill={skill} onSelect={onSelect} />
                   <Link
                     className={styles.link}
                     href={`/coaching?focus=${skill.id}`}
