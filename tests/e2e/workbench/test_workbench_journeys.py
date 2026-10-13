@@ -2088,6 +2088,7 @@ def test_fixture_coaching_secondary_lessons(
         summary.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("compact-summary")
         journey.control_target(summary, "more-lessons")
+        journey.control_target(recommendation.locator("details > summary"), "recommended-takeaways")
         assert summary.bounding_box()["height"] >= (44 if journey.width == 390 else 40), (
             "The native lesson summary is below its existing 40/44px floor"
         )

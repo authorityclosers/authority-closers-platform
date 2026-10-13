@@ -1,5 +1,24 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 03:34–03:35 UTC — new secondary-lesson disclosure:
+**4 desktop PASS,1 phone FAIL,3 phone NOT RUN** (-x), unchanged `df87dbc3`,
+41.49 seconds/launcher1. Personal390/light nested “Read key takeaways”
+measures332x40px, centre reachable, below the required44px. Outer “More
+lessons”358x44px passes. Native interactions, original recommendation/
+secondary title/reason/takeaways/transcript/access/preview/mission/query pass;
+runtime/server/font/overflow/refresh/media/API mutations0. Exact owned CSS
+repair request sent D/coordinator; next only affected phone cases.
+
+All16 retained PNG contents inspected, no other defect found. Receipts/JUnit/
+log/PNGs: strike `shots/2026-10-13-secondary-lessons-deps/`, with the exact
+failure measurement in `secondary-lessons-personal-390-light.json`.
+Initial `shots/2026-10-13-secondary-lessons-0333Z/` preserves caller setup
+failure: omitted documented browser library path, no page opened; corrected
+caller reused existing local dependencies, no product/environment change.
+Recommended takeaway target is now explicitly included in the same guard.
+Fictional source evidence only; playback/request-reveal/fold-pause and hosted
+authenticated criteria remain separate.
+
 13 October, 03:18–03:19 UTC — lesson/mission shortcuts16 + call/retained
 Report moments12 **28/28 PASS**, unchanged `23d64fc9`,61.21/49.35 seconds,
 both launchers0. Four existing fictional Coaching surfaces preserve original
