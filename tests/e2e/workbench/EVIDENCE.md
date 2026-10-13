@@ -1,5 +1,20 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 02:16–02:17 UTC — new Insights name-search4 + Team
+missing-focus4 **8/8 PASS**,60.95 seconds, launcher0, unchanged `0be5d7fb`.
+Insights preserves all65 matches/order, both duplicate display-name source keys,
+figures/profile suppression, quiet no-match, Clear focus and prior50/all state;
+local search performs no extra reads. Team retains original names/counts/person
+routes/latest-call dates, two no-focus rows, historic totals, phone one-row
+filter/reset32–44px and pointer/Enter reset. Shared dates are absent in this
+source; distinct shared/absent latest browser edges remain separate.
+
+All32 step captures inspected/readable. Runtime/server/font/overflow/API
+mutation errors0. Desktop/light Insights reports2 Fast Refresh notices;
+otherseven0, so no immutable-runtime claim. Receipts/JUnit/log/PNGs:
+strike `shots/2026-10-13-insights-search-missing-focus/`.
+No authenticated hosted, audio/provider or production acceptance claim.
+
 13 October, 01:36–01:49 UTC — three focused dev continuations complete:
 Team current Delivery area **4/4 PASS** at `5d3da489`, Organisation People
 name search **4/4 PASS** at `562153c0`, and repaired Insights People targets
