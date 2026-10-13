@@ -78,7 +78,9 @@ plus eight focus-to-moment, eight call-search and four rep-call reset cases,
 plus four Insights People, four Organisation People search and four Team
 current-area cases, four Insights name-search and four Team missing-focus cases,
 plus four each for summary clips, supplied shared dates and person-call search,
-and four current-skill finding-filter cases, plus four skill-clip disclosure cases, plus sixteen lesson/mission anchor cases, and twelve call/retained-Report moment-anchor cases, collect 136 cases. The original Report
+and four current-skill finding-filter cases, plus four skill-clip disclosure cases,
+sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
+cases and eight secondary-lesson disclosure cases, collect 144 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -285,3 +287,11 @@ check32–44px and pointer/Enter target focus, require an actual heading hit bel
 sticky navigation and next Tab inside, with no media/source reads or writes.
 The retained Report example is authored UI evidence; canonical Report bootstrap
 and authenticated acceptance remain separate.
+
+For the new secondary-lesson fold, select only
+`-k fixture_coaching_secondary_lessons`. Its existing personal/fictional-rep
+sources preserve recommended and secondary titles/reasons/takeaways/transcript,
+access/preview labels and mission/query. Native pointer/Enter/nested disclosure
+independence, focus/next Tab and40–44px summary targets are checked without
+playback/source reads or writes. Audio-request/reveal and scoped fold-pause
+remain separate mocked unit evidence, as does authenticated acceptance.

@@ -2014,6 +2014,151 @@ def test_fixture_call_focus_moments(
         }
 
 
+@pytest.mark.parametrize("scene", ("personal", "rep"))
+def test_fixture_coaching_secondary_lessons(
+    browser: Browser, viewport: tuple[int, str], scene: str
+) -> None:
+    """Secondary source lessons fold independently without fetching their media."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Secondary lessons use D's existing fictional personal/rep sources")
+    sandbox = scene == "rep"
+    data = "sandbox" if sandbox else "review"
+    filename = "sandbox-team.json" if sandbox else "sandbox.json"
+    key = "rep" if sandbox else "me"
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching"
+            / filename
+        ).read_text()
+    )[key]
+    clips = payload["media_clips"]
+    assert len(clips) == 2, "The existing authored source has changed"
+    with _journey(browser, viewport, f"secondary-lessons-{scene}") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        media: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            request = route.request
+            path = urlsplit(request.url).path
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif re.search(r"/(source|media)/", path) or path.endswith("/source"):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        page.on(
+            "request",
+            lambda request: media.append("media") if request.resource_type == "media" else None,
+        )
+        journey.open(f"/review-fixture/coaching?data={data}&view=me")
+        expect(
+            page.get_by_role(
+                "button", name="AC Sandbox" if sandbox else "Design review", exact=True
+            )
+        ).to_have_attribute("aria-pressed", "true")
+        expect(
+            page.get_by_role("button", name="One rep" if sandbox else "My coaching", exact=True)
+        ).to_have_attribute("aria-pressed", "true")
+        page.evaluate("() => document.fonts.ready")
+        page.wait_for_load_state("networkidle", timeout=15000)
+        pillar = page.locator("#coaching-better")
+        cards = pillar.locator("article[data-access]")
+        expect(cards).to_have_count(len(clips))
+        recommendation, secondary = cards.nth(0), cards.nth(1)
+        original_recommendation = recommendation.inner_text()
+        expect(recommendation).to_contain_text(clips[0]["title"])
+        expect(recommendation).to_contain_text(clips[0]["reason"])
+        expect(recommendation).to_have_attribute("data-recommended", "")
+        expect(recommendation).to_have_attribute("data-access", clips[0]["access"])
+        more = pillar.locator("details[data-other-lessons]")
+        summary = more.locator(":scope > summary")
+        expect(summary).to_have_text(f"More lessons · {len(clips) - 1}")
+        controls = summary.get_attribute("aria-controls")
+        assert controls
+        expect(more.locator(f'[id="{controls}"]')).to_have_count(1)
+        assert more.get_attribute("open") is None
+        expect(secondary).not_to_be_visible()
+        expect(recommendation.locator("details[open]")).to_have_count(0)
+        summary.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("compact-summary")
+        journey.control_target(summary, "more-lessons")
+        assert summary.bounding_box()["height"] >= (44 if journey.width == 390 else 40), (
+            "The native lesson summary is below its existing 40/44px floor"
+        )
+        summary.click()
+        expect(more).to_have_attribute("open", "")
+        expect(secondary).to_be_visible()
+        expect(secondary).to_contain_text(clips[1]["title"])
+        expect(secondary).to_contain_text(clips[1]["reason"])
+        expect(secondary).to_have_attribute("data-access", clips[1]["access"])
+        assert secondary.get_attribute("data-recommended") is None
+        for takeaway in clips[1]["takeaways"]:
+            expect(secondary).to_contain_text(takeaway)
+        if clips[1]["access"] == "preview":
+            preview = (clips[1]["preview_end_ms"] - clips[1]["start_ms"]) // 1000
+            expect(secondary).to_contain_text(f"Free preview · {preview // 60}:{preview % 60:02d}")
+        nested = secondary.locator("details")
+        nested_summary = nested.locator(":scope > summary")
+        expect(nested_summary).to_have_text("Read key takeaways")
+        assert nested.get_attribute("open") is None
+        nested_summary.click()
+        expect(nested).to_have_attribute("open", "")
+        expect(nested).to_contain_text(clips[1]["transcript_excerpt"])
+        nested_summary.focus()
+        page.keyboard.press("Enter")
+        assert nested.get_attribute("open") is None
+        expect(nested_summary).to_be_focused()
+        expect(more).to_have_attribute("open", "")
+        page.keyboard.press("Enter")
+        expect(nested).to_have_attribute("open", "")
+        secondary.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("source-transcript-expanded")
+        journey.control_target(nested_summary, "nested-takeaways")
+        assert recommendation.inner_text() == original_recommendation
+        nested_summary.click()
+        assert nested.get_attribute("open") is None
+        expect(more).to_have_attribute("open", "")
+        summary.focus()
+        page.keyboard.press("Enter")
+        assert more.get_attribute("open") is None
+        expect(summary).to_be_focused()
+        expect(secondary).not_to_be_visible()
+        page.keyboard.press("Enter")
+        expect(more).to_have_attribute("open", "")
+        page.keyboard.press("Tab")
+        assert secondary.evaluate("el => el.contains(document.activeElement)"), (
+            "Next Tab left the revealed secondary lesson"
+        )
+        summary.click()
+        assert more.get_attribute("open") is None
+        expect(summary).to_be_focused()
+        expect(secondary).not_to_be_visible()
+        assert recommendation.inner_text() == original_recommendation
+        expect(page.locator("[data-active-mission]")).to_have_text(payload["mission"]["behavior"])
+        expect(page).to_have_url(re.compile(rf"/review-fixture/coaching\?data={data}&view=me$"))
+        expect(page.locator("audio,video")).to_have_count(0)
+        summary.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("folded-native-focus")
+        assert not media, "Secondary lesson disclosure fetched media or a recording source"
+        assert not mutations, "Secondary lesson disclosure attempted an API mutation"
+        journey.observations[-1]["fictional_secondary_lessons"] = {
+            "source": f"De358c19a existing {filename}/{key}",
+            "recommended_source_unchanged": True,
+            "secondary_titles_reasons_takeaways_transcript_access_preview_preserved": True,
+            "native_pointer_enter_nested_independence_and_next_tab": True,
+            "summary_40_44px_and_mission_query_unchanged": True,
+            "media_requests": len(media),
+            "api_mutations": len(mutations),
+            "audio_request_fold_pause_or_authenticated_acceptance": False,
+        }
+
+
 @pytest.mark.parametrize("scene", ("personal", "rep", "call", "rep-call"))
 def test_fixture_coaching_focus_lesson(
     browser: Browser, viewport: tuple[int, str], scene: str
