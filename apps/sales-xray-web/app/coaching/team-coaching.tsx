@@ -157,6 +157,20 @@ function RepList({
         <span className={styles.note} role="status">
           {TEAM.repCount(shown.length)}
         </span>
+        {query || area !== "all" ? (
+          <button
+            type="button"
+            className={kitStyles.button}
+            onClick={() => {
+              setQuery("");
+              setArea("all");
+              setAll(false);
+              search.current?.focus();
+            }}
+          >
+            {TEAM.clearFilters}
+          </button>
+        ) : null}
       </div>
       {shown.length ? (
         <div id={listId} className={styles.repList}>
@@ -203,18 +217,6 @@ function RepList({
             title={TEAM.noMatches}
             text={TEAM.noMatchesText}
           />
-          <button
-            type="button"
-            className={kitStyles.button}
-            onClick={() => {
-              setQuery("");
-              setArea("all");
-              setAll(false);
-              search.current?.focus();
-            }}
-          >
-            {TEAM.clearFilters}
-          </button>
         </div>
       )}
       {shown.length > 8 ? (

@@ -235,6 +235,11 @@ describe("anonymous Team coaching", () => {
         search.dispatchEvent(new Event("input", { bubbles: true }));
       });
     const links = () => [...host.querySelectorAll<HTMLAnchorElement>("li a")];
+    const clearFilters = () =>
+      [...host.querySelectorAll("button")].find(
+        (button) => button.textContent === "Clear filters",
+      );
+    expect(clearFilters()).toBeUndefined();
     expect(links()).toHaveLength(8);
     expect(links().some((link) => link.textContent?.includes("Asha Rao"))).toBe(
       false,
@@ -252,6 +257,18 @@ describe("anonymous Team coaching", () => {
     expect(links()[0].getAttribute("href")).toBe(
       `/coaching?person=${sandboxTeam.reps[9].person_id}`,
     );
+    // A matching result must be just as easy to reset as an empty one.
+    expect(clearFilters()).toBeDefined();
+    await act(async () => clearFilters()!.click());
+    expect(search.value).toBe("");
+    expect(select.value).toBe("all");
+    expect(document.activeElement).toBe(search);
+    expect(links()).toHaveLength(8);
+    expect(clearFilters()).toBeUndefined();
+    await act(async () => {
+      select.value = "qualification";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await setQuery("Closer");
     expect(links()).toHaveLength(0);
     expect(host.querySelector('[role="status"]')?.textContent).toBe("0 reps");
@@ -307,6 +324,13 @@ describe("anonymous Team coaching", () => {
       )!;
     await act(async () => allClosing().click());
     expect(links()).toHaveLength(9);
+    // Clear an area-only match even after its list has been expanded.
+    await act(async () => clearFilters()!.click());
+    expect(search.value).toBe("");
+    expect(select.value).toBe("all");
+    expect(links()).toHaveLength(8);
+    expect(document.activeElement).toBe(search);
+    expect(clearFilters()).toBeUndefined();
     await setQuery("Closer");
     const findArea = (label: string) =>
       host.querySelector<HTMLButtonElement>(
