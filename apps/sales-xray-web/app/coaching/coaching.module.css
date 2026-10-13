@@ -634,6 +634,8 @@
 
   .repArea {
     flex-grow: 1;
+    flex-basis: 140px;
+    min-width: 0;
   }
 }
 
