@@ -1,5 +1,15 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 04:15 UTC — `95508b3e` first pair passes both players' source,
+deadline, keyboard focus, inert activation and moved-focus assertions, but
+the final generic `/media/` guard reports five unspecified unexpected reads:
+**1 guard FAIL,3 NOT RUN**,16.28 seconds/launcher1. Original diagnostics did
+not retain their types/paths. The guard now records safe type/local-path
+details and permits only same-origin Next static font assets, whose directory
+also contains `/media/`. Audio-source and external-media interception remains
+strict; no final PASS inferred. Original receipts/five PNGs retained in
+`audio-focus-playback-control/`.
+
 13 October, 04:14 UTC — `7d5aca8c` continuation retains the moment checks
 but the narration loading selector also finds two disabled seek controls:
 **1 test-selector FAIL,3 NOT RUN**,14.17 seconds/launcher1. Scope the loading

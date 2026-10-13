@@ -2038,7 +2038,7 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
         source_requests = {moment_source: 0, lesson_source: 0}
         pending: dict[str, Route] = {}
         mutations: list[str] = []
-        unexpected_media: list[str] = []
+        unexpected_media: list[dict[str, str]] = []
 
         def controlled_read(route: Route) -> None:
             request = route.request
@@ -2048,12 +2048,24 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
                 or re.search(r"/(source|media)/", url.path)
                 or url.path.endswith("/source")
             )
+            # Next also puts font files in /static/media; they are page assets,
+            # not recording/lesson sources. Keep the exception local and typed.
+            static_font = (
+                request.resource_type == "font"
+                and url.netloc == "127.0.0.1:3026"
+                and url.path.startswith("/_next/static/media/")
+            )
             if request.method not in {"GET", "HEAD"}:
                 mutations.append(request.method)
                 route.abort("blockedbyclient")
-            elif is_media:
+            elif is_media and not static_font:
                 if url.netloc != "127.0.0.1:3026" or url.path not in source_requests:
-                    unexpected_media.append("unexpected-source")
+                    unexpected_media.append(
+                        {
+                            "type": request.resource_type,
+                            "path": url.path if url.netloc == "127.0.0.1:3026" else "external",
+                        }
+                    )
                     route.abort("blockedbyclient")
                 else:
                     source_requests[url.path] += 1
@@ -2199,6 +2211,7 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
         expect(lesson).to_contain_text(clip["reason"])
         expect(page.locator("[data-active-mission]")).to_have_text(payload["mission"]["behavior"])
         expect(page).to_have_url(re.compile(r"/review-fixture/coaching\?data=review&view=me$"))
+        journey.observations[-1]["unexpected_media"] = unexpected_media
         assert not pending and not unexpected_media and not mutations
         assert journey.live_refreshes == 0, "Live source changed during controlled startup"
         journey.observations[-1]["fictional_audio_startup"] = {
