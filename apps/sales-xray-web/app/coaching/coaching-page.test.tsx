@@ -37,6 +37,96 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("Coaching story", () => {
+  it("restores and focuses a rep's calls after searching or filtering, with or without a current focus", async () => {
+    const calls = Array.from({ length: 10 }, (_, index) => ({
+      submission_id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      call_label: `Fictional call ${index + 1}`,
+      created_at: "2026-10-01T10:00:00Z",
+      state:
+        index === 8
+          ? ("pending" as const)
+          : index === 9
+            ? ("unavailable" as const)
+            : ("ready" as const),
+      focus_label: null,
+    }));
+    const button = (name: string) =>
+      [...host.querySelectorAll("button")].find(
+        (control) => control.textContent === name,
+      )!;
+    for (const sandbox of [false, true]) {
+      for (const hasFocus of [false, true]) {
+        await act(async () =>
+          root.render(
+            <CoachingStory
+              key={`${sandbox}:${hasFocus}`}
+              coaching={{
+                ...fictionalCoaching,
+                sandbox,
+                focus: hasFocus ? fictionalCoaching.focus : null,
+                calls,
+                progress: [
+                  {
+                    submission_id: calls[0].submission_id,
+                    created_at: calls[0].created_at,
+                    state: "suggested",
+                    after_mission: true,
+                  },
+                ],
+              }}
+              readOnly
+            />,
+          ),
+        );
+        const section = host.querySelector<HTMLElement>("#coaching-calls")!;
+        const search = section.querySelector<HTMLInputElement>("input")!;
+        const shortcut = host.querySelector<HTMLAnchorElement>(
+          'nav[aria-label="This rep’s calls"] a[href="#coaching-calls"]',
+        )!;
+        expect(shortcut.getAttribute("aria-controls")).toBe(section.id);
+        if (hasFocus) {
+          await act(async () => button("On this skill").click());
+          expect(section.querySelectorAll("li a")).toHaveLength(1);
+        }
+        await act(async () => {
+          Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            "value",
+          )!.set!.call(search, "missing call");
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        expect(section.querySelectorAll("li a")).toHaveLength(0);
+        await act(async () => shortcut.click());
+        expect(search.value).toBe("");
+        expect(document.activeElement).toBe(section);
+        if (hasFocus)
+          expect(button("All calls").getAttribute("aria-pressed")).toBe("true");
+        expect(section.querySelector('[role="status"]')?.textContent).toBe(
+          "10 calls",
+        );
+        expect(
+          [...section.querySelectorAll("li a")].map((link) =>
+            link.getAttribute("href"),
+          ),
+        ).toEqual(
+          calls.map((call) =>
+            sandbox && call.state === "ready"
+              ? `/coaching?call=${call.submission_id}`
+              : `/analysis/calls/${call.submission_id}`,
+          ),
+        );
+        await act(async () => button("Show all 10 calls").click());
+        await act(async () => shortcut.click());
+        expect(button("Show all 10 calls").getAttribute("aria-expanded")).toBe(
+          "false",
+        );
+        expect(document.activeElement).toBe(section);
+        expect(host.textContent).not.toContain("Who sees your coaching");
+        expect(host.textContent).not.toContain("Not completely");
+      }
+    }
+  });
+
   it("opens progress's saved skill calls, focuses the list and keeps each viewer's destinations", async () => {
     const calls = Array.from({ length: 10 }, (_, index) => ({
       submission_id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,

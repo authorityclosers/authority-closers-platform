@@ -23,7 +23,10 @@ export function callsOnSkill(
   );
 }
 
-export type CallsPanelHandle = { showSkill: () => void };
+export type CallsPanelHandle = {
+  showSkill: () => void;
+  showAll: () => void;
+};
 
 /** Every call stays available; filter only from this focus's saved records. */
 export function CallsPanel({
@@ -50,14 +53,19 @@ export function CallsPanel({
   );
   const onSkill = callsOnSkill(calls, progress);
   const canFilter = Boolean(focusLabel && onSkill.length);
+  const showCalls = (next: "all" | "skill") => {
+    setFilter(next);
+    setQuery("");
+    setExpanded(false);
+    section.current?.focus({ preventScroll: true });
+    section.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  };
   useImperativeHandle(ref, () => ({
     showSkill() {
-      if (!canFilter) return;
-      setFilter("skill");
-      setQuery("");
-      setExpanded(false);
-      section.current?.focus({ preventScroll: true });
-      section.current?.scrollIntoView({ block: "start", behavior: "instant" });
+      if (canFilter) showCalls("skill");
+    },
+    showAll() {
+      showCalls("all");
     },
   }));
   if (!calls?.length) return null;

@@ -133,6 +133,7 @@ function StartCoaching({
   readOnly?: boolean;
   sharing?: SharingView;
 }) {
+  const calls = useRef<CallsPanelHandle>(null);
   if (readOnly)
     return (
       <div className={styles.conversation}>
@@ -153,10 +154,14 @@ function StartCoaching({
                 ? START.theirNoFocusText
                 : START.theirNoCallsText}
             </p>
-            <RepCallLinks calls={coaching.calls} sandbox={coaching.sandbox} />
+            <RepCallLinks
+              calls={coaching.calls}
+              sandbox={coaching.sandbox}
+              onSeeCalls={() => calls.current?.showAll()}
+            />
           </StoryCard>
         </Pillar>
-        <CallsPanel calls={coaching.calls} />
+        <CallsPanel ref={calls} calls={coaching.calls} />
       </div>
     );
   return (
@@ -284,7 +289,11 @@ function Story({
           take={dipakTake(coaching.media_clips)}
         >
           {readOnly ? (
-            <RepCallLinks calls={coaching.calls} sandbox={coaching.sandbox} />
+            <RepCallLinks
+              calls={coaching.calls}
+              sandbox={coaching.sandbox}
+              onSeeCalls={() => calls.current?.showAll()}
+            />
           ) : null}
           {!readOnly && requestedFocus && requestedFocus !== focus.skill_id ? (
             <p className={styles.note}>
