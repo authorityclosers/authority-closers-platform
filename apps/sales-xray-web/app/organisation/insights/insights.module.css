@@ -688,6 +688,16 @@ button.barRow:focus-visible {
 
 /* ---------- People table ---------- */
 
+.peopleControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--sx-line);
+}
+
 .page td[data-trend="better"] {
   color: var(--sx-good);
 }

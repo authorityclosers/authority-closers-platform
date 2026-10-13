@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -927,100 +928,123 @@ function PeopleTable({
   /** Real organisations: each name also opens the person's profile. */
   profiles: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const peopleId = useId();
   const teamKey = (name: string | null) =>
     teams.find((team) => team.name === name)?.key ?? null;
-  const rows = groups.slice(0, 50);
+  const rows = expanded ? groups : groups.slice(0, 50);
   return (
-    <Table
-      label="People"
-      cards={rows.map((group) => (
-        <Card key={group.key ?? group.name}>
-          <div className={styles.cardHead}>
-            <span>
-              <button
-                type="button"
-                className={styles.linkish}
-                onClick={() => group.key && onPerson(group.key)}
-              >
-                {group.name}
-              </button>
-              {profiles ? <ProfileLink group={group} /> : null}
-            </span>
-            <span>{count(group.calls)} calls</span>
-          </div>
-          <div className={styles.cardMeta}>
-            {group.team ? <span>{group.team}</span> : null}
-            <span>
-              {percent(group.calls ? group.nextStep / group.calls : null)} next
-              step
-            </span>
-            <span>{count(group.won)} won</span>
-            <span>{changeText(group.needsAttentionChange)}</span>
-          </div>
-        </Card>
-      ))}
-    >
-      <thead>
-        <tr>
-          <th>Person</th>
-          {teams.length ? <th>Team</th> : null}
-          <th className={styles.num}>Calls</th>
-          <th className={styles.num}>Time</th>
-          <th className={styles.num}>Next step</th>
-          <th className={styles.num}>Won</th>
-          <th className={styles.num}>Talk</th>
-          <th>Skills trend</th>
-          <th>Last call</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((group) => (
-          <tr key={group.key ?? group.name}>
-            <td>
-              <button
-                type="button"
-                className={styles.linkish}
-                onClick={() => group.key && onPerson(group.key)}
-              >
-                {group.name}
-              </button>
-              {profiles ? <ProfileLink group={group} /> : null}
-            </td>
-            {teams.length ? (
-              <td>
-                {group.team ? (
+    <>
+      <div id={peopleId}>
+        <Table
+          label="People"
+          cards={rows.map((group) => (
+            <Card key={group.key ?? group.name}>
+              <div className={styles.cardHead}>
+                <span>
                   <button
                     type="button"
                     className={styles.linkish}
-                    onClick={() => {
-                      const key = teamKey(group.team);
-                      if (key) onTeam(key);
-                    }}
+                    onClick={() => group.key && onPerson(group.key)}
                   >
-                    {group.team}
+                    {group.name}
                   </button>
-                ) : (
-                  "—"
-                )}
-              </td>
-            ) : null}
-            <td className={styles.num}>{count(group.calls)}</td>
-            <td className={styles.num}>{minutes(group.minutes)}</td>
-            <td className={styles.num}>
-              {percent(group.calls ? group.nextStep / group.calls : null)}
-            </td>
-            <td className={styles.num}>{count(group.won)}</td>
-            <td className={styles.num}>
-              {group.talkShare === null ? "—" : `${group.talkShare}%`}
-            </td>
-            <td data-trend={trendTone(group.needsAttentionChange)}>
-              {changeText(group.needsAttentionChange)}
-            </td>
-            <td>{dateLabel(group.lastAt)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+                  {profiles ? <ProfileLink group={group} /> : null}
+                </span>
+                <span>{count(group.calls)} calls</span>
+              </div>
+              <div className={styles.cardMeta}>
+                {group.team ? <span>{group.team}</span> : null}
+                <span>
+                  {percent(group.calls ? group.nextStep / group.calls : null)}{" "}
+                  next step
+                </span>
+                <span>{count(group.won)} won</span>
+                <span>{changeText(group.needsAttentionChange)}</span>
+              </div>
+            </Card>
+          ))}
+        >
+          <thead>
+            <tr>
+              <th>Person</th>
+              {teams.length ? <th>Team</th> : null}
+              <th className={styles.num}>Calls</th>
+              <th className={styles.num}>Time</th>
+              <th className={styles.num}>Next step</th>
+              <th className={styles.num}>Won</th>
+              <th className={styles.num}>Talk</th>
+              <th>Skills trend</th>
+              <th>Last call</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((group) => (
+              <tr key={group.key ?? group.name}>
+                <td>
+                  <button
+                    type="button"
+                    className={styles.linkish}
+                    onClick={() => group.key && onPerson(group.key)}
+                  >
+                    {group.name}
+                  </button>
+                  {profiles ? <ProfileLink group={group} /> : null}
+                </td>
+                {teams.length ? (
+                  <td>
+                    {group.team ? (
+                      <button
+                        type="button"
+                        className={styles.linkish}
+                        onClick={() => {
+                          const key = teamKey(group.team);
+                          if (key) onTeam(key);
+                        }}
+                      >
+                        {group.team}
+                      </button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                ) : null}
+                <td className={styles.num}>{count(group.calls)}</td>
+                <td className={styles.num}>{minutes(group.minutes)}</td>
+                <td className={styles.num}>
+                  {percent(group.calls ? group.nextStep / group.calls : null)}
+                </td>
+                <td className={styles.num}>{count(group.won)}</td>
+                <td className={styles.num}>
+                  {group.talkShare === null ? "—" : `${group.talkShare}%`}
+                </td>
+                <td data-trend={trendTone(group.needsAttentionChange)}>
+                  {changeText(group.needsAttentionChange)}
+                </td>
+                <td>{dateLabel(group.lastAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </div>
+      <div className={styles.peopleControls}>
+        <p className={styles.caption} role="status">
+          Showing {count(rows.length)} of {count(groups.length)} people
+        </p>
+        {groups.length > 50 ? (
+          <Button
+            aria-expanded={expanded}
+            aria-controls={peopleId}
+            onClick={(event) => {
+              if (expanded) event.currentTarget.focus();
+              setExpanded(!expanded);
+            }}
+          >
+            {expanded ? "Show fewer" : "Show more"}
+          </Button>
+        ) : null}
+      </div>
+    </>
   );
 }
 

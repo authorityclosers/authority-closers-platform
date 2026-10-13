@@ -58,6 +58,154 @@ async function choose(view: string) {
   });
 }
 
+function returnedPeople(size: number) {
+  const people = Array.from({ length: size }, (_, index) => ({
+    ...fixture.overview.people[index % fixture.overview.people.length],
+    key: `fictional-person-${index + 1}`,
+    name: `Fictional person ${index + 1}`,
+  }));
+  return {
+    ...fixture.overview,
+    // A summary total is not a promise that additional rows were returned.
+    totals: { ...fixture.overview.totals, people: 999 },
+    people,
+    facets: { ...fixture.overview.facets, people },
+  };
+}
+
+it.each([51, 125])(
+  "reaches all %i returned people in source order and folds with focus",
+  async (size) => {
+    const overview = returnedPeople(size);
+    await render(
+      <InsightsView
+        view="people"
+        filters={DEFAULT_FILTERS}
+        initial={{ status: 200, body: overview }}
+        initialCalls={{ status: 200, body: fixture.calls }}
+      />,
+    );
+    const table = host.querySelector('table[aria-label="People"]')!;
+    const cards = host.querySelector('[role="list"][aria-label="People"]')!;
+    const toggle = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent === "Show more",
+    )!;
+    expect(table.querySelectorAll("tbody tr")).toHaveLength(50);
+    expect(cards.querySelectorAll('[role="listitem"]')).toHaveLength(50);
+    expect(host.textContent).toContain(`Showing 50 of ${size} people`);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      document
+        .getElementById(toggle.getAttribute("aria-controls")!)!
+        .contains(table),
+    ).toBe(true);
+
+    await act(async () => toggle.click());
+    expect(toggle.textContent).toBe("Show fewer");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(host.textContent).toContain(`Showing ${size} of ${size} people`);
+    const names = overview.people.map((person) => person.name);
+    expect(
+      Array.from(
+        table.querySelectorAll("tbody td:first-child button"),
+        (button) => button.textContent,
+      ),
+    ).toEqual(names);
+    expect(
+      Array.from(
+        cards.querySelectorAll("article button"),
+        (button) => button.textContent,
+      ),
+    ).toEqual(names);
+    expect(host.querySelector('a[href^="/organisation/people/"]')).toBeNull();
+
+    const last = Array.from(
+      table.querySelectorAll<HTMLButtonElement>("button"),
+    ).find((button) => button.textContent === names.at(-1))!;
+    last.focus();
+    expect(document.activeElement).toBe(last);
+    await act(async () => toggle.click());
+    expect(document.activeElement).toBe(toggle);
+    expect(toggle.textContent).toBe("Show more");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(table.querySelectorAll("tbody tr")).toHaveLength(50);
+    expect(cards.querySelectorAll('[role="listitem"]')).toHaveLength(50);
+    expect(table.textContent).not.toContain(names.at(-1));
+    expect(fetchMock).not.toHaveBeenCalled();
+  },
+);
+
+it("keeps the last returned person's profile and call-filter identity", async () => {
+  const overview = {
+    ...returnedPeople(65),
+    source: "call",
+    synthetic: false,
+  };
+  const last = overview.people.at(-1)!;
+  // Exercise profile URL encoding independently of the displayed name.
+  last.key = "fictional/person?65";
+  fetchMock.mockImplementation(async (path: string) =>
+    json(path.includes("/calls") ? fixture.calls : overview),
+  );
+  await render(
+    <InsightsView
+      view="people"
+      filters={DEFAULT_FILTERS}
+      initial={{ status: 200, body: overview }}
+      initialCalls={{ status: 200, body: fixture.calls }}
+    />,
+  );
+  const toggle = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Show more",
+  )!;
+  await act(async () => toggle.click());
+  const profilePath = `/organisation/people/${encodeURIComponent(last.key)}`;
+  const table = host.querySelector('table[aria-label="People"]')!;
+  const cards = host.querySelector('[role="list"][aria-label="People"]')!;
+  for (const surface of [table, cards]) {
+    const profile = surface.querySelector(`a[href="${profilePath}"]`)!;
+    expect(profile.getAttribute("aria-label")).toBe(
+      `Open ${last.name}’s profile`,
+    );
+  }
+  expect(fetchMock).not.toHaveBeenCalled();
+  const person = Array.from(
+    cards.querySelectorAll<HTMLButtonElement>("button"),
+  ).find((button) => button.textContent === last.name)!;
+  await act(async () => person.click());
+  expect(new URL(window.location.href).searchParams.get("person")).toBe(
+    last.key,
+  );
+  expect(new URL(window.location.href).searchParams.get("view")).toBe("people");
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/v1/conversation/acquisition/insights?person=fictional%2Fperson%3F65",
+    expect.objectContaining({ credentials: "same-origin" }),
+  );
+});
+
+it.each([0, 1, 50])(
+  "shows the returned count without expansion when there are %i people",
+  async (size) => {
+    await render(
+      <InsightsView
+        view="people"
+        filters={DEFAULT_FILTERS}
+        initial={{ status: 200, body: returnedPeople(size) }}
+        initialCalls={{ status: 200, body: fixture.calls }}
+      />,
+    );
+    expect(host.textContent).toContain(`Showing ${size} of ${size} people`);
+    expect(
+      Array.from(host.querySelectorAll("button")).some(
+        (button) =>
+          button.textContent === "Show more" ||
+          button.textContent === "Show fewer",
+      ),
+    ).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  },
+);
+
 it("renders a seeded sandbox page whole, labelled synthetic, without reading", async () => {
   await render(
     <InsightsView
