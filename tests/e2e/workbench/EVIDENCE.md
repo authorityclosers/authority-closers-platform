@@ -1,5 +1,20 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 05:08 UTC — Hear Dipak **4/4 final PASS**: original three
+accepted pairs at `313c3f5e` plus affected desktop/dark retake1PASS12.59s/
+launcher0, source `9251ead4` -> `f20b606f`, refresh0. Pointer/Enter focus the
+stationary reachable playback control, next Tab stays inside, and observed
+404 preserves moved focus. The strict dark retake also requires loading
+through both captures; original other-three case durations/captures remain
+below the15-second deadline. Source/quote/lesson/access/transcript/mission/
+query and40–44px targets pass; final runtime/server/font/overflow/refresh/
+unexpected-media/API writes0. No real audio/provider/authenticated acceptance.
+
+All12 final capture contents inspected;16 original/interruption/retake PNGs
+accounted, one byte-equal. Original limited dark raw PASS and setup refresh
+failure remain unchanged below. Final dark receipt/JUnit/log/three PNGs:
+`shots/2026-10-13-hear-lesson-dark-settle/`. Own jobs exited.
+
 13 October, 05:03 UTC — strict desktop/dark retake at `3952d157` stops
 before any interaction: network-idle timeout with two Fast Refresh events,
 29.12s/launcher1. Receipt/JUnit/log/failure PNG retained in
