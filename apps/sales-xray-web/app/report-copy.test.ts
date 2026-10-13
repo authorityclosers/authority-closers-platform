@@ -8,6 +8,7 @@ import {
   GUEST,
   PILLAR_COPY,
   PILLAR_IDS,
+  SKILLS,
   WORKED_DIDNT,
   partHeading,
   pillarHeading,
@@ -94,6 +95,9 @@ describe("report copy", () => {
     expect(prospectAgreed("Amit Sharma")).toBe("Amit Sharma agreed to");
     expect(prospectAgreed("  ")).toBe("Prospect agreed to");
     expect(viewAllMoments(8)).toBe("View all 8 moments");
+    expect(SKILLS.showAllClips(5)).toBe("Show all 5 clips");
+    expect(SKILLS.showAllClips(12)).toBe("Show all 12 clips");
+    expect(SKILLS.showFewerClips).toBe("Show fewer clips");
     expect(copy.prospectInsights(1)).toBe("1 prospect insight captured");
     expect(copy.changedAt("11:18")).toBe("The call changed here · 11:18");
     expect(copy.followUpDate("2026-10-16")).toBe("Follow-up: Friday, 16 Oct");
