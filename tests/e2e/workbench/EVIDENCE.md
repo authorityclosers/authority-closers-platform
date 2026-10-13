@@ -1,5 +1,32 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 00:42 UTC — saved-call name search **8/8 PASS**, 71.81 seconds.
+Personal/fictional rep at 1440/390 light/dark: full-label and partial-name
+matches preserve source order, routes and saved skill states. Search combines
+with On this skill; pointer/Enter clear retain the skill and restore search
+focus. Progress clears a conflicting search, selects saved skill calls and
+returns the next Tab to Find a call. The pending personal call keeps its
+Analysing state/original route and is excluded from saved skill calls.
+Search/reset controls meet 32/44 px; actual full-row call targets measure
+54.5–72.5 px and all five centre/edge hits reach the intended link. No runtime,
+server, font, clipping, overflow, refresh or API mutation faults. Source
+`91652bc9` stayed unchanged during the run; pytest/inner subprocess exit0,
+outer launcher143 after completion is retained without claiming launcher0.
+
+All 32 captures inspected. Two original desktop personal matched-result frames
+left the rows below the image; `fc0adcef` fixes capture framing. Only those two
+cases were retaken: **2/2 PASS**, 12.20 seconds, launcher0, no refresh/errors;
+all eight retake PNGs inspected and named results readable. Source range
+`fc0adcef` to `8c50c338`. Receipts/JUnit/log/PNGs: strike `shots/2026-10-13-call-search-continuation/`
+and `shots/2026-10-13-call-search-desktop-framing/`.
+
+Original eight text-box target failures remain in `shots/2026-10-13-call-search-0039Z/`.
+They measured the 19.5 px text box instead of the existing stretched row link;
+`d69a3024` corrects that QA assumption using actual five-point hits. No product
+repair was required. Fictional UI only; product destinations and populated
+hosted authenticated acceptance remain unexecuted. Earlier Report/Document/Word
+and Team passes retain their scope. Coordinator owns production recovery.
+
 13 October, 00:24 UTC — Team skills/progress **4/4 PASS**, 53.77 seconds,
 launcher0, six captures per width/theme at recorded HEAD `2e4c192e`. All six
 Find reps actions preserve call counts and exact current-focus names/routes,
