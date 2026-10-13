@@ -2238,7 +2238,7 @@ def test_fixture_coaching_hear_lesson_focus(browser: Browser, viewport: tuple[in
             expect(play).to_be_disabled()
             expect(play).to_be_focused()
             # Wait for a stationary, reachable landing, rather than demanding
-            # an exact card centre after fonts change its measured height.
+            # an exact card centre as its measured height changes.
             page.evaluate("window.__wbHearPreviousY = null")
             page.wait_for_function("""() => {
               const card = document.querySelector('#coaching-better article[data-recommended]');

@@ -1,5 +1,12 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 05:03 UTC — strict desktop/dark retake at `3952d157` stops
+before any interaction: network-idle timeout with two Fast Refresh events,
+29.12s/launcher1. Receipt/JUnit/log/failure PNG retained in
+`shots/2026-10-13-hear-lesson-dark-loading/`; PNG inspected. No loading/error
+assertion ran, so it supplies no product verdict. Keep the original three
+accepted pairs and retry only desktop/dark after the new dev source settles.
+
 13 October, 04:55–04:56 UTC — first Hear Dipak run reports4 pytest PASS,
 46.20s/launcher0 at unchanged `313c3f5e`. All12 PNGs inspected. Desktop/dark
 Enter shows timeout/retry before the controlled-error step, so that pair's
