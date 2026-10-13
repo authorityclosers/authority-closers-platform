@@ -1,5 +1,22 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 04:18 UTC — audio continuation **4/4 PASS**,31.12 seconds/
+launcher0 at unchanged `331f76a1` (D repair `688a8670`). Both players keep
+keyboard focus on same-source404 retry, ignore Enter during loading, and
+leave deliberately moved focus unchanged at the15-second timeout. Original
+quote/time/lesson/access/transcript/mission/query and32–44px reachable targets
+pass. Runtime/server/font/overflow/refresh/unexpected-media/API mutation0.
+Three user activations per player are checked; actual intercepted request
+count9 per pair remains in receipts. No request reaches a media provider.
+
+All16 final PNGs inspected/readable in strike
+`shots/2026-10-13-audio-focus-font-guard/`; earlier11 capture contents are
+also inspected, with five equal to previously inspected bytes. Original
+focus failure and all three harness failures remain unchanged below.
+This closes only controlled-source startup/focus. Real playback, preview,
+late promises, switching/unmount and authenticated hosted acceptance remain
+outside this browser criterion. Static/import checks pass; own jobs exited.
+
 13 October, 04:15 UTC — `95508b3e` first pair passes both players' source,
 deadline, keyboard focus, inert activation and moved-focus assertions, but
 the final generic `/media/` guard reports five unspecified unexpected reads:
