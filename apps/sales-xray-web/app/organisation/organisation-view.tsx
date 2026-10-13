@@ -1069,6 +1069,8 @@ function PeopleActivity({
   members: Live<OrgMember[]>;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
   // Weekly bars need every call; the server lists up to 500 in 30 days.
   const complete =
     activity.calls.length >=
@@ -1088,6 +1090,7 @@ function PeopleActivity({
         return {
           id: member.personId as string,
           name: memberName(member),
+          searchName: member.name ?? "",
           email: member.email,
           test: isTestEmail(member.email),
           calls: rep?.calls ?? 0,
@@ -1102,6 +1105,7 @@ function PeopleActivity({
         people.push({
           id: rep.personId,
           name: rep.name || "Member",
+          searchName: rep.name ?? "",
           email: null,
           test: false,
           calls: rep.calls,
@@ -1129,7 +1133,15 @@ function PeopleActivity({
   const quiet = rows.filter((row) => row.calls === 0 || row.test);
   const top = Math.max(1, ...rows.map((row) => row.calls));
   const topWeek = Math.max(1, ...[...weekly.values()].flat());
-  const shown = open ? [...active, ...quiet] : active;
+  const query = search.trim().toLocaleLowerCase();
+  const allRows = [...active, ...quiet];
+  const shown = query
+    ? allRows.filter((row) =>
+        row.searchName.toLocaleLowerCase().includes(query),
+      )
+    : open
+      ? allRows
+      : active;
 
   return (
     <section className={styles.section} aria-labelledby="org-people">
@@ -1138,10 +1150,45 @@ function PeopleActivity({
         {complete ? <span>Bars: each of the last 4 weeks</span> : null}
       </div>
       <div className={styles.surface}>
+        <div className={styles.peopleSearch}>
+          <label className={styles.peopleSearchField}>
+            <span>Search people</span>
+            <input
+              ref={searchInput}
+              type="search"
+              placeholder="Name"
+              value={search}
+              aria-describedby="org-people-count"
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className={styles.secondary}
+            disabled={search.length === 0}
+            onClick={() => {
+              setSearch("");
+              searchInput.current?.focus();
+            }}
+          >
+            Clear search
+          </button>
+          <span
+            id="org-people-count"
+            className={styles.peopleCount}
+            role="status"
+          >
+            {query ? "Matches:" : "Showing"} {shown.length} of {rows.length}{" "}
+            people
+          </span>
+        </div>
         {members.status === "loading" ? (
           <p className={styles.footnote}>Loading people…</p>
         ) : null}
-        {active.length === 0 && members.status !== "loading" ? (
+        {query && shown.length === 0 ? (
+          <p className={styles.footnote}>No people match this name.</p>
+        ) : null}
+        {!query && active.length === 0 && members.status !== "loading" ? (
           <p className={styles.footnote}>
             Nobody has saved a call in the last 30 days.
           </p>
@@ -1193,7 +1240,7 @@ function PeopleActivity({
             </li>
           ))}
         </ul>
-        {quiet.length > 0 ? (
+        {!query && quiet.length > 0 ? (
           <button
             type="button"
             className={styles.more}
