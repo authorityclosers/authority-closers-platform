@@ -944,7 +944,7 @@ function PeopleTable({
                 <span>
                   <button
                     type="button"
-                    className={styles.linkish}
+                    className={`${styles.linkish} ${styles.peopleButton}`}
                     onClick={() => group.key && onPerson(group.key)}
                   >
                     {group.name}
@@ -984,7 +984,7 @@ function PeopleTable({
                 <td>
                   <button
                     type="button"
-                    className={styles.linkish}
+                    className={`${styles.linkish} ${styles.peopleButton}`}
                     onClick={() => group.key && onPerson(group.key)}
                   >
                     {group.name}
@@ -996,7 +996,7 @@ function PeopleTable({
                     {group.team ? (
                       <button
                         type="button"
-                        className={styles.linkish}
+                        className={`${styles.linkish} ${styles.peopleButton}`}
                         onClick={() => {
                           const key = teamKey(group.team);
                           if (key) onTeam(key);

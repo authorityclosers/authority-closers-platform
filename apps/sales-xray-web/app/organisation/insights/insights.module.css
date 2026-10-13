@@ -688,6 +688,13 @@ button.barRow:focus-visible {
 
 /* ---------- People table ---------- */
 
+.peopleButton {
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--sx-control-h);
+  min-height: var(--sx-control-h);
+}
+
 .peopleControls {
   display: flex;
   flex-wrap: wrap;
