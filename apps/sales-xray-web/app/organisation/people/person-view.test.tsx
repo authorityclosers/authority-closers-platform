@@ -6,6 +6,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WorkspaceAccessContext } from "../../workspace-access";
 import { PersonView } from "./person-view";
 import { fictionalCoaching } from "../../coaching/coaching.fixture";
+import { PersonCalls } from "./person-panels";
+import type { PersonActivity } from "./person-data";
 
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
@@ -516,3 +518,230 @@ it("keeps known totals honest when individual calls cannot be listed", async () 
   expect(host.textContent).not.toContain("No calls in the last 12 weeks.");
   expect(host.querySelector('a[href^="/analysis/calls/"]')).toBeNull();
 });
+
+const callsPanel = () =>
+  [...host.querySelectorAll("section")].find(
+    (section) =>
+      section.querySelector("h2")?.firstChild?.textContent === "Calls",
+  )!;
+const callRows = () => [...callsPanel().querySelectorAll("li a")];
+const callSearch = () =>
+  callsPanel().querySelector<HTMLInputElement>('input[type="search"]')!;
+const callCount = () =>
+  callsPanel().querySelector('[role="status"]')?.textContent;
+const callButton = (name: string) =>
+  [...callsPanel().querySelectorAll("button")].find(
+    (button) => button.textContent === name,
+  )!;
+
+async function searchCalls(value: string) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(callSearch(), value);
+    callSearch().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function listedCalls(): PersonActivity {
+  const listed = Array.from({ length: 12 }, (_, index) => ({
+    id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    ownerPersonId: ashaId,
+    ownerName: "Asha Menon",
+    label:
+      index === 6
+        ? null
+        : index === 11
+          ? "मराठी · Budget review"
+          : index === 0 || index === 10
+            ? "Discovery · Same name"
+            : `Discovery · Prospect ${index}`,
+    createdAt: ago(index + 1),
+    durationSeconds: index === 10 ? 0 : 900,
+    state: index === 10 ? "queued" : "completed",
+    hasReport: index !== 10,
+  }));
+  return {
+    listed,
+    calls: 12,
+    minutes: 165,
+    reportsReady: 11,
+    complete: true,
+    lastCallAt: listed[0]!.createdAt,
+  };
+}
+
+async function showCalls(data = listedCalls()) {
+  await act(async () =>
+    root.render(
+      <PersonCalls
+        data={data}
+        dates={{
+          locale: "en-IN",
+          timeZone: "Asia/Kolkata",
+          today: "2026-10-13",
+        }}
+        callsHref={`/analysis/calls?rep=${ashaId}`}
+      />,
+    ),
+  );
+}
+
+it("searches the person's displayed call names without changing other panels or making reads", async () => {
+  await show(ashaId);
+  const figures = host.querySelector('[aria-label="Last 12 weeks"]')!.innerHTML;
+  const otherPanels = [...host.querySelectorAll("section")]
+    .filter((section) => section !== callsPanel())
+    .map((section) => section.innerHTML);
+  const reads = [...calls];
+  const row = callRows()[0]!.innerHTML;
+  expect(callSearch().closest("label")?.textContent).toBe("Search these calls");
+  expect(callSearch().getAttribute("aria-describedby")).toBe(
+    callsPanel().querySelector('[role="status"]')!.id,
+  );
+  await searchCalls("  dIsCoVeRy  ");
+  expect(callCount()).toBe("Matches: 1 of 2 listed calls");
+  expect(callRows()[0]!.getAttribute("href")).toBe(`/analysis/calls/${callA}`);
+  expect(callRows()[0]!.innerHTML).toBe(row);
+  expect(host.querySelector('[aria-label="Last 12 weeks"]')!.innerHTML).toBe(
+    figures,
+  );
+  expect(
+    [...host.querySelectorAll("section")]
+      .filter((section) => section !== callsPanel())
+      .map((section) => section.innerHTML),
+  ).toEqual(otherPanels);
+  expect(calls).toEqual(reads);
+});
+
+it("reaches every matching returned call beyond eight in the original order", async () => {
+  const data = listedCalls();
+  await showCalls(data);
+  expect(callRows()).toHaveLength(8);
+  expect(callCount()).toBe("Showing 8 of 12 listed calls");
+  expect(callButton("Show all 12 calls").getAttribute("aria-expanded")).toBe(
+    "false",
+  );
+  await searchCalls("Discovery");
+  expect(callRows()).toHaveLength(10);
+  expect(callCount()).toBe("Matches: 10 of 12 listed calls");
+  expect(callRows().map((row) => row.getAttribute("href"))).toEqual(
+    data.listed
+      .filter((call) => call.label?.startsWith("Discovery"))
+      .map((call) => `/analysis/calls/${call.id}`),
+  );
+  expect(callButton("Show all 12 calls")).toBeUndefined();
+  expect(callButton("Show fewer")).toBeUndefined();
+});
+
+it("keeps duplicate call names distinct with their own links, dates, durations and statuses", async () => {
+  const data = listedCalls();
+  await showCalls(data);
+  await act(async () => callButton("Show all 12 calls").click());
+  const duplicates = [callRows()[0]!.innerHTML, callRows()[10]!.innerHTML];
+  await searchCalls("same name");
+  expect(callRows().map((row) => row.getAttribute("href"))).toEqual([
+    `/analysis/calls/${data.listed[0]!.id}`,
+    `/analysis/calls/${data.listed[10]!.id}`,
+  ]);
+  expect(callRows().map((row) => row.innerHTML)).toEqual(duplicates);
+  expect(callRows()[0]!.textContent).toContain("15:00");
+  expect(callRows()[1]!.textContent).toContain("—");
+  expect(callRows()[0]!.textContent).not.toBe(callRows()[1]!.textContent);
+});
+
+it.each([false, true])(
+  "clears with focus and restores the prior all=%s disclosure",
+  async (all) => {
+    await showCalls();
+    if (all) await act(async () => callButton("Show all 12 calls").click());
+    const before = callRows().map((row) => row.innerHTML);
+    await searchCalls("मराठी");
+    expect(callCount()).toBe("Matches: 1 of 12 listed calls");
+    await act(async () => callButton("Clear search").click());
+    expect(callSearch().value).toBe("");
+    expect(document.activeElement).toBe(callSearch());
+    expect(callRows().map((row) => row.innerHTML)).toEqual(before);
+    expect(
+      callButton(all ? "Show fewer" : "Show all 12 calls").getAttribute(
+        "aria-expanded",
+      ),
+    ).toBe(String(all));
+    expect(callButton("Clear search").disabled).toBe(true);
+  },
+);
+
+it("shows an honest name-only no-match state and handles whitespace without folding changes", async () => {
+  await showCalls();
+  for (const query of ["Ready", "15:00", ashaId, "Unknown prospect"]) {
+    await searchCalls(query);
+    expect(callRows()).toHaveLength(0);
+    expect(callCount()).toBe("Matches: 0 of 12 listed calls");
+    expect(callsPanel().textContent).toContain(
+      "No listed calls match this name.",
+    );
+    expect(callsPanel().textContent).not.toContain(
+      "No calls in the last 12 weeks.",
+    );
+    expect(callsPanel().textContent).not.toContain(
+      "Recent call details are unavailable.",
+    );
+  }
+  await searchCalls("   ");
+  expect(callRows()).toHaveLength(8);
+  expect(callCount()).toBe("Showing 8 of 12 listed calls");
+  expect(callButton("Clear search").disabled).toBe(false);
+  await act(async () => callButton("Clear search").click());
+  expect(document.activeElement).toBe(callSearch());
+});
+
+it("matches the visible unnamed-call fallback and retains incomplete coverage while searching", async () => {
+  const data = { ...listedCalls(), complete: false, calls: 64 };
+  await showCalls(data);
+  expect(callsPanel().textContent).toContain(
+    "Showing the newest 12 of 64 calls.",
+  );
+  const fallback = callRows()[6]!.querySelector("span")!.textContent!;
+  await searchCalls(fallback);
+  expect(callCount()).toBe("Matches: 1 of 12 listed calls");
+  expect(callRows()[0]!.getAttribute("href")).toBe(
+    `/analysis/calls/${data.listed[6]!.id}`,
+  );
+  expect(callsPanel().textContent).toContain(
+    "Searching the newest 12 of 64 calls.",
+  );
+  await searchCalls("Absent call");
+  expect(callCount()).toBe("Matches: 0 of 12 listed calls");
+  expect(callsPanel().textContent).toContain(
+    "Searching the newest 12 of 64 calls.",
+  );
+  expect(callsPanel().textContent).toContain(
+    "No listed calls match this name.",
+  );
+  await act(async () => callButton("Clear search").click());
+  expect(callsPanel().textContent).toContain(
+    "Showing the newest 12 of 64 calls.",
+  );
+});
+
+it.each([0, 64])(
+  "does not offer search or invent results when no call details are returned: total %s",
+  async (total) => {
+    await showCalls({
+      ...listedCalls(),
+      listed: [],
+      calls: total,
+      complete: total === 0,
+      lastCallAt: null,
+    });
+    expect(callSearch()).toBeNull();
+    expect(callCount()).toBeUndefined();
+    expect(callsPanel().textContent).toContain(
+      total
+        ? "Recent call details are unavailable."
+        : "No calls in the last 12 weeks.",
+    );
+    expect(callsPanel().textContent).not.toContain("Matches: 0");
+  },
+);

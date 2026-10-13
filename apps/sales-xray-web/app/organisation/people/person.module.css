@@ -365,6 +365,54 @@
 
 /* ---------- Calls ---------- */
 
+.callSearch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.callSearchField {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.callSearchField input {
+  width: 100%;
+  min-width: 0;
+  height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.callSearchField input::placeholder {
+  color: var(--sx-muted);
+}
+
+.callSearchField input:focus-visible,
+.callSearch .quiet:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.callCount {
+  grid-column: 1 / -1;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
 .calls {
   display: grid;
   margin: 0;
@@ -596,6 +644,7 @@
   .select,
   .quiet,
   .primary,
+  .callSearchField input,
   .actionLink,
   .previousReport a {
     min-height: 44px;
