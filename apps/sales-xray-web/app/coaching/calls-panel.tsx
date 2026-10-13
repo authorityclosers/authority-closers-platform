@@ -21,6 +21,21 @@ import {
 } from "./coaching-voice";
 import styles from "./coaching.module.css";
 
+/** Keep the saved call name intact while emphasising literal search words. */
+function callNameMatch(label: string, term: string) {
+  if (!term) return label;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return label.split(new RegExp(`(${escaped})`, "giu")).map((part, index) =>
+    index % 2 ? (
+      <mark className={styles.repMatch} key={index}>
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
+
 /** Only retained ready calls with a saved opportunity on this focus. */
 export function callsOnSkill(
   calls: CallSummary[] = [],
@@ -164,7 +179,9 @@ export function CallsPanel({
                   key={call.submission_id}
                   icon={<PhoneCall size={15} aria-hidden="true" />}
                   title={
-                    <span className={styles.callTitle}>{call.call_label}</span>
+                    <span className={styles.callTitle}>
+                      {callNameMatch(call.call_label, name)}
+                    </span>
                   }
                   href={
                     call.state === "ready"

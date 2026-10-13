@@ -120,6 +120,7 @@ describe("calls on the current skill", () => {
 
   it("finds a call beyond the compact history and combines name and saved-skill filters without changing shared Report links", async () => {
     const calls = Array.from({ length: 10 }, (_, index) => call(index + 1));
+    calls[7] = { ...call(8), call_label: "Follow-up [2]" };
     calls[8] = { ...call(9, "pending"), call_label: "Meera · चर्चा" };
     calls[9] = { ...call(10), call_label: "Meera · Follow-up" };
     await act(async () =>
@@ -145,6 +146,9 @@ describe("calls on the current skill", () => {
       "Meera · चर्चा",
       "Meera · Follow-up",
     ]);
+    expect(
+      [...host.querySelectorAll("mark")].map((mark) => mark.textContent),
+    ).toEqual(["Meera", "Meera"]);
     expect(links().map((link) => link.getAttribute("href"))).toEqual([
       `/analysis/calls/${call(9).submission_id}`,
       `/analysis/calls/${call(10).submission_id}`,
@@ -164,10 +168,27 @@ describe("calls on the current skill", () => {
     expect(document.activeElement).toBe(findCall());
     expect(button("On this skill").getAttribute("aria-pressed")).toBe("true");
     expect(links()).toHaveLength(2);
+    expect(host.querySelector("mark")).toBeNull();
     await act(async () => button("All calls").click());
     await searchFor("चर्चा");
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toBe("Meera · चर्चा");
+    expect(host.querySelector("mark")?.textContent).toBe("चर्चा");
+    await searchFor("-up");
+    expect(links().map((link) => link.textContent)).toEqual([
+      "Follow-up [2]",
+      "Meera · Follow-up",
+    ]);
+    expect(host.querySelector("mark")?.textContent).toBe("-up");
+    await searchFor(".*[");
+    expect(links()).toHaveLength(0);
+    expect(host.querySelector("mark")).toBeNull();
+    await searchFor("[2]");
+    expect(links()[0].textContent).toBe("Follow-up [2]");
+    expect(links()[0].getAttribute("href")).toBe(
+      `/analysis/calls/${call(8).submission_id}`,
+    );
+    expect(host.querySelector("mark")?.textContent).toBe("[2]");
   });
 
   it("clears a prior search when the progress shortcut opens saved skill calls", async () => {
