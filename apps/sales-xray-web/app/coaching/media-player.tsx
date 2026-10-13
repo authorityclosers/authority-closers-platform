@@ -168,6 +168,12 @@ function ClipCard({
     },
     [key, clip.start_ms, stopAt],
   );
+  // Audio mounts only on demand, so cleanup needs the latest player rather
+  // than the empty ref from the card's first render.
+  const checkpointCurrent = useCallback(
+    () => checkpoint(player.current),
+    [checkpoint],
+  );
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
@@ -175,7 +181,7 @@ function ClipCard({
       active.current = false;
       // A switch or fold can fall between timeupdate events. Keep the actual
       // paused position, including before the two-second device checkpoint.
-      const offset = checkpoint(player.current);
+      const offset = checkpointCurrent();
       if (offset !== null) setPosition(offset);
       setState("paused");
     };
@@ -189,7 +195,7 @@ function ClipCard({
       window.removeEventListener("sx-coaching-play", stopOther);
       window.removeEventListener("sx-coaching-fold", stopHidden);
     };
-  }, [identity, foldId, checkpoint]);
+  }, [identity, foldId, checkpointCurrent]);
   useEffect(() => {
     if (playState !== "loading") return;
     // Bound both a missing metadata response and an unresolved play().
@@ -206,9 +212,9 @@ function ClipCard({
       active.current = false;
       // Layout cleanup runs before React detaches the audio ref. Ref rechecks
       // in Strict Mode must not interrupt a newly mounted player's startup.
-      checkpoint(player.current);
+      checkpointCurrent();
     };
-  }, [checkpoint]);
+  }, [checkpointCurrent]);
   // A stored position shows after hydration (the server renders 0), and only
   // inside the window the server allows; before the first play it reads as
   // a paused clip.
@@ -254,7 +260,7 @@ function ClipCard({
     if (locked || state === "limit" || state === "loading") return;
     if (state === "playing") {
       active.current = false;
-      const offset = checkpoint(player.current);
+      const offset = checkpointCurrent();
       if (offset !== null) setPosition(offset);
       setState("paused");
       return;
