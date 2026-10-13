@@ -633,7 +633,7 @@ def install_submission_http(
         ):
             raise fail(
                 422,
-                "Choose one bounded audio file up to 32 MiB and accept the current upload terms.",
+                "Choose an audio or video file up to 100 MB and accept the current upload terms.",
             )
         # Authenticate before accepting bytes. No database transaction remains
         # open during network streaming or isolated native decoding.
