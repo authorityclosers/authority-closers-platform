@@ -1,5 +1,32 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 02:33–02:39 UTC — person-call search4 + distinct Team dates4
++ summary clips4 **12/12 final PASS** across bounded runs. Person/date cases
+pass at unchanged `298f412b`. Summary desktop/light passes at `e61dbe68`,
+phone2 at `3a31f295`, and desktop/dark retake at `b21e3c84`.
+Source order/IDs/routes, duplicate call labels/queued status/Devanagari,
+partial-source scope, prior8/all disclosure, Clear focus and supplied distinct
+call/share dates pass. Summary preserves prose and ordered original spans,
+pointer/Enter/Space selections, original revised-source words,32–44px targets,
+no-ref row absence, no media and no API mutations.
+
+All40 final step captures inspected/readable; final runtime/server/visual/
+Fast Refresh/API mutation errors0. Receipts/JUnit/log/PNGs in strike
+`shots/2026-10-13-summary-person-date-0233Z/` (person/date24),
+`shots/2026-10-13-summary-clips-continuation/` (desktop/light4),
+`shots/2026-10-13-summary-phone-framing/` (phone8), and
+`shots/2026-10-13-summary-desktop-dark-settle/` (dark4).
+Original summary4failures retain own missing first observation; original phone2
+covered-target failures retain nav-framing mismatch, fixed by ordinary centered
+scroll. Original desktop/dark first frame caught unsettled styles/2refresh;
+retake1PASS5.77s with no refresh. No product defect found there.
+Initial combined pytest45.34s/inner1, outerlauncher143 after completed receipt;
+summary continuation21.12s/1, phone26.19s/0, dark5.77s/0.
+B confirms duplicate-ref/different-summary browser examples absent; D confirms
+absent latest-date browser example absent. Those remain unit-only/browser
+unexecuted, separate from fictional UI, hosted access and real audio/provider.
+New saved-finding selector is a separate pending four-case criterion.
+
 13 October, 02:24 UTC — post-release foundation health **4/4 PASS**.
 Original-Host localhost8080 GETs return200 for staging/production web `/health`
 and API `/health/ready`, all at `e991cb39430213d1873b59a446ce3a38466170b0`.
