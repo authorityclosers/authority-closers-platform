@@ -76,7 +76,9 @@ path they skip. The original sixteen plus four each for format, persistence,
 quote, print, legacy-action, Team-search, Team-skill and supporting-moment checks,
 plus eight focus-to-moment, eight call-search and four rep-call reset cases,
 plus four Insights People, four Organisation People search and four Team
-current-area cases, plus four Insights name-search and four Team missing-focus cases, plus four each for summary clips, supplied shared dates and person-call search, collect 100 cases. The original Report
+current-area cases, four Insights name-search and four Team missing-focus cases,
+plus four each for summary clips, supplied shared dates and person-call search,
+collect 100 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an

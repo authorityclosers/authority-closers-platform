@@ -1907,6 +1907,8 @@ def test_fixture_summary_clips(browser: Browser, viewport: tuple[int, str]) -> N
         native_summary = source["account"]["content"]["summary"]
         expect(picture).to_contain_text(native_summary)
         expect(buttons).to_have_text(["00:05–00:10", "00:26–00:31", "00:36–00:40"])
+        summary.scroll_into_view_if_needed()
+        journey.snapshot("native-summary-before")
         for index, (action, span) in enumerate(
             zip(
                 ("pointer", "Enter", "Space"),
