@@ -3,6 +3,7 @@
 import { Lock, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -153,21 +154,40 @@ function ClipCard({
       ? clip.preview_end_ms
       : clip.end_ms;
   const key = resumeKey(clip);
+  const checkpoint = useCallback(
+    (audio: HTMLAudioElement | null) => {
+      if (!audio) return null;
+      audio.pause();
+      const at = Math.round(audio.currentTime * 1000);
+      const offset = Math.max(0, at - clip.start_ms);
+      if (offset <= 0 || at >= stopAt) return null;
+      saved.current = offset;
+      writeResume(key, offset);
+      return offset;
+    },
+    [key, clip.start_ms, stopAt],
+  );
+  const attachPlayer = useCallback(
+    (audio: HTMLAudioElement | null) => {
+      const previous = player.current;
+      // React clears the ref before effect cleanup when this view closes.
+      if (previous && previous !== audio && active.current) {
+        active.current = false;
+        checkpoint(previous);
+      }
+      player.current = audio;
+    },
+    [checkpoint],
+  );
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
       if (!active.current) return;
       active.current = false;
-      player.current?.pause();
       // A switch or fold can fall between timeupdate events. Keep the actual
       // paused position, including before the two-second device checkpoint.
-      const at = Math.round((player.current?.currentTime ?? 0) * 1000);
-      const offset = Math.max(0, at - clip.start_ms);
-      if (offset > 0 && at < stopAt) {
-        saved.current = offset;
-        writeResume(key, offset);
-        setPosition(offset);
-      }
+      const offset = checkpoint(player.current);
+      if (offset !== null) setPosition(offset);
       setState("paused");
     };
     const stopHidden = (event: Event) => {
@@ -180,7 +200,7 @@ function ClipCard({
       window.removeEventListener("sx-coaching-play", stopOther);
       window.removeEventListener("sx-coaching-fold", stopHidden);
     };
-  }, [identity, foldId, key, clip.start_ms, stopAt]);
+  }, [identity, foldId, checkpoint]);
   useEffect(() => {
     if (playState !== "loading") return;
     // Bound both a missing metadata response and an unresolved play().
@@ -241,8 +261,8 @@ function ClipCard({
     if (locked || state === "limit" || state === "loading") return;
     if (state === "playing") {
       active.current = false;
-      player.current?.pause();
-      remember(position, true);
+      const offset = checkpoint(player.current);
+      if (offset !== null) setPosition(offset);
       setState("paused");
       return;
     }
@@ -451,7 +471,7 @@ function ClipCard({
       {attempt > 0 && !locked && state !== "failed" ? (
         <audio
           key={attempt}
-          ref={player}
+          ref={attachPlayer}
           src={clipSource(clip)}
           preload="metadata"
           aria-label={CLIP.audio}

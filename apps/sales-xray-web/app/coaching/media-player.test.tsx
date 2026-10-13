@@ -438,6 +438,37 @@ describe("reviewed placeholder clips", () => {
       expect(resumed.currentTime).toBe(pausedAt);
     },
   );
+  it.each(["pause", "leaving"])(
+    "keeps the exact narration position on %s between timeupdate events",
+    async (interruption) => {
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      await act(async () => button("Play coaching clip").click());
+      const audio = host.querySelector("audio")!;
+      await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+      audio.currentTime = fictionalClip.start_ms / 1000 + 1.25;
+      vi.spyOn(audio, "pause").mockImplementation(() => {
+        audio.currentTime += 0.001;
+      });
+      expect(window.localStorage.length).toBe(0);
+      if (interruption === "pause")
+        await act(async () => button("Pause").click());
+      await act(async () => root.unmount());
+      expect(audio.pause).toHaveBeenCalledOnce();
+      const pausedAt = audio.currentTime;
+      root = createRoot(host);
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      expect(host.querySelector("audio")).toBeNull();
+      expect(button("Resume clip")).toBeTruthy();
+      await act(async () => button("Resume clip").click());
+      const resumed = host.querySelector("audio")!;
+      await act(async () => resumed.dispatchEvent(new Event("loadedmetadata")));
+      expect(resumed.currentTime).toBe(pausedAt);
+    },
+  );
   it("never restores a position outside the preview window", async () => {
     const [clip] = parseClips([
       {
