@@ -152,10 +152,20 @@ function ClipCard({
     clip.access === "preview" && clip.preview_end_ms
       ? clip.preview_end_ms
       : clip.end_ms;
+  const key = resumeKey(clip);
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
       if (!active.current) return;
+      // A switch or fold can fall between timeupdate events. Keep the actual
+      // paused position, including before the two-second device checkpoint.
+      const at = Math.round((player.current?.currentTime ?? 0) * 1000);
+      const offset = Math.max(0, at - clip.start_ms);
+      if (offset > 0 && at < stopAt) {
+        saved.current = offset;
+        writeResume(key, offset);
+        setPosition(offset);
+      }
       active.current = false;
       player.current?.pause();
       setState("paused");
@@ -170,7 +180,7 @@ function ClipCard({
       window.removeEventListener("sx-coaching-play", stopOther);
       window.removeEventListener("sx-coaching-fold", stopHidden);
     };
-  }, [identity, foldId]);
+  }, [identity, foldId, key, clip.start_ms, stopAt]);
   useEffect(() => {
     if (playState !== "loading") return;
     // Bound both a missing metadata response and an unresolved play().
@@ -189,7 +199,6 @@ function ClipCard({
   // A stored position shows after hydration (the server renders 0), and only
   // inside the window the server allows; before the first play it reads as
   // a paused clip.
-  const key = resumeKey(clip);
   const stored = useSyncExternalStore(
     noSubscription,
     () => (locked ? 0 : readResume(key)),

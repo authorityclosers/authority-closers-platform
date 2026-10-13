@@ -385,6 +385,54 @@ describe("reviewed placeholder clips", () => {
     await act(async () => next.dispatchEvent(new Event("timeupdate")));
     expect(window.localStorage.length).toBe(0);
   });
+  it.each(["another player", "folding"])(
+    "keeps the exact narration position when interrupted by %s before the next timeupdate",
+    async (interruption) => {
+      const secondary = {
+        ...fictionalClip,
+        topic_id: "fictional-interrupted",
+      };
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip, secondary]} />),
+      );
+      const disclosure = host.querySelector<HTMLDetailsElement>(
+        "details[data-other-lessons]",
+      )!;
+      disclosure.open = true;
+      const card = disclosure.querySelector("article")!;
+      await act(async () =>
+        card.querySelector<HTMLButtonElement>("button")!.click(),
+      );
+      const audio = card.querySelector("audio")!;
+      await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+      // A switch/fold can arrive between the browser's timeupdate events and
+      // before the periodic two-second device checkpoint.
+      audio.currentTime = secondary.start_ms / 1000 + 1.25;
+      expect(window.localStorage.length).toBe(0);
+      await act(async () => {
+        if (interruption === "folding") {
+          disclosure.open = false;
+          disclosure.dispatchEvent(new Event("toggle"));
+        } else {
+          window.dispatchEvent(
+            new CustomEvent("sx-coaching-play", { detail: "call-moment" }),
+          );
+        }
+      });
+      expect(audio.pause).toHaveBeenCalled();
+      expect(card.textContent).toContain("Resume clip");
+      await act(async () => root.unmount());
+      root = createRoot(host);
+      await act(async () => root.render(<CoachingMedia clips={[secondary]} />));
+      expect(host.querySelector("audio")).toBeNull();
+      expect(button("Resume clip")).toBeTruthy();
+      await act(async () => button("Resume clip").click());
+      const resumed = host.querySelector("audio")!;
+      expect(resumed.getAttribute("src")).toBe(clipSource(secondary));
+      await act(async () => resumed.dispatchEvent(new Event("loadedmetadata")));
+      expect(resumed.currentTime).toBe(secondary.start_ms / 1000 + 1.25);
+    },
+  );
   it("never restores a position outside the preview window", async () => {
     const [clip] = parseClips([
       {
