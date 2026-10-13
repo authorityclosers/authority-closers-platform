@@ -1364,15 +1364,16 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
 
 
 def test_fixture_team_skill_reps(browser: Browser, viewport: tuple[int, str]) -> None:
-    """A skill summary finds its current reps and clears conflicting list filters."""
+    """Skill summaries find current reps; progress reaches their saved skill calls."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":
         pytest.skip("Skill-to-rep checks use the fictional dev fixture")
-    data = json.loads(
+    payload = json.loads(
         (
             Path(__file__).resolve().parents[3]
             / "apps/sales-xray-web/app/review-fixture/coaching/sandbox-team.json"
         ).read_text()
-    )["team"]
+    )
+    data = payload["team"]
     skills = [
         skill
         for skill in data["suggestions"]
@@ -1462,6 +1463,65 @@ def test_fixture_team_skill_reps(browser: Browser, viewport: tuple[int, str]) ->
             "pointer_and_enter_focus_search": True,
             "current_focus_names_destinations_preserved": True,
             "call_suggestion_counts_preserved": True,
+            "product_destinations_opened": False,
+        }
+
+        page.get_by_role("button", name="One rep", exact=True).click()
+        rep = payload["rep"]
+        records = {point["submission_id"]: point["state"] for point in rep["progress"]}
+        skill_calls = [
+            call
+            for call in rep["calls"]
+            if call["state"] == "ready"
+            and call["submission_id"] in records
+            and records[call["submission_id"]] != "not_covered"
+        ]
+        progress_action = page.get_by_role("button", name="See calls on this skill", exact=True)
+        expect(progress_action).to_have_attribute("aria-controls", "coaching-calls")
+        history = page.locator("#coaching-calls")
+        history_links = history.get_by_role("list").get_by_role("link")
+        compact_calls = min(len(skill_calls), 3 if journey.width == 390 else 8)
+        progress_action.scroll_into_view_if_needed()
+        journey.snapshot("rep-progress")
+        journey.control_target(progress_action, "progress-calls")
+        for step, activation in (
+            ("rep-pointer-calls", "pointer"),
+            ("rep-keyboard-calls", "keyboard"),
+        ):
+            history.get_by_role("button", name="All calls", exact=True).click()
+            history.get_by_role(
+                "button", name=f"Show all {len(rep['calls'])} calls", exact=True
+            ).click()
+            expect(history_links).to_have_count(len(rep["calls"]))
+            if activation == "pointer":
+                progress_action.click()
+            else:
+                progress_action.focus()
+                page.keyboard.press("Enter")
+            expect(history).to_be_focused()
+            expect(history.get_by_role("heading").first).to_be_in_viewport()
+            expect(
+                history.get_by_role("button", name="On this skill", exact=True)
+            ).to_have_attribute("aria-pressed", "true")
+            expect(history.get_by_role("status")).to_have_text(f"{len(skill_calls)} calls")
+            expect(history_links).to_have_count(compact_calls)
+            for index, call in enumerate(skill_calls[:compact_calls]):
+                expect(history_links.nth(index)).to_contain_text(call["call_label"])
+                expect(history_links.nth(index)).to_have_attribute(
+                    "href", f"/coaching?call={call['submission_id']}"
+                )
+            page.keyboard.press("Tab")
+            assert history.evaluate("el => el.contains(document.activeElement)"), (
+                "Next Tab left the skill-call list after landing"
+            )
+            journey.snapshot(step)
+            journey.unclipped_text(history)
+        journey.observations[-1]["progress_calls"] = {
+            "saved_skill_call_count": len(skill_calls),
+            "compact_count": compact_calls,
+            "pointer_and_enter_focus_calls": True,
+            "expanded_all_calls_reset": True,
+            "source_names_destinations_preserved": True,
             "product_destinations_opened": False,
         }
 

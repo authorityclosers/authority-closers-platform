@@ -124,7 +124,10 @@ For the Team skill-summary action, select `-k fixture_team_skill_reps`.
 Four cases exercise each Find reps action, preserve call suggestion counts,
 check the exact current-focus names/routes and reset an expanded rep list.
 Enter activation clears a conflicting name/area filter and brings keyboard
-focus back to Find a rep. No product destination is opened.
+focus back to Find a rep. The same four cases then open One rep and check the
+committed progress action, See calls on this skill. Pointer/Enter must select
+the saved-record call filter, shorten an expanded history, focus its list and
+preserve source call names/routes. No product destination is opened.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
