@@ -2057,9 +2057,10 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
                     route.abort("blockedbyclient")
                 else:
                     source_requests[url.path] += 1
-                    if source_requests[url.path] == 1:
+                    if source_requests[url.path] in {1, 3}:
                         # Keep the browser's request pending; no server/provider
-                        # receives it. Retry gets a controlled unavailable reply.
+                        # receives it. The middle retry gets an unavailable reply;
+                        # the last attempt checks that moved focus is respected.
                         pending[url.path] = route
                     else:
                         route.fulfill(status=404, content_type="text/plain", body="")
@@ -2148,11 +2149,48 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
             assert source_requests[source] == 2, "Retry changed or duplicated its source request"
             if name == "moment":
                 expect(retry).to_have_attribute("aria-label", f"Try audio again {span}")
-            checks.append({"player": name, "deadline_ms": 15_000, "same_source_retries": 2})
+            journey.snapshot(f"{name}-keyboard-retry-focus")
+
+            # Loading must prevent another activation without dropping keyboard
+            # focus. Deliberately move to another existing control before expiry:
+            # the recovered player must then leave that chosen focus alone.
+            with page.expect_request(
+                lambda request, expected=source: urlsplit(request.url).path == expected
+            ):
+                page.keyboard.press("Enter")
+            loading = card.locator('button[aria-disabled="true"],button:disabled')
+            expect(loading).to_have_count(1)
+            expect(loading).to_be_disabled()
+            expect(loading).to_be_focused()
+            page.keyboard.press("Enter")
+            page.clock.fast_forward(1)
+            assert source_requests[source] == 3, "Loading activation duplicated its source request"
+            moved_focus = page.get_by_role("button", name="Design review", exact=True)
+            moved_focus.focus()
+            expect(moved_focus).to_be_focused()
+            page.clock.fast_forward(14_998)
+            expect(loading).to_be_disabled()
+            expect(card.get_by_role("status")).to_have_count(0)
+            page.clock.fast_forward(1)
+            expect(retry).to_be_enabled()
+            expect(moved_focus).to_be_focused()
+            expect(card.locator("audio")).to_have_count(0)
+            expect(card.get_by_role("status")).to_contain_text(failure_text)
+            assert source_requests[source] == 3
+            pending.pop(source).abort("blockedbyclient")
+            checks.append(
+                {
+                    "player": name,
+                    "deadline_ms": 15_000,
+                    "same_source_attempts": 3,
+                    "keyboard_retry_focus_retained": True,
+                    "loading_activation_inert": True,
+                    "deliberately_moved_focus_retained": True,
+                }
+            )
         expect(moment.locator("blockquote")).to_have_text(evidence["quote"])
-        expect(moment.get_by_role("button", name=re.compile(r"^Play moment"))).to_have_attribute(
-            "aria-label", original_time
-        )
+        final_moment_retry = moment.get_by_role("button", name=re.compile(r"^Try audio again"))
+        expect(final_moment_retry).to_have_attribute("aria-label", f"Try audio again {span}")
         expect(lesson.locator("h3")).to_have_text(clip["title"])
         expect(lesson).to_have_attribute("data-access", clip["access"])
         assert lesson.locator("details").text_content() == original_lesson
@@ -2162,10 +2200,11 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
         assert not pending and not unexpected_media and not mutations
         assert journey.live_refreshes == 0, "Live source changed during controlled startup"
         journey.observations[-1]["fictional_audio_startup"] = {
-            "source": "D166c9940 existing sandbox.json/me; intercepted stalled then404 sources",
+            "source": "existing sandbox.json/me; intercepted stalled/404/stalled sources",
             "players": checks,
             "quote_times_lesson_access_transcript_mission_query_preserved": True,
             "keyboard_retry_and_32_44px_targets": True,
+            "loading_activation_inert_and_moved_focus_not_stolen": True,
             "source_requests_intercepted": sum(source_requests.values()),
             "api_mutations": len(mutations),
             "actual_playback_provider_or_authenticated_acceptance": False,

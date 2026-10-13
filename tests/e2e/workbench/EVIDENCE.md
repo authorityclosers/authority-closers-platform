@@ -1,5 +1,13 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 04:07 UTC — prepared the existing four-case audio continuation
+for the D-owned focus repair. It retains the original keyboard-retry guard,
+adds inert loading activation and deliberately moved-focus preservation for
+both players, and captures the recovered keyboard focus. All sources remain
+intercepted; no browser verdict yet. Corrected the previously unreachable
+final source-time assertion to expect the honest retry label after failure.
+Original03:57 failure/remaining NOT RUN are retained below.
+
 13 October, 03:57 UTC — first new audio-startup pair **1 FAIL,3 NOT RUN**
 (-x), source `17052c4f`,32.32 seconds/launcher1. Moment loading remains
 disabled at14999ms and becomes enabled retry at15000ms, with audio removed,

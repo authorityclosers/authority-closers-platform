@@ -301,7 +301,9 @@ For the new stalled-audio recovery, select only
 `-k fixture_coaching_audio_startup`. Four cases use the existing local Design
 review at3026 and freeze the browser clock before interaction. The moment and
 recommended narration requests stay intercepted until their15-second deadline;
-keyboard retry receives an intercepted404 for that same source. Original quote,
+keyboard retry receives an intercepted404 for that same source. A third stalled
+attempt checks loading activation stays inert, keeps keyboard focus, and leaves
+focus on another existing control when the user moves it before timeout. Original quote,
 times, lesson/access/transcript, mission/query and32–44px retry targets remain
 checked. No source request reaches a server or provider. Real playback, preview
 limits, late play promises, switch/unmount cleanup and authenticated acceptance
