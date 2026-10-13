@@ -75,7 +75,7 @@ React-state result substitutes for this evidence. Without the explicit write
 path they skip. The original sixteen plus four each for format, persistence,
 quote, print, legacy-action, Team-search, Team-skill and supporting-moment checks,
 plus eight focus-to-moment, eight call-search and four rep-call reset cases,
-collect 68 cases. The original Report
+plus four Insights People cases, collect 72 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -147,6 +147,14 @@ call. Pointer/Enter on See calls must restore All calls, clear search, fold the
 list and focus its section, with the next Tab reaching Find a call. All source
 call names/routes and the native hash/query are retained. These fictional
 checks open no product call destination and invoke no API mutation.
+
+For the coordinator-requested Insights People disclosure, select
+`-k fixture_insights_people`. Four focused cases reuse G's existing fictional
+65-person API harness on shared dev3026, with a fresh browser and every
+non-read API request blocked. They preserve returned order, reach person65,
+collapse to50 with focus recovery and check the selected source key in the
+Person control, address and API read. This is fictional UI evidence; it creates
+no account/session or data and establishes no authenticated hosted acceptance.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.

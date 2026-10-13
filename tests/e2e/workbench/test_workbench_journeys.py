@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
@@ -12,7 +14,7 @@ from datetime import UTC, datetime
 from html import unescape
 from http.cookiejar import HTTPONLY_ATTR, LoadError, MozillaCookieJar
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from zipfile import ZipFile
 
 import pytest
@@ -1846,6 +1848,155 @@ def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) ->
             "product_destinations_opened": False,
         }
         assert not mutation_requests, "Read-only rep shortcut attempted an API mutation"
+
+
+def test_fixture_insights_people(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Reach all 65 fictional returned people and retain filter identity/focus."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Insights expansion checks use G's fictional read-only harness")
+    if (
+        os.environ.get("WB_STORAGE_STATE")
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.fail(
+            "Fictional Insights replies require shared dev3026 and a fresh no-session browser"
+        )
+    node_binary = shutil.which("node")
+    assert node_binary, "The existing fictional harness requires Node"
+    root = Path(__file__).resolve().parents[3]
+    fixture = json.loads(
+        (root / "apps/sales-xray-web/app/review-fixture/insights/sandbox.json").read_text()
+    )
+    # Exact 65-person source construction from G's existing populated dev harness.
+    base_people = fixture["overview"]["people"]
+    people = [
+        {
+            **base_people[index % len(base_people)],
+            "key": f"fictional-person-{index + 1}",
+            "name": f"Fictional rep {index + 1}",
+        }
+        for index in range(65)
+    ]
+    overview = {
+        **fixture["overview"],
+        "totals": {**fixture["overview"]["totals"], "people": len(people)},
+        "people": people,
+        "pending": 0,
+        "facets": {**fixture["overview"]["facets"], "people": people},
+    }
+    endpoint = "/v1/conversation/acquisition/insights"
+    with _journey(browser, viewport, "insights-people") as journey:
+        page = journey.page
+        reads: list[str] = []
+        mutations: list[str] = []
+
+        def fictional_read(route: Route) -> None:
+            request = route.request
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+                return
+            url = urlsplit(request.url)
+            reads.append(url.path)
+            if url.path == endpoint:
+                reply = {"status": 200, "body": overview}
+            elif url.path == endpoint + "/calls":
+                reply = {"status": 200, "body": fixture["calls"]}
+            else:
+                reply = json.loads(
+                    # Read-only fixture arguments; no shell or executable from the request.
+                    subprocess.check_output(  # noqa: S603
+                        [
+                            node_binary,
+                            str(Path(__file__).with_name("fictional-api-reply.mjs")),
+                            request.method,
+                            url.path,
+                            "?" + url.query if url.query else "",
+                        ],
+                        text=True,
+                        timeout=10,
+                    )
+                )
+            route.fulfill(
+                status=reply["status"],
+                content_type="application/json",
+                body=json.dumps(reply["body"]),
+            )
+
+        journey.context.route("**/v1/**", fictional_read)
+        journey.context.add_init_script(
+            "localStorage.setItem("
+            "'sx.guide.off:00000000-0000-4000-8000-000000000001:first-call', '1');"
+        )
+        journey.open("/organisation/insights?view=people")
+        expect(page.get_by_text("Synthetic sandbox data", exact=True)).to_be_visible()
+        surface = page.get_by_role(
+            "list" if journey.width == 390 else "table", name="People", exact=True
+        )
+        names = surface.locator(
+            "article button" if journey.width == 390 else "tbody td:first-child button"
+        )
+        more = page.get_by_role("button", name="Show more", exact=True)
+        fewer = page.get_by_role("button", name="Show fewer", exact=True)
+        count = page.get_by_role("status").filter(
+            has_text=re.compile(r"^Showing \d+ of 65 people$")
+        )
+        expect(names).to_have_text([person["name"] for person in people[:50]])
+        expect(count).to_have_text("Showing 50 of 65 people")
+        expect(more).to_have_attribute("aria-expanded", "false")
+        more.scroll_into_view_if_needed()
+        journey.snapshot("compact")
+        journey.control_target(more, "show-people")
+        reads_before = len(reads)
+        more.click()
+        expect(names).to_have_text([person["name"] for person in people])
+        expect(count).to_have_text("Showing 65 of 65 people")
+        expect(fewer).to_have_attribute("aria-expanded", "true")
+        expect(names.last).to_have_text(people[-1]["name"])
+        names.last.scroll_into_view_if_needed()
+        journey.snapshot("last-returned")
+        journey.control_target(names.last, "last-person")
+        journey.control_target(fewer, "show-fewer-people")
+        # Exercise hidden-tail focus recovery, as in G's existing harness.
+        names.last.focus()
+        fewer.evaluate("button => button.click()")
+        expect(more).to_be_focused()
+        expect(names).to_have_count(50)
+        expect(count).to_have_text("Showing 50 of 65 people")
+        assert len(reads) == reads_before, "Disclosure unexpectedly fetched another API page"
+        more.scroll_into_view_if_needed()
+        journey.snapshot("collapsed-focus")
+        more.focus()
+        page.keyboard.press("Enter")
+        expect(names).to_have_count(65)
+        last = people[-1]
+        with page.expect_response(
+            lambda response: (
+                urlsplit(response.url).path == endpoint
+                and parse_qs(urlsplit(response.url).query).get("person") == [last["key"]]
+            )
+        ) as filtered:
+            names.last.click()
+        assert filtered.value.status == 200
+        expect(page.get_by_role("combobox", name="Person", exact=True)).to_have_value(last["key"])
+        address = urlsplit(page.url)
+        assert address.path == "/organisation/insights"
+        assert parse_qs(address.query).get("person") == [last["key"]]
+        assert parse_qs(address.query).get("view") == ["people"]
+        page.get_by_role("group", name="Filters", exact=True).scroll_into_view_if_needed()
+        journey.snapshot("last-person-filter")
+        journey.observations[-1]["fictional_insights"] = {
+            "source": "G19eca7b7's existing 65-person fictional API harness",
+            "returned_people": len(people),
+            "compact_people": 50,
+            "source_order_and_last_person_preserved": True,
+            "disclosure_fetches": 0,
+            "collapse_restores_control_focus": True,
+            "last_source_key_in_address_api_and_selector": True,
+            "api_mutations": len(mutations),
+            "authenticated_hosted_acceptance": False,
+        }
+        assert not mutations, "Fictional Insights attempted an API mutation"
 
 
 @pytest.mark.parametrize("kind", ["review", "sandbox"])
