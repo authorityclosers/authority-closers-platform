@@ -177,6 +177,7 @@ export function EvidencePlayer({
       });
   };
   const play = () => {
+    if (state === "loading") return;
     if (state === "playing") {
       active.current = false;
       audio.current?.pause();
@@ -203,7 +204,7 @@ export function EvidencePlayer({
           type="button"
           className={styles.time}
           onClick={play}
-          disabled={state === "loading"}
+          aria-disabled={state === "loading" || undefined}
           data-state={state}
           style={
             state === "playing"
@@ -302,6 +303,11 @@ export function EvidencePlayer({
               active.current = false;
               setState("idle");
             }
+          }}
+          onEnded={() => {
+            // The recording can finish before this excerpt's saved end time.
+            active.current = false;
+            setState("idle");
           }}
           onError={() => {
             active.current = false;

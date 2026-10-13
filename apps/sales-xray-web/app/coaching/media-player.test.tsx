@@ -229,7 +229,7 @@ describe("reviewed placeholder clips", () => {
     const first = host.querySelector("audio")!;
     const source = first.getAttribute("src");
     await act(async () => vi.advanceTimersByTime(14_999));
-    expect(button("Loading clip…").disabled).toBe(true);
+    expect(button("Loading clip…").getAttribute("aria-disabled")).toBe("true");
     await act(async () => vi.advanceTimersByTime(1));
     expect(button("Try clip again").disabled).toBe(false);
     expect(host.querySelector("audio")).toBeNull();
@@ -274,11 +274,51 @@ describe("reviewed placeholder clips", () => {
       expect(button("Try clip again")).toBeTruthy();
       await act(async () => button("Try clip again").click());
       await act(async () => settle());
-      expect(button("Loading clip…").disabled).toBe(true);
+      expect(button("Loading clip…").getAttribute("aria-disabled")).toBe(
+        "true",
+      );
       await act(async () =>
         host.querySelector("audio")!.dispatchEvent(new Event("loadedmetadata")),
       );
       expect(button("Pause")).toBeTruthy();
+    },
+  );
+  it.each(["timeout", "error"] as const)(
+    "keeps narration retry focused after %s and leaves another control focused",
+    async (failure) => {
+      vi.useFakeTimers();
+      HTMLElement.prototype.scrollIntoView = vi.fn();
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      const play = button("Play coaching clip");
+      play.focus();
+      await act(async () => play.click());
+      const audio = host.querySelector("audio")!;
+      expect(play.disabled).toBe(false);
+      expect(play.getAttribute("aria-disabled")).toBe("true");
+      expect(document.activeElement).toBe(play);
+      await act(async () => play.click());
+      await act(async () => requestClip(fictionalClip));
+      expect(host.querySelector("audio")).toBe(audio);
+      expect(audio.play).not.toHaveBeenCalled();
+      const fail = async () => {
+        if (failure === "timeout")
+          await act(async () => vi.advanceTimersByTime(15_000));
+        else
+          await act(async () =>
+            host.querySelector("audio")!.dispatchEvent(new Event("error")),
+          );
+      };
+      await fail();
+      expect(button("Try clip again")).toBe(play);
+      expect(play.getAttribute("aria-disabled")).toBeNull();
+      expect(document.activeElement).toBe(play);
+      const next = button("Next slide");
+      await act(async () => play.click());
+      next.focus();
+      await fail();
+      expect(document.activeElement).toBe(next);
     },
   );
   it("clears a narration startup deadline when another player starts or the card unmounts", async () => {

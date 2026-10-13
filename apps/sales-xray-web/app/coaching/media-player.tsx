@@ -228,7 +228,7 @@ function ClipCard({
       });
   };
   const toggle = () => {
-    if (locked || state === "limit") return;
+    if (locked || state === "limit" || state === "loading") return;
     if (state === "playing") {
       active.current = false;
       player.current?.pause();
@@ -300,9 +300,9 @@ function ClipCard({
           type="button"
           className={styles.clipPlay}
           onClick={toggle}
-          disabled={state === "loading" || state === "limit"}
+          disabled={state === "limit"}
           data-locked={locked ? "" : undefined}
-          aria-disabled={locked || undefined}
+          aria-disabled={locked || state === "loading" || undefined}
           title={locked ? CLIP.lockedTitle : PLAY_LABEL[state]}
         >
           {locked ? (

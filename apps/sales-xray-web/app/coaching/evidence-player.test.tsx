@@ -98,6 +98,42 @@ describe("Evidence playback", () => {
     expect(clipLength(120_000)).toBe("2 min");
     expect(clipLength(200)).toBe("1 s");
   });
+  it.each(["playing", "loading"] as const)(
+    "returns from %s to one-click replay when the recording ends before the excerpt",
+    async (state) => {
+      vi.useFakeTimers();
+      let resolvePlay: () => void = () => {};
+      if (state === "loading")
+        vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+          () => new Promise<void>((resolve) => (resolvePlay = resolve)),
+        );
+      await act(async () =>
+        root.render(<EvidencePlayer evidence={evidence} />),
+      );
+      const play = host.querySelector<HTMLButtonElement>("button")!;
+      await act(async () => play.click());
+      const audio = host.querySelector("audio")!;
+      const source = audio.getAttribute("src");
+      await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+      expect(play.dataset.state).toBe(state);
+      audio.currentTime = evidence.end_ms / 1000 - 1;
+      await act(async () => audio.dispatchEvent(new Event("ended")));
+      await act(async () => resolvePlay());
+      expect(play.dataset.state).toBe("idle");
+      expect(play.disabled).toBe(false);
+      expect(play.getAttribute("aria-label")).toMatch(/^Play moment /);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(host.querySelector("blockquote")?.textContent).toBe(
+        evidence.quote,
+      );
+      expect(audio.getAttribute("src")).toBe(source);
+      await act(async () => play.click());
+      expect(host.querySelector("audio")).toBe(audio);
+      expect(audio.currentTime).toBe(evidence.start_ms / 1000);
+      expect(audio.play).toHaveBeenCalledTimes(2);
+      expect(play.dataset.state).toBe("playing");
+    },
+  );
   it("offers a retry after a source failure and leaves the transcript inspectable", async () => {
     await act(async () => root.render(<EvidencePlayer evidence={evidence} />));
     await act(async () =>
@@ -120,7 +156,7 @@ describe("Evidence playback", () => {
     const first = host.querySelector("audio")!;
     const source = first.getAttribute("src");
     await act(async () => vi.advanceTimersByTime(14_999));
-    expect(play.disabled).toBe(true);
+    expect(play.getAttribute("aria-disabled")).toBe("true");
     await act(async () => vi.advanceTimersByTime(1));
     expect(play.disabled).toBe(false);
     expect(play.getAttribute("aria-label")).toMatch(/^Try audio again /);
@@ -167,6 +203,43 @@ describe("Evidence playback", () => {
       const retry = host.querySelector("audio")!;
       await act(async () => retry.dispatchEvent(new Event("loadedmetadata")));
       expect(play.dataset.state).toBe("playing");
+    },
+  );
+  it.each(["timeout", "error"] as const)(
+    "keeps keyboard focus on retry after %s, without blocking focus elsewhere",
+    async (failure) => {
+      vi.useFakeTimers();
+      await act(async () =>
+        root.render(<EvidencePlayer evidence={evidence} />),
+      );
+      const play = host.querySelector<HTMLButtonElement>("button")!;
+      play.focus();
+      await act(async () => play.click());
+      const audio = host.querySelector("audio")!;
+      expect(play.disabled).toBe(false);
+      expect(play.getAttribute("aria-disabled")).toBe("true");
+      expect(document.activeElement).toBe(play);
+      // A second activation while loading keeps the source and deadline.
+      await act(async () => play.click());
+      expect(host.querySelector("audio")).toBe(audio);
+      expect(audio.play).not.toHaveBeenCalled();
+      const fail = async () => {
+        if (failure === "timeout")
+          await act(async () => vi.advanceTimersByTime(15_000));
+        else
+          await act(async () =>
+            host.querySelector("audio")!.dispatchEvent(new Event("error")),
+          );
+      };
+      await fail();
+      expect(play.getAttribute("aria-disabled")).toBeNull();
+      expect(play.getAttribute("aria-label")).toMatch(/^Try audio again /);
+      expect(document.activeElement).toBe(play);
+      const call = host.querySelector<HTMLAnchorElement>("a")!;
+      await act(async () => play.click());
+      call.focus();
+      await fail();
+      expect(document.activeElement).toBe(call);
     },
   );
   it("clears the startup deadline on switch and unmount", async () => {
