@@ -1873,6 +1873,147 @@ def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) ->
         assert not mutation_requests, "Read-only rep shortcut attempted an API mutation"
 
 
+@pytest.mark.parametrize("scene", ("call", "rep-call", "report"))
+def test_fixture_call_focus_moments(
+    browser: Browser, viewport: tuple[int, str], scene: str
+) -> None:
+    """Call/retained Report focus reaches original moments below sticky navigation."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Call-to-moment navigation uses D's existing fictional surfaces")
+    report = scene == "report"
+    data = "sandbox" if scene == "rep-call" else "review"
+    payload = None
+    if not report:
+        filename = "sandbox-team.json" if data == "sandbox" else "sandbox.json"
+        payload = json.loads(
+            (
+                Path(__file__).resolve().parents[3]
+                / "apps/sales-xray-web/app/review-fixture/coaching"
+                / filename
+            ).read_text()
+        )["call"]
+    with _journey(browser, viewport, f"call-focus-moments-{scene}") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        media: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            request = route.request
+            path = urlsplit(request.url).path
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif re.search(r"/(source|media)/", path) or path.endswith("/source"):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        page.on(
+            "request",
+            lambda request: media.append("media") if request.resource_type == "media" else None,
+        )
+        journey.open(
+            "/review-fixture/report/story?call=00000000-0000-4000-8000-000000000077&view=coaching&section=call-coaching"
+            if report
+            else f"/review-fixture/coaching?data={data}&view=call"
+        )
+        if not report:
+            expect(
+                page.get_by_role(
+                    "button",
+                    name="AC Sandbox" if data == "sandbox" else "Design review",
+                    exact=True,
+                )
+            ).to_have_attribute("aria-pressed", "true")
+            expect(page.get_by_role("button", name="This call", exact=True)).to_have_attribute(
+                "aria-pressed", "true"
+            )
+        page.evaluate("() => document.fonts.ready")
+        page.wait_for_load_state("networkidle", timeout=15000)
+        hero = page.locator("#report-coaching-focus" if report else "#coaching-focus")
+        target_id = "report-coaching-why" if report else "coaching-why"
+        target = page.locator(f"#{target_id}")
+        jump = hero.get_by_role("link", name="See the moments", exact=True)
+        expect(jump).to_have_attribute("href", f"#{target_id}")
+        expect(jump).to_have_attribute("aria-controls", target_id)
+        expect(target).to_have_attribute("tabindex", "-1")
+        expect(target).to_have_attribute("aria-labelledby", f"{target_id}-heading")
+        source_text = target.inner_text()
+        quotes = target.locator("blockquote").all_text_contents()
+        assert quotes, "No original moment quote was supplied"
+        times = target.locator(
+            '[aria-label^="Moment at"],button[aria-label^="Play moment"]'
+        ).all_text_contents()
+        if payload:
+            assert quotes == [moment["quote"] for moment in payload["evidence"]]
+            expect(hero).to_contain_text(payload["focus"]["label"])
+            assert times == [
+                f"{moment['start_ms'] // 60000}:{moment['start_ms'] // 1000 % 60:02d}"
+                for moment in payload["evidence"]
+            ]
+        mission = page.locator("[data-active-mission]")
+        mission_text = mission.inner_text()
+        hero.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("focus-source-shortcut")
+        journey.control_target(jump, "call-moments-shortcut")
+
+        def landed() -> None:
+            expect(target).to_be_focused()
+            heading = target.get_by_role("heading").first
+            expect(heading).to_be_in_viewport()
+            assert heading.evaluate("""el => {
+                const r = el.getBoundingClientRect();
+                const hit = document.elementFromPoint(r.x + r.width/2,r.y + r.height/2);
+                return hit === el || el.contains(hit);
+            }"""), "Moment heading is covered by sticky navigation"
+            location = urlsplit(page.url)
+            assert location.fragment == target_id
+            assert parse_qs(location.query).get("view") == ["coaching" if report else "call"]
+            if report:
+                assert parse_qs(location.query).get("call") == [
+                    "00000000-0000-4000-8000-000000000077"
+                ]
+            else:
+                assert parse_qs(location.query).get("data") == [data]
+            assert target.inner_text() == source_text
+            assert target.locator("blockquote").all_text_contents() == quotes
+            assert (
+                target.locator(
+                    '[aria-label^="Moment at"],button[aria-label^="Play moment"]'
+                ).all_text_contents()
+                == times
+            )
+            assert mission.inner_text() == mission_text
+            expect(target.locator("blockquote").first).to_be_visible()
+
+        jump.click()
+        landed()
+        page.keyboard.press("Tab")
+        assert target.evaluate("el => el.contains(document.activeElement)"), (
+            "Next Tab left the moments"
+        )
+        jump.focus()
+        page.keyboard.press("Enter")
+        landed()
+        journey.snapshot("original-moments-native-focus")
+        expect(page.locator("audio[src]")).to_have_count(0)
+        assert not media, "Call moment navigation fetched media or a recording source"
+        assert not mutations, "Call moment navigation attempted an API mutation"
+        journey.observations[-1]["fictional_call_focus_moments"] = {
+            "source": "D021e7fa0/0fc46c26 existing call/retained Report authored examples",
+            "original_quotes": len(quotes),
+            "original_times_unchanged": True,
+            "pointer_enter_focus_and_heading_actual_hit": True,
+            "next_tab_inside_and_query_mission_unchanged": True,
+            "shortcut_32_44px": True,
+            "media_requests": len(media),
+            "api_mutations": len(mutations),
+            "authenticated_or_canonical_report_acceptance": False,
+        }
+
+
 @pytest.mark.parametrize("scene", ("personal", "rep", "call", "rep-call"))
 def test_fixture_coaching_focus_lesson(
     browser: Browser, viewport: tuple[int, str], scene: str

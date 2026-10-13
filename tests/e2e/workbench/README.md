@@ -78,7 +78,7 @@ plus eight focus-to-moment, eight call-search and four rep-call reset cases,
 plus four Insights People, four Organisation People search and four Team
 current-area cases, four Insights name-search and four Team missing-focus cases,
 plus four each for summary clips, supplied shared dates and person-call search,
-and four current-skill finding-filter cases, plus four skill-clip disclosure cases, plus sixteen lesson/mission anchor cases, collect 124 cases. The original Report
+and four current-skill finding-filter cases, plus four skill-clip disclosure cases, plus sixteen lesson/mission anchor cases, and twelve call/retained-Report moment-anchor cases, collect 136 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -278,3 +278,10 @@ See the lesson/mission with pointer and Enter, exact target/hash/query/focus,
 next Tab inside the folded lesson, unchanged source content, one-row32–44px
 controls and no media/source reads or API writes. These16cases do not prove
 canonical Report integration or authenticated lesson/sharing access.
+
+For the call-to-moments shortcut, select only `-k fixture_call_focus_moments`.
+Its three existing fictional surfaces retain original quotes/times/mission/query,
+check32–44px and pointer/Enter target focus, require an actual heading hit below
+sticky navigation and next Tab inside, with no media/source reads or writes.
+The retained Report example is authored UI evidence; canonical Report bootstrap
+and authenticated acceptance remain separate.
