@@ -1,5 +1,20 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 05:26 UTC — interrupted lesson resume **8/8 PASS**,130.89s/
+launcher0 at unchanged `29364cc5`. Moment-switch and secondary-fold cases
+save exactly the native paused window offset (849–1124ms), before the first
+device checkpoint. Reload fetches no audio; Enter resumes the same source at
+the exact saved position with keyboard focus and32–44px targets. Original
+quote/lesson/UI access/transcript/mission/query remain unchanged, including
+the secondary15-second preview label. Runtime/server/font/overflow/refresh/
+unexpected-media/API writes0. All16 PNGs inspected/readable.
+
+Receipt/JUnit/log/screens: `shots/2026-10-13-lesson-interruption-0524Z/`.
+Native media is the local70s silent response; call source returns intercepted404.
+Only isolated browser device position changes; no canonical progress, actual
+recording/provider/authenticated acceptance. Own finite job exited. Previous
+audio4, ended4 and Hear4 passes retained; B's new Worked/Didn't disclosure is next.
+
 13 October, 05:19 UTC — prepared only interrupted-lesson resume8 from
 the completed D135be632/b7623097 handoff. Reuse its70-second local silent
 PCM response and intercepted404 call source. Check both moment-switch and
