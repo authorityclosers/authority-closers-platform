@@ -688,6 +688,45 @@ button.barRow:focus-visible {
 
 /* ---------- People table ---------- */
 
+.peopleSearch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.peopleSearchField {
+  display: grid;
+  flex: 1 1 180px;
+  gap: 4px;
+  min-width: 0;
+  max-width: 320px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.peopleSearchField input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.peopleSearchField input:focus-visible {
+  border-color: var(--sx-accent);
+  box-shadow: 0 0 0 3px var(--sx-accent-soft);
+  outline: none;
+}
+
 .peopleButton {
   display: inline-flex;
   align-items: center;

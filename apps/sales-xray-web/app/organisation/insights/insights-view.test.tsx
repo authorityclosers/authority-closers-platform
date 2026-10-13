@@ -73,6 +73,26 @@ function returnedPeople(size: number) {
   };
 }
 
+const peopleSearch = () =>
+  host.querySelector<HTMLInputElement>('input[type="search"]')!;
+const peopleTable = () => host.querySelector('table[aria-label="People"]')!;
+const peopleCards = () =>
+  host.querySelector('[role="list"][aria-label="People"]')!;
+const button = (name: string) =>
+  Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(
+    (item) => item.textContent === name,
+  )!;
+
+async function searchPeople(value: string) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(peopleSearch(), value);
+    peopleSearch().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 it.each([51, 125])(
   "reaches all %i returned people in source order and folds with focus",
   async (size) => {
@@ -203,6 +223,193 @@ it.each([0, 1, 50])(
       ),
     ).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  },
+);
+
+it("matches names beyond 50, keeping duplicate identities, source order and figures", async () => {
+  const overview = { ...returnedPeople(65), source: "call", synthetic: false };
+  overview.people[1].name = "Casey Fixture";
+  overview.people[54].name = "Casey Fixture";
+  overview.people[64].name = "Casey Park";
+  const matched = [
+    overview.people[1],
+    overview.people[54],
+    overview.people[64],
+  ];
+  await render(
+    <InsightsView
+      view="people"
+      filters={DEFAULT_FILTERS}
+      initial={{ status: 200, body: overview }}
+      initialCalls={{ status: 200, body: fixture.calls }}
+    />,
+  );
+  expect(peopleSearch().closest("label")?.textContent).toBe("Search people");
+  expect(button("Clear search").disabled).toBe(true);
+  await act(async () => button("Show more").click());
+  const beforeRows = Array.from(peopleTable().querySelectorAll("tbody tr"));
+  const beforeCards = Array.from(peopleCards().querySelectorAll("article"));
+  const figures = [1, 54, 64].map((index) => beforeRows[index].textContent);
+  const cardFigures = [1, 54, 64].map(
+    (index) => beforeCards[index].textContent,
+  );
+  await act(async () => button("Show fewer").click());
+
+  await searchPeople("  CaSeY  ");
+  expect(host.textContent).toContain("Matches: 3 of 65 people");
+  expect(
+    document.getElementById(peopleSearch().getAttribute("aria-describedby")!)
+      ?.textContent,
+  ).toBe("Matches: 3 of 65 people");
+  expect(
+    Array.from(
+      peopleTable().querySelectorAll("tbody tr"),
+      (row) => row.textContent,
+    ),
+  ).toEqual(figures);
+  expect(
+    Array.from(
+      peopleCards().querySelectorAll("article"),
+      (card) => card.textContent,
+    ),
+  ).toEqual(cardFigures);
+  for (const surface of [peopleTable(), peopleCards()]) {
+    expect(
+      Array.from(
+        surface.querySelectorAll('a[href^="/organisation/people/"]'),
+        (link) => link.getAttribute("href"),
+      ),
+    ).toEqual(
+      matched.map(
+        (person) => `/organisation/people/${encodeURIComponent(person.key)}`,
+      ),
+    );
+  }
+  expect(host.textContent).toContain("65 with calls");
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it.each([false, true])(
+  "clearing name search restores expanded=%s and input focus without a read",
+  async (expanded) => {
+    await render(
+      <InsightsView
+        view="people"
+        filters={DEFAULT_FILTERS}
+        initial={{ status: 200, body: returnedPeople(65) }}
+        initialCalls={{ status: 200, body: fixture.calls }}
+      />,
+    );
+    if (expanded) await act(async () => button("Show more").click());
+    const address = window.location.href;
+    await searchPeople("Fictional person");
+    expect(peopleTable().querySelectorAll("tbody tr")).toHaveLength(65);
+    expect(peopleCards().querySelectorAll('[role="listitem"]')).toHaveLength(
+      65,
+    );
+    expect(host.textContent).toContain("Matches: 65 of 65 people");
+    expect(button("Show more")).toBeUndefined();
+    expect(button("Show fewer")).toBeUndefined();
+    expect(window.location.href).toBe(address);
+    await act(async () => button("Clear search").click());
+    expect(peopleSearch().value).toBe("");
+    expect(document.activeElement).toBe(peopleSearch());
+    expect(button("Clear search").disabled).toBe(true);
+    const size = expanded ? 65 : 50;
+    expect(peopleTable().querySelectorAll("tbody tr")).toHaveLength(size);
+    expect(peopleCards().querySelectorAll('[role="listitem"]')).toHaveLength(
+      size,
+    );
+    expect(host.textContent).toContain(`Showing ${size} of 65 people`);
+    expect(
+      button(expanded ? "Show fewer" : "Show more").getAttribute(
+        "aria-expanded",
+      ),
+    ).toBe(String(expanded));
+    expect(window.location.href).toBe(address);
+    expect(fetchMock).not.toHaveBeenCalled();
+  },
+);
+
+it("searches only names and clears a quiet empty result, including whitespace", async () => {
+  await render(
+    <InsightsView
+      view="people"
+      filters={DEFAULT_FILTERS}
+      initial={{ status: 200, body: returnedPeople(65) }}
+      initialCalls={{ status: 200, body: fixture.calls }}
+    />,
+  );
+  for (const query of [
+    "fictional-person-65",
+    fixture.overview.people[0].team,
+    "Missing name",
+  ]) {
+    await searchPeople(query);
+    expect(host.textContent).toContain("No people match this name.");
+    expect(host.textContent).toContain("Matches: 0 of 65 people");
+    expect(peopleTable()).toBeNull();
+    expect(peopleCards()).toBeNull();
+  }
+  await searchPeople("   ");
+  expect(host.textContent).not.toContain("No people match this name.");
+  expect(host.textContent).toContain("Showing 50 of 65 people");
+  expect(button("Clear search").disabled).toBe(false);
+  await act(async () => button("Clear search").click());
+  expect(document.activeElement).toBe(peopleSearch());
+  expect(button("Clear search").disabled).toBe(true);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it.each(["person", "team"])(
+  "keeps the searched last person's %s filter action",
+  async (filter) => {
+    const overview = {
+      ...returnedPeople(65),
+      source: "call",
+      synthetic: false,
+    };
+    const last = overview.people.at(-1)!;
+    last.key = "fictional/person?65";
+    const team = overview.teams.find((item) => item.name === last.team)!;
+    fetchMock.mockImplementation(async (path: string) =>
+      json(path.includes("/calls") ? fixture.calls : overview),
+    );
+    await render(
+      <InsightsView
+        view="people"
+        filters={DEFAULT_FILTERS}
+        initial={{ status: 200, body: overview }}
+        initialCalls={{ status: 200, body: fixture.calls }}
+      />,
+    );
+    await searchPeople(last.name);
+    expect(peopleTable().querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(peopleCards().querySelectorAll('[role="listitem"]')).toHaveLength(1);
+    for (const surface of [peopleTable(), peopleCards()]) {
+      expect(
+        surface
+          .querySelector('a[href^="/organisation/people/"]')
+          ?.getAttribute("href"),
+      ).toBe(`/organisation/people/${encodeURIComponent(last.key)}`);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    const target = Array.from(
+      peopleTable().querySelectorAll<HTMLButtonElement>("button"),
+    ).find(
+      (item) =>
+        item.textContent === (filter === "person" ? last.name : last.team),
+    )!;
+    await act(async () => target.click());
+    const key = filter === "person" ? last.key : team.key;
+    expect(new URL(window.location.href).searchParams.get(filter)).toBe(key);
+    expect(new URL(window.location.href).searchParams.get("view")).toBe(
+      "people",
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/v1/conversation/acquisition/insights?${filter}=${encodeURIComponent(key)}`,
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
   },
 );
 
