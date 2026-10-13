@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SalesReport, Transcript } from "./report-contract";
 import { ReportDocument } from "./report-document";
 import type { DocumentReportData } from "./report-document-data";
+import { SourceWaveformProvider, type ClipRange } from "./source-waveform";
 import {
   amitReport,
   amitTranscript,
@@ -143,6 +144,138 @@ it("plays a moment through the report's player when one is given", async () => {
   expect(onSelect).toHaveBeenCalledOnce();
   expect(onSelect.mock.calls[0][0]).toHaveProperty("start_ms");
 });
+
+it("shows Pause on its active clip, then Play when paused or ended, preserving the selection", async () => {
+  const onSelect = vi.fn();
+  const audio = document.createElement("audio");
+  const audioRef = { current: audio };
+  let paused = true;
+  let ended = false;
+  Object.defineProperties(audio, {
+    paused: { get: () => paused },
+    ended: { get: () => ended },
+  });
+  const renderPlayer = async (activeRange: ClipRange | null) => {
+    await act(async () =>
+      root.render(
+        <SourceWaveformProvider audioRef={audioRef} activeRange={activeRange}>
+          <ReportDocument
+            data={DATA}
+            id="report"
+            textSize="100"
+            onSelect={onSelect}
+          />
+        </SourceWaveformProvider>,
+      ),
+    );
+  };
+  await renderPlayer(null);
+  const play = container.querySelector<HTMLButtonElement>(
+    "button[aria-pressed]",
+  )!;
+  await act(async () => play.click());
+  const [source, title] = onSelect.mock.calls[0];
+  const initialText = play.textContent!;
+  const initialLabel = play.getAttribute("aria-label")!;
+  await renderPlayer(source);
+  const emit = async (event: string) => {
+    await act(async () => {
+      audio.dispatchEvent(new Event(event));
+    });
+  };
+  audio.currentTime = (source.start_ms + 500) / 1000;
+  paused = false;
+  await emit("play");
+  expect(play.textContent).toBe(initialText.replace(/Play$/, "Pause"));
+  expect(play.getAttribute("aria-label")).toBe(
+    initialLabel.replace(/^Play /, "Pause "),
+  );
+  expect(play.getAttribute("aria-pressed")).toBe("true");
+  expect(play.querySelector(".lucide-pause")).not.toBeNull();
+  await act(async () => play.click());
+  expect(onSelect.mock.calls[1][0]).toBe(source);
+  expect(onSelect.mock.calls[1][1]).toBe(title);
+
+  paused = true;
+  await emit("pause");
+  expect(play.textContent).toBe(initialText);
+  expect(play.getAttribute("aria-label")).toBe(initialLabel);
+  expect(play.getAttribute("aria-pressed")).toBe("false");
+  expect(play.querySelector(".lucide-play")).not.toBeNull();
+
+  paused = false;
+  await emit("play");
+  expect(play.textContent).toMatch(/ · Pause$/);
+  // The recording can end before a supplied clip's end timestamp.
+  ended = true;
+  await emit("ended");
+  expect(play.textContent).toBe(initialText);
+  expect(play.getAttribute("aria-pressed")).toBe("false");
+
+  ended = false;
+  audio.currentTime = source.end_ms / 1000;
+  await emit("timeupdate");
+  expect(play.textContent).toBe(initialText);
+
+  await act(async () =>
+    root.render(
+      <SourceWaveformProvider audioRef={audioRef} activeRange={source}>
+        <ReportDocument data={DATA} id="report" textSize="100" />
+      </SourceWaveformProvider>,
+    ),
+  );
+  audio.currentTime = (source.start_ms + 500) / 1000;
+  await emit("play");
+  expect(container.querySelector("button[aria-pressed]")).toBeNull();
+  expect(container.textContent).toMatch(/\d\d:\d\d · Play/);
+  expect(container.textContent).not.toContain(" · Pause");
+});
+
+it.each(["unrelated clip", "full recording"])(
+  "keeps the visible Play label during %s playback, even inside its timestamps",
+  async (mode) => {
+    const onSelect = vi.fn();
+    const audio = document.createElement("audio");
+    const audioRef = { current: audio };
+    Object.defineProperty(audio, "paused", { get: () => false });
+    const renderPlayer = async (activeRange: ClipRange | null) => {
+      await act(async () =>
+        root.render(
+          <SourceWaveformProvider audioRef={audioRef} activeRange={activeRange}>
+            <ReportDocument
+              data={DATA}
+              id="report"
+              textSize="100"
+              onSelect={onSelect}
+            />
+          </SourceWaveformProvider>,
+        ),
+      );
+    };
+    await renderPlayer(null);
+    const play = container.querySelector<HTMLButtonElement>(
+      "button[aria-pressed]",
+    )!;
+    await act(async () => play.click());
+    const [source] = onSelect.mock.calls[0];
+    await renderPlayer(
+      mode === "unrelated clip"
+        ? { start_ms: source.start_ms, end_ms: source.end_ms + 1000 }
+        : null,
+    );
+    audio.currentTime = (source.start_ms + 500) / 1000;
+    await act(async () => {
+      audio.dispatchEvent(new Event("play"));
+    });
+    const chips = [...container.querySelectorAll("button[aria-pressed]")];
+    expect(chips.every((chip) => / · Play$/.test(chip.textContent ?? ""))).toBe(
+      true,
+    );
+    expect(
+      chips.every((chip) => chip.getAttribute("aria-pressed") === "false"),
+    ).toBe(true);
+  },
+);
 
 it("builds the Word file only when asked, from the same report", async () => {
   await render();
