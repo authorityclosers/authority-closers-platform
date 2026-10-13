@@ -825,7 +825,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: var(--sx-row-h);
+  min-height: max(var(--sx-row-h), var(--sx-control-h));
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
   font-weight: 600;

@@ -19,6 +19,7 @@ afterEach(async () => {
   host.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 describe("Evidence playback", () => {
   it("unfolds the full quote without changing its source or starting playback", async () => {
@@ -110,6 +111,84 @@ describe("Evidence playback", () => {
       host.querySelector<HTMLButtonElement>("button")!.click(),
     );
     expect(host.querySelector("audio")).not.toBe(first);
+  });
+  it("times out missing metadata, keeps the source words and retries the same moment", async () => {
+    vi.useFakeTimers();
+    await act(async () => root.render(<EvidencePlayer evidence={evidence} />));
+    const play = host.querySelector<HTMLButtonElement>("button")!;
+    await act(async () => play.click());
+    const first = host.querySelector("audio")!;
+    const source = first.getAttribute("src");
+    await act(async () => vi.advanceTimersByTime(14_999));
+    expect(play.disabled).toBe(true);
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(play.disabled).toBe(false);
+    expect(play.getAttribute("aria-label")).toMatch(/^Try audio again /);
+    expect(host.textContent).toContain(evidence.quote);
+    expect(host.textContent).toContain("the quote stays here");
+    expect(host.querySelector("audio")).toBeNull();
+    expect(first.pause).toHaveBeenCalled();
+    await act(async () => play.click());
+    const retry = host.querySelector("audio")!;
+    expect(retry).not.toBe(first);
+    expect(retry.getAttribute("src")).toBe(source);
+    await act(async () => retry.dispatchEvent(new Event("loadedmetadata")));
+    expect(retry.currentTime).toBe(evidence.start_ms / 1000);
+    await act(async () => vi.advanceTimersByTime(16_000));
+    expect(play.dataset.state).toBe("playing");
+    expect(host.querySelector('[role="status"]')).toBeNull();
+  });
+  it.each(["resolve", "reject"] as const)(
+    "ignores a timed-out play promise that later %ss during a fresh retry",
+    async (outcome) => {
+      vi.useFakeTimers();
+      let settle!: () => void;
+      vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            settle =
+              outcome === "resolve"
+                ? resolve
+                : () => reject(new Error("Late failure"));
+          }),
+      );
+      await act(async () =>
+        root.render(<EvidencePlayer evidence={evidence} />),
+      );
+      const play = host.querySelector<HTMLButtonElement>("button")!;
+      await act(async () => play.click());
+      const first = host.querySelector("audio")!;
+      await act(async () => first.dispatchEvent(new Event("loadedmetadata")));
+      await act(async () => vi.advanceTimersByTime(15_000));
+      expect(play.dataset.state).toBe("failed");
+      await act(async () => play.click());
+      await act(async () => settle());
+      expect(play.dataset.state).toBe("loading");
+      const retry = host.querySelector("audio")!;
+      await act(async () => retry.dispatchEvent(new Event("loadedmetadata")));
+      expect(play.dataset.state).toBe("playing");
+    },
+  );
+  it("clears the startup deadline on switch and unmount", async () => {
+    vi.useFakeTimers();
+    await act(async () => root.render(<EvidencePlayer evidence={evidence} />));
+    const play = host.querySelector<HTMLButtonElement>("button")!;
+    await act(async () => play.click());
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent("sx-coaching-play", { detail: "another-player" }),
+      ),
+    );
+    await act(async () => vi.advanceTimersByTime(16_000));
+    expect(play.dataset.state).toBe("idle");
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+      () => new Promise<void>(() => {}),
+    );
+    await act(async () => play.click());
+    expect(vi.getTimerCount()).toBe(1);
+    await act(async () => root.render(null));
+    expect(vi.getTimerCount()).toBe(0);
   });
   it("stops the previous moment when another evidence card starts", async () => {
     await act(async () =>

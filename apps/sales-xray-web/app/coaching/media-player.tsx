@@ -137,6 +137,7 @@ function ClipCard({
   const card = useRef<HTMLElement>(null);
   const player = useRef<HTMLAudioElement>(null);
   const active = useRef(false);
+  const playRequest = useRef(0);
   const [playState, setState] = useState<ClipState>("idle");
   const [attempt, setAttempt] = useState(0);
   const [slide, setSlide] = useState(0);
@@ -169,6 +170,21 @@ function ClipCard({
       window.removeEventListener("sx-coaching-fold", stopHidden);
     };
   }, [identity, foldId]);
+  useEffect(() => {
+    if (playState !== "loading") return;
+    // Bound both a missing metadata response and an unresolved play().
+    const deadline = window.setTimeout(() => {
+      active.current = false;
+      player.current?.pause();
+      setState("failed");
+    }, 15_000);
+    return () => window.clearTimeout(deadline);
+  }, [playState, attempt]);
+  useEffect(() => {
+    return () => {
+      active.current = false;
+    };
+  }, []);
   // A stored position shows after hydration (the server renders 0), and only
   // inside the window the server allows; before the first play it reads as
   // a paused clip.
@@ -192,14 +208,23 @@ function ClipCard({
     }
   };
   const begin = (audio: HTMLAudioElement, from: number) => {
+    const request = ++playRequest.current;
+    const current = () =>
+      active.current &&
+      player.current === audio &&
+      playRequest.current === request;
     audio.currentTime = from / 1000;
     void audio
       .play()
       .then(() => {
-        if (active.current) setState("playing");
+        if (current()) setState("playing");
       })
       .catch(() => {
-        if (active.current) setState("failed");
+        if (current()) {
+          active.current = false;
+          audio.pause();
+          setState("failed");
+        }
       });
   };
   const toggle = () => {
@@ -410,7 +435,7 @@ function ClipCard({
           </div>
         </details>
       )}
-      {attempt > 0 && !locked ? (
+      {attempt > 0 && !locked && state !== "failed" ? (
         <audio
           key={attempt}
           ref={player}

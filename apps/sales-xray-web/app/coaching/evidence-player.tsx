@@ -119,6 +119,7 @@ export function EvidencePlayer({
   // Where playback is inside this clip of the call, 0–1.
   const [progress, setProgress] = useState(0);
   const active = useRef(false);
+  const playRequest = useRef(0);
   const source = `/v1/conversation/acquisition/submissions/${evidence.submission_id}/source`;
   const span = `${timeLabel(evidence.start_ms)}–${timeLabel(evidence.end_ms)}`;
   const length = Math.max(1, evidence.end_ms - evidence.start_ms);
@@ -141,18 +142,38 @@ export function EvidencePlayer({
     return () => {
       window.removeEventListener("sx-coaching-play", stopOther);
       window.removeEventListener("sx-coaching-fold", stopFolded);
+      active.current = false;
     };
   }, [identity]);
+  useEffect(() => {
+    if (state !== "loading") return;
+    // A source can stall before metadata or before play() resolves.
+    const deadline = window.setTimeout(() => {
+      active.current = false;
+      audio.current?.pause();
+      setState("failed");
+    }, 15_000);
+    return () => window.clearTimeout(deadline);
+  }, [state, attempt]);
   const start = (player: HTMLAudioElement) => {
+    const request = ++playRequest.current;
+    const current = () =>
+      active.current &&
+      audio.current === player &&
+      playRequest.current === request;
     player.currentTime = evidence.start_ms / 1000;
     setProgress(0);
     void player
       .play()
       .then(() => {
-        if (active.current) setState("playing");
+        if (current()) setState("playing");
       })
       .catch(() => {
-        if (active.current) setState("failed");
+        if (current()) {
+          active.current = false;
+          player.pause();
+          setState("failed");
+        }
       });
   };
   const play = () => {
@@ -262,7 +283,7 @@ export function EvidencePlayer({
           </p>
         ) : null}
       </div>
-      {attempt > 0 ? (
+      {attempt > 0 && state !== "failed" ? (
         <audio
           key={attempt}
           ref={audio}

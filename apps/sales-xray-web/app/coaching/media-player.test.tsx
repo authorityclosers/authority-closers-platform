@@ -21,6 +21,7 @@ afterEach(async () => {
   host.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 const button = (name: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -215,6 +216,92 @@ describe("reviewed placeholder clips", () => {
     );
     await act(async () => button("Try clip again").click());
     expect(host.querySelector("audio")).not.toBe(audio);
+  });
+  it("times out missing narration metadata and retries without changing its allowed window", async () => {
+    vi.useFakeTimers();
+    const preview = {
+      ...fictionalClip,
+      access: "preview" as const,
+      preview_end_ms: 3000,
+    };
+    await act(async () => root.render(<CoachingMedia clips={[preview]} />));
+    await act(async () => button("Play coaching clip").click());
+    const first = host.querySelector("audio")!;
+    const source = first.getAttribute("src");
+    await act(async () => vi.advanceTimersByTime(14_999));
+    expect(button("Loading clip…").disabled).toBe(true);
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(button("Try clip again").disabled).toBe(false);
+    expect(host.querySelector("audio")).toBeNull();
+    expect(host.textContent).toContain(preview.reason);
+    expect(host.textContent).toContain(preview.transcript_excerpt);
+    expect(host.textContent).toContain("Narration is unavailable");
+    await act(async () => button("Try clip again").click());
+    const retry = host.querySelector("audio")!;
+    expect(retry).not.toBe(first);
+    expect(retry.getAttribute("src")).toBe(source);
+    await act(async () => retry.dispatchEvent(new Event("loadedmetadata")));
+    expect(retry.currentTime).toBe(preview.start_ms / 1000);
+    await act(async () => vi.advanceTimersByTime(16_000));
+    expect(button("Pause")).toBeTruthy();
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    retry.currentTime = preview.preview_end_ms / 1000;
+    await act(async () => retry.dispatchEvent(new Event("timeupdate")));
+    expect(button("Preview finished").disabled).toBe(true);
+    expect(host.textContent).toContain("That’s the free preview");
+  });
+  it.each(["resolve", "reject"] as const)(
+    "ignores a timed-out narration promise that later %ss during retry",
+    async (outcome) => {
+      vi.useFakeTimers();
+      let settle!: () => void;
+      vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            settle =
+              outcome === "resolve"
+                ? resolve
+                : () => reject(new Error("Late failure"));
+          }),
+      );
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      await act(async () => button("Play coaching clip").click());
+      const first = host.querySelector("audio")!;
+      await act(async () => first.dispatchEvent(new Event("loadedmetadata")));
+      await act(async () => vi.advanceTimersByTime(15_000));
+      expect(button("Try clip again")).toBeTruthy();
+      await act(async () => button("Try clip again").click());
+      await act(async () => settle());
+      expect(button("Loading clip…").disabled).toBe(true);
+      await act(async () =>
+        host.querySelector("audio")!.dispatchEvent(new Event("loadedmetadata")),
+      );
+      expect(button("Pause")).toBeTruthy();
+    },
+  );
+  it("clears a narration startup deadline when another player starts or the card unmounts", async () => {
+    vi.useFakeTimers();
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip]} />),
+    );
+    await act(async () => button("Play coaching clip").click());
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent("sx-coaching-play", { detail: "another-player" }),
+      ),
+    );
+    await act(async () => vi.advanceTimersByTime(16_000));
+    expect(button("Resume clip")).toBeTruthy();
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+      () => new Promise<void>(() => {}),
+    );
+    await act(async () => button("Resume clip").click());
+    expect(vi.getTimerCount()).toBe(1);
+    await act(async () => root.render(null));
+    expect(vi.getTimerCount()).toBe(0);
   });
   it("resumes where the learner stopped on a later visit", async () => {
     await act(async () =>
