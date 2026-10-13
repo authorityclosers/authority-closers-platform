@@ -1728,6 +1728,93 @@ def test_fixture_coaching_call_search(
         assert not mutation_requests, "Read-only call search attempted an API mutation"
 
 
+def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) -> None:
+    """See calls restores the rep's full history after a conflicting search/filter."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Rep call-reset checks use the fictional dev fixture")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox-team.json"
+        ).read_text()
+    )["rep"]
+    calls = payload["calls"]
+    with _journey(browser, viewport, "rep-calls-reset") as journey:
+        page = journey.page
+        mutation_requests: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD", "OPTIONS"}:
+                mutation_requests.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        journey.open("/review-fixture/coaching?data=sandbox&view=me")
+        shortcuts = page.get_by_role("navigation", name="This rep’s calls", exact=True)
+        jump = shortcuts.get_by_role("link", name="See calls", exact=True)
+        expect(jump).to_have_attribute("href", "#coaching-calls")
+        shortcuts.scroll_into_view_if_needed()
+        journey.snapshot("shortcut")
+        journey.control_target(jump, "see-calls")
+        history = page.locator("#coaching-calls")
+        search = history.get_by_role("searchbox", name="Find a call", exact=True)
+        all_calls = history.get_by_role("button", name="All calls", exact=True)
+        on_skill = history.get_by_role("button", name="On this skill", exact=True)
+        expand = history.get_by_role("button", name=f"Show all {len(calls)} calls", exact=True)
+        call_list = history.get_by_role("list", name="Their recent calls", exact=True)
+        compact_count = min(len(calls), 3 if journey.width == 390 else 8)
+        for step, keyboard in (("pointer-restored", False), ("keyboard-restored", True)):
+            all_calls.click()
+            expand.click()
+            expect(call_list.get_by_role("link")).to_have_count(len(calls))
+            on_skill.click()
+            search.fill("no such fictional call")
+            expect(history.get_by_role("status")).to_have_text("0 calls")
+            expect(history.get_by_text("No matching calls", exact=True)).to_be_visible()
+            if keyboard:
+                jump.focus()
+                page.keyboard.press("Enter")
+            else:
+                jump.click()
+            expect(page).to_have_url(
+                re.compile(r"/review-fixture/coaching\?data=sandbox&view=me#coaching-calls$")
+            )
+            expect(history).to_be_focused()
+            expect(history.get_by_role("heading").first).to_be_in_viewport()
+            expect(search).to_have_value("")
+            expect(all_calls).to_have_attribute("aria-pressed", "true")
+            expect(on_skill).to_have_attribute("aria-pressed", "false")
+            expect(history.get_by_role("status")).to_have_text(f"{len(calls)} calls")
+            expect(expand).to_have_attribute("aria-expanded", "false")
+            expect(call_list.get_by_role("link")).to_have_count(compact_count)
+            links = call_list.get_by_role("link", include_hidden=True)
+            expect(links).to_have_count(len(calls))
+            for index, call in enumerate(calls):
+                expect(links.nth(index)).to_have_text(call["call_label"])
+                expect(links.nth(index)).to_have_attribute(
+                    "href", f"/coaching?call={call['submission_id']}"
+                )
+            page.keyboard.press("Tab")
+            expect(search).to_be_focused()
+            history.scroll_into_view_if_needed()
+            journey.snapshot(step)
+            journey.unclipped_text(history)
+        journey.observations[-1]["rep_call_reset"] = {
+            "source_call_count": len(calls),
+            "compact_count": compact_count,
+            "pointer_and_enter_restore_all_calls": True,
+            "prior_search_skill_and_expansion_reset": True,
+            "section_focus_then_search_tab": True,
+            "source_names_destinations_preserved": True,
+            "native_hash_and_query_preserved": True,
+            "api_mutations": len(mutation_requests),
+            "product_destinations_opened": False,
+        }
+        assert not mutation_requests, "Read-only rep shortcut attempted an API mutation"
+
+
 @pytest.mark.parametrize("kind", ["review", "sandbox"])
 def test_fixture_coaching_focus_moments(
     browser: Browser, viewport: tuple[int, str], kind: str
