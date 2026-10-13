@@ -2103,6 +2103,7 @@ def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, s
         journey.control_target(select, "saved-finding")
         select.select_option("no_suggestion")
         verify(findings["no_suggestion"])
+        section.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("skill-used-no-fix")
         report = listing.get_by_role(
             "link", name=f"Open Report for {findings['no_suggestion'][0]['call_label']}", exact=True
@@ -2122,6 +2123,7 @@ def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, s
         expect(search).to_have_value("")
         expect(select).to_have_value("suggested")
         verify(findings["suggested"])
+        section.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("clear-keeps-finding")
         all_calls.click()
         expect(select).to_have_count(0)
@@ -2142,6 +2144,7 @@ def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, s
         page.keyboard.press("Tab")
         expect(search).to_be_focused()
         assert progress.inner_text() == history
+        section.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("progress-restores-skill-calls")
         assert not mutations, "Fictional finding filter attempted an API mutation"
         journey.observations[-1]["fictional_call_findings"] = {
