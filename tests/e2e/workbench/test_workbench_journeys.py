@@ -1873,6 +1873,136 @@ def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) ->
         assert not mutation_requests, "Read-only rep shortcut attempted an API mutation"
 
 
+@pytest.mark.parametrize("scene", ("personal", "rep", "call", "rep-call"))
+def test_fixture_coaching_focus_lesson(
+    browser: Browser, viewport: tuple[int, str], scene: str
+) -> None:
+    """Native lesson/mission shortcuts retain source content, folded state and focus."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Lesson shortcuts use D's four existing fictional surfaces")
+    sandbox = scene in {"rep", "rep-call"}
+    view = "call" if scene in {"call", "rep-call"} else "me"
+    data = "sandbox" if sandbox else "review"
+    filename = "sandbox-team.json" if sandbox else "sandbox.json"
+    key = "call" if view == "call" else "rep" if sandbox else "me"
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching"
+            / filename
+        ).read_text()
+    )[key]
+    mission_id = "call-mission" if view == "call" else "mission"
+    with _journey(browser, viewport, f"focus-lesson-{scene}") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        media: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            request = route.request
+            path = urlsplit(request.url).path
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif re.search(r"/(source|media)/", path) or path.endswith("/source"):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        page.on(
+            "request",
+            lambda request: media.append("media") if request.resource_type == "media" else None,
+        )
+        journey.open(f"/review-fixture/coaching?data={data}&view={view}")
+        expect(
+            page.get_by_role(
+                "button", name="AC Sandbox" if sandbox else "Design review", exact=True
+            )
+        ).to_have_attribute("aria-pressed", "true")
+        selected_view = "This call" if view == "call" else "One rep" if sandbox else "My coaching"
+        expect(page.get_by_role("button", name=selected_view, exact=True)).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        page.evaluate("() => document.fonts.ready")
+        hero = page.locator("#coaching-focus")
+        lesson = page.locator("#coaching-better")
+        mission = page.locator(f"#{mission_id}")
+        lesson_link = hero.get_by_role("link", name="See the lesson", exact=True)
+        mission_link = hero.get_by_role("link", name="See the mission", exact=True)
+        expect(hero).to_contain_text(payload["focus"]["label"])
+        expect(lesson).to_contain_text(payload["lesson"]["title"])
+        expect(mission.locator("[data-active-mission]")).to_have_text(
+            payload["mission"]["behavior"]
+        )
+        lesson_text = lesson.inner_text()
+        hero.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("focus-shortcuts")
+        for control, target, label in (
+            (lesson_link, lesson, "lesson-shortcut"),
+            (mission_link, mission, "mission-shortcut"),
+        ):
+            target_id = target.get_attribute("id")
+            expect(control).to_have_attribute("href", f"#{target_id}")
+            expect(control).to_have_attribute("aria-controls", target_id)
+            expect(target).to_have_attribute("tabindex", "-1")
+            journey.control_target(control, label)
+        assert abs(lesson_link.bounding_box()["y"] - mission_link.bounding_box()["y"]) <= 1, (
+            "Lesson and mission shortcuts left their shared row"
+        )
+
+        def landed(target: Locator, anchor: str) -> None:
+            expect(target).to_be_focused()
+            expect(target.get_by_role("heading").first).to_be_in_viewport()
+            location = urlsplit(page.url)
+            assert location.fragment == anchor
+            assert parse_qs(location.query).get("data") == [data]
+            assert parse_qs(location.query).get("view") == [view]
+
+        lesson_link.click()
+        landed(lesson, "coaching-better")
+        page.keyboard.press("Tab")
+        assert lesson.evaluate("el => el.contains(document.activeElement)"), (
+            "Next Tab left the lesson"
+        )
+        expect(lesson.locator("details[open]")).to_have_count(0)
+        assert lesson.inner_text() == lesson_text
+        journey.snapshot("lesson-native-focus")
+        lesson_link.focus()
+        page.keyboard.press("Enter")
+        landed(lesson, "coaching-better")
+        mission_link.focus()
+        page.keyboard.press("Enter")
+        landed(mission, mission_id)
+        mission_link.click()
+        landed(mission, mission_id)
+        expect(mission.locator("[data-active-mission]")).to_have_text(
+            payload["mission"]["behavior"]
+        )
+        expect(lesson.locator("details[open]")).to_have_count(0)
+        assert lesson.inner_text() == lesson_text
+        expect(page.locator("audio")).to_have_count(0)
+        if sandbox:
+            expect(page.get_by_role("button", name="Share my coaching", exact=True)).to_have_count(
+                0
+            )
+            expect(page.get_by_role("button", name="Not completely", exact=True)).to_have_count(0)
+        journey.snapshot("mission-source-preserved")
+        assert not media, "Lesson shortcut fetched media or a recording source"
+        assert not mutations, "Lesson shortcut attempted an API mutation"
+        journey.observations[-1]["fictional_focus_lesson"] = {
+            "source": f"D624cf2bc existing {filename}/{key}",
+            "pointer_enter_native_hash_query_and_target_focus": True,
+            "next_tab_inside_folded_lesson": True,
+            "same_row_and_32_44px": True,
+            "original_lesson_and_mission_unchanged": True,
+            "media_requests": len(media),
+            "api_mutations": len(mutations),
+            "authenticated_hosted_or_report_integration": False,
+        }
+
+
 def test_fixture_skill_clip_disclosure(browser: Browser, viewport: tuple[int, str]) -> None:
     """Every supplied fictional skill clip stays reachable, in its original order."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":

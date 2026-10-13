@@ -78,7 +78,7 @@ plus eight focus-to-moment, eight call-search and four rep-call reset cases,
 plus four Insights People, four Organisation People search and four Team
 current-area cases, four Insights name-search and four Team missing-focus cases,
 plus four each for summary clips, supplied shared dates and person-call search,
-and four current-skill finding-filter cases, plus four skill-clip disclosure cases, collect 108 cases. The original Report
+and four current-skill finding-filter cases, plus four skill-clip disclosure cases, plus sixteen lesson/mission anchor cases, collect 124 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -271,3 +271,10 @@ Four/all counts, literal source order, independent skills, fold focus, original
 selection times,32–44px and no eager media/extra reads/writes are checked.
 This explicitly altered fictional input is not a customer Report or native
 loaded-DB acceptance; no new fixture route or persisted data is created.
+
+For the new lesson shortcut, select only `-k fixture_coaching_focus_lesson`.
+Four existing fictional surfaces (personal, rep, call and rep-call) check
+See the lesson/mission with pointer and Enter, exact target/hash/query/focus,
+next Tab inside the folded lesson, unchanged source content, one-row32–44px
+controls and no media/source reads or API writes. These16cases do not prove
+canonical Report integration or authenticated lesson/sharing access.
