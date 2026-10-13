@@ -355,6 +355,13 @@
   font-size: var(--sx-text-xs);
 }
 
+.nextCallActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
 .jump {
   display: inline-flex;
   flex: none;
@@ -377,6 +384,7 @@
   scroll-margin-top: 80px;
 }
 
+.pillar:focus-visible,
 .evidenceTarget:focus-visible,
 .callsSection:focus-visible {
   outline: 2px solid var(--sx-accent);

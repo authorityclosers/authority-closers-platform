@@ -37,6 +37,51 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("Coaching story", () => {
+  it("offers the existing lesson from each ready focus without inventing one for an incomplete call", () => {
+    const ready = [
+      <CoachingStory key="personal" coaching={fictionalCoaching} />,
+      <CoachingStory key="rep" coaching={fictionalCoaching} readOnly />,
+      <CallCoachingStory key="call" coaching={fictionalCallCoaching} />,
+    ];
+    for (const story of ready) {
+      host.innerHTML = renderToStaticMarkup(story);
+      const shortcut = host.querySelector<HTMLAnchorElement>(
+        '#coaching-focus a[href="#coaching-better"]',
+      )!;
+      const lesson = host.querySelector<HTMLElement>("#coaching-better")!;
+      expect(shortcut.textContent?.trim()).toBe("See the lesson");
+      expect(shortcut.getAttribute("aria-controls")).toBe(lesson.id);
+      expect(lesson.tabIndex).toBe(-1);
+      expect(lesson.textContent).toContain(fictionalCoaching.lesson!.title);
+      expect(lesson.querySelector("details")!.open).toBe(false);
+      const mission = host.querySelector<HTMLElement>(
+        "#mission, #call-mission",
+      )!;
+      expect(mission.tabIndex).toBe(-1);
+      expect(mission.textContent).toContain(
+        fictionalCoaching.mission!.behavior,
+      );
+      expect(lesson.getAttribute("aria-labelledby")).toBe(
+        `${lesson.id}-heading`,
+      );
+      expect(host.querySelector("audio")).toBeNull();
+    }
+    for (const story of [
+      <CoachingStory
+        key="personal"
+        coaching={{ ...fictionalCoaching, lesson: null }}
+      />,
+      <CallCoachingStory
+        key="call"
+        coaching={{ ...fictionalCallCoaching, lesson: null }}
+      />,
+    ]) {
+      const html = renderToStaticMarkup(story);
+      expect(html).not.toContain("See the lesson");
+      expect(html).not.toContain('id="coaching-better"');
+    }
+  });
+
   it("restores and focuses a rep's calls after searching or filtering, with or without a current focus", async () => {
     const calls = Array.from({ length: 10 }, (_, index) => ({
       submission_id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,

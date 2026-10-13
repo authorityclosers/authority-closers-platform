@@ -284,6 +284,7 @@ function Story({
           why={focus.why_it_matters}
           reason={focus.selected_reason}
           evidenceAnchor={evidence.length ? "coaching-evidence" : undefined}
+          lessonAnchor="coaching-better"
           mission={mission.behavior}
           missionAnchor="mission"
           take={dipakTake(coaching.media_clips)}

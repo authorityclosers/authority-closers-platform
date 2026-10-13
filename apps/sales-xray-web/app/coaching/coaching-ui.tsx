@@ -55,6 +55,7 @@ export function Pillar({
       id={id}
       className={styles.pillar}
       aria-labelledby={heading}
+      tabIndex={-1}
       data-coaching-pillar={copy.number}
     >
       <PillarHeading
@@ -93,6 +94,7 @@ export function FocusHero({
   why,
   reason,
   evidenceAnchor,
+  lessonAnchor,
   mission,
   missionAnchor,
   take,
@@ -105,6 +107,8 @@ export function FocusHero({
   reason: string;
   /** Existing source moments behind this focus, when available. */
   evidenceAnchor?: string;
+  /** Only provided when this view contains the current focus's lesson. */
+  lessonAnchor?: string;
   mission: string;
   missionAnchor: string;
   /** Dipak's recommended clip in pillar 3 ("Hear Dipak's take"). */
@@ -160,9 +164,24 @@ export function FocusHero({
           <span>{they ? THEIR.onNextCall : FOCUS.onNextCall}</span>
           <span>{mission}</span>
         </p>
-        <a className={styles.jump} href={`#${missionAnchor}`}>
-          {FOCUS.seeMission} <ArrowDown size={13} aria-hidden="true" />
-        </a>
+        <div className={styles.nextCallActions}>
+          {lessonAnchor ? (
+            <a
+              className={styles.jump}
+              href={`#${lessonAnchor}`}
+              aria-controls={lessonAnchor}
+            >
+              {FOCUS.seeLesson} <ArrowDown size={13} aria-hidden="true" />
+            </a>
+          ) : null}
+          <a
+            className={styles.jump}
+            href={`#${missionAnchor}`}
+            aria-controls={missionAnchor}
+          >
+            {FOCUS.seeMission} <ArrowDown size={13} aria-hidden="true" />
+          </a>
+        </div>
       </div>
     </StoryCard>
   );
