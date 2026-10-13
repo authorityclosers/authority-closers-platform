@@ -81,7 +81,8 @@ plus four each for summary clips, supplied shared dates and person-call search,
 and four current-skill finding-filter cases, plus four skill-clip disclosure cases,
 sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
 cases, eight secondary-lesson disclosure cases and four controlled audio-startup
-cases, plus four controlled native moment-end/replay cases, collect 152 cases. The original Report
+cases, plus four controlled native moment-end/replay and four narration shortcut
+focus cases, collect 156 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -317,3 +318,11 @@ control must return, Enter must replay its original timestamp, and pointer Pause
 must stop it. Source quote/time/call link/mission/query and32–44px targets remain
 checked. This exercises native browser playback of silence only; no real recording,
 provider, authenticated read or API write occurs.
+
+For the new “Hear Dipak’s take” focus behavior, select only
+`-k fixture_coaching_hear_lesson_focus`. Four cases check pointer and Enter on the
+existing Design review shortcut: the recommended playback button receives focus,
+is centred/reachable at40–44px, and next Tab stays inside its card. Return an
+intercepted404 only after that focus moves; the error must leave focus alone.
+Original quote/lesson/access/transcript/mission/query remain unchanged. No real
+audio, provider, authenticated read or write is used.

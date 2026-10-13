@@ -1,5 +1,14 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 04:45 UTC — prepared only the four narration-shortcut cases
+for D's completed `a97c3d38` return. Pointer and Enter must focus the existing
+recommended playback control at its settled centre, keep next Tab inside,
+and preserve moved focus after an observed intercepted404. Original quote,
+lesson/access/transcript/mission/query and40–44px playback targets are guarded.
+No media source reaches a provider/server. Ruff/format/API import/diff PASS;
+opt-in4skip/152deselected. Browser pending the04:54UTC normal interval;
+previous audio4 and native-ended4 final passes remain retained.
+
 13 October, 04:38 UTC — native recording-end **4/4 final PASS** across
 the retained three cases at `758d27fb` and the affected phone/dark retake
 at `135be632` (14.38s/launcher0). Native silent WAV ends at106.072s inside
