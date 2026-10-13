@@ -18,7 +18,7 @@ import styles from "./acquisition-file-stage.module.css";
 
 const PAGE_SIZE = 2;
 const SUPPORTED_AUDIO =
-  /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i;
+  /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i;
 
 export type AcquisitionFileStageProps = Readonly<{
   files: readonly File[];
@@ -153,7 +153,7 @@ export function AcquisitionFileStage({
           ref={input}
           className={styles.fileInput}
           type="file"
-          accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc"
+          accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc,.wma,.asf,.wmv,.caf"
           multiple
           tabIndex={-1}
           aria-hidden="true"

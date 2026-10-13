@@ -273,6 +273,10 @@ it.each([
   "aiff",
   "aif",
   "aifc",
+  "wma",
+  "asf",
+  "wmv",
+  "caf",
 ])("keeps new %s recordings in folder inventory", (extension) => {
   const file = recording(`Team/Rep/call.${extension}`);
   expect(selectedImportFiles([file]).data?.files.size).toBe(1);

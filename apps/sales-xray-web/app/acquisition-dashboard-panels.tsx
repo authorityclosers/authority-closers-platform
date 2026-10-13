@@ -56,7 +56,7 @@ const steps = [
 ] as const;
 
 const supportedAudioName =
-  /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i;
+  /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i;
 
 function fileSizeLabel(bytes: number): string {
   const megabytes = bytes / 1_000_000;

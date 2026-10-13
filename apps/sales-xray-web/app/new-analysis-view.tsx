@@ -178,7 +178,7 @@ export function NewAnalysisView({
           <input
             ref={fileInputRef}
             type="file"
-            accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc"
+            accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc,.wma,.asf,.wmv,.caf"
             style={{ display: "none" }}
             onChange={handleFileChange}
             disabled={disabled}
