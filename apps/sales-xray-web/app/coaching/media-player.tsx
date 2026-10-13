@@ -135,6 +135,7 @@ function ClipCard({
   const they = useTheirCoaching();
   const identity = useId();
   const card = useRef<HTMLElement>(null);
+  const playButton = useRef<HTMLButtonElement>(null);
   const player = useRef<HTMLAudioElement>(null);
   const active = useRef(false);
   const playRequest = useRef(0);
@@ -268,6 +269,8 @@ function ClipCard({
         "details[data-other-lessons]",
       );
       if (disclosure) disclosure.open = true;
+      // The shortcut moves the learner here; pause/retry must be next at hand.
+      playButton.current?.focus({ preventScroll: true });
       card.current?.scrollIntoView({ block: "center", behavior: "smooth" });
       if (!playing) latestToggle.current();
     };
@@ -297,6 +300,7 @@ function ClipCard({
     >
       <div className={styles.clipHead}>
         <button
+          ref={playButton}
           type="button"
           className={styles.clipPlay}
           onClick={toggle}

@@ -133,6 +133,7 @@ describe("reviewed placeholder clips", () => {
     )!;
     await act(async () => requestClip(second));
     expect(disclosure.open).toBe(true);
+    expect(document.activeElement).toBe(disclosure.querySelector("button"));
     const audio = disclosure.querySelector("audio")!;
     expect(audio.getAttribute("src")).toBe(clipSource(second));
     await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
@@ -160,7 +161,7 @@ describe("reviewed placeholder clips", () => {
     expect(firstPause).not.toHaveBeenCalled();
     expect(recommended.textContent).toContain("Pause");
   });
-  it("'Hear Dipak's take' brings the recommended clip into view and plays it", async () => {
+  it("'Hear Dipak's take' focuses the recommended playback control and plays only once", async () => {
     const scroll = vi.fn();
     HTMLElement.prototype.scrollIntoView = scroll;
     const take = dipakTake([fictionalClip]);
@@ -186,11 +187,27 @@ describe("reviewed placeholder clips", () => {
     )!;
     expect(hear.textContent).toBe("Hear Dipak’s take · 0:04");
     expect(host.querySelector("audio")).toBeNull();
+    hear.focus();
     await act(async () => hear.click());
     expect(scroll).toHaveBeenCalled();
+    const playback = host.querySelector("[data-recommended] button")!;
+    expect(document.activeElement).toBe(playback);
     const audio = host.querySelector("audio")!;
     await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
-    expect(audio.play).toHaveBeenCalled();
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(playback);
+    hear.focus();
+    await act(async () => hear.click());
+    expect(document.activeElement).toBe(playback);
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(host.querySelector("audio")).toBe(audio);
+    // A request for an absent clip cannot move focus or start another source.
+    hear.focus();
+    await act(async () =>
+      requestClip({ ...fictionalClip, topic_id: "not-on-this-page" }),
+    );
+    expect(document.activeElement).toBe(hear);
+    expect(audio.play).toHaveBeenCalledOnce();
     // A locked clip is never offered from the focus.
     expect(dipakTake([{ ...fictionalClip, access: "locked" }])).toBeNull();
     expect(dipakTake(undefined)).toBeNull();
