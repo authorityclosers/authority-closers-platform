@@ -2137,6 +2137,11 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
             ):
                 page.keyboard.press("Enter")
             expect(retry).to_be_enabled()
+            journey.observations[-1]["keyboard_retry"] = retry.evaluate(
+                """el => ({focused: document.activeElement === el,
+                  active_tag: document.activeElement?.tagName,
+                  enabled: !el.disabled})"""
+            )
             expect(retry).to_be_focused()
             expect(card.locator("audio")).to_have_count(0)
             expect(card.get_by_role("status")).to_contain_text(failure_text)

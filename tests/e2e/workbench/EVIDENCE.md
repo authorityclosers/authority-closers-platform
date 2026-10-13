@@ -1,5 +1,22 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 03:57 UTC — first new audio-startup pair **1 FAIL,3 NOT RUN**
+(-x), source `17052c4f`,32.32 seconds/launcher1. Moment loading remains
+disabled at14999ms and becomes enabled retry at15000ms, with audio removed,
+unchanged quote/time/source and70.86x32px reachable target. Enter retry gets
+the same intercepted source/404 and becomes enabled, but keyboard focus is
+lost (`test_workbench_journeys.py:2140`). Narration was not reached.
+Refresh/runtime/server/font/overflow/API mutations0. Original receipt/log
+and two PNGs retained in strike `shots/2026-10-13-audio-startup-0356Z/`;
+failure image inspected. Exact scoped focus repair sent D/coordinator.
+The guard now also records safe active-element tag/focus/enabled diagnostics.
+No real media/provider/authenticated or production product acceptance follows.
+
+Independent03:53 original-Host foundation health4/4 HTTP200: staging and
+production core/web all serve `2df8a931`. Existing populated hosted context
+remains unavailable; no unsuitable-session matrix repeated. Health receipt:
+strike `shots/2026-10-13-v042-health/health.json`.
+
 13 October, 03:50 UTC — added only the four controlled audio-startup cases
 for D's `166c9940`. Explicit `data=review&view=me` selects the existing
 Design review moment/narration sources, which stay
