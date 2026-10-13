@@ -1,5 +1,26 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 02:55–03:02 UTC — saved-finding4 + skill-disclosure4
+**8/8 PASS**, source `b81e3ef1` unchanged,27.35/37.00 seconds, launchers0.
+Finding preserves explicit source6/4/2 counts, labels/order/IDs/Report routes,
+excludes pending/not-covered, intersects names, keeps finding on Clear and resets
+through All calls/progress with section→search focus. Skill disclosure preserves
+B's browser-only original0/4/5/6 refs, duplicates/order, independent rows,
+fold focus, original pointer/Enter/Space time selections and eight Coaching links.
+32–44px targets pass; runtime/server/visual/refresh/media/API mutation errors0.
+
+All28 final step captures inspected. Skill12 + finding phone8 receipts:
+`shots/2026-10-13-skill-clips-0255Z/`, `shots/2026-10-13-call-findings-0255Z/`.
+Desktop8 final: `shots/2026-10-13-call-findings-desktop-rows/`, source `af12bef2`,
+2PASS7.00s/launcher0. Earlier centred2PASS9.01s at `0b0f8747` retained in
+`shots/2026-10-13-call-findings-desktop-framing/`. Six latest desktop images
+equal inspected centred images; original no-fix frames also equal final bytes
+and were already complete. Only Clear/progress framing changed; no product
+repair or defect claim. Explicit full-viewport no-fix guard now passes.
+Fictional boundary lists alter in-memory authored refs only, no canonical fixture
+file or data write. Hosted/real audio/provider acceptance remains separate.
+New lesson/mission anchor criterion is pending its normal-interval run.
+
 13 October, 02:33–02:39 UTC — person-call search4 + distinct Team dates4
 + summary clips4 **12/12 final PASS** across bounded runs. Person/date cases
 pass at unchanged `298f412b`. Summary desktop/light passes at `e61dbe68`,
