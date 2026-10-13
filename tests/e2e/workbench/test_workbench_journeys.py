@@ -110,6 +110,25 @@ def _call_title_links(
     return call_list.get_by_role("link", name=names, include_hidden=include_hidden)
 
 
+def _fictional_api_reply(method: str, pathname: str, query: str) -> dict[str, object]:
+    """Reuse the builders' existing read-only bootstrap replies, without a shell."""
+    node_binary = shutil.which("node")
+    assert node_binary, "The existing fictional harness requires Node"
+    return json.loads(
+        subprocess.check_output(  # noqa: S603 -- fixture arguments, never shell code
+            [
+                node_binary,
+                str(Path(__file__).with_name("fictional-api-reply.mjs")),
+                method,
+                pathname,
+                "?" + query if query else "",
+            ],
+            text=True,
+            timeout=10,
+        )
+    )
+
+
 def _document_preview(page: Page) -> Locator:
     return page.get_by_role(
         "region", name=re.compile(r"^(?:Sales Xray document preview|Report document)$")
@@ -1861,8 +1880,6 @@ def test_fixture_insights_people(browser: Browser, viewport: tuple[int, str]) ->
         pytest.fail(
             "Fictional Insights replies require shared dev3026 and a fresh no-session browser"
         )
-    node_binary = shutil.which("node")
-    assert node_binary, "The existing fictional harness requires Node"
     root = Path(__file__).resolve().parents[3]
     fixture = json.loads(
         (root / "apps/sales-xray-web/app/review-fixture/insights/sandbox.json").read_text()
@@ -1903,20 +1920,7 @@ def test_fixture_insights_people(browser: Browser, viewport: tuple[int, str]) ->
             elif url.path == endpoint + "/calls":
                 reply = {"status": 200, "body": fixture["calls"]}
             else:
-                reply = json.loads(
-                    # Read-only fixture arguments; no shell or executable from the request.
-                    subprocess.check_output(  # noqa: S603
-                        [
-                            node_binary,
-                            str(Path(__file__).with_name("fictional-api-reply.mjs")),
-                            request.method,
-                            url.path,
-                            "?" + url.query if url.query else "",
-                        ],
-                        text=True,
-                        timeout=10,
-                    )
-                )
+                reply = _fictional_api_reply(request.method, url.path, url.query)
             route.fulfill(
                 status=reply["status"],
                 content_type="application/json",
@@ -2003,6 +2007,252 @@ def test_fixture_insights_people(browser: Browser, viewport: tuple[int, str]) ->
             "authenticated_hosted_acceptance": False,
         }
         assert not mutations, "Fictional Insights attempted an API mutation"
+
+
+def test_fixture_organisation_people_search(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Search all returned active, quiet and test people without changing their figures."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Organisation search uses A's existing fictional read-only harness")
+    if (
+        os.environ.get("WB_STORAGE_STATE")
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.fail("Fictional Organisation replies require shared dev3026 with no session")
+    active_id = "00000000-0000-4000-8000-000000000001"
+    quiet_id = "00000000-0000-4000-8000-000000000006"
+    with _journey(browser, viewport, "organisation-people-search") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        reads: list[str] = []
+
+        def fictional_read(route: Route) -> None:
+            request = route.request
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+                return
+            url = urlsplit(request.url)
+            reads.append(url.path)
+            reply = _fictional_api_reply(request.method, url.path, url.query)
+            if url.path == "/v1/organisation/members" and reply["status"] == 200:
+                body = reply["body"]
+                reply["body"] = {
+                    "members": [
+                        *body["members"],
+                        {
+                            **body["members"][0],
+                            "person_id": quiet_id,
+                            "name": "Asha Menon",
+                            "email": "asha-desk@brightline.example.in",
+                            "role": "member",
+                            "calls_30d": 0,
+                            "minutes_used_30d": 0,
+                        },
+                    ]
+                }
+            if url.path == "/v1/organisation" and reply["status"] == 200:
+                reply["body"] = {**reply["body"], "member_count": 6}
+            route.fulfill(
+                status=reply["status"],
+                content_type="application/json",
+                body=json.dumps(reply["body"]),
+            )
+
+        journey.context.route("**/v1/**", fictional_read)
+        journey.context.add_init_script(
+            "localStorage.setItem("
+            "'sx.guide.off:00000000-0000-4000-8000-000000000001:first-call', '1');"
+        )
+        journey.open("/organisation")
+        people = page.locator('[aria-labelledby="org-people"]')
+        search = people.get_by_role("searchbox", name="Search people", exact=True)
+        clear = people.get_by_role("button", name="Clear search", exact=True)
+        rows = people.locator("li")
+        expect(people.get_by_role("status")).to_have_text("Showing 4 of 6 people")
+        expect(rows).to_have_count(4)
+        figures = page.locator("[data-organisation-view] dl").first.inner_text()
+        team_calls = page.locator('[aria-label="Team calls"]').inner_text()
+
+        def row_values() -> list[object]:
+            return rows.evaluate_all(
+                """els => els.map(el => ({
+                  href: el.querySelector('a').getAttribute('href'),
+                  text: el.innerText, quiet: el.hasAttribute('data-quiet')
+                }))"""
+            )
+
+        baseline = row_values()
+        reads_before = len(reads)
+        search.fill("  aShA  ")
+        expect(rows).to_have_count(2)
+        expect(people.get_by_role("status")).to_have_text("Matches: 2 of 6 people")
+        for index, person_id in enumerate((active_id, quiet_id)):
+            expect(rows.nth(index).get_by_role("link")).to_have_attribute(
+                "href", f"/organisation/people/{person_id}"
+            )
+        expect(rows.first).to_contain_text("3 calls")
+        expect(rows.last).to_contain_text("No calls")
+        expect(rows.last).to_have_attribute("data-quiet", "")
+        expect(rows.first).to_contain_text("asha@brightline.example.in")
+        expect(rows.last).to_contain_text("asha-desk@brightline.example.in")
+        people.scroll_into_view_if_needed()
+        journey.snapshot("same-name")
+        for control, label in (
+            (search, "search-people"),
+            (clear, "clear-people"),
+            (rows.last.get_by_role("link"), "quiet-person"),
+        ):
+            journey.control_target(control, label)
+        search.fill("Quinn")
+        expect(rows).to_have_count(1)
+        expect(rows.first).to_contain_text("Quinn Fixture")
+        expect(rows.first).to_contain_text("No calls")
+        expect(rows.first).to_have_attribute("data-quiet", "")
+        expect(rows.first).to_contain_text("Test")
+        test_person_href = "/organisation/people/00000000-0000-4000-8000-000000000005"
+        expect(rows.first.get_by_role("link")).to_have_attribute("href", test_person_href)
+        journey.snapshot("folded-test-person")
+        search.fill("brightline.example.in")
+        expect(rows).to_have_count(0)
+        expect(people.get_by_role("status")).to_have_text("Matches: 0 of 6 people")
+        expect(people.get_by_text("No people match this name.", exact=True)).to_be_visible()
+        journey.snapshot("no-name-match")
+        clear.focus()
+        page.keyboard.press("Enter")
+        expect(search).to_be_focused()
+        expect(search).to_have_value("")
+        assert row_values() == baseline
+        expand = people.get_by_role(
+            "button", name="2 more people with no calls or test accounts", exact=True
+        )
+        expect(expand).to_have_attribute("aria-expanded", "false")
+        expand.click()
+        expect(rows).to_have_count(6)
+        expanded = row_values()
+        search.fill("Quinn")
+        expect(rows.first.get_by_role("link")).to_have_attribute("href", test_person_href)
+        clear.click()
+        expect(search).to_be_focused()
+        assert row_values() == expanded
+        expect(
+            people.get_by_role("button", name="Show only people with calls", exact=True)
+        ).to_have_attribute("aria-expanded", "true")
+        assert page.locator("[data-organisation-view] dl").first.inner_text() == figures
+        assert page.locator('[aria-label="Team calls"]').inner_text() == team_calls
+        assert len(reads) == reads_before, "Local name search unexpectedly fetched new data"
+        people.scroll_into_view_if_needed()
+        journey.snapshot("restored-expanded")
+        journey.observations[-1]["fictional_organisation_search"] = {
+            "source": "A8c290b4f's existing six-person fictional API harness",
+            "same_name_active_and_quiet_people_distinct": True,
+            "folded_test_name_reachable": True,
+            "names_only_empty_result": True,
+            "source_order_identity_figures_routes_preserved": True,
+            "clear_restores_focus_and_prior_disclosure": True,
+            "extra_reads": 0,
+            "api_mutations": len(mutations),
+            "profile_destinations_opened": False,
+            "authenticated_hosted_acceptance": False,
+        }
+        assert not mutations, "Fictional Organisation search attempted an API mutation"
+
+
+def test_fixture_team_current_areas(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Current Delivery reps stay filterable without adding a historic total."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Current-area checks use D's existing fictional example")
+    data = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox-team.json"
+        ).read_text()
+    )["team"]
+    missing_skill = data["reps"][0]["skill_id"]
+    suggestions = [row for row in data["suggestions"] if row["skill_id"] != missing_skill]
+    matching = [rep for rep in data["reps"] if rep["skill_id"] == missing_skill]
+    target = matching[-1]
+    options = list(
+        dict.fromkeys(
+            [row["skill_id"] for row in suggestions] + [rep["skill_id"] for rep in data["reps"]]
+        )
+    )
+    with _journey(browser, viewport, "team-current-areas") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD", "OPTIONS"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        journey.open("/review-fixture/coaching?data=sandbox&view=team&example=current-focus-areas")
+        team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
+        search = team.get_by_role("searchbox", name="Find a rep", exact=True)
+        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        reset = team.get_by_role("button", name="Clear filters", exact=True)
+        links = team.get_by_role(
+            "list", name="Reps and their current focus", exact=True
+        ).get_by_role("link")
+        totals = page.get_by_role("list", name="Coaching areas", exact=True)
+        historical = totals.inner_text()
+        assert area.locator("option").evaluate_all("els => els.map(el => el.value)") == [
+            "all",
+            *options,
+        ]
+        expect(totals.get_by_role("listitem")).to_have_count(len(suggestions))
+        removed = next(row for row in data["suggestions"] if row["skill_id"] == missing_skill)
+        expect(
+            page.get_by_role("button", name=f"Find reps working on {removed['label']}", exact=True)
+        ).to_have_count(0)
+        expect(area.locator(f'option[value="{missing_skill}"]')).to_have_text("Delivery")
+
+        def assert_reps(expected: list[dict[str, object]]) -> None:
+            expect(links).to_have_count(min(len(expected), 8))
+            for index, rep in enumerate(expected[:8]):
+                expect(links.nth(index)).to_contain_text(str(rep["name"]))
+                expect(links.nth(index)).to_contain_text(str(rep["focus_label"]))
+                expect(links.nth(index)).to_have_attribute(
+                    "href", f"/coaching?person={rep['person_id']}"
+                )
+
+        area.select_option(missing_skill)
+        assert_reps(matching)
+        expect(team.get_by_role("status")).to_have_text(f"{len(matching)} reps")
+        team.scroll_into_view_if_needed()
+        journey.snapshot("delivery-reps")
+        journey.control_target(area, "current-area")
+        search.fill(f"  {target['name'].swapcase()}  ")
+        assert_reps([target])
+        expect(team.get_by_role("status")).to_have_text("1 rep")
+        journey.snapshot("named-current-rep")
+        for control, label in (
+            (search, "rep-search"),
+            (links.first, "matched-rep"),
+            (reset, "reset-matching"),
+        ):
+            journey.control_target(control, label)
+        reset.focus()
+        page.keyboard.press("Enter")
+        expect(search).to_have_value("")
+        expect(search).to_be_focused()
+        expect(area).to_have_value("all")
+        assert_reps(data["reps"])
+        assert totals.inner_text() == historical, (
+            "Current focus filtering changed historical counters"
+        )
+        journey.snapshot("reset-current-filter")
+        journey.observations[-1]["current_area"] = {
+            "current_reps_without_historic_total": len(matching),
+            "source_names_focuses_destinations_preserved": True,
+            "historical_counters_unchanged": True,
+            "combined_name_filter_and_enter_reset_focus": True,
+            "api_mutations": len(mutations),
+            "product_destinations_opened": False,
+        }
+        assert not mutations, "Current-focus filter attempted an API mutation"
 
 
 @pytest.mark.parametrize("kind", ["review", "sandbox"])

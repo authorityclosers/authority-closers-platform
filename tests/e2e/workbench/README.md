@@ -75,7 +75,8 @@ React-state result substitutes for this evidence. Without the explicit write
 path they skip. The original sixteen plus four each for format, persistence,
 quote, print, legacy-action, Team-search, Team-skill and supporting-moment checks,
 plus eight focus-to-moment, eight call-search and four rep-call reset cases,
-plus four Insights People cases, collect 72 cases. The original Report
+plus four Insights People, four Organisation People search and four Team
+current-area cases, collect 80 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -155,6 +156,15 @@ non-read API request blocked. They preserve returned order, reach person65,
 collapse to50 with focus recovery and check the selected source key in the
 Person control, address and API read. This is fictional UI evidence; it creates
 no account/session or data and establishes no authenticated hosted acceptance.
+
+For A's Organisation name search and D's current-focus area picker, select
+`-k 'fixture_organisation_people_search or fixture_team_current_areas'`.
+Eight focused cases reuse the existing fictional read-only six-person and
+current-focus examples. Organisation covers same-name active/quiet identities,
+folded test names, names-only empty state and clear/focus/disclosure with unchanged
+figures/routes. Team covers the existing Delivery reps absent from historical
+totals, combined name filtering and reset/focus with unchanged historic counters.
+All API writes are refused; no profile/call destination is opened.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
