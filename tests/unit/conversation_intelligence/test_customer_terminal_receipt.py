@@ -6,6 +6,7 @@ from uuid import UUID
 
 import pytest
 
+from ac_platform.conversation_intelligence.acquisition_usage import LONGEST_CALL_SECONDS
 from ac_platform.conversation_intelligence.checkpoints import SourceBinding, content_hash
 from ac_platform.conversation_intelligence.customer_terminal_receipt import (
     CustomerTerminalFailureReceipt,
@@ -134,7 +135,7 @@ def test_live_cancelled_erased_published_or_unknown_facts_cannot_release(changes
     [
         ("reserved_seconds", True),
         ("reserved_seconds", 0),
-        ("reserved_seconds", 6001),
+        ("reserved_seconds", LONGEST_CALL_SECONDS + 1),
         ("reserved_seconds", "1041"),
         ("reserved_seconds", 1.0),
         ("recovery_generation", False),
