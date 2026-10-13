@@ -35,6 +35,7 @@ import {
 } from "./lightbox/time";
 import { REPORT_SECTION_COPY } from "./report-section-copy";
 import { AccountNavigation } from "./account-navigation";
+import { acquisition, parseEntry, parsePolicy } from "./acquisition-client";
 import {
   parseProcessingPlan,
   type ProcessingPlan,
@@ -297,6 +298,10 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
+  const [previewUnavailable, setPreviewUnavailable] = useState(false);
+  const [measuredUpload, setMeasuredUpload] = useState<
+    "checking" | "available" | "unavailable"
+  >("checking");
   const [quote, setQuote] = useState<Quote | null>(null);
   const [plan, setPlan] = useState<ProcessingPlan | null>(null);
   const [job, setJob] = useState<Job | null>(null);
@@ -353,6 +358,38 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
       });
     return () => controller.abort();
   }, []);
+  useEffect(() => {
+    if (!previewUnavailable || !file) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const entry = parseEntry(
+          await acquisition("/entry", { signal: controller.signal }),
+        );
+        const policy = entry.enabled
+          ? parsePolicy(
+              await acquisition("/upload-policy", {
+                signal: controller.signal,
+              }),
+            )
+          : null;
+        if (!controller.signal.aborted)
+          setMeasuredUpload(
+            policy && file.size <= policy.maximum_file_bytes
+              ? "available"
+              : "unavailable",
+          );
+      } catch {
+        if (!controller.signal.aborted) setMeasuredUpload("unavailable");
+      }
+    })();
+    return () => controller.abort();
+  }, [previewUnavailable, file]);
+  useEffect(() => {
+    if (!file || duration || previewUnavailable || quote || job) return;
+    const timer = window.setTimeout(() => setPreviewUnavailable(true), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [file, duration, previewUnavailable, quote, job]);
   useEffect(() => {
     if (!workspace?.authenticated) return;
     const controller = new AbortController();
@@ -616,6 +653,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     setActiveTranscript(null);
     setAudioUrl(URL.createObjectURL(next));
     setDuration(0);
+    setPreviewUnavailable(false);
+    setMeasuredUpload("checking");
     setQuote(null);
     setPlan(null);
     setJob(null);
@@ -824,7 +863,14 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     }
   }
   async function prepare() {
-    if (!file || busy) return;
+    if (
+      !file ||
+      busy ||
+      previewUnavailable ||
+      !Number.isFinite(duration) ||
+      duration <= 0
+    )
+      return;
     const current = attempt.current;
     setBusy("Preparing your call…");
     setError("");
@@ -1113,6 +1159,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     setSourceSha256(null);
     setReportBlocked(false);
     setDuration(0);
+    setPreviewUnavailable(false);
+    setMeasuredUpload("checking");
     setError("");
     setBusy("");
     setConsent(false);
@@ -1249,8 +1297,12 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                   <div>
                     <h2>{file.name}</h2>
                     <p>
-                      {duration ? time(duration) : "Reading duration…"} ·{" "}
-                      {(file.size / 1048576).toFixed(1)} MB
+                      {duration
+                        ? time(duration)
+                        : previewUnavailable
+                          ? "Preview unavailable"
+                          : "Reading duration…"}{" "}
+                      · {(file.size / 1048576).toFixed(1)} MB
                     </p>
                   </div>
                   {!busy && !job && (
@@ -1270,10 +1322,22 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                   preload="metadata"
                   onLoadedMetadata={() => {
                     const value = audio.current?.duration;
-                    if (value && Number.isFinite(value))
+                    if (value && Number.isFinite(value) && value > 0) {
                       setDuration(value * 1000);
+                      setPreviewUnavailable(false);
+                    } else {
+                      setPreviewUnavailable(true);
+                    }
                   }}
-                  onError={() => setMomentStatus(copy.playbackUnavailable)}
+                  onError={() => {
+                    if (!quote && !job) {
+                      setDuration(0);
+                      setPreviewUnavailable(true);
+                      if (!previewUnavailable) setMeasuredUpload("checking");
+                    } else {
+                      setMomentStatus(copy.playbackUnavailable);
+                    }
+                  }}
                   onSeeking={allowFullCallSeek}
                   onTimeUpdate={stopAtMomentEnd}
                 />
@@ -1337,7 +1401,36 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               aria-label="Choose sales call audio"
               onChange={(e) => selectFile(e.target.files?.[0])}
             />
-            {file && !quote && !job && (
+            {file && !quote && !job && previewUnavailable && (
+              <div className="small-text" role="status">
+                <p>
+                  {measuredUpload === "checking"
+                    ? "Your browser can’t preview this recording. Checking private upload…"
+                    : measuredUpload === "available"
+                      ? "Your browser can’t preview this recording. Choose this file in New analysis; Sales Xray will check its length before analysis."
+                      : "Your browser can’t preview this recording, and private upload is unavailable here. Choose a WAV or MP3 copy, or try again later."}
+                </p>
+                {measuredUpload === "available" && (
+                  <a
+                    className="primary-button studio-wide"
+                    href={
+                      homeHref === "/home"
+                        ? "/sales-xray?new=1"
+                        : "/analysis/new?new=1"
+                    }
+                  >
+                    <ArrowRight size={17} /> Continue with private upload
+                  </a>
+                )}
+                <button
+                  className="secondary-button studio-wide"
+                  onClick={() => input.current?.click()}
+                >
+                  Choose another recording
+                </button>
+              </div>
+            )}
+            {file && !quote && !job && !previewUnavailable && (
               <button
                 className="primary-button studio-wide"
                 disabled={!!busy || !duration || !workspace?.intake_enabled}
