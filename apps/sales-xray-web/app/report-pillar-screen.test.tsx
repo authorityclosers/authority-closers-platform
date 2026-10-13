@@ -98,6 +98,90 @@ it("plays the exact quoted moment from any pillar", async () => {
   expect(select).toHaveBeenCalledWith(strongest, "Strongest part");
 });
 
+it.each(["saved", "matching pillars", "validated content"] as const)(
+  "makes %s summary clips reachable once each, in saved order",
+  async (kind) => {
+    const validated = kind === "validated content";
+    const report = validated ? contentReport : amitReport;
+    const transcript = validated ? contentTranscript : amitTranscript;
+    const sources = validated
+      ? contentFixture.summary_sentences.flatMap((note) => note.evidence)
+      : amitReport.summary_evidence!;
+    const summary = validated
+      ? contentFixture.summary_sentences.map((note) => note.text).join(" ")
+      : report.summary;
+    const { host, select } = await mount(
+      {
+        ...report,
+        summary_evidence: [sources[0], { ...sources[0] }, ...sources.slice(1)],
+        ...(kind === "matching pillars"
+          ? { pillars: { version: "report-pillars/1" as const, summary } }
+          : {}),
+        ...(validated
+          ? {
+              report_content: {
+                ...contentFixture,
+                summary_sentences: [
+                  contentFixture.summary_sentences[0],
+                  ...contentFixture.summary_sentences.slice(1).map((note) => ({
+                    ...note,
+                    evidence: [{ ...sources[0] }, ...note.evidence],
+                  })),
+                ],
+              },
+            }
+          : {}),
+      },
+      transcript,
+    );
+    const picture = pillar(host, "overview");
+    expect(picture.textContent).toContain(summary);
+    const buttons = picture.querySelectorAll<HTMLButtonElement>(
+      '[role="group"][aria-label="Summary"] button',
+    );
+    expect(buttons).toHaveLength(sources.length);
+    expect(select).not.toHaveBeenCalled();
+    for (const [index, button] of [...buttons].entries()) {
+      expect(button.type).toBe("button");
+      await act(async () => button.click());
+      expect(select).toHaveBeenCalledTimes(index + 1);
+      expect(select.mock.calls[index][0]).toBe(sources[index]);
+      expect(select.mock.calls[index][1]).toBe(BIG_PICTURE.summary.label);
+    }
+    expect(
+      [...host.querySelectorAll("[data-report-mode-section]")].map((node) =>
+        node.getAttribute("data-report-mode-section"),
+      ),
+    ).toEqual(REPORT_PILLARS.map((part) => part.id));
+  },
+);
+
+it.each(["no sources", "different pillar summary"] as const)(
+  "adds no summary clip row for %s",
+  async (kind) => {
+    const report = {
+      ...amitReport,
+      ...(kind === "no sources"
+        ? { summary_evidence: [] }
+        : {
+            pillars: {
+              version: "report-pillars/1" as const,
+              summary: "A different saved summary without its own citations.",
+            },
+          }),
+    };
+    const { host, select } = await mount(report, amitTranscript);
+    const picture = pillar(host, "overview");
+    expect(picture.textContent).toContain(
+      report.pillars?.summary ?? report.summary,
+    );
+    expect(
+      picture.querySelector('[role="group"][aria-label="Summary"]'),
+    ).toBeNull();
+    expect(select).not.toHaveBeenCalled();
+  },
+);
+
 it("shows eight compact skill rows that expand to evidence and Coaching", async () => {
   const { host } = await mount(amitReport, amitTranscript);
   const skills = pillar(host, "skills");

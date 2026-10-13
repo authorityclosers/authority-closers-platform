@@ -38,6 +38,24 @@
   line-height: 1.6;
 }
 
+.summaryClips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.summaryClips > button {
+  height: 32px;
+}
+.summaryClips > button::after {
+  inset: 0;
+}
+@media (pointer: coarse) {
+  .summaryClips > button {
+    height: 44px;
+  }
+}
+
 .line {
   color: var(--sx-ink-2);
   line-height: 1.55;

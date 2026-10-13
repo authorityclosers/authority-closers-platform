@@ -55,6 +55,13 @@ export function BigPicture({
   onSelect?: Select;
 }) {
   const { picture } = model;
+  const summaryClips = picture.summary?.sources.filter(
+    (source, index, sources) =>
+      sources.findIndex(
+        (other) =>
+          other.start_ms === source.start_ms && other.end_ms === source.end_ms,
+      ) === index,
+  );
   const when = model.deal.nextEvent?.text ?? null;
   const nextRepeatsOutcome =
     picture.nextStep?.text === picture.outcome.detail?.text;
@@ -78,9 +85,28 @@ export function BigPicture({
         {picture.summary || picture.assessment ? (
           <div className={styles.summary}>
             {picture.summary ? (
-              <p>
-                <Text text={picture.summary.text} />
-              </p>
+              <div className={styles.summary}>
+                <p>
+                  <Text text={picture.summary.text} />
+                </p>
+                {summaryClips?.length ? (
+                  <div
+                    className={styles.summaryClips}
+                    role="group"
+                    aria-label={BIG_PICTURE.summary.label}
+                  >
+                    {summaryClips.map((source) => (
+                      <PlayChip
+                        key={`${source.start_ms}:${source.end_ms}`}
+                        source={source}
+                        title={BIG_PICTURE.summary.label}
+                        onSelect={onSelect}
+                        range
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             {picture.assessment ? (
               <p>
