@@ -1873,6 +1873,166 @@ def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) ->
         assert not mutation_requests, "Read-only rep shortcut attempted an API mutation"
 
 
+def test_fixture_insights_people_search(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Search the full returned list, preserving duplicate identities and disclosure."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Insights expansion checks use G's fictional read-only harness")
+    if (
+        os.environ.get("WB_STORAGE_STATE")
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.fail(
+            "Fictional Insights replies require shared dev3026 and a fresh no-session browser"
+        )
+    root = Path(__file__).resolve().parents[3]
+    fixture = json.loads(
+        (root / "apps/sales-xray-web/app/review-fixture/insights/sandbox.json").read_text()
+    )
+    # Exact 65-person source construction from G's existing populated dev harness.
+    base_people = fixture["overview"]["people"]
+    people = [
+        {
+            **base_people[index % len(base_people)],
+            "key": f"fictional-person-{index + 1}",
+            "name": f"Fictional rep {index + 1}",
+        }
+        for index in range(65)
+    ]
+    # Requested duplicate-name check: retain both distinct original source keys.
+    people[54] = {**people[54], "name": people[-1]["name"]}
+    overview = {
+        **fixture["overview"],
+        "totals": {**fixture["overview"]["totals"], "people": len(people)},
+        "people": people,
+        "pending": 0,
+        "facets": {**fixture["overview"]["facets"], "people": people},
+    }
+    endpoint = "/v1/conversation/acquisition/insights"
+    with _journey(browser, viewport, "insights-people-search") as journey:
+        page = journey.page
+        reads: list[str] = []
+        mutations: list[str] = []
+
+        def fictional_read(route: Route) -> None:
+            request = route.request
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+                return
+            url = urlsplit(request.url)
+            reads.append(url.path)
+            if url.path == endpoint:
+                reply = {"status": 200, "body": overview}
+            elif url.path == endpoint + "/calls":
+                reply = {"status": 200, "body": fixture["calls"]}
+            else:
+                reply = _fictional_api_reply(request.method, url.path, url.query)
+            route.fulfill(
+                status=reply["status"],
+                content_type="application/json",
+                body=json.dumps(reply["body"]),
+            )
+
+        journey.context.route("**/v1/**", fictional_read)
+        journey.context.add_init_script(
+            "localStorage.setItem("
+            "'sx.guide.off:00000000-0000-4000-8000-000000000001:first-call', '1');"
+        )
+        journey.open("/organisation/insights?view=people")
+        expect(page.get_by_text("Synthetic sandbox data", exact=True)).to_be_visible()
+        surface = page.get_by_role(
+            "list" if journey.width == 390 else "table", name="People", exact=True
+        )
+        names = surface.locator(
+            "article button" if journey.width == 390 else "tbody td:first-child button"
+        )
+        search = page.get_by_role("searchbox", name="Search people", exact=True)
+        clear = page.get_by_role("button", name="Clear search", exact=True)
+        more = page.get_by_role("button", name="Show more", exact=True)
+        fewer = page.get_by_role("button", name="Show fewer", exact=True)
+        status = page.get_by_role("status").filter(has_text=re.compile(r"people$"))
+        panel = page.get_by_role("region", name=re.compile(r"^People and teams"))
+        expect(names).to_have_text([person["name"] for person in people[:50]])
+        expect(clear).to_be_disabled()
+        figures = page.get_by_role("region", name="This period", exact=True).inner_text()
+        address = page.url
+        reads_before = len(reads)
+        search.fill("  FICTIONAL REP 65  ")
+        expect(names).to_have_text([people[54]["name"], people[-1]["name"]])
+        expect(status).to_have_text("Matches: 2 of 65 people")
+        expect(surface.get_by_role("link", name=re.compile(r"^Open .+’s profile$"))).to_have_count(
+            0
+        )
+        panel.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("duplicate-tail-names")
+        for control, label in (
+            (search, "search-people"),
+            (clear, "clear-search"),
+            (names.last, "tail-person"),
+        ):
+            journey.control_target(control, label)
+        clear.focus()
+        page.keyboard.press("Enter")
+        expect(search).to_be_focused()
+        expect(search).to_have_value("")
+        expect(names).to_have_text([person["name"] for person in people[:50]])
+        expect(more).to_have_attribute("aria-expanded", "false")
+        more.click()
+        search.fill("fictional rep")
+        expect(names).to_have_text([person["name"] for person in people])
+        expect(status).to_have_text("Matches: 65 of 65 people")
+        expect(fewer).to_have_count(0)
+        names.last.scroll_into_view_if_needed()
+        journey.snapshot("all-matching-source-order")
+        clear.click()
+        expect(search).to_be_focused()
+        expect(names).to_have_count(65)
+        expect(fewer).to_have_attribute("aria-expanded", "true")
+        search.fill("Missing fictional name")
+        expect(page.get_by_text("No people match this name.", exact=True)).to_be_visible()
+        expect(status).to_have_text("Matches: 0 of 65 people")
+        expect(surface).to_have_count(0)
+        panel.scroll_into_view_if_needed()
+        journey.snapshot("quiet-no-match")
+        clear.click()
+        expect(search).to_be_focused()
+        expect(names).to_have_text([person["name"] for person in people])
+        assert len(reads) == reads_before, "Local search unexpectedly fetched new data"
+        assert page.url == address
+        assert page.get_by_role("region", name="This period", exact=True).inner_text() == figures
+        # Both equal display names must select their own original source key.
+        for person in (people[54], people[-1]):
+            search.fill(person["name"])
+            index = 0 if person["key"] == people[54]["key"] else 1
+            with page.expect_response(
+                lambda response, key=person["key"]: (
+                    urlsplit(response.url).path == endpoint
+                    and parse_qs(urlsplit(response.url).query).get("person") == [key]
+                )
+            ) as filtered:
+                names.nth(index).click()
+            assert filtered.value.status == 200
+            expect(page.get_by_role("combobox", name="Person", exact=True)).to_have_value(
+                person["key"]
+            )
+            assert parse_qs(urlsplit(page.url).query).get("person") == [person["key"]]
+        search.scroll_into_view_if_needed()
+        journey.snapshot("duplicate-key-selection")
+        journey.observations[-1]["fictional_insights_search"] = {
+            "source": "G65-person harness with requested duplicate display name at source55/65",
+            "both_original_keys_selected": True,
+            "trimmed_case_insensitive_tail_match": True,
+            "all_matches_source_order_preserved": True,
+            "empty_state_and_clear_focus": True,
+            "both_prior_disclosure_states_restored": True,
+            "local_search_reads": 0,
+            "figures_and_profile_suppression_preserved": True,
+            "api_mutations": len(mutations),
+            "authenticated_hosted_acceptance": False,
+        }
+        assert not mutations, "Fictional Insights search attempted an API mutation"
+
+
 def test_fixture_insights_people(browser: Browser, viewport: tuple[int, str]) -> None:
     """Reach all 65 fictional returned people and retain filter identity/focus."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":
@@ -2011,6 +2171,115 @@ def test_fixture_insights_people(browser: Browser, viewport: tuple[int, str]) ->
             "authenticated_hosted_acceptance": False,
         }
         assert not mutations, "Fictional Insights attempted an API mutation"
+
+
+def test_fixture_team_missing_focus(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Filter existing reps with no focus without changing history or source dates."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Missing-focus checks use D's existing fictional example")
+    data = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox-team.json"
+        ).read_text()
+    )["team"]
+    missing = [data["reps"][8], data["reps"][19]]
+    with _journey(browser, viewport, "team-missing-focus") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        journey.open("/review-fixture/coaching?data=sandbox&view=team&example=no-focus-reps")
+        team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
+        search = team.get_by_role("searchbox", name="Find a rep", exact=True)
+        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        reset = team.get_by_role("button", name="Clear filters", exact=True)
+        listing = team.get_by_role("list", name="Reps and their current focus", exact=True)
+        rows = listing.get_by_role("listitem")
+        links = listing.get_by_role("link")
+        totals = page.get_by_role("list", name="Coaching areas", exact=True)
+        history = totals.inner_text()
+        expect(links).to_have_count(8)
+
+        def assert_reps(expected: list[dict[str, object]], no_focus: bool) -> None:
+            expect(rows).to_have_count(len(expected))
+            for index, rep in enumerate(expected):
+                row = rows.nth(index)
+                expect(row).to_contain_text(str(rep["name"]))
+                expect(row).to_contain_text(
+                    "No focus shown" if no_focus else str(rep["focus_label"])
+                )
+                if no_focus:
+                    expect(row).not_to_contain_text(str(rep["focus_label"]))
+                expect(row).to_contain_text(f"{rep['calls']} calls")
+                stamp = datetime.fromisoformat(str(rep["latest_call_at"]))
+                month = "Sept" if stamp.month == 9 else stamp.strftime("%b")
+                expect(row).to_contain_text(f"Latest call {stamp.day} {month} {stamp.year}")
+                expect(row).not_to_contain_text("Shared ")
+                expect(links.nth(index)).to_have_attribute(
+                    "href", f"/coaching?person={rep['person_id']}"
+                )
+
+        team.get_by_role("button", name="Show all 60 people", exact=True).click()
+        expect(links).to_have_count(60)
+        area.select_option("no-focus")
+        assert_reps(missing, True)
+        expect(team.get_by_role("status")).to_have_text("2 reps")
+        expect(team.get_by_role("button", name="Show fewer people", exact=True)).to_have_count(0)
+        team.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("missing-focus-source-reps")
+        for control, label in (
+            (search, "find-rep"),
+            (area, "no-focus-filter"),
+            (reset, "reset-filter"),
+            (links.last, "no-focus-person"),
+        ):
+            journey.control_target(control, label)
+        if journey.width == 390:
+            assert abs(area.bounding_box()["y"] - reset.bounding_box()["y"]) < 1, (
+                "Phone area and reset left their shared row"
+            )
+        search.fill(f"  {missing[-1]['name'].upper()}  ")
+        assert_reps([missing[-1]], True)
+        expect(team.get_by_role("status")).to_have_text("1 rep")
+        journey.snapshot("named-missing-focus")
+        search.fill("Missing fictional rep")
+        expect(team.get_by_role("status")).to_have_text("0 reps")
+        expect(listing).to_have_count(0)
+        journey.snapshot("quiet-no-match")
+        reset.focus()
+        page.keyboard.press("Enter")
+        expect(search).to_be_focused()
+        expect(search).to_have_value("")
+        expect(area).to_have_value("all")
+        assert_reps(data["reps"][:8], False)
+        area.select_option("no-focus")
+        search.fill(str(missing[0]["name"]))
+        assert_reps([missing[0]], True)
+        reset.click()
+        expect(search).to_be_focused()
+        assert_reps(data["reps"][:8], False)
+        assert totals.inner_text() == history
+        team.scroll_into_view_if_needed()
+        journey.snapshot("restored-source-reps")
+        journey.observations[-1]["fictional_missing_focus"] = {
+            "source": "D's existing no-focus-reps example changes only rep8/19 focus fields",
+            "source_names_calls_dates_routes_preserved": True,
+            "historical_totals_unchanged": True,
+            "no_invented_share_dates": True,
+            "pointer_enter_reset_focus_and_compact_list": True,
+            "api_mutations": len(mutations),
+            "distinct_shared_and_absent_latest_dates": "not supplied by this fixture",
+            "authenticated_hosted_acceptance": False,
+        }
+        assert not mutations, "Missing-focus fixture attempted an API mutation"
 
 
 def test_fixture_organisation_people_search(browser: Browser, viewport: tuple[int, str]) -> None:

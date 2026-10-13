@@ -76,7 +76,7 @@ path they skip. The original sixteen plus four each for format, persistence,
 quote, print, legacy-action, Team-search, Team-skill and supporting-moment checks,
 plus eight focus-to-moment, eight call-search and four rep-call reset cases,
 plus four Insights People, four Organisation People search and four Team
-current-area cases, collect 80 cases. The original Report
+current-area cases, plus four Insights name-search and four Team missing-focus cases, collect 88 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -231,3 +231,13 @@ Run after builders' commits, at most every 15 minutes. Record the source SHA,
 receipts, remaining gaps and screenshot findings in strike NOTES, and append
 exact defects to the owning strike's INBOX. The coordinator owns any staging
 run or shipping. These journeys never promote a version themselves.
+
+For returned-name search and missing-focus changes, use
+`-k 'fixture_insights_people_search or fixture_team_missing_focus'` only.
+Insights searches the existing65-person fictional source, with source55 and65
+sharing a display name while retaining distinct keys; it checks both selections,
+all matching rows, figures, no local reads and both prior disclosure states.
+Team uses the existing no-focus-reps example and retains source call dates,
+counts, routes and historical totals. Its source supplies no shared dates or
+absent latest dates; those browser edges require an explicit separate source.
+These remain fictional read-only UI checks.
