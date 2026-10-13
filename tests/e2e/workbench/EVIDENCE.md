@@ -1,5 +1,14 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 00:05 UTC — focus-to-moments **8/8 PASS**, 37.22 seconds,
+launcher0. Personal/fictional rep at 1440/390 light/dark: pointer/Enter focus
+the saved evidence, next Tab stays inside it, first quote/time/call destination
+remain intact, and shortcut/call targets meet 32/44 px. No refresh, browser,
+server, visual, media or API mutation faults. All 24 captures inspected and
+readable. Receipts/JUnit/log/PNGs: `shots/2026-10-13-focus-moments-0004Z/` in
+the strike directory; recorded HEAD `f26186e5` to `83555a6f` during shared-dev
+work. Fictional UI scope; product destinations/playback/hosted reads unexecuted.
+
 12 October, 23:49 UTC — supporting moments repair independently passes
 
 At `9e1f43b6`, the focused supporting-moment journey passes **4/4** in
