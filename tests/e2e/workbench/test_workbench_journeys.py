@@ -1413,10 +1413,11 @@ def test_fixture_team_skill_reps(browser: Browser, viewport: tuple[int, str]) ->
                 expect(
                     team.get_by_role("button", name=f"Show all {len(matches)} people", exact=True)
                 ).to_have_attribute("aria-expanded", "false")
-            button = summary.get_by_role(
-                "button", name=f"Find reps working on {skill['label']}", exact=True
+            source_row = summary.get_by_role("listitem").filter(
+                has=page.get_by_role(
+                    "button", name=f"Find reps working on {skill['label']}", exact=True
+                )
             )
-            source_row = summary.get_by_role("listitem").filter(has=button)
             expect(source_row).to_contain_text(
                 f"{skill['suggestion_calls']} of {data['analysed_calls']} calls"
             )
