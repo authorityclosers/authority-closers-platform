@@ -1650,7 +1650,7 @@ def test_fixture_coaching_call_search(
         assert len(matches) > 1, "Fictional name search needs several retained calls"
         search.fill(query)
         assert_calls(matches)
-        search.scroll_into_view_if_needed()
+        history.scroll_into_view_if_needed()
         journey.snapshot("named-match")
         journey.unclipped_text(history)
         journey.control_target(search, "find-call")
