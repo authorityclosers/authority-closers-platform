@@ -21,10 +21,13 @@ AudioType = Literal[
     "audio/3gpp",
     "audio/webm",
     "audio/aiff",
+    "audio/x-caf",
+    "audio/x-ms-wma",
     "video/mp4",
     "video/quicktime",
     "video/3gpp",
     "video/x-matroska",
+    "video/x-ms-asf",
 ]
 
 
