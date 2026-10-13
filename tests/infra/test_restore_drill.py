@@ -1229,7 +1229,7 @@ def test_checked_in_migrations_preserve_forward_only_recovery_policy() -> None:
         assert spec is not None and spec.loader is not None
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
-        if migration.revision in {"20261012_0088", "20261013_0089"}:
+        if migration.revision in {"20261012_0088", "20261013_0089", "20261013_0090"}:
             # These constraint-only migrations permit compatible rollback, but
             # unsupported retained history must force forward recovery.
             migration.op = SimpleNamespace(
@@ -1266,7 +1266,7 @@ def test_empty_terminal_failure_migration_can_reverse_without_touching_history()
     assert set(changed_tables) == {"conversation_acquisition_settlements"}
 
 
-@pytest.mark.parametrize("head", ["20261012_0088", "20261013_0089"])
+@pytest.mark.parametrize("head", ["20261012_0088", "20261013_0089", "20261013_0090"])
 def test_constraints_reuse_the_existing_row_count_contract(head: str) -> None:
     from tests.infra.test_postgres_backup import backup
     from tests.infra.test_postgres_restore_proof import proof
@@ -1316,6 +1316,74 @@ def test_bulk_size_rollback_locks_and_preserves_large_import_history(large_rows:
         assert changed_tables
         assert set(changed_tables) == {"conversation_recording_import_items"}
     assert events == ["lock", "read"]
+
+
+@pytest.mark.parametrize("oversized_table", [None, *range(3)])
+def test_duration_rollback_locks_all_history_before_changing_bounds(
+    oversized_table: int | None,
+) -> None:
+    path = ROOT / "db/migrations/versions/20261013_0090_recording_duration_7200.py"
+    spec = importlib.util.spec_from_file_location("guarded_duration_migration", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    tables = (
+        ("conversation_acquisition_usage", "reserved_seconds", 1),
+        ("conversation_acquisition_settlements", "charged_seconds", 0),
+        ("conversation_report_minute_events", "seconds", 0),
+    )
+    events: list[str] = []
+    checks: list[tuple[str, str, str]] = []
+
+    def lock(statement: Any) -> None:
+        assert not events
+        assert str(statement) == (
+            "LOCK TABLE conversation_acquisition_usage, conversation_acquisition_settlements, "
+            "conversation_report_minute_events IN ACCESS EXCLUSIVE MODE"
+        )
+        events.append("lock")
+
+    def history(statement: Any) -> bool:
+        assert events[0] == "lock"
+        assert not checks
+        index = len(events) - 1
+        table, column, _ = tables[index]
+        sql = str(statement)
+        assert f"FROM {table}" in sql
+        assert f"{table}.{column} >" in sql
+        assert statement.compile().params == {f"{column}_1": 6000}
+        events.append(table)
+        return index == oversized_table
+
+    def drop(name: str, table: str, **kwargs: Any) -> None:
+        assert events == ["lock", *(item[0] for item in tables)]
+        checks.append(("drop", table, name))
+
+    def create(name: str, table: str, condition: str) -> None:
+        checks.append(("create", table, condition))
+
+    migration.op = SimpleNamespace(
+        execute=lock,
+        get_bind=lambda: SimpleNamespace(scalar=history),
+        f=lambda name: name,
+        drop_constraint=drop,
+        create_check_constraint=create,
+    )
+    if oversized_table is not None:
+        with pytest.raises(RuntimeError, match="history requires forward recovery"):
+            migration.downgrade()
+        assert not checks
+        assert events == ["lock", *(item[0] for item in tables[: oversized_table + 1])]
+    else:
+        migration.downgrade()
+        assert checks == [
+            change
+            for table, column, floor in tables
+            for change in (
+                ("drop", table, f"ck_{table}_duration_bound"),
+                ("create", table, f"{column} BETWEEN {floor} AND 6000"),
+            )
+        ]
 
 
 @pytest.mark.parametrize(
