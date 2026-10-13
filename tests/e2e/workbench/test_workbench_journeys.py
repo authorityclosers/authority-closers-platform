@@ -416,6 +416,31 @@ class Journey:
         expect(mission).to_contain_text("Done when")
         self.snapshot(step)
 
+    def row_link_target(self, link: Locator, label: str) -> None:
+        """Measure a stretched row link using real hits across its claimed area."""
+        link.locator("xpath=ancestor::li[1]").scroll_into_view_if_needed()
+        expect(link).to_be_visible()
+        metrics = link.evaluate(
+            """el => {
+              const row = el.closest('li').getBoundingClientRect();
+              const text = el.getBoundingClientRect();
+              const cx = row.x + row.width / 2, cy = row.y + row.height / 2;
+              const points = [[cx, cy], [cx, row.y + 2],
+                [cx, row.bottom - 2], [row.x + 2, cy], [row.right - 2, cy]];
+              return {width: row.width, height: row.height,
+                textHeight: text.height, hits: points.map(([x, y]) => {
+                  const hit = document.elementFromPoint(x, y);
+                  return hit === el || el.contains(hit);
+                })};
+            }"""
+        )
+        self.observations[-1][f"target_{label}"] = metrics
+        minimum = 44 if self.width == 390 else 32
+        if min(metrics["width"], metrics["height"]) < minimum - 0.01:
+            self.visual_errors.append(f"{label}: clickable row is below {minimum}px")
+        if not all(metrics["hits"]):
+            self.visual_errors.append(f"{label}: row link does not cover its claimed hit area")
+
 
 def _install_local_transport(journey: Journey, origin: str) -> None:
     transport = _local_transport(origin)
@@ -1630,7 +1655,7 @@ def test_fixture_coaching_call_search(
         journey.unclipped_text(history)
         journey.control_target(search, "find-call")
         journey.control_target(clear, "clear-search")
-        journey.control_target(call_list.get_by_role("link").first, "matched-call")
+        journey.row_link_target(call_list.get_by_role("link").first, "matched-call")
 
         on_skill.click()
         expect(search).to_have_value(query)
