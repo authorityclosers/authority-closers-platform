@@ -2118,9 +2118,11 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
             ):
                 play.click()
             expect(card.locator("audio")).to_have_attribute("src", source)
-            expect(play).to_be_disabled()
+            loading = card.locator('button[aria-disabled="true"],button:disabled')
+            expect(loading).to_have_count(1)
+            expect(loading).to_be_disabled()
             page.clock.fast_forward(14_999)
-            expect(play).to_be_disabled()
+            expect(loading).to_be_disabled()
             expect(card.get_by_role("status")).to_have_count(0)
             page.clock.fast_forward(1)
             retry = card.get_by_role("button", name=retry_name)

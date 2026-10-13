@@ -1,5 +1,15 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 04:12 UTC — continuation at `88a2a99a` (including D's
+`688a8670`) reaches narration after the moment deadline/retry, keyboard
+focus, inert loading and moved-focus assertions pass. It then stops with
+**1 test-selector FAIL,3 NOT RUN**,16.99 seconds/launcher1: narration changes
+its accessible label while loading, so the original Play-labelled locator
+no longer resolves. The corrected loading selector still requires exactly
+one unavailable control and the same14999/15000ms deadline. This is a harness
+repair; no new product defect. Original JSON/JUnit/log/three PNGs retained in
+strike `shots/2026-10-13-audio-focus-continuation/`.
+
 13 October, 04:07 UTC — prepared the existing four-case audio continuation
 for the D-owned focus repair. It retains the original keyboard-retry guard,
 adds inert loading activation and deliberately moved-focus preservation for
