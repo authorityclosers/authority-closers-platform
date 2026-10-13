@@ -408,6 +408,10 @@ describe("reviewed placeholder clips", () => {
       // A switch/fold can arrive between the browser's timeupdate events and
       // before the periodic two-second device checkpoint.
       audio.currentTime = secondary.start_ms / 1000 + 1.25;
+      vi.spyOn(audio, "pause").mockImplementation(() => {
+        // Native playback can advance between a position read and pause().
+        audio.currentTime += 0.001;
+      });
       expect(window.localStorage.length).toBe(0);
       await act(async () => {
         if (interruption === "folding") {
@@ -421,6 +425,7 @@ describe("reviewed placeholder clips", () => {
       });
       expect(audio.pause).toHaveBeenCalled();
       expect(card.textContent).toContain("Resume clip");
+      const pausedAt = audio.currentTime;
       await act(async () => root.unmount());
       root = createRoot(host);
       await act(async () => root.render(<CoachingMedia clips={[secondary]} />));
@@ -430,7 +435,7 @@ describe("reviewed placeholder clips", () => {
       const resumed = host.querySelector("audio")!;
       expect(resumed.getAttribute("src")).toBe(clipSource(secondary));
       await act(async () => resumed.dispatchEvent(new Event("loadedmetadata")));
-      expect(resumed.currentTime).toBe(secondary.start_ms / 1000 + 1.25);
+      expect(resumed.currentTime).toBe(pausedAt);
     },
   );
   it("never restores a position outside the preview window", async () => {

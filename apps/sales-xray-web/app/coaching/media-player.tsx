@@ -157,6 +157,8 @@ function ClipCard({
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
       if (!active.current) return;
+      active.current = false;
+      player.current?.pause();
       // A switch or fold can fall between timeupdate events. Keep the actual
       // paused position, including before the two-second device checkpoint.
       const at = Math.round((player.current?.currentTime ?? 0) * 1000);
@@ -166,8 +168,6 @@ function ClipCard({
         writeResume(key, offset);
         setPosition(offset);
       }
-      active.current = false;
-      player.current?.pause();
       setState("paused");
     };
     const stopHidden = (event: Event) => {
