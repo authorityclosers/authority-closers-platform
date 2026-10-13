@@ -1905,6 +1905,8 @@ def test_fixture_summary_clips(browser: Browser, viewport: tuple[int, str]) -> N
         summary = picture.get_by_role("group", name="Summary", exact=True)
         buttons = summary.get_by_role("button")
         native_summary = source["account"]["content"]["summary"]
+        # Wait for the native fixture shell/style reads before its first image.
+        page.wait_for_load_state("networkidle", timeout=15000)
         expect(picture).to_contain_text(native_summary)
         expect(buttons).to_have_text(["00:05–00:10", "00:26–00:31", "00:36–00:40"])
         summary.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
