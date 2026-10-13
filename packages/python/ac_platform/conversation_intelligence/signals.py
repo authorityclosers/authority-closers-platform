@@ -55,7 +55,7 @@ _RAW_ROW = struct.Struct("<18d")
 _ROW = struct.Struct("<IBHHB14f")
 _HEADER = struct.Struct("<8sIIQIIQ")
 _MAGIC = b"ACAAF001"
-_FORMATS = "wav,mp3,mov,matroska,webm,ogg,flac,aac,aiff,amr"
+_FORMATS = "wav,mp3,mov,matroska,webm,ogg,flac,aac,aiff,amr,asf,caf"
 
 
 class SignalError(ValueError):

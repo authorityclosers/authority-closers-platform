@@ -601,7 +601,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     if (
       next.size === 0 ||
       next.size > 100_000_000 ||
-      !/\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i.test(
+      !/\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i.test(
         next.name,
       )
     ) {
@@ -859,6 +859,10 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 aiff: "audio/aiff",
                 aif: "audio/aiff",
                 aifc: "audio/aiff",
+                wma: "audio/x-ms-wma",
+                asf: "video/x-ms-asf",
+                wmv: "video/x-ms-asf",
+                caf: "audio/x-caf",
                 ogg: "audio/ogg",
                 flac: "audio/flac",
                 amr: "audio/amr",
@@ -1329,7 +1333,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               id="call-file"
               className="visually-hidden"
               type="file"
-              accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc"
+              accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc,.wma,.asf,.wmv,.caf"
               aria-label="Choose sales call audio"
               onChange={(e) => selectFile(e.target.files?.[0])}
             />

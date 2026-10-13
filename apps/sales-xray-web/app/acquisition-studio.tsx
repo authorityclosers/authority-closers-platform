@@ -1322,7 +1322,7 @@ export function AcquisitionStudio({
     setPlanRequiresAction(false);
     if (
       !policy ||
-      !/\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i.test(
+      !/\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i.test(
         next.name,
       ) ||
       !next.size ||
@@ -1355,7 +1355,7 @@ export function AcquisitionStudio({
     const candidates = Array.from(nextFiles);
     const valid = candidates.filter(
       (candidate) =>
-        /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i.test(
+        /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i.test(
           candidate.name,
         ) &&
         candidate.size > 0 &&
@@ -2957,7 +2957,7 @@ export function AcquisitionStudio({
                   className="visually-hidden"
                   id="acquisition-file"
                   type="file"
-                  accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc"
+                  accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc,.wma,.asf,.wmv,.caf"
                   aria-label="Choose sales call audio"
                   disabled={
                     !policy ||

@@ -33,6 +33,21 @@ class NativePreflightTimeout(ConversationError):
     status = 408
 
 
+_ASF_HEADER = UUID("75b22630-668e-11cf-a6d9-00aa0062ce6c").bytes_le
+_ASF_STREAM = UUID("b7dc0791-a9b7-11cf-8ee6-00c00c205365").bytes_le
+_ASF_AUDIO = UUID("f8699e40-5b4d-11cf-a8fd-00805f5c442b").bytes_le
+_ASF_VIDEO = UUID("bc19efc0-5b4d-11cf-a8fd-00805f5c442b").bytes_le
+_ASF_EXTENSION = UUID("5fbf03b5-a92e-11cf-8ee3-00c00c205365").bytes_le
+_ASF_METADATA = frozenset(
+    UUID(value).bytes_le
+    for value in (
+        "44231c94-9498-49d1-a141-1d134e457054",  # Metadata Library
+        "c5f8cbea-5baf-4877-8467-aa8c44fa4cca",  # Metadata
+        "7c4346a9-efe0-4bfc-b229-393ede415c85",  # Language List
+    )
+)
+
+
 def original_content_type(header: bytes) -> AudioType:
     # This allowlist selects a playback type. The isolated decoder must still
     # validate the complete source; a magic signature is never duration proof.
@@ -42,6 +57,10 @@ def original_content_type(header: bytes) -> AudioType:
         return "audio/ogg"
     if header.startswith(b"fLaC"):
         return "audio/flac"
+    if header.startswith(b"caff"):
+        return "audio/x-caf"
+    if header.startswith(_ASF_HEADER):
+        return "video/x-ms-asf"
     if header.startswith(b"#!AMR-WB\n"):
         return "audio/amr-wb"
     if header.startswith(b"#!AMR\n"):
@@ -187,6 +206,70 @@ def _matroska_sound_track(path: Path) -> bool | None:
     return found_audio if found_tracks else None
 
 
+def _asf_track_types(path: Path) -> frozenset[bytes] | None:
+    """Read bounded ASF header objects; native decoding remains authoritative.
+
+    Unknown nested or stream metadata stays unknown rather than asserting a
+    missing sound track. Packet payloads and large metadata objects are skipped.
+    """
+    tracks: set[bytes] = set()
+    uncertain = False
+    remaining = 2048
+
+    def objects(stream: BinaryIO, start: int, end: int, depth: int) -> int:
+        nonlocal remaining, uncertain
+        if depth > 1:
+            raise ValueError("container_depth")
+        position, count = start, 0
+        while position < end:
+            remaining -= 1
+            if remaining < 0 or end - position < 24:
+                raise ValueError("container_bounds")
+            stream.seek(position)
+            obj = stream.read(24)
+            size = int.from_bytes(obj[16:24], "little")
+            if len(obj) != 24 or size < 24 or position + size > end:
+                raise ValueError("container_bounds")
+            if obj[:16] == _ASF_STREAM:
+                if size < 78:
+                    raise ValueError("container_stream")
+                kind = stream.read(16)
+                if kind in {_ASF_AUDIO, _ASF_VIDEO}:
+                    tracks.add(kind)
+                else:
+                    uncertain = True
+            elif obj[:16] == _ASF_EXTENSION:
+                if size < 46:
+                    raise ValueError("container_extension")
+                extension = stream.read(22)
+                nested_size = int.from_bytes(extension[18:22], "little")
+                if nested_size != size - 46:
+                    raise ValueError("container_extension")
+                objects(stream, position + 46, position + size, depth + 1)
+            elif depth and obj[:16] not in _ASF_METADATA:
+                # Extended stream properties can embed additional streams.
+                # An unsupported nested layout must not imply missing audio.
+                uncertain = True
+            position += size
+            count += 1
+        return count
+
+    try:
+        with path.open("rb") as stream:
+            header = stream.read(30)
+            if len(header) != 30 or header[:16] != _ASF_HEADER:
+                return None
+            end = int.from_bytes(header[16:24], "little")
+            count = int.from_bytes(header[24:28], "little")
+            if not 30 <= end <= path.stat().st_size or not 0 < count <= 2048:
+                return None
+            if objects(stream, 30, end, 0) != count or uncertain:
+                return None
+    except (OSError, ValueError):
+        return None
+    return frozenset(tracks) if tracks else None
+
+
 @dataclass(frozen=True)
 class MeasuredUpload:
     source: MeasuredSource
@@ -218,6 +301,12 @@ class NativeUploadPreflight:
                 media_type = "video/3gpp" if b"vide" in handlers else "audio/3gpp"
         elif media_type in {"audio/webm", "video/x-matroska"}:
             sound_track = _matroska_sound_track(path)
+        elif media_type == "video/x-ms-asf":
+            tracks = _asf_track_types(path)
+            if tracks is not None:
+                sound_track = _ASF_AUDIO in tracks
+                if _ASF_VIDEO not in tracks and sound_track:
+                    media_type = "audio/x-ms-wma"
         if sound_track is False:
             raise ConversationError("This file has no sound track.")
         destination = path.parent / "preflight"

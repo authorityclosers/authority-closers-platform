@@ -41,7 +41,7 @@ const supported = (path: string) => {
   const name = path.split("/").at(-1) ?? "";
   return (
     !name.includes(".") ||
-    /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i.test(
+    /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i.test(
       name,
     )
   );

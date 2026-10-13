@@ -96,6 +96,10 @@ it.each([
   "mka",
   "aiff",
   "aif",
+  "wma",
+  "asf",
+  "wmv",
+  "caf",
 ])(
   "keeps a phone %s file selectable even without a browser MIME type",
   async (extension) => {
