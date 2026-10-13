@@ -1,5 +1,24 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 01:19 UTC — requested Insights People **4/4 FAIL**, 24.75
+seconds, launcher1, source `bec91d47`. All four complete compact50 →
+returned65/source-order → collapse/focus/no-extra-read → source person key in
+control/address/API. The sole real defect is the name-filter button:
+96×18.84375 px, below32 desktop/44 phone, centre reachable. It has no whole-row
+or stretched target; exact scoped repair sent to G/coordinator. Show more/fewer
+meet32/44 px; runtime/server/font/overflow/API mutation errors0. Desktop/light
+has2 Fast Refresh notices; other three pairs0, so no immutable-runtime claim.
+
+All sixteen step PNGs inspected and readable; four failure PNGs are byte-identical
+to the inspected final-filter captures. Receipts/JUnit/log/PNGs:
+strike `shots/2026-10-13-insights-people-0119Z/`. Existing G65-person fictional
+API replies are reused, every non-read request blocked, no real account/session
+or data created and no authenticated hosted acceptance. No full PASS or
+release-wide hold. New local name search is still uncommitted/untested.
+`2366ebc1` retains explicit fictional-profile suppression assertions for the
+next repaired-source continuation; focused static/import guards pass.
+Earlier Coaching12PASS remains a separate completed receipt.
+
 13 October, 01:03 UTC — rep shortcut/search/Report actions **12/12 PASS**,
 92.01 seconds, launcher/inner subprocess0, unchanged source `1af5922e`.
 Eight personal/fictional-rep search cases preserve source labels, ordering,
