@@ -1,5 +1,21 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 04:38 UTC — native recording-end **4/4 final PASS** across
+the retained three cases at `758d27fb` and the affected phone/dark retake
+at `135be632` (14.38s/launcher0). Native silent WAV ends at106.072s inside
+the saved excerpt; Enter replays the same source from103.072s, then pointer
+Pause stops it. Original quote/time/call link/mission/query and32–44px targets
+pass. Final runtime/server/font/overflow/refresh/media surprises/API writes0.
+This is local silent native playback only; no real recording/provider/hosted read.
+
+Original04:35 run retained **3 PASS,1 live-refresh FAIL**,40.57s/launcher1:
+phone/dark reaches all playback/source checks but records four Fast Refresh
+events. The strict guard was kept; only that pair reran. Eight final capture
+contents inspected/accounted; eleven original/retake PNGs total include three
+byte-equal images. Receipts/JUnit/logs in strike
+`shots/2026-10-13-moment-ended-0434Z/` and `moment-ended-dark-settle/`.
+Own jobs exited; prior controlled audio4PASS remains retained.
+
 13 October, 04:25 UTC — prepared only four native recording-end cases for
 D's completed `688a8670` return. Reuse its in-memory silent PCM/range source
 at the existing Design review moment; check actual native end inside the
