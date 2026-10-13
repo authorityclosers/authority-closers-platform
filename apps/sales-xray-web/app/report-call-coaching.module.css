@@ -13,6 +13,10 @@
 .coaching > p {
   margin: 0;
 }
+/* Native focus/mission/moment links clear the Report's measured sticky rows. */
+.coaching [data-coaching-pillar] {
+  scroll-margin-block-start: var(--report-scroll-target-offset, 72px);
+}
 .context {
   margin: 0;
   color: var(--lx-muted);
