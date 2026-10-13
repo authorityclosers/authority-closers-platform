@@ -216,7 +216,7 @@ function RepList({
                 icon={<Avatar name={rep.name} size={24} />}
                 title={
                   <>
-                    {searchMatch(rep.name, term)}{" "}
+                    <span>{searchMatch(rep.name, term)}</span>{" "}
                     <span className={styles.repFocus}>
                       {rep.focus_label
                         ? searchMatch(rep.focus_label, term)
