@@ -1907,7 +1907,7 @@ def test_fixture_summary_clips(browser: Browser, viewport: tuple[int, str]) -> N
         native_summary = source["account"]["content"]["summary"]
         expect(picture).to_contain_text(native_summary)
         expect(buttons).to_have_text(["00:05–00:10", "00:26–00:31", "00:36–00:40"])
-        summary.scroll_into_view_if_needed()
+        summary.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("native-summary-before")
         for index, (action, span) in enumerate(
             zip(
@@ -1917,6 +1917,7 @@ def test_fixture_summary_clips(browser: Browser, viewport: tuple[int, str]) -> N
             )
         ):
             button = buttons.nth(index)
+            button.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
             journey.control_target(button, f"native-summary-{index}")
             if action == "pointer":
                 button.click()
@@ -1929,7 +1930,7 @@ def test_fixture_summary_clips(browser: Browser, viewport: tuple[int, str]) -> N
                 )
             ).to_be_visible()
             expect(picture).to_contain_text(native_summary)
-        summary.scroll_into_view_if_needed()
+        summary.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("native-summary-selected")
         page.get_by_role("button", name="Revised Report", exact=True).click()
         expect(buttons).to_have_text(["00:00", "00:03", "00:05"])
@@ -1946,6 +1947,7 @@ def test_fixture_summary_clips(browser: Browser, viewport: tuple[int, str]) -> N
         ]
         for index, action in enumerate(("pointer", "Enter", "Space")):
             button = buttons.nth(index)
+            button.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
             journey.control_target(button, f"revised-summary-{index}")
             if action == "pointer":
                 button.click()
@@ -1956,7 +1958,7 @@ def test_fixture_summary_clips(browser: Browser, viewport: tuple[int, str]) -> N
                 quotes[index]
             )
             expect(picture).to_contain_text(revised)
-        summary.scroll_into_view_if_needed()
+        summary.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("revised-original-source")
         page.get_by_role("button", name="Older report", exact=True).click()
         expect(summary).to_have_count(0)
