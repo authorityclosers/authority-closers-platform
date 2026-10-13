@@ -237,6 +237,7 @@ def test_unsafe_results_are_refused_without_echoing_values(mutation):
         b"x" * (1024 * 1024 + 1),
         b'{"kind":"database","kind":"database"}\n{}\n{}\n{}\n',
     ],
+    ids=["empty", "array", "nan", "non_ascii", "excess_records", "excess_bytes", "duplicate"],
 )
 def test_malformed_excess_and_duplicate_json(data):
     with pytest.raises(sizing.Refusal):

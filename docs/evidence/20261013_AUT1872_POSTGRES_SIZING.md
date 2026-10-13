@@ -33,3 +33,5 @@ Verification
 Next: publish the full source commit/digests, fixed SQL/inventory pins, exact two invocations and allowlisted receipt in this issue's source-handoff document; retain the source bundle/JUnit as Paperclip work products; use the existing native CTO then CEO stages. The later operator must refuse any changed live pin and get a separately reviewed rebinding before reading. Shipping remains the sole authorised coordinator path; no builder PR, push or competing ship is created.
 
 Exact script SHA256: 915fc6be80aaec0a2d903bcdadba7d8198d6cdb8736fa1ab2a08776b5adbbc29. Fixed SQL SHA256: 8aed056ccb6bfc2ee52ea62417ad7f91e2ccf713c58af7ed17b7e631fc177b8a. Ordered approved inventory JSON SHA256: f405624d9a9632ece77c0f8b979ec5be6a1782367ad54f702fcb9cd00a5624aa. Full source commit is recorded in the task handoff after the ownership-safe wb-commit.
+
+Final receipt-only refinement: fixed short labels for malformed-output test cases prevent a 1 MiB synthetic parameter from expanding JUnit case names. Runtime/SQL bytes are unchanged. Final unit36PASS; integration10PASS/19.94s; compact XML receipts are included in the source bundle.
