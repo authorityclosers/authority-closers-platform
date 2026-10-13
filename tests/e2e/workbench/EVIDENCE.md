@@ -1,5 +1,25 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 01:36–01:49 UTC — three focused dev continuations complete:
+Team current Delivery area **4/4 PASS** at `5d3da489`, Organisation People
+name search **4/4 PASS** at `562153c0`, and repaired Insights People targets
+**4/4 PASS** at `279c2fd3`. Source identities, ordering, routes, historical
+figures, prior disclosure and reset focus pass; controls meet 32/44 px.
+Runtime/server/font/overflow/Fast Refresh/API mutation errors0 on these passes.
+
+All 44 final step captures inspected. Receipts/JUnit/logs/PNGs in strike
+`shots/2026-10-13-people-current-areas-0135Z/` (Team12),
+`shots/2026-10-13-organisation-search-continuation/` (Organisation16), and
+`shots/2026-10-13-insights-target-continuation/` (Insights16).
+Original Organisation failures remain: the audit counted decorative hidden
+initials beside full names, and a phone capture placed its quiet-person link
+under the fixed nav. `fb03a9d5` corrects those audit/capture issues; no product
+defect found there. Original Insights18.84px target failures remain below;
+G's `690508d2` repairs the actual controls, independently measured32/44px.
+New Insights name search and Team missing-focus criteria remain separate
+pending checks. Fictional read-only UI evidence, no hosted acceptance or
+production promotion claim.
+
 13 October, 01:19 UTC — requested Insights People **4/4 FAIL**, 24.75
 seconds, launcher1, source `bec91d47`. All four complete compact50 →
 returned65/source-order → collapse/focus/no-extra-read → source person key in
