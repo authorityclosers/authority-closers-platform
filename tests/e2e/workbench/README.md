@@ -74,7 +74,7 @@ and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
 path they skip. The original sixteen plus four each for format, persistence,
 quote, print, legacy-action, Team-search, Team-skill and supporting-moment checks,
-plus eight focus-to-moment cases, collect 56 cases. The original Report
+plus eight focus-to-moment and eight call-search cases, collect 64 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -128,6 +128,17 @@ focus back to Find a rep. The same four cases then open One rep and check the
 committed progress action, See calls on this skill. Pointer/Enter must select
 the saved-record call filter, shorten an expanded history, focus its list and
 preserve source call names/routes. No product destination is opened.
+
+For the new saved-call name search, select `-k fixture_coaching_call_search`.
+Eight cases cover personal/fictional rep histories at both widths/themes. A
+trimmed mixed-case name finds the retained call, collapses expanded history
+and combines with On this skill without changing source states or routes.
+No matching calls and Clear search retain the skill filter; pointer/Enter
+restore search focus. The progress shortcut clears a conflicting search and
+lands on saved skill calls, with the next Tab in Find a call. The personal
+fixture also checks that its pending call retains Analysing and its original
+route, and remains excluded from saved skill calls. Controls meet 32/44 px.
+No product call destination or API mutation is invoked.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.

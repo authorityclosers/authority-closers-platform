@@ -1528,6 +1528,174 @@ def test_fixture_team_skill_reps(browser: Browser, viewport: tuple[int, str]) ->
 
 
 @pytest.mark.parametrize("kind", ["review", "sandbox"])
+def test_fixture_coaching_call_search(
+    browser: Browser, viewport: tuple[int, str], kind: str
+) -> None:
+    """Find retained calls without losing their saved skill, state or destination."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Call-name search checks use the fictional dev fixture")
+    filename, key = ("sandbox-team.json", "rep") if kind == "sandbox" else ("sandbox.json", "me")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching"
+            / filename
+        ).read_text()
+    )[key]
+    calls = payload["calls"]
+    records = {point["submission_id"]: point["state"] for point in payload["progress"]}
+    skill_calls = [
+        call
+        for call in calls
+        if call["state"] == "ready"
+        and call["submission_id"] in records
+        and records[call["submission_id"]] != "not_covered"
+    ]
+    target = skill_calls[-1]
+    point_labels = {"suggested": "Needed work", "no_suggestion": "Skill used, nothing to fix"}
+    with _journey(browser, viewport, f"coaching-call-search-{kind}") as journey:
+        page = journey.page
+        mutation_requests: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD", "OPTIONS"}:
+                mutation_requests.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        journey.open(f"/review-fixture/coaching?data={kind}&view=me")
+        history = page.locator("#coaching-calls")
+        search = history.get_by_role("searchbox", name="Find a call", exact=True)
+        all_calls = history.get_by_role("button", name="All calls", exact=True)
+        on_skill = history.get_by_role("button", name="On this skill", exact=True)
+        clear = history.get_by_role("button", name="Clear search", exact=True)
+        list_name = "Their recent calls" if kind == "sandbox" else "Your recent calls"
+        call_list = history.get_by_role("list", name=list_name, exact=True)
+        compact_count = 3 if journey.width == 390 else 8
+
+        def assert_calls(expected: list[dict[str, object]], *, skill: bool = False) -> None:
+            count = len(expected)
+            expect(history.get_by_role("status")).to_have_text(
+                f"{count} call{'s' if count != 1 else ''}"
+            )
+            if not expected:
+                expect(history.get_by_text("No matching calls", exact=True)).to_be_visible()
+                expect(history.get_by_role("link")).to_have_count(0)
+                expect(
+                    history.get_by_role("button", name=re.compile(r"^Show (all|fewer)"))
+                ).to_have_count(0)
+                return
+            # Inspect retained hidden rows too; screenshots separately check the compact list.
+            links = call_list.get_by_role("link", include_hidden=True)
+            expect(links).to_have_count(count)
+            for index, call in enumerate(expected):
+                expect(links.nth(index)).to_have_text(str(call["call_label"]))
+                href = (
+                    f"/coaching?call={call['submission_id']}"
+                    if call["state"] == "ready"
+                    else f"/analysis/calls/{call['submission_id']}"
+                )
+                expect(links.nth(index)).to_have_attribute("href", href)
+                row = call_list.get_by_role("listitem", include_hidden=True).nth(index)
+                if skill:
+                    expect(row).to_contain_text(point_labels[records[call["submission_id"]]])
+                elif call["state"] == "pending":
+                    expect(row).to_contain_text("Analysing…")
+
+        assert_calls(calls)
+        expect(search).to_have_attribute(
+            "aria-controls", call_list.locator("..").get_attribute("id")
+        )
+        if len(calls) > compact_count:
+            history.get_by_role("button", name=f"Show all {len(calls)} calls", exact=True).click()
+            expect(call_list.get_by_role("link")).to_have_count(len(calls))
+        query = f"  {target['call_label'].swapcase()}  "
+        search.fill(query)
+        matches = [call for call in calls if call["call_label"] == target["call_label"]]
+        assert_calls(matches)
+        expect(search).to_be_focused()
+        expect(call_list.locator("..")).not_to_have_attribute("data-expanded", "")
+        expect(call_list.get_by_role("link")).to_have_count(len(matches))
+        search.scroll_into_view_if_needed()
+        journey.snapshot("named-match")
+        journey.unclipped_text(history)
+        journey.control_target(search, "find-call")
+        journey.control_target(clear, "clear-search")
+        journey.control_target(call_list.get_by_role("link").first, "matched-call")
+
+        on_skill.click()
+        expect(search).to_have_value(query)
+        assert_calls(matches, skill=True)
+        search.fill("no such fictional call")
+        assert_calls([])
+        search.scroll_into_view_if_needed()
+        journey.snapshot("no-match")
+        journey.unclipped_text(history)
+        for keyboard in (False, True):
+            if keyboard:
+                search.fill("no such fictional call")
+                clear.focus()
+                page.keyboard.press("Enter")
+            else:
+                clear.click()
+            expect(search).to_have_value("")
+            expect(search).to_be_focused()
+            expect(on_skill).to_have_attribute("aria-pressed", "true")
+            assert_calls(skill_calls, skill=True)
+        journey.snapshot("cleared-skill")
+        journey.unclipped_text(history)
+        all_calls.click()
+        assert_calls(calls)
+        # A pending source call keeps its original status/route and is absent on this skill.
+        pending = next((call for call in calls if call["state"] == "pending"), None)
+        if pending:
+            search.fill(pending["call_label"])
+            assert_calls([pending])
+            on_skill.click()
+            assert_calls([])
+            clear.click()
+        progress_action = page.get_by_role("button", name="See calls on this skill", exact=True)
+        for keyboard in (False, True):
+            all_calls.click()
+            search.fill("no such fictional call")
+            assert_calls([])
+            if keyboard:
+                progress_action.focus()
+                page.keyboard.press("Enter")
+            else:
+                progress_action.click()
+            expect(search).to_have_value("")
+            expect(on_skill).to_have_attribute("aria-pressed", "true")
+            expect(history).to_be_focused()
+            expect(history.get_by_role("heading").first).to_be_in_viewport()
+            assert_calls(skill_calls, skill=True)
+            expect(call_list.get_by_role("link")).to_have_count(
+                min(len(skill_calls), compact_count)
+            )
+            page.keyboard.press("Tab")
+            expect(search).to_be_focused()
+        journey.snapshot("progress-reset")
+        journey.unclipped_text(history)
+        expect(page).to_have_url(re.compile(rf"/review-fixture/coaching\?data={kind}&view=me$"))
+        journey.observations[-1]["call_search"] = {
+            "source_call_count": len(calls),
+            "saved_skill_call_count": len(skill_calls),
+            "trimmed_mixed_case_match": True,
+            "expanded_history_reset": True,
+            "search_and_skill_combined": True,
+            "pointer_and_enter_clear_with_search_focus": True,
+            "pending_state_and_route_checked": pending is not None,
+            "pointer_and_enter_progress_reset_search": True,
+            "source_names_states_destinations_preserved": True,
+            "api_mutations": len(mutation_requests),
+            "product_destinations_opened": False,
+        }
+        assert not mutation_requests, "Read-only call search attempted an API mutation"
+
+
+@pytest.mark.parametrize("kind", ["review", "sandbox"])
 def test_fixture_coaching_focus_moments(
     browser: Browser, viewport: tuple[int, str], kind: str
 ) -> None:
