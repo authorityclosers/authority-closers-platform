@@ -82,7 +82,8 @@ and four current-skill finding-filter cases, plus four skill-clip disclosure cas
 sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
 cases, eight secondary-lesson disclosure cases and four controlled audio-startup
 cases, plus four controlled native moment-end/replay and four narration shortcut
-focus cases and eight interrupted-lesson resume cases, collect 164 cases. The original Report
+focus cases, eight interrupted-lesson resume and four Worked/Didn't clip disclosure
+cases, collect 168 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -337,3 +338,11 @@ request no audio; Enter must resume that same source at the exact saved position
 with focus/32–44px targets and original access/text/mission/query. The call source
 receives an intercepted404. Only the isolated browser's device position changes;
 no canonical progress, provider, real recording, authenticated read or API write.
+
+For the new Worked/Didn't clip controls, select only
+`-k fixture_worked_clip_disclosure`. Four cases reuse B's exact browser-only
+boundary: each existing fictional card repeats its own original source ref for
+0/1/2/3/4-ref counts. Check first two/all/fewer, independent cards, pointer/Enter/
+Space selection of original displayed bounds/title, fold focus, unchanged six
+findings/prose and32–44px controls, with no added API/media/write. Mixed source
+order and original object identity stay unit-only; canonical payloads are untouched.

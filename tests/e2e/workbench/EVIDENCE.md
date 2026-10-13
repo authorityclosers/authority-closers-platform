@@ -1,5 +1,14 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 05:43 UTC — prepared only Worked/Didn't disclosure4 using
+B99a79943's exact existing authored-card boundary. Repeated own refs cover
+0/1/2/3/4, first-two/all/fewer and independent cards, pointer/Enter/Space,
+original displayed bounds/title, fold focus and32–44px. All six finding
+paragraphs must remain byte-equal at the DOM text level; no canonical payload
+changes, added API/media/write. Mixed order/object identity stay unit-only.
+Ruff/format/API import/diff PASS; opt-in4skip/164deselected. Browser next
+through ordinary shared slot; earlier Report/Document/Word matrices retained.
+
 13 October, 05:26 UTC — interrupted lesson resume **8/8 PASS**,130.89s/
 launcher0 at unchanged `29364cc5`. Moment-switch and secondary-fold cases
 save exactly the native paused window offset (849–1124ms), before the first

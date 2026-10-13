@@ -2997,6 +2997,172 @@ def test_fixture_coaching_focus_lesson(
         }
 
 
+def test_fixture_worked_clip_disclosure(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Each supplied Worked/Didn't clip remains reachable without changing its finding."""
+    if (
+        os.environ.get("WB_MODE", "fixture") != "fixture"
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.skip("Worked disclosure uses B's existing local fictional input boundary")
+
+    def clock(ms: int) -> str:
+        seconds = ms // 1000
+        return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+    with _journey(browser, viewport, "worked-clip-disclosure") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        media: list[str] = []
+        reads: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            request = route.request
+            path = urlsplit(request.url).path
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif (
+                request.resource_type == "media"
+                or path.endswith("/source")
+                or (path.startswith("/v1/") and "/media/" in path)
+            ):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            else:
+                if path.startswith("/v1/"):
+                    reads.append("read")
+                route.continue_()
+
+        page.route("**/*", observe_read)
+        journey.open("/review-fixture/report/story?view=story&section=moments")
+        section = page.locator('[data-report-pillar="moments"]')
+        expect(section).to_be_visible()
+        columns = [
+            section.get_by_role("region", name=label, exact=True)
+            for label in ("What worked", "What didn't")
+        ]
+        rows = [column.locator("ul").first.locator(":scope > li") for column in columns]
+        for group in rows:
+            expect(group).to_have_count(3)
+        page.evaluate("() => document.fonts.ready")
+        page.wait_for_load_state("networkidle", timeout=15_000)
+        # Exact B99a79943 presentation-only setup. No canonical fixture/model
+        # file changes: repeat only each authored card's own original ref.
+        fixture = section.evaluate("""element => {
+          if (!document.querySelector('[data-full-shell-fixture="true"]'))
+            throw new Error('Not the authored fictional Report');
+          return [...element.querySelectorAll('section')].slice(0, 2).map((column, ci) =>
+            [...column.querySelector('ul').children].map((row, ri) => {
+              const key = Object.keys(row).find(key => key.startsWith('__reactFiber$'));
+              let fiber = row[key];
+              while (fiber && !fiber.memoizedProps?.item) fiber = fiber.return;
+              const dispatch = fiber?.memoizedState?.queue?.dispatch ??
+                fiber?.alternate?.memoizedState?.queue?.dispatch;
+              const item = fiber?.memoizedProps.item, original = item?.what.sources[0];
+              if (!dispatch || !original) throw new Error('Missing original ItemRow boundary');
+              const paragraphs = [...row.querySelectorAll('p')].map(p => p.textContent);
+              item.what.sources = Array.from({length: [[4,0,1],[3,2,1]][ci][ri]}, () => original);
+              dispatch(true);
+              return {title: item.title, sources: item.what.sources, paragraphs};
+            }));
+        }""")
+        assert [[len(item["sources"]) for item in group] for group in fixture] == [
+            [4, 0, 1],
+            [3, 2, 1],
+        ]
+        toggles = [group.first.locator("button[aria-controls]") for group in rows]
+        groups = []
+        for index, toggle in enumerate(toggles):
+            expect(toggle).to_have_text("Show fewer clips")
+            toggle.click()
+            expect(toggle).to_have_text(f"Show all {len(fixture[index][0]['sources'])} clips")
+            expect(toggle).to_have_attribute("aria-expanded", "false")
+            groups.append(
+                rows[index].first.locator(f'[id="{toggle.get_attribute("aria-controls")}"]')
+            )
+            expect(groups[index].get_by_role("button")).to_have_count(2)
+        expect(rows[0].nth(1).get_by_role("button")).to_have_count(0)
+        expect(rows[0].nth(2).get_by_role("button")).to_have_count(1)
+        expect(rows[1].nth(1).get_by_role("button")).to_have_count(2)
+        expect(rows[1].nth(1).locator("button[aria-controls]")).to_have_count(0)
+        expect(rows[1].nth(2).get_by_role("button")).to_have_count(1)
+        before_reads = len(reads)
+        toggles[0].click()
+        expect(groups[0].get_by_role("button")).to_have_count(4)
+        expect(groups[1].get_by_role("button")).to_have_count(2)
+        toggles[1].focus()
+        page.keyboard.press("Enter")
+        expect(groups[1].get_by_role("button")).to_have_count(3)
+        for index, group in enumerate(groups):
+            buttons = group.get_by_role("button")
+            item = fixture[index][0]
+            expect(buttons).to_have_text(
+                [f"{clock(ref['start_ms'])} · Play" for ref in item["sources"]]
+            )
+            for number, ref in enumerate(item["sources"]):
+                button = buttons.nth(number)
+                if number % 3 == 0:
+                    button.click()
+                else:
+                    button.focus()
+                    page.keyboard.press("Enter" if number % 3 == 1 else "Space")
+                expect(
+                    page.get_by_role("status", name="Fixture action status", exact=True)
+                ).to_contain_text(
+                    f"Selected {clock(ref['start_ms'])}–{clock(ref['end_ms'])} · "
+                    f"{item['title']}. No audio exists in this fixture."
+                )
+        groups[0].get_by_role("button").last.focus()
+        toggles[0].click()
+        expect(toggles[0]).to_be_focused()
+        expect(toggles[0]).to_have_attribute("aria-expanded", "false")
+        expect(groups[0].get_by_role("button")).to_have_count(2)
+        expect(groups[1].get_by_role("button")).to_have_count(3)
+        toggles[0].focus()
+        page.keyboard.press("Space")
+        expect(groups[0].get_by_role("button")).to_have_count(4)
+        for index, label in enumerate(("worked", "didnt")):
+            row = rows[index].first
+            row.evaluate("""element => {
+              const navBottom = Math.max(0, ...[...document.querySelectorAll('[data-report-nav]')]
+                .filter(nav => nav.getClientRects().length)
+                .map(nav => nav.getBoundingClientRect().bottom));
+              let scroller = element.parentElement;
+              while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY))
+                scroller = scroller.parentElement;
+              if (!scroller) throw new Error('Missing shared Report scroller');
+              scroller.scrollBy({top: element.getBoundingClientRect().top - navBottom - 8,
+                behavior:'instant'});
+            }""")
+            journey.snapshot(f"{label}-all-original-clips")
+            for control, target in (
+                (groups[index].get_by_role("button").last, f"{label}-tail-clip"),
+                (toggles[index], f"{label}-all-fewer"),
+            ):
+                journey.control_target(control, target)
+        for ci, group in enumerate(rows):
+            expect(group).to_have_count(3)
+            for ri, item in enumerate(fixture[ci]):
+                assert group.nth(ri).locator("p").all_text_contents() == item["paragraphs"], (
+                    "Source finding/prose changed during clip disclosure"
+                )
+        expect(page.locator("[data-report-pillar]")).to_have_count(6)
+        assert len(reads) == before_reads and not media and not mutations
+        assert journey.live_refreshes == 0, "Live source changed during Worked/Didn't disclosure"
+        journey.observations[-1]["fictional_worked_clip_disclosure"] = {
+            "source": "B99a79943 existing authored card refs; presentation-only repeats",
+            "counts": [[len(item["sources"]) for item in group] for group in fixture],
+            "first_two_all_fewer_independent_cards_and_fold_focus": True,
+            "pointer_enter_space_original_displayed_bounds_title": True,
+            "all_six_findings_prose_and_32_44px_preserved": True,
+            "mixed_order_and_original_object_identity_browser_tested": False,
+            "extra_api_reads": len(reads) - before_reads,
+            "media_requests": len(media),
+            "api_mutations": len(mutations),
+            "canonical_payload_real_audio_or_authenticated_acceptance": False,
+        }
+
+
 def test_fixture_skill_clip_disclosure(browser: Browser, viewport: tuple[int, str]) -> None:
     """Every supplied fictional skill clip stays reachable, in its original order."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":
