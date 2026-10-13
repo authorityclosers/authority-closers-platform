@@ -71,6 +71,8 @@ export function CoachingFixture() {
   // totals. Names, focuses and destinations still come from the same set.
   const currentFocusExample =
     data === "sandbox" && query.get("example") === "current-focus-areas";
+  const noFocusExample =
+    data === "sandbox" && query.get("example") === "no-focus-reps";
   const team = parseTeamCoaching(
     currentFocusExample
       ? {
@@ -79,7 +81,16 @@ export function CoachingFixture() {
             (row) => row.skill_id !== acSandbox.team.reps[0].skill_id,
           ),
         }
-      : set.team,
+      : noFocusExample
+        ? {
+            ...set.team,
+            reps: set.team.reps.map((rep, index) =>
+              index === 8 || index === 19
+                ? { ...rep, skill_id: null, focus_label: null }
+                : rep,
+            ),
+          }
+        : set.team,
   );
   return (
     <CoachingWrites.Provider value={REVIEW_WRITES}>
@@ -93,6 +104,9 @@ export function CoachingFixture() {
                   "3,360 fictional calls, 60 fictional reps",
                   ...(currentFocusExample
                     ? ["Filter example: one current focus has no team total"]
+                    : []),
+                  ...(noFocusExample
+                    ? ["Filter example: two reps have no focus shown"]
                     : []),
                 ]
               : [

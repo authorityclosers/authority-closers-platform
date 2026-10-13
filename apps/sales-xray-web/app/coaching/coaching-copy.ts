@@ -625,6 +625,7 @@ export const RETAINED = {
 /** Team coaching for owners and admins: totals, objections, shared reps. */
 export const TEAM = {
   allAreas: "All areas",
+  noFocusShown: "No focus shown",
   findRep: "Find a rep",
   findRepHint: "Name or current focus",
   findReps: "Find reps",

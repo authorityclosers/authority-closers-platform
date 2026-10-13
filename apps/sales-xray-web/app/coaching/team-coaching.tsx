@@ -35,6 +35,8 @@ const AREA: Record<string, string> = {
 const share = (part: number, whole: number) =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
 
+const NO_FOCUS = "no-focus";
+
 /** Buyer objections from report call maps: how often, and how they were met. */
 function ObjectionsPanel({ coaching }: { coaching: TeamCoaching }) {
   const calls = coaching.objection_calls;
@@ -107,7 +109,8 @@ function RepList({
   const term = query.trim().toLocaleLowerCase();
   const shown = reps.filter(
     (rep) =>
-      (area === "all" || rep.skill_id === area) &&
+      (area === "all" ||
+        (area === NO_FOCUS ? !rep.focus_label : rep.skill_id === area)) &&
       (rep.name.toLocaleLowerCase().includes(term) ||
         (rep.focus_label?.toLocaleLowerCase().includes(term) ?? false)),
   );
@@ -124,6 +127,7 @@ function RepList({
     (skill): skill is string =>
       skill !== null && reps.some((rep) => rep.skill_id === skill),
   );
+  const hasMissingFocus = reps.some((rep) => !rep.focus_label);
   return (
     <Panel
       title={TEAM.who}
@@ -147,6 +151,7 @@ function RepList({
         </label>
         {areas.length > 1 ||
         (areas.length === 1 && reps.some((rep) => !rep.skill_id)) ||
+        hasMissingFocus ||
         area !== "all" ? (
           <span className={`${kitStyles.field} ${styles.repArea}`}>
             <select
@@ -163,6 +168,9 @@ function RepList({
                   {AREA[skill] ?? "Other"}
                 </option>
               ))}
+              {hasMissingFocus ? (
+                <option value={NO_FOCUS}>{TEAM.noFocusShown}</option>
+              ) : null}
             </select>
           </span>
         ) : null}
@@ -193,15 +201,10 @@ function RepList({
                 icon={<Avatar name={rep.name} size={24} />}
                 title={
                   <>
-                    {rep.name}
-                    {rep.focus_label ? (
-                      <>
-                        {" "}
-                        <span className={styles.repFocus}>
-                          {rep.focus_label}
-                        </span>
-                      </>
-                    ) : null}
+                    {rep.name}{" "}
+                    <span className={styles.repFocus}>
+                      {rep.focus_label ?? TEAM.noFocusShown}
+                    </span>
                   </>
                 }
                 href={`/coaching?person=${rep.person_id}`}

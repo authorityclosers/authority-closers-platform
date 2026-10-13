@@ -194,6 +194,19 @@ describe("anonymous Team coaching", () => {
     expect(
       renderToStaticMarkup(<TeamCoachingStory coaching={unshared} />),
     ).not.toContain("Find reps");
+    const noFocus = parseTeamCoaching({
+      ...shared,
+      reps: [{ ...shared.reps[0], skill_id: null, focus_label: null }],
+    })!;
+    const noFocusHtml = renderToStaticMarkup(
+      <TeamCoachingStory coaching={noFocus} />,
+    );
+    expect(noFocusHtml).toContain("No focus shown");
+    expect(noFocusHtml).toContain("Shared 11 Oct 2026");
+    expect(noFocusHtml).toContain(
+      `/coaching?person=${shared.reps[0].person_id}`,
+    );
+    expect(noFocusHtml).not.toContain("Find reps working on");
     expect(
       parseTeamCoaching({ ...shared, sandbox: true, scope: "sandbox" }),
     ).toBeNull();
@@ -477,6 +490,7 @@ describe("anonymous Team coaching", () => {
     expect([...withoutTotals.options].map((option) => option.value)).toEqual([
       "all",
       "closing_decision_management",
+      "no-focus",
     ]);
     expect(host.querySelector('ul[aria-label="Coaching areas"]')).toBeNull();
     expect(host.textContent).toContain("No team suggestions yet");
@@ -500,6 +514,65 @@ describe("anonymous Team coaching", () => {
     expect(document.activeElement).toBe(
       host.querySelector('input[type="search"]'),
     );
+    // Missing focus is inspectable without inventing an area or diagnosis.
+    await act(async () => {
+      withoutTotals.value = "no-focus";
+      withoutTotals.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Asha Rao");
+    expect(links()[0].textContent).toContain("No focus shown");
+    expect(links()[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[9].person_id}`,
+    );
+    await setQuery("  aShA  ");
+    expect(links()).toHaveLength(1);
+    await setQuery("Closer");
+    expect(links()).toHaveLength(0);
+    await act(async () => clearFilters()!.click());
+    expect(withoutTotals.value).toBe("all");
+    expect(search.value).toBe("");
+    expect(document.activeElement).toBe(search);
+    expect(links()).toHaveLength(2);
+    // Even an all-missing set has a usable filter. A known area without a
+    // focus label remains in that area too; absence isn't a skill judgment.
+    await act(async () =>
+      root.render(
+        <TeamCoachingStory
+          key="missing-focus"
+          coaching={
+            parseTeamCoaching({
+              ...sandboxTeam,
+              reps: sandboxTeam.reps.map((rep) => ({
+                ...rep,
+                focus_label: null,
+              })),
+            })!
+          }
+        />,
+      ),
+    );
+    const missingSelect = host.querySelector<HTMLSelectElement>("select")!;
+    await act(async () => {
+      missingSelect.value = "no-focus";
+      missingSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(8);
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("10 reps");
+    const missingAll = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Show all 10 people",
+    )!;
+    await act(async () => missingAll.click());
+    expect(links()).toHaveLength(10);
+    await act(async () => {
+      missingSelect.value = "qualification";
+      missingSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("No focus shown");
+    expect(
+      host.querySelector('ul[aria-label="Coaching areas"]')!.textContent,
+    ).toContain("3 of 3 calls");
     await act(async () => root.unmount());
     host.remove();
   });
