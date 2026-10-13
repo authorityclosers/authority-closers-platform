@@ -1873,6 +1873,144 @@ def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) ->
         assert not mutation_requests, "Read-only rep shortcut attempted an API mutation"
 
 
+def test_fixture_skill_clip_disclosure(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Every supplied fictional skill clip stays reachable, in its original order."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Skill disclosure uses B's existing browser-only fictional source case")
+
+    def clock(ms: int) -> str:
+        seconds = ms // 1000
+        return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+    with _journey(browser, viewport, "skill-clip-disclosure") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        media: list[str] = []
+        reads: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                reads.append("read")
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        page.on(
+            "request",
+            lambda request: media.append("media") if request.resource_type == "media" else None,
+        )
+        journey.open("/review-fixture/report/pillars?view=story&section=skills")
+        skills = page.locator('[data-report-pillar="skills"]')
+        expect(skills).to_be_visible()
+        rows = skills.locator("li:has(> details > summary)")
+        expect(rows).to_have_count(8)
+        page.wait_for_load_state("networkidle", timeout=15000)
+        # Exact browser-only source setup from B's existing disclosure harness.
+        # This dev fixture has no account/recording; alter only these in-memory props.
+        fixture = skills.evaluate("""element => {
+            const fiberKey = Object.keys(element).find(key => key.startsWith('__reactFiber$'));
+            let fiber = element[fiberKey];
+            while (fiber && !fiber.memoizedProps?.documentData?.report) fiber = fiber.return;
+            const report = fiber?.memoizedProps.documentData.report;
+            if (!report || !document.querySelector('[data-full-shell-fixture="true"]'))
+                throw new Error('No authored fictional Report props found');
+            const dimensions = report.dimensions;
+            const original = dimensions.map(dimension => dimension.evidence ?? []);
+            const first = original[0], second = original[1];
+            dimensions[0].evidence = [first[1], first[0], first[1], first[0], first[1]];
+            dimensions[1].evidence = [...second, ...second, ...second];
+            dimensions[2].evidence = [];
+            dimensions[3].evidence = [...original[3], ...original[3]];
+            return dimensions.slice(0, 4).map(d => ({
+                label: d.label, sources: d.evidence, observation: d.observation}));
+        }""")
+        page.get_by_role("button", name="Coaching view", exact=True).click()
+        page.get_by_role("button", name="Report view", exact=True).click()
+        expect(skills).to_be_visible()
+        for index in range(4):
+            rows.nth(index).locator("summary").click()
+            expect(rows.nth(index).locator("details")).to_have_attribute("open", "")
+            expect(rows.nth(index)).to_contain_text(fixture[index]["observation"])
+        toggles = [rows.nth(index).locator("button[aria-controls]") for index in range(2)]
+        groups = []
+        for index, toggle in enumerate(toggles):
+            expect(toggle).to_have_text(f"Show all {len(fixture[index]['sources'])} clips")
+            expect(toggle).to_have_attribute("aria-expanded", "false")
+            group = rows.nth(index).locator(f'[id="{toggle.get_attribute("aria-controls")}"]')
+            groups.append(group)
+            expect(group.get_by_role("button")).to_have_count(4)
+        expect(rows.nth(2).get_by_role("button")).to_have_count(0)
+        expect(rows.nth(3).get_by_role("button")).to_have_count(4)
+        expect(rows.nth(3).locator("button[aria-controls]")).to_have_count(0)
+        page.wait_for_load_state("networkidle", timeout=15000)
+        reads_before = len(reads)
+        rows.first.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("first-four-clips")
+        journey.control_target(toggles[0], "show-all-skill-clips")
+        toggles[0].click()
+        expect(groups[0].get_by_role("button")).to_have_count(5)
+        expect(groups[1].get_by_role("button")).to_have_count(4)
+        toggles[1].focus()
+        page.keyboard.press("Enter")
+        expect(groups[1].get_by_role("button")).to_have_count(6)
+        for index, group in enumerate(groups):
+            buttons = group.get_by_role("button")
+            expect(buttons).to_have_text(
+                [f"{clock(source['start_ms'])} · Play" for source in fixture[index]["sources"]]
+            )
+            for number, source in enumerate(fixture[index]["sources"]):
+                button = buttons.nth(number)
+                button.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+                if number % 3 == 0:
+                    button.click()
+                else:
+                    button.focus()
+                    page.keyboard.press("Enter" if number % 3 == 1 else "Space")
+                expect(
+                    page.get_by_role("status", name="Fixture action status", exact=True)
+                ).to_contain_text(
+                    f"Selected {clock(source['start_ms'])}–{clock(source['end_ms'])} · "
+                    f"{fixture[index]['label']}. No audio exists in this fixture."
+                )
+        rows.first.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("all-original-clips")
+        journey.control_target(groups[0].get_by_role("button").last, "tail-skill-clip")
+        groups[0].get_by_role("button").last.focus()
+        toggles[0].click()
+        expect(groups[0].get_by_role("button")).to_have_count(4)
+        expect(groups[1].get_by_role("button")).to_have_count(6)
+        expect(toggles[0]).to_be_focused()
+        expect(toggles[0]).to_have_attribute("aria-expanded", "false")
+        expect(rows.first.locator("details")).to_have_attribute("open", "")
+        journey.snapshot("fold-keeps-other-skill")
+        toggles[0].focus()
+        page.keyboard.press("Space")
+        expect(groups[0].get_by_role("button")).to_have_count(5)
+        expect(toggles[0]).to_have_attribute("aria-expanded", "true")
+        expect(skills.locator('a[href^="/coaching?focus="]')).to_have_count(8)
+        expect(page.locator("[data-report-pillar]")).to_have_count(6)
+        for index in range(4):
+            expect(rows.nth(index)).to_contain_text(fixture[index]["observation"])
+        assert len(reads) == reads_before, "Local skill disclosure fetched extra data"
+        assert not media, "Fictional skill disclosure fetched audio"
+        assert not mutations, "Fictional skill disclosure attempted an API mutation"
+        journey.observations[-1]["fictional_skill_disclosure"] = {
+            "source": "B's browser-only fictional native props; repeated original refs preserved",
+            "source_counts": [len(row["sources"]) for row in fixture],
+            "first_four_then_all_original_order": True,
+            "per_skill_state_and_tail_fold_focus": True,
+            "zero_four_source_rows_have_no_toggle": True,
+            "pointer_enter_space_original_times_selected": True,
+            "observation_labels_and_eight_coaching_links_unchanged": True,
+            "extra_reads": 0,
+            "media_requests": len(media),
+            "api_mutations": len(mutations),
+            "authenticated_or_real_audio_acceptance": False,
+        }
+
+
 def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, str]) -> None:
     """Compare only the current skill's explicit saved findings, with name/reset guards."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":

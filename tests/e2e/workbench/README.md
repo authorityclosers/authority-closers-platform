@@ -78,7 +78,7 @@ plus eight focus-to-moment, eight call-search and four rep-call reset cases,
 plus four Insights People, four Organisation People search and four Team
 current-area cases, four Insights name-search and four Team missing-focus cases,
 plus four each for summary clips, supplied shared dates and person-call search,
-and four current-skill finding-filter cases, collect 104 cases. The original Report
+and four current-skill finding-filter cases, plus four skill-clip disclosure cases, collect 108 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -263,3 +263,11 @@ names/order/IDs/Report routes, excludes pending/no-opportunity calls, intersects
 name search, preserves the selected finding on Clear search and resets it through
 All calls or the progress shortcut, including focus and32–44px targets.
 No destination, mutation, authenticated read or AI-scoring claim is made.
+
+After B returns its completed skill-disclosure source, select only
+`-k fixture_skill_clip_disclosure`. It reuses B's browser-only fictional native
+Report prop setup: five/six repeated original refs, zero refs and four refs.
+Four/all counts, literal source order, independent skills, fold focus, original
+selection times,32–44px and no eager media/extra reads/writes are checked.
+This explicitly altered fictional input is not a customer Report or native
+loaded-DB acceptance; no new fixture route or persisted data is created.
