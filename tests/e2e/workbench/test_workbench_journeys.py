@@ -1873,6 +1873,153 @@ def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) ->
         assert not mutation_requests, "Read-only rep shortcut attempted an API mutation"
 
 
+def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Compare only the current skill's explicit saved findings, with name/reset guards."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Finding comparisons use D's existing fictional personal example")
+    data = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox.json"
+        ).read_text()
+    )["me"]
+    points = {row["submission_id"]: row["state"] for row in data["progress"]}
+    calls = data["calls"]
+    skill_calls = [
+        call
+        for call in calls
+        if call["state"] == "ready"
+        and points.get(call["submission_id"]) in {"suggested", "no_suggestion"}
+    ]
+    findings = {
+        "all": skill_calls,
+        **{
+            state: [call for call in skill_calls if points[call["submission_id"]] == state]
+            for state in ("suggested", "no_suggestion")
+        },
+    }
+    labels = {"suggested": "Needed work", "no_suggestion": "Skill used, nothing to fix"}
+    with _journey(browser, viewport, "coaching-call-findings") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        journey.open("/review-fixture/coaching?view=me")
+        section = page.locator("#coaching-calls")
+        search = section.get_by_role("searchbox", name="Find a call", exact=True)
+        select = section.get_by_role("combobox", name="What the report found", exact=True)
+        on_skill = section.get_by_role("button", name="On this skill", exact=True)
+        all_calls = section.get_by_role("button", name="All calls", exact=True)
+        listing = section.get_by_role("list", name="Your recent calls", exact=True)
+        progress = page.locator("#coaching-progress")
+        history = progress.inner_text()
+
+        def verify(expected: list[dict[str, object]], saved: bool = True) -> None:
+            rows = listing.locator("li")
+            expect(rows).to_have_count(len(expected))
+            titles = _call_title_links(listing, expected, include_hidden=True)
+            expect(titles).to_have_text([call["call_label"] for call in expected])
+            expect(section.get_by_role("status")).to_have_text(
+                f"{len(expected)} call{'s' if len(expected) != 1 else ''}"
+            )
+            for index, call in enumerate(expected):
+                expected_href = (
+                    f"/coaching?call={call['submission_id']}"
+                    if call["state"] == "ready"
+                    else f"/analysis/calls/{call['submission_id']}"
+                )
+                expect(titles.nth(index)).to_have_attribute("href", expected_href)
+                report = rows.nth(index).get_by_role(
+                    "link",
+                    name=f"Open Report for {call['call_label']}",
+                    exact=True,
+                    include_hidden=True,
+                )
+                expect(report).to_have_count(1 if call["state"] == "ready" else 0)
+                if call["state"] == "ready":
+                    expect(report).to_have_attribute(
+                        "href", f"/analysis/calls/{call['submission_id']}"
+                    )
+                if saved:
+                    expect(rows.nth(index)).to_contain_text(labels[points[call["submission_id"]]])
+            expect(listing.locator("li:visible")).to_have_count(
+                min(len(expected), 3 if journey.width == 390 else 8)
+            )
+
+        expect(select).to_have_count(0)
+        on_skill.click()
+        verify(findings["all"])
+        expect(select).to_have_value("all")
+        assert select.get_attribute("aria-controls") == listing.locator("..").get_attribute("id")
+        select.select_option("suggested")
+        verify(findings["suggested"])
+        section.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
+        journey.snapshot("needed-work")
+        journey.control_target(select, "saved-finding")
+        select.select_option("no_suggestion")
+        verify(findings["no_suggestion"])
+        journey.snapshot("skill-used-no-fix")
+        report = listing.get_by_role(
+            "link", name=f"Open Report for {findings['no_suggestion'][0]['call_label']}", exact=True
+        )
+        journey.control_target(report, "saved-finding-report")
+        match = findings["no_suggestion"][0]
+        search.fill(f"  {match['call_label'].upper()}  ")
+        verify([match])
+        select.select_option("suggested")
+        expect(listing).to_have_count(0)
+        expect(section.get_by_role("status")).to_have_text("0 calls")
+        expect(section).to_contain_text("Try another call name, or show all calls on this skill.")
+        clear = section.get_by_role("button", name="Clear search", exact=True)
+        clear.focus()
+        page.keyboard.press("Enter")
+        expect(search).to_be_focused()
+        expect(search).to_have_value("")
+        expect(select).to_have_value("suggested")
+        verify(findings["suggested"])
+        journey.snapshot("clear-keeps-finding")
+        all_calls.click()
+        expect(select).to_have_count(0)
+        verify(calls, False)
+        on_skill.focus()
+        page.keyboard.press("Enter")
+        expect(select).to_have_value("all")
+        verify(findings["all"])
+        select.select_option("no_suggestion")
+        search.fill("Missing fictional call")
+        shortcut = progress.get_by_role("button", name="See calls on this skill", exact=True)
+        shortcut.focus()
+        page.keyboard.press("Enter")
+        expect(select).to_have_value("all")
+        expect(search).to_have_value("")
+        verify(findings["all"])
+        expect(section).to_be_focused()
+        page.keyboard.press("Tab")
+        expect(search).to_be_focused()
+        assert progress.inner_text() == history
+        journey.snapshot("progress-restores-skill-calls")
+        assert not mutations, "Fictional finding filter attempted an API mutation"
+        journey.observations[-1]["fictional_call_findings"] = {
+            "source": "D298f412b existing sandbox.json me.calls/progress",
+            "source_counts": {state: len(rows) for state, rows in findings.items()},
+            "source_names_order_ids_report_routes_preserved": True,
+            "pending_and_not_covered_excluded": True,
+            "name_intersection_and_clear_keeps_finding": True,
+            "all_calls_and_progress_reset_finding": True,
+            "section_focus_then_search_tab": True,
+            "progress_unchanged": True,
+            "api_mutations": len(mutations),
+            "authenticated_hosted_acceptance": False,
+        }
+
+
 def test_fixture_summary_clips(browser: Browser, viewport: tuple[int, str]) -> None:
     """Saved summary sources select their original times without fetching audio."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":

@@ -78,7 +78,7 @@ plus eight focus-to-moment, eight call-search and four rep-call reset cases,
 plus four Insights People, four Organisation People search and four Team
 current-area cases, four Insights name-search and four Team missing-focus cases,
 plus four each for summary clips, supplied shared dates and person-call search,
-collect 100 cases. The original Report
+and four current-skill finding-filter cases, collect 104 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -255,3 +255,11 @@ with partial-source scope and prior8/all disclosure. The date check uses D's
 existing Design review Team, retaining distinct supplied call/share dates;
 missing latest-date browser coverage remains unexecuted. No authenticated
 hosted, real audio/provider or data-write claim follows from these examples.
+
+For the saved-finding selector, choose only `-k fixture_coaching_call_findings`.
+The existing fictional personal example supplies six ready calls on the skill:
+four Needed work and two Skill used, nothing to fix. The check preserves original
+names/order/IDs/Report routes, excludes pending/no-opportunity calls, intersects
+name search, preserves the selected finding on Clear search and resets it through
+All calls or the progress shortcut, including focus and32–44px targets.
+No destination, mutation, authenticated read or AI-scoring claim is made.
