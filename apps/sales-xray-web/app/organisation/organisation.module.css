@@ -655,6 +655,53 @@
 
 /* ---------- People with calls ---------- */
 
+.peopleSearch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--lx-line-soft);
+}
+
+.peopleSearchField {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+.peopleSearchField input {
+  min-width: 0;
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.peopleSearchField input::placeholder {
+  color: var(--lx-muted-2);
+}
+
+.peopleSearchField input:focus-visible {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.peopleCount {
+  grid-column: 1 / -1;
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .people {
   display: grid;
   margin: 0;
@@ -1855,6 +1902,10 @@
 
 @media (max-width: 720px) {
   /* Phone touch targets are at least 44 px tall. */
+  .peopleSearchField input {
+    height: 44px;
+  }
+
   .tab,
   .more {
     height: 44px;

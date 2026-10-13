@@ -73,8 +73,8 @@ class MeasuredSource:
         if (
             type(self.submission_id) is not UUID
             or type(self.duration_ms) is not int
-            # Retain readability/replay of sources admitted under the former
-            # 100-minute trial. New reservations use the current shared quota.
+            # Technical receipt ceiling; admission separately enforces the
+            # current plan and remaining allowance, including old-source replays.
             or not 1 <= self.duration_ms <= LONGEST_CALL_SECONDS * 1000
             or _DIGEST.fullmatch(self.source_sha256) is None
             or _DIGEST.fullmatch(self.duration_evidence_sha256) is None

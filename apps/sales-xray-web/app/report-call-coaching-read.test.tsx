@@ -134,6 +134,19 @@ it("uses a source-checked server bootstrap without another read", async () => {
   await render(access, true);
   expect(container.textContent).toContain("Fictional API focus");
   expect(fetcher).not.toHaveBeenCalled();
+  const lesson = container.querySelector<HTMLElement>(
+    "#report-coaching-better",
+  )!;
+  const shortcut = container.querySelector<HTMLAnchorElement>(
+    '#report-coaching-focus a[href="#report-coaching-better"]',
+  )!;
+  expect(shortcut.textContent?.trim()).toBe("See the lesson");
+  expect(shortcut.getAttribute("aria-controls")).toBe(lesson.id);
+  expect(lesson.tabIndex).toBe(-1);
+  expect(lesson.textContent).toContain(fictionalCallCoaching().lesson.title);
+  expect(
+    container.querySelector("#report-coaching-mission")?.textContent,
+  ).toContain(fictionalCallCoaching().mission.behavior);
   expect(
     container.querySelector(`a[href="/coaching?call=${submissionId}"]`),
   ).not.toBeNull();

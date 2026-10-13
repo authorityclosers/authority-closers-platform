@@ -320,6 +320,7 @@ function CanonicalCallCoaching({
             explanation={focus.explanation}
             why={focus.why_it_matters}
             reason={focus.selected_reason}
+            lessonAnchor="report-coaching-better"
             mission={mission.behavior}
             missionAnchor="report-coaching-mission"
             take={dipakTake(coaching.media_clips)}

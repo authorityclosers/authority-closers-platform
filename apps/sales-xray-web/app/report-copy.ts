@@ -402,6 +402,8 @@ export const SKILLS = {
   notCoveredText: "This report doesn't cover this skill.",
   observation: "Observation",
   evidence: "Evidence",
+  showAllClips: (count: number) => `Show all ${count} clips`,
+  showFewerClips: "Show fewer clips",
   toCoaching: "Work on this in Coaching",
   deeper: "Explore deeper analysis",
   /** The same part, opened, in the Document view and the Word file. */

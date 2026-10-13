@@ -10,9 +10,11 @@ import styles from "./coaching.module.css";
 export function RepCallLinks({
   calls,
   sandbox = false,
+  onSeeCalls,
 }: {
   calls?: CallSummary[];
   sandbox?: boolean;
+  onSeeCalls?: () => void;
 }) {
   if (!calls?.length) return null;
   const latest = calls.reduce<CallSummary | null>(
@@ -51,7 +53,12 @@ export function RepCallLinks({
             ) : null}
           </>
         ) : null}
-        <a className={kitStyles.button} href="#coaching-calls">
+        <a
+          className={kitStyles.button}
+          href="#coaching-calls"
+          aria-controls="coaching-calls"
+          onClick={onSeeCalls}
+        >
           {CALLS.seeCalls}
         </a>
       </div>

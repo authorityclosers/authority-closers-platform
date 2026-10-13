@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: signIn, replace: vi.fn(), prefetch: vi.fn() }),
 }));
 import { LinkedProspectContext } from "./prospect-link-control";
-import { BIG_PICTURE } from "./report-copy";
+import { BIG_PICTURE, SKILLS } from "./report-copy";
 import { ReportModes } from "./report-modes";
 import { REPORT_PILLARS } from "./report-pillars";
 import {
@@ -98,6 +98,90 @@ it("plays the exact quoted moment from any pillar", async () => {
   expect(select).toHaveBeenCalledWith(strongest, "Strongest part");
 });
 
+it.each(["saved", "matching pillars", "validated content"] as const)(
+  "makes %s summary clips reachable once each, in saved order",
+  async (kind) => {
+    const validated = kind === "validated content";
+    const report = validated ? contentReport : amitReport;
+    const transcript = validated ? contentTranscript : amitTranscript;
+    const sources = validated
+      ? contentFixture.summary_sentences.flatMap((note) => note.evidence)
+      : amitReport.summary_evidence!;
+    const summary = validated
+      ? contentFixture.summary_sentences.map((note) => note.text).join(" ")
+      : report.summary;
+    const { host, select } = await mount(
+      {
+        ...report,
+        summary_evidence: [sources[0], { ...sources[0] }, ...sources.slice(1)],
+        ...(kind === "matching pillars"
+          ? { pillars: { version: "report-pillars/1" as const, summary } }
+          : {}),
+        ...(validated
+          ? {
+              report_content: {
+                ...contentFixture,
+                summary_sentences: [
+                  contentFixture.summary_sentences[0],
+                  ...contentFixture.summary_sentences.slice(1).map((note) => ({
+                    ...note,
+                    evidence: [{ ...sources[0] }, ...note.evidence],
+                  })),
+                ],
+              },
+            }
+          : {}),
+      },
+      transcript,
+    );
+    const picture = pillar(host, "overview");
+    expect(picture.textContent).toContain(summary);
+    const buttons = picture.querySelectorAll<HTMLButtonElement>(
+      '[role="group"][aria-label="Summary"] button',
+    );
+    expect(buttons).toHaveLength(sources.length);
+    expect(select).not.toHaveBeenCalled();
+    for (const [index, button] of [...buttons].entries()) {
+      expect(button.type).toBe("button");
+      await act(async () => button.click());
+      expect(select).toHaveBeenCalledTimes(index + 1);
+      expect(select.mock.calls[index][0]).toBe(sources[index]);
+      expect(select.mock.calls[index][1]).toBe(BIG_PICTURE.summary.label);
+    }
+    expect(
+      [...host.querySelectorAll("[data-report-mode-section]")].map((node) =>
+        node.getAttribute("data-report-mode-section"),
+      ),
+    ).toEqual(REPORT_PILLARS.map((part) => part.id));
+  },
+);
+
+it.each(["no sources", "different pillar summary"] as const)(
+  "adds no summary clip row for %s",
+  async (kind) => {
+    const report = {
+      ...amitReport,
+      ...(kind === "no sources"
+        ? { summary_evidence: [] }
+        : {
+            pillars: {
+              version: "report-pillars/1" as const,
+              summary: "A different saved summary without its own citations.",
+            },
+          }),
+    };
+    const { host, select } = await mount(report, amitTranscript);
+    const picture = pillar(host, "overview");
+    expect(picture.textContent).toContain(
+      report.pillars?.summary ?? report.summary,
+    );
+    expect(
+      picture.querySelector('[role="group"][aria-label="Summary"]'),
+    ).toBeNull();
+    expect(select).not.toHaveBeenCalled();
+  },
+);
+
 it("shows eight compact skill rows that expand to evidence and Coaching", async () => {
   const { host } = await mount(amitReport, amitTranscript);
   const skills = pillar(host, "skills");
@@ -111,6 +195,113 @@ it("shows eight compact skill rows that expand to evidence and Coaching", async 
     8,
   );
   expect(skills.textContent).toContain("Explore deeper analysis");
+});
+
+const skillSources = amitReport.dimensions.flatMap(
+  (skill) => skill.evidence ?? [],
+);
+
+it.each([0, 4])(
+  "needs no skill clip disclosure for %i saved refs",
+  async (count) => {
+    const sources = skillSources.slice(0, count);
+    const { host, select } = await mount(
+      {
+        ...amitReport,
+        dimensions: amitReport.dimensions.map((skill, index) =>
+          index === 0 ? { ...skill, evidence: sources } : skill,
+        ),
+      },
+      amitTranscript,
+    );
+    const row = pillar(host, "skills").querySelector("li")!;
+    expect(row.querySelector("button[aria-controls]")).toBeNull();
+    const clips = [...row.querySelectorAll<HTMLButtonElement>("button")];
+    expect(clips).toHaveLength(count);
+    expect(row.textContent?.includes(SKILLS.evidence)).toBe(count > 0);
+    expect(select).not.toHaveBeenCalled();
+    for (const [index, clip] of clips.entries()) {
+      await act(async () => clip.click());
+      expect(select).toHaveBeenCalledTimes(index + 1);
+      expect(select.mock.calls[index][0]).toBe(sources[index]);
+      expect(select.mock.calls[index][1]).toBe(amitReport.dimensions[0].label);
+    }
+  },
+);
+
+it("expands skill clips independently in saved order, retaining duplicate refs and fold focus", async () => {
+  const sources = [
+    [
+      skillSources[4],
+      skillSources[0],
+      skillSources[2],
+      skillSources[3],
+      skillSources[0],
+    ],
+    skillSources.slice(1, 7),
+  ];
+  const { host, select } = await mount(
+    {
+      ...amitReport,
+      dimensions: amitReport.dimensions.map((skill, index) =>
+        index < 2 ? { ...skill, evidence: sources[index] } : skill,
+      ),
+    },
+    amitTranscript,
+  );
+  const skills = pillar(host, "skills");
+  const rows = [...skills.querySelectorAll("ul > li")].slice(0, 2);
+  const toggles = rows.map(
+    (row) => row.querySelector<HTMLButtonElement>("button[aria-controls]")!,
+  );
+  const groups = toggles.map(
+    (toggle) => document.getElementById(toggle.getAttribute("aria-controls")!)!,
+  );
+  const clips = (index: number) => [
+    ...groups[index].querySelectorAll<HTMLButtonElement>("button"),
+  ];
+  expect(groups[0]).not.toBe(groups[1]);
+  for (const [index, toggle] of toggles.entries()) {
+    expect(toggle.textContent).toBe(SKILLS.showAllClips(sources[index].length));
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(clips(index)).toHaveLength(4);
+    rows[index].querySelector("details")!.open = true;
+  }
+  await act(async () => toggles[0].click());
+  expect(clips(0)).toHaveLength(5);
+  expect(clips(1)).toHaveLength(4);
+  await act(async () => toggles[1].click());
+  expect(clips(0)).toHaveLength(5);
+  expect(clips(1)).toHaveLength(6);
+  expect(select).not.toHaveBeenCalled();
+  for (const [rowIndex, refs] of sources.entries()) {
+    expect(toggles[rowIndex].getAttribute("aria-expanded")).toBe("true");
+    expect(toggles[rowIndex].textContent).toBe(SKILLS.showFewerClips);
+    for (const [index, button] of clips(rowIndex).entries()) {
+      select.mockClear();
+      await act(async () => button.click());
+      expect(select).toHaveBeenCalledTimes(1);
+      expect(select.mock.calls[0][0]).toBe(refs[index]);
+      expect(select.mock.calls[0][1]).toBe(
+        amitReport.dimensions[rowIndex].label,
+      );
+    }
+  }
+  select.mockClear();
+  clips(0).at(-1)!.focus();
+  await act(async () => toggles[0].click());
+  expect(document.activeElement).toBe(toggles[0]);
+  expect(clips(0)).toHaveLength(4);
+  expect(clips(1)).toHaveLength(6);
+  expect(toggles[0].getAttribute("aria-expanded")).toBe("false");
+  expect(rows[0].querySelector("details")!.open).toBe(true);
+  expect(rows[1].querySelector("details")!.open).toBe(true);
+  expect(skills.querySelectorAll('a[href^="/coaching?focus="]')).toHaveLength(
+    8,
+  );
+  expect(rows[0].textContent).toContain(amitReport.dimensions[0].observation);
+  expect(rows[1].textContent).toContain(amitReport.dimensions[1].observation);
+  expect(select).not.toHaveBeenCalled();
 });
 
 it("keeps moments to five, then shows all on request", async () => {

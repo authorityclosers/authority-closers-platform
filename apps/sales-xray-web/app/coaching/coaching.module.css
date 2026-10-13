@@ -355,6 +355,13 @@
   font-size: var(--sx-text-xs);
 }
 
+.nextCallActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
 .jump {
   display: inline-flex;
   flex: none;
@@ -373,10 +380,26 @@
 
 /* ---------- Evidence moments (pillar 2) ---------- */
 
+.evidenceTarget {
+  scroll-margin-top: 80px;
+}
+
+.pillar:focus-visible,
+.evidenceTarget:focus-visible,
+.callsSection:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
 .moments {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.moments:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: -2px;
 }
 
 .moment {
@@ -423,15 +446,18 @@
 .momentMeta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 2px 8px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
 }
 
 .momentMeta a {
-  /* A taller tap area for a small inline link, without moving the line. */
-  display: inline-block;
-  margin-block: -4px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: var(--sx-control-h);
+  min-width: var(--sx-control-h);
   padding-block: 4px;
   color: var(--sx-accent);
   text-decoration: none;
@@ -616,6 +642,8 @@
 
   .repArea {
     flex-grow: 1;
+    flex-basis: 140px;
+    min-width: 0;
   }
 }
 
@@ -625,6 +653,15 @@
   font-size: var(--sx-text-xs);
   font-weight: 500;
   white-space: normal;
+}
+
+.repMatch {
+  border-radius: 2px;
+  background: var(--sx-accent-soft);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--sx-accent);
+  text-underline-offset: 2px;
 }
 
 .repCallLinks {
@@ -649,6 +686,12 @@
   scroll-margin-top: 80px;
 }
 
+/* Keep each saved call's full name beside its separate Report action. */
+.callTitle {
+  display: block;
+  white-space: normal;
+}
+
 .callFilter {
   display: flex;
   flex-wrap: wrap;
@@ -660,6 +703,22 @@
 
 .callFilter p {
   flex-basis: 100%;
+}
+
+.callSearch {
+  flex: 1 1 220px;
+}
+
+.callFinding {
+  flex: 0 1 230px;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .callSearch,
+  .callFinding {
+    flex-basis: 100%;
+  }
 }
 
 /* Segmented's inset is visual; each call filter keeps the full tap floor. */
@@ -1244,6 +1303,20 @@
   text-align: right;
 }
 
+.areaActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .areaActions {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+  }
+}
+
 /* ---------- Recovery and loading ---------- */
 
 .error {
@@ -1298,7 +1371,8 @@
 }
 
 @media (max-width: 760px) {
-  .quoteToggle {
+  .quoteToggle,
+  .momentMeta a {
     min-height: 44px;
   }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { FileSearch, FlaskConical, LineChart, Lock, Users } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
   Avatar,
   Badge,
@@ -34,6 +34,23 @@ const AREA: Record<string, string> = {
 
 const share = (part: number, whole: number) =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
+
+const NO_FOCUS = "no-focus";
+
+/** Emphasise literal search words without changing the original rep text. */
+function searchMatch(text: string, term: string) {
+  if (!term) return text;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.split(new RegExp(`(${escaped})`, "giu")).map((part, index) =>
+    index % 2 ? (
+      <mark className={styles.repMatch} key={index}>
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
 
 /** Buyer objections from report call maps: how often, and how they were met. */
 function ObjectionsPanel({ coaching }: { coaching: TeamCoaching }) {
@@ -75,32 +92,57 @@ function ObjectionsPanel({ coaching }: { coaching: TeamCoaching }) {
   );
 }
 
-/** Fictional AC Sandbox reps, each with their newest call's one focus. */
+type RepListHandle = { findArea: (skill: string) => void };
+
+/** Already shared or fictional reps, with their current focus. */
 function RepList({
   reps,
   rows,
   shared,
+  ref,
 }: {
   reps: TeamRep[];
   rows: TeamCoaching["suggestions"];
   /** Real reps who shared their coaching, rather than fictional ones. */
   shared: boolean;
+  ref: Ref<RepListHandle>;
 }) {
   const [area, setArea] = useState("all");
   const [query, setQuery] = useState("");
   const [all, setAll] = useState(false);
   const listId = useId();
   const search = useRef<HTMLInputElement>(null);
-  const name = query.trim().toLocaleLowerCase();
+  useImperativeHandle(ref, () => ({
+    findArea(skill) {
+      setArea(skill);
+      setQuery("");
+      setAll(false);
+      search.current?.focus({ preventScroll: true });
+      search.current?.scrollIntoView({ block: "center", behavior: "instant" });
+    },
+  }));
+  const term = query.trim().toLocaleLowerCase();
   const shown = reps.filter(
     (rep) =>
-      (area === "all" || rep.skill_id === area) &&
-      rep.name.toLocaleLowerCase().includes(name),
+      (area === "all" ||
+        (area === NO_FOCUS ? !rep.focus_label : rep.skill_id === area)) &&
+      (rep.name.toLocaleLowerCase().includes(term) ||
+        (rep.focus_label?.toLocaleLowerCase().includes(term) ?? false)),
   );
   const visible = all ? shown : shown.slice(0, 8);
-  const areas = rows.filter((row) =>
-    reps.some((rep) => rep.skill_id === row.skill_id),
+  // Totals describe past call suggestions; named reps carry their current
+  // focus. Keep the existing option order, then include any other current
+  // skills without adding a suggestion to the totals.
+  const areas = [
+    ...new Set([
+      ...rows.map((row) => row.skill_id),
+      ...reps.map((rep) => rep.skill_id),
+    ]),
+  ].filter(
+    (skill): skill is string =>
+      skill !== null && reps.some((rep) => rep.skill_id === skill),
   );
+  const hasMissingFocus = reps.some((rep) => !rep.focus_label);
   return (
     <Panel
       title={TEAM.who}
@@ -114,7 +156,7 @@ function RepList({
           <input
             ref={search}
             type="search"
-            placeholder={TEAM.findRep}
+            placeholder={TEAM.findRepHint}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -122,7 +164,10 @@ function RepList({
             }}
           />
         </label>
-        {areas.length > 1 ? (
+        {areas.length > 1 ||
+        (areas.length === 1 && reps.some((rep) => !rep.skill_id)) ||
+        hasMissingFocus ||
+        area !== "all" ? (
           <span className={`${kitStyles.field} ${styles.repArea}`}>
             <select
               aria-label="Coaching area"
@@ -133,17 +178,34 @@ function RepList({
               }}
             >
               <option value="all">{TEAM.allAreas}</option>
-              {areas.map((row) => (
-                <option key={row.skill_id} value={row.skill_id}>
-                  {AREA[row.skill_id] ?? row.label}
+              {areas.map((skill) => (
+                <option key={skill} value={skill}>
+                  {AREA[skill] ?? "Other"}
                 </option>
               ))}
+              {hasMissingFocus ? (
+                <option value={NO_FOCUS}>{TEAM.noFocusShown}</option>
+              ) : null}
             </select>
           </span>
         ) : null}
         <span className={styles.note} role="status">
           {TEAM.repCount(shown.length)}
         </span>
+        {query || area !== "all" ? (
+          <button
+            type="button"
+            className={kitStyles.button}
+            onClick={() => {
+              setQuery("");
+              setArea("all");
+              setAll(false);
+              search.current?.focus();
+            }}
+          >
+            {TEAM.clearFilters}
+          </button>
+        ) : null}
       </div>
       {shown.length ? (
         <div id={listId} className={styles.repList}>
@@ -154,25 +216,23 @@ function RepList({
                 icon={<Avatar name={rep.name} size={24} />}
                 title={
                   <>
-                    {rep.name}
-                    {rep.focus_label ? (
-                      <>
-                        {" "}
-                        <span className={styles.repFocus}>
-                          {rep.focus_label}
-                        </span>
-                      </>
-                    ) : null}
+                    <span>{searchMatch(rep.name, term)}</span>{" "}
+                    <span className={styles.repFocus}>
+                      {rep.focus_label
+                        ? searchMatch(rep.focus_label, term)
+                        : TEAM.noFocusShown}
+                    </span>
                   </>
                 }
                 href={`/coaching?person=${rep.person_id}`}
                 meta={[
                   `${rep.calls} call${rep.calls === 1 ? "" : "s"}`,
+                  rep.latest_call_at
+                    ? TEAM.repLatest(callDate(rep.latest_call_at))
+                    : null,
                   shared && rep.shared_at
                     ? `Shared ${callDate(rep.shared_at)}`
-                    : rep.latest_call_at
-                      ? callDate(rep.latest_call_at)
-                      : null,
+                    : null,
                 ]}
                 end={
                   rep.skill_id ? (
@@ -190,18 +250,6 @@ function RepList({
             title={TEAM.noMatches}
             text={TEAM.noMatchesText}
           />
-          <button
-            type="button"
-            className={kitStyles.button}
-            onClick={() => {
-              setQuery("");
-              setArea("all");
-              setAll(false);
-              search.current?.focus();
-            }}
-          >
-            {TEAM.clearFilters}
-          </button>
         </div>
       )}
       {shown.length > 8 ? (
@@ -231,7 +279,11 @@ function RepList({
 
 /** Level 3: anonymous team totals. A rep's own coaching stays private. */
 export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
+  const reps = useRef<RepListHandle>(null);
   const rows = coaching.suggestions;
+  const hasRepFocus = rows.some((row) =>
+    coaching.reps.some((rep) => rep.skill_id === row.skill_id),
+  );
   const first = rows[0];
   const analysed = coaching.analysed_calls;
   return (
@@ -281,6 +333,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
         <div className={styles.main}>
           {coaching.reps.length ? (
             <RepList
+              ref={reps}
               reps={coaching.reps}
               rows={rows}
               shared={coaching.reps_basis === "shared"}
@@ -300,9 +353,23 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
                       `${row.suggestion_calls} of ${analysed} call${analysed === 1 ? "" : "s"}`,
                     ]}
                     end={
-                      <span className={styles.share}>
-                        <Meter value={row.suggestion_calls} max={analysed} />
-                        <span>{share(row.suggestion_calls, analysed)}%</span>
+                      <span className={styles.areaActions}>
+                        <span className={styles.share}>
+                          <Meter value={row.suggestion_calls} max={analysed} />
+                          <span>{share(row.suggestion_calls, analysed)}%</span>
+                        </span>
+                        {coaching.reps.some(
+                          (rep) => rep.skill_id === row.skill_id,
+                        ) ? (
+                          <button
+                            type="button"
+                            className={kitStyles.button}
+                            aria-label={TEAM.findRepsLabel(row.label)}
+                            onClick={() => reps.current?.findArea(row.skill_id)}
+                          >
+                            {TEAM.findReps}
+                          </button>
+                        ) : null}
                       </span>
                     }
                   />
@@ -321,6 +388,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
                 {coaching.latest_call_at
                   ? ` ${TEAM.latest(callDate(coaching.latest_call_at))}`
                   : null}
+                {hasRepFocus ? ` ${TEAM.currentFocusNote}` : null}
               </span>
             </p>
           </Panel>

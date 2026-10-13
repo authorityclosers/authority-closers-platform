@@ -2,6 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useRef } from "react";
 
 import { StoryCard } from "../report-visuals/visuals";
 import { kitStyles } from "../ui/kit";
@@ -43,7 +44,7 @@ import { FocusFeedback, SharePanel } from "./sharing-ui";
 import type { SharingView } from "./sharing-client";
 import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
 import { RepCallLinks } from "./rep-call-links";
-import { CallsPanel } from "./calls-panel";
+import { CallsPanel, callsOnSkill, type CallsPanelHandle } from "./calls-panel";
 import styles from "./coaching.module.css";
 
 const JOURNEY: MasteryState[] = [
@@ -132,6 +133,7 @@ function StartCoaching({
   readOnly?: boolean;
   sharing?: SharingView;
 }) {
+  const calls = useRef<CallsPanelHandle>(null);
   if (readOnly)
     return (
       <div className={styles.conversation}>
@@ -152,10 +154,14 @@ function StartCoaching({
                 ? START.theirNoFocusText
                 : START.theirNoCallsText}
             </p>
-            <RepCallLinks calls={coaching.calls} sandbox={coaching.sandbox} />
+            <RepCallLinks
+              calls={coaching.calls}
+              sandbox={coaching.sandbox}
+              onSeeCalls={() => calls.current?.showAll()}
+            />
           </StoryCard>
         </Pillar>
-        <CallsPanel calls={coaching.calls} />
+        <CallsPanel ref={calls} calls={coaching.calls} />
       </div>
     );
   return (
@@ -243,6 +249,7 @@ function Story({
   readOnly = false,
   sharing,
 }: StoryProps) {
+  const calls = useRef<CallsPanelHandle>(null);
   const { focus, mission, lesson, evidence, practice, mastery } = coaching;
   if (!focus || !mission || !lesson || !practice)
     return (
@@ -276,12 +283,18 @@ function Story({
           explanation={focus.explanation}
           why={focus.why_it_matters}
           reason={focus.selected_reason}
+          evidenceAnchor={evidence.length ? "coaching-evidence" : undefined}
+          lessonAnchor="coaching-better"
           mission={mission.behavior}
           missionAnchor="mission"
           take={dipakTake(coaching.media_clips)}
         >
           {readOnly ? (
-            <RepCallLinks calls={coaching.calls} sandbox={coaching.sandbox} />
+            <RepCallLinks
+              calls={coaching.calls}
+              sandbox={coaching.sandbox}
+              onSeeCalls={() => calls.current?.showAll()}
+            />
           ) : null}
           {!readOnly && requestedFocus && requestedFocus !== focus.skill_id ? (
             <p className={styles.note}>
@@ -328,7 +341,12 @@ function Story({
             ) : null}
           </dl>
         </StoryCard>
-        <div className={styles.card} data-flush="">
+        <div
+          id="coaching-evidence"
+          className={`${styles.card} ${styles.evidenceTarget}`}
+          data-flush=""
+          tabIndex={-1}
+        >
           <MomentList
             evidence={evidence}
             heading={readOnly ? THEIR.evidence : WHY.evidence}
@@ -410,6 +428,19 @@ function Story({
             ))}
           </ol>
           <ProgressStrip points={coaching.progress} />
+          {callsOnSkill(coaching.calls, coaching.progress).length ? (
+            <div className={styles.actions}>
+              <button
+                type="button"
+                className={kitStyles.button}
+                aria-controls="coaching-calls"
+                onClick={() => calls.current?.showSkill()}
+              >
+                {PROGRESS.seeCalls}
+                <ArrowRight size={14} aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
           <details className={styles.more}>
             <summary>{PROGRESS.how}</summary>
             <div className={styles.moreBody}>
@@ -465,6 +496,7 @@ function Story({
       </Pillar>
       {readOnly ? null : <SharePanel initial={sharing} />}
       <CallsPanel
+        ref={calls}
         key={`${coaching.person_id}:${focus.skill_id}`}
         calls={coaching.calls}
         progress={coaching.progress}

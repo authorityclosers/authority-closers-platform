@@ -86,7 +86,7 @@ class ConversationAcquisitionUsage(Base):
             ["memberships.tenant_id", "memberships.person_id"],
         ),
         CheckConstraint("(visitor_id IS NULL) <> (person_id IS NULL)", name="one_owner"),
-        CheckConstraint("reserved_seconds BETWEEN 1 AND 6000", name="duration_bound"),
+        CheckConstraint("reserved_seconds BETWEEN 1 AND 7200", name="duration_bound"),
         CheckConstraint("length(source_sha256) = 64", name="source_hash"),
         CheckConstraint("length(duration_evidence_sha256) = 64", name="duration_evidence"),
     )
@@ -105,7 +105,7 @@ class ConversationAcquisitionUsage(Base):
 class ConversationAcquisitionSettlement(Base):
     __tablename__ = "conversation_acquisition_settlements"
     __table_args__ = (
-        CheckConstraint("charged_seconds BETWEEN 0 AND 6000", name="duration_bound"),
+        CheckConstraint("charged_seconds BETWEEN 0 AND 7200", name="duration_bound"),
         CheckConstraint("length(receipt_sha256) = 64", name="receipt_hash"),
         CheckConstraint(
             "kind IN ('completed', 'no_work_performed', 'terminal_failure')", name="kind"
@@ -134,7 +134,7 @@ class ConversationReportMinuteEvent(Base):
         UniqueConstraint("usage_id", "key"),
         CheckConstraint("revision >= 1", name="positive_revision"),
         CheckConstraint("kind IN ('reserved','released','delivered')", name="kind"),
-        CheckConstraint("seconds BETWEEN 0 AND 6000", name="duration_bound"),
+        CheckConstraint("seconds BETWEEN 0 AND 7200", name="duration_bound"),
         CheckConstraint("(kind = 'released') = (seconds = 0)", name="release_zero"),
         CheckConstraint("(kind = 'delivered') = (report_draft_id IS NOT NULL)", name="delivery"),
         CheckConstraint("length(receipt_sha256) = 64", name="receipt_hash"),

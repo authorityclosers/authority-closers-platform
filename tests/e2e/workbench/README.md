@@ -73,16 +73,23 @@ fully reload each choice, check Report/Document/Word and read the saved API valu
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
 path they skip. The original sixteen plus four each for format, persistence,
-quote, print, legacy-action and Team-search checks collect 40 cases. The original Report
+quote, print, legacy-action, Team-search, Team-skill and supporting-moment checks,
+plus eight focus-to-moment, eight call-search and four rep-call reset cases,
+plus four Insights People, four Organisation People search and four Team
+current-area cases, four Insights name-search and four Team missing-focus cases,
+plus four each for summary clips, supplied shared dates and person-call search,
+and four current-skill finding-filter cases, plus four skill-clip disclosure cases, collect 108 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
 empty result and restores keyboard focus. It checks ready-call Report/coaching
-destinations and follows See calls to expand the rep's history, filter it to the
+destinations in the separate One rep fixture and follows See calls to expand
+its history, filter it to the
 saved current-skill records and return to All calls, with 32/44 px reachable
 controls. Expanded Team and skill-history lists can be shortened again; the
 journey checks keyboard focus, viewport return and the retained skill filter.
-Product call links are inspected without opening them;
+Fictional history links open Call coaching; its separate Report shortcut is
+checked independently. Product call links are inspected without opening them;
 this does not establish authenticated access to those calls.
 
 ```sh
@@ -104,6 +111,62 @@ The additional dev-only long-quote journey verifies the exact fictional
 The separate dev print journey checks the native full-shell Document, six headings,
 call facts and motionless hidden shell controls, saves A4 captures/PDFs and keeps
 compact print typography outside the screen font/control audit.
+
+After a supporting-moment repair, select `-k fixture_coaching_moment_fold` for
+four focused cases. They check 2/1 compact desktop/phone moments, Show all/Show
+fewer, restored list focus and retained source quotes, times and Call coaching
+links. Reading these fictional moments requests no media; playback is not tested.
+
+For the current-focus evidence link, select `-k fixture_coaching_focus_moments`.
+Eight focused cases cover personal and fictional rep Coaching at both widths
+and themes. Pointer and Enter activation must reach the original evidence,
+focus its container and leave the next Tab inside that evidence. The first
+source quote/time/call destination and 32/44 px reachable controls are checked.
+No call destination, media playback or API mutation is invoked.
+
+For the Team skill-summary action, select `-k fixture_team_skill_reps`.
+Four cases exercise each Find reps action, preserve call suggestion counts,
+check the exact current-focus names/routes and reset an expanded rep list.
+Enter activation clears a conflicting name/area filter and brings keyboard
+focus back to Find a rep. The same four cases then open One rep and check the
+committed progress action, See calls on this skill. Pointer/Enter must select
+the saved-record call filter, shorten an expanded history, focus its list and
+preserve source call names/routes. No product destination is opened.
+
+For the new saved-call name search, select `-k fixture_coaching_call_search`.
+Eight cases cover personal/fictional rep histories at both widths/themes. A
+trimmed mixed-case name finds the retained call, collapses expanded history
+and combines with On this skill without changing source states or routes.
+No matching calls and Clear search retain the skill filter; pointer/Enter
+restore search focus. The progress shortcut clears a conflicting search and
+lands on saved skill calls, with the next Tab in Find a call. The personal
+fixture also checks that its pending call retains Analysing and its original
+route, and remains excluded from saved skill calls. Controls meet 32/44 px.
+No product call destination or API mutation is invoked.
+
+For the rep's See calls shortcut repair, select `-k fixture_rep_calls_reset`.
+Four cases deliberately expand history, select a skill and search for a missing
+call. Pointer/Enter on See calls must restore All calls, clear search, fold the
+list and focus its section, with the next Tab reaching Find a call. All source
+call names/routes and the native hash/query are retained. These fictional
+checks open no product call destination and invoke no API mutation.
+
+For the coordinator-requested Insights People disclosure, select
+`-k fixture_insights_people`. Four focused cases reuse G's existing fictional
+65-person API harness on shared dev3026, with a fresh browser and every
+non-read API request blocked. They preserve returned order, reach person65,
+collapse to50 with focus recovery and check the selected source key in the
+Person control, address and API read. This is fictional UI evidence; it creates
+no account/session or data and establishes no authenticated hosted acceptance.
+
+For A's Organisation name search and D's current-focus area picker, select
+`-k 'fixture_organisation_people_search or fixture_team_current_areas'`.
+Eight focused cases reuse the existing fictional read-only six-person and
+current-focus examples. Organisation covers same-name active/quiet identities,
+folded test names, names-only empty state and clear/focus/disclosure with unchanged
+figures/routes. Team covers the existing Delivery reps absent from historical
+totals, combined name filtering and reset/focus with unchanged historic counters.
+All API writes are refused; no profile/call destination is opened.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
@@ -130,7 +193,7 @@ routes; it never tries to enable development-only fixtures on staging.
 For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
 Use the receipt's safe exception type and check/line for the failure handoff.
 The read-only twelve-case staging selection is
-`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold and not fixture_document_print and not fixture_legacy_deal_action and not fixture_team_search_and_rep_calls'`. Clear the optional
+`-k 'test_report_sections_and_document or test_document_view or test_coaching_pages'`. Clear the optional
 write path when running smoke; no outcome mutation is part of staging acceptance.
 
 The coordinator-approved local deployed transport is opt-in:
@@ -170,3 +233,41 @@ Run after builders' commits, at most every 15 minutes. Record the source SHA,
 receipts, remaining gaps and screenshot findings in strike NOTES, and append
 exact defects to the owning strike's INBOX. The coordinator owns any staging
 run or shipping. These journeys never promote a version themselves.
+
+For returned-name search and missing-focus changes, use
+`-k 'fixture_insights_people_search or fixture_team_missing_focus'` only.
+Insights searches the existing65-person fictional source, with source55 and65
+sharing a display name while retaining distinct keys; it checks both selections,
+all matching rows, figures, no local reads and both prior disclosure states.
+Team uses the existing no-focus-reps example and retains source call dates,
+counts, routes and historical totals. Its source supplies no shared dates or
+absent latest dates; those browser edges require an explicit separate source.
+These remain fictional read-only UI checks.
+
+For the next completed summary/person-call/date changes, select only
+`-k 'fixture_summary_clips or fixture_person_call_search or fixture_team_shared_dates'`.
+Summary uses B's native/Revised/Older fictional reports and checks source times,
+quotes, unchanged prose, pointer/Enter/Space,32–44px and no eager media or writes.
+Duplicate-ref and different-summary browser cases are not supplied; builder unit
+evidence remains separate. Person call search reuses A's twelve returned calls,
+including duplicate names, queued status, an unnamed call and a Devanagari tail,
+with partial-source scope and prior8/all disclosure. The date check uses D's
+existing Design review Team, retaining distinct supplied call/share dates;
+missing latest-date browser coverage remains unexecuted. No authenticated
+hosted, real audio/provider or data-write claim follows from these examples.
+
+For the saved-finding selector, choose only `-k fixture_coaching_call_findings`.
+The existing fictional personal example supplies six ready calls on the skill:
+four Needed work and two Skill used, nothing to fix. The check preserves original
+names/order/IDs/Report routes, excludes pending/no-opportunity calls, intersects
+name search, preserves the selected finding on Clear search and resets it through
+All calls or the progress shortcut, including focus and32–44px targets.
+No destination, mutation, authenticated read or AI-scoring claim is made.
+
+After B returns its completed skill-disclosure source, select only
+`-k fixture_skill_clip_disclosure`. It reuses B's browser-only fictional native
+Report prop setup: five/six repeated original refs, zero refs and four refs.
+Four/all counts, literal source order, independent skills, fold focus, original
+selection times,32–44px and no eager media/extra reads/writes are checked.
+This explicitly altered fictional input is not a customer Report or native
+loaded-DB acceptance; no new fixture route or persisted data is created.

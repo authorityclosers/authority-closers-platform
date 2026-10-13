@@ -701,6 +701,133 @@ it("lists active people first and folds quiet and test accounts away", async () 
   expect(host.textContent).toContain("No calls");
 });
 
+const peopleSection = () =>
+  host.querySelector<HTMLElement>('[aria-labelledby="org-people"]')!;
+const peopleRows = () => [...peopleSection().querySelectorAll("li")];
+const peopleSearch = () =>
+  peopleSection().querySelector<HTMLInputElement>("input")!;
+async function searchPeople(value: string) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(peopleSearch(), value);
+    peopleSearch().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+it("finds both same-name people in source order without changing calls, figures or reads", async () => {
+  activityRoutes([0, 3, 9]);
+  await render();
+  const figures = host.querySelector("dl")!.textContent;
+  const calls = host.querySelector('[aria-label="Team calls"]')!.textContent;
+  const reads = fetchMock.mock.calls.length;
+  expect(peopleSearch().closest("label")?.textContent).toBe("Search people");
+  await searchPeople("  aDmIn  ");
+  expect(peopleSection().querySelector('[role="status"]')?.textContent).toBe(
+    "Matches: 2 of 4 people",
+  );
+  expect(
+    peopleRows().map((row) => row.querySelector("a")?.getAttribute("href")),
+  ).toEqual([
+    `/organisation/people/${ownerId}`,
+    `/organisation/people/${deskId}`,
+  ]);
+  expect(peopleRows()[0].textContent).toContain("admin@fictional-studio.in");
+  expect(peopleRows()[0].textContent).toContain("3 calls13 min · 1 report");
+  expect(peopleRows()[1].textContent).toContain("desk@fictional-mail.in");
+  expect(peopleRows()[1].hasAttribute("data-quiet")).toBe(true);
+  expect(peopleRows()[1].textContent).toContain("0 callsNo calls");
+  expect(host.querySelector("dl")!.textContent).toBe(figures);
+  expect(host.querySelector('[aria-label="Team calls"]')!.textContent).toBe(
+    calls,
+  );
+  expect(fetchMock.mock.calls).toHaveLength(reads);
+  expect(writes()).toHaveLength(0);
+});
+
+it("searches names only and clears an honest empty result back to the folded list with focus", async () => {
+  activityRoutes();
+  await render();
+  await searchPeople("fictional-studio.in");
+  expect(peopleRows()).toHaveLength(0);
+  expect(peopleSection().textContent).toContain("No people match this name.");
+  expect(peopleSection().textContent).toContain("Matches: 0 of 4 people");
+  expect(peopleSection().textContent).not.toContain("Nobody has saved a call");
+  await click("Clear search");
+  expect(peopleSearch().value).toBe("");
+  expect(document.activeElement).toBe(peopleSearch());
+  expect(peopleRows()).toHaveLength(1);
+  expect(
+    button("3 more people with no calls or test accounts").getAttribute(
+      "aria-expanded",
+    ),
+  ).toBe("false");
+  expect(peopleSection().textContent).not.toContain("No people match");
+  expect(peopleSection().textContent).toContain("Showing 1 of 4 people");
+});
+
+it("makes a folded test person searchable without inventing calls or hiding their test label", async () => {
+  activityRoutes();
+  await render();
+  await searchPeople("Quinn");
+  expect(peopleRows()).toHaveLength(1);
+  expect(peopleRows()[0].querySelector("a")?.getAttribute("href")).toBe(
+    `/organisation/people/${testId}`,
+  );
+  expect(peopleRows()[0].textContent).toContain("Quinn FixtureTest");
+  expect(peopleRows()[0].textContent).toContain("0 callsNo calls");
+  expect(peopleRows()[0].hasAttribute("data-quiet")).toBe(true);
+  expect(peopleSection().textContent).toContain("Matches: 1 of 4 people");
+  expect(peopleSection().querySelector("[aria-expanded]")).toBeNull();
+  expect(writes()).toHaveLength(0);
+});
+
+it("does not search an unnamed person's email used as their display fallback", async () => {
+  activityRoutes();
+  const directory = routes["/v1/organisation/members"] as {
+    members: { name: string | null }[];
+  };
+  directory.members[2].name = null;
+  await render();
+  await click("3 more people with no calls or test accounts");
+  expect(peopleSection().textContent).toContain("dipak@fictional-studio.in");
+  await searchPeople("dipak");
+  expect(peopleRows()).toHaveLength(0);
+  expect(peopleSection().textContent).toContain("No people match this name.");
+});
+
+it("keeps the expanded disclosure and every row's identity and content when clearing a search", async () => {
+  activityRoutes();
+  await render();
+  await click("3 more people with no calls or test accounts");
+  const rows = peopleRows().map((row) => row.innerHTML);
+  await searchPeople("Dipak");
+  expect(peopleRows()).toHaveLength(1);
+  expect(peopleRows()[0].querySelector("a")?.getAttribute("href")).toBe(
+    `/organisation/people/${memberId}`,
+  );
+  await click("Clear search");
+  expect(document.activeElement).toBe(peopleSearch());
+  expect(peopleRows().map((row) => row.innerHTML)).toEqual(rows);
+  expect(
+    button("Show only people with calls").getAttribute("aria-expanded"),
+  ).toBe("true");
+  expect(writes()).toHaveLength(0);
+});
+
+it("treats whitespace as no name filter while keeping clear available", async () => {
+  activityRoutes();
+  await render();
+  await searchPeople("   ");
+  expect(peopleRows()).toHaveLength(1);
+  expect(peopleSection().textContent).toContain("Showing 1 of 4 people");
+  expect(button("Clear search").disabled).toBe(false);
+  await click("Clear search");
+  expect(button("Clear search").disabled).toBe(true);
+  expect(document.activeElement).toBe(peopleSearch());
+});
+
 it("draws a 14-day sparkline only with at least three active days", async () => {
   activityRoutes([0, 3, 9]);
   await render();

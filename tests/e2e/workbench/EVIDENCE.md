@@ -1,6 +1,228 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 02:33–02:39 UTC — person-call search4 + distinct Team dates4
++ summary clips4 **12/12 final PASS** across bounded runs. Person/date cases
+pass at unchanged `298f412b`. Summary desktop/light passes at `e61dbe68`,
+phone2 at `3a31f295`, and desktop/dark retake at `b21e3c84`.
+Source order/IDs/routes, duplicate call labels/queued status/Devanagari,
+partial-source scope, prior8/all disclosure, Clear focus and supplied distinct
+call/share dates pass. Summary preserves prose and ordered original spans,
+pointer/Enter/Space selections, original revised-source words,32–44px targets,
+no-ref row absence, no media and no API mutations.
+
+All40 final step captures inspected/readable; final runtime/server/visual/
+Fast Refresh/API mutation errors0. Receipts/JUnit/log/PNGs in strike
+`shots/2026-10-13-summary-person-date-0233Z/` (person/date24),
+`shots/2026-10-13-summary-clips-continuation/` (desktop/light4),
+`shots/2026-10-13-summary-phone-framing/` (phone8), and
+`shots/2026-10-13-summary-desktop-dark-settle/` (dark4).
+Original summary4failures retain own missing first observation; original phone2
+covered-target failures retain nav-framing mismatch, fixed by ordinary centered
+scroll. Original desktop/dark first frame caught unsettled styles/2refresh;
+retake1PASS5.77s with no refresh. No product defect found there.
+Initial combined pytest45.34s/inner1, outerlauncher143 after completed receipt;
+summary continuation21.12s/1, phone26.19s/0, dark5.77s/0.
+B confirms duplicate-ref/different-summary browser examples absent; D confirms
+absent latest-date browser example absent. Those remain unit-only/browser
+unexecuted, separate from fictional UI, hosted access and real audio/provider.
+New saved-finding selector is a separate pending four-case criterion.
+
+13 October, 02:24 UTC — post-release foundation health **4/4 PASS**.
+Original-Host localhost8080 GETs return200 for staging/production web `/health`
+and API `/health/ready`, all at `e991cb39430213d1873b59a446ce3a38466170b0`.
+Coordinator reports v0.41.0 production canary02:20UTC PASS; this QA readback
+independently verifies availability/revision only. No approved populated hosted
+context supplied. Receipt: strike `shots/2026-10-13-production-v041-health/health.json`.
+Next sole normal release remains with coordinator/operator.
+
+13 October, 02:16–02:17 UTC — new Insights name-search4 + Team
+missing-focus4 **8/8 PASS**,60.95 seconds, launcher0, unchanged `0be5d7fb`.
+Insights preserves all65 matches/order, both duplicate display-name source keys,
+figures/profile suppression, quiet no-match, Clear focus and prior50/all state;
+local search performs no extra reads. Team retains original names/counts/person
+routes/latest-call dates, two no-focus rows, historic totals, phone one-row
+filter/reset32–44px and pointer/Enter reset. Shared dates are absent in this
+source; distinct shared/absent latest browser edges remain separate.
+
+All32 step captures inspected/readable. Runtime/server/font/overflow/API
+mutation errors0. Desktop/light Insights reports2 Fast Refresh notices;
+otherseven0, so no immutable-runtime claim. Receipts/JUnit/log/PNGs:
+strike `shots/2026-10-13-insights-search-missing-focus/`.
+No authenticated hosted, audio/provider or production acceptance claim.
+
+13 October, 01:36–01:49 UTC — three focused dev continuations complete:
+Team current Delivery area **4/4 PASS** at `5d3da489`, Organisation People
+name search **4/4 PASS** at `562153c0`, and repaired Insights People targets
+**4/4 PASS** at `279c2fd3`. Source identities, ordering, routes, historical
+figures, prior disclosure and reset focus pass; controls meet 32/44 px.
+Runtime/server/font/overflow/Fast Refresh/API mutation errors0 on these passes.
+
+All 44 final step captures inspected. Receipts/JUnit/logs/PNGs in strike
+`shots/2026-10-13-people-current-areas-0135Z/` (Team12),
+`shots/2026-10-13-organisation-search-continuation/` (Organisation16), and
+`shots/2026-10-13-insights-target-continuation/` (Insights16).
+Original Organisation failures remain: the audit counted decorative hidden
+initials beside full names, and a phone capture placed its quiet-person link
+under the fixed nav. `fb03a9d5` corrects those audit/capture issues; no product
+defect found there. Original Insights18.84px target failures remain below;
+G's `690508d2` repairs the actual controls, independently measured32/44px.
+New Insights name search and Team missing-focus criteria remain separate
+pending checks. Fictional read-only UI evidence, no hosted acceptance or
+production promotion claim.
+
+13 October, 01:19 UTC — requested Insights People **4/4 FAIL**, 24.75
+seconds, launcher1, source `bec91d47`. All four complete compact50 →
+returned65/source-order → collapse/focus/no-extra-read → source person key in
+control/address/API. The sole real defect is the name-filter button:
+96×18.84375 px, below32 desktop/44 phone, centre reachable. It has no whole-row
+or stretched target; exact scoped repair sent to G/coordinator. Show more/fewer
+meet32/44 px; runtime/server/font/overflow/API mutation errors0. Desktop/light
+has2 Fast Refresh notices; other three pairs0, so no immutable-runtime claim.
+
+All sixteen step PNGs inspected and readable; four failure PNGs are byte-identical
+to the inspected final-filter captures. Receipts/JUnit/log/PNGs:
+strike `shots/2026-10-13-insights-people-0119Z/`. Existing G65-person fictional
+API replies are reused, every non-read request blocked, no real account/session
+or data created and no authenticated hosted acceptance. No full PASS or
+release-wide hold. New local name search is still uncommitted/untested.
+`2366ebc1` retains explicit fictional-profile suppression assertions for the
+next repaired-source continuation; focused static/import guards pass.
+Earlier Coaching12PASS remains a separate completed receipt.
+
+13 October, 01:03 UTC — rep shortcut/search/Report actions **12/12 PASS**,
+92.01 seconds, launcher/inner subprocess0, unchanged source `1af5922e`.
+Eight personal/fictional-rep search cases preserve source labels, ordering,
+primary routes and saved states beside the new Report actions. Every ready
+row has its same-ID Report destination and exact accessible name; pending
+rows have no extra Report action. Report targets meet 32/44 px and Tab from
+the primary call title reaches its Report action. Four rep shortcut cases
+restore All calls after a conflicting search/skill/expanded history, retain
+all forty source names/routes and native hash/query, focus the section and
+send the next Tab to Find a call. Runtime/server/font/clipping/overflow,
+Fast Refresh and API mutation errors0.
+
+All 44 capture contents inspected (six progress captures are byte-identical
+to already inspected cleared-state images); source labels, Report controls,
+phone wrapping and focus readable. Receipts/JUnit/log/PNGs:
+strike `shots/2026-10-13-rep-report-continuation/`.
+The initial four generic-link-count failures at `86fe95f5` remain in
+`shots/2026-10-13-rep-calls-reset-0100Z/`: a new ready row has two sibling
+links. `1af5922e` uses retained source title names; no product defect found.
+`8ad47316` applies the same tested selector to retained Team/progress
+journeys; their earlier full-wave receipts remain tied to their original
+sources. No extra broad suite/build. Fictional UI only; authenticated hosted
+acceptance remains pending. Coordinator owns production recovery.
+
+13 October, 00:42 UTC — saved-call name search **8/8 PASS**, 71.81 seconds.
+Personal/fictional rep at 1440/390 light/dark: full-label and partial-name
+matches preserve source order, routes and saved skill states. Search combines
+with On this skill; pointer/Enter clear retain the skill and restore search
+focus. Progress clears a conflicting search, selects saved skill calls and
+returns the next Tab to Find a call. The pending personal call keeps its
+Analysing state/original route and is excluded from saved skill calls.
+Search/reset controls meet 32/44 px; actual full-row call targets measure
+54.5–72.5 px and all five centre/edge hits reach the intended link. No runtime,
+server, font, clipping, overflow, refresh or API mutation faults. Source
+`91652bc9` stayed unchanged during the run; pytest/inner subprocess exit0,
+outer launcher143 after completion is retained without claiming launcher0.
+
+All 32 captures inspected. Two original desktop personal matched-result frames
+left the rows below the image; `fc0adcef` fixes capture framing. Only those two
+cases were retaken: **2/2 PASS**, 12.20 seconds, launcher0, no refresh/errors;
+all eight retake PNGs inspected and named results readable. Source range
+`fc0adcef` to `8c50c338`. Receipts/JUnit/log/PNGs: strike `shots/2026-10-13-call-search-continuation/`
+and `shots/2026-10-13-call-search-desktop-framing/`.
+
+Original eight text-box target failures remain in `shots/2026-10-13-call-search-0039Z/`.
+They measured the 19.5 px text box instead of the existing stretched row link;
+`d69a3024` corrects that QA assumption using actual five-point hits. No product
+repair was required. Fictional UI only; product destinations and populated
+hosted authenticated acceptance remain unexecuted. Earlier Report/Document/Word
+and Team passes retain their scope. Coordinator owns production recovery.
+
+13 October, 00:24 UTC — Team skills/progress **4/4 PASS**, 53.77 seconds,
+launcher0, six captures per width/theme at recorded HEAD `2e4c192e`. All six
+Find reps actions preserve call counts and exact current-focus names/routes,
+reset disclosure/filters and focus search. Progress-to-call pointer/Enter
+select the saved-record filter, shorten expanded history, focus the panel and
+keep next Tab inside. Targets meet 32/44 px; no refresh/browser/server/visual
+faults. All 24 PNGs inspected/readable. Original four-case nested-locator
+failure remains in `shots/2026-10-13-team-skill-reps-0020Z/`; final receipts,
+JUnit/log/PNGs: `shots/2026-10-13-team-skill-continuation/` in the strike folder.
+Fictional UI only; product destinations and authenticated reads unexecuted.
+
+00:26 UTC post-ship original-Host health: staging web/API `e991cb3`, production
+web/API `fa846dc`, all four HTTP200. Ship log records staging/canary success
+00:21:45 and production promotion failure00:23:06. No production v0.41 claim.
+Health receipt is beside the final captures; no usable hosted context arrived.
+
+13 October, 00:05 UTC — focus-to-moments **8/8 PASS**, 37.22 seconds,
+launcher0. Personal/fictional rep at 1440/390 light/dark: pointer/Enter focus
+the saved evidence, next Tab stays inside it, first quote/time/call destination
+remain intact, and shortcut/call targets meet 32/44 px. No refresh, browser,
+server, visual, media or API mutation faults. All 24 captures inspected and
+readable. Receipts/JUnit/log/PNGs: `shots/2026-10-13-focus-moments-0004Z/` in
+the strike directory; recorded HEAD `f26186e5` to `83555a6f` during shared-dev
+work. Fictional UI scope; product destinations/playback/hosted reads unexecuted.
+
+12 October, 23:49 UTC — supporting moments repair independently passes
+
+At `9e1f43b6`, the focused supporting-moment journey passes **4/4** in
+10.51 seconds, launcher0, all three captures per width/theme. Compact counts
+are 2 desktop / 1 phone; expansion exposes all four retained quotes, original
+times and existing Call coaching links. Shortening restores list focus and
+keeps every source quote. Controls meet 32/44 px floors, with no refresh,
+runtime/server/visual errors or media request. Playback is not tested.
+
+All twelve PNGs were inspected. Expanded and shortened lists are readable in
+both themes; the initial captures frame the diagnosis above the list, while
+the shortened captures show the compact list itself. Receipts/JUnit/log/PNGs:
+`shots/2026-10-12-supporting-moments-2348Z/` in the strike directory. Report4,
+Team4 and supporting-moment4 results are separate completed focused runs.
+ReleaseCI passed per the coordinator; actual served release/canaries and
+approved populated hosted context remain pending. Next new dev wave: 00:04 UTC.
+
+12 October, 23:39 UTC — focused Report and Team repair QA complete
+
+Final Team continuation at `b81a3443`: **4/4 PASS**, 18.25 seconds, launcher0,
+seven observations per pair, no Fast Refresh/runtime/server/visual errors.
+Search/combined filters/reset, Team Show fewer/focus, rep shortcuts, expanded
+saved-skill history, Call coaching destinations, Show fewer/filter/focus and
+return to All calls all pass. Controls meet 32 px desktop / 44 px phone floors.
+The four shortened skill-history captures and representative Team/reset/phone
+shortcut captures were inspected and are readable. Receipts/JUnit/log/28 PNGs:
+`shots/2026-10-12-team-route-continuation/` in the strike directory.
+
+Report **4/4 PASS** remains the completed `495b25b6` result below: mission-label
+gap plus saved next move across reload, Document and Word. Both original QA
+assumption failures remain retained; the corrected Team run supersedes them.
+These are fictional shared-dev checks. Hosted populated acceptance still lacks
+an approved usable context; coordinator release CI/canaries remain pending.
+The next new product wave is due no earlier 23:48 UTC, or after a relevant repair.
+
 12 October, 23:26 UTC — focused repair readback prepared
+
+Actual 23:33 run at `495b25b6`: Report **4/4 PASS**; Team **4/4 stopped** at the
+empty-state selector, which incorrectly expected a heading. Inspected phone
+capture shows the correct "No reps match" message and Clear filters control.
+The selector is corrected to its rendered text. Named-rep phone targets now
+measure **210 × 44 px**, reachable in both themes; clipping/font/overflow/runtime
+and server checks are clear. Report mission label/body gap passes all four pairs,
+as do saved-action reload, Document and Word agreement. Later Team reset/history
+steps were not reached. Original receipts, JUnit, screenshots and launcher exit1
+remain in `shots/2026-10-12-focused-repairs-2333Z/`; no complete Team PASS claimed.
+Report now also scrolls the mission into view for its own readable screenshot.
+A bounded four-case selector correction will finish this existing QA cycle;
+the next new product wave remains due no earlier 23:48 UTC.
+
+The 23:37 four-case continuation at `652b347f` reaches Team shortening/reset,
+rep shortcuts and the expanded skill history in all pairs, then stops at the
+test's assumed Report destination. Existing `coaching-voice.ts` and
+`CoachingStory` specify Call coaching for fictional reps; Report links apply
+to real shared reps. The fixture assertion now uses `/coaching?call=...`,
+without opening those product destinations. No new product defect is claimed.
+Original failures remain in `shots/2026-10-12-team-selector-continuation/`.
+All recorded target/font/clipping/overflow/runtime/server checks pass.
 
 The existing Team/rep journey now checks Show fewer, restored keyboard/viewport
 focus and preservation of the saved-skill filter. The legacy Report journey

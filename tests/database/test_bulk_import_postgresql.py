@@ -29,6 +29,7 @@ from ac_platform.conversation_intelligence.guest_ownership import (
     GuestOwnership,
     admit_processing_actor,
 )
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.models import ConversationCommand, ConversationRun
 from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
 from ac_platform.db.models import model_metadata
@@ -219,6 +220,144 @@ async def upload(client, batch, index, data):
     return await client.put(
         f"{PREFIX}/submissions/{submission_id}/source", content=data, headers=headers
     )
+
+
+@pytest.mark.parametrize("size", [32 * 1024**2 + 1, MAX_AUDIO_BYTES])
+def test_import_confirmation_accepts_current_file_limit_without_creating_calls(
+    postgres_harness, tmp_path, size
+):
+    """Manifest declarations only; no source bytes or provider call are uploaded."""
+
+    async def exercise():
+        setup = await setup_import(postgres_harness, tmp_path)
+        try:
+            files = [source("Rep/old.wav", b"original small fixture")]
+            async with await client_for(setup) as client:
+                old, _ = await confirm(client, setup, files, key="old-small-import")
+                assert old.status_code == 201, old.text
+                original = old.json()
+                large = {
+                    **source("Rep/large.mp4", b"fictional large-file manifest"),
+                    "source_bytes": size,
+                }
+                response, body = await confirm(client, setup, [large], key="large-recording-import")
+                assert response.status_code == 201, response.text
+                batch = response.json()
+                assert batch["files"][0]["source_bytes"] == size
+                replay = await client.post(
+                    PREFIX + "/imports",
+                    json=body,
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "large-recording-import"},
+                )
+                assert replay.status_code == 201 and replay.json() == batch
+                over_limit = await client.post(
+                    PREFIX + "/imports/preview",
+                    json={"files": [{**large, "source_bytes": MAX_AUDIO_BYTES + 1}]},
+                    headers={"Origin": ORIGIN},
+                )
+                assert over_limit.status_code == 422, over_limit.text
+                assert (
+                    await client.get(PREFIX + "/imports/" + original["batch_id"])
+                ).json() == original
+            async with setup.sessions() as db:
+                row = await db.get(ConversationRecordingImportItem, (UUID(batch["batch_id"]), 0))
+                assert row.source_bytes == size
+                assert row.tenant_id == setup.organisation.tenant_id
+                assert row.person_id == setup.member.person_id and row.usage_id is None
+                assert await db.scalar(select(func.count()).select_from(Job)) == 0
+                assert (
+                    await db.scalar(select(func.count()).select_from(ConversationAcquisitionUsage))
+                    == 0
+                )
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_0089_preserves_small_rows_and_refuses_rollback_over_large_files(
+    postgres_harness, tmp_path
+):
+    import importlib.util
+
+    from alembic.operations import Operations
+    from sqlalchemy.exc import DBAPIError
+
+    async def fixture():
+        setup = await setup_import(postgres_harness, tmp_path)
+        try:
+            async with await client_for(setup) as client:
+                reply, _ = await confirm(client, setup, [source("Rep/small.wav", b"small")])
+                assert reply.status_code == 201, reply.text
+                return UUID(reply.json()["batch_id"])
+        finally:
+            await setup.engine.dispose()
+
+    batch_id = run(fixture())
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "db/migrations/versions/20261013_0089_bulk_import_100mb.py"
+    )
+    spec = importlib.util.spec_from_file_location("bulk_import_100mb_migration", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert (migration.revision, migration.down_revision) == ("20261013_0089", "20261012_0088")
+    table = ConversationRecordingImportItem.__table__
+    with (
+        postgres_harness.begin() as connection,
+        Operations.context(MigrationContext.configure(connection)),
+    ):
+        old = dict(
+            connection.execute(select(table).where(table.c.batch_id == batch_id)).mappings().one()
+        )
+        large = {
+            **old,
+            "item_index": 1,
+            "source_bytes": MAX_AUDIO_BYTES,
+            "source_sha256": "b" * 64,
+            "path_sha256": "b" * 64,
+            "submission_id": uuid4(),
+        }
+        migration.downgrade()
+        with pytest.raises(DBAPIError), connection.begin_nested():
+            connection.execute(table.insert().values(large))
+        migration.upgrade()
+        assert (
+            dict(
+                connection.execute(
+                    select(table).where(table.c.batch_id == batch_id, table.c.item_index == 0)
+                )
+                .mappings()
+                .one()
+            )
+            == old
+        )
+        connection.execute(table.insert().values(large))
+        with pytest.raises(RuntimeError, match="forward recovery"):
+            migration.downgrade()
+        assert (
+            dict(
+                connection.execute(
+                    select(table).where(table.c.batch_id == batch_id, table.c.item_index == 1)
+                )
+                .mappings()
+                .one()
+            )
+            == large
+        )
+        with pytest.raises(DBAPIError), connection.begin_nested():
+            connection.execute(
+                table.insert().values(
+                    {
+                        **large,
+                        "item_index": 2,
+                        "source_bytes": MAX_AUDIO_BYTES + 1,
+                        "path_sha256": "c" * 64,
+                        "submission_id": uuid4(),
+                    }
+                )
+            )
 
 
 def test_manifest_receipt_is_replayed_without_content_jobs_or_minutes_and_migration_has_no_drift(

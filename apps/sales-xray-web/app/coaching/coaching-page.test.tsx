@@ -37,6 +37,260 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("Coaching story", () => {
+  it("offers the existing lesson from each ready focus without inventing one for an incomplete call", () => {
+    const ready = [
+      <CoachingStory key="personal" coaching={fictionalCoaching} />,
+      <CoachingStory key="rep" coaching={fictionalCoaching} readOnly />,
+      <CallCoachingStory key="call" coaching={fictionalCallCoaching} />,
+    ];
+    for (const story of ready) {
+      host.innerHTML = renderToStaticMarkup(story);
+      const shortcut = host.querySelector<HTMLAnchorElement>(
+        '#coaching-focus a[href="#coaching-better"]',
+      )!;
+      const lesson = host.querySelector<HTMLElement>("#coaching-better")!;
+      expect(shortcut.textContent?.trim()).toBe("See the lesson");
+      expect(shortcut.getAttribute("aria-controls")).toBe(lesson.id);
+      expect(lesson.tabIndex).toBe(-1);
+      expect(lesson.textContent).toContain(fictionalCoaching.lesson!.title);
+      expect(lesson.querySelector("details")!.open).toBe(false);
+      const mission = host.querySelector<HTMLElement>(
+        "#mission, #call-mission",
+      )!;
+      expect(mission.tabIndex).toBe(-1);
+      expect(mission.textContent).toContain(
+        fictionalCoaching.mission!.behavior,
+      );
+      expect(lesson.getAttribute("aria-labelledby")).toBe(
+        `${lesson.id}-heading`,
+      );
+      expect(host.querySelector("audio")).toBeNull();
+    }
+    for (const story of [
+      <CoachingStory
+        key="personal"
+        coaching={{ ...fictionalCoaching, lesson: null }}
+      />,
+      <CallCoachingStory
+        key="call"
+        coaching={{ ...fictionalCallCoaching, lesson: null }}
+      />,
+    ]) {
+      const html = renderToStaticMarkup(story);
+      expect(html).not.toContain("See the lesson");
+      expect(html).not.toContain('id="coaching-better"');
+    }
+  });
+
+  it("restores and focuses a rep's calls after searching or filtering, with or without a current focus", async () => {
+    const calls = Array.from({ length: 10 }, (_, index) => ({
+      submission_id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      call_label: `Fictional call ${index + 1}`,
+      created_at: "2026-10-01T10:00:00Z",
+      state:
+        index === 8
+          ? ("pending" as const)
+          : index === 9
+            ? ("unavailable" as const)
+            : ("ready" as const),
+      focus_label: null,
+    }));
+    const button = (name: string) =>
+      [...host.querySelectorAll("button")].find(
+        (control) => control.textContent === name,
+      )!;
+    for (const sandbox of [false, true]) {
+      for (const hasFocus of [false, true]) {
+        await act(async () =>
+          root.render(
+            <CoachingStory
+              key={`${sandbox}:${hasFocus}`}
+              coaching={{
+                ...fictionalCoaching,
+                sandbox,
+                focus: hasFocus ? fictionalCoaching.focus : null,
+                calls,
+                progress: [
+                  {
+                    submission_id: calls[0].submission_id,
+                    created_at: calls[0].created_at,
+                    state: "suggested",
+                    after_mission: true,
+                  },
+                ],
+              }}
+              readOnly
+            />,
+          ),
+        );
+        const section = host.querySelector<HTMLElement>("#coaching-calls")!;
+        const search = section.querySelector<HTMLInputElement>("input")!;
+        const shortcut = host.querySelector<HTMLAnchorElement>(
+          'nav[aria-label="This rep’s calls"] a[href="#coaching-calls"]',
+        )!;
+        expect(shortcut.getAttribute("aria-controls")).toBe(section.id);
+        if (hasFocus) {
+          await act(async () => button("On this skill").click());
+          expect(section.querySelectorAll("li")).toHaveLength(1);
+        }
+        await act(async () => {
+          Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            "value",
+          )!.set!.call(search, "missing call");
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        expect(section.querySelectorAll("li")).toHaveLength(0);
+        await act(async () => shortcut.click());
+        expect(search.value).toBe("");
+        expect(document.activeElement).toBe(section);
+        if (hasFocus)
+          expect(button("All calls").getAttribute("aria-pressed")).toBe("true");
+        expect(section.querySelector('[role="status"]')?.textContent).toBe(
+          "10 calls",
+        );
+        expect(
+          [...section.querySelectorAll("li")].map((row) =>
+            row.querySelector("a")!.getAttribute("href"),
+          ),
+        ).toEqual(
+          calls.map((call) =>
+            sandbox && call.state === "ready"
+              ? `/coaching?call=${call.submission_id}`
+              : `/analysis/calls/${call.submission_id}`,
+          ),
+        );
+        await act(async () => button("Show all 10 calls").click());
+        await act(async () => shortcut.click());
+        expect(button("Show all 10 calls").getAttribute("aria-expanded")).toBe(
+          "false",
+        );
+        expect(document.activeElement).toBe(section);
+        expect(host.textContent).not.toContain("Who sees your coaching");
+        expect(host.textContent).not.toContain("Not completely");
+      }
+    }
+  });
+
+  it("opens progress's saved skill calls, focuses the list and keeps each viewer's destinations", async () => {
+    const calls = Array.from({ length: 10 }, (_, index) => ({
+      submission_id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      call_label: `Fictional call ${index + 1}`,
+      created_at: "2026-10-01T10:00:00Z",
+      state: index === 8 ? ("pending" as const) : ("ready" as const),
+      focus_label: "This call's separate focus",
+    }));
+    const progress = calls.slice(0, 9).map((call, index) => ({
+      submission_id: call.submission_id,
+      created_at: call.created_at,
+      state:
+        index === 7
+          ? ("not_covered" as const)
+          : index === 1
+            ? ("no_suggestion" as const)
+            : ("suggested" as const),
+      after_mission: true,
+    }));
+    const button = (name: string) =>
+      [...host.querySelectorAll("button")].find(
+        (control) => control.textContent === name,
+      )!;
+    for (const readOnly of [false, true]) {
+      await act(async () =>
+        root.render(
+          <CoachingStory
+            key={String(readOnly)}
+            coaching={{ ...fictionalCoaching, calls, progress }}
+            readOnly={readOnly}
+            sharing={{
+              available: false,
+              shared: false,
+              revision: 0,
+              reaches: [],
+            }}
+          />,
+        ),
+      );
+      const section = host.querySelector<HTMLElement>("#coaching-calls")!;
+      const links = () =>
+        [...section.querySelectorAll("li")].map(
+          (row) => row.querySelector("a")!,
+        );
+      expect(links()).toHaveLength(10);
+      const shortcut = button("See calls on this skill");
+      expect(shortcut.closest("#coaching-progress")).not.toBeNull();
+      expect(shortcut.getAttribute("aria-controls")).toBe(section.id);
+      await act(async () => shortcut.click());
+      expect(document.activeElement).toBe(section);
+      expect(button("On this skill").getAttribute("aria-pressed")).toBe("true");
+      expect(links()).toHaveLength(7);
+      expect(links().map((link) => link.getAttribute("href"))).toEqual(
+        calls
+          .slice(0, 7)
+          .map((call) =>
+            readOnly
+              ? `/analysis/calls/${call.submission_id}`
+              : `/coaching?call=${call.submission_id}`,
+          ),
+      );
+      expect(section.querySelector('[role="status"]')?.textContent).toBe(
+        "7 calls",
+      );
+      expect(section.textContent).toContain("Skill used, nothing to fix");
+      expect(section.textContent).not.toContain("Fictional call 8");
+      expect(section.textContent).not.toContain("Fictional call 9");
+      expect(section.textContent).not.toContain("Fictional call 10");
+      await act(async () => button("Show all 7 calls").click());
+      await act(async () => shortcut.click());
+      expect(button("Show all 7 calls").getAttribute("aria-expanded")).toBe(
+        "false",
+      );
+      expect(document.activeElement).toBe(section);
+      await act(async () => button("All calls").click());
+      expect(links()).toHaveLength(10);
+      expect(section.textContent).toContain("Analysing…");
+      expect(section.textContent).toContain("This call's separate focus");
+    }
+  });
+
+  it("offers no progress shortcut for missing, unavailable or no-opportunity calls", () => {
+    const call = {
+      submission_id: "00000000-0000-4000-8000-000000000001",
+      call_label: "Fictional call",
+      created_at: "2026-10-01T10:00:00Z",
+      state: "ready" as const,
+      focus_label: null,
+    };
+    const point = {
+      submission_id: call.submission_id,
+      created_at: call.created_at,
+      state: "suggested" as const,
+      after_mission: true,
+    };
+    for (const overrides of [
+      { progress: [] },
+      { calls: [] },
+      { calls: [{ ...call, state: "pending" as const }] },
+      { calls: [{ ...call, state: "unavailable" as const }] },
+      { progress: [{ ...point, state: "not_covered" as const }] },
+      { progress: [{ ...point, submission_id: "missing-call" }] },
+      { focus: null },
+    ]) {
+      const html = renderToStaticMarkup(
+        <CoachingStory
+          coaching={{
+            ...fictionalCoaching,
+            calls: [call],
+            progress: [point],
+            ...overrides,
+          }}
+          readOnly
+        />,
+      );
+      expect(html).not.toContain("See calls on this skill");
+    }
+  });
+
   it("does not reuse a server result from a different session of the same person", async () => {
     mocks.access = {
       status: "ready",

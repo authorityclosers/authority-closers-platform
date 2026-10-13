@@ -37,7 +37,10 @@ const sandboxTeam = {
     ...Array.from({ length: 9 }, (_, i) =>
       rep(i + 1, `Closer ${i + 1}`, "closing_decision_management"),
     ),
-    rep(20, "Asha Rao", "qualification", 1),
+    {
+      ...rep(20, "Asha Rao", "qualification", 1),
+      focus_label: "Confirm who decides before the sale",
+    },
   ],
 };
 
@@ -62,6 +65,7 @@ describe("anonymous Team coaching", () => {
     expect(html).not.toContain("Play moment");
     expect(html).not.toContain("<audio");
     expect(html).not.toContain("Find a rep");
+    expect(html).not.toContain("Find reps");
   });
   it("defaults absent counts and rows and discards source-supplied labels", () => {
     const sparse = parseTeamCoaching({
@@ -136,6 +140,7 @@ describe("anonymous Team coaching", () => {
     expect(html).toContain("10 fictional reps");
     expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
     expect(html).toContain("Focus for Closer 1");
+    expect(html).toContain("Latest call 1 Sept 2026");
     expect(html).toContain("Show all 10 people");
     expect(html.indexOf("Who needs help with what")).toBeLessThan(
       html.indexOf("What the team should work on"),
@@ -149,11 +154,19 @@ describe("anonymous Team coaching", () => {
     })!;
     expect(partial.reps.map((row) => row.name)).toEqual(["Closer 1"]);
   });
-  it("names a real rep only after they share, with the date they shared", () => {
+  it("names a real rep only after they share, keeping latest-call and share dates separate", () => {
     const shared = {
       ...fictionalTeamCoaching,
       named_rep_details: true,
       reps_basis: "shared",
+      suggestions: [
+        fictionalTeamCoaching.suggestions[0],
+        {
+          skill_id: "qualification",
+          label: "Qualification",
+          suggestion_calls: 1,
+        },
+      ],
       reps: [
         {
           ...rep(30, "Swati Kale", "qualification", 4),
@@ -167,7 +180,11 @@ describe("anonymous Team coaching", () => {
     const html = renderToStaticMarkup(<TeamCoachingStory coaching={team} />);
     expect(html).toContain("1 shared with you");
     expect(html).toContain("Find a rep");
+    expect(html).toContain("Find reps working on Qualification");
+    // Historic call suggestions never invent a current rep on that skill.
+    expect(html).not.toContain("Find reps working on Problem");
     expect(html).toContain("Shared 11 Oct 2026");
+    expect(html).toContain("Latest call 1 Sept 2026");
     expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
     expect(html).not.toContain("fictional");
     // A real rep without a share date never appears.
@@ -176,6 +193,32 @@ describe("anonymous Team coaching", () => {
       reps: [{ ...shared.reps[0], shared_at: null }],
     })!;
     expect(unshared.reps).toEqual([]);
+    expect(
+      renderToStaticMarkup(<TeamCoachingStory coaching={unshared} />),
+    ).not.toContain("Find reps");
+    const noFocus = parseTeamCoaching({
+      ...shared,
+      reps: [{ ...shared.reps[0], skill_id: null, focus_label: null }],
+    })!;
+    const noFocusHtml = renderToStaticMarkup(
+      <TeamCoachingStory coaching={noFocus} />,
+    );
+    expect(noFocusHtml).toContain("No focus shown");
+    expect(noFocusHtml).toContain("Shared 11 Oct 2026");
+    expect(noFocusHtml).toContain("Latest call 1 Sept 2026");
+    expect(noFocusHtml).toContain(
+      `/coaching?person=${shared.reps[0].person_id}`,
+    );
+    expect(noFocusHtml).not.toContain("Find reps working on");
+    const noDate = parseTeamCoaching({
+      ...shared,
+      reps: [{ ...shared.reps[0], latest_call_at: null }],
+    })!;
+    const noDateHtml = renderToStaticMarkup(
+      <TeamCoachingStory coaching={noDate} />,
+    );
+    expect(noDateHtml).toContain("Shared 11 Oct 2026");
+    expect(noDateHtml).not.toContain("Latest call 1 Sept 2026");
     expect(
       parseTeamCoaching({ ...shared, sandbox: true, scope: "sandbox" }),
     ).toBeNull();
@@ -190,7 +233,7 @@ describe("anonymous Team coaching", () => {
     ])
       expect(parseTeamCoaching(raw)).toBeNull();
   });
-  it("finds a rep beyond the first eight, combines filters and clears no matches", async () => {
+  it("finds reps by name, current focus or skill, combines filters and resets disclosure", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const host = document.createElement("div");
     document.body.append(host);
@@ -208,9 +251,8 @@ describe("anonymous Team coaching", () => {
       "Closing",
       "Qualification",
     ]);
-    const search = host.querySelector<HTMLInputElement>(
-      'input[type="search"]',
-    )!;
+    let search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    expect(search.placeholder).toBe("Name or current focus");
     const setQuery = async (value: string) =>
       act(async () => {
         Object.getOwnPropertyDescriptor(
@@ -220,6 +262,11 @@ describe("anonymous Team coaching", () => {
         search.dispatchEvent(new Event("input", { bubbles: true }));
       });
     const links = () => [...host.querySelectorAll<HTMLAnchorElement>("li a")];
+    const clearFilters = () =>
+      [...host.querySelectorAll("button")].find(
+        (button) => button.textContent === "Clear filters",
+      );
+    expect(clearFilters()).toBeUndefined();
     expect(links()).toHaveLength(8);
     expect(links().some((link) => link.textContent?.includes("Asha Rao"))).toBe(
       false,
@@ -227,16 +274,67 @@ describe("anonymous Team coaching", () => {
     await setQuery("  aShA  ");
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain("Asha Rao");
+    expect(links()[0].querySelector("mark")?.textContent).toBe("Asha");
     expect(host.querySelector('[role="status"]')?.textContent).toBe("1 rep");
     await act(async () => {
       select.value = "qualification";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(links()).toHaveLength(1);
-    expect(links()[0].textContent).toContain("Focus for Asha Rao");
+    expect(links()[0].textContent).toContain(
+      "Confirm who decides before the sale",
+    );
     expect(links()[0].getAttribute("href")).toBe(
       `/coaching?person=${sandboxTeam.reps[9].person_id}`,
     );
+    // A matching result must be just as easy to reset as an empty one.
+    expect(clearFilters()).toBeDefined();
+    await act(async () => clearFilters()!.click());
+    expect(search.value).toBe("");
+    expect(select.value).toBe("all");
+    expect(document.activeElement).toBe(search);
+    expect(links()).toHaveLength(8);
+    expect(clearFilters()).toBeUndefined();
+    expect(host.querySelector("mark")).toBeNull();
+    // Search the actual habit, without knowing the rep's name. Existing
+    // area filters still intersect it, and history totals do not change.
+    const totalsBefore = host.querySelector(
+      'ul[aria-label="Coaching areas"]',
+    )!.textContent;
+    await setQuery("  wHo DeCiDeS  ");
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Asha Rao");
+    expect(links()[0].querySelector("mark")?.textContent).toBe("who decides");
+    expect(links()[0].textContent).toContain(
+      "Confirm who decides before the sale",
+    );
+    expect(links()[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[9].person_id}`,
+    );
+    await act(async () => {
+      select.value = "closing_decision_management";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(0);
+    expect(host.textContent).toContain(
+      "Try another name, focus or coaching area.",
+    );
+    await act(async () => {
+      select.value = "qualification";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(1);
+    expect(
+      host.querySelector('ul[aria-label="Coaching areas"]')!.textContent,
+    ).toBe(totalsBefore);
+    await act(async () => clearFilters()!.click());
+    expect(search.value).toBe("");
+    expect(select.value).toBe("all");
+    expect(document.activeElement).toBe(search);
+    await act(async () => {
+      select.value = "qualification";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await setQuery("Closer");
     expect(links()).toHaveLength(0);
     expect(host.querySelector('[role="status"]')?.textContent).toBe("0 reps");
@@ -286,6 +384,220 @@ describe("anonymous Team coaching", () => {
     expect(links()).toHaveLength(1);
     await setQuery("");
     expect(links()).toHaveLength(8);
+    const allClosing = () =>
+      [...host.querySelectorAll("button")].find(
+        (button) => button.textContent === "Show all 9 people",
+      )!;
+    await act(async () => allClosing().click());
+    expect(links()).toHaveLength(9);
+    // Clear an area-only match even after its list has been expanded.
+    await act(async () => clearFilters()!.click());
+    expect(search.value).toBe("");
+    expect(select.value).toBe("all");
+    expect(links()).toHaveLength(8);
+    expect(document.activeElement).toBe(search);
+    expect(clearFilters()).toBeUndefined();
+    // Search punctuation is literal, never a regular expression or markup.
+    await setQuery(".");
+    expect(links()).toHaveLength(0);
+    await setQuery("[");
+    expect(links()).toHaveLength(0);
+    await setQuery("Closer");
+    expect(links()[0].querySelectorAll("mark")).toHaveLength(2);
+    expect(links()[0].textContent).toContain("Closer 1 Focus for Closer 1");
+    const findArea = (label: string) =>
+      host.querySelector<HTMLButtonElement>(
+        `button[aria-label="Find reps working on ${label}"]`,
+      )!;
+    await act(async () => findArea("Qualification").click());
+    expect(search.value).toBe("");
+    expect(select.value).toBe("qualification");
+    expect(document.activeElement).toBe(search);
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Asha Rao");
+    expect(links()[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[9].person_id}`,
+    );
+    await setQuery("Asha");
+    await act(async () => findArea("Closing & Decision Management").click());
+    expect(search.value).toBe("");
+    expect(select.value).toBe("closing_decision_management");
+    expect(links()).toHaveLength(8);
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("9 reps");
+    expect(document.activeElement).toBe(search);
+    expect(allClosing().getAttribute("aria-expanded")).toBe("false");
+    await setQuery("No match");
+    expect(links()).toHaveLength(0);
+    // Repeating the same area also clears a name filter; the shortcut isn't
+    // a remount keyed only to the area.
+    await act(async () => findArea("Closing & Decision Management").click());
+    expect(search.value).toBe("");
+    expect(links()).toHaveLength(8);
+    await act(async () =>
+      root.render(
+        <TeamCoachingStory
+          key="one-area"
+          coaching={
+            parseTeamCoaching({
+              ...sandboxTeam,
+              suggestions: [sandboxTeam.suggestions[1]],
+            })!
+          }
+        />,
+      ),
+    );
+    // A current skill remains findable even when absent from the historical
+    // suggestion totals. Adding its option must not invent a total or action.
+    search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    const currentAreas = host.querySelector<HTMLSelectElement>("select")!;
+    expect([...currentAreas.options].map((option) => option.value)).toEqual([
+      "all",
+      "qualification",
+      "closing_decision_management",
+    ]);
+    const totals = host.querySelector('ul[aria-label="Coaching areas"]')!;
+    expect(totals.querySelectorAll("li")).toHaveLength(1);
+    expect(totals.textContent).toContain("1 of 3 calls");
+    expect(totals.textContent).not.toContain("Closing");
+    expect(findArea("Closing & Decision Management")).toBeNull();
+    await act(async () => {
+      currentAreas.value = "closing_decision_management";
+      currentAreas.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(8);
+    expect(links().every((link) => link.textContent?.includes("Closer"))).toBe(
+      true,
+    );
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("9 reps");
+    await setQuery("  cLoSeR 9  ");
+    expect(links()).toHaveLength(1);
+    expect(links()[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[8].person_id}`,
+    );
+    await act(async () => clearFilters()!.click());
+    expect(search.value).toBe("");
+    expect(document.activeElement).toBe(search);
+    expect(currentAreas.value).toBe("all");
+    expect(links()).toHaveLength(8);
+    await act(async () => findArea("Qualification").click());
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Asha Rao");
+    // Even one historic area needs All areas once its shortcut hides other
+    // current focuses. A successful filter must always be resettable.
+    const oneArea = host.querySelector("select")!;
+    expect(oneArea.value).toBe("qualification");
+    await act(async () => {
+      oneArea.value = "all";
+      oneArea.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(8);
+    // No historical suggestions still permits current-focus filtering, and
+    // a rep without a known skill contributes no made-up area.
+    await act(async () =>
+      root.render(
+        <TeamCoachingStory
+          key="no-totals"
+          coaching={
+            parseTeamCoaching({
+              ...sandboxTeam,
+              suggestions: [],
+              reps: [
+                sandboxTeam.reps[0],
+                { ...sandboxTeam.reps[9], skill_id: null, focus_label: null },
+              ],
+            })!
+          }
+        />,
+      ),
+    );
+    search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    const withoutTotals = host.querySelector<HTMLSelectElement>("select")!;
+    expect([...withoutTotals.options].map((option) => option.value)).toEqual([
+      "all",
+      "closing_decision_management",
+      "no-focus",
+    ]);
+    expect(host.querySelector('ul[aria-label="Coaching areas"]')).toBeNull();
+    expect(host.textContent).toContain("No team suggestions yet");
+    expect(findArea("Closing & Decision Management")).toBeNull();
+    // A missing focus contributes no made-up searchable habit.
+    await setQuery("Focus for");
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Closer 1");
+    await setQuery("");
+    await act(async () => {
+      withoutTotals.value = "closing_decision_management";
+      withoutTotals.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(1);
+    expect(links()[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[0].person_id}`,
+    );
+    await act(async () => clearFilters()!.click());
+    expect(withoutTotals.value).toBe("all");
+    expect(links()).toHaveLength(2);
+    expect(document.activeElement).toBe(
+      host.querySelector('input[type="search"]'),
+    );
+    // Missing focus is inspectable without inventing an area or diagnosis.
+    await act(async () => {
+      withoutTotals.value = "no-focus";
+      withoutTotals.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Asha Rao");
+    expect(links()[0].textContent).toContain("No focus shown");
+    expect(links()[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[9].person_id}`,
+    );
+    await setQuery("  aShA  ");
+    expect(links()).toHaveLength(1);
+    await setQuery("Closer");
+    expect(links()).toHaveLength(0);
+    await act(async () => clearFilters()!.click());
+    expect(withoutTotals.value).toBe("all");
+    expect(search.value).toBe("");
+    expect(document.activeElement).toBe(search);
+    expect(links()).toHaveLength(2);
+    // Even an all-missing set has a usable filter. A known area without a
+    // focus label remains in that area too; absence isn't a skill judgment.
+    await act(async () =>
+      root.render(
+        <TeamCoachingStory
+          key="missing-focus"
+          coaching={
+            parseTeamCoaching({
+              ...sandboxTeam,
+              reps: sandboxTeam.reps.map((rep) => ({
+                ...rep,
+                focus_label: null,
+              })),
+            })!
+          }
+        />,
+      ),
+    );
+    const missingSelect = host.querySelector<HTMLSelectElement>("select")!;
+    await act(async () => {
+      missingSelect.value = "no-focus";
+      missingSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(8);
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("10 reps");
+    const missingAll = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Show all 10 people",
+    )!;
+    await act(async () => missingAll.click());
+    expect(links()).toHaveLength(10);
+    await act(async () => {
+      missingSelect.value = "qualification";
+      missingSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("No focus shown");
+    expect(
+      host.querySelector('ul[aria-label="Coaching areas"]')!.textContent,
+    ).toContain("3 of 3 calls");
     await act(async () => root.unmount());
     host.remove();
   });

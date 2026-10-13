@@ -2,7 +2,7 @@
 
 import { AudioLines, ChevronDown, GraduationCap } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { callHref } from "../../acquisition-client";
 import { unnamedCallName } from "../../call-label";
@@ -465,7 +465,19 @@ export function PersonCalls({
   callsHref?: string;
 }) {
   const [all, setAll] = useState(false);
-  const calls = all ? data.listed : data.listed.slice(0, CALLS_SHOWN);
+  const [search, setSearch] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const countId = useId();
+  const query = search.trim().toLocaleLowerCase();
+  const displayName = (call: PersonCall) =>
+    call.label ?? unnamedCallName(call.createdAt, dates);
+  const calls = query
+    ? data.listed.filter((call) =>
+        displayName(call).toLocaleLowerCase().includes(query),
+      )
+    : all
+      ? data.listed
+      : data.listed.slice(0, CALLS_SHOWN);
   return (
     <Panel
       title="Calls"
@@ -476,11 +488,42 @@ export function PersonCalls({
       foot={
         !data.complete ? (
           <span>
-            Showing the newest {data.listed.length} of {data.calls} calls.
+            {query ? "Searching" : "Showing"} the newest {data.listed.length} of{" "}
+            {data.calls} calls.
           </span>
         ) : undefined
       }
     >
+      {data.listed.length ? (
+        <div className={styles.callSearch}>
+          <label className={styles.callSearchField}>
+            <span>Search these calls</span>
+            <input
+              ref={searchInput}
+              type="search"
+              placeholder="Call name"
+              value={search}
+              aria-describedby={countId}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className={styles.quiet}
+            disabled={search.length === 0}
+            onClick={() => {
+              setSearch("");
+              searchInput.current?.focus();
+            }}
+          >
+            Clear search
+          </button>
+          <span id={countId} className={styles.callCount} role="status">
+            {query ? "Matches:" : "Showing"} {calls.length} of{" "}
+            {data.listed.length} listed calls
+          </span>
+        </div>
+      ) : null}
       {calls.length ? (
         <>
           <ul className={styles.calls}>
@@ -494,9 +537,7 @@ export function PersonCalls({
                     className={styles.callRow}
                   >
                     <AudioLines size={15} aria-hidden="true" />
-                    <span className={styles.callName}>
-                      {call.label ?? unnamedCallName(call.createdAt, dates)}
-                    </span>
+                    <span className={styles.callName}>{displayName(call)}</span>
                     <span className={styles.callDate}>
                       {callDate(call.createdAt, undefined, dates)}
                     </span>
@@ -514,7 +555,7 @@ export function PersonCalls({
               );
             })}
           </ul>
-          {data.listed.length > CALLS_SHOWN ? (
+          {!query && data.listed.length > CALLS_SHOWN ? (
             <button
               type="button"
               className={styles.more}
@@ -528,9 +569,11 @@ export function PersonCalls({
         </>
       ) : (
         <p className={styles.quietLine}>
-          {data.calls > 0
-            ? "Recent call details are unavailable."
-            : `No calls in the last ${PERSON_WEEKS} weeks.`}
+          {query
+            ? "No listed calls match this name."
+            : data.calls > 0
+              ? "Recent call details are unavailable."
+              : `No calls in the last ${PERSON_WEEKS} weeks.`}
         </p>
       )}
     </Panel>

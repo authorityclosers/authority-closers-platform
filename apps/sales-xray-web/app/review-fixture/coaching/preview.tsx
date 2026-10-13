@@ -67,7 +67,31 @@ export function CoachingFixture() {
       : set.call;
   const call = parseCallCoaching(callPayload, callPayload.submission_id);
   const me = parseCoaching(data === "sandbox" ? acSandbox.rep : sandbox.me);
-  const team = parseTeamCoaching(set.team);
+  // Dev-only fictional example: a current rep focus absent from historic
+  // totals. Names, focuses and destinations still come from the same set.
+  const currentFocusExample =
+    data === "sandbox" && query.get("example") === "current-focus-areas";
+  const noFocusExample =
+    data === "sandbox" && query.get("example") === "no-focus-reps";
+  const team = parseTeamCoaching(
+    currentFocusExample
+      ? {
+          ...set.team,
+          suggestions: set.team.suggestions.filter(
+            (row) => row.skill_id !== acSandbox.team.reps[0].skill_id,
+          ),
+        }
+      : noFocusExample
+        ? {
+            ...set.team,
+            reps: set.team.reps.map((rep, index) =>
+              index === 8 || index === 19
+                ? { ...rep, skill_id: null, focus_label: null }
+                : rep,
+            ),
+          }
+        : set.team,
+  );
   return (
     <CoachingWrites.Provider value={REVIEW_WRITES}>
       <div className={styles.root}>
@@ -75,7 +99,16 @@ export function CoachingFixture() {
           title="Coaching review"
           context={
             data === "sandbox"
-              ? ["AC Sandbox", "3,360 fictional calls, 60 fictional reps"]
+              ? [
+                  "AC Sandbox",
+                  "3,360 fictional calls, 60 fictional reps",
+                  ...(currentFocusExample
+                    ? ["Filter example: one current focus has no team total"]
+                    : []),
+                  ...(noFocusExample
+                    ? ["Filter example: two reps have no focus shown"]
+                    : []),
+                ]
               : [
                   "Synthetic sandbox data",
                   "Clip preview and lock states for design review",
