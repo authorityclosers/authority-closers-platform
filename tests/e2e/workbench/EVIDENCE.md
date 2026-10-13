@@ -1,5 +1,15 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 05:19 UTC — prepared only interrupted-lesson resume8 from
+the completed D135be632/b7623097 handoff. Reuse its70-second local silent
+PCM response and intercepted404 call source. Check both moment-switch and
+secondary-fold interruptions before the first device checkpoint, exact native
+paused offset/window, reload without eager audio, exact source/timestamp Enter
+resume, focus/32–44px and original quote/lesson/access/transcript/mission/query.
+Only isolated device position changes; no canonical progress/provider/API write.
+Ruff/format/API import/diff PASS; opt-in8skip/156deselected. Browser pending
+05:24UTC normal interval; earlier audio4/ended4/Hear4 remain retained.
+
 13 October, 05:08 UTC — Hear Dipak **4/4 final PASS**: original three
 accepted pairs at `313c3f5e` plus affected desktop/dark retake1PASS12.59s/
 launcher0, source `9251ead4` -> `f20b606f`, refresh0. Pointer/Enter focus the

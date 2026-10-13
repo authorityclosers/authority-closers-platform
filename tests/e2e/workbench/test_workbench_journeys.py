@@ -2309,6 +2309,205 @@ def test_fixture_coaching_hear_lesson_focus(browser: Browser, viewport: tuple[in
         }
 
 
+@pytest.mark.parametrize("interruption", ("moment", "fold"))
+def test_fixture_coaching_interrupted_lesson_resume(
+    browser: Browser, viewport: tuple[int, str], interruption: str
+) -> None:
+    """A source lesson remembers the native position when another control pauses it."""
+    if (
+        os.environ.get("WB_MODE", "fixture") != "fixture"
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.skip("Interruption/resume checks use only the local Design review")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox.json"
+        ).read_text()
+    )["me"]
+    clip = payload["media_clips"][0 if interruption == "moment" else 1]
+    source = (
+        f"/v1/me/coaching/media/{clip['topic_id']}/{clip['revision']}/{clip['review_id']}/source"
+    )
+    call_source = (
+        f"/v1/conversation/acquisition/submissions/{payload['evidence'][0]['submission_id']}/source"
+    )
+    storage_key = f"sx-coaching-clip:{clip['topic_id']}:{clip['revision']}:{clip['review_id']}"
+    with BytesIO() as output:
+        with wave.open(output, "wb") as local_audio:
+            local_audio.setnchannels(1)
+            local_audio.setsampwidth(2)
+            local_audio.setframerate(8000)
+            local_audio.writeframes(b"\0\0" * 70 * 8000)
+        silent_wav = output.getvalue()
+    with _journey(browser, viewport, f"lesson-resume-{interruption}") as journey:
+        page = journey.page
+        reads = {source: 0, call_source: 0}
+        unexpected_media: list[str] = []
+        mutations: list[str] = []
+        page.add_init_script("""(() => {
+          window.__wbLessonStarts = [];
+          const nativePlay = HTMLMediaElement.prototype.play;
+          HTMLMediaElement.prototype.play = function () {
+            window.__wbLessonStarts.push({source: this.getAttribute('src'), at: this.currentTime});
+            this.muted = true;
+            return nativePlay.call(this);
+          };
+        })();""")
+
+        def local_read(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif url.netloc == "127.0.0.1:3026" and url.path == source:
+                reads[source] += 1
+                byte_range = re.fullmatch(r"bytes=(\d+)-(\d*)", request.headers.get("range", ""))
+                first = int(byte_range[1]) if byte_range else 0
+                last = (
+                    min(int(byte_range[2]), len(silent_wav) - 1)
+                    if byte_range and byte_range[2]
+                    else len(silent_wav) - 1
+                )
+                if first > last:
+                    route.fulfill(
+                        status=416, headers={"Content-Range": f"bytes */{len(silent_wav)}"}
+                    )
+                    return
+                body = silent_wav[first : last + 1]
+                headers = {"Accept-Ranges": "bytes", "Content-Length": str(len(body))}
+                if byte_range:
+                    headers["Content-Range"] = f"bytes {first}-{last}/{len(silent_wav)}"
+                route.fulfill(
+                    status=206 if byte_range else 200,
+                    content_type="audio/wav",
+                    headers=headers,
+                    body=body if request.method == "GET" else b"",
+                )
+            elif url.netloc == "127.0.0.1:3026" and url.path == call_source:
+                reads[call_source] += 1
+                route.fulfill(status=404, content_type="text/plain", body="")
+            elif (
+                request.resource_type == "media"
+                or url.path.endswith("/source")
+                or (url.path.startswith("/v1/") and "/media/" in url.path)
+            ):
+                unexpected_media.append("unexpected-source")
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/*", local_read)
+
+        def ready() -> None:
+            for label in ("Design review", "My coaching"):
+                expect(page.get_by_role("button", name=label, exact=True)).to_have_attribute(
+                    "aria-pressed", "true"
+                )
+            page.evaluate("() => document.fonts.ready")
+            expect(page.locator("audio,video")).to_have_count(0)
+
+        journey.open("/review-fixture/coaching?data=review&view=me")
+        ready()
+        assert not any(reads.values()), "Reading Coaching eagerly requested media"
+        more = page.locator("#coaching-better details[data-other-lessons]")
+        summary = more.locator(":scope > summary")
+        card = (
+            page.locator("#coaching-better article[data-recommended]")
+            if interruption == "moment"
+            else more.locator("article").first
+        )
+        quote = page.locator("#coaching-evidence blockquote").first
+        expect(quote).to_have_text(payload["evidence"][0]["quote"])
+        if interruption == "fold":
+            summary.click()
+        card.get_by_role("button", name="Play coaching clip", exact=True).click()
+        pause = card.get_by_role("button", name="Pause", exact=True)
+        expect(pause).to_be_visible()
+        audio = card.locator("audio")
+        expect(audio).to_have_attribute("src", source)
+        page.wait_for_function(
+            """({source, start}) => {
+              const audio = document.querySelector(`audio[src="${source}"]`);
+              return audio && audio.currentTime >= start + 0.8;
+            }""",
+            arg={"source": source, "start": clip["start_ms"] / 1000},
+        )
+        assert page.evaluate("key => localStorage.getItem(key)", storage_key) is None
+        if interruption == "moment":
+            moment = page.locator("#coaching-evidence li").first
+            moment.get_by_role("button", name=re.compile(r"^Play moment")).click()
+            expect(
+                moment.get_by_role("button", name=re.compile(r"^Try audio again"))
+            ).to_be_enabled()
+            assert reads[call_source] >= 1
+        else:
+            summary.click()
+            assert more.get_attribute("open") is None
+        page.wait_for_function(
+            'source => document.querySelector(`audio[src="${source}"]`)?.paused', arg=source
+        )
+        paused_at = audio.evaluate("el => Math.round(el.currentTime * 1000)")
+        saved = int(page.evaluate("key => localStorage.getItem(key)", storage_key) or 0)
+        assert 0 < saved < 2000, "Interruption was not before the first device checkpoint"
+        assert saved == paused_at - clip["start_ms"], "Saved offset differs from native paused time"
+        resume = card.get_by_role("button", name="Resume clip", exact=True)
+        if interruption == "fold":
+            summary.click()
+        expect(resume).to_be_visible()
+        card.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("interruption-saved-native-position")
+        journey.control_target(resume, "interrupted-lesson-resume")
+        if interruption == "fold":
+            journey.control_target(summary, "secondary-lesson-fold")
+        before_reload = dict(reads)
+        response = page.reload(wait_until="domcontentloaded", timeout=60_000)
+        assert response and response.status < 400
+        ready()
+        assert reads == before_reload, "Reload eagerly requested media"
+        if interruption == "fold":
+            assert more.get_attribute("open") is None
+            summary.click()
+        expect(resume).to_be_visible()
+        resume.focus()
+        page.keyboard.press("Enter")
+        expect(pause).to_be_visible()
+        expect(pause).to_be_focused()
+        expect(audio).to_have_attribute("src", source)
+        expected_start = (clip["start_ms"] + saved) / 1000
+        assert page.evaluate("window.__wbLessonStarts") == [
+            {"source": source, "at": expected_start}
+        ]
+        card.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("reloaded-original-source-resumed")
+        journey.control_target(pause, "reloaded-lesson-pause")
+        pause.click()
+        assert audio.evaluate("el => el.paused")
+        expect(card.locator("h3")).to_have_text(clip["title"])
+        expect(card).to_have_attribute("data-access", clip["access"])
+        expect(card).to_contain_text(clip["reason"])
+        expect(card).to_contain_text(clip["transcript_excerpt"])
+        expect(quote).to_have_text(payload["evidence"][0]["quote"])
+        expect(page.locator("[data-active-mission]")).to_have_text(payload["mission"]["behavior"])
+        expect(page).to_have_url(re.compile(r"/review-fixture/coaching\?data=review&view=me$"))
+        assert not unexpected_media and not mutations
+        assert journey.live_refreshes == 0, "Live source changed during interruption/resume"
+        journey.observations[-1]["fictional_interrupted_lesson_resume"] = {
+            "source": "D135be632/b7623097 existing authored clips; local70s silent WAV/404 call",
+            "interruption": interruption,
+            "native_paused_at_ms": paused_at,
+            "saved_window_offset_ms": saved,
+            "native_reloaded_start_seconds": expected_start,
+            "no_eager_audio_before_play_or_after_reload": True,
+            "quote_lesson_access_transcript_mission_query_focus_and_32_44px_preserved": True,
+            "source_reads_intercepted": sum(reads.values()),
+            "api_mutations": len(mutations),
+            "device_position_only_not_canonical_progress": True,
+            "real_recording_provider_or_authenticated_acceptance": False,
+        }
+
+
 def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, str]) -> None:
     """A stalled fictional source exposes retry while keeping its words and times."""
     if (

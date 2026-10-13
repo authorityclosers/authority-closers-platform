@@ -82,7 +82,7 @@ and four current-skill finding-filter cases, plus four skill-clip disclosure cas
 sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
 cases, eight secondary-lesson disclosure cases and four controlled audio-startup
 cases, plus four controlled native moment-end/replay and four narration shortcut
-focus cases, collect 156 cases. The original Report
+focus cases and eight interrupted-lesson resume cases, collect 164 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -327,3 +327,13 @@ intercepted404 only after that focus moves; the error must leave focus alone.
 The source must still be loading through capture before that404 is returned.
 Original quote/lesson/access/transcript/mission/query remain unchanged. No real
 audio, provider, authenticated read or write is used.
+
+For the new interruption resume, select only
+`-k fixture_coaching_interrupted_lesson_resume`. Eight cases reuse the existing
+recommended/secondary Design review clips and D's native muted70-second silent
+WAV response. A call moment or secondary fold interrupts before the first device
+checkpoint; its saved window offset must equal the native paused time. Reload must
+request no audio; Enter must resume that same source at the exact saved position
+with focus/32–44px targets and original access/text/mission/query. The call source
+receives an intercepted404. Only the isolated browser's device position changes;
+no canonical progress, provider, real recording, authenticated read or API write.
