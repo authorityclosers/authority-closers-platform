@@ -1,5 +1,21 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 03:18–03:19 UTC — lesson/mission shortcuts16 + call/retained
+Report moments12 **28/28 PASS**, unchanged `23d64fc9`,61.21/49.35 seconds,
+both launchers0. Four existing fictional Coaching surfaces preserve original
+lesson/mission, query, folded lesson and native pointer/Enter/next-Tab focus.
+Call/Report links preserve original quotes/times/mission and focus labelled
+moments; actual heading hit tests clear sticky navigation. Controls32–44px,
+runtime/server/font/overflow/refresh/media/API mutations0.
+
+All72 step capture contents inspected:64 unique plus8 byte-identical call
+shortcut frames equal inspected lesson frames. No new defect found.
+Receipts/JUnit/log/PNGs: strike `shots/2026-10-13-focus-lesson-0318Z/`
+and `shots/2026-10-13-call-focus-moments-0318Z/`.
+Fictional UI only; canonical Report bootstrap, real playback/provider and
+authenticated hosted acceptance remain separate. New secondary-lesson fold
+is a distinct pending criterion, with no repeat of these completed checks.
+
 13 October, 02:55–03:02 UTC — saved-finding4 + skill-disclosure4
 **8/8 PASS**, source `b81e3ef1` unchanged,27.35/37.00 seconds, launchers0.
 Finding preserves explicit source6/4/2 counts, labels/order/IDs/Report routes,
