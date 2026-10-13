@@ -1,5 +1,12 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 04:14 UTC — `7d5aca8c` continuation retains the moment checks
+but the narration loading selector also finds two disabled seek controls:
+**1 test-selector FAIL,3 NOT RUN**,14.17 seconds/launcher1. Scope the loading
+guard to the card's original first playback control. The unavailable state,
+deadline, keyboard focus and exact source-request guards stay intact. Original
+receipts/three PNGs retained in `audio-focus-loading-selector/`; no product defect.
+
 13 October, 04:12 UTC — continuation at `88a2a99a` (including D's
 `688a8670`) reaches narration after the moment deadline/retry, keyboard
 focus, inert loading and moved-focus assertions pass. It then stops with

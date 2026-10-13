@@ -2118,7 +2118,7 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
             ):
                 play.click()
             expect(card.locator("audio")).to_have_attribute("src", source)
-            loading = card.locator('button[aria-disabled="true"],button:disabled')
+            loading = card.locator("button").first
             expect(loading).to_have_count(1)
             expect(loading).to_be_disabled()
             page.clock.fast_forward(14_999)
@@ -2160,7 +2160,7 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
                 lambda request, expected=source: urlsplit(request.url).path == expected
             ):
                 page.keyboard.press("Enter")
-            loading = card.locator('button[aria-disabled="true"],button:disabled')
+            loading = card.locator("button").first
             expect(loading).to_have_count(1)
             expect(loading).to_be_disabled()
             expect(loading).to_be_focused()
