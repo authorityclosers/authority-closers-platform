@@ -1410,7 +1410,11 @@ def test_fixture_coaching_focus_moments(
         jump.click()
         target = page.locator("#coaching-evidence")
         expect(target).to_be_focused()
-        expect(target.get_by_role("heading").first).to_be_in_viewport()
+        caption = target.locator("p").first
+        expect(caption).to_contain_text(
+            "From their calls" if kind == "sandbox" else "From your calls"
+        )
+        expect(caption).to_be_in_viewport()
         expected_url = re.compile(
             rf"/review-fixture/coaching\?data={kind}&view=me#coaching-evidence$"
         )
@@ -1432,13 +1436,13 @@ def test_fixture_coaching_focus_moments(
         call_link = first.get_by_role("link", name=original["call_label"], exact=True)
         expect(call_link).to_have_attribute("href", f"/coaching?call={original['submission_id']}")
         journey.snapshot("pointer-landed")
-        journey.unclipped_text(target)
+        journey.unclipped_text(call_link.locator(".."))
         journey.control_target(call_link, "supporting-call")
         jump.focus()
         expect(jump).to_be_focused()
         page.keyboard.press("Enter")
         expect(target).to_be_focused()
-        expect(target.get_by_role("heading").first).to_be_in_viewport()
+        expect(caption).to_be_in_viewport()
         expect(page).to_have_url(expected_url)
         page.keyboard.press("Tab")
         assert target.evaluate("el => el.contains(document.activeElement)"), (
