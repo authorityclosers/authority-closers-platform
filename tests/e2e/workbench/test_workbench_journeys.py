@@ -98,6 +98,16 @@ def _heading(page: Page, label: str) -> Locator:
     return page.get_by_role("heading", name=re.compile(r"^" + re.escape(label) + r"(?:\s|$)"))
 
 
+def _call_title_links(
+    call_list: Locator, calls: list[dict[str, object]], *, include_hidden: bool = False
+) -> Locator:
+    """Count source call titles independently of their separate Report actions."""
+    names = re.compile(
+        r"^(?:" + "|".join(re.escape(str(call["call_label"])) for call in calls) + r")$"
+    )
+    return call_list.get_by_role("link", name=names, include_hidden=include_hidden)
+
+
 def _document_preview(page: Page) -> Locator:
     return page.get_by_role(
         "region", name=re.compile(r"^(?:Sales Xray document preview|Report document)$")
@@ -1613,7 +1623,7 @@ def test_fixture_coaching_call_search(
                 ).to_have_count(0)
                 return
             # Inspect retained hidden rows too; screenshots separately check the compact list.
-            links = call_list.get_by_role("link", include_hidden=True)
+            links = _call_title_links(call_list, calls, include_hidden=True)
             expect(links).to_have_count(count)
             for index, call in enumerate(expected):
                 expect(links.nth(index)).to_have_text(str(call["call_label"]))
@@ -1628,6 +1638,19 @@ def test_fixture_coaching_call_search(
                     expect(row).to_contain_text(point_labels[records[call["submission_id"]]])
                 elif call["state"] == "pending":
                     expect(row).to_contain_text("Analysing…")
+                reports = row.get_by_role(
+                    "link", name=re.compile(r"^Open Report for "), include_hidden=True
+                )
+                if call["state"] == "ready":
+                    expect(reports).to_have_count(1)
+                    expect(reports).to_have_attribute(
+                        "aria-label", f"Open Report for {call['call_label']}"
+                    )
+                    expect(reports).to_have_attribute(
+                        "href", f"/analysis/calls/{call['submission_id']}"
+                    )
+                else:
+                    expect(reports).to_have_count(0)
 
         assert_calls(calls)
         expect(search).to_have_attribute(
@@ -1635,14 +1658,14 @@ def test_fixture_coaching_call_search(
         )
         if len(calls) > compact_count:
             history.get_by_role("button", name=f"Show all {len(calls)} calls", exact=True).click()
-            expect(call_list.get_by_role("link")).to_have_count(len(calls))
+            expect(_call_title_links(call_list, calls)).to_have_count(len(calls))
         query = f"  {target['call_label'].swapcase()}  "
         search.fill(query)
         matches = [call for call in calls if call["call_label"] == target["call_label"]]
         assert_calls(matches)
         expect(search).to_be_focused()
         expect(call_list.locator("..")).not_to_have_attribute("data-expanded", "")
-        expect(call_list.get_by_role("link")).to_have_count(len(matches))
+        expect(_call_title_links(call_list, calls)).to_have_count(len(matches))
         # A person's name can match several calls, including calls beyond the folded rows.
         name = target["call_label"].split("·")[1].strip()
         query = f"  {name.swapcase()}  "
@@ -1655,7 +1678,14 @@ def test_fixture_coaching_call_search(
         journey.unclipped_text(history)
         journey.control_target(search, "find-call")
         journey.control_target(clear, "clear-search")
-        journey.row_link_target(call_list.get_by_role("link").first, "matched-call")
+        journey.row_link_target(_call_title_links(call_list, calls).first, "matched-call")
+        report = call_list.get_by_role(
+            "link", name=f"Open Report for {matches[0]['call_label']}", exact=True
+        )
+        journey.control_target(report, "matched-report")
+        _call_title_links(call_list, calls).first.focus()
+        page.keyboard.press("Tab")
+        expect(report).to_be_focused()
 
         on_skill.click()
         expect(search).to_have_value(query)
@@ -1703,7 +1733,7 @@ def test_fixture_coaching_call_search(
             expect(history).to_be_focused()
             expect(history.get_by_role("heading").first).to_be_in_viewport()
             assert_calls(skill_calls, skill=True)
-            expect(call_list.get_by_role("link")).to_have_count(
+            expect(_call_title_links(call_list, calls)).to_have_count(
                 min(len(skill_calls), compact_count)
             )
             page.keyboard.press("Tab")
@@ -1722,6 +1752,7 @@ def test_fixture_coaching_call_search(
             "pending_state_and_route_checked": pending is not None,
             "pointer_and_enter_progress_reset_search": True,
             "source_names_states_destinations_preserved": True,
+            "ready_report_destinations_and_keyboard_order_checked": True,
             "api_mutations": len(mutation_requests),
             "product_destinations_opened": False,
         }
@@ -1768,7 +1799,7 @@ def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) ->
         for step, keyboard in (("pointer-restored", False), ("keyboard-restored", True)):
             all_calls.click()
             expand.click()
-            expect(call_list.get_by_role("link")).to_have_count(len(calls))
+            expect(_call_title_links(call_list, calls)).to_have_count(len(calls))
             on_skill.click()
             search.fill("no such fictional call")
             expect(history.get_by_role("status")).to_have_text("0 calls")
@@ -1788,8 +1819,8 @@ def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) ->
             expect(on_skill).to_have_attribute("aria-pressed", "false")
             expect(history.get_by_role("status")).to_have_text(f"{len(calls)} calls")
             expect(expand).to_have_attribute("aria-expanded", "false")
-            expect(call_list.get_by_role("link")).to_have_count(compact_count)
-            links = call_list.get_by_role("link", include_hidden=True)
+            expect(_call_title_links(call_list, calls)).to_have_count(compact_count)
+            links = _call_title_links(call_list, calls, include_hidden=True)
             expect(links).to_have_count(len(calls))
             for index, call in enumerate(calls):
                 expect(links.nth(index)).to_have_text(call["call_label"])
