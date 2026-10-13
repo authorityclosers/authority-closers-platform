@@ -81,7 +81,7 @@ plus four each for summary clips, supplied shared dates and person-call search,
 and four current-skill finding-filter cases, plus four skill-clip disclosure cases,
 sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
 cases, eight secondary-lesson disclosure cases and four controlled audio-startup
-cases, collect 148 cases. The original Report
+cases, plus four controlled native moment-end/replay cases, collect 152 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -308,3 +308,12 @@ times, lesson/access/transcript, mission/query and32–44px retry targets remain
 checked. No source request reaches a server or provider. Real playback, preview
 limits, late play promises, switch/unmount cleanup and authenticated acceptance
 remain outside this browser check; the builder's mocked unit coverage is separate.
+
+For the new early recording-end behavior, select only
+`-k fixture_coaching_moment_ended`. Four cases reuse the authored Design review
+moment and D's short silent WAV as an in-memory, byte-range browser response.
+Native muted playback ends before the saved excerpt's end; the existing Play
+control must return, Enter must replay its original timestamp, and pointer Pause
+must stop it. Source quote/time/call link/mission/query and32–44px targets remain
+checked. This exercises native browser playback of silence only; no real recording,
+provider, authenticated read or API write occurs.

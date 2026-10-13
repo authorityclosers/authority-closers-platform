@@ -7,12 +7,14 @@ import os
 import re
 import shutil
 import subprocess
+import wave
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from html import unescape
 from http.cookiejar import HTTPONLY_ATTR, LoadError, MozillaCookieJar
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from zipfile import ZipFile
@@ -2011,6 +2013,151 @@ def test_fixture_call_focus_moments(
             "media_requests": len(media),
             "api_mutations": len(mutations),
             "authenticated_or_canonical_report_acceptance": False,
+        }
+
+
+def test_fixture_coaching_moment_ended(browser: Browser, viewport: tuple[int, str]) -> None:
+    """A local silent recording can end early and replay its original saved moment."""
+    if (
+        os.environ.get("WB_MODE", "fixture") != "fixture"
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.skip("Native end checks use only the existing local Design review")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox.json"
+        ).read_text()
+    )["me"]
+    evidence = payload["evidence"][0]
+    start, end = evidence["start_ms"] / 1000, evidence["end_ms"] / 1000
+    assert evidence["playable"] and start + 3 < end
+    # Reuse D's short, silent PCM source in memory; no recording is fetched.
+    with BytesIO() as output:
+        with wave.open(output, "wb") as local_audio:
+            local_audio.setnchannels(1)
+            local_audio.setsampwidth(2)
+            local_audio.setframerate(8000)
+            local_audio.writeframes(b"\0\0" * round((start + 3) * 8000))
+        silent_wav = output.getvalue()
+    source = f"/v1/conversation/acquisition/submissions/{evidence['submission_id']}/source"
+    with _journey(browser, viewport, "moment-ended") as journey:
+        page = journey.page
+        source_reads: list[str] = []
+        unexpected_media: list[str] = []
+        mutations: list[str] = []
+        page.add_init_script("""(() => {
+          window.__wbMomentStarts = [];
+          const nativePlay = HTMLMediaElement.prototype.play;
+          HTMLMediaElement.prototype.play = function () {
+            window.__wbMomentStarts.push(this.currentTime);
+            this.muted = true;
+            return nativePlay.call(this);
+          };
+        })();""")
+
+        def local_read(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif url.netloc == "127.0.0.1:3026" and url.path == source:
+                source_reads.append(request.method)
+                byte_range = re.fullmatch(r"bytes=(\d+)-(\d*)", request.headers.get("range", ""))
+                first = int(byte_range[1]) if byte_range else 0
+                last = (
+                    min(int(byte_range[2]), len(silent_wav) - 1)
+                    if byte_range and byte_range[2]
+                    else len(silent_wav) - 1
+                )
+                if first > last:
+                    route.fulfill(
+                        status=416, headers={"Content-Range": f"bytes */{len(silent_wav)}"}
+                    )
+                    return
+                body = silent_wav[first : last + 1]
+                headers = {"Accept-Ranges": "bytes", "Content-Length": str(len(body))}
+                if byte_range:
+                    headers["Content-Range"] = f"bytes {first}-{last}/{len(silent_wav)}"
+                route.fulfill(
+                    status=206 if byte_range else 200,
+                    content_type="audio/wav",
+                    headers=headers,
+                    body=body if request.method == "GET" else b"",
+                )
+            elif (
+                request.resource_type == "media"
+                or url.path.endswith("/source")
+                or (url.path.startswith("/v1/") and "/media/" in url.path)
+            ):
+                unexpected_media.append("unexpected-source")
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/*", local_read)
+        journey.open("/review-fixture/coaching?data=review&view=me")
+        for label in ("Design review", "My coaching"):
+            expect(page.get_by_role("button", name=label, exact=True)).to_have_attribute(
+                "aria-pressed", "true"
+            )
+        page.evaluate("() => document.fonts.ready")
+        page.wait_for_load_state("networkidle", timeout=15_000)
+        expect(page.locator("audio,video")).to_have_count(0)
+        assert not source_reads, "Reading Coaching eagerly requested the local media"
+        moment = page.locator("#coaching-evidence li").first
+        expect(moment.locator("blockquote")).to_have_text(evidence["quote"])
+        call_link = moment.get_by_role("link", name=evidence["call_label"], exact=True)
+        call_href = call_link.get_attribute("href")
+        assert call_href and evidence["submission_id"] in call_href
+        play = moment.get_by_role("button", name=re.compile(r"^Play moment"))
+        original_time = play.get_attribute("aria-label")
+        play.click()
+        pause = moment.get_by_role("button", name=re.compile(r"^Pause moment"))
+        expect(pause).to_be_visible()
+        audio = moment.locator("audio")
+        expect(audio).to_have_attribute("src", source)
+        expect(play).to_be_enabled(timeout=15_000)
+        assert audio.evaluate("el => el.ended"), "Play returned before native recording end"
+        duration = audio.evaluate("el => el.duration")
+        assert start < duration < end, "The controlled source did not end inside the saved moment"
+        moment.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("recording-ended-replay-ready")
+        journey.control_target(play, "ended-moment-play")
+        expect(play).to_have_attribute("aria-label", original_time)
+        play.focus()
+        page.keyboard.press("Enter")
+        expect(pause).to_be_visible()
+        expect(pause).to_be_focused()
+        expect(audio).to_have_attribute("src", source)
+        assert page.evaluate("window.__wbMomentStarts") == [start, start]
+        resumed_at = audio.evaluate("el => el.currentTime")
+        assert start <= resumed_at < start + 1, "Replay did not begin at the saved timestamp"
+        pause.click()
+        expect(play).to_be_enabled()
+        assert audio.evaluate("el => el.paused")
+        expect(play).to_have_attribute("aria-label", original_time)
+        expect(moment.locator("blockquote")).to_have_text(evidence["quote"])
+        expect(call_link).to_have_attribute("href", call_href)
+        expect(page.locator("[data-active-mission]")).to_have_text(payload["mission"]["behavior"])
+        expect(page).to_have_url(re.compile(r"/review-fixture/coaching\?data=review&view=me$"))
+        expect(moment.get_by_role("status")).to_have_count(0)
+        journey.snapshot("original-timestamp-replayed-paused")
+        journey.control_target(play, "replayed-moment-play")
+        assert source_reads and not unexpected_media and not mutations
+        assert journey.live_refreshes == 0, "Live source changed during native end/replay"
+        journey.observations[-1]["fictional_native_moment_end"] = {
+            "source": "D688a8670 existing authored me/evidence[0]; local silent PCM WAV",
+            "native_end_inside_saved_moment": True,
+            "source_duration_seconds": duration,
+            "native_play_start_seconds": [start, start],
+            "replayed_at_seconds": resumed_at,
+            "source_reads_intercepted": len(source_reads),
+            "quote_time_call_link_mission_query_and_32_44px_preserved": True,
+            "keyboard_replay_then_pointer_pause": True,
+            "api_mutations": len(mutations),
+            "real_recording_provider_or_authenticated_acceptance": False,
         }
 
 

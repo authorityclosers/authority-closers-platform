@@ -1,5 +1,14 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 04:25 UTC — prepared only four native recording-end cases for
+D's completed `688a8670` return. Reuse its in-memory silent PCM/range source
+at the existing Design review moment; check actual native end inside the
+saved excerpt, Play recovery, Enter replay at the exact saved timestamp,
+pointer Pause, original quote/time/call link/mission/query and32–44px targets.
+All source requests stay browser-local; no real recording/provider/write.
+Ruff/format/API import/whitespace PASS; opt-in4skip/148deselected. Browser
+verdict waits the ordinary04:34UTC interval; prior audio4PASS is retained.
+
 13 October, 04:18 UTC — audio continuation **4/4 PASS**,31.12 seconds/
 launcher0 at unchanged `331f76a1` (D repair `688a8670`). Both players keep
 keyboard focus on same-source404 retry, ignore Enter during loading, and
