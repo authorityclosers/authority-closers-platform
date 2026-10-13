@@ -2067,7 +2067,7 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
                 route.continue_()
 
         page.route("**/*", controlled_read)
-        journey.open("/review-fixture/coaching?view=me")
+        journey.open("/review-fixture/coaching?data=review&view=me")
         for label in ("Design review", "My coaching"):
             expect(page.get_by_role("button", name=label, exact=True)).to_have_attribute(
                 "aria-pressed", "true"
@@ -2153,7 +2153,7 @@ def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, s
         assert lesson.locator("details").text_content() == original_lesson
         expect(lesson).to_contain_text(clip["reason"])
         expect(page.locator("[data-active-mission]")).to_have_text(payload["mission"]["behavior"])
-        expect(page).to_have_url(re.compile(r"/review-fixture/coaching\?view=me$"))
+        expect(page).to_have_url(re.compile(r"/review-fixture/coaching\?data=review&view=me$"))
         assert not pending and not unexpected_media and not mutations
         assert journey.live_refreshes == 0, "Live source changed during controlled startup"
         journey.observations[-1]["fictional_audio_startup"] = {

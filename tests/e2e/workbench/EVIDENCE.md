@@ -1,7 +1,8 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
 13 October, 03:50 UTC — added only the four controlled audio-startup cases
-for D's `166c9940`. Existing Design review moment/narration sources stay
+for D's `166c9940`. Explicit `data=review&view=me` selects the existing
+Design review moment/narration sources, which stay
 intercepted while the browser clock checks the15-second deadline, then
 keyboard retry receives an intercepted404 from the same path. The guard
 retains original quote/times/lesson/access/transcript/mission/query and
