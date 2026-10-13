@@ -80,7 +80,8 @@ current-area cases, four Insights name-search and four Team missing-focus cases,
 plus four each for summary clips, supplied shared dates and person-call search,
 and four current-skill finding-filter cases, plus four skill-clip disclosure cases,
 sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
-cases and eight secondary-lesson disclosure cases, collect 144 cases. The original Report
+cases, eight secondary-lesson disclosure cases and four controlled audio-startup
+cases, collect 148 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -295,3 +296,13 @@ access/preview labels and mission/query. Native pointer/Enter/nested disclosure
 independence, focus/next Tab and40–44px summary targets are checked without
 playback/source reads or writes. Audio-request/reveal and scoped fold-pause
 remain separate mocked unit evidence, as does authenticated acceptance.
+
+For the new stalled-audio recovery, select only
+`-k fixture_coaching_audio_startup`. Four cases use the existing local Design
+review at3026 and freeze the browser clock before interaction. The moment and
+recommended narration requests stay intercepted until their15-second deadline;
+keyboard retry receives an intercepted404 for that same source. Original quote,
+times, lesson/access/transcript, mission/query and32–44px retry targets remain
+checked. No source request reaches a server or provider. Real playback, preview
+limits, late play promises, switch/unmount cleanup and authenticated acceptance
+remain outside this browser check; the builder's mocked unit coverage is separate.

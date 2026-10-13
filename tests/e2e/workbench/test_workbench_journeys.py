@@ -2014,6 +2014,160 @@ def test_fixture_call_focus_moments(
         }
 
 
+def test_fixture_coaching_audio_startup(browser: Browser, viewport: tuple[int, str]) -> None:
+    """A stalled fictional source exposes retry while keeping its words and times."""
+    if (
+        os.environ.get("WB_MODE", "fixture") != "fixture"
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.skip("Controlled startup checks use only the existing local Design review")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox.json"
+        ).read_text()
+    )["me"]
+    evidence, clip = payload["evidence"][0], payload["media_clips"][0]
+    assert evidence["playable"] and clip["access"] == "full"
+    moment_source = f"/v1/conversation/acquisition/submissions/{evidence['submission_id']}/source"
+    lesson_source = (
+        f"/v1/me/coaching/media/{clip['topic_id']}/{clip['revision']}/{clip['review_id']}/source"
+    )
+    with _journey(browser, viewport, "audio-startup") as journey:
+        page = journey.page
+        source_requests = {moment_source: 0, lesson_source: 0}
+        pending: dict[str, Route] = {}
+        mutations: list[str] = []
+        unexpected_media: list[str] = []
+
+        def controlled_read(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            is_media = (
+                request.resource_type == "media"
+                or re.search(r"/(source|media)/", url.path)
+                or url.path.endswith("/source")
+            )
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif is_media:
+                if url.netloc != "127.0.0.1:3026" or url.path not in source_requests:
+                    unexpected_media.append("unexpected-source")
+                    route.abort("blockedbyclient")
+                else:
+                    source_requests[url.path] += 1
+                    if source_requests[url.path] == 1:
+                        # Keep the browser's request pending; no server/provider
+                        # receives it. Retry gets a controlled unavailable reply.
+                        pending[url.path] = route
+                    else:
+                        route.fulfill(status=404, content_type="text/plain", body="")
+            else:
+                route.continue_()
+
+        page.route("**/*", controlled_read)
+        journey.open("/review-fixture/coaching?view=me")
+        for label in ("Design review", "My coaching"):
+            expect(page.get_by_role("button", name=label, exact=True)).to_have_attribute(
+                "aria-pressed", "true"
+            )
+        page.evaluate("() => document.fonts.ready")
+        page.wait_for_load_state("networkidle", timeout=15_000)
+        expect(page.locator("audio,video")).to_have_count(0)
+        assert not any(source_requests.values()), "Reading Coaching eagerly requested media"
+        moment = page.locator("#coaching-evidence li").first
+        lesson = page.locator("#coaching-better article[data-recommended]")
+        expect(moment.locator("blockquote")).to_have_text(evidence["quote"])
+        expect(lesson.locator("h3")).to_have_text(clip["title"])
+        original_lesson = lesson.locator("details").text_content()
+        original_time = moment.get_by_role(
+            "button", name=re.compile(r"^Play moment")
+        ).get_attribute("aria-label")
+        span = (
+            f"{evidence['start_ms'] // 60_000}:{evidence['start_ms'] // 1000 % 60:02d}"
+            f"–{evidence['end_ms'] // 60_000}:{evidence['end_ms'] // 1000 % 60:02d}"
+        )
+        assert original_time == f"Play moment {span}"
+        page.clock.install()
+        # Freeze time before clicks so request setup cannot consume the deadline.
+        page.clock.pause_at(datetime.now(UTC) + timedelta(seconds=1))
+        checks: list[dict[str, object]] = []
+        for name, card, source, play_name, retry_name, failure_text in (
+            (
+                "moment",
+                moment,
+                moment_source,
+                re.compile(r"^Play moment"),
+                re.compile(r"^Try audio again"),
+                "the quote stays here",
+            ),
+            (
+                "lesson",
+                lesson,
+                lesson_source,
+                "Play coaching clip",
+                "Try clip again",
+                "Narration is unavailable",
+            ),
+        ):
+            play = card.get_by_role("button", name=play_name)
+            with page.expect_request(
+                lambda request, expected=source: urlsplit(request.url).path == expected
+            ):
+                play.click()
+            expect(card.locator("audio")).to_have_attribute("src", source)
+            expect(play).to_be_disabled()
+            page.clock.fast_forward(14_999)
+            expect(play).to_be_disabled()
+            expect(card.get_by_role("status")).to_have_count(0)
+            page.clock.fast_forward(1)
+            retry = card.get_by_role("button", name=retry_name)
+            expect(retry).to_be_enabled()
+            expect(card.locator("audio")).to_have_count(0)
+            expect(card.get_by_role("status")).to_contain_text(failure_text)
+            assert source_requests[source] == 1
+            pending.pop(source).abort("blockedbyclient")
+            card.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(f"{name}-retry-keeps-source")
+            journey.control_target(retry, f"{name}-retry")
+            retry.focus()
+            with page.expect_request(
+                lambda request, expected=source: urlsplit(request.url).path == expected
+            ):
+                page.keyboard.press("Enter")
+            expect(retry).to_be_enabled()
+            expect(retry).to_be_focused()
+            expect(card.locator("audio")).to_have_count(0)
+            expect(card.get_by_role("status")).to_contain_text(failure_text)
+            assert source_requests[source] == 2, "Retry changed or duplicated its source request"
+            if name == "moment":
+                expect(retry).to_have_attribute("aria-label", f"Try audio again {span}")
+            checks.append({"player": name, "deadline_ms": 15_000, "same_source_retries": 2})
+        expect(moment.locator("blockquote")).to_have_text(evidence["quote"])
+        expect(moment.get_by_role("button", name=re.compile(r"^Play moment"))).to_have_attribute(
+            "aria-label", original_time
+        )
+        expect(lesson.locator("h3")).to_have_text(clip["title"])
+        expect(lesson).to_have_attribute("data-access", clip["access"])
+        assert lesson.locator("details").text_content() == original_lesson
+        expect(lesson).to_contain_text(clip["reason"])
+        expect(page.locator("[data-active-mission]")).to_have_text(payload["mission"]["behavior"])
+        expect(page).to_have_url(re.compile(r"/review-fixture/coaching\?view=me$"))
+        assert not pending and not unexpected_media and not mutations
+        assert journey.live_refreshes == 0, "Live source changed during controlled startup"
+        journey.observations[-1]["fictional_audio_startup"] = {
+            "source": "D166c9940 existing sandbox.json/me; intercepted stalled then404 sources",
+            "players": checks,
+            "quote_times_lesson_access_transcript_mission_query_preserved": True,
+            "keyboard_retry_and_32_44px_targets": True,
+            "source_requests_intercepted": sum(source_requests.values()),
+            "api_mutations": len(mutations),
+            "actual_playback_provider_or_authenticated_acceptance": False,
+            "late_play_promise_preview_and_switch_cleanup_browser_tested": False,
+        }
+
+
 @pytest.mark.parametrize("scene", ("personal", "rep"))
 def test_fixture_coaching_secondary_lessons(
     browser: Browser, viewport: tuple[int, str], scene: str

@@ -1,5 +1,15 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 03:50 UTC — added only the four controlled audio-startup cases
+for D's `166c9940`. Existing Design review moment/narration sources stay
+intercepted while the browser clock checks the15-second deadline, then
+keyboard retry receives an intercepted404 from the same path. The guard
+retains original quote/times/lesson/access/transcript/mission/query and
+32–44px retry targets. Ruff/format/API import/whitespace checks pass;
+no-server opt-in invocation skips4 with144 deselected. Browser verdict is
+pending builder's completed handoff and the ordinary interval. This does
+not test real playback, late play promises, preview limits or hosted access.
+
 13 October, 03:40 UTC — secondary-lesson phone repair **4/4 PASS**,
 38.19 seconds/launcher0, unchanged `297441de` including D's `166c9940`
 CSS repair. Outer, recommended and nested takeaway summaries each measure44px
