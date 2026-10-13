@@ -240,6 +240,7 @@ export const MEDIA = {
   /** A call's coaching and the Report: the focus is this call's, not My coaching's. */
   recommendedCall: "Recommended for this call’s focus",
   other: "Also relevant",
+  more: (count: number) => `More lessons · ${count}`,
   why: "Why this is recommended",
   takeaways: "Read key takeaways",
   kind: (video: boolean) => (video ? "Video" : "Audio"),

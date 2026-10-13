@@ -122,11 +122,14 @@ function ClipCard({
   recommended,
   forCall = false,
   headingLevel = 3,
+  foldId,
 }: {
   clip: CoachingClip;
   recommended: boolean;
   forCall?: boolean;
   headingLevel?: 3 | 4;
+  /** Only secondary lessons pause when their own disclosure closes. */
+  foldId?: string;
 }) {
   const Title = headingLevel === 4 ? "h4" : "h3";
   const they = useTheirCoaching();
@@ -155,9 +158,17 @@ function ClipCard({
       player.current?.pause();
       setState("paused");
     };
+    const stopHidden = (event: Event) => {
+      if (foldId && (event as CustomEvent<string>).detail === foldId)
+        stopOther(event);
+    };
     window.addEventListener("sx-coaching-play", stopOther);
-    return () => window.removeEventListener("sx-coaching-play", stopOther);
-  }, [identity]);
+    window.addEventListener("sx-coaching-fold", stopHidden);
+    return () => {
+      window.removeEventListener("sx-coaching-play", stopOther);
+      window.removeEventListener("sx-coaching-fold", stopHidden);
+    };
+  }, [identity, foldId]);
   // A stored position shows after hydration (the server renders 0), and only
   // inside the window the server allows; before the first play it reads as
   // a paused clip.
@@ -228,6 +239,10 @@ function ClipCard({
   useEffect(() => {
     const onRequest = (event: Event) => {
       if ((event as CustomEvent<string>).detail !== clipKey(clip)) return;
+      const disclosure = card.current?.closest<HTMLDetailsElement>(
+        "details[data-other-lessons]",
+      );
+      if (disclosure) disclosure.open = true;
       card.current?.scrollIntoView({ block: "center", behavior: "smooth" });
       if (!playing) latestToggle.current();
     };
@@ -446,18 +461,47 @@ export function CoachingMedia({
   /** 4 inside the Report, where the pillars are h3. */
   headingLevel?: 3 | 4;
 }) {
+  const otherId = useId();
   if (!clips?.length) return null;
+  const [recommended, ...others] = clips;
   return (
     <div className={styles.clips}>
-      {clips.map((clip, index) => (
-        <ClipCard
-          key={clipKey(clip)}
-          clip={clip}
-          recommended={index === 0}
-          forCall={forCall}
-          headingLevel={headingLevel}
-        />
-      ))}
+      <ClipCard
+        key={clipKey(recommended)}
+        clip={recommended}
+        recommended
+        forCall={forCall}
+        headingLevel={headingLevel}
+      />
+      {others.length ? (
+        <details
+          className={styles.more}
+          data-other-lessons=""
+          onToggle={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !event.currentTarget.open
+            )
+              window.dispatchEvent(
+                new CustomEvent("sx-coaching-fold", { detail: otherId }),
+              );
+          }}
+        >
+          <summary aria-controls={otherId}>{MEDIA.more(others.length)}</summary>
+          <div id={otherId} className={styles.clips}>
+            {others.map((clip) => (
+              <ClipCard
+                key={clipKey(clip)}
+                clip={clip}
+                recommended={false}
+                forCall={forCall}
+                headingLevel={headingLevel}
+                foldId={otherId}
+              />
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

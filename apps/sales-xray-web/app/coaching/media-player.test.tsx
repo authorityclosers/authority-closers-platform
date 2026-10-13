@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dipakTake, FocusHero } from "./coaching-ui";
-import { CoachingMedia } from "./media-player";
+import { CoachingMedia, requestClip } from "./media-player";
 import { parseClips, clipSource } from "./media-contract";
 import { fictionalClip } from "./coaching.fixture";
 
@@ -71,6 +71,93 @@ describe("reviewed placeholder clips", () => {
     expect(host.textContent).toContain("Recommended for this call’s focus");
     expect(host.textContent).not.toContain("your current focus");
     expect(host.textContent).toContain("Also relevant");
+  });
+  it("keeps only the recommendation open and preserves every secondary access rule", async () => {
+    const preview = {
+      ...fictionalClip,
+      topic_id: "fictional-preview",
+      title: "Another way to practise",
+      access: "preview" as const,
+      preview_end_ms: 3000,
+    };
+    const locked = {
+      ...fictionalClip,
+      topic_id: "fictional-locked",
+      title: "Full coaching lesson",
+      access: "locked" as const,
+    };
+    await act(async () =>
+      root.render(
+        <CoachingMedia
+          clips={[fictionalClip, preview, locked]}
+          headingLevel={4}
+        />,
+      ),
+    );
+    const disclosure = host.querySelector<HTMLDetailsElement>(
+      "details[data-other-lessons]",
+    )!;
+    expect(disclosure.open).toBe(false);
+    expect(disclosure.querySelector("summary")?.textContent).toBe(
+      "More lessons · 2",
+    );
+    expect(
+      [...disclosure.querySelectorAll("article")].map((card) => [
+        card.querySelector("h4")?.textContent,
+        card.getAttribute("data-access"),
+      ]),
+    ).toEqual([
+      [preview.title, "preview"],
+      [locked.title, "locked"],
+    ]);
+    expect(disclosure.textContent).toContain("Free preview · 0:02");
+    expect(disclosure.textContent).toContain("Get the full coaching");
+    expect(host.querySelector("audio")).toBeNull();
+    expect(disclosure.querySelector("[data-recommended]")).toBeNull();
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip]} />),
+    );
+    expect(host.querySelector("details[data-other-lessons]")).toBeNull();
+    await act(async () => root.render(<CoachingMedia clips={[]} />));
+    expect(host.textContent).toBe("");
+  });
+  it("reveals a requested secondary clip and folding pauses only that group", async () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    const second = { ...fictionalClip, topic_id: "fictional-secondary" };
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip, second]} />),
+    );
+    const disclosure = host.querySelector<HTMLDetailsElement>(
+      "details[data-other-lessons]",
+    )!;
+    await act(async () => requestClip(second));
+    expect(disclosure.open).toBe(true);
+    const audio = disclosure.querySelector("audio")!;
+    expect(audio.getAttribute("src")).toBe(clipSource(second));
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    const pause = vi.spyOn(audio, "pause");
+    const nested = disclosure.querySelector("details")!;
+    await act(async () =>
+      nested.dispatchEvent(new Event("toggle", { bubbles: true })),
+    );
+    expect(pause).not.toHaveBeenCalled();
+    await act(async () => {
+      disclosure.open = false;
+      disclosure.dispatchEvent(new Event("toggle"));
+    });
+    expect(pause).toHaveBeenCalledOnce();
+    expect(disclosure.textContent).toContain("Resume clip");
+    await act(async () => requestClip(fictionalClip));
+    const recommended = host.querySelector("[data-recommended]")!;
+    const firstAudio = recommended.querySelector("audio")!;
+    await act(async () =>
+      firstAudio.dispatchEvent(new Event("loadedmetadata")),
+    );
+    const firstPause = vi.spyOn(firstAudio, "pause");
+    firstPause.mockClear();
+    await act(async () => disclosure.dispatchEvent(new Event("toggle")));
+    expect(firstPause).not.toHaveBeenCalled();
+    expect(recommended.textContent).toContain("Pause");
   });
   it("'Hear Dipak's take' brings the recommended clip into view and plays it", async () => {
     const scroll = vi.fn();

@@ -865,6 +865,10 @@
   gap: 10px;
 }
 
+.clips > .more > summary {
+  min-height: max(var(--sx-row-h), var(--sx-control-h));
+}
+
 .clip {
   display: grid;
   gap: 10px;
