@@ -140,6 +140,7 @@ describe("anonymous Team coaching", () => {
     expect(html).toContain("10 fictional reps");
     expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
     expect(html).toContain("Focus for Closer 1");
+    expect(html).toContain("Latest call 1 Sept 2026");
     expect(html).toContain("Show all 10 people");
     expect(html.indexOf("Who needs help with what")).toBeLessThan(
       html.indexOf("What the team should work on"),
@@ -153,7 +154,7 @@ describe("anonymous Team coaching", () => {
     })!;
     expect(partial.reps.map((row) => row.name)).toEqual(["Closer 1"]);
   });
-  it("names a real rep only after they share, with the date they shared", () => {
+  it("names a real rep only after they share, keeping latest-call and share dates separate", () => {
     const shared = {
       ...fictionalTeamCoaching,
       named_rep_details: true,
@@ -183,6 +184,7 @@ describe("anonymous Team coaching", () => {
     // Historic call suggestions never invent a current rep on that skill.
     expect(html).not.toContain("Find reps working on Problem");
     expect(html).toContain("Shared 11 Oct 2026");
+    expect(html).toContain("Latest call 1 Sept 2026");
     expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
     expect(html).not.toContain("fictional");
     // A real rep without a share date never appears.
@@ -203,10 +205,20 @@ describe("anonymous Team coaching", () => {
     );
     expect(noFocusHtml).toContain("No focus shown");
     expect(noFocusHtml).toContain("Shared 11 Oct 2026");
+    expect(noFocusHtml).toContain("Latest call 1 Sept 2026");
     expect(noFocusHtml).toContain(
       `/coaching?person=${shared.reps[0].person_id}`,
     );
     expect(noFocusHtml).not.toContain("Find reps working on");
+    const noDate = parseTeamCoaching({
+      ...shared,
+      reps: [{ ...shared.reps[0], latest_call_at: null }],
+    })!;
+    const noDateHtml = renderToStaticMarkup(
+      <TeamCoachingStory coaching={noDate} />,
+    );
+    expect(noDateHtml).toContain("Shared 11 Oct 2026");
+    expect(noDateHtml).not.toContain("Latest call 1 Sept 2026");
     expect(
       parseTeamCoaching({ ...shared, sandbox: true, scope: "sandbox" }),
     ).toBeNull();

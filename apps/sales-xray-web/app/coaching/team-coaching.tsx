@@ -210,11 +210,12 @@ function RepList({
                 href={`/coaching?person=${rep.person_id}`}
                 meta={[
                   `${rep.calls} call${rep.calls === 1 ? "" : "s"}`,
+                  rep.latest_call_at
+                    ? TEAM.repLatest(callDate(rep.latest_call_at))
+                    : null,
                   shared && rep.shared_at
                     ? `Shared ${callDate(rep.shared_at)}`
-                    : rep.latest_call_at
-                      ? callDate(rep.latest_call_at)
-                      : null,
+                    : null,
                 ]}
                 end={
                   rep.skill_id ? (

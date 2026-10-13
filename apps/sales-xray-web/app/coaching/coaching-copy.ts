@@ -638,6 +638,7 @@ export const TEAM = {
   showAll: (count: number) => `Show all ${count} people`,
   showFewer: "Show fewer people",
   people: (count: number) => `${count} ${count === 1 ? "person" : "people"}`,
+  repLatest: (date: string) => `Latest call ${date}`,
   latest: (date: string) => `Latest call ${date}.`,
   last40: "last 40",
   inView: "In this view",
