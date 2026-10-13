@@ -10,7 +10,7 @@ import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from html import unescape
 from http.cookiejar import HTTPONLY_ATTR, LoadError, MozillaCookieJar
 from pathlib import Path
@@ -1871,6 +1871,368 @@ def test_fixture_rep_calls_reset(browser: Browser, viewport: tuple[int, str]) ->
             "product_destinations_opened": False,
         }
         assert not mutation_requests, "Read-only rep shortcut attempted an API mutation"
+
+
+def test_fixture_summary_clips(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Saved summary sources select their original times without fetching audio."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Summary clips use B's existing fictional report examples")
+    source = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/report/pillars/v8-fictional.json"
+        ).read_text()
+    )
+    with _journey(browser, viewport, "summary-clips") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        media: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        page.on(
+            "request",
+            lambda request: media.append("media") if request.resource_type == "media" else None,
+        )
+        journey.open("/review-fixture/report/pillars")
+        picture = page.locator('[data-report-pillar="overview"]')
+        summary = picture.get_by_role("group", name="Summary", exact=True)
+        buttons = summary.get_by_role("button")
+        native_summary = source["account"]["content"]["summary"]
+        expect(picture).to_contain_text(native_summary)
+        expect(buttons).to_have_text(["00:05–00:10", "00:26–00:31", "00:36–00:40"])
+        for index, (action, span) in enumerate(
+            zip(
+                ("pointer", "Enter", "Space"),
+                ("00:05–00:10", "00:26–00:31", "00:36–00:40"),
+                strict=True,
+            )
+        ):
+            button = buttons.nth(index)
+            journey.control_target(button, f"native-summary-{index}")
+            if action == "pointer":
+                button.click()
+            else:
+                button.focus()
+                page.keyboard.press(action)
+            expect(
+                page.get_by_text(
+                    f"Selected {span} · Summary. No audio exists in this fixture.", exact=True
+                )
+            ).to_be_visible()
+            expect(picture).to_contain_text(native_summary)
+        summary.scroll_into_view_if_needed()
+        journey.snapshot("native-summary-selected")
+        page.get_by_role("button", name="Revised Report", exact=True).click()
+        expect(buttons).to_have_text(["00:00", "00:03", "00:05"])
+        revised = (
+            "The seller explained the purpose of the call. The delivery date remained open. "
+            "Both agreed to meet Friday at 4 PM."
+        )
+        expect(picture).to_contain_text(revised)
+        expect(page.locator("[data-report-pillar]")).to_have_count(6)
+        quotes = [
+            "This call is to arrange a meeting.",
+            "I need to check the delivery date.",
+            "Yes, Friday at 4 PM. I will bring the details.",
+        ]
+        for index, action in enumerate(("pointer", "Enter", "Space")):
+            button = buttons.nth(index)
+            journey.control_target(button, f"revised-summary-{index}")
+            if action == "pointer":
+                button.click()
+            else:
+                button.focus()
+                page.keyboard.press(action)
+            expect(page.locator('[data-synthetic-report] aside[role="status"] p')).to_have_text(
+                quotes[index]
+            )
+            expect(picture).to_contain_text(revised)
+        summary.scroll_into_view_if_needed()
+        journey.snapshot("revised-original-source")
+        page.get_by_role("button", name="Older report", exact=True).click()
+        expect(summary).to_have_count(0)
+        picture.scroll_into_view_if_needed()
+        journey.snapshot("older-no-summary-sources")
+        assert not media, "Reading or selecting fictional summary clips fetched media"
+        assert not mutations, "Fictional summary attempted an API mutation"
+        journey.observations[-1]["fictional_summary_clips"] = {
+            "native_ordered_spans": [[5400, 10300], [26200, 31000], [36000, 40100]],
+            "revised_original_quote_selection": True,
+            "pointer_enter_space_and_32_44px": True,
+            "summary_prose_unchanged": True,
+            "older_no_ref_has_no_clip_row": True,
+            "duplicate_and_different_summary_browser_source": (
+                "not supplied; builder unit evidence separate"
+            ),
+            "media_requests": len(media),
+            "api_mutations": len(mutations),
+            "real_audio_or_provider_acceptance": False,
+        }
+
+
+def test_fixture_team_shared_dates(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Keep the existing design records' latest-call and sharing dates distinct."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Shared-date checks use D's existing synthetic design records")
+    data = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox.json"
+        ).read_text()
+    )["team"]
+    with _journey(browser, viewport, "team-shared-dates") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        journey.open("/review-fixture/coaching?view=team")
+        team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
+        search = team.get_by_role("searchbox", name="Find a rep", exact=True)
+        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        rows = team.get_by_role(
+            "list", name="Reps and their current focus", exact=True
+        ).get_by_role("listitem")
+        historical = page.get_by_role("list", name="Coaching areas", exact=True).inner_text()
+        expect(rows).to_have_count(len(data["reps"]))
+        for index, rep in enumerate(data["reps"]):
+            row = rows.nth(index)
+            expect(row).to_contain_text(rep["name"])
+            expect(row).to_contain_text(rep["focus_label"])
+            expect(row).to_contain_text(f"{rep['calls']} calls")
+            for field, label in (("latest_call_at", "Latest call"), ("shared_at", "Shared")):
+                stamp = datetime.fromisoformat(rep[field])
+                expect(row).to_contain_text(f"{label} {stamp.day} Sept {stamp.year}")
+            expect(row.get_by_role("link")).to_have_attribute(
+                "href", f"/coaching?person={rep['person_id']}"
+            )
+        team.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("distinct-source-dates")
+        journey.control_target(search, "find-shared-rep")
+        journey.control_target(area, "shared-area")
+        journey.control_target(rows.last.get_by_role("link"), "dated-rep")
+        search.fill(f"  {data['reps'][-1]['name'].upper()}  ")
+        expect(rows).to_have_count(1)
+        expect(rows.first).to_contain_text("Latest call 5 Sept 2026")
+        expect(rows.first).to_contain_text("Shared 1 Sept 2026")
+        reset = team.get_by_role("button", name="Clear filters", exact=True)
+        journey.control_target(reset, "reset-dated-rep")
+        reset.focus()
+        page.keyboard.press("Enter")
+        expect(search).to_be_focused()
+        expect(rows).to_have_count(2)
+        assert (
+            page.get_by_role("list", name="Coaching areas", exact=True).inner_text() == historical
+        )
+        journey.snapshot("date-filter-reset")
+        assert not mutations, "Design date checks attempted an API mutation"
+        journey.observations[-1]["fictional_shared_dates"] = {
+            "source": "D's existing Design review sandbox.json team",
+            "latest_and_share_dates_distinct": True,
+            "source_names_counts_focus_routes_unchanged": True,
+            "reset_focus_and_targets_preserved": True,
+            "absent_latest_date_browser_case": "not supplied; unit evidence only",
+            "api_mutations": len(mutations),
+            "authenticated_sharing_acceptance": False,
+        }
+
+
+def test_fixture_person_call_search(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Find every returned call name without changing source rows or other panels."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Person call search uses A's existing fictional read-only harness")
+    if (
+        os.environ.get("WB_STORAGE_STATE")
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.fail("Fictional person replies require shared dev3026 with no session")
+    person_id = "00000000-0000-4000-8000-000000000003"
+    now = datetime.now(UTC)
+    listed = [
+        {
+            "id": f"00000000-0000-4000-8000-{index + 101:012}",
+            "owner_person_id": person_id,
+            "owner_name": "Neha Kulkarni",
+            "label": None
+            if index == 6
+            else "मराठी · Budget review"
+            if index == 11
+            else "Discovery · Same prospect"
+            if index in (0, 10)
+            else f"Discovery · Prospect {index}",
+            "created_at": (now - timedelta(days=index + 1)).isoformat(),
+            "duration_seconds": 0 if index == 10 else 900,
+            "state": "queued" if index == 10 else "completed",
+            "has_report": index != 10,
+        }
+        for index in range(12)
+    ]
+    with _journey(browser, viewport, "person-call-search") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        reads: list[str] = []
+
+        def fictional_read(route: Route) -> None:
+            request = route.request
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+                return
+            url = urlsplit(request.url)
+            reads.append(url.path)
+            if url.path == f"/v1/organisation/members/{person_id}/activity":
+                reply = {
+                    "status": 200,
+                    "body": {
+                        "person_id": person_id,
+                        "totals": {"calls": 64, "recorded_minutes": 720, "reports_ready": 60},
+                        "weeks": [
+                            {
+                                "start": (now - timedelta(weeks=12 - index)).isoformat(),
+                                "calls": 9 if index == 11 else 5,
+                                "recorded_minutes": 60,
+                                "reports_ready": 5,
+                            }
+                            for index in range(12)
+                        ],
+                        "calls": listed,
+                    },
+                }
+            elif url.path == f"/v1/me/coaching/people/{person_id}":
+                reply = _fictional_api_reply("GET", "/v1/me/coaching", "")
+                reply["body"] = {
+                    **reply["body"],
+                    "person_id": person_id,
+                    "tenant_id": "22222222-2222-4222-8222-222222222222",
+                    "sandbox": True,
+                }
+            elif re.fullmatch(r"/v1/conversation/acquisition/submissions/[^/]+/report", url.path):
+                reply = {
+                    "status": 200,
+                    "body": {
+                        "report": {
+                            "content": {
+                                "overview": {
+                                    "outcome": {"kind": "follow_up"},
+                                    "final_assessment": {"fix_first": "Ask what the budget is."},
+                                },
+                                "dimensions": [
+                                    {
+                                        "dimension_id": "discovery",
+                                        "label": "Discovery",
+                                        "status": "observed",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                }
+            else:
+                reply = _fictional_api_reply(request.method, url.path, url.query)
+            route.fulfill(
+                status=reply["status"],
+                content_type="application/json",
+                body=json.dumps(reply["body"]),
+            )
+
+        journey.context.route("**/v1/**", fictional_read)
+        journey.context.add_init_script(
+            "localStorage.setItem("
+            "'sx.guide.off:00000000-0000-4000-8000-000000000001:first-call', '1');"
+        )
+        journey.open(f"/organisation/people/{person_id}")
+        panel = page.get_by_role("region", name=re.compile(r"^Calls.*12 in the last 12 weeks$"))
+        search = panel.get_by_role("searchbox", name="Search these calls", exact=True)
+        clear = panel.get_by_role("button", name="Clear search", exact=True)
+        rows = panel.locator("li a")
+        expect(rows).to_have_count(8)
+        figures = page.locator('[aria-label="Last 12 weeks"]').inner_html()
+
+        def row_values() -> list[object]:
+            return rows.evaluate_all(
+                "els => els.map(el => ({html: el.innerHTML, href: el.getAttribute('href')}))"
+            )
+
+        baseline = row_values()
+        reads_before = len(reads)
+        search.fill("  dIsCoVeRy  ")
+        expect(rows).to_have_count(10)
+        expect(panel.get_by_role("status")).to_have_text("Matches: 10 of 12 listed calls")
+        assert rows.evaluate_all("els => els.map(el => el.getAttribute('href'))") == [
+            f"/analysis/calls/{call['id']}"
+            for call in listed
+            if call["label"] and call["label"].startswith("Discovery")
+        ]
+        search.fill("same prospect")
+        expect(rows).to_have_count(2)
+        for index, call in enumerate((listed[0], listed[10])):
+            expect(rows.nth(index)).to_have_attribute("href", f"/analysis/calls/{call['id']}")
+        expect(rows.last).to_contain_text("Queued")
+        expect(rows.last).to_contain_text("—")
+        expect(panel).to_contain_text("Searching the newest 12 of 64 calls.")
+        panel.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("duplicate-call-names")
+        for control, label in (
+            (search, "search-these-calls"),
+            (clear, "clear-call-search"),
+            (rows.last, "queued-call"),
+        ):
+            journey.control_target(control, label)
+        search.fill("Missing fictional prospect")
+        expect(rows).to_have_count(0)
+        expect(panel.get_by_text("No listed calls match this name.", exact=True)).to_be_visible()
+        expect(panel).to_contain_text("Searching the newest 12 of 64 calls.")
+        journey.snapshot("quiet-no-match")
+        clear.focus()
+        page.keyboard.press("Enter")
+        expect(search).to_be_focused()
+        assert row_values() == baseline
+        more = panel.get_by_role("button", name="Show all 12 calls", exact=True)
+        expect(more).to_have_attribute("aria-expanded", "false")
+        more.click()
+        expect(rows).to_have_count(12)
+        expanded = row_values()
+        search.fill("मराठी")
+        expect(rows).to_have_count(1)
+        expect(rows.first).to_contain_text("मराठी · Budget review")
+        journey.snapshot("devanagari-tail-call")
+        clear.click()
+        expect(search).to_be_focused()
+        assert row_values() == expanded
+        expect(panel.get_by_role("button", name="Show fewer", exact=True)).to_have_attribute(
+            "aria-expanded", "true"
+        )
+        expect(panel).to_contain_text("Showing the newest 12 of 64 calls.")
+        assert page.locator('[aria-label="Last 12 weeks"]').inner_html() == figures
+        assert len(reads) == reads_before, "Local call search unexpectedly fetched new data"
+        panel.scroll_into_view_if_needed()
+        journey.snapshot("expanded-restored")
+        assert not mutations, "Fictional person call search attempted an API mutation"
+        journey.observations[-1]["fictional_person_call_search"] = {
+            "source": "A2eee20a9's existing twelve-call fictional API harness",
+            "duplicate_names_keep_distinct_source_routes_status": True,
+            "source_order_and_row_markup_preserved": True,
+            "devanagari_tail_match_and_partial_scope": True,
+            "quiet_no_match_and_prior_8_all_state": True,
+            "pointer_enter_clear_focus": True,
+            "extra_reads": 0,
+            "figures_unchanged": True,
+            "api_mutations": len(mutations),
+            "authenticated_hosted_acceptance": False,
+        }
 
 
 def test_fixture_insights_people_search(browser: Browser, viewport: tuple[int, str]) -> None:

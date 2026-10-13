@@ -76,7 +76,7 @@ path they skip. The original sixteen plus four each for format, persistence,
 quote, print, legacy-action, Team-search, Team-skill and supporting-moment checks,
 plus eight focus-to-moment, eight call-search and four rep-call reset cases,
 plus four Insights People, four Organisation People search and four Team
-current-area cases, plus four Insights name-search and four Team missing-focus cases, collect 88 cases. The original Report
+current-area cases, plus four Insights name-search and four Team missing-focus cases, plus four each for summary clips, supplied shared dates and person-call search, collect 100 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -241,3 +241,15 @@ Team uses the existing no-focus-reps example and retains source call dates,
 counts, routes and historical totals. Its source supplies no shared dates or
 absent latest dates; those browser edges require an explicit separate source.
 These remain fictional read-only UI checks.
+
+For the next completed summary/person-call/date changes, select only
+`-k 'fixture_summary_clips or fixture_person_call_search or fixture_team_shared_dates'`.
+Summary uses B's native/Revised/Older fictional reports and checks source times,
+quotes, unchanged prose, pointer/Enter/Space,32–44px and no eager media or writes.
+Duplicate-ref and different-summary browser cases are not supplied; builder unit
+evidence remains separate. Person call search reuses A's twelve returned calls,
+including duplicate names, queued status, an unnamed call and a Devanagari tail,
+with partial-source scope and prior8/all disclosure. The date check uses D's
+existing Design review Team, retaining distinct supplied call/share dates;
+missing latest-date browser coverage remains unexecuted. No authenticated
+hosted, real audio/provider or data-write claim follows from these examples.
