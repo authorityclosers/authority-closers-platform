@@ -81,6 +81,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
             explanation={focus.explanation}
             why={focus.why_it_matters}
             reason={focus.selected_reason}
+            evidenceAnchor={evidence.length ? "coaching-why" : undefined}
             lessonAnchor="coaching-better"
             mission={mission.behavior}
             missionAnchor="call-mission"

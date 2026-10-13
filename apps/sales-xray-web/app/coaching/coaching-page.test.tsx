@@ -37,6 +37,44 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("Coaching story", () => {
+  it("links a call's focus to its original moments only when they exist", () => {
+    for (const theirs of [false, true]) {
+      const coaching = {
+        ...fictionalCallCoaching,
+        ...(theirs
+          ? { sandbox: true, rep_person_id: fictionalCoaching.person_id }
+          : {}),
+      };
+      host.innerHTML = renderToStaticMarkup(
+        <CallCoachingStory coaching={coaching} />,
+      );
+      const shortcut = host.querySelector<HTMLAnchorElement>(
+        '#coaching-focus a[href="#coaching-why"]',
+      )!;
+      const moments = host.querySelector<HTMLElement>("#coaching-why")!;
+      expect(shortcut.textContent?.trim()).toBe("See the moments");
+      expect(shortcut.getAttribute("aria-controls")).toBe(moments.id);
+      expect(moments.tabIndex).toBe(-1);
+      expect(moments.getAttribute("aria-labelledby")).toBe(
+        `${moments.id}-heading`,
+      );
+      expect(
+        [...moments.querySelectorAll("blockquote")].map(
+          (quote) => quote.textContent,
+        ),
+      ).toEqual(coaching.evidence.map((moment) => moment.quote));
+      expect(host.querySelector("audio")).toBeNull();
+      for (const unavailable of [
+        { ...coaching, evidence: [] },
+        { ...coaching, focus: null },
+      ]) {
+        expect(
+          renderToStaticMarkup(<CallCoachingStory coaching={unavailable} />),
+        ).not.toContain("See the moments");
+      }
+    }
+  });
+
   it("offers the existing lesson from each ready focus without inventing one for an incomplete call", () => {
     const ready = [
       <CoachingStory key="personal" coaching={fictionalCoaching} />,
