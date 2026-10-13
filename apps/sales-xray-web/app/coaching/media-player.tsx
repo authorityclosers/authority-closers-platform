@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -167,18 +168,6 @@ function ClipCard({
     },
     [key, clip.start_ms, stopAt],
   );
-  const attachPlayer = useCallback(
-    (audio: HTMLAudioElement | null) => {
-      const previous = player.current;
-      // React clears the ref before effect cleanup when this view closes.
-      if (previous && previous !== audio && active.current) {
-        active.current = false;
-        checkpoint(previous);
-      }
-      player.current = audio;
-    },
-    [checkpoint],
-  );
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
@@ -211,11 +200,15 @@ function ClipCard({
     }, 15_000);
     return () => window.clearTimeout(deadline);
   }, [playState, attempt]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     return () => {
+      if (!active.current) return;
       active.current = false;
+      // Layout cleanup runs before React detaches the audio ref. Ref rechecks
+      // in Strict Mode must not interrupt a newly mounted player's startup.
+      checkpoint(player.current);
     };
-  }, []);
+  }, [checkpoint]);
   // A stored position shows after hydration (the server renders 0), and only
   // inside the window the server allows; before the first play it reads as
   // a paused clip.
@@ -471,7 +464,7 @@ function ClipCard({
       {attempt > 0 && !locked && state !== "failed" ? (
         <audio
           key={attempt}
-          ref={attachPlayer}
+          ref={player}
           src={clipSource(clip)}
           preload="metadata"
           aria-label={CLIP.audio}

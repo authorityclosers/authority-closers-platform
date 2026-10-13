@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dipakTake, FocusHero } from "./coaching-ui";
@@ -469,6 +469,37 @@ describe("reviewed placeholder clips", () => {
       expect(resumed.currentTime).toBe(pausedAt);
     },
   );
+  it("starts and saves narration when development rechecks refs in Strict Mode", async () => {
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <CoachingMedia clips={[fictionalClip]} />
+        </StrictMode>,
+      ),
+    );
+    await act(async () => button("Play coaching clip").click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(button("Pause")).toBeTruthy();
+    audio.currentTime = fictionalClip.start_ms / 1000 + 1.25;
+    await act(async () => root.unmount());
+    expect(audio.paused).toBe(true);
+    root = createRoot(host);
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <CoachingMedia clips={[fictionalClip]} />
+        </StrictMode>,
+      ),
+    );
+    expect(host.querySelector("audio")).toBeNull();
+    await act(async () => button("Resume clip").click());
+    const resumed = host.querySelector("audio")!;
+    await act(async () => resumed.dispatchEvent(new Event("loadedmetadata")));
+    expect(resumed.currentTime).toBe(fictionalClip.start_ms / 1000 + 1.25);
+    expect(button("Pause")).toBeTruthy();
+  });
   it("never restores a position outside the preview window", async () => {
     const [clip] = parseClips([
       {
