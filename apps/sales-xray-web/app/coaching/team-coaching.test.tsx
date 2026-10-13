@@ -37,7 +37,10 @@ const sandboxTeam = {
     ...Array.from({ length: 9 }, (_, i) =>
       rep(i + 1, `Closer ${i + 1}`, "closing_decision_management"),
     ),
-    rep(20, "Asha Rao", "qualification", 1),
+    {
+      ...rep(20, "Asha Rao", "qualification", 1),
+      focus_label: "Confirm who decides before the sale",
+    },
   ],
 };
 
@@ -205,7 +208,7 @@ describe("anonymous Team coaching", () => {
     ])
       expect(parseTeamCoaching(raw)).toBeNull();
   });
-  it("finds reps by name or current skill, combines filters and resets disclosure", async () => {
+  it("finds reps by name, current focus or skill, combines filters and resets disclosure", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const host = document.createElement("div");
     document.body.append(host);
@@ -224,6 +227,7 @@ describe("anonymous Team coaching", () => {
       "Qualification",
     ]);
     let search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    expect(search.placeholder).toBe("Name or current focus");
     const setQuery = async (value: string) =>
       act(async () => {
         Object.getOwnPropertyDescriptor(
@@ -251,7 +255,9 @@ describe("anonymous Team coaching", () => {
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(links()).toHaveLength(1);
-    expect(links()[0].textContent).toContain("Focus for Asha Rao");
+    expect(links()[0].textContent).toContain(
+      "Confirm who decides before the sale",
+    );
     expect(links()[0].getAttribute("href")).toBe(
       `/coaching?person=${sandboxTeam.reps[9].person_id}`,
     );
@@ -263,6 +269,37 @@ describe("anonymous Team coaching", () => {
     expect(document.activeElement).toBe(search);
     expect(links()).toHaveLength(8);
     expect(clearFilters()).toBeUndefined();
+    // Search the actual habit, without knowing the rep's name. Existing
+    // area filters still intersect it, and history totals do not change.
+    const totalsBefore = host.querySelector(
+      'ul[aria-label="Coaching areas"]',
+    )!.textContent;
+    await setQuery("  wHo DeCiDeS  ");
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Asha Rao");
+    expect(links()[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[9].person_id}`,
+    );
+    await act(async () => {
+      select.value = "closing_decision_management";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(0);
+    expect(host.textContent).toContain(
+      "Try another name, focus or coaching area.",
+    );
+    await act(async () => {
+      select.value = "qualification";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(links()).toHaveLength(1);
+    expect(
+      host.querySelector('ul[aria-label="Coaching areas"]')!.textContent,
+    ).toBe(totalsBefore);
+    await act(async () => clearFilters()!.click());
+    expect(search.value).toBe("");
+    expect(select.value).toBe("all");
+    expect(document.activeElement).toBe(search);
     await act(async () => {
       select.value = "qualification";
       select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -444,6 +481,11 @@ describe("anonymous Team coaching", () => {
     expect(host.querySelector('ul[aria-label="Coaching areas"]')).toBeNull();
     expect(host.textContent).toContain("No team suggestions yet");
     expect(findArea("Closing & Decision Management")).toBeNull();
+    // A missing focus contributes no made-up searchable habit.
+    await setQuery("Focus for");
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Closer 1");
+    await setQuery("");
     await act(async () => {
       withoutTotals.value = "closing_decision_management";
       withoutTotals.dispatchEvent(new Event("change", { bubbles: true }));

@@ -104,11 +104,12 @@ function RepList({
       search.current?.scrollIntoView({ block: "center", behavior: "instant" });
     },
   }));
-  const name = query.trim().toLocaleLowerCase();
+  const term = query.trim().toLocaleLowerCase();
   const shown = reps.filter(
     (rep) =>
       (area === "all" || rep.skill_id === area) &&
-      rep.name.toLocaleLowerCase().includes(name),
+      (rep.name.toLocaleLowerCase().includes(term) ||
+        (rep.focus_label?.toLocaleLowerCase().includes(term) ?? false)),
   );
   const visible = all ? shown : shown.slice(0, 8);
   // Totals describe past call suggestions; named reps carry their current
@@ -136,7 +137,7 @@ function RepList({
           <input
             ref={search}
             type="search"
-            placeholder={TEAM.findRep}
+            placeholder={TEAM.findRepHint}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);

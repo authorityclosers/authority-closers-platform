@@ -626,11 +626,12 @@ export const RETAINED = {
 export const TEAM = {
   allAreas: "All areas",
   findRep: "Find a rep",
+  findRepHint: "Name or current focus",
   findReps: "Find reps",
   findRepsLabel: (skill: string) => `Find reps working on ${skill}`,
   currentFocusNote: "Find reps uses their current focus.",
   noMatches: "No reps match",
-  noMatchesText: "Try another name or coaching area.",
+  noMatchesText: "Try another name, focus or coaching area.",
   clearFilters: "Clear filters",
   repCount: (count: number) => `${count} ${count === 1 ? "rep" : "reps"}`,
   showAll: (count: number) => `Show all ${count} people`,
