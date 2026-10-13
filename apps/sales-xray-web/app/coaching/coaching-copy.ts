@@ -619,6 +619,9 @@ export const RETAINED = {
 export const TEAM = {
   allAreas: "All areas",
   findRep: "Find a rep",
+  findReps: "Find reps",
+  findRepsLabel: (skill: string) => `Find reps working on ${skill}`,
+  currentFocusNote: "Find reps uses their current focus.",
   noMatches: "No reps match",
   noMatchesText: "Try another name or coaching area.",
   clearFilters: "Clear filters",

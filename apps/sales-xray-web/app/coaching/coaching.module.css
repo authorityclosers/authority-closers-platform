@@ -1261,6 +1261,20 @@
   text-align: right;
 }
 
+.areaActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .areaActions {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+  }
+}
+
 /* ---------- Recovery and loading ---------- */
 
 .error {

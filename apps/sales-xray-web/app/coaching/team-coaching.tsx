@@ -1,7 +1,7 @@
 "use client";
 
 import { FileSearch, FlaskConical, LineChart, Lock, Users } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
   Avatar,
   Badge,
@@ -75,22 +75,35 @@ function ObjectionsPanel({ coaching }: { coaching: TeamCoaching }) {
   );
 }
 
-/** Fictional AC Sandbox reps, each with their newest call's one focus. */
+type RepListHandle = { findArea: (skill: string) => void };
+
+/** Already shared or fictional reps, with their current focus. */
 function RepList({
   reps,
   rows,
   shared,
+  ref,
 }: {
   reps: TeamRep[];
   rows: TeamCoaching["suggestions"];
   /** Real reps who shared their coaching, rather than fictional ones. */
   shared: boolean;
+  ref: Ref<RepListHandle>;
 }) {
   const [area, setArea] = useState("all");
   const [query, setQuery] = useState("");
   const [all, setAll] = useState(false);
   const listId = useId();
   const search = useRef<HTMLInputElement>(null);
+  useImperativeHandle(ref, () => ({
+    findArea(skill) {
+      setArea(skill);
+      setQuery("");
+      setAll(false);
+      search.current?.focus({ preventScroll: true });
+      search.current?.scrollIntoView({ block: "center", behavior: "instant" });
+    },
+  }));
   const name = query.trim().toLocaleLowerCase();
   const shown = reps.filter(
     (rep) =>
@@ -122,7 +135,7 @@ function RepList({
             }}
           />
         </label>
-        {areas.length > 1 ? (
+        {areas.length > 1 || area !== "all" ? (
           <span className={`${kitStyles.field} ${styles.repArea}`}>
             <select
               aria-label="Coaching area"
@@ -231,7 +244,11 @@ function RepList({
 
 /** Level 3: anonymous team totals. A rep's own coaching stays private. */
 export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
+  const reps = useRef<RepListHandle>(null);
   const rows = coaching.suggestions;
+  const hasRepFocus = rows.some((row) =>
+    coaching.reps.some((rep) => rep.skill_id === row.skill_id),
+  );
   const first = rows[0];
   const analysed = coaching.analysed_calls;
   return (
@@ -281,6 +298,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
         <div className={styles.main}>
           {coaching.reps.length ? (
             <RepList
+              ref={reps}
               reps={coaching.reps}
               rows={rows}
               shared={coaching.reps_basis === "shared"}
@@ -300,9 +318,23 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
                       `${row.suggestion_calls} of ${analysed} call${analysed === 1 ? "" : "s"}`,
                     ]}
                     end={
-                      <span className={styles.share}>
-                        <Meter value={row.suggestion_calls} max={analysed} />
-                        <span>{share(row.suggestion_calls, analysed)}%</span>
+                      <span className={styles.areaActions}>
+                        <span className={styles.share}>
+                          <Meter value={row.suggestion_calls} max={analysed} />
+                          <span>{share(row.suggestion_calls, analysed)}%</span>
+                        </span>
+                        {coaching.reps.some(
+                          (rep) => rep.skill_id === row.skill_id,
+                        ) ? (
+                          <button
+                            type="button"
+                            className={kitStyles.button}
+                            aria-label={TEAM.findRepsLabel(row.label)}
+                            onClick={() => reps.current?.findArea(row.skill_id)}
+                          >
+                            {TEAM.findReps}
+                          </button>
+                        ) : null}
                       </span>
                     }
                   />
@@ -321,6 +353,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
                 {coaching.latest_call_at
                   ? ` ${TEAM.latest(callDate(coaching.latest_call_at))}`
                   : null}
+                {hasRepFocus ? ` ${TEAM.currentFocusNote}` : null}
               </span>
             </p>
           </Panel>
