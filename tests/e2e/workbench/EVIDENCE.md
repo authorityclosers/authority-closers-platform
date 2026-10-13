@@ -1,5 +1,15 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 04:55–04:56 UTC — first Hear Dipak run reports4 pytest PASS,
+46.20s/launcher0 at unchanged `313c3f5e`. All12 PNGs inspected. Desktop/dark
+Enter shows timeout/retry before the controlled-error step, so that pair's
+404-focus acceptance is **limited pending retake** despite the raw PASS.
+The other three pairs show loading in both captures and remain retained.
+The harness now waits for stationary reachable playback rather than an exact
+card centre, and requires loading/no-error through capture before returning404.
+Only desktop/dark will rerun; original raw result/images retained in
+`shots/2026-10-13-hear-lesson-0454Z/`. No product defect inferred.
+
 13 October, 04:45 UTC — prepared only the four narration-shortcut cases
 for D's completed `a97c3d38` return. Pointer and Enter must focus the existing
 recommended playback control at its settled centre, keep next Tab inside,

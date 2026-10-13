@@ -322,7 +322,8 @@ provider, authenticated read or API write occurs.
 For the new “Hear Dipak’s take” focus behavior, select only
 `-k fixture_coaching_hear_lesson_focus`. Four cases check pointer and Enter on the
 existing Design review shortcut: the recommended playback button receives focus,
-is centred/reachable at40–44px, and next Tab stays inside its card. Return an
+is stationary/reachable at40–44px, and next Tab stays inside its card. Return an
 intercepted404 only after that focus moves; the error must leave focus alone.
+The source must still be loading through capture before that404 is returned.
 Original quote/lesson/access/transcript/mission/query remain unchanged. No real
 audio, provider, authenticated read or write is used.

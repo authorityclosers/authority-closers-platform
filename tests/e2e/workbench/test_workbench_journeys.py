@@ -2237,18 +2237,24 @@ def test_fixture_coaching_hear_lesson_focus(browser: Browser, viewport: tuple[in
             expect(card.locator("audio")).to_have_attribute("src", source)
             expect(play).to_be_disabled()
             expect(play).to_be_focused()
-            # Wait for the shortcut's own scroll to settle before capture/hit
-            # testing; an intermediate smooth-scroll frame is not its landing.
+            # Wait for a stationary, reachable landing, rather than demanding
+            # an exact card centre after fonts change its measured height.
+            page.evaluate("window.__wbHearPreviousY = null")
             page.wait_for_function("""() => {
               const card = document.querySelector('#coaching-better article[data-recommended]');
               const control = card?.querySelector('button');
               if (!card || !control) return false;
-              const c = card.getBoundingClientRect(), r = control.getBoundingClientRect();
-              return Math.abs(c.y + c.height/2 - innerHeight/2) <= 2 && r.y >= 0 &&
+              const r = control.getBoundingClientRect(), previous = window.__wbHearPreviousY;
+              window.__wbHearPreviousY = r.y;
+              return previous !== null && Math.abs(previous - r.y) < 0.5 && r.y >= 0 &&
                 r.bottom <= innerHeight && control.contains(
                   document.elementFromPoint(r.x + r.width/2, r.y + r.height/2));
             }""")
+            expect(play).to_be_disabled()
+            expect(card.get_by_role("status")).to_have_count(0)
             journey.snapshot(f"{activation.lower()}-lesson-playback-focus")
+            expect(play).to_be_disabled()
+            expect(card.get_by_role("status")).to_have_count(0)
             journey.control_target(play, f"{activation.lower()}-lesson-playback")
             box = play.bounding_box()
             assert box and min(box["height"], box["width"]) >= (44 if journey.width == 390 else 40)
@@ -2287,6 +2293,7 @@ def test_fixture_coaching_hear_lesson_focus(browser: Browser, viewport: tuple[in
                     "playback_focused": True,
                     "next_tab_inside": True,
                     "error_preserves_moved_focus": True,
+                    "source_still_loading_before_controlled_404": True,
                 }
             )
         assert len(requests) >= 2 and not pending and not unexpected_media and not mutations
