@@ -1618,6 +1618,13 @@ def test_fixture_coaching_call_search(
         expect(search).to_be_focused()
         expect(call_list.locator("..")).not_to_have_attribute("data-expanded", "")
         expect(call_list.get_by_role("link")).to_have_count(len(matches))
+        # A person's name can match several calls, including calls beyond the folded rows.
+        name = target["call_label"].split("·")[1].strip()
+        query = f"  {name.swapcase()}  "
+        matches = [call for call in calls if name.casefold() in call["call_label"].casefold()]
+        assert len(matches) > 1, "Fictional name search needs several retained calls"
+        search.fill(query)
+        assert_calls(matches)
         search.scroll_into_view_if_needed()
         journey.snapshot("named-match")
         journey.unclipped_text(history)
@@ -1627,7 +1634,7 @@ def test_fixture_coaching_call_search(
 
         on_skill.click()
         expect(search).to_have_value(query)
-        assert_calls(matches, skill=True)
+        assert_calls([call for call in skill_calls if call in matches], skill=True)
         search.fill("no such fictional call")
         assert_calls([])
         search.scroll_into_view_if_needed()
@@ -1683,6 +1690,7 @@ def test_fixture_coaching_call_search(
             "source_call_count": len(calls),
             "saved_skill_call_count": len(skill_calls),
             "trimmed_mixed_case_match": True,
+            "partial_name_match_count": len(matches),
             "expanded_history_reset": True,
             "search_and_skill_combined": True,
             "pointer_and_enter_clear_with_search_focus": True,
