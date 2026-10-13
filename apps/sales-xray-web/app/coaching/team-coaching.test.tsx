@@ -274,6 +274,7 @@ describe("anonymous Team coaching", () => {
     await setQuery("  aShA  ");
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain("Asha Rao");
+    expect(links()[0].querySelector("mark")?.textContent).toBe("Asha");
     expect(host.querySelector('[role="status"]')?.textContent).toBe("1 rep");
     await act(async () => {
       select.value = "qualification";
@@ -294,6 +295,7 @@ describe("anonymous Team coaching", () => {
     expect(document.activeElement).toBe(search);
     expect(links()).toHaveLength(8);
     expect(clearFilters()).toBeUndefined();
+    expect(host.querySelector("mark")).toBeNull();
     // Search the actual habit, without knowing the rep's name. Existing
     // area filters still intersect it, and history totals do not change.
     const totalsBefore = host.querySelector(
@@ -302,6 +304,10 @@ describe("anonymous Team coaching", () => {
     await setQuery("  wHo DeCiDeS  ");
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain("Asha Rao");
+    expect(links()[0].querySelector("mark")?.textContent).toBe("who decides");
+    expect(links()[0].textContent).toContain(
+      "Confirm who decides before the sale",
+    );
     expect(links()[0].getAttribute("href")).toBe(
       `/coaching?person=${sandboxTeam.reps[9].person_id}`,
     );
@@ -391,7 +397,14 @@ describe("anonymous Team coaching", () => {
     expect(links()).toHaveLength(8);
     expect(document.activeElement).toBe(search);
     expect(clearFilters()).toBeUndefined();
+    // Search punctuation is literal, never a regular expression or markup.
+    await setQuery(".");
+    expect(links()).toHaveLength(0);
+    await setQuery("[");
+    expect(links()).toHaveLength(0);
     await setQuery("Closer");
+    expect(links()[0].querySelectorAll("mark")).toHaveLength(2);
+    expect(links()[0].textContent).toContain("Closer 1 Focus for Closer 1");
     const findArea = (label: string) =>
       host.querySelector<HTMLButtonElement>(
         `button[aria-label="Find reps working on ${label}"]`,

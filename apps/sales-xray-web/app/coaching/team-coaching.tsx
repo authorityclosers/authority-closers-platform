@@ -37,6 +37,21 @@ const share = (part: number, whole: number) =>
 
 const NO_FOCUS = "no-focus";
 
+/** Emphasise literal search words without changing the original rep text. */
+function searchMatch(text: string, term: string) {
+  if (!term) return text;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.split(new RegExp(`(${escaped})`, "giu")).map((part, index) =>
+    index % 2 ? (
+      <mark className={styles.repMatch} key={index}>
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
+
 /** Buyer objections from report call maps: how often, and how they were met. */
 function ObjectionsPanel({ coaching }: { coaching: TeamCoaching }) {
   const calls = coaching.objection_calls;
@@ -201,9 +216,11 @@ function RepList({
                 icon={<Avatar name={rep.name} size={24} />}
                 title={
                   <>
-                    {rep.name}{" "}
+                    {searchMatch(rep.name, term)}{" "}
                     <span className={styles.repFocus}>
-                      {rep.focus_label ?? TEAM.noFocusShown}
+                      {rep.focus_label
+                        ? searchMatch(rep.focus_label, term)
+                        : TEAM.noFocusShown}
                     </span>
                   </>
                 }

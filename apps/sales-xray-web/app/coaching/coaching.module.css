@@ -647,6 +647,15 @@
   white-space: normal;
 }
 
+.repMatch {
+  border-radius: 2px;
+  background: var(--sx-accent-soft);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--sx-accent);
+  text-underline-offset: 2px;
+}
+
 .repCallLinks {
   display: grid;
   gap: 8px;
