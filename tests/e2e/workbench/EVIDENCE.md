@@ -1,5 +1,13 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 02:24 UTC — post-release foundation health **4/4 PASS**.
+Original-Host localhost8080 GETs return200 for staging/production web `/health`
+and API `/health/ready`, all at `e991cb39430213d1873b59a446ce3a38466170b0`.
+Coordinator reports v0.41.0 production canary02:20UTC PASS; this QA readback
+independently verifies availability/revision only. No approved populated hosted
+context supplied. Receipt: strike `shots/2026-10-13-production-v041-health/health.json`.
+Next sole normal release remains with coordinator/operator.
+
 13 October, 02:16–02:17 UTC — new Insights name-search4 + Team
 missing-focus4 **8/8 PASS**,60.95 seconds, launcher0, unchanged `0be5d7fb`.
 Insights preserves all65 matches/order, both duplicate display-name source keys,

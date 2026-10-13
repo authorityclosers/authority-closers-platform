@@ -2159,6 +2159,8 @@ def test_fixture_person_call_search(browser: Browser, viewport: tuple[int, str])
         clear = panel.get_by_role("button", name="Clear search", exact=True)
         rows = panel.locator("li a")
         expect(rows).to_have_count(8)
+        # Match A's existing harness: allow its initial finite detail reads to settle.
+        page.wait_for_timeout(800)
         figures = page.locator('[aria-label="Last 12 weeks"]').inner_html()
 
         def row_values() -> list[object]:
