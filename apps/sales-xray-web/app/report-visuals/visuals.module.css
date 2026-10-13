@@ -196,6 +196,12 @@
   cursor: pointer;
 }
 
+/* Keep the time and neighbouring controls still when Play becomes Pause. */
+.playAction {
+  display: inline-block;
+  min-inline-size: 5ch;
+}
+
 /* A bigger hit area than the chip, for thumbs. */
 .play::after {
   position: absolute;
