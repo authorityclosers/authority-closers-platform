@@ -297,7 +297,11 @@ class Journey:
                   'main *, [data-report-modes] *, [data-coaching-pillar] *, ' +
                   'section[aria-label] *, section[aria-labelledby] *')) {
                 // Decorative initials accompany a separately rendered speaker name.
-                if (el.matches('[aria-hidden="true"][class*="avatar"]')) continue;
+                const namedCellAvatar = el.matches('i[aria-hidden="true"]') &&
+                  el.parentElement?.getAttribute('role') === 'cell' &&
+                  el.nextElementSibling?.tagName === 'SPAN';
+                if (el.matches('[aria-hidden="true"][class*="avatar"]') ||
+                    namedCellAvatar) continue;
                 // Closed details can retain layout bounds without painting their content.
                 if (!el.checkVisibility({checkOpacity: true, checkVisibilityCSS: true})) continue;
                 const text = Array.from(el.childNodes).some(n => {
@@ -2095,7 +2099,7 @@ def test_fixture_organisation_people_search(browser: Browser, viewport: tuple[in
         expect(rows.last).to_have_attribute("data-quiet", "")
         expect(rows.first).to_contain_text("asha@brightline.example.in")
         expect(rows.last).to_contain_text("asha-desk@brightline.example.in")
-        people.scroll_into_view_if_needed()
+        people.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("same-name")
         for control, label in (
             (search, "search-people"),
