@@ -701,8 +701,14 @@
   flex: 1 1 220px;
 }
 
+.callFinding {
+  flex: 0 1 230px;
+  min-width: 0;
+}
+
 @media (max-width: 600px) {
-  .callSearch {
+  .callSearch,
+  .callFinding {
     flex-basis: 100%;
   }
 }

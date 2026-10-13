@@ -55,6 +55,8 @@ export type CallsPanelHandle = {
   showAll: () => void;
 };
 
+type Finding = "all" | "suggested" | "no_suggestion";
+
 /** Every call stays available; filter only from this focus's saved records. */
 export function CallsPanel({
   calls,
@@ -68,6 +70,7 @@ export function CallsPanel({
   ref?: Ref<CallsPanelHandle>;
 }) {
   const [filter, setFilter] = useState<"all" | "skill">("all");
+  const [finding, setFinding] = useState<Finding>("all");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
@@ -81,8 +84,16 @@ export function CallsPanel({
   );
   const onSkill = callsOnSkill(calls, progress);
   const canFilter = Boolean(focusLabel && onSkill.length);
+  const canCompare =
+    onSkill.some(
+      (call) => points.get(call.submission_id)?.state === "suggested",
+    ) &&
+    onSkill.some(
+      (call) => points.get(call.submission_id)?.state === "no_suggestion",
+    );
   const showCalls = (next: "all" | "skill") => {
     setFilter(next);
+    setFinding("all");
     setQuery("");
     setExpanded(false);
     section.current?.focus({ preventScroll: true });
@@ -101,7 +112,12 @@ export function CallsPanel({
   const searchable = calls.length > 3;
   const name = query.trim().toLocaleLowerCase();
   const shown = (filtered ? onSkill : calls).filter(
-    (call) => !searchable || call.call_label.toLocaleLowerCase().includes(name),
+    (call) =>
+      (!searchable || call.call_label.toLocaleLowerCase().includes(name)) &&
+      (!filtered ||
+        !canCompare ||
+        finding === "all" ||
+        points.get(call.submission_id)?.state === finding),
   );
   return (
     <section
@@ -136,6 +152,7 @@ export function CallsPanel({
                 value={filtered ? "skill" : "all"}
                 onChange={(next) => {
                   setFilter(next);
+                  setFinding("all");
                   setExpanded(false);
                 }}
                 items={[
@@ -143,6 +160,25 @@ export function CallsPanel({
                   { key: "skill", label: CALLS.onSkill },
                 ]}
               />
+            ) : null}
+            {filtered && canCompare ? (
+              <span className={`${kitStyles.field} ${styles.callFinding}`}>
+                <select
+                  aria-label={CALLS.finding}
+                  aria-controls={listId}
+                  value={finding}
+                  onChange={(event) => {
+                    setFinding(event.target.value as Finding);
+                    setExpanded(false);
+                  }}
+                >
+                  <option value="all">{CALLS.allFindings}</option>
+                  <option value="suggested">{POINT_COPY.suggested}</option>
+                  <option value="no_suggestion">
+                    {POINT_COPY.no_suggestion}
+                  </option>
+                </select>
+              </span>
             ) : null}
             <span className={styles.note} role="status">
               {CALLS.count(shown.length)}
@@ -223,7 +259,7 @@ export function CallsPanel({
             <Empty
               icon={PhoneCall}
               title={CALLS.noMatches}
-              text={CALLS.noMatchesText}
+              text={filtered ? CALLS.noSkillMatchesText : CALLS.noMatchesText}
             />
           )}
         </div>

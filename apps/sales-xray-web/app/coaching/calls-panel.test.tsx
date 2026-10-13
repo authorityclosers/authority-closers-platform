@@ -57,6 +57,140 @@ const searchFor = async (query: string) => {
 };
 
 describe("calls on the current skill", () => {
+  it("compares saved report findings, intersects call names and resets from shortcuts without changing destinations", async () => {
+    const ref = createRef<CallsPanelHandle>();
+    const calls = [
+      ...Array.from({ length: 6 }, (_, index) => call(index + 1)),
+      call(7, "pending"),
+      call(8, "unavailable"),
+      call(9),
+      call(10),
+    ];
+    const progress = [
+      ...Array.from({ length: 4 }, (_, index) => point(index + 1, "suggested")),
+      point(5, "no_suggestion"),
+      point(6, "no_suggestion"),
+      point(7, "suggested"),
+      point(8, "no_suggestion"),
+      point(9, "not_covered"),
+      point(99, "suggested"),
+    ];
+    for (const reports of [false, true]) {
+      await act(async () =>
+        root.render(
+          <TheirCoaching.Provider value={reports}>
+            <CallsOpenReports.Provider value={reports}>
+              <CallsPanel
+                key={String(reports)}
+                ref={ref}
+                calls={calls}
+                progress={progress}
+                focusLabel="Explore the consequence"
+              />
+            </CallsOpenReports.Provider>
+          </TheirCoaching.Provider>,
+        ),
+      );
+      expect(host.querySelector("select")).toBeNull();
+      await act(async () => ref.current!.showSkill());
+      let select = host.querySelector<HTMLSelectElement>(
+        'select[aria-label="What the report found"]',
+      )!;
+      expect([...select.options].map((option) => option.textContent)).toEqual([
+        "All on this skill",
+        "Needed work",
+        "Skill used, nothing to fix",
+      ]);
+      expect(select.getAttribute("aria-controls")).toBe(
+        host.querySelector("ul")!.parentElement!.id,
+      );
+      const choose = async (value: string) =>
+        act(async () => {
+          select.value = value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      const check = (ids: number[]) => {
+        expect(links().map((link) => link.textContent)).toEqual(
+          ids.map((id) => call(id).call_label),
+        );
+        expect(links().map((link) => link.getAttribute("href"))).toEqual(
+          ids.map(
+            (id) =>
+              `${reports || calls[id - 1].state !== "ready" ? "/analysis/calls/" : "/coaching?call="}${call(id).submission_id}`,
+          ),
+        );
+        expect(host.querySelector('[role="status"]')?.textContent).toBe(
+          `${ids.length} call${ids.length === 1 ? "" : "s"}`,
+        );
+      };
+      check([1, 2, 3, 4, 5, 6]);
+      await act(async () => button("Show all 6 calls").click());
+      await choose("suggested");
+      check([1, 2, 3, 4]);
+      expect(host.querySelector("[data-expanded]")).toBeNull();
+      await searchFor("  cAlL 4  ");
+      check([4]);
+      await choose("no_suggestion");
+      check([]);
+      expect(host.textContent).toContain(
+        "Try another call name, or show all calls on this skill.",
+      );
+      await act(async () => button("Clear search").click());
+      expect(select.value).toBe("no_suggestion");
+      expect(document.activeElement).toBe(findCall());
+      check([5, 6]);
+      expect(host.querySelector("ul")!.textContent).not.toContain(
+        "Needed work",
+      );
+      // Every Report shortcut continues to target its original call.
+      expect(
+        [...host.querySelectorAll('a[aria-label^="Open Report for"]')].map(
+          (link) => link.getAttribute("href"),
+        ),
+      ).toEqual(
+        reports
+          ? []
+          : [5, 6].map((id) => `/analysis/calls/${call(id).submission_id}`),
+      );
+      await act(async () => button("All calls").click());
+      expect(host.querySelector("select")).toBeNull();
+      check([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      await act(async () => button("On this skill").click());
+      select = host.querySelector("select")!;
+      expect(select.value).toBe("all");
+      check([1, 2, 3, 4, 5, 6]);
+      await choose("no_suggestion");
+      await searchFor("missing call");
+      await act(async () => ref.current!.showSkill());
+      expect(findCall().value).toBe("");
+      expect(select.value).toBe("all");
+      check([1, 2, 3, 4, 5, 6]);
+      expect(document.activeElement).toBe(host.querySelector("section"));
+      await choose("suggested");
+      await act(async () => ref.current!.showAll());
+      expect(host.querySelector("select")).toBeNull();
+      check([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    }
+    // Neither unmatched nor unready progress records create a comparison.
+    await act(async () =>
+      root.render(
+        <CallsPanel
+          key="one-finding"
+          calls={calls}
+          progress={[
+            point(1, "suggested"),
+            point(7, "no_suggestion"),
+            point(99, "no_suggestion"),
+          ]}
+          focusLabel="Explore the consequence"
+        />,
+      ),
+    );
+    await act(async () => button("On this skill").click());
+    expect(links()).toHaveLength(1);
+    expect(host.querySelector("select")).toBeNull();
+  });
+
   it("offers the matching Report beside ready personal and fictional calls, preserving shared and unready destinations", async () => {
     const calls = [
       call(1),
