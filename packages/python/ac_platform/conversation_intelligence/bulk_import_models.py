@@ -20,6 +20,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.db.base import Base
 
 
@@ -69,7 +70,7 @@ class ConversationRecordingImportItem(Base):
         ),
         UniqueConstraint("batch_id", "path_sha256"),
         CheckConstraint("item_index BETWEEN 0 AND 255", name="index_bound"),
-        CheckConstraint("source_bytes BETWEEN 1 AND 33554432", name="byte_bound"),
+        CheckConstraint(f"source_bytes BETWEEN 1 AND {MAX_AUDIO_BYTES}", name="byte_bound"),
         CheckConstraint("length(source_sha256) = 64", name="source_hash"),
         CheckConstraint("length(path_sha256) = 64", name="path_hash"),
         CheckConstraint("length(folder_sha256) = 64", name="folder_hash"),
