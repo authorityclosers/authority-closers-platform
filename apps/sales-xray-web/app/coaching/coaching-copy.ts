@@ -422,6 +422,8 @@ export const CALLS = {
   showAll: (count: number) => `Show all ${count} calls`,
   showFewer: "Show fewer calls",
   latestReady: "Latest call with coaching",
+  yourShortcuts: "Your latest call",
+  theirShortcuts: "This rep’s calls",
   openReport: "Open Report",
   report: "Report",
   reportFor: (label: string) => `Open Report for ${label}`,

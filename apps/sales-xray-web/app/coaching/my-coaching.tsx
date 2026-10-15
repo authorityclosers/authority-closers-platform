@@ -156,7 +156,6 @@ function StartCoaching({
             </p>
             <RepCallLinks
               calls={coaching.calls}
-              sandbox={coaching.sandbox}
               onSeeCalls={() => calls.current?.showAll()}
             />
           </StoryCard>
@@ -184,6 +183,10 @@ function StartCoaching({
               {START.pending(coaching.pending_calls)}
             </p>
           ) : null}
+          <RepCallLinks
+            calls={coaching.calls}
+            onSeeCalls={() => calls.current?.showAll()}
+          />
           <div className={styles.actions}>
             {coaching.sandbox_reps ? (
               <Link
@@ -212,7 +215,7 @@ function StartCoaching({
           ) : null}
         </StoryCard>
       </Pillar>
-      <CallsPanel calls={coaching.calls} />
+      <CallsPanel ref={calls} calls={coaching.calls} />
       {/* Sharing can always be stopped, focus or not. */}
       <SharePanel initial={sharing} />
     </div>
@@ -289,13 +292,11 @@ function Story({
           missionAnchor="mission"
           take={dipakTake(coaching.media_clips)}
         >
-          {readOnly ? (
-            <RepCallLinks
-              calls={coaching.calls}
-              sandbox={coaching.sandbox}
-              onSeeCalls={() => calls.current?.showAll()}
-            />
-          ) : null}
+          <RepCallLinks
+            calls={coaching.calls}
+            progress={coaching.progress}
+            onSeeCalls={() => calls.current?.showAll()}
+          />
           {!readOnly && requestedFocus && requestedFocus !== focus.skill_id ? (
             <p className={styles.note}>
               Your report brought you here for{" "}
