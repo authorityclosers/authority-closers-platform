@@ -500,3 +500,11 @@ numbers remain explicitly illustrative. No outcome write, source playback or
 provider action is invoked. Shell reads use the existing approved fictional
 bootstrap; API mutations, media requests and live refreshes must be zero.
 Existing six-part Document/Word evidence remains separate and is not replayed.
+
+Select only `-k fixture_report_scroll_training` for the `77717316` delta: four
+viewport/theme pairs on `?example=follow_up`, checking the title scrolls above
+the analysis, heading/control centre hits and 32/44px controls. Enter on the
+existing opening pointer's null-href training button must open the same fictional
+call's Coaching, preserve the example query and document, and request no media or
+writes. Two changed-state screenshots per pair cover training and Coaching. This
+does not repeat the all27/outcome matrix or certify saved outcome API mapping.

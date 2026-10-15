@@ -6543,6 +6543,152 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
         }
 
 
+def test_fixture_report_scroll_training(browser: Browser, viewport: tuple[int, str]) -> None:
+    """The title clears analysis; a missing video URL opens this call's Coaching."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("This bounded check uses the existing fictional Report only")
+    with _journey(browser, viewport, "report-scroll-training") as journey:
+        page = journey.page
+        reads: list[str] = []
+        mutations: list[str] = []
+        media: list[str] = []
+        documents: list[str] = []
+        replies: dict[tuple[str, str, str], dict[str, object]] = {}
+        journey.observations.append(
+            {"step": "network-guard", "reads": reads, "mutations": mutations, "media": media}
+        )
+
+        def read_only(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif request.resource_type == "media" or re.search(
+                r"\.(?:mp3|mp4|m4a|wav|ogg|webm|aac)$", url.path, re.I
+            ):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            elif url.path.startswith("/v1/"):
+                reads.append(url.path)
+                key = (request.method, url.path, url.query)
+                if key not in replies:
+                    replies[key] = _fictional_api_reply(*key)
+                reply = replies[key]
+                route.fulfill(
+                    status=reply["status"],
+                    content_type="application/json",
+                    body=json.dumps(reply["body"]),
+                )
+            else:
+                if request.resource_type == "document":
+                    documents.append(url.path)
+                route.continue_()
+
+        page.route("**/*", read_only)
+        journey.open("/review-fixture/report/story?example=follow_up")
+        page.wait_for_load_state("load")
+        page.evaluate("() => document.fonts.ready")
+        modes = page.locator("[data-report-modes]")
+        expect(modes).to_have_attribute("data-view", "story")
+        header = page.locator("[data-report-sticky]")
+        expect(header.get_by_role("heading", level=1)).to_have_text(
+            "Siddhant Pawar · discovery call"
+        )
+        analysis_nav = page.locator("[data-report-sections]:visible").get_by_role(
+            "link", name="Detailed Call Analysis", exact=True
+        )
+        journey.control_target(analysis_nav, "analysis-navigation")
+        analysis_nav.click()
+        part = page.locator('[data-report-mode-section="analysis"]:visible')
+        heading = part.get_by_role("heading", name="2. Detailed Call Analysis", exact=True)
+        expect(heading).to_be_in_viewport()
+        # Let the existing measured section jump finish before taking geometry.
+        page.evaluate(
+            """() => new Promise(resolve => requestAnimationFrame(() =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve))))"""
+        )
+        scroll = header.evaluate(
+            """el => {
+              let port = el.parentElement;
+              while (port && !(port.scrollHeight > port.clientHeight &&
+                /auto|scroll/.test(getComputedStyle(port).overflowY))) port = port.parentElement;
+              const r = el.getBoundingClientRect();
+              return {position: getComputedStyle(el).position, bottom: r.bottom,
+                scrollportTop: port?.getBoundingClientRect().top ?? 0,
+                scrollTop: port?.scrollTop ?? window.scrollY};
+            }"""
+        )
+        journey.observations[-1]["title_after_analysis_jump"] = scroll
+        assert scroll["position"] == "static", "Report title still pins over the cards"
+        assert scroll["scrollTop"] > 0
+        assert scroll["bottom"] <= scroll["scrollportTop"] + 1, "Title did not scroll away"
+        heading_hit = heading.evaluate(
+            """el => {
+              const r = el.getBoundingClientRect();
+              const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+              return {top: r.top, bottom: r.bottom, reachable: hit === el || el.contains(hit)};
+            }"""
+        )
+        journey.observations[-1]["analysis_heading"] = heading_hit
+        assert heading_hit["reachable"], "Analysis heading is covered"
+        row = part.locator('li[data-pointer="call_opening"]')
+        disclosure = row.get_by_role("button", name=re.compile(r"View more$"))
+        journey.control_target(disclosure, "pointer-disclosure")
+        disclosure.focus()
+        page.keyboard.press("Enter")
+        expect(disclosure).to_have_attribute("aria-expanded", "true")
+        training = row.get_by_role("button", name="Watch Training Video", exact=True)
+        training.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.control_target(training, "training")
+        journey.snapshot("analysis-training")
+        journey.unclipped_text(row)
+        training.focus()
+        expect(training).to_be_focused()
+        original = urlsplit(page.url)
+        original_query = parse_qs(original.query)
+        document_count = len(documents)
+        time_origin = page.evaluate(
+            "() => { window.__wbReportTrainingDocument = true; return performance.timeOrigin; }"
+        )
+        page.keyboard.press("Enter")
+        expect(modes).to_have_attribute("data-view", "coaching")
+        expect(modes).to_have_attribute("data-report-section", "call-coaching")
+        coaching = page.locator("[data-call-coaching]:visible")
+        expect(coaching).to_be_visible()
+        expect(coaching).to_have_attribute("data-state", "report-focus")
+        current = urlsplit(page.url)
+        query = parse_qs(current.query)
+        assert current.path == original.path
+        assert query.get("call") == ["00000000-0000-4000-8000-000000000077"]
+        assert query.get("view") == ["coaching"]
+        assert query.get("section") == ["call-coaching"]
+        for key, value in original_query.items():
+            if key not in {"view", "section", "call"}:
+                assert query.get(key) == value, "Training navigation lost the fixture query"
+        assert page.evaluate("() => window.__wbReportTrainingDocument === true")
+        assert page.evaluate("() => performance.timeOrigin") == time_origin
+        assert len(documents) == document_count, "Training caused a full document request"
+        assert len(page.context.pages) == 1, "Missing-href training opened another tab"
+        coaching.get_by_role("heading").first.scroll_into_view_if_needed()
+        journey.snapshot("coaching")
+        journey.unclipped_text(coaching)
+        assert not mutations, "Report navigation attempted a write"
+        assert not media, "Training navigation started media automatically"
+        assert journey.live_refreshes == 0, "Live source changed during this bounded check"
+        journey.observations[-1]["report_scroll_training"] = {
+            "source": "77717316; current fixture source bae78551",
+            "pointer": "call_opening; authored training.href=null",
+            "call_id": query["call"][0],
+            "keyboard_training_opens_same_call_coaching": True,
+            "document_requests_during_training": len(documents) - document_count,
+            "query_retained": True,
+            "api_mutations": len(mutations),
+            "media_requests": len(media),
+            "authenticated_or_saved_outcome_acceptance": False,
+        }
+
+
 def test_live_report_15oct_structure(browser: Browser, viewport: tuple[int, str]) -> None:
     """Read one explicitly supplied saved call using an existing approved session."""
     if os.environ.get("WB_MODE") != "live":
