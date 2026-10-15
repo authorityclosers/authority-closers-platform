@@ -424,3 +424,17 @@ unchanged. Targets meet 32/44 px and screenshots cover both folded orders.
 No product destination or API mutation is invoked. Missing/tied dates and a
 single-rep/anonymous Team are not supplied by these fixtures; those edges remain
 unit coverage, not browser acceptance.
+
+For context saving, select only `-k fixture_coaching_context_save`. Four cases
+open the existing Design review `?data=review&view=me&example=context-save`:
+Add context, type a fictional Hindi/English note and Save. A virtual clock
+checks each three-second wait. While saving, the textarea remains selectable
+and focusable but native typing cannot replace the submitted note; Save and
+Cancel are disabled and the reserved Saving… status and Save position stay
+steady. The first failure retains the exact note and permits editing; Enter
+on Save retries successfully and shows the exact saved note. Screenshots cover
+saving, failure and success at 1440/390 light/dark. Retry targets meet 32/44 px;
+mission/query, readability, overflow and absence of API/media requests or live
+refreshes are checked. The fixture uses an in-page writer: canonical persistence,
+authenticated access and command identity are outside this browser evidence
+(same-note command reuse remains covered by the builder's unit tests).

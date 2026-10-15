@@ -5953,3 +5953,129 @@ def test_fixture_coaching_latest_call_shortcut(
             "api_mutations": len(mutations),
             "authenticated_or_real_data_acceptance": False,
         }
+
+
+def test_fixture_coaching_context_save(browser: Browser, viewport: tuple[int, str]) -> None:
+    """A pending context save protects the submitted words and permits a safe retry."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Context pending/retry uses the fictional in-page writer, never the API")
+    with _journey(browser, viewport, "context-save") as journey:
+        page = journey.page
+        api_requests: list[str] = []
+        media_requests: list[str] = []
+
+        def read_only(route: Route) -> None:
+            api_requests.append(route.request.method)
+            if route.request.method not in {"GET", "HEAD"}:
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", read_only)
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append(request.resource_type)
+                if request.resource_type == "media"
+                else None
+            ),
+        )
+        path = "/review-fixture/coaching?data=review&view=me&example=context-save"
+        journey.open(path)
+        expect(page.get_by_role("button", name="My coaching", exact=True)).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        page.evaluate("() => document.fonts.ready")
+        mission = page.locator("[data-active-mission]").inner_text()
+        page.clock.install()
+        page.clock.pause_at(datetime.now(UTC) + timedelta(seconds=1))
+        section = page.locator("#coaching-path")
+        section.get_by_role("button", name="Add context", exact=True).click()
+        area = section.get_by_role(
+            "textbox", name=re.compile("What should we know about this focus")
+        )
+        note = "ग्राहक had already confirmed the budget, and asked to keep the call short."
+        area.fill(note)
+        form = area.locator("../..")
+        status = form.get_by_role("status")
+        save = form.get_by_role("button", name="Save", exact=True)
+        cancel = form.get_by_role("button", name="Cancel", exact=True)
+
+        def geometry() -> dict[str, float]:
+            return {
+                "status_height": status.evaluate("el => el.getBoundingClientRect().height"),
+                "save_document_y": save.evaluate("el => el.getBoundingClientRect().y + scrollY"),
+            }
+
+        def capture(state: str) -> None:
+            area.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(state)
+            journey.unclipped_text(form)
+
+        idle_geometry = geometry()
+        save.click()
+        expect(status).to_have_text("Saving…")
+        expect(area).to_have_js_property("readOnly", True)
+        expect(area).to_be_enabled()
+        expect(save).to_be_disabled()
+        expect(cancel).to_be_disabled()
+        # Native selection and focus still work, but a keystroke cannot replace
+        # the submitted words while success would clear the draft.
+        area.select_text()
+        assert area.evaluate("el => el.selectionEnd - el.selectionStart") == len(note)
+        page.keyboard.type("This must not replace the submitted note.")
+        expect(area).to_have_value(note)
+        expect(area).to_be_focused()
+        assert geometry() == idle_geometry, "Saving shifted the reserved status or Save control"
+        capture("saving")
+        page.clock.fast_forward(2999)
+        expect(status).to_have_text("Saving…")
+        expect(area).to_have_js_property("readOnly", True)
+        page.clock.fast_forward(1)
+        expect(status).to_have_text("Not saved. Try again.")
+        expect(area).to_have_value(note)
+        expect(area).to_be_editable()
+        expect(save).to_be_enabled()
+        expect(cancel).to_be_enabled()
+        assert geometry() == idle_geometry, "Failure shifted the reserved status or Save control"
+        page.keyboard.press("Control+End")
+        page.keyboard.type(" Retry can edit.")
+        expect(area).to_have_value(note + " Retry can edit.")
+        area.fill(note)
+        capture("retry")
+        journey.control_target(save, "retry-save")
+        journey.control_target(cancel, "retry-cancel")
+        save.focus()
+        page.keyboard.press("Enter")
+        expect(status).to_have_text("Saving…")
+        expect(area).to_have_js_property("readOnly", True)
+        page.clock.fast_forward(2999)
+        expect(area).to_have_value(note)
+        expect(status).to_have_text("Saving…")
+        page.clock.fast_forward(1)
+        expect(area).to_have_count(0)
+        saved = section.get_by_role("status").filter(has_text=f"Saved: “{note}”")
+        expect(saved).to_have_text(f"Saved: “{note}”")
+        saved.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("saved")
+        journey.unclipped_text(section)
+        expect(page.locator("[data-active-mission]")).to_have_text(mission)
+        expect(page).to_have_url(os.environ["WB_BASE_URL"].rstrip("/") + path)
+        expect(page.locator("audio,video")).to_have_count(0)
+        assert not api_requests, "The fictional context writer attempted a live API request"
+        assert not media_requests, "Context saving requested media"
+        assert journey.live_refreshes == 0, "Live source changed during context saving"
+        journey.observations[-1]["fictional_context_save"] = {
+            "source": "D cba15b3e; signed-out Design review pending/error/retry writer",
+            "native_selection_length": len(note),
+            "pending_ms_each_attempt": 3000,
+            "pending_geometry": idle_geometry,
+            "native_pending_typing_blocked": True,
+            "failure_retains_editable_note": True,
+            "keyboard_retry_saves_exact_note": True,
+            "mission_and_query_retained": True,
+            "api_requests": len(api_requests),
+            "media_requests": len(media_requests),
+            "command_identity": "unit-covered; not exposed by the fictional browser writer",
+            "authenticated_or_canonical_persistence_acceptance": False,
+        }
