@@ -479,6 +479,43 @@ def test_team_names_fictional_reps_with_their_newest_focus() -> None:
         ("Asha Rao", 1),
     ]
     assert view.reps[0].latest_call_at == datetime(2026, 7, 24, 4, 30, tzinfo=UTC)
+    # Each rep's record on their newest focus counts as their own history does:
+    # recent calls written with that skill, all of which needed work.
+    assert [(rep.focus_calls, rep.focus_window) for rep in view.reps] == [(2, 2), (1, 1)]
+    history = rep_view(
+        (calls[0], calls[2]), sandbox_bundle(), {}, person_id=VIEWER, tenant_id=TENANT
+    )
+    assert len(history.progress) == view.reps[0].focus_window
+
+
+def test_team_rep_record_skips_calls_on_other_skills_and_needs_a_focus() -> None:
+    calls = (
+        indexed(sandbox_bundle("syn-fixture-J03-C-01", at="2026-07-24T10:00:00+05:30")),
+        indexed(
+            sandbox_bundle(
+                "syn-fixture-J02-C-01",
+                skill="skill-2",
+                label="Diagnose before prescribing",
+                at="2026-07-22T10:00:00+05:30",
+            )
+        ),
+        indexed(sandbox_bundle("syn-fixture-J01-C-01", at="2026-07-21T10:00:00+05:30")),
+    )
+    view = team_view(calls, person_id=VIEWER, tenant_id=TENANT)
+    assert [(rep.calls, rep.focus_calls, rep.focus_window) for rep in view.reps] == [(3, 2, 2)]
+    with pytest.raises(ValueError):
+        TeamRep(person_id=uuid4(), name="Pair", calls=1, focus_calls=1)
+    with pytest.raises(ValueError):
+        TeamRep(person_id=uuid4(), name="No focus", calls=1, focus_calls=1, focus_window=1)
+    with pytest.raises(ValueError):
+        TeamRep(
+            person_id=uuid4(),
+            name="Impossible",
+            focus_label="Agree a clear next step",
+            calls=1,
+            focus_calls=2,
+            focus_window=1,
+        )
 
 
 def test_real_team_totals_cannot_carry_names() -> None:

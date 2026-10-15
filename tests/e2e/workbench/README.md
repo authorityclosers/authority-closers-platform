@@ -83,7 +83,9 @@ sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
 cases, eight secondary-lesson disclosure cases and four controlled audio-startup
 cases, plus four controlled native moment-end/replay and four narration shortcut
 focus cases, sixteen interrupted-lesson resume and four Worked/Didn't clip disclosure
-cases and four moment view-close cases, collect 180 cases. The original Report
+cases and four moment view-close cases, plus four phone mastery-name, four Report
+clip-room, four call record-mark and four Team rep-record cases, eight latest-call
+shortcut cases and four Team rep-order cases, collect 208 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -384,3 +386,41 @@ Design review marks 6 of 8 rows, Sandbox every ready row. "On this skill" shows
 no marks (its filter keeps its own words) and All calls restores them. Report
 links `/analysis/calls/<id>` and row targets are unchanged; no reads, writes or
 media are added. The no-current-focus view stays unit-only.
+
+For each rep's saved record on their current focus in Team, select only
+`-k fixture_team_rep_records`. Four width/theme cases read pillar 5's legend on
+the signed-out Sandbox My coaching view, then open the Sandbox Team view and
+compare the first eight rows and, after "Show all 60 people", every row against
+the fixture: name, focus and `/coaching?person=<id>` route unchanged, exactly one
+record mark reading "Needed work in N of M calls" (or "Nothing to fix in M calls")
+right after the focus and before "N calls" and "Latest call", on one line inside
+its row, with a 10 px dot whose fill, ring and style equal the legend for the same
+state. The Design review's shared reps, whose older records carry no counts, show
+no mark and no record words. Row targets, clipping, reads, writes and refreshes
+are checked as usual. The fixture holds only "Needed work" records, so "Nothing
+to fix" stays unit-only.
+
+For pillar 1's "Latest call with coaching" shortcut, select only
+`-k fixture_coaching_latest_call_shortcut`. Eight cases (Design review My coaching
+"Your latest call" and AC Sandbox One rep "This rep’s calls", 1440/390 light/dark)
+find the one navigation inside `#coaching-focus` before "Why this matters", and
+check it names the fixture's newest ready call with its date; its three links are
+Open Report `/analysis/calls/<id>`, Call coaching `/coaching?call=<id>` and See
+calls `#coaching-calls`, where `<id>` is that call's own row in "Coaching for each
+call". The record mark is present exactly when that row carries one, with the
+same words and a 10 px dot equal to pillar 5's legend (Design review's latest
+call has no saved record; Sandbox shows "Needed work"). Links meet 32/44 px with
+reachable centres; See calls focuses the call list on All calls, folded as usual. Reads,
+writes, clipping, overflow and refreshes are checked as usual. Fixture-only.
+
+For Team's native Sort reps control, select `-k fixture_team_rep_order`.
+Four viewport/theme cases use the existing signed-out Sandbox and Design review
+Team views. They check Latest call against absolute source timestamps and Name
+A–Z against fixed en-IN base/numeric collation across every supplied rep, before
+the eight-row fold. Home/End retain native control focus; switching order folds.
+Name/area intersection, empty state, Clear filters and Find reps keep the order.
+Names, focus, records, counts, dates, dots, routes and aggregate totals stay
+unchanged. Targets meet 32/44 px and screenshots cover both folded orders.
+No product destination or API mutation is invoked. Missing/tied dates and a
+single-rep/anonymous Team are not supplied by these fixtures; those edges remain
+unit coverage, not browser acceptance.

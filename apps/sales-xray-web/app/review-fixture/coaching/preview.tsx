@@ -31,6 +31,21 @@ const REVIEW_WRITES: CoachingWriter = {
   feedback: async () => ({ data: true, error: null }),
 };
 
+/** Opt-in fictional pending/error/retry example; never calls the API. */
+function contextSaveExample(): CoachingWriter {
+  let attempts = 0;
+  return {
+    ...REVIEW_WRITES,
+    context: async () => {
+      const attempt = ++attempts;
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      return attempt === 1
+        ? { data: null, error: "Not saved. Try again." }
+        : { data: true, error: null };
+    },
+  };
+}
+
 /** Keep the chosen level in the address, so a reload or a link opens it. */
 function remember(key: "view" | "data", value: string) {
   const url = new URL(window.location.href);
@@ -55,10 +70,13 @@ export function CoachingFixture() {
   const linked = query.get("view");
   const [chosenView, setView] = useState<View | null>(null);
   const [chosenData, setData] = useState<Data | null>(null);
+  const [contextSaveWrites] = useState(contextSaveExample);
   const view: View =
     chosenView ?? (linked === "me" || linked === "team" ? linked : "call");
   const data: Data =
     chosenData ?? (query.get("data") === "sandbox" ? "sandbox" : "review");
+  const contextSave =
+    data === "review" && query.get("example") === "context-save";
   const set = data === "sandbox" ? acSandbox : sandbox;
   // An opt-in, dev-only reproduction of the retained long-quote lesson.
   const callPayload =
@@ -93,7 +111,9 @@ export function CoachingFixture() {
         : set.team,
   );
   return (
-    <CoachingWrites.Provider value={REVIEW_WRITES}>
+    <CoachingWrites.Provider
+      value={contextSave ? contextSaveWrites : REVIEW_WRITES}
+    >
       <div className={styles.root}>
         <PageHeader
           title="Coaching review"
@@ -101,7 +121,9 @@ export function CoachingFixture() {
             data === "sandbox"
               ? [
                   "AC Sandbox",
-                  "3,360 fictional calls, 60 fictional reps",
+                  // The fixture's own totals, so a dataset refresh never leaves
+                  // a stale number in the header.
+                  `${acSandbox.team.analysed_calls.toLocaleString("en-IN")} fictional calls, ${acSandbox.team.rep_count} fictional reps`,
                   ...(currentFocusExample
                     ? ["Filter example: one current focus has no team total"]
                     : []),

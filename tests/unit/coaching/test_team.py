@@ -88,3 +88,25 @@ def test_team_counts_buyer_objections_by_kind_and_handling_never_their_words() -
     assert view.objections[0].label == "Price"
     raw = view.model_dump_json()
     assert "Too costly" not in raw and "Let me think" not in raw
+
+
+def test_a_shared_rep_row_carries_their_record_on_the_focus_as_their_history_counts_it() -> None:
+    rep = UUID(int=999)
+    first = from_report(envelope(), submission_id=CALL, created_at=NOW, comparison_key="v1")
+    later = envelope()
+    later["submission_id"], later["source_sha256"] = str(UUID(int=11)), "b" * 64
+    second = from_report(later, submission_id=UUID(int=11), created_at=NOW, comparison_key="v1")
+    assert first is not None and second is not None
+    view = summarize_team(
+        ((rep, first), (rep, second)),
+        person_id=UUID(int=1),
+        tenant_id=UUID(int=2),
+        shared=((rep, "Swati Kale", NOW),),
+    )
+    row = view.reps[0]
+    assert row.focus_label == "Impact clarity" and row.calls == 2
+    # Both calls assessed the skill and both suggested work on it.
+    assert (row.focus_calls, row.focus_window) == (2, 2)
+    raw = view.model_dump_json()
+    for private in ("Handover takes time.", "Explore one consequence."):
+        assert private not in raw

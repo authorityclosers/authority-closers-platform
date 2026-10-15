@@ -422,6 +422,8 @@ export const CALLS = {
   showAll: (count: number) => `Show all ${count} calls`,
   showFewer: "Show fewer calls",
   latestReady: "Latest call with coaching",
+  yourShortcuts: "Your latest call",
+  theirShortcuts: "This rep’s calls",
   openReport: "Open Report",
   report: "Report",
   reportFor: (label: string) => `Open Report for ${label}`,
@@ -633,6 +635,9 @@ export const TEAM = {
   noFocusShown: "No focus shown",
   findRep: "Find a rep",
   findRepHint: "Name or current focus",
+  sortReps: "Sort reps",
+  latestFirst: "Latest call",
+  nameOrder: "Name A–Z",
   findReps: "Find reps",
   findRepsLabel: (skill: string) => `Find reps working on ${skill}`,
   currentFocusNote: "Find reps uses their current focus.",
@@ -644,6 +649,11 @@ export const TEAM = {
   showFewer: "Show fewer people",
   people: (count: number) => `${count} ${count === 1 ? "person" : "people"}`,
   repLatest: (date: string) => `Latest call ${date}`,
+  /** A rep's saved record on their current focus, in the history's words. */
+  repRecord: (needed: number, calls: number) =>
+    needed
+      ? `Needed work in ${needed} of ${calls} call${calls === 1 ? "" : "s"}`
+      : `Nothing to fix in ${calls} call${calls === 1 ? "" : "s"}`,
   latest: (date: string) => `Latest call ${date}.`,
   last40: "last 40",
   inView: "In this view",

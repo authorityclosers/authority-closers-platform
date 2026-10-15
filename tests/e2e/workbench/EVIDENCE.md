@@ -1,5 +1,76 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 20:28 UTC — Team rep order (D e1d7c08b). New
+`fixture_team_rep_order` **4/4 PASS**, 24.74s/launcher0 at workbench 5c6d0e31,
+shared dev :3026, 1440/390 light/dark. Existing Sandbox60 and Design review2:
+Latest call follows absolute source timestamps; Name A–Z follows fixed en-IN
+base/numeric collation across every supplied rep, before the eight-row fold.
+Native Home/End preserves focus; both order changes fold expanded lists.
+Name/area intersection, no match, Enter Clear filters and Enter Find reps
+retain the chosen order; shortening restores search focus. Original names,
+focus, records/dots, counts/dates, person routes and aggregate totals retained.
+Order140x32 desktop / 140.5–145x44 phone, all measured controls32/44 and
+reachable; stretched first-row links73.5/98 (Sandbox),72.5/97 (review), all five
+hit points pass. Undersized/clipping/overflow/errors/writes/refreshes0.
+All eight final PNGs inspected: both sort labels and row details readable,
+phone filters on two rows; no defect. Screens/receipts:
+`/home/acdev/strikes/1694/shots/2026-10-15-team-rep-order/`.
+Initial stopped run1FAIL27.01s used the raw Design review label "qualification"
+for Find reps; the fixture normalizes that label to the approved taxonomy.
+Own locator fixed to its source summary row; all three initial PNGs inspected
+and original receipt retained in `harness-normalized-review-label/`. Earlier
+Ruff closure/format failures corrected; final Ruff/format/API import pass.
+208 cases collect (4 selected/204 deselected); no-server selection4skip.
+Missing/tied dates, single-rep and anonymous Team edges remain unit coverage,
+not supplied browser cases. Fictional UI evidence only. v0.46 retry log stopped
+20:27:13Z on validate-python-static before deployment; no release readback due.
+
+15 October, 18:01 UTC — Pillar 1 latest-call shortcut (D 393c32e3). New
+`fixture_coaching_latest_call_shortcut` **8/8 PASS** (7 in 25.18s, then the one
+Sandbox 390 light case rerun in 3.52s after two live dev rebuilds tripped the
+refresh guard; its first artefacts retained in `harness-live-refresh-sandbox-390-light/`)
+at workbench 393c32e3 on shared :3026, 1440/390 light/dark. Design review My
+coaching ("Your latest call") and AC Sandbox One rep ("This rep’s calls"): one
+navigation inside `#coaching-focus` before "Why this matters", naming the fixture's
+newest ready call (ArthaPath · Chennai clinic · Close, 7 Sept; Edtech · Viren
+Nivantakar · call 5, 28 Aug) with links Open Report `/analysis/calls/<id>`, Call
+coaching `/coaching?call=<id>` and See calls `#coaching-calls`, the same id as
+that call's own row. Record mark present exactly when the row carries one: Design
+review none (no record words), Sandbox `suggested` "Needed work" on one line with a
+10 px dot equal to pillar 5's legend (light rgb(180,83,9), dark rgb(245,158,11)).
+Links 108/112/81 x 32 px desktop, x 44 px phone, centres reachable. See calls
+focuses the call section on All calls with the list folded as usual. Undersized,
+clipping, overflow, writes, errors 0. A first run failed 6/8 on my own assumption
+that See calls opens every row (the product resets the filter and keeps the fold);
+retained in `harness-see-calls-fold/`, no product defect. All eight PNGs inspected
+(`shots/2026-10-15-latest-call-shortcut/`). Fictional UI only.
+
+15 October, 16:18 UTC — Team rep records (D ad8b72e1). New `fixture_team_rep_records`
+**4/4 PASS** 18.11s/launcher 0 at workbench ad8b72e1 on shared :3026, 1440/390
+light/dark. Sandbox Team: first eight and all 60 rows match the fixture's names,
+order, focus and person routes; each carries exactly one `[data-state=suggested]`
+mark "Needed work in 40 of 40 calls" right after its focus, before "N calls" and
+"Latest call", one line inside its row; 10 px dot fill/ring/style equal pillar 5's
+legend on the Sandbox My coaching view. Design review's two shared reps (no
+counts) show no mark and no record words. First-row link 37.5/44 px with centre
+hits, undersized 0, overflow 0, writes/errors/refreshes 0. All eight PNGs
+inspected (`shots/2026-10-15-team-rep-records/`): dot and words readable both
+themes; at 390 the count and latest date wrap to a second line below the record.
+"Nothing to fix" stays unit-only (fixture has no such rep). Fictional UI only.
+
+15 October, 16:17 UTC — v0.45.0 served-source readback. Ship log: PR #476 green
+15:41:58, merged 8e417f2, staging live/canary PASS 16:10:59, production snapshot
+20261015T161108Z-before-v0.45.0, production live/canary PASS 16:17:05, ship done
+16:17:06; ac-canary@staging and @production Result=success/ExecMainStatus=0.
+Original-Host foundation :8080 reads at 16:17:47: staging and production web
+`/health` and API `/health/ready` all HTTP200 with release_id
+`8e417f2e786762156a5fed3489b9c0f932225bfa` (workbench fe2368b0). Receipts
+`shots/2026-10-15-v0.45.0-health/`. The clip-room rerun on 510da4f1 (4/4 PASS
+15:20:41, Moments That Mattered chip 158x32 desktop / 158x44 phone, hit area
+equal, centre reachable; `shots/2026-10-15-report-clip-pause-room-rerun/`) is in
+this version. Availability and served source only; no populated authenticated
+acceptance.
+
 15 October, 14:23 UTC — v0.44.0 served-source readback. Ship log: staging
 live/canary PASS 14:15:07, production snapshot 20261015T141515Z-before-v0.44.0,
 production live/canary PASS 14:23:06, ship done 14:23:07; ac-canary@staging and

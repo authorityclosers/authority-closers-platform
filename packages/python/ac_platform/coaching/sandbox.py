@@ -787,11 +787,16 @@ def team_view(
     counts: dict[str, int] = {}
     newest: dict[str, SandboxCall] = {}
     per_rep: dict[str, int] = {}
+    # Each rep's record on their newest focus, counted as their own progress
+    # history does: their recent calls written with that same skill.
+    on_focus: dict[str, int] = {}
     for call in calls:
         if call.skill_id:
             counts[call.skill_id] = counts.get(call.skill_id, 0) + 1
-        newest.setdefault(call.rep_key, call)
+        first = newest.setdefault(call.rep_key, call)
         per_rep[call.rep_key] = per_rep.get(call.rep_key, 0) + 1
+        if per_rep[call.rep_key] <= HISTORY_LIMIT and call.skill_id == first.skill_id:
+            on_focus[call.rep_key] = on_focus.get(call.rep_key, 0) + 1
     # Most recently active first; the area filter groups them by "what".
     reps = sorted(newest.values(), key=lambda call: (-call.occurred_at.timestamp(), call.rep_name))
     return TeamCoachingView(
@@ -819,6 +824,8 @@ def team_view(
                 focus_label=call.focus_label,
                 calls=per_rep[call.rep_key],
                 latest_call_at=call.occurred_at,
+                focus_calls=on_focus.get(call.rep_key) if call.skill_id else None,
+                focus_window=on_focus.get(call.rep_key) if call.skill_id else None,
             )
             for call in reps
         ),

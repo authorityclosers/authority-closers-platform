@@ -226,6 +226,9 @@ function ContextForm({
         </span>
         <textarea
           value={text}
+          // Success clears this draft: hold the submitted words steady until
+          // the result arrives, so typing during the wait cannot be lost.
+          readOnly={saving}
           maxLength={CONTEXT_LIMIT}
           rows={3}
           onChange={(event) => setText(event.target.value)}
@@ -246,11 +249,9 @@ function ContextForm({
           {FEEDBACK.cancel}
         </Button>
       </div>
-      {error ? (
-        <p role="status" className={styles.status}>
-          {error}
-        </p>
-      ) : null}
+      <p role="status" className={styles.status}>
+        {saving ? FEEDBACK.saving : error}
+      </p>
     </div>
   );
 }

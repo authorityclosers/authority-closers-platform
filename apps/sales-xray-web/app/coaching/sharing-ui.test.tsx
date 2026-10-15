@@ -205,6 +205,69 @@ describe("Focus feedback", () => {
     expect(host.querySelector("textarea")).toBeNull();
     expect(button("Add context")).toBeDefined();
   });
+  it.each(["success", "failure"])(
+    "holds the submitted note steady during a pending save (%s)",
+    async (outcome) => {
+      let finish!: (response: Response) => void;
+      const fetch = vi
+        .fn()
+        .mockImplementationOnce(
+          () => new Promise<Response>((resolve) => (finish = resolve)),
+        )
+        .mockResolvedValue(new Response(null, { status: 204 }));
+      vi.stubGlobal("fetch", fetch);
+      await act(async () =>
+        root.render(
+          <FocusFeedback
+            focusSkillId="problem_impact_desire"
+            originSubmissionId={fictionalCoaching.mission!.origin_submission_id}
+          />,
+        ),
+      );
+      await act(async () => button("Add context").click());
+      const area = host.querySelector("textarea")!;
+      const note = "ग्राहक had already confirmed the budget";
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          "value",
+        )!.set!.call(area, note);
+        area.dispatchEvent(new Event("input", { bubbles: true }));
+        area.focus();
+      });
+      await act(async () => button("Save").click());
+      expect(area.readOnly).toBe(true);
+      expect(area.disabled).toBe(false);
+      expect(document.activeElement).toBe(area);
+      expect(area.value).toBe(note);
+      expect(button("Save").disabled).toBe(true);
+      expect(button("Cancel").disabled).toBe(true);
+      expect(
+        area.closest("div")?.querySelector('[role="status"]')?.textContent,
+      ).toBe("Saving…");
+      await act(async () =>
+        finish(
+          new Response(null, { status: outcome === "success" ? 204 : 500 }),
+        ),
+      );
+      await flush();
+      if (outcome === "failure") {
+        expect(area.readOnly).toBe(false);
+        expect(area.value).toBe(note);
+        expect(button("Save").disabled).toBe(false);
+        expect(button("Cancel").disabled).toBe(false);
+        expect(host.textContent).toContain("Not saved. Try again.");
+        await act(async () => button("Save").click());
+        await flush();
+        const [first, retry] = fetch.mock.calls.map((call) =>
+          JSON.parse(call[1].body),
+        );
+        expect(retry).toEqual(first);
+      }
+      expect(host.querySelector("textarea")).toBeNull();
+      expect(host.textContent).toContain(`Saved: “${note}”`);
+    },
+  );
   it("“Not completely” shows what the focus rests on, then asks what we missed", async () => {
     const fetch = vi
       .fn()

@@ -66,6 +66,24 @@ class TeamRep(Model):
     calls: int = Field(ge=0)
     latest_call_at: datetime | None = None
     shared_at: datetime | None = None
+    # The rep's saved record on their current focus, as their own progress
+    # history counts it: calls on the skill that needed work, out of the calls
+    # with a record on it. Only as a pair, and only with a focus.
+    focus_calls: int | None = Field(default=None, ge=0)
+    focus_window: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def record_only_with_a_focus(self) -> "TeamRep":
+        if (self.focus_calls is None) != (self.focus_window is None):
+            raise ValueError("A rep's focus record is a pair.")
+        if self.focus_calls is not None and (
+            self.focus_label is None
+            or self.focus_window is None
+            or self.focus_calls > self.focus_window
+            or self.focus_window < 1
+        ):
+            raise ValueError("A rep's focus record needs a focus and a possible count.")
+        return self
 
 
 class TeamCoachingView(Model):
@@ -146,16 +164,20 @@ def summarize_team(
         newest = max(own, key=lambda call: call.created_at, default=None)
         # The same focus selection as the rep's own coaching page, over the
         # calls in this view (their page may see older calls too).
-        focus = (
+        learner = (
             build_learner(
                 tuple(sorted(own, key=lambda call: call.created_at)),
                 person_id=rep_id,
                 tenant_id=tenant_id,
-            ).focus
+            )
             if own
             else None
         )
+        focus = learner.focus if learner else None
         skill = focus.skill_id if focus and focus.skill_id in LABELS else None
+        # The same counts as the rep's own "needed work in N of M calls".
+        pattern = learner.pattern if learner and focus else None
+        window = pattern.relevant_call_count if pattern else 0
         reps.append(
             TeamRep(
                 person_id=rep_id,
@@ -165,6 +187,8 @@ def summarize_team(
                 calls=len(own),
                 latest_call_at=newest.created_at if newest else None,
                 shared_at=shared_at,
+                focus_calls=pattern.attention_call_count if pattern and window else None,
+                focus_window=window or None,
             )
         )
     heard: Counter[str] = Counter()
