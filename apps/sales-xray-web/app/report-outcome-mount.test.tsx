@@ -89,12 +89,14 @@ it("records a person's outcome in one tap and shows it as the call outcome", asy
   );
   await settle();
   const picture = () =>
-    host.querySelector<HTMLElement>('[data-report-pillar="overview"]')!;
+    host.querySelector<HTMLElement>('[data-xray-part="overview"]')!;
+  const outcome = () =>
+    host.querySelector<HTMLElement>('[data-xray-part="outcome"]')!;
   expect(fetch.mock.calls[0][0]).toBe(
     `/v1/conversation/prospects/calls/${call}/outcome`,
   );
   // Until a person records it, the analysis's reading stays labelled as such.
-  expect(picture().textContent).toContain("As heard on the call");
+  expect(outcome().textContent).toContain("As heard on the call");
   expect(picture().textContent).toContain("Not set yet");
   const wonButton = [
     ...picture().querySelectorAll<HTMLButtonElement>("button"),
@@ -108,10 +110,11 @@ it("records a person's outcome in one tap and shows it as the call outcome", asy
     expected_membership_id: null,
     expected_prospect_stage_revision: null,
   });
-  expect(picture().textContent).toContain("Set by your team");
-  expect(picture().querySelector('[data-tone="good"]')?.textContent).toContain(
-    "Won",
-  );
+  expect(outcome().textContent).toContain("Set by your team");
+  expect(outcome().dataset.outcome).toBe("won");
+  expect(
+    picture().querySelector('button[aria-pressed="true"]')?.textContent,
+  ).toBe("Won");
   await act(async () => root.unmount());
 });
 
@@ -162,9 +165,11 @@ it("stays quiet on a teammate's call the person cannot record", async () => {
   );
   await settle();
   expect(fetch).toHaveBeenCalledOnce();
-  const picture = host.querySelector('[data-report-pillar="overview"]')!;
-  expect(picture.textContent).not.toContain("couldn't be read");
-  expect(picture.textContent).not.toContain("Not set yet");
-  expect(picture.textContent).toContain("As heard on the call");
+  const report = host.querySelector("[data-report-modes]")!;
+  expect(report.textContent).not.toContain("couldn't be read");
+  expect(report.textContent).not.toContain("Not set yet");
+  expect(
+    host.querySelector('[data-xray-part="outcome"]')!.textContent,
+  ).toContain("As heard on the call");
   await act(async () => root.unmount());
 });

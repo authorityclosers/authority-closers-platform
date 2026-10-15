@@ -6,7 +6,6 @@ import { PillarsPreview } from "./pillars-preview";
 import { StoryShellPreview } from "../story/preview";
 import { contentReport, contentTranscript } from "./content-fixture";
 import { ReportDocument } from "../../../report-document";
-import { REPORT_PILLARS } from "../../../report-pillars";
 
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -56,14 +55,14 @@ it("keeps native v8 as the route default and exposes the revised reader, source 
       [...host.querySelectorAll("[data-report-mode-section]")].map((e) =>
         e.getAttribute("data-report-mode-section"),
       ),
-    ).toEqual(REPORT_PILLARS.map((p) => p.id));
-    for (const text of ["Meeting Booked", "Friday", "4 PM", "Not Applicable"])
+    ).toEqual(["overview", "analysis", "outcome"]);
+    for (const text of ["Meeting Booked", "Friday", "4 PM"])
       expect(host.textContent).toContain(text);
     expect(host.textContent).not.toContain(
       "Synthetic call: the buyer declined a sale",
     );
     const source = host.querySelector<HTMLButtonElement>(
-      '[data-report-pillar="overview"] button[aria-label="Play 00:04: Strongest part"]',
+      '[data-xray-part="overview"] button[aria-label="Play 00:04: Biggest strength"]',
     );
     expect(source).not.toBeNull();
     await act(async () => source!.click());

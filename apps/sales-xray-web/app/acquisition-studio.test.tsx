@@ -1212,7 +1212,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "AI draft · not yet reviewed by Dipak",
   );
   expect(container.querySelectorAll(".studio-report-metric")).toHaveLength(0);
-  expect(container.textContent).toContain("The Big Picture");
+  expect(container.textContent).toContain("Overview & Score");
   expect(container.textContent).toContain(
     "Draft coaching; not adjudicated by Dipak.",
   );
@@ -1251,17 +1251,16 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   ).toBe("story");
   expect(
     container.querySelectorAll('[aria-label="Explore your sales report"] a'),
-  ).toHaveLength(6);
+  ).toHaveLength(3);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
     expect(call.init.redirect).toBe("error");
   }
-  await clickReportSection("Moments That Mattered");
-  // The supported Commitment stays in Moments; legacy misses may be gated.
+  await clickReportSection("Final Call Outcome");
   expect(
-    container.querySelector('[data-report-pillar="missed"]')?.textContent,
-  ).toContain("तीन बजे ठीक है, please send details.");
+    container.querySelector('[data-xray-part="outcome"]')?.textContent,
+  ).toContain("Next Steps");
   // Every original turn remains readable, including the legacy miss's quote.
   await click("Transcript");
   expect(
@@ -3307,7 +3306,7 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     savedAudio?.closest('[aria-label="Call audio player"]'),
   );
   expect(savedAudio?.getAttribute("src")).toBe(source);
-  // A saved call opens straight on the six-part Report, nothing hidden.
+  // A saved call opens straight on the three-part Report, nothing hidden.
   expect(
     container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
   ).toBe("story");
@@ -3321,35 +3320,27 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
       ),
     ].map((link) => link.getAttribute("aria-label")),
   ).toEqual([
-    "The Big Picture",
-    "How the Call Played Out",
-    "What Worked — & What Didn't",
-    "Moments That Mattered",
-    "Your Skills on This Call",
-    "Where the Deal Stands",
+    "Overview & Score",
+    "Detailed Call Analysis",
+    "Final Call Outcome",
   ]);
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")
     .mockResolvedValue(undefined);
-  await clickReportSection("Where the Deal Stands");
+  await clickReportSection("Final Call Outcome");
   expect(
     container
-      .querySelector('[data-report-mode-section="facts"]')
+      .querySelector('[data-report-mode-section="outcome"]')
       ?.hasAttribute("hidden"),
   ).toBe(false);
+  // Prospect's Information is its own section now, not part of the Report.
   expect(container.querySelector("[data-prospect-snapshot]")).toBeNull();
-  expect(
-    container.querySelector(
-      '[data-report-mode-section="facts"] [data-prospect-card]',
-    ),
-  ).not.toBeNull();
-  expect(container.querySelector('a[href="/prospects"]')).not.toBeNull();
   const prospectSource = envelope.report.content.strengths[0].evidence[0];
   // The play chip shows its time; its accessible name says what it plays.
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(
-        `[aria-label="Play ${formatClock(prospectSource.start_ms)}: Strongest part"]`,
+        `[aria-label="Play ${formatClock(prospectSource.start_ms)}: Biggest strength"]`,
       )!
       .click(),
   );
@@ -3358,7 +3349,7 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     prospectSource.start_ms / 1000,
   );
   expect(play).toHaveBeenCalledOnce();
-  await clickReportSection("How the Call Played Out");
+  await clickReportSection("Detailed Call Analysis");
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),
   ).toBe(savedAudio);

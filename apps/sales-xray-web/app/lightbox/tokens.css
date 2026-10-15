@@ -361,3 +361,110 @@
     --lx-stagger: 0ms;
   }
 }
+
+/* ---------- Sales Xray Report (15 Oct structure, xray-report/) ----------
+ * Dark values are sampled from the owner doc's images, light values from its
+ * light page (image3). Text tones keep at least 4.5:1 on their cards; the
+ * *-mark tones are for icons, rings and fills. A light report surface keeps
+ * the light values inside a dark app. */
+:root {
+  --xr-text: #0f1b2d;
+  --xr-text-2: #33435a;
+  --xr-muted: #56657c;
+  --xr-card: #ffffff;
+  --xr-card-2: #f8fafd;
+  --xr-card-3: #f1f5fa;
+  --xr-line: #e3e9f1;
+  --xr-line-2: #d3dbe7;
+  --xr-shadow: 0 1px 2px rgba(15, 27, 45, 0.04);
+  --xr-green: #077d4a;
+  --xr-green-mark: #12b26f;
+  --xr-green-soft: #ecfaf3;
+  --xr-green-line: #bfead3;
+  --xr-amber: #9a5800;
+  --xr-amber-mark: #f2a20c;
+  --xr-amber-soft: #fff7e8;
+  --xr-amber-line: #f8dfae;
+  --xr-red: #c4122f;
+  --xr-red-mark: #ef3f4f;
+  --xr-red-soft: #fdeef0;
+  --xr-red-line: #f6c7cf;
+  --xr-blue: #1d5fd6;
+  --xr-blue-mark: #2f7bf5;
+  --xr-blue-soft: #ecf3ff;
+  --xr-blue-line: #c8dbfb;
+  --xr-purple: #6a2ee6;
+  --xr-purple-mark: #8b4cf7;
+  --xr-purple-soft: #f4eeff;
+  --xr-purple-line: #ddcffd;
+  --xr-solid-text: #ffffff;
+  --xr-on-mark: #ffffff;
+}
+
+:root[data-theme="dark"] {
+  --xr-text: #eef2f7;
+  --xr-text-2: #c7d1dd;
+  --xr-muted: #95a4b6;
+  --xr-card: #0a1119;
+  --xr-card-2: #0d1520;
+  --xr-card-3: #111b27;
+  --xr-line: #18222e;
+  --xr-line-2: #223041;
+  --xr-shadow: none;
+  --xr-green: #2bd283;
+  --xr-green-mark: #20c878;
+  --xr-green-soft: rgba(32, 200, 120, 0.09);
+  --xr-green-line: rgba(32, 200, 120, 0.3);
+  --xr-amber: #f7b928;
+  --xr-amber-mark: #f5b021;
+  --xr-amber-soft: rgba(245, 176, 33, 0.09);
+  --xr-amber-line: rgba(245, 176, 33, 0.32);
+  --xr-red: #f65f57;
+  --xr-red-mark: #f0544c;
+  --xr-red-soft: rgba(240, 84, 76, 0.1);
+  --xr-red-line: rgba(240, 84, 76, 0.34);
+  --xr-blue: #5eaef8;
+  --xr-blue-mark: #4fa3f6;
+  --xr-blue-soft: rgba(79, 163, 246, 0.1);
+  --xr-blue-line: rgba(79, 163, 246, 0.3);
+  --xr-purple: #c27bfa;
+  --xr-purple-mark: #b25cf6;
+  --xr-purple-soft: rgba(178, 92, 246, 0.11);
+  --xr-purple-line: rgba(178, 92, 246, 0.34);
+  --xr-solid-text: #0a1119;
+  --xr-on-mark: #ffffff;
+}
+
+[data-lx-surface="light"] {
+  --xr-text: #0f1b2d;
+  --xr-text-2: #33435a;
+  --xr-muted: #56657c;
+  --xr-card: #ffffff;
+  --xr-card-2: #f8fafd;
+  --xr-card-3: #f1f5fa;
+  --xr-line: #e3e9f1;
+  --xr-line-2: #d3dbe7;
+  --xr-shadow: 0 1px 2px rgba(15, 27, 45, 0.04);
+  --xr-green: #077d4a;
+  --xr-green-mark: #12b26f;
+  --xr-green-soft: #ecfaf3;
+  --xr-green-line: #bfead3;
+  --xr-amber: #9a5800;
+  --xr-amber-mark: #f2a20c;
+  --xr-amber-soft: #fff7e8;
+  --xr-amber-line: #f8dfae;
+  --xr-red: #c4122f;
+  --xr-red-mark: #ef3f4f;
+  --xr-red-soft: #fdeef0;
+  --xr-red-line: #f6c7cf;
+  --xr-blue: #1d5fd6;
+  --xr-blue-mark: #2f7bf5;
+  --xr-blue-soft: #ecf3ff;
+  --xr-blue-line: #c8dbfb;
+  --xr-purple: #6a2ee6;
+  --xr-purple-mark: #8b4cf7;
+  --xr-purple-soft: #f4eeff;
+  --xr-purple-line: #ddcffd;
+  --xr-solid-text: #ffffff;
+  --xr-on-mark: #ffffff;
+}

@@ -78,22 +78,16 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
   ).not.toBeNull();
   expect(report?.textContent).toContain("59:58");
   // Real report sections and the one call dock.
-  // Like the live report, a finished call opens on the six-part Report.
+  // Like the live report, a finished call opens on the three-part Report.
   expect(
     [...container.querySelectorAll("[data-report-mode-section]")].map((s) =>
       s.getAttribute("data-report-mode-section"),
     ),
-  ).toEqual(["overview", "coaching", "moments", "missed", "skills", "facts"]);
-  // The Report starts with its conclusion: no glance strip in the header,
-  // and the interactive call map sits inside "How the Call Played Out".
+  ).toEqual(["overview", "analysis", "outcome"]);
+  // The Report starts with its conclusion: no glance strip in the header.
   expect(
     report?.querySelector('[aria-label="This call at a glance"]'),
   ).toBeNull();
-  expect(
-    report?.querySelector(
-      '[data-report-pillar="coaching"] [data-report-map-slot] figure',
-    ),
-  ).not.toBeNull();
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),
   ).not.toBeNull();

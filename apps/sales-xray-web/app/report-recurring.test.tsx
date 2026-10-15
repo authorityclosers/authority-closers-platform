@@ -2,7 +2,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
-import { ReportModes } from "./report-modes";
+import { CallOutcomeProvider } from "./report-outcome-context";
+import { reportScreenPanels } from "./report-pillar-screen";
 import {
   amitReport,
   amitTranscript,
@@ -41,13 +42,19 @@ async function mount() {
   await act(async () =>
     root.render(
       <WorkspaceAccessContext.Provider value={access}>
-        <ReportModes
-          structure="pillars"
-          initialView="story"
-          panels={[]}
-          boundCallId={CALL}
-          documentData={{ report: amitReport, transcript: amitTranscript }}
-        />
+        {/* The six pillars left the Report view (15 Oct structure); their
+            What Didn't note is still tested where it renders. */}
+        <CallOutcomeProvider callId={null}>
+          {reportScreenPanels(
+            { report: amitReport, transcript: amitTranscript },
+            undefined,
+            undefined,
+            undefined,
+            { callId: CALL },
+          ).map((panel) => (
+            <section key={panel.id}>{panel.content}</section>
+          ))}
+        </CallOutcomeProvider>
       </WorkspaceAccessContext.Provider>,
     ),
   );
