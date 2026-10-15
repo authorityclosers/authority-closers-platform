@@ -176,7 +176,8 @@ def summarize_team(
         focus = learner.focus if learner else None
         skill = focus.skill_id if focus and focus.skill_id in LABELS else None
         # The same counts as the rep's own "needed work in N of M calls".
-        window = learner.pattern.relevant_call_count if learner and focus else 0
+        pattern = learner.pattern if learner and focus else None
+        window = pattern.relevant_call_count if pattern else 0
         reps.append(
             TeamRep(
                 person_id=rep_id,
@@ -186,7 +187,7 @@ def summarize_team(
                 calls=len(own),
                 latest_call_at=newest.created_at if newest else None,
                 shared_at=shared_at,
-                focus_calls=learner.pattern.attention_call_count if window else None,
+                focus_calls=pattern.attention_call_count if pattern and window else None,
                 focus_window=window or None,
             )
         )
