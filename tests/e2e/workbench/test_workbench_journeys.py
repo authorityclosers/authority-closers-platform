@@ -2309,7 +2309,7 @@ def test_fixture_coaching_hear_lesson_focus(browser: Browser, viewport: tuple[in
         }
 
 
-@pytest.mark.parametrize("interruption", ("moment", "fold"))
+@pytest.mark.parametrize("interruption", ("moment", "fold", "pause", "viewclose"))
 def test_fixture_coaching_interrupted_lesson_resume(
     browser: Browser, viewport: tuple[int, str], interruption: str
 ) -> None:
@@ -2325,7 +2325,7 @@ def test_fixture_coaching_interrupted_lesson_resume(
             / "apps/sales-xray-web/app/review-fixture/coaching/sandbox.json"
         ).read_text()
     )["me"]
-    clip = payload["media_clips"][0 if interruption == "moment" else 1]
+    clip = payload["media_clips"][1 if interruption == "fold" else 0]
     source = (
         f"/v1/me/coaching/media/{clip['topic_id']}/{clip['revision']}/{clip['review_id']}/source"
     )
@@ -2414,9 +2414,9 @@ def test_fixture_coaching_interrupted_lesson_resume(
         more = page.locator("#coaching-better details[data-other-lessons]")
         summary = more.locator(":scope > summary")
         card = (
-            page.locator("#coaching-better article[data-recommended]")
-            if interruption == "moment"
-            else more.locator("article").first
+            more.locator("article").first
+            if interruption == "fold"
+            else page.locator("#coaching-better article[data-recommended]")
         )
         quote = page.locator("#coaching-evidence blockquote").first
         expect(quote).to_have_text(payload["evidence"][0]["quote"])
@@ -2427,6 +2427,7 @@ def test_fixture_coaching_interrupted_lesson_resume(
         expect(pause).to_be_visible()
         audio = card.locator("audio")
         expect(audio).to_have_attribute("src", source)
+        audio.evaluate("el => { window.__wbInterruptedLesson = el; }")
         page.wait_for_function(
             """({source, start}) => {
               const audio = document.querySelector(`audio[src="${source}"]`);
@@ -2442,17 +2443,32 @@ def test_fixture_coaching_interrupted_lesson_resume(
                 moment.get_by_role("button", name=re.compile(r"^Try audio again"))
             ).to_be_enabled()
             assert reads[call_source] >= 1
-        else:
+        elif interruption == "fold":
             summary.click()
             assert more.get_attribute("open") is None
-        page.wait_for_function(
-            'source => document.querySelector(`audio[src="${source}"]`)?.paused', arg=source
-        )
-        paused_at = audio.evaluate("el => Math.round(el.currentTime * 1000)")
+        elif interruption == "pause":
+            pause.click()
+        else:
+            page.get_by_role("button", name="This call", exact=True).click()
+            expect(page.get_by_role("button", name="This call", exact=True)).to_have_attribute(
+                "aria-pressed", "true"
+            )
+        page.wait_for_function("window.__wbInterruptedLesson.paused")
+        paused_at = page.evaluate("Math.round(window.__wbInterruptedLesson.currentTime * 1000)")
         saved = int(page.evaluate("key => localStorage.getItem(key)", storage_key) or 0)
         assert 0 < saved < 2000, "Interruption was not before the first device checkpoint"
         assert saved == paused_at - clip["start_ms"], "Saved offset differs from native paused time"
         resume = card.get_by_role("button", name="Resume clip", exact=True)
+        if interruption == "viewclose":
+            assert page.evaluate("window.__wbInterruptedLesson.isConnected") is False
+            before_return = dict(reads)
+            page.get_by_role("button", name="My coaching", exact=True).click()
+            ready()
+            assert reads == before_return, "Returning to Coaching eagerly requested media"
+            assert (
+                page.evaluate("Math.round(window.__wbInterruptedLesson.currentTime * 1000)")
+                == paused_at
+            )
         if interruption == "fold":
             summary.click()
         expect(resume).to_be_visible()
@@ -2494,7 +2510,7 @@ def test_fixture_coaching_interrupted_lesson_resume(
         assert not unexpected_media and not mutations
         assert journey.live_refreshes == 0, "Live source changed during interruption/resume"
         journey.observations[-1]["fictional_interrupted_lesson_resume"] = {
-            "source": "D135be632/b7623097 existing authored clips; local70s silent WAV/404 call",
+            "source": "D135be632/b7623097/f20b606f authored clips; local70s silent WAV/404 call",
             "interruption": interruption,
             "native_paused_at_ms": paused_at,
             "saved_window_offset_ms": saved,
@@ -2504,6 +2520,194 @@ def test_fixture_coaching_interrupted_lesson_resume(
             "source_reads_intercepted": sum(reads.values()),
             "api_mutations": len(mutations),
             "device_position_only_not_canonical_progress": True,
+            "real_recording_provider_or_authenticated_acceptance": False,
+        }
+
+
+def test_fixture_coaching_moment_view_close(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Leaving a fictional moment stops its detached player and preserves original replay."""
+    if (
+        os.environ.get("WB_MODE", "fixture") != "fixture"
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.skip("Moment teardown uses only the existing local Design review")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox.json"
+        ).read_text()
+    )["me"]
+    evidence = payload["evidence"][0]
+    source = f"/v1/conversation/acquisition/submissions/{evidence['submission_id']}/source"
+    start = evidence["start_ms"] / 1000
+    with BytesIO() as output:
+        with wave.open(output, "wb") as local_audio:
+            local_audio.setnchannels(1)
+            local_audio.setsampwidth(2)
+            local_audio.setframerate(8000)
+            local_audio.writeframes(b"\0\0" * round((evidence["end_ms"] / 1000 + 5) * 8000))
+        silent_wav = output.getvalue()
+    with _journey(browser, viewport, "moment-view-close") as journey:
+        page = journey.page
+        loading = False
+        pending: list[Route] = []
+        reads: list[str] = []
+        media: list[str] = []
+        mutations: list[str] = []
+        page.add_init_script("""(() => {
+          window.__wbLeavingMomentStarts = [];
+          const nativePlay = HTMLMediaElement.prototype.play;
+          HTMLMediaElement.prototype.play = function () {
+            window.__wbLeavingMomentStarts.push({
+              source: this.getAttribute('src'), at: this.currentTime,
+            });
+            this.muted = true;
+            return nativePlay.call(this);
+          };
+        })();""")
+
+        def local_read(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif url.netloc == "127.0.0.1:3026" and url.path == source:
+                reads.append(request.method)
+                if loading:
+                    pending.append(route)
+                    return
+                byte_range = re.fullmatch(r"bytes=(\d+)-(\d*)", request.headers.get("range", ""))
+                first = int(byte_range[1]) if byte_range else 0
+                last = (
+                    min(int(byte_range[2]), len(silent_wav) - 1)
+                    if byte_range and byte_range[2]
+                    else len(silent_wav) - 1
+                )
+                if first > last:
+                    route.fulfill(
+                        status=416, headers={"Content-Range": f"bytes */{len(silent_wav)}"}
+                    )
+                    return
+                body = silent_wav[first : last + 1]
+                headers = {"Accept-Ranges": "bytes", "Content-Length": str(len(body))}
+                if byte_range:
+                    headers["Content-Range"] = f"bytes {first}-{last}/{len(silent_wav)}"
+                route.fulfill(
+                    status=206 if byte_range else 200,
+                    content_type="audio/wav",
+                    headers=headers,
+                    body=body if request.method == "GET" else b"",
+                )
+            elif (
+                request.resource_type == "media"
+                or url.path.endswith("/source")
+                or (url.path.startswith("/v1/") and "/media/" in url.path)
+            ):
+                media.append("unexpected-source")
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/*", local_read)
+
+        def ready() -> None:
+            for label in ("Design review", "My coaching"):
+                expect(page.get_by_role("button", name=label, exact=True)).to_have_attribute(
+                    "aria-pressed", "true"
+                )
+            page.evaluate("() => document.fonts.ready")
+            expect(page.locator("audio,video")).to_have_count(0)
+
+        def leave_and_return() -> dict[str, object]:
+            page.get_by_role("button", name="This call", exact=True).click()
+            expect(page.get_by_role("button", name="This call", exact=True)).to_have_attribute(
+                "aria-pressed", "true"
+            )
+            old = page.evaluate("""() => ({
+              connected: window.__wbLeftMoment.isConnected,
+              paused: window.__wbLeftMoment.paused,
+              position: window.__wbLeftMoment.currentTime,
+            })""")
+            assert old["connected"] is False and old["paused"] is True
+            before_return = len(reads)
+            page.get_by_role("button", name="My coaching", exact=True).click()
+            ready()
+            assert len(reads) == before_return, "Returning eagerly fetched a moment source"
+            assert page.evaluate("window.__wbLeftMoment.currentTime") == old["position"]
+            return old
+
+        journey.open("/review-fixture/coaching?data=review&view=me")
+        ready()
+        assert not reads, "Reading Coaching eagerly fetched a moment source"
+        moment = page.locator("#coaching-evidence li").first
+        expect(moment.locator("blockquote")).to_have_text(evidence["quote"])
+        call_link = moment.get_by_role("link", name=evidence["call_label"], exact=True)
+        call_href = call_link.get_attribute("href")
+        play = moment.get_by_role("button", name=re.compile(r"^Play moment"))
+        original_label = play.get_attribute("aria-label")
+        play.click()
+        pause = moment.get_by_role("button", name=re.compile(r"^Pause moment"))
+        expect(pause).to_be_visible()
+        audio = moment.locator("audio")
+        expect(audio).to_have_attribute("src", source)
+        assert audio.evaluate("el => !el.paused")
+        audio.evaluate("el => {window.__wbLeftMoment = el;}")
+        closed_playing = leave_and_return()
+        expect(play).to_have_attribute("aria-label", original_label)
+        moment.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("playing-player-detached-return-ready")
+        journey.control_target(play, "returned-moment-play")
+        play.focus()
+        page.keyboard.press("Enter")
+        expect(pause).to_be_visible()
+        expect(pause).to_be_focused()
+        assert page.evaluate("window.__wbLeavingMomentStarts") == [
+            {"source": source, "at": start},
+            {"source": source, "at": start},
+        ]
+        journey.snapshot("original-source-replayed-native-focus")
+        journey.control_target(pause, "replayed-moment-pause")
+        pause.click()
+        # The same existing source also covers closing while metadata is held.
+        loading = True
+        response = page.reload(wait_until="domcontentloaded", timeout=60_000)
+        assert response and response.status < 400
+        ready()
+        with page.expect_request(lambda request: urlsplit(request.url).path == source):
+            play.click()
+        expect(moment.locator("audio")).to_have_attribute("src", source)
+        expect(moment.locator("button").first).to_be_disabled()
+        moment.locator("audio").evaluate("el => {window.__wbLeftMoment = el;}")
+        closed_loading = leave_and_return()
+        while pending:
+            with suppress(Exception):
+                pending.pop().fulfill(status=200, content_type="audio/wav", body=silent_wav)
+        page.evaluate("""() => new Promise(resolve => requestAnimationFrame(
+          () => requestAnimationFrame(resolve)))""")
+        assert page.evaluate("window.__wbLeavingMomentStarts") == []
+        assert page.evaluate("window.__wbLeftMoment.paused") is True
+        assert page.evaluate("window.__wbLeftMoment.currentTime") == closed_loading["position"]
+        expect(play).to_be_enabled()
+        expect(play).to_have_attribute("aria-label", original_label)
+        expect(moment.locator("blockquote")).to_have_text(evidence["quote"])
+        expect(call_link).to_have_attribute("href", call_href)
+        expect(page.locator("[data-active-mission]")).to_have_text(payload["mission"]["behavior"])
+        expect(page).to_have_url(re.compile(r"/review-fixture/coaching\?data=review&view=me$"))
+        moment.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("held-loading-player-detached-return-ready")
+        journey.control_target(play, "loading-close-return-play")
+        assert not media and not mutations
+        assert journey.live_refreshes == 0, "Live source changed during moment teardown"
+        journey.observations[-1]["fictional_moment_view_close"] = {
+            "source": "D37f7ef65 existing authored first moment; muted local PCM/held source",
+            "playing_detached_paused_position": closed_playing["position"],
+            "held_loading_detached_paused_position": closed_loading["position"],
+            "no_eager_return_or_native_play_after_loading_close": True,
+            "original_source_start_quote_call_mission_query_focus_and_32_44px_preserved": True,
+            "late_source_delivery_attempted_locally": True,
+            "unresolved_play_promise_browser_tested": False,
+            "api_mutations": len(mutations),
             "real_recording_provider_or_authenticated_acceptance": False,
         }
 
@@ -4789,3 +4993,446 @@ def test_fixture_document_print(browser: Browser, viewport: tuple[int, str]) -> 
         journey.observations.append(
             {"step": "print", "screenshot": str(shot), "pdf": str(pdf), "print_metrics": metrics}
         )
+
+
+def test_fixture_coaching_mastery_names(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Pillar 5's five mastery names stay whole, apart and unclipped on phones."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Mastery-name checks use the signed-out Design review and Sandbox views")
+    names = ["Emerging", "Developing", "Consistent", "Strong", "Mastered"]
+    minimum_gap = 8
+    with _journey(browser, viewport, "mastery-names") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        current_steps: dict[str, str | None] = {}
+        for data in ("review", "sandbox"):
+            journey.open(f"/review-fixture/coaching?data={data}&view=me")
+            stepper = page.get_by_role("list", name="Mastery journey", exact=True).first
+            expect(stepper.get_by_role("listitem")).to_have_text(names)
+            page.evaluate("() => document.fonts.ready")
+            stepper.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            geometry = stepper.evaluate(
+                """list => {
+                  const box = list.getBoundingClientRect();
+                  const labels = [...list.querySelectorAll(':scope > li')].map(item => {
+                    const span = item.querySelector('span');
+                    const range = document.createRange();
+                    range.selectNodeContents(span);
+                    // The text itself, not the stretched column box.
+                    const text = range.getBoundingClientRect();
+                    const lines = new Set(
+                      [...range.getClientRects()].map(rect => Math.round(rect.top))).size;
+                    const style = getComputedStyle(span);
+                    const clips = value => ['hidden', 'clip'].includes(value);
+                    const clipped = [item, span].some(el =>
+                      clips(getComputedStyle(el).overflowX) && el.scrollWidth > el.clientWidth + 1);
+                    return {text: span.textContent, left: text.left, right: text.right,
+                      top: text.top, bottom: text.bottom, lines, clipped,
+                      weight: Number(style.fontWeight), size: parseFloat(style.fontSize),
+                      current: item.getAttribute('aria-current') === 'step'};
+                  });
+                  return {left: box.left, right: box.right, labels,
+                    overflow: document.documentElement.scrollWidth -
+                      document.documentElement.clientWidth};
+                }"""
+            )
+            labels = geometry["labels"]
+            assert [label["text"] for label in labels] == names
+            for label in labels:
+                assert label["lines"] == 1, f"{label['text']} wraps onto {label['lines']} lines"
+                assert not label["clipped"], f"{label['text']} is clipped"
+                assert label["size"] >= 12, f"{label['text']} is {label['size']}px"
+                assert (
+                    label["left"] >= geometry["left"] - 0.5
+                    and label["right"] <= geometry["right"] + 0.5
+                ), f"{label['text']} leaves the journey box"
+            gaps: list[float] = []
+            for index, first in enumerate(labels):
+                for second in labels[index + 1 :]:
+                    same_line = first["top"] < second["bottom"] and second["top"] < first["bottom"]
+                    if same_line:
+                        gaps.append(second["left"] - first["right"])
+            assert gaps, "No two names share a line"
+            assert min(gaps) >= minimum_gap, f"Names on one line only {min(gaps):.1f}px apart"
+            assert geometry["overflow"] <= 1, f"Page overflows by {geometry['overflow']}px"
+            current = [label for label in labels if label["current"]]
+            assert len(current) <= 1, "More than one current step"
+            if current:
+                assert current[0]["weight"] >= 700, f"{current[0]['text']} is not bold"
+                assert all(label["weight"] < 700 for label in labels if not label["current"]), (
+                    "A non-current step is bold"
+                )
+            current_steps[data] = current[0]["text"] if current else None
+            journey.snapshot(f"{data}-mastery-names")
+            journey.unclipped_text(stepper)
+            journey.observations[-1]["mastery_names"] = {
+                "view": data,
+                "names_present_whole_and_unclipped": True,
+                "minimum_same_line_gap_px": round(min(gaps), 1),
+                "lines_per_name": [label["lines"] for label in labels],
+                "current_step": current_steps[data],
+                "current_step_bold": bool(current) and current[0]["weight"] >= 700,
+                "font_px": sorted({label["size"] for label in labels}),
+                "overflow_px": geometry["overflow"],
+            }
+        assert any(current_steps.values()), "Neither view rendered a current step"
+        assert not mutations, "Mastery-name checks attempted an API mutation"
+        journey.observations[-1]["fictional_mastery_names"] = {
+            "source": "D c3ec652c; signed-out Design review and AC Sandbox My coaching",
+            "current_steps": current_steps,
+            "api_mutations": len(mutations),
+            "authenticated_or_real_data_acceptance": False,
+        }
+
+
+def test_fixture_report_clip_pause_room(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Labelled Report clips reserve room for Pause, so nothing moves when one plays."""
+    if (
+        os.environ.get("WB_MODE", "fixture") != "fixture"
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.skip("Clip room checks use the authored fictional Report only")
+    pillars = ("moments", "missed", "skills")
+    with _journey(browser, viewport, "report-clip-pause-room") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        media: list[str] = []
+        reads: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            request = route.request
+            path = urlsplit(request.url).path
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif (
+                request.resource_type == "media"
+                or path.endswith("/source")
+                or (path.startswith("/v1/") and "/media/" in path)
+            ):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            else:
+                if path.startswith("/v1/"):
+                    reads.append("read")
+                route.continue_()
+
+        page.route("**/*", observe_read)
+        journey.open("/review-fixture/report/story?view=story&section=moments")
+        expect(page.locator("[data-report-pillar]")).to_have_count(6)
+        page.evaluate("() => document.fonts.ready")
+        page.wait_for_load_state("networkidle", timeout=15_000)
+        before_reads = len(reads)
+        assert page.locator('[data-full-shell-fixture="true"]').count() == 1
+        labelled = page.locator("[data-report-pillar] button[aria-pressed]").filter(
+            has_text=re.compile(r"· Play$")
+        )
+        expect(labelled.first).to_be_visible()
+        counts: dict[str, int] = {}
+        geometry: dict[str, dict[str, object]] = {}
+        shortfalls: list[str] = []
+        for pillar in pillars:
+            section = page.locator(f'[data-report-pillar="{pillar}"]')
+            scope = section
+            if pillar == "skills":
+                # Skill clips sit inside the row's own disclosure; open the first row.
+                rows = section.locator("li:has(> details > summary)")
+                expect(rows).to_have_count(8)
+                rows.first.locator("summary").click()
+                expect(rows.first.locator("details")).to_have_attribute("open", "")
+                scope = rows.first
+            chips = scope.locator("button[aria-pressed]").filter(has_text=re.compile(r"· Play$"))
+            counts[pillar] = chips.count()
+            assert counts[pillar] >= 1, f"{pillar} shows no labelled clip"
+            # Every labelled chip is idle on the fixture: no clip plays here.
+            expect(section.locator('button[aria-pressed="true"]')).to_have_count(0)
+            for index in range(counts[pillar]):
+                assert (chips.nth(index).get_attribute("aria-label") or "").startswith("Play ")
+            first = chips.first
+            first.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            expect(first).to_be_visible()
+            # Browser-only word swap on the rendered chip: the shipped CSS must
+            # keep the chip, its time and its neighbours still when Play reads
+            # Pause. The word is restored at once; no product state changes.
+            measured = first.evaluate("""button => {
+              const word = button.querySelector('span > span');
+              if (!word || word.textContent !== 'Play') throw new Error('Missing Play word');
+              const row = button.parentElement;
+              const next = button.nextElementSibling;
+              const textWidth = () => {
+                const range = document.createRange();
+                range.selectNodeContents(word);
+                return range.getBoundingClientRect().width;
+              };
+              const read = () => {
+                const chip = button.getBoundingClientRect();
+                const span = word.getBoundingClientRect();
+                return {chipLeft: chip.left, chipWidth: chip.width, chipHeight: chip.height,
+                  wordLeft: span.left, wordWidth: span.width, text: textWidth(),
+                  rowHeight: row.getBoundingClientRect().height,
+                  nextLeft: next ? next.getBoundingClientRect().left : null,
+                  nextTop: next ? next.getBoundingClientRect().top : null,
+                  clipped: word.scrollWidth > word.clientWidth + 1};
+              };
+              const style = getComputedStyle(word);
+              const idle = read();
+              word.textContent = 'Pause';
+              const paused = read();
+              word.textContent = 'Play';
+              const restored = read();
+              return {idle, paused, restored, restoredWord: word.textContent,
+                minInlineSize: parseFloat(style.minInlineSize), display: style.display,
+                fontPx: parseFloat(style.fontSize), chipLabel: button.textContent};
+            }""")
+            assert measured["restoredWord"] == "Play"
+            idle, paused, restored = measured["idle"], measured["paused"], measured["restored"]
+            for key in (
+                "chipLeft",
+                "chipWidth",
+                "chipHeight",
+                "wordLeft",
+                "wordWidth",
+                "rowHeight",
+                "nextLeft",
+                "nextTop",
+            ):
+                if idle[key] is None:
+                    continue
+                assert abs(paused[key] - idle[key]) <= 0.5, (
+                    f"{pillar}: {key} moves by {paused[key] - idle[key]:.2f}px when Play "
+                    "reads Pause"
+                )
+                assert abs(restored[key] - idle[key]) <= 0.5, f"{pillar}: {key} not restored"
+            assert paused["text"] <= paused["wordWidth"] + 0.5, (
+                f"{pillar}: Pause ({paused['text']:.1f}px) exceeds its reserved "
+                f"{paused['wordWidth']:.1f}px"
+            )
+            assert not paused["clipped"] and not idle["clipped"], f"{pillar}: word is clipped"
+            assert measured["minInlineSize"] >= paused["text"] - 0.5, (
+                f"{pillar}: reserved {measured['minInlineSize']:.1f}px is narrower than Pause"
+            )
+            assert measured["display"] == "inline-block"
+            assert measured["fontPx"] >= 12
+            geometry[pillar] = {
+                "chip_width_px": round(idle["chipWidth"], 1),
+                "word_width_px": round(idle["wordWidth"], 1),
+                "pause_text_px": round(paused["text"], 1),
+                "reserved_px": round(measured["minInlineSize"], 1),
+                "shift_px_when_pause": round(
+                    max(abs(paused[k] - idle[k]) for k in ("chipWidth", "wordLeft", "rowHeight")),
+                    2,
+                ),
+                "neighbour_present": idle["nextLeft"] is not None,
+            }
+            journey.snapshot(f"{pillar}-play-chips")
+            # The chip's real pointer area, including its thumb-sized ::after.
+            target = first.evaluate("""el => {
+              const r = el.getBoundingClientRect();
+              const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+              const hits = (x, y) => {
+                const hit = document.elementFromPoint(x, y);
+                return hit === el || el.contains(hit);
+              };
+              let top = cy, bottom = cy, left = cx, right = cx;
+              while (top - 1 >= 0 && hits(cx, top - 1)) top -= 1;
+              while (bottom + 1 <= innerHeight && hits(cx, bottom + 1)) bottom += 1;
+              while (left - 1 >= 0 && hits(left - 1, cy)) left -= 1;
+              while (right + 1 <= innerWidth && hits(right + 1, cy)) right += 1;
+              return {visibleWidth: r.width, visibleHeight: r.height, reachable: hits(cx, cy),
+                hitWidth: right - left + 1, hitHeight: bottom - top + 1};
+            }""")
+            journey.observations[-1][f"target_{pillar}_first_clip"] = target
+            minimum = 44 if journey.width == 390 else 32
+            assert target["reachable"], f"{pillar}: first clip centre is covered"
+            if min(target["hitWidth"], target["hitHeight"]) < minimum:
+                shortfalls.append(f"{pillar}: clip hit area {target} is below {minimum}px")
+            geometry[pillar]["visible_height_px"] = round(target["visibleHeight"], 1)
+            geometry[pillar]["hit_height_px"] = target["hitHeight"]
+        pressed = page.locator('[data-report-pillar] button[aria-pressed="true"]')
+        expect(pressed.filter(has_text=re.compile(r"· (?:Play|Pause)$"))).to_have_count(0)
+        expect(page.locator("audio")).to_have_count(1)
+        assert page.locator("audio").evaluate("el => el.paused && !el.getAttribute('src')")
+        # The shell may finish a delayed read of its own; clips add no media or writes.
+        assert not media and not mutations
+        assert journey.live_refreshes == 0, "Live source changed during clip room checks"
+        journey.observations[-1]["fictional_report_clip_pause_room"] = {
+            "source": "B5f7d7ac1 labelled PlayChip; authored fictional Report, idle dock",
+            "labelled_clips": counts,
+            "geometry": geometry,
+            "clip_hit_area_shortfalls": shortfalls,
+            "word_swap_is_browser_only_and_restored": True,
+            "live_pause_state_during_playback_browser_tested": False,
+            "extra_api_reads": len(reads) - before_reads,
+            "media_requests": len(media),
+            "api_mutations": len(mutations),
+            "real_audio_provider_or_authenticated_acceptance": False,
+        }
+        assert not shortfalls, "; ".join(shortfalls)
+
+
+def test_fixture_coaching_call_record_marks(browser: Browser, viewport: tuple[int, str]) -> None:
+    """All calls rows carry each call's saved record on the current focus, with its dot."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Call record marks use the signed-out Design review and Sandbox views")
+    fixtures = (
+        Path(__file__).resolve().parents[3] / "apps/sales-xray-web/app/review-fixture/coaching"
+    )
+    sources = {
+        "review": json.loads((fixtures / "sandbox.json").read_text())["me"],
+        "sandbox": json.loads((fixtures / "sandbox-team.json").read_text())["rep"],
+    }
+    labels = {"suggested": "Needed work", "no_suggestion": "Skill used, nothing to fix"}
+    with _journey(browser, viewport, "call-record-marks") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        summary: dict[str, dict[str, object]] = {}
+        for data, payload in sources.items():
+            points = {row["submission_id"]: row["state"] for row in payload["progress"]}
+            calls = payload["calls"]
+            fallback = f"One practice for {'your' if data == 'review' else 'their'} next call"
+            assert payload["focus"]["label"], f"{data}: fixture has no current focus"
+            expected = [
+                {
+                    "label": call["call_label"],
+                    "id": call["submission_id"],
+                    "ready": call["state"] == "ready",
+                    "focus": (
+                        "Analysing…"
+                        if call["state"] == "pending"
+                        else call["focus_label"] or fallback
+                    ),
+                    "mark": (
+                        points.get(call["submission_id"])
+                        if call["state"] == "ready" and points.get(call["submission_id"]) in labels
+                        else None
+                    ),
+                    "recurring": bool(call.get("recurring")),
+                }
+                for call in calls
+            ]
+            journey.open(f"/review-fixture/coaching?data={data}&view=me")
+            section = page.locator("#coaching-calls")
+            # My coaching says "Your recent calls"; One rep says "Their recent calls".
+            listing = section.get_by_role("list", name=re.compile(r"^(Your|Their) recent calls$"))
+            all_calls = section.get_by_role("button", name="All calls", exact=True)
+            on_skill = section.get_by_role("button", name="On this skill", exact=True)
+            expect(all_calls).to_have_attribute("aria-pressed", "true")
+            expect(listing.locator("li")).to_have_count(len(expected))
+            show_all = section.get_by_role("button", name=re.compile(r"^Show all \d+ calls$"))
+            if show_all.count():
+                show_all.click()
+            expect(listing.locator("li:visible")).to_have_count(len(expected))
+            page.evaluate("() => document.fonts.ready")
+            rows = listing.evaluate(
+                """list => [...list.querySelectorAll(':scope > li')].map(li => {
+                  const title = li.querySelector('a');
+                  const meta = title?.nextElementSibling;
+                  const items = meta ? [...meta.children].map(s => s.textContent) : [];
+                  const mark = li.querySelector('[data-state]');
+                  const dot = mark ? getComputedStyle(mark, '::before') : null;
+                  const report = li.querySelector('a[aria-label^="Open Report for "]');
+                  return {title: title?.textContent, href: title?.getAttribute('href'),
+                    items, state: mark?.getAttribute('data-state') ?? null,
+                    markIndex: mark ? [...meta.children].findIndex(s => s.contains(mark)) : null,
+                    markText: mark?.textContent ?? null,
+                    dot: dot ? {width: dot.width, height: dot.height, content: dot.content,
+                      background: dot.backgroundColor, border: dot.borderTopColor,
+                      style: dot.borderTopStyle} : null,
+                    report: report?.getAttribute('href') ?? null};
+                })"""
+            )
+            legend = page.locator('#coaching-progress p[aria-hidden="true"] span[data-state]')
+            legend_dots = legend.evaluate_all(
+                """spans => Object.fromEntries(spans.map(s => {
+                  const dot = getComputedStyle(s, '::before');
+                  return [s.getAttribute('data-state'), {width: dot.width,
+                    background: dot.backgroundColor, border: dot.borderTopColor,
+                    style: dot.borderTopStyle}];
+                }))"""
+            )
+            assert {"suggested", "no_suggestion"} <= set(legend_dots), "Legend lacks both states"
+            assert [row["title"] for row in rows] == [call["label"] for call in expected]
+            marked = 0
+            for row, call in zip(rows, expected, strict=True):
+                where = f"{data}: {call['label']}"
+                assert row["items"][1] == call["focus"], f"{where}: own focus changed"
+                if call["ready"]:
+                    assert row["report"] == f"/analysis/calls/{call['id']}", f"{where}: Report"
+                if call["mark"] is None:
+                    assert row["state"] is None, f"{where}: unexpected record mark"
+                    assert not any(text in row["items"] for text in labels.values()), (
+                        f"{where}: record words without a saved record"
+                    )
+                    continue
+                marked += 1
+                assert row["state"] == call["mark"], f"{where}: wrong saved record"
+                assert row["markText"] == labels[call["mark"]], f"{where}: wrong record words"
+                assert row["markIndex"] == 2, f"{where}: record not right after the focus"
+                if call["recurring"]:
+                    assert row["items"][3] == "Also on other calls", f"{where}: recurring order"
+                dot, legend_dot = row["dot"], legend_dots[call["mark"]]
+                assert dot["width"] == "10px" and dot["height"] == "10px", f"{where}: dot size"
+                assert dot["content"] != "none", f"{where}: no dot"
+                assert (dot["background"], dot["border"], dot["style"]) == (
+                    legend_dot["background"],
+                    legend_dot["border"],
+                    legend_dot["style"],
+                ), f"{where}: dot differs from the pillar 5 legend"
+            assert marked == sum(1 for call in expected if call["mark"]), f"{data}: mark count"
+            assert marked, f"{data}: no row carries a saved record"
+            section.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
+            journey.snapshot(f"{data}-call-record-marks")
+            journey.unclipped_text(listing)
+            first_ready = next(call for call in expected if call["ready"])
+            journey.row_link_target(
+                listing.get_by_role("link", name=first_ready["label"], exact=True),
+                f"{data}-first-ready-row",
+            )
+            # The skill filter keeps its own record words: no separate marks.
+            on_skill.click()
+            expect(on_skill).to_have_attribute("aria-pressed", "true")
+            expect(section.locator("[data-state]")).to_have_count(0)
+            expect(listing.locator("li").first).to_contain_text(
+                re.compile("Needed work|Skill used, nothing to fix")
+            )
+            all_calls.click()
+            expect(all_calls).to_have_attribute("aria-pressed", "true")
+            expect(section.locator("[data-state]")).to_have_count(marked)
+            summary[data] = {
+                "rows": len(expected),
+                "marked": marked,
+                "unmarked": [call["label"] for call in expected if call["mark"] is None][:4],
+                "states": sorted({call["mark"] for call in expected if call["mark"]}),
+                "recurring_rows": sum(1 for call in expected if call["recurring"]),
+                "legend_dot_width": legend_dots["suggested"]["width"],
+            }
+        assert summary["review"]["marked"] == 6 and summary["review"]["rows"] == 8
+        assert summary["sandbox"]["marked"] == summary["sandbox"]["rows"]
+        assert not mutations, "Call record marks attempted an API mutation"
+        assert journey.live_refreshes == 0, "Live source changed during call record marks"
+        journey.observations[-1]["fictional_call_record_marks"] = {
+            "source": "D f5f6ad82/73fbadc7; signed-out Design review and AC Sandbox My coaching",
+            "views": summary,
+            "mark_after_focus_before_recurring_and_dot_matches_legend": True,
+            "no_focus_view_browser_tested": False,
+            "api_mutations": len(mutations),
+            "authenticated_or_real_data_acceptance": False,
+        }

@@ -35,6 +35,7 @@ import {
 } from "./lightbox/time";
 import { REPORT_SECTION_COPY } from "./report-section-copy";
 import { AccountNavigation } from "./account-navigation";
+import { useTheme } from "./lightbox/theme-provider";
 import { acquisition, parseEntry, parsePolicy } from "./acquisition-client";
 import {
   parseProcessingPlan,
@@ -294,6 +295,9 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   const resolvedVariant =
     variant ?? (homeHref === "/" ? "standalone" : "embedded");
   const embedded = resolvedVariant === "embedded";
+  // Inherit the released document theme like AcquisitionStudio; without the
+  // provider (LMS embed) everything stays light.
+  const resolvedTheme = useTheme()?.resolved ?? "light";
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -1217,7 +1221,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   return (
     <div
       className={`xray-app simple-app${embedded ? " embedded-studio" : ""}`}
-      data-theme="light"
+      data-theme={resolvedTheme}
       data-variant={resolvedVariant}
     >
       {!embedded && (

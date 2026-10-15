@@ -7,6 +7,8 @@ import {
   type CallStudioProps,
 } from "./call-studio";
 import * as sourcePlaybackContext from "./source-playback-context";
+import { ThemeProvider } from "./lightbox/theme-provider";
+import { THEME_STORAGE_KEY } from "./lightbox/theme";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -1851,6 +1853,41 @@ describe("CallStudio", () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "Transcript is not ready.",
     );
+  });
+
+  it("inherits the released dark theme so recovery text stays readable", async () => {
+    enableMeasuredUpload();
+    await render();
+    expect(
+      container.querySelector(".xray-app")?.getAttribute("data-theme"),
+    ).toBe("light");
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    localStorage.setItem(THEME_STORAGE_KEY, "dark");
+    try {
+      await act(async () =>
+        root.render(
+          <ThemeProvider controlEnabled>
+            <CallStudio />
+          </ThemeProvider>,
+        ),
+      );
+      await flush();
+      const studio = container.querySelector(".xray-app");
+      expect(studio?.getAttribute("data-theme")).toBe("dark");
+      await selectAudio("call.caf", silentCaf(), "error");
+      await flush();
+      const recovery = container.querySelector('[role="status"]');
+      expect(recovery?.textContent).toContain("Continue with private upload");
+      expect(studio?.contains(recovery)).toBe(true);
+      expect(studio?.getAttribute("data-theme")).toBe("dark");
+    } finally {
+      localStorage.removeItem(THEME_STORAGE_KEY);
+      document.documentElement.removeAttribute("data-theme");
+      document.documentElement.removeAttribute("data-theme-preference");
+      document.documentElement.style.colorScheme = "";
+    }
   });
 
   it("never persists selected source data in browser storage", async () => {

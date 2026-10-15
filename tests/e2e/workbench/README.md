@@ -82,8 +82,8 @@ and four current-skill finding-filter cases, plus four skill-clip disclosure cas
 sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
 cases, eight secondary-lesson disclosure cases and four controlled audio-startup
 cases, plus four controlled native moment-end/replay and four narration shortcut
-focus cases, eight interrupted-lesson resume and four Worked/Didn't clip disclosure
-cases, collect 168 cases. The original Report
+focus cases, sixteen interrupted-lesson resume and four Worked/Didn't clip disclosure
+cases and four moment view-close cases, collect 180 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -330,7 +330,7 @@ Original quote/lesson/access/transcript/mission/query remain unchanged. No real
 audio, provider, authenticated read or write is used.
 
 For the new interruption resume, select only
-`-k fixture_coaching_interrupted_lesson_resume`. Eight cases reuse the existing
+`-k 'fixture_coaching_interrupted_lesson_resume and (moment or fold)'`. Eight cases reuse the existing
 recommended/secondary Design review clips and D's native muted70-second silent
 WAV response. A call moment or secondary fold interrupts before the first device
 checkpoint; its saved window offset must equal the native paused time. Reload must
@@ -339,6 +339,21 @@ with focus/32–44px targets and original access/text/mission/query. The call so
 receives an intercepted404. Only the isolated browser's device position changes;
 no canonical progress, provider, real recording, authenticated read or API write.
 
+For the separate direct Pause/view-close return, select only
+`-k 'fixture_coaching_interrupted_lesson_resume and (pause or viewclose)'`. These
+eight new cases use the same local silent source and exact native/device offset,
+reload/Enter/focus/access guards. View-close also checks the detached player is
+paused and stationary, with no eager media on return. Earlier switch/fold results
+remain retained; do not rerun them for this new criterion.
+
+For the new moment view-close behavior, select only
+`-k fixture_coaching_moment_view_close`. Four width/theme cases check both native
+silent playback and a held source: leaving detaches/pauses the old element, its
+position stays stationary, and return fetches no audio. Enter replays the playing
+case from its original timestamp with focus/32–44px; the held case cannot start
+playing after a late local delivery attempt. Quote/call/mission/query remain.
+Unresolved play promises stay unit-only; no real recording/provider/hosted claim.
+
 For the new Worked/Didn't clip controls, select only
 `-k fixture_worked_clip_disclosure`. Four cases reuse B's exact browser-only
 boundary: each existing fictional card repeats its own original source ref for
@@ -346,3 +361,26 @@ boundary: each existing fictional card repeats its own original source ref for
 Space selection of original displayed bounds/title, fold focus, unchanged six
 findings/prose and32–44px controls, with no added API/media/write. Mixed source
 order and original object identity stay unit-only; canonical payloads are untouched.
+
+For labelled Report clip chips ("18:42 · Play"), select only
+`-k fixture_report_clip_pause_room`. Four cases open the authored fictional
+Report and, in Worked/Didn't, Moments That Mattered and the first opened Skills
+row, swap the chip's word to Pause in the browser only (restored at once) and
+require zero movement of the chip, its time, its row and any neighbour, with the
+Pause text fitting the reserved width. The chip's real pointer area, including its
+`::after`, must reach 32 px desktop / 44 px phone with the centre reachable. The
+fixture never starts a clip, so the live Pause state during playback stays
+unit-only; no media, reads or writes are added by the checks.
+
+For each call's saved record on the current focus, select only
+`-k fixture_coaching_call_record_marks`. Four width/theme cases open the signed-out
+Design review and AC Sandbox My coaching views, press All calls (Show all first
+where present) and compare every row against the fixture: a ready call with a
+saved `suggested` or `no_suggestion` record carries "Needed work" or "Skill used,
+nothing to fix" right after its own focus and before "Also on other calls", with a
+10 px dot whose fill, ring and style equal pillar 5's legend for the same state.
+Pending calls and calls without a saved record show no mark and no record words;
+Design review marks 6 of 8 rows, Sandbox every ready row. "On this skill" shows
+no marks (its filter keeps its own words) and All calls restores them. Report
+links `/analysis/calls/<id>` and row targets are unchanged; no reads, writes or
+media are added. The no-current-focus view stays unit-only.

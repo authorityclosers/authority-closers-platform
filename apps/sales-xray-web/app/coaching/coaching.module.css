@@ -1092,7 +1092,8 @@
 }
 
 .timeline li,
-.legend span::before {
+.legend span::before,
+.callPoint::before {
   box-sizing: border-box;
   width: 14px;
   height: 14px;
@@ -1101,14 +1102,30 @@
 }
 
 .timeline [data-state="suggested"],
-.legend [data-state="suggested"]::before {
+.legend [data-state="suggested"]::before,
+.callPoint[data-state="suggested"]::before {
   border-color: transparent;
   background: var(--sx-warn);
 }
 
 .timeline [data-state="no_suggestion"],
-.legend [data-state="no_suggestion"]::before {
+.legend [data-state="no_suggestion"]::before,
+.callPoint[data-state="no_suggestion"]::before {
   border-color: var(--sx-accent);
+}
+
+/* A call row's saved record on the current focus, with the history's dot. */
+.callPoint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.callPoint::before {
+  content: "";
+  flex: none;
+  width: 10px;
+  height: 10px;
 }
 
 .timeline [data-state="not_covered"],
@@ -1178,6 +1195,7 @@
 
 .stepper li {
   display: grid;
+  align-content: start;
   gap: 6px;
   min-width: 0;
   color: var(--sx-muted);
@@ -1204,14 +1222,21 @@
   white-space: nowrap;
 }
 
-/* Phones: names sit under their bars, the ends flush with the edges. */
+/* Phones: names sit under their bars, the ends flush with the edges.
+   Five whole names do not fit one 390 px line at 12 px, so the even steps
+   drop to a second line: neighbours never touch, each stays under its bar. */
 @media (max-width: 400px) {
   .stepper {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 2px;
   }
 
   .stepper li {
     text-align: center;
+  }
+
+  .stepper li:nth-child(even) > span {
+    margin-top: 16px;
   }
 
   .stepper li:first-child {

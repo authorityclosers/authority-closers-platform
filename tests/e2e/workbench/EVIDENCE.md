@@ -1,5 +1,62 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 14:23 UTC — v0.44.0 served-source readback. Ship log: staging
+live/canary PASS 14:15:07, production snapshot 20261015T141515Z-before-v0.44.0,
+production live/canary PASS 14:23:06, ship done 14:23:07; ac-canary@staging and
+@production units Result=success/ExecMainStatus=0. Original-Host foundation
+:8080 reads at 14:23:13–14: staging and production web `/health` and API
+`/health/ready` all HTTP200 with release_id
+`d5beefbcffedaeb900c53891592de14482d60f47` (main d5beefb from workbench
+1e98c0d1); the 14:17:59 reads showed staging already on d5beefb while
+production still served adb834f. Receipts `shots/2026-10-15-v0.44.0-health/`.
+Availability and served source only; no populated authenticated acceptance
+and no operator action. Coordinator note delivered.
+
+15 October, 13:58 UTC — phone mastery-journey names **4/4 PASS**, 11.93s/
+launcher0 at `fbd4864f` (D c3ec652c). New `test_fixture_coaching_mastery_names`
+opens the signed-out Design review and AC Sandbox My coaching views: the five
+names render whole on one line each at 12px, inside the journey box and
+unclipped; the smallest same-line gap is 124px at 1440 and 75.5px at 390 (the
+even steps drop to a second line); page overflow0; Sandbox's single current
+step Emerging is bold and the Design review view has none; API writes0,
+refreshes/runtime/server/visual errors0. All eight PNGs inspected in
+`shots/2026-10-15-1357Z-mastery-names/`. Fixture geometry only; no
+authenticated or real-data claim. D closure delivered.
+
+15 October, 13:42 UTC — lesson Pause and view-close resume **8/8 PASS**,
+36.67s/launcher0 at `261cacc4` (D f20b606f source; own EVIDENCE a39f45f5
+landed mid-wave, docs only), and moment view-close **4/4 PASS**, 19.25s/
+launcher0 at `a39f45f5` (D37f7ef65). Pause/viewclose store the exact native
+offset (849–954ms) before the first checkpoint; reload fetches no audio and
+Enter resumes the same source at that offset with focus and 40/44px targets.
+Leaving a playing moment pauses the detached audio at 103.09–103.16s and the
+held-loading close stays at 0; the return has no eager media and Enter replays
+the original 1:43 source with native focus; 62x32/62x44 targets reachable.
+Quote/lesson/access/transcript/mission/query unchanged; live_refreshes,
+runtime/server/visual errors, blocked mutations and API writes0. All 28 PNGs
+inspected in `shots/2026-10-15-1340Z-{lesson-pause-viewclose,moment-view-close}/`
+(16 unique lesson captures; the held-loading return pairs are byte-identical to
+the playing return pairs since both show the same ready state). Local silent
+PCM/404/held sources only; device position, no canonical progress, real
+recording, provider or authenticated claim. D and coordinator closures sent.
+
+15 October, 13:28 UTC — Worked/Didn't clip disclosure **4/4 PASS**, 44.29s/
+launcher0 at `0e848802` (includes B99a79943), live_refreshes0 after two quiet
+days; the 13 October 1/4 hot-rebuild stop is cleared. First two then all/fewer
+per card, independent cards and fold focus; pointer/Enter/Space select the
+original displayed bounds/title for 4/0/1 and 3/2/1 refs; all six findings and
+prose intact; tail clip 118x32/118x44 and all/fewer 106x32/106x44 reachable.
+Extra API reads/media/mutations/runtime/server/visual errors0. All eight PNGs
+inspected in `shots/2026-10-15-1326Z-worked-clips/`; the 1440 worked/didnt
+pairs are byte-identical because both cards sit side by side fully expanded
+at both snapshots (capture artefact). Mixed order/object identity remain unit
+proof; no real-audio/authenticated claim. B closure delivered.
+
+The same script's lesson pause/viewclose8 and moment view-close4 waves were
+killed with the launching session at about 13:28 UTC before any case finished
+(partial folder `2026-10-15-1326Z-lesson-pause-viewclose-killed/`, no result);
+relaunched detached at 13:40 UTC as `2026-10-15-1340Z-*`.
+
 13 October, 05:43 UTC — prepared only Worked/Didn't disclosure4 using
 B99a79943's exact existing authored-card boundary. Repeated own refs cover
 0/1/2/3/4, first-two/all/fewer and independent cards, pointer/Enter/Space,
@@ -1665,3 +1722,18 @@ External screenshots/JSON: `/home/acdev/strikes/1694/shots/`:
 
 Strike NOTES records current verdicts, commits and exact owning INBOX handoffs.
 Two queued checks ended 143; those incomplete runs do not establish acceptance.
+
+## Report clip Pause room — 2026-10-15T14:50Z
+`-k fixture_report_clip_pause_room` at workbench `6cb849d4` (product source
+B `5f7d7ac1`, shipped in v0.44.0), shared dev :3026, 1440/390 light/dark.
+Worked/Didn't and Skills chips: 118 px wide, Play word reserved 45 px, Pause text
+35 px, 0 px shift of chip/time/row when the word reads Pause, hit area 118x32
+desktop / 118x44 phone, centres reachable. Moments That Mattered range chip
+(158 px wide, 24 px pill): same zero shift, but real hit area 160x30 desktop /
+164x42 phone, under the 32/44 floor. Result **4/4 FAIL on that one shortfall**;
+errors/overflow/undersized text/media/writes 0, live refreshes 0. Exact defect
+sent to B (1677 INBOX). Four harness-only failures before this result (strict
+multi-element idle check, sticky-header scroll, over-broad pressed guard, late
+shell read) are retained in the shot folder's sub-directories. Receipts and PNGs:
+`/home/acdev/strikes/1694/shots/2026-10-15-report-clip-pause-room/`.
+Fixture-only; the live Pause state during playback is not browser-tested.

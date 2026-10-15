@@ -101,22 +101,24 @@ function MomentRow({
           </p>
         </Field>
       ) : null}
-      <PlayChip
-        source={
-          moment.prospectResponse
-            ? {
-                ...moment.source,
-                end_ms:
-                  moment.prospectResponse.sources[0]?.end_ms ??
-                  moment.source.end_ms,
-              }
-            : moment.source
-        }
-        title={moment.title}
-        onSelect={onSelect}
-        label={COMMON.play}
-        range
-      />
+      <div className={`${styles.plays} ${styles.itemClips}`}>
+        <PlayChip
+          source={
+            moment.prospectResponse
+              ? {
+                  ...moment.source,
+                  end_ms:
+                    moment.prospectResponse.sources[0]?.end_ms ??
+                    moment.source.end_ms,
+                }
+              : moment.source
+          }
+          title={moment.title}
+          onSelect={onSelect}
+          label={COMMON.play}
+          range
+        />
+      </div>
     </li>
   );
 }
