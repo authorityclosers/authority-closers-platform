@@ -32,10 +32,21 @@ from scripts.ci import migration_schema_gate as gate  # noqa: E402
 REPOSITORY = "authorityclosers/authority-closers-platform"
 WORKFLOW = ".github/workflows/migration-schema-publish.yml"
 PREFIX = "ac-migration-schema-"
-MAX_PAYLOAD = 60_000
-MAX_ZIP = MAX_PAYLOAD // 4 * 3
 LIMITS = {"schema.dump": gate.MAX_DUMP_BYTES, "manifest.json": 8192}
 MAX_PAIR = sum(LIMITS.values())
+# Deflate cannot expand the pair beyond this margin; GitHub serves blobs up to 100 MB.
+MAX_ZIP = MAX_PAIR + 64 * 1024
+MAX_TRANSFER_SECONDS = 600
+RAW_BLOB = "application/vnd.github.raw+json"
+INPUT_FIELDS = {
+    "payload_blob",
+    "payload_sha256",
+    "manifest_sha256",
+    "publisher_sha",
+    "mode",
+    "request_id",
+    "admission",
+}
 MAX_PUBLICATIONS = 4
 MAX_PUBLICATION_BYTES = 128 * 1024 * 1024
 ADMISSION_AGE = timedelta(minutes=15)
@@ -92,7 +103,13 @@ def temporary_root() -> str | None:
     )
 
 
-def command(argv: list[str], data: bytes | None = None) -> bytes:
+def command(
+    argv: list[str],
+    data: bytes | None = None,
+    *,
+    limit: int = 4 * 1024 * 1024,
+    seconds: int = 60,
+) -> bytes:
     process = None
     timer = None
     try:
@@ -111,14 +128,14 @@ def command(argv: list[str], data: bytes | None = None) -> bytes:
                 with suppress(ProcessLookupError):
                     os.killpg(process.pid, signal.SIGKILL)
 
-            timer = threading.Timer(60, stop)
+            timer = threading.Timer(seconds, stop)
             timer.start()
             assert process.stdout is not None
             size = 0
             chunks = []
             while chunk := process.stdout.read(65536):
                 size += len(chunk)
-                require(size <= 4 * 1024 * 1024, "bounded command output exceeded limit")
+                require(size <= limit, "bounded command output exceeded limit")
                 chunks.append(chunk)
             require(process.wait(timeout=5) == 0, "bounded command failed")
             return b"".join(chunks)
@@ -137,12 +154,26 @@ def command(argv: list[str], data: bytes | None = None) -> bytes:
                 process.stdout.close()
 
 
-def api(path: str, *, data: dict | None = None, binary: bool = False):
+def api(
+    path: str,
+    *,
+    data: dict | None = None,
+    binary: bool = False,
+    accept: str | None = None,
+    seconds: int = 60,
+):
     require(path.startswith(f"repos/{REPOSITORY}/") or path == "user", "fixed repository required")
     argv = ["gh", "api", path]
+    if accept is not None:
+        argv += ["--header", f"Accept: {accept}"]
     if data is not None:
         argv += ["--method", "POST", "--input", "-"]
-    raw = command(argv, json.dumps(data).encode() if data is not None else None)
+    raw = command(
+        argv,
+        json.dumps(data).encode() if data is not None else None,
+        limit=MAX_ZIP if binary else 4 * 1024 * 1024,
+        seconds=seconds,
+    )
     if binary:
         require(len(raw) <= MAX_ZIP, "download exceeded transport bound")
         return raw
@@ -270,7 +301,7 @@ def unpack(raw: bytes) -> dict[str, bytes]:
     return result
 
 
-def pack(pair: dict[str, bytes]) -> str:
+def pack(pair: dict[str, bytes]) -> bytes:
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name in LIMITS:
@@ -279,24 +310,61 @@ def pack(pair: dict[str, bytes]) -> str:
             entry.external_attr = (stat.S_IFREG | 0o600) << 16
             entry.compress_type = zipfile.ZIP_DEFLATED
             archive.writestr(entry, pair[name])
-    payload = base64.b64encode(stream.getvalue()).decode("ascii")
-    require(len(payload) <= MAX_PAYLOAD, "schema exceeds dispatch input limit; no chunking")
-    require(unpack(stream.getvalue()) == pair, "packed bytes differ")
-    return payload
+    raw = stream.getvalue()
+    require(len(raw) <= MAX_ZIP, "schema pair exceeds the transport bound")
+    require(unpack(raw) == pair, "packed bytes differ")
+    return raw
+
+
+def blob_sha(raw: bytes) -> str:
+    # Git's content address for a blob object; SHA-256 of the same bytes is bound separately.
+    return hashlib.sha1(b"blob %d\0" % len(raw) + raw, usedforsecurity=False).hexdigest()
+
+
+def verify_payload(inputs: dict, raw: bytes) -> None:
+    require(0 < len(raw) <= MAX_ZIP, "ZIP exceeded transport bound")
+    require(
+        blob_sha(raw) == inputs["payload_blob"]
+        and hashlib.sha256(raw).hexdigest() == inputs["payload_sha256"],
+        "payload bytes differ from the admitted blob identity",
+    )
+
+
+def fetch_blob(inputs: dict) -> bytes:
+    # Content-addressed read from the fixed repository with the read-only token.
+    identity(inputs)
+    raw = api(
+        f"repos/{REPOSITORY}/git/blobs/{inputs['payload_blob']}",
+        binary=True,
+        accept=RAW_BLOB,
+        seconds=MAX_TRANSFER_SECONDS,
+    )
+    verify_payload(inputs, raw)
+    return raw
+
+
+def publish_blob(inputs: dict, raw: bytes) -> None:
+    # Identical bytes always yield the identical SHA, so creation is idempotent and
+    # makes no ref: the blob stays unreachable until GitHub collects it.
+    verify_payload(inputs, raw)
+    created = api(
+        f"repos/{REPOSITORY}/git/blobs",
+        data={"content": base64.b64encode(raw).decode("ascii"), "encoding": "base64"},
+        seconds=MAX_TRANSFER_SECONDS,
+    )
+    require(created.get("sha") == inputs["payload_blob"], "repository blob identity differs")
+    require(fetch_blob(inputs) == raw, "repository blob bytes differ from the local pack")
 
 
 def identity(inputs: dict) -> None:
-    require(
-        set(inputs)
-        == {"payload", "manifest_sha256", "publisher_sha", "mode", "request_id", "admission"},
-        "invalid dispatch fields",
-    )
+    require(set(inputs) == INPUT_FIELDS, "invalid dispatch fields")
     require(all(isinstance(v, str) for v in inputs.values()), "dispatch strings required")
     require(bool(SHA.fullmatch(inputs["publisher_sha"])), "full publisher SHA required")
     require(bool(HASH.fullmatch(inputs["manifest_sha256"])), "independent manifest SHA required")
     require(bool(REQUEST.fullmatch(inputs["request_id"])), "UUID hex request ID required")
     require(inputs["mode"] in {"fictional", "staging"}, "invalid publication mode")
-    require(0 < len(inputs["payload"]) <= MAX_PAYLOAD, "payload exceeded transport bound")
+    require(bool(SHA.fullmatch(inputs["payload_blob"])), "git blob SHA of the pair ZIP required")
+    require(bool(HASH.fullmatch(inputs["payload_sha256"])), "SHA-256 of the pair ZIP required")
 
 
 def admission(inputs: dict, actor: int, pool: int) -> dict:
@@ -430,9 +498,10 @@ def permission(actor: dict) -> None:
     )
 
 
-def decode_inputs(inputs: dict) -> tuple[dict[str, bytes], dict]:
+def decode_inputs(inputs: dict, raw: bytes) -> tuple[dict[str, bytes], dict]:
     identity(inputs)
-    pair = unpack(base64.b64decode(inputs["payload"], validate=True))
+    verify_payload(inputs, raw)
+    pair = unpack(raw)
     metadata = validate_pair(pair, inputs["manifest_sha256"], baseline())
     return pair, metadata
 
@@ -470,7 +539,7 @@ def prepare(event: dict, environment: dict, destination: Path) -> dict:
     require(bool(re.fullmatch(r"[0-9]{9,10}", pool_raw)), "unknown repository pool")
     pool = int(pool_raw)
     admission(inputs, actor["id"], pool)
-    pair, _ = decode_inputs(inputs)
+    pair, _ = decode_inputs(inputs, fetch_blob(inputs))
     storage(inventory(), pool, inputs["request_id"], sum(map(len, pair.values())))
     destination.mkdir(mode=0o700, exist_ok=False)
     for name, raw in pair.items():
@@ -587,13 +656,14 @@ def preflight(inputs: dict, pair: dict[str, bytes]) -> dict:
 def dispatch_saved(request_id: str) -> None:
     require(bool(REQUEST.fullmatch(request_id)), "invalid request ID")
     folder = scratch() / request_id
-    request = json_object(read_file(folder / "dispatch.json", 70_000), 70_000)
+    request = json_object(read_file(folder / "dispatch.json", 8192), 8192)
     require(
         set(request) == {"ref", "inputs"} and request["ref"] == "main", "main dispatch required"
     )
     inputs = request["inputs"]
     require(inputs["request_id"] == request_id, "saved request identity mismatch")
-    pair, _ = decode_inputs(inputs)
+    raw = read_file(folder / "payload.zip", MAX_ZIP)
+    pair, _ = decode_inputs(inputs, raw)
     actor = preflight(inputs, pair)
     state = json_object(read_file(folder / "state.json", 4096), 4096)
     require(
@@ -604,7 +674,9 @@ def dispatch_saved(request_id: str) -> None:
         and state.get("operator_id") == actor["id"],
         "saved operator/source mismatch",
     )
-    # Persist before the only mutation: an ambiguous transport failure is not retryable.
+    publish_blob(inputs, raw)
+    # Persist before the only non-idempotent mutation: an ambiguous dispatch failure is
+    # not retryable, while the content-addressed blob may be recreated freely.
     private_write(folder / "dispatch-attempted", b"one attempt; never replay\n")
     assert_main(inputs["publisher_sha"])
     api(f"repos/{REPOSITORY}/actions/workflows/{Path(WORKFLOW).name}/dispatches", data=request)
@@ -716,8 +788,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.operation == "pack":
             pair = read_pair(args.pair_dir)
             validate_pair(pair, args.manifest_sha256, baseline())
+            raw = pack(pair)
             inputs = {
-                "payload": pack(pair),
+                "payload_blob": blob_sha(raw),
+                "payload_sha256": hashlib.sha256(raw).hexdigest(),
                 "manifest_sha256": args.manifest_sha256,
                 "publisher_sha": args.publisher_sha,
                 "mode": args.mode,
@@ -729,6 +803,7 @@ def main(argv: list[str] | None = None) -> int:
             folder.mkdir(mode=0o700, exist_ok=False)
             request = {"ref": "main", "inputs": inputs}
             private_write(folder / "dispatch.json", json.dumps(request).encode())
+            private_write(folder / "payload.zip", raw)
             state = {
                 k: inputs[k] for k in ["publisher_sha", "mode", "request_id", "manifest_sha256"]
             }

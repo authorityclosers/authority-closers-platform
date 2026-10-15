@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import base64
 import copy
 import hashlib
 import importlib.util
 import io
 import json
 import os
+import secrets
 import stat
 import struct
+import subprocess
 import sys
 import warnings
 import zipfile
@@ -33,6 +34,8 @@ REQUEST = "b" * 32
 BASELINE = "20261010_0001"
 POOL = 2_000_000_000
 ACTOR = {"id": 123, "login": "fictional-root"}
+PAYLOADS: dict[str, bytes] = {}
+REAL_FETCH = publisher.fetch_blob
 
 
 def fixture_pair(data=b"PGDMPfictional", **changes):
@@ -70,8 +73,11 @@ def admission_value(**changes):
 
 def dispatch_inputs(pair=None, **changes):
     pair = pair or fixture_pair()
+    raw = publisher.pack(pair)
+    PAYLOADS[publisher.blob_sha(raw)] = raw
     inputs = {
-        "payload": publisher.pack(pair),
+        "payload_blob": publisher.blob_sha(raw),
+        "payload_sha256": hashlib.sha256(raw).hexdigest(),
         "manifest_sha256": hashlib.sha256(pair["manifest.json"]).hexdigest(),
         "publisher_sha": SOURCE,
         "mode": "fictional",
@@ -82,11 +88,20 @@ def dispatch_inputs(pair=None, **changes):
     return inputs
 
 
+def payload(inputs):
+    return PAYLOADS[inputs["payload_blob"]]
+
+
+def decode(inputs):
+    return publisher.decode_inputs(inputs, payload(inputs))
+
+
 @pytest.fixture
 def validation(tmp_path, monkeypatch):
     monkeypatch.setenv("PAPERCLIP_RUN_SCRATCH_DIR", str(tmp_path))
     monkeypatch.setattr(publisher, "baseline", lambda: BASELINE)
     monkeypatch.setattr(publisher, "inspect_dump", lambda *_: None)
+    monkeypatch.setattr(publisher, "fetch_blob", payload)
 
 
 def archive(entries):
@@ -101,7 +116,7 @@ def archive(entries):
 
 def test_transport_preserves_original_bytes_and_private_files(validation, tmp_path):
     pair = fixture_pair()
-    unpacked, metadata = publisher.decode_inputs(dispatch_inputs(pair))
+    unpacked, metadata = decode(dispatch_inputs(pair))
     assert unpacked == pair and metadata["alembic_revision"] == BASELINE
     directory = tmp_path / "pair"
     directory.mkdir(mode=0o700)
@@ -156,7 +171,7 @@ def test_hostile_zip_metadata_and_corruption_fail(kind, monkeypatch):
         entry.external_attr = (file_type | 0o600) << 16
         raw = archive([(entry, pair["schema.dump"]), ("manifest.json", pair["manifest.json"])])
     else:
-        raw = bytearray(base64.b64decode(publisher.pack(pair)))
+        raw = bytearray(publisher.pack(pair))
         central = raw.index(b"PK\x01\x02")
         if kind == "encrypted":
             struct.pack_into("<H", raw, central + 8, 1)
@@ -191,16 +206,80 @@ def test_hostile_zip_metadata_and_corruption_fail(kind, monkeypatch):
 def test_manifest_freshness_baseline_and_checksum_reused(validation, changes):
     pair = fixture_pair(**changes)
     with pytest.raises((publisher.PublicationError, publisher.gate.GateError)):
-        publisher.decode_inputs(dispatch_inputs(pair))
+        decode(dispatch_inputs(pair))
 
 
 def test_duplicate_manifest_keys_and_checksum_mismatch_fail(validation):
     pair = fixture_pair()
     pair["manifest.json"] = b'{"schema_only":true,"schema_only":false}'
     with pytest.raises(publisher.PublicationError, match="duplicate"):
-        publisher.decode_inputs(dispatch_inputs(pair))
+        decode(dispatch_inputs(pair))
     with pytest.raises(publisher.gate.GateError, match="checksum"):
-        publisher.decode_inputs(dispatch_inputs(manifest_sha256="f" * 64))
+        decode(dispatch_inputs(manifest_sha256="f" * 64))
+
+
+def test_blob_identity_binds_bytes_and_bound(validation, tmp_path):
+    inputs = dispatch_inputs()
+    raw = payload(inputs)
+    expected = (
+        subprocess.run(  # noqa: S603 - fixed argv, fictional bytes
+            ["git", "hash-object", "--stdin"],  # noqa: S607 - controlled executable
+            input=raw,
+            capture_output=True,
+            check=True,
+        )
+        .stdout.decode()
+        .strip()
+    )
+    assert publisher.blob_sha(raw) == expected == inputs["payload_blob"]
+    with pytest.raises(publisher.PublicationError, match="differ"):
+        publisher.decode_inputs(inputs, raw + b"x")
+    with pytest.raises(publisher.PublicationError, match="differ"):
+        publisher.decode_inputs(dict(inputs, payload_sha256="f" * 64), raw)
+    with pytest.raises(publisher.PublicationError, match="differ"):
+        publisher.decode_inputs(dict(inputs, payload_blob="f" * 40), raw)
+    with pytest.raises(publisher.PublicationError, match="exceeded"):
+        publisher.verify_payload(inputs, b"x" * (publisher.MAX_ZIP + 1))
+    with pytest.raises(publisher.PublicationError, match="dispatch fields"):
+        publisher.identity({k: v for k, v in inputs.items() if k != "payload_sha256"})
+
+
+def test_bound_pair_fits_blob_transport_without_dispatch_input(validation):
+    data = b"PGDMP" + secrets.token_bytes(publisher.LIMITS["schema.dump"] - 5)
+    pair = fixture_pair(data)
+    raw = publisher.pack(pair)
+    assert len(raw) <= publisher.MAX_ZIP < 100 * 1024 * 1024
+    inputs = dispatch_inputs(pair)
+    assert max(len(v) for v in inputs.values()) < 4096
+    assert decode(inputs)[0] == pair
+    too_large = fixture_pair(data + b"x")
+    with pytest.raises(publisher.PublicationError, match="exceeded bound"):
+        publisher.validate_pair(too_large, "f" * 64, BASELINE)
+
+
+def test_runner_fetches_blob_from_fixed_repository_only(validation, monkeypatch):
+    inputs = dispatch_inputs()
+    monkeypatch.setattr(publisher, "fetch_blob", REAL_FETCH)
+    calls = []
+
+    def fake_api(path, **kwargs):
+        calls.append((path, kwargs))
+        return payload(inputs)
+
+    monkeypatch.setattr(publisher, "api", fake_api)
+    assert publisher.fetch_blob(inputs) == payload(inputs)
+    path, kwargs = calls[0]
+    assert path == f"repos/{publisher.REPOSITORY}/git/blobs/{inputs['payload_blob']}"
+    assert kwargs == {
+        "binary": True,
+        "accept": publisher.RAW_BLOB,
+        "seconds": publisher.MAX_TRANSFER_SECONDS,
+    }
+    monkeypatch.setattr(publisher, "api", lambda *a, **k: payload(inputs) + b"x")
+    with pytest.raises(publisher.PublicationError, match="differ"):
+        publisher.fetch_blob(inputs)
+    with pytest.raises(publisher.PublicationError, match="dispatch fields"):
+        publisher.fetch_blob({"payload_blob": "../" + "a" * 37})
 
 
 def test_pair_never_follows_links(validation, tmp_path):
@@ -277,6 +356,7 @@ def test_inventory_counts_all_repository_bytes_and_reserves_inflated_bytes():
 @pytest.fixture
 def action_context(validation, monkeypatch):
     monkeypatch.setattr(publisher, "command", lambda *a, **kw: SOURCE.encode())
+    monkeypatch.setattr(publisher, "fetch_blob", payload)
     monkeypatch.setattr(publisher, "permission", lambda _: None)
     monkeypatch.setattr(publisher, "inventory", lambda: [])
     event = {
@@ -305,9 +385,7 @@ def test_action_admits_exact_source_and_distinct_fictional_pair(action_context, 
     event, environment = action_context
     destination = tmp_path / "candidate"
     receipt = publisher.prepare(event, environment, destination)
-    assert publisher.read_pair(destination) == publisher.unpack(
-        base64.b64decode(event["inputs"]["payload"])
-    )
+    assert publisher.read_pair(destination) == publisher.unpack(payload(event["inputs"]))
     assert receipt["artifact_name"] == f"{publisher.PREFIX}fictional-{REQUEST}-{SOURCE}-r321-a1"
     assert set(p.name for p in destination.iterdir()) == {"schema.dump", "manifest.json"}
     assert "artifact_id" not in receipt
@@ -361,7 +439,7 @@ def readback_context(validation, monkeypatch):
         "run": run,
         "listing": {"total_count": 1, "artifacts": [item]},
         "artifact": item,
-        "download": base64.b64decode(inputs["payload"]),
+        "download": payload(inputs),
     }
 
     def fake_api(path, **kwargs):
@@ -422,7 +500,7 @@ def test_wrong_run_or_changed_download_cannot_return_receipt(readback_context, c
     elif case == "artifact-run":
         values["artifact"]["workflow_run"]["id"] = 999
     elif case == "different-bytes":
-        values["download"] = base64.b64decode(publisher.pack(fixture_pair(b"PGDMPdifferent")))
+        values["download"] = publisher.pack(fixture_pair(b"PGDMPdifferent"))
     elif case == "extra-root":
         values["download"] = archive([*pair.items(), ("extra", b"forbidden")])
     else:
@@ -454,18 +532,76 @@ def test_corrupt_deflate_failure_is_suppressed(validation, tmp_path, monkeypatch
     assert "fictional-private-diagnostic" not in capsys.readouterr().err
 
 
-def test_dispatch_never_replays_ambiguous_failure(validation, tmp_path, monkeypatch):
+def saved_request(tmp_path):
     inputs = dispatch_inputs()
     folder = tmp_path / REQUEST
     folder.mkdir(mode=0o700)
     publisher.private_write(
         folder / "dispatch.json", json.dumps({"ref": "main", "inputs": inputs}).encode()
     )
+    publisher.private_write(folder / "payload.zip", payload(inputs))
     state = {k: inputs[k] for k in ["publisher_sha", "request_id", "mode", "manifest_sha256"]}
     state["operator_id"] = ACTOR["id"]
     publisher.private_write(folder / "state.json", json.dumps(state).encode())
+    return inputs, folder
+
+
+def test_blob_is_created_read_back_and_then_dispatched_once(validation, tmp_path, monkeypatch):
+    inputs, folder = saved_request(tmp_path)
+    monkeypatch.setattr(publisher, "fetch_blob", REAL_FETCH)
     monkeypatch.setattr(publisher, "preflight", lambda *a: ACTOR)
     monkeypatch.setattr(publisher, "assert_main", lambda *a: None)
+    calls = []
+
+    def fake_api(path, **kwargs):
+        calls.append((path, kwargs))
+        if path.endswith("/git/blobs"):
+            assert kwargs["data"]["encoding"] == "base64"
+            assert kwargs["seconds"] == publisher.MAX_TRANSFER_SECONDS
+            return {"sha": inputs["payload_blob"]}
+        if "/git/blobs/" in path:
+            return payload(inputs)
+        return None
+
+    monkeypatch.setattr(publisher, "api", fake_api)
+    publisher.dispatch_saved(REQUEST)
+    assert [p.rsplit("/", 2)[-2:] for p, _ in calls] == [
+        ["git", "blobs"],
+        ["blobs", inputs["payload_blob"]],
+        ["migration-schema-publish.yml", "dispatches"],
+    ]
+    assert calls[-1][1]["data"]["inputs"] == inputs
+    assert (folder / "dispatch-attempted").exists()
+
+
+@pytest.mark.parametrize("failure", ["identity", "bytes", "error"])
+def test_blob_failure_prevents_dispatch_and_marker(validation, tmp_path, monkeypatch, failure):
+    inputs, folder = saved_request(tmp_path)
+    monkeypatch.setattr(publisher, "fetch_blob", REAL_FETCH)
+    monkeypatch.setattr(publisher, "preflight", lambda *a: ACTOR)
+    monkeypatch.setattr(publisher, "assert_main", lambda *a: None)
+    calls = []
+
+    def fake_api(path, **kwargs):
+        calls.append(path)
+        if failure == "error":
+            raise publisher.PublicationError("fictional blob failure")
+        if path.endswith("/git/blobs"):
+            return {"sha": "e" * 40 if failure == "identity" else inputs["payload_blob"]}
+        return payload(inputs) + b"x"
+
+    monkeypatch.setattr(publisher, "api", fake_api)
+    with pytest.raises(publisher.PublicationError):
+        publisher.dispatch_saved(REQUEST)
+    assert not any(path.endswith("/dispatches") for path in calls)
+    assert not (folder / "dispatch-attempted").exists()
+
+
+def test_dispatch_never_replays_ambiguous_failure(validation, tmp_path, monkeypatch):
+    inputs, folder = saved_request(tmp_path)
+    monkeypatch.setattr(publisher, "preflight", lambda *a: ACTOR)
+    monkeypatch.setattr(publisher, "assert_main", lambda *a: None)
+    monkeypatch.setattr(publisher, "publish_blob", lambda *a: None)
     calls = []
 
     def fail_api(path, *, data):
@@ -483,14 +619,26 @@ def test_dispatch_never_replays_ambiguous_failure(validation, tmp_path, monkeypa
 
 def test_api_payload_on_stdin_not_argv(monkeypatch):
     calls = []
-    monkeypatch.setattr(publisher, "command", lambda argv, data: calls.append((argv, data)) or b"")
+    monkeypatch.setattr(
+        publisher, "command", lambda argv, data, **kw: calls.append((argv, data, kw)) or b""
+    )
     publisher.api(
         f"repos/{publisher.REPOSITORY}/actions/workflows/migration-schema-publish.yml/dispatches",
         data={"payload": "fictional-private-payload"},
     )
-    argv, data = calls[0]
+    argv, data, options = calls[0]
     assert "fictional-private-payload" not in " ".join(argv)
     assert argv[-2:] == ["--input", "-"] and b"fictional-private-payload" in data
+    assert options == {"limit": 4 * 1024 * 1024, "seconds": 60}
+    publisher.api(
+        f"repos/{publisher.REPOSITORY}/git/blobs/{'a' * 40}",
+        binary=True,
+        accept=publisher.RAW_BLOB,
+        seconds=publisher.MAX_TRANSFER_SECONDS,
+    )
+    argv, _, options = calls[1]
+    assert argv[3:5] == ["--header", "Accept: " + publisher.RAW_BLOB]
+    assert options == {"limit": publisher.MAX_ZIP, "seconds": publisher.MAX_TRANSFER_SECONDS}
 
 
 def test_command_output_bounded_and_diagnostics_suppressed(validation):
@@ -512,6 +660,8 @@ def test_workflow_no_payload_shell_interpolation_or_pointer_writes():
     assert "actions: write" not in source and "secrets." not in source
     assert "AC_MIGRATION_SCHEMA_ARTIFACT_ID" not in source
     assert "GITHUB_STEP_SUMMARY" in source
+    assert "payload_blob:" in source and "payload_sha256:" in source
+    assert "\n      payload:" not in source and "contents: read" in source
 
 
 def test_real_schema_transport_and_full_backup_rejection(tmp_path, monkeypatch):
@@ -540,7 +690,7 @@ def test_real_schema_transport_and_full_backup_rejection(tmp_path, monkeypatch):
     for data, forbidden in [(schema, False), (full, True)]:
         pair = fixture_pair(data)
         digest = hashlib.sha256(pair["manifest.json"]).hexdigest()
-        downloaded = publisher.unpack(base64.b64decode(publisher.pack(pair)))
+        downloaded = publisher.unpack(publisher.pack(pair))
         assert downloaded == pair
         if forbidden:
             with pytest.raises(publisher.gate.GateError, match="data or external"):

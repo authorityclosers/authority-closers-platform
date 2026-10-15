@@ -3,6 +3,9 @@
 Continuation baseline: 3f3093b1be3a7a11595687414f8f39085560a2c5.
 Architecture: AUT-1741 decision 83bcefc8-8d1b-49f6-8099-77ca165fb682.
 Transport: AUT-1816 decision 67ffb4e6-bd71-4a9e-8dcb-cae2ea60d4ac.
+Staging-size transport: AUT-1985 CTO decision document `decision`
+(revision 46a7c5ea-f7f2-4dd3-85d6-b05e361ad45d), superseding the dispatch-input
+payload of AUT-1816; every other guarantee is unchanged.
 Acceptance: AUT-1818. The immutable source commit is linked from the task.
 
 ## Interface
@@ -15,10 +18,21 @@ inspect TOC with the pinned image; submitted schema SQL is never executed.
 Full backup tools and the existing schema APIs remain unchanged.
 
 ZIP reads reject duplicate, extra, missing, empty, directory, traversal, link,
-encrypted, unsupported, corrupt and inflated entries. Input is at most 60,000
-base64 characters; larger pairs fail without chunking. Payloads use private
-stdin and the Actions event file, never shell interpolation, argv or output.
-Errors suppress inputs, API diagnostics and credentials.
+encrypted, unsupported, corrupt and inflated entries. The pair never travels in
+a dispatch input (GitHub caps all inputs at 65,535 characters together). The
+operator creates one unreachable git blob in this repository holding the
+hardened ZIP; the dispatch carries only the blob's git SHA and the ZIP SHA-256.
+The publisher run fetches that blob by SHA from the fixed repository with its
+read-only token, streams it under the pair bound (32 MiB + 8 KiB + 64 KiB ZIP
+margin, within GitHub's 100 MB blob read bound), and verifies both hashes before
+the unchanged ZIP, manifest, baseline, freshness and TOC checks. No ref, branch,
+tag, commit, release or package is created; the blob is never deleted by us and
+GitHub collects unreachable objects on its own schedule. The repository is
+public, so a blob readable by SHA exposes exactly what the published artifact
+already exposes: schema-only content with no secrets or customer rows. Payloads
+use private stdin, private 0600 scratch files and the Actions event file, never
+shell interpolation, argv or output. Errors suppress inputs, API diagnostics and
+credentials.
 
 Event, workflow and checkout SHA must equal the independent main pin; reruns
 fail. Dispatch requires existing admin/maintainer access and the numeric Root
@@ -115,9 +129,16 @@ mutation, then dispatch the saved private request once:
     uv run --frozen python scripts/ops/publish_migration_schema.py dispatch --request-id "$SCHEMA_REQUEST_ID"
 
 Both commands revalidate custody, allowance, pool and source. Main moving
-requires source readmission. Request/state files are 0600 in a 0700 UUID
-directory. A marker is persisted before the sole mutation, so ambiguous dispatch
-failure cannot be replayed. Inspect the existing run instead of retrying.
+requires source readmission. Request, ZIP and state files are 0600 in a 0700
+UUID directory. The `pack` command writes nothing to GitHub. The `dispatch`
+command first creates the content-addressed blob (idempotent: identical bytes
+give the identical SHA; a repeat creates nothing new), reads it back by SHA and
+compares every byte to the local ZIP, then persists a marker before the sole
+non-idempotent mutation, so ambiguous dispatch failure cannot be replayed. A
+blob failure stops before the marker and the dispatch; re-run `dispatch`. If
+GitHub collects the blob before the run fetches it, the run fails closed with
+pointers unchanged; pack a fresh request. Inspect the existing run instead of
+retrying a dispatch.
 Obtain the candidate run ID from Actions without a polling timer:
 
     gh api 'repos/authorityclosers/authority-closers-platform/actions/workflows/migration-schema-publish.yml/runs?event=workflow_dispatch&branch=main&per_page=10' --jq '.workflow_runs[] | {id,head_sha,run_attempt,status,conclusion}'
@@ -147,22 +168,28 @@ by Root on AUT-1815 through AUT-63 after a verified staging-mode receipt.
     pnpm exec prettier --check .github/workflows/migration-schema-publish.yml .github/workflows/migration-safety.yml docs/evidence/aut-1741-schema-publication.md
     ac-gate check
 
-The local verification receipt is 133 passed, four Docker cases skipped, before
-the added corrupt-deflate diagnostic regression. The final scoped receipt is
-71 passed, one Docker case skipped. Four Docker cases require the
-migration-safety CI job, which sets AC_REQUIRE_SCHEMA_GATE_DOCKER_TEST=1 so they
-cannot skip. The new real PostgreSQL case proves schema transport and rejects
-a full backup before any restore. Existing exporter/migration test files remain
-unchanged; their old exact-source receipt does not prove new transport code.
+The AUT-1985 scoped receipt is 114 passed, four Docker cases skipped, over the
+publication and gate files. Four Docker cases require the migration-safety CI
+job, which sets AC_REQUIRE_SCHEMA_GATE_DOCKER_TEST=1 so they cannot skip. The
+real PostgreSQL case proves schema transport and rejects a full backup before
+any restore. The bound case packs a 32 MiB fictional dump, proves it fits the
+blob transport while every dispatch input stays under 4 KiB, and proves the git
+blob SHA against `git hash-object`. Creating a blob at the bound is not proven
+against GitHub; the first real proof is the 826 KB staging pair on AUT-1815.
+Existing exporter/migration test files remain unchanged.
 
-PR #450 stays closed. This handoff provides a pushed source commit for CTO
-review under existing custody. New-head CI, main registration and actual
-fictional Actions publication/download remain unproven pending sensitive
-review, CEO approval and normal watchdog/source activation. No PR reopen,
-dispatch, settings/pointer change, merge, deployment, staging or production
-access occurred. Items 2–4 and overall delivery remain open.
+PR #450 merged as 0c8344d7e1259884dd714b666be9f6869c73bef6; its fictional
+publication and independent byte read-back succeeded on AUT-1815 (run
+38777061562, artifact 11993778137) before the real staging pair exceeded the
+dispatch input bound. The AUT-1985 transport change is CTO-authored, so the CEO
+is its backup reviewer and approver. Actual fictional and staging publication
+through the blob transport remain unproven until Root resumes AUT-1815 on the
+merged source. No dispatch, blob, settings/pointer change, merge, deployment,
+staging or production access occurred in this change. Items 2–4 and overall
+delivery remain open.
 
 Reference contracts:
+[blob create/read, 100 MB read bound and raw media type](https://docs.github.com/en/rest/git/blobs),
 [dispatch branch/tag semantics](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event),
 [workflow source contexts](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts),
 [run identity fields](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run),

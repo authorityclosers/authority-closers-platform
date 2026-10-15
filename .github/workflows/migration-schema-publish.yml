@@ -3,8 +3,12 @@ name: Migration schema publication
 on:
   workflow_dispatch:
     inputs:
-      payload:
-        description: Bounded base64 ZIP containing only the schema pair
+      payload_blob:
+        description: Git blob SHA of the hardened schema-pair ZIP created by the governed operator
+        type: string
+        required: true
+      payload_sha256:
+        description: Independently calculated SHA-256 of that ZIP
         type: string
         required: true
       manifest_sha256:
@@ -55,7 +59,7 @@ jobs:
           python-version: "3.12"
       - name: Install locked validation tooling
         run: python -m pip install --disable-pip-version-check uv==0.12.7 && uv sync --frozen
-      - name: Validate event custody, allowance, ZIP and schema-only TOC
+      - name: Fetch the admitted blob by SHA; validate custody, allowance, ZIP and schema-only TOC
         id: candidate
         run: >-
           uv run --frozen python scripts/ops/publish_migration_schema.py prepare-action
