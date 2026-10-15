@@ -10,6 +10,10 @@ from ac_platform.conversation_intelligence.application import (
     ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+from ac_platform.conversation_intelligence.pointer_review import (
+    latest_review,
+    merge_into_structure,
+)
 from ac_platform.conversation_intelligence.prospect_call_outcome_store import CallOutcomeStore
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore
 from ac_platform.conversation_intelligence.report_structure import (
@@ -72,4 +76,9 @@ async def enrich_report_structure(
     except (ConversationNotFound, ConversationConflict):
         outcome = None
     structure["final_call_outcome"] = project_final_outcome(outcome)
+    # Owner decision 16 Oct (rulebook 693645b0): a saved AI pointer review for
+    # exactly this run, source and transcript overlays its scores as an AI draft.
+    review = await latest_review(ownership.database, envelope)
+    if review is not None:
+        result["report"]["content"]["structure"] = merge_into_structure(structure, review)
     return result
