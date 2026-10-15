@@ -1,5 +1,25 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 21:01 UTC — Sharing-setting read recovery (D265372c0).
+New `fixture_coaching_sharing_retry` **4/4 PASS**,16.73s/launcher0 at9bcc8cb9
+on shared3026,1440/390 light/dark. Initial failed read offers only Try again;
+pointer(light)/Enter(dark) starts Checking sharing… with disabled retry and no
+sharing action through2999ms. At3000ms current Private setting names Priya Shah
+and offers the original Share with your admins action. Retry82x32/44 and
+share191x32/44, centres reachable. Original Document object/mission/query
+retained; errors/undersized/clipping/overflow/API/media/refresh0. No sharing
+action invoked. All12 final PNGs inspected; no product defect. All8 original
+harness captures byte-equal to the three inspected desktop/light states.
+Screens/receipts:`/home/acdev/strikes/1694/shots/2026-10-15-sharing-retry/`.
+Two stopped harness failures retained:1FAIL3.22s counted a history event as
+reload (`harness-navigation-events/`),1FAIL7.37s sampled timeOrigin before the
+virtual clock replaced it (`harness-virtual-clock-origin/`). Guard now compares
+native Document identity, without changing the fixture/product. Preparation
+ad065505/corrections6ad129b8/9bcc8cb9; Ruff/format/API import/diffPASS.
+Fictional in-page reader only; conflict/revision/write acceptance remains builder
+unit coverage. v0.46 CI green20:58:02Z, mainb6cbab3019db1780e0e2301b7218c132907146e9;
+images building, no canary/readback due. This later source is outside v0.46.
+
 15 October, 20:44 UTC — Context pending/error/retry (D cba15b3e).
 New `fixture_coaching_context_save` **4/4 PASS**, 13.28s/launcher0 at
 671cc8ab on shared dev :3026, 1440/390 light/dark. Native selection retains
