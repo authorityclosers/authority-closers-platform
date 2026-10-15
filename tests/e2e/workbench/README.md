@@ -83,7 +83,8 @@ sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
 cases, eight secondary-lesson disclosure cases and four controlled audio-startup
 cases, plus four controlled native moment-end/replay and four narration shortcut
 focus cases, sixteen interrupted-lesson resume and four Worked/Didn't clip disclosure
-cases and four moment view-close cases, collect 180 cases. The original Report
+cases and four moment view-close cases, plus four phone mastery-name, four Report
+clip-room, four call record-mark and four Team rep-record cases, collect 196 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -384,3 +385,16 @@ Design review marks 6 of 8 rows, Sandbox every ready row. "On this skill" shows
 no marks (its filter keeps its own words) and All calls restores them. Report
 links `/analysis/calls/<id>` and row targets are unchanged; no reads, writes or
 media are added. The no-current-focus view stays unit-only.
+
+For each rep's saved record on their current focus in Team, select only
+`-k fixture_team_rep_records`. Four width/theme cases read pillar 5's legend on
+the signed-out Sandbox My coaching view, then open the Sandbox Team view and
+compare the first eight rows and, after "Show all 60 people", every row against
+the fixture: name, focus and `/coaching?person=<id>` route unchanged, exactly one
+record mark reading "Needed work in N of M calls" (or "Nothing to fix in M calls")
+right after the focus and before "N calls" and "Latest call", on one line inside
+its row, with a 10 px dot whose fill, ring and style equal the legend for the same
+state. The Design review's shared reps, whose older records carry no counts, show
+no mark and no record words. Row targets, clipping, reads, writes and refreshes
+are checked as usual. The fixture holds only "Needed work" records, so "Nothing
+to fix" stays unit-only.

@@ -1,5 +1,31 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 16:18 UTC — Team rep records (D ad8b72e1). New `fixture_team_rep_records`
+**4/4 PASS** 18.11s/launcher 0 at workbench ad8b72e1 on shared :3026, 1440/390
+light/dark. Sandbox Team: first eight and all 60 rows match the fixture's names,
+order, focus and person routes; each carries exactly one `[data-state=suggested]`
+mark "Needed work in 40 of 40 calls" right after its focus, before "N calls" and
+"Latest call", one line inside its row; 10 px dot fill/ring/style equal pillar 5's
+legend on the Sandbox My coaching view. Design review's two shared reps (no
+counts) show no mark and no record words. First-row link 37.5/44 px with centre
+hits, undersized 0, overflow 0, writes/errors/refreshes 0. All eight PNGs
+inspected (`shots/2026-10-15-team-rep-records/`): dot and words readable both
+themes; at 390 the count and latest date wrap to a second line below the record.
+"Nothing to fix" stays unit-only (fixture has no such rep). Fictional UI only.
+
+15 October, 16:17 UTC — v0.45.0 served-source readback. Ship log: PR #476 green
+15:41:58, merged 8e417f2, staging live/canary PASS 16:10:59, production snapshot
+20261015T161108Z-before-v0.45.0, production live/canary PASS 16:17:05, ship done
+16:17:06; ac-canary@staging and @production Result=success/ExecMainStatus=0.
+Original-Host foundation :8080 reads at 16:17:47: staging and production web
+`/health` and API `/health/ready` all HTTP200 with release_id
+`8e417f2e786762156a5fed3489b9c0f932225bfa` (workbench fe2368b0). Receipts
+`shots/2026-10-15-v0.45.0-health/`. The clip-room rerun on 510da4f1 (4/4 PASS
+15:20:41, Moments That Mattered chip 158x32 desktop / 158x44 phone, hit area
+equal, centre reachable; `shots/2026-10-15-report-clip-pause-room-rerun/`) is in
+this version. Availability and served source only; no populated authenticated
+acceptance.
+
 15 October, 14:23 UTC — v0.44.0 served-source readback. Ship log: staging
 live/canary PASS 14:15:07, production snapshot 20261015T141515Z-before-v0.44.0,
 production live/canary PASS 14:23:06, ship done 14:23:07; ac-canary@staging and

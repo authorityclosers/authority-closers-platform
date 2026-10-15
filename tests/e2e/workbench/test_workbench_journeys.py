@@ -5436,3 +5436,161 @@ def test_fixture_coaching_call_record_marks(browser: Browser, viewport: tuple[in
             "api_mutations": len(mutations),
             "authenticated_or_real_data_acceptance": False,
         }
+
+
+def test_fixture_team_rep_records(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Team rows carry each rep's saved record on their current focus, with the history's dot."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Team rep records use the signed-out AC Sandbox and Design review views")
+    fixtures = (
+        Path(__file__).resolve().parents[3] / "apps/sales-xray-web/app/review-fixture/coaching"
+    )
+    sandbox = json.loads((fixtures / "sandbox-team.json").read_text())["team"]
+    review = json.loads((fixtures / "sandbox.json").read_text())["team"]
+    record_words = re.compile(r"Needed work in \d+ of \d+ calls?|Nothing to fix in \d+ calls?")
+
+    def expected_record(rep: dict[str, object]) -> tuple[str, str] | None:
+        needed, window = rep.get("focus_calls"), rep.get("focus_window")
+        if not isinstance(needed, int) or not isinstance(window, int):
+            return None
+        unit = "call" if window == 1 else "calls"
+        if needed:
+            return ("suggested", f"Needed work in {needed} of {window} {unit}")
+        return ("no_suggestion", f"Nothing to fix in {window} {unit}")
+
+    read_rows = """list => [...list.querySelectorAll(':scope > li')].map(li => {
+      const title = li.querySelector('a');
+      const focus = title?.children[1] ?? null;
+      const meta = title?.nextElementSibling;
+      const items = meta ? [...meta.children].map(s => s.textContent) : [];
+      const marks = li.querySelectorAll('[data-state]');
+      const mark = marks[0] ?? null;
+      const dot = mark ? getComputedStyle(mark, '::before') : null;
+      const row = li.getBoundingClientRect();
+      const lines = mark ? [...mark.getClientRects()] : [];
+      const box = lines[0] ?? null;
+      return {name: title?.children[0]?.textContent ?? null,
+        focus: focus?.textContent ?? null, href: title?.getAttribute('href'), items,
+        marks: marks.length, state: mark?.getAttribute('data-state') ?? null,
+        markText: mark?.textContent ?? null,
+        markIndex: mark ? [...meta.children].findIndex(s => s.contains(mark)) : null,
+        focusBeforeMark: mark && focus
+          ? Boolean(focus.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING)
+          : null,
+        lines: lines.length,
+        inside: box ? box.top >= row.top - 0.5 && box.bottom <= row.bottom + 0.5
+          && box.left >= row.left - 0.5 && box.right <= row.right + 0.5 : null,
+        dot: dot ? {width: dot.width, height: dot.height, content: dot.content,
+          background: dot.backgroundColor, border: dot.borderTopColor,
+          style: dot.borderTopStyle} : null};
+    })"""
+    with _journey(browser, viewport, "team-rep-records") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        # The dot must equal pillar 5's legend on the rep's own view.
+        journey.open("/review-fixture/coaching?data=sandbox&view=me")
+        legend = page.locator('#coaching-progress p[aria-hidden="true"] span[data-state]')
+        expect(legend.first).to_be_attached()
+        legend_dots = legend.evaluate_all(
+            """spans => Object.fromEntries(spans.map(s => {
+              const dot = getComputedStyle(s, '::before');
+              return [s.getAttribute('data-state'), {width: dot.width,
+                background: dot.backgroundColor, border: dot.borderTopColor,
+                style: dot.borderTopStyle}];
+            }))"""
+        )
+        assert {"suggested", "no_suggestion"} <= set(legend_dots), "Legend lacks both states"
+
+        journey.open("/review-fixture/coaching?data=sandbox&view=team")
+        team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
+        listing = team.get_by_role("list", name="Reps and their current focus", exact=True)
+        rows = listing.get_by_role("listitem")
+        expect(rows).to_have_count(8)
+        page.evaluate("() => document.fonts.ready")
+
+        def check_rows(reps: list[dict[str, object]], where: str) -> int:
+            seen = listing.evaluate(read_rows)
+            assert [row["name"] for row in seen] == [rep["name"] for rep in reps], (
+                f"{where}: rep names or order changed"
+            )
+            marked = 0
+            for row, rep in zip(seen, reps, strict=True):
+                label = f"{where}: {rep['name']}"
+                assert row["href"] == f"/coaching?person={rep['person_id']}", f"{label}: route"
+                assert row["focus"] == (rep["focus_label"] or "No focus shown"), f"{label}: focus"
+                record = expected_record(rep)
+                if record is None:
+                    assert row["marks"] == 0, f"{label}: record without fixture counts"
+                    assert not any(record_words.search(item) for item in row["items"]), (
+                        f"{label}: record words without a saved record"
+                    )
+                    assert row["items"][0] == f"{rep['calls']} calls", f"{label}: call count"
+                    continue
+                marked += 1
+                state, words = record
+                assert row["marks"] == 1, f"{label}: expected exactly one record mark"
+                assert row["state"] == state, f"{label}: wrong record state"
+                assert row["markText"] == words, f"{label}: record words differ from fixture"
+                assert row["markIndex"] == 0, f"{label}: record not first after the focus"
+                assert row["focusBeforeMark"] is True, f"{label}: focus not before the record"
+                assert row["items"][1] == f"{rep['calls']} calls", f"{label}: count after record"
+                if rep.get("latest_call_at"):
+                    assert row["items"][2].startswith("Latest call "), f"{label}: latest call"
+                assert row["lines"] == 1 and row["inside"] is True, f"{label}: record wraps"
+                dot, legend_dot = row["dot"], legend_dots[state]
+                assert dot["width"] == "10px" and dot["height"] == "10px", f"{label}: dot size"
+                assert dot["content"] != "none", f"{label}: no dot"
+                assert (dot["background"], dot["border"], dot["style"]) == (
+                    legend_dot["background"],
+                    legend_dot["border"],
+                    legend_dot["style"],
+                ), f"{label}: dot differs from the pillar 5 legend"
+            return marked
+
+        marked_visible = check_rows(sandbox["reps"][:8], "sandbox first eight")
+        team.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
+        journey.snapshot("sandbox-rep-records")
+        journey.unclipped_text(listing)
+        journey.row_link_target(rows.first.get_by_role("link"), "sandbox-first-rep")
+        show_all = team.get_by_role("button", name=f"Show all {len(sandbox['reps'])} people")
+        show_all.click()
+        expect(rows).to_have_count(len(sandbox["reps"]))
+        marked_all = check_rows(sandbox["reps"], "sandbox all")
+        team.get_by_role("button", name="Show fewer people", exact=True).click()
+        expect(rows).to_have_count(8)
+
+        # Older records without the counts (the Design review's shared reps) show no mark.
+        journey.open("/review-fixture/coaching?view=team")
+        expect(rows).to_have_count(len(review["reps"]))
+        marked_review = check_rows(review["reps"], "review")
+        expect(listing.locator("[data-state]")).to_have_count(0)
+        team.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
+        journey.snapshot("review-no-record")
+
+        assert marked_visible == 8 and marked_all == len(sandbox["reps"]), "Sandbox marks"
+        assert marked_review == 0, "Design review reps carry no fixture record"
+        assert not mutations, "Team rep records attempted an API mutation"
+        assert journey.live_refreshes == 0, "Live source changed during Team rep records"
+        records = [expected_record(rep) for rep in sandbox["reps"]]
+        states = sorted({record[0] for record in records if record})
+        journey.observations[-1]["fictional_team_rep_records"] = {
+            "source": "D ad8b72e1; signed-out AC Sandbox Team (60 reps) and Design review Team",
+            "sandbox_reps": len(sandbox["reps"]),
+            "sandbox_marked": marked_all,
+            "sandbox_states": states,
+            "nothing_to_fix_browser_tested": "no_suggestion" in states,
+            "review_reps_unmarked": len(review["reps"]),
+            "record_after_focus_before_count_on_one_line": True,
+            "dot_equals_pillar_5_legend": True,
+            "api_mutations": len(mutations),
+            "authenticated_or_real_data_acceptance": False,
+        }
