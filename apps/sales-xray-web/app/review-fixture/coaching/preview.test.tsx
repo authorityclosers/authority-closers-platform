@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -11,6 +11,53 @@ import acSandbox from "./sandbox-team.json";
 import longQuote from "./long-quote.json";
 
 describe("Coaching review fixture", () => {
+  it("retries the fictional sharing read without sending a request, including in Strict Mode", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.useFakeTimers();
+    const fetch = vi.fn().mockRejectedValue(new Error("no account here"));
+    vi.stubGlobal("fetch", fetch);
+    window.history.replaceState(
+      null,
+      "",
+      "/review-fixture/coaching?data=review&view=me&example=sharing-retry",
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      await act(async () =>
+        root.render(
+          <StrictMode>
+            <CoachingFixture />
+          </StrictMode>,
+        ),
+      );
+      const button = (name: string) =>
+        [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+          (b) => b.textContent === name,
+        )!;
+      expect(host.textContent).toContain("Sharing setting couldn’t be loaded.");
+      expect(button("Share with your admins")).toBeUndefined();
+      await act(async () => button("Try again").click());
+      expect(host.textContent).toContain("Checking sharing…");
+      expect(button("Try again").disabled).toBe(true);
+      await act(async () => vi.advanceTimersByTimeAsync(2999));
+      expect(button("Share with your admins")).toBeUndefined();
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+      expect(button("Share with your admins").disabled).toBe(false);
+      expect(host.textContent).toContain("Priya Shah");
+      expect(host.textContent).not.toContain(
+        "Sharing setting couldn’t be loaded.",
+      );
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+      window.history.replaceState(null, "", "/");
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
   it("passes every sandbox payload through the real parsers", () => {
     expect(sandbox.synthetic).toBe(true);
     const call = parseCallCoaching(sandbox.call, sandbox.call.submission_id);

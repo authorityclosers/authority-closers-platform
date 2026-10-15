@@ -6,7 +6,12 @@ import { CallCoachingStory } from "../../coaching/call-coaching";
 import { parseCoaching } from "../../coaching/coaching-client";
 import { CoachingStory } from "../../coaching/coaching-page";
 import { parseCallCoaching } from "../../coaching/coaching-read";
-import { CoachingWrites, type CoachingWriter } from "../../coaching/sharing-ui";
+import {
+  CoachingSharingRead,
+  CoachingWrites,
+  type CoachingWriter,
+} from "../../coaching/sharing-ui";
+import type { readSharing } from "../../coaching/sharing-client";
 import { parseTeamCoaching } from "../../coaching/team-contract";
 import { TeamCoachingStory } from "../../coaching/team-coaching";
 import styles from "../../coaching/coaching.module.css";
@@ -20,6 +25,37 @@ type Data = "review" | "sandbox";
 const noSubscription = () => () => {};
 
 const REACHES = [{ name: "Priya Shah", why: "admin" as const }];
+const REVIEW_SHARING = {
+  available: true,
+  shared: false,
+  revision: 0,
+  reaches: REACHES,
+};
+const REVIEW_READ_SHARING: typeof readSharing = async () => ({
+  data: REVIEW_SHARING,
+  error: null,
+});
+
+/** Failed read, then a delayed current setting; no sharing change is sent. */
+function sharingReadExample(): typeof readSharing {
+  let attempts = 0;
+  return async (signal) => {
+    // Strict Mode abandons the first effect: it must not consume the example.
+    await Promise.resolve();
+    if (signal?.aborted)
+      return {
+        data: null,
+        error: "Sharing setting couldn’t be loaded. Try again.",
+      };
+    if (++attempts === 1)
+      return {
+        data: null,
+        error: "Sharing setting couldn’t be loaded. Try again.",
+      };
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    return { data: { ...REVIEW_SHARING, revision: 7 }, error: null };
+  };
+}
 
 /** The review has no account behind it: a tap shows its flow, nothing is sent. */
 const REVIEW_WRITES: CoachingWriter = {
@@ -71,12 +107,15 @@ export function CoachingFixture() {
   const [chosenView, setView] = useState<View | null>(null);
   const [chosenData, setData] = useState<Data | null>(null);
   const [contextSaveWrites] = useState(contextSaveExample);
+  const [sharingRead] = useState(sharingReadExample);
   const view: View =
     chosenView ?? (linked === "me" || linked === "team" ? linked : "call");
   const data: Data =
     chosenData ?? (query.get("data") === "sandbox" ? "sandbox" : "review");
   const contextSave =
     data === "review" && query.get("example") === "context-save";
+  const sharingRetry =
+    data === "review" && query.get("example") === "sharing-retry";
   const set = data === "sandbox" ? acSandbox : sandbox;
   // An opt-in, dev-only reproduction of the retained long-quote lesson.
   const callPayload =
@@ -114,77 +153,80 @@ export function CoachingFixture() {
     <CoachingWrites.Provider
       value={contextSave ? contextSaveWrites : REVIEW_WRITES}
     >
-      <div className={styles.root}>
-        <PageHeader
-          title="Coaching review"
-          context={
-            data === "sandbox"
-              ? [
-                  "AC Sandbox",
-                  // The fixture's own totals, so a dataset refresh never leaves
-                  // a stale number in the header.
-                  `${acSandbox.team.analysed_calls.toLocaleString("en-IN")} fictional calls, ${acSandbox.team.rep_count} fictional reps`,
-                  ...(currentFocusExample
-                    ? ["Filter example: one current focus has no team total"]
-                    : []),
-                  ...(noFocusExample
-                    ? ["Filter example: two reps have no focus shown"]
-                    : []),
-                ]
-              : [
-                  "Synthetic sandbox data",
-                  "Clip preview and lock states for design review",
-                  "Taps here aren’t saved",
-                ]
-          }
-          actions={
-            <>
-              <Segmented<Data>
-                label="Data"
-                value={data}
-                onChange={(next) => {
-                  setData(next);
-                  remember("data", next);
-                }}
-                items={[
-                  { key: "review", label: "Design review" },
-                  { key: "sandbox", label: "AC Sandbox" },
-                ]}
-              />
-              <Segmented<View>
-                label="Coaching level"
-                value={view}
-                onChange={(next) => {
-                  setView(next);
-                  remember("view", next);
-                }}
-                items={[
-                  { key: "call", label: "This call" },
-                  {
-                    key: "me",
-                    label: data === "sandbox" ? "One rep" : "My coaching",
-                  },
-                  { key: "team", label: "Team" },
-                ]}
-              />
-            </>
-          }
-        />
-        {view === "call" && call ? <CallCoachingStory coaching={call} /> : null}
-        {view === "me" ? (
-          <CoachingStory
-            coaching={me}
-            readOnly={data === "sandbox"}
-            sharing={{
-              available: true,
-              shared: false,
-              revision: 0,
-              reaches: REACHES,
-            }}
+      <CoachingSharingRead.Provider
+        value={sharingRetry ? sharingRead : REVIEW_READ_SHARING}
+      >
+        <div className={styles.root}>
+          <PageHeader
+            title="Coaching review"
+            context={
+              data === "sandbox"
+                ? [
+                    "AC Sandbox",
+                    // The fixture's own totals, so a dataset refresh never leaves
+                    // a stale number in the header.
+                    `${acSandbox.team.analysed_calls.toLocaleString("en-IN")} fictional calls, ${acSandbox.team.rep_count} fictional reps`,
+                    ...(currentFocusExample
+                      ? ["Filter example: one current focus has no team total"]
+                      : []),
+                    ...(noFocusExample
+                      ? ["Filter example: two reps have no focus shown"]
+                      : []),
+                  ]
+                : [
+                    "Synthetic sandbox data",
+                    "Clip preview and lock states for design review",
+                    "Taps here aren’t saved",
+                  ]
+            }
+            actions={
+              <>
+                <Segmented<Data>
+                  label="Data"
+                  value={data}
+                  onChange={(next) => {
+                    setData(next);
+                    remember("data", next);
+                  }}
+                  items={[
+                    { key: "review", label: "Design review" },
+                    { key: "sandbox", label: "AC Sandbox" },
+                  ]}
+                />
+                <Segmented<View>
+                  label="Coaching level"
+                  value={view}
+                  onChange={(next) => {
+                    setView(next);
+                    remember("view", next);
+                  }}
+                  items={[
+                    { key: "call", label: "This call" },
+                    {
+                      key: "me",
+                      label: data === "sandbox" ? "One rep" : "My coaching",
+                    },
+                    { key: "team", label: "Team" },
+                  ]}
+                />
+              </>
+            }
           />
-        ) : null}
-        {view === "team" && team ? <TeamCoachingStory coaching={team} /> : null}
-      </div>
+          {view === "call" && call ? (
+            <CallCoachingStory coaching={call} />
+          ) : null}
+          {view === "me" ? (
+            <CoachingStory
+              coaching={me}
+              readOnly={data === "sandbox"}
+              sharing={sharingRetry ? undefined : REVIEW_SHARING}
+            />
+          ) : null}
+          {view === "team" && team ? (
+            <TeamCoachingStory coaching={team} />
+          ) : null}
+        </div>
+      </CoachingSharingRead.Provider>
     </CoachingWrites.Provider>
   );
 }

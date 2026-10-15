@@ -32,6 +32,9 @@ export const CoachingWrites = createContext<CoachingWriter>({
   feedback: sendFeedback,
 });
 
+/** The review can read a fictional setting without an account or API call. */
+export const CoachingSharingRead = createContext(readSharing);
+
 /** Private by default; one tap shares, one tap stops (owner decision 10 Oct). */
 export function SharePanel({
   initial = null,
@@ -40,22 +43,25 @@ export function SharePanel({
   initial?: SharingView | null;
 } = {}) {
   const [view, setView] = useState<SharingView | null>(initial);
+  const read = useContext(CoachingSharingRead);
   const writes = useContext(CoachingWrites);
   const [error, setError] = useState<string | null>(null);
   // A failed tap's message, kept through the reload that follows it.
   const [failed, setFailed] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(!initial);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (initial && attempt === 0) return;
     const controller = new AbortController();
-    void readSharing(controller.signal).then((result) => {
+    void read(controller.signal).then((result) => {
       if (controller.signal.aborted) return;
       setView(result.data);
       setError(result.error);
+      setLoading(false);
     });
     return () => controller.abort();
-  }, [attempt, initial]);
+  }, [attempt, initial, read]);
   const toggle = async () => {
     if (!view) return;
     setSaving(true);
@@ -67,6 +73,7 @@ export function SharePanel({
       setFailed(null);
     } else {
       setFailed(`${result.error} ${SHARING.unchanged}`);
+      setLoading(true);
       setAttempt((value) => value + 1);
     }
   };
@@ -89,7 +96,22 @@ export function SharePanel({
             <Skeleton width="60%" height={13} />
           </>
         ) : !view ? (
-          <p className={styles.status}>{error}</p>
+          <>
+            <p role="status" className={styles.status}>
+              {loading ? SHARING.checking : error}
+            </p>
+            <div className={styles.actions}>
+              <Button
+                disabled={loading}
+                onClick={() => {
+                  setLoading(true);
+                  setAttempt((value) => value + 1);
+                }}
+              >
+                {SHARING.retry}
+              </Button>
+            </div>
+          </>
         ) : !view.available ? (
           <p className={styles.eyebrow}>
             <Lock size={14} aria-hidden="true" />
@@ -106,7 +128,7 @@ export function SharePanel({
               <Button
                 variant={view.shared ? "secondary" : "primary"}
                 onClick={() => void toggle()}
-                disabled={saving}
+                disabled={saving || loading}
               >
                 {view.shared ? (
                   SHARING.stop
@@ -119,9 +141,9 @@ export function SharePanel({
               </Button>
             </div>
             <p className={styles.note}>{SHARING.note}</p>
-            {failed || error ? (
+            {loading || failed || error ? (
               <p role="status" className={styles.status}>
-                {failed ?? error}
+                {loading ? SHARING.checking : (failed ?? error)}
               </p>
             ) : null}
           </>

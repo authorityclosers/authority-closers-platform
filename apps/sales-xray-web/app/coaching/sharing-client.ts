@@ -42,6 +42,7 @@ async function call<T>(
   path: string,
   parse: (raw: unknown) => T | null,
   init: RequestInit = {},
+  failure = "Not saved. Try again.",
 ): Promise<Result<T>> {
   try {
     const response = await fetch(path, {
@@ -65,7 +66,7 @@ async function call<T>(
             ? "Sign in again to continue."
             : response.status === 403
               ? "This isn't available in this workspace."
-              : "Not saved. Try again.",
+              : failure,
       };
     if (response.status === 204) return { data: parse(null) as T, error: null };
     const data = parse(await response.json());
@@ -78,7 +79,12 @@ async function call<T>(
 }
 
 export const readSharing = (signal?: AbortSignal) =>
-  call("/v1/me/coaching/sharing", parseSharing, { signal });
+  call(
+    "/v1/me/coaching/sharing",
+    parseSharing,
+    { signal },
+    "Sharing setting couldn’t be loaded. Try again.",
+  );
 
 export const changeSharing = (shared: boolean, expectedRevision: number) =>
   call("/v1/me/coaching/sharing", parseSharing, {
