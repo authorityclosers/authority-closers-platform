@@ -1,5 +1,25 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 18:01 UTC — Pillar 1 latest-call shortcut (D 393c32e3). New
+`fixture_coaching_latest_call_shortcut` **8/8 PASS** (7 in 25.18s, then the one
+Sandbox 390 light case rerun in 3.52s after two live dev rebuilds tripped the
+refresh guard; its first artefacts retained in `harness-live-refresh-sandbox-390-light/`)
+at workbench 393c32e3 on shared :3026, 1440/390 light/dark. Design review My
+coaching ("Your latest call") and AC Sandbox One rep ("This rep’s calls"): one
+navigation inside `#coaching-focus` before "Why this matters", naming the fixture's
+newest ready call (ArthaPath · Chennai clinic · Close, 7 Sept; Edtech · Viren
+Nivantakar · call 5, 28 Aug) with links Open Report `/analysis/calls/<id>`, Call
+coaching `/coaching?call=<id>` and See calls `#coaching-calls`, the same id as
+that call's own row. Record mark present exactly when the row carries one: Design
+review none (no record words), Sandbox `suggested` "Needed work" on one line with a
+10 px dot equal to pillar 5's legend (light rgb(180,83,9), dark rgb(245,158,11)).
+Links 108/112/81 x 32 px desktop, x 44 px phone, centres reachable. See calls
+focuses the call section on All calls with the list folded as usual. Undersized,
+clipping, overflow, writes, errors 0. A first run failed 6/8 on my own assumption
+that See calls opens every row (the product resets the filter and keeps the fold);
+retained in `harness-see-calls-fold/`, no product defect. All eight PNGs inspected
+(`shots/2026-10-15-latest-call-shortcut/`). Fictional UI only.
+
 15 October, 16:18 UTC — Team rep records (D ad8b72e1). New `fixture_team_rep_records`
 **4/4 PASS** 18.11s/launcher 0 at workbench ad8b72e1 on shared :3026, 1440/390
 light/dark. Sandbox Team: first eight and all 60 rows match the fixture's names,

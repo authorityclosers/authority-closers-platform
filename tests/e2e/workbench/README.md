@@ -398,3 +398,16 @@ state. The Design review's shared reps, whose older records carry no counts, sho
 no mark and no record words. Row targets, clipping, reads, writes and refreshes
 are checked as usual. The fixture holds only "Needed work" records, so "Nothing
 to fix" stays unit-only.
+
+For pillar 1's "Latest call with coaching" shortcut, select only
+`-k fixture_coaching_latest_call_shortcut`. Eight cases (Design review My coaching
+"Your latest call" and AC Sandbox One rep "This rep’s calls", 1440/390 light/dark)
+find the one navigation inside `#coaching-focus` before "Why this matters", and
+check it names the fixture's newest ready call with its date; its three links are
+Open Report `/analysis/calls/<id>`, Call coaching `/coaching?call=<id>` and See
+calls `#coaching-calls`, where `<id>` is that call's own row in "Coaching for each
+call". The record mark is present exactly when that row carries one, with the
+same words and a 10 px dot equal to pillar 5's legend (Design review's latest
+call has no saved record; Sandbox shows "Needed work"). Links meet 32/44 px with
+reachable centres; See calls focuses the call list on All calls, folded as usual. Reads,
+writes, clipping, overflow and refreshes are checked as usual. Fixture-only.
