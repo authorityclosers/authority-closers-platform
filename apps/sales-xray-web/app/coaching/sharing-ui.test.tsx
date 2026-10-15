@@ -162,6 +162,60 @@ describe("Sharing my coaching", () => {
 });
 
 describe("Focus feedback", () => {
+  it.each(["Agree", "Not completely"])(
+    "announces a pending %s, keeps its keyboard place and retries the same command",
+    async (choice) => {
+      let finish!: (response: Response) => void;
+      const fetch = vi
+        .fn()
+        .mockImplementationOnce(
+          () => new Promise<Response>((resolve) => (finish = resolve)),
+        )
+        .mockResolvedValue(new Response(null, { status: 204 }));
+      vi.stubGlobal("fetch", fetch);
+      await act(async () =>
+        root.render(
+          <FocusFeedback
+            focusSkillId="problem_impact_desire"
+            originSubmissionId={fictionalCoaching.mission!.origin_submission_id}
+            evidence={fictionalCoaching.evidence}
+          />,
+        ),
+      );
+      const selected = button(choice);
+      selected.focus();
+      await act(async () => selected.click());
+      expect(host.textContent).toContain("Saving…");
+      expect(selected.disabled).toBe(false);
+      expect(selected.getAttribute("aria-disabled")).toBe("true");
+      expect(document.activeElement).toBe(selected);
+      expect(host.querySelector("textarea")).toBeNull();
+      // Neither repeated activation nor switching choices sends while pending.
+      await act(async () => {
+        selected.click();
+        button(choice === "Agree" ? "Not completely" : "Agree").click();
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      await act(async () => finish(new Response(null, { status: 500 })));
+      await flush();
+      expect(host.textContent).toContain("Not saved. Try again.");
+      expect(document.activeElement).toBe(selected);
+      expect(selected.getAttribute("aria-disabled")).toBeNull();
+      await act(async () => selected.click());
+      await flush();
+      const [first, retry] = fetch.mock.calls.map((call) =>
+        JSON.parse(call[1].body),
+      );
+      expect(retry).toEqual(first);
+      expect(selected.disabled).toBe(true);
+      expect(selected.getAttribute("aria-pressed")).toBe("true");
+      expect(host.textContent).not.toContain("Saving…");
+      expect(host.textContent).not.toContain("Not saved.");
+      expect(Boolean(host.querySelector("textarea"))).toBe(
+        choice === "Not completely",
+      );
+    },
+  );
   it("records agreement once with the visible focus and mission", async () => {
     const fetch = vi
       .fn()

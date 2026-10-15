@@ -375,7 +375,12 @@ export function FocusFeedback({
     agree: crypto.randomUUID(),
     not_completely: crypto.randomUUID(),
   }));
+  const sending = useRef(false);
   const send = async (agreement: "agree" | "not_completely") => {
+    // Pending controls stay focusable for a keyboard retry. Guard activation
+    // synchronously as well as announcing that the request is still running.
+    if (sending.current || state !== "idle") return;
+    sending.current = true;
     setState("saving");
     setError(null);
     const result = await writes.feedback({
@@ -384,6 +389,7 @@ export function FocusFeedback({
       focus_skill_id: focusSkillId,
       mission_origin_submission_id: originSubmissionId,
     });
+    sending.current = false;
     if (result.error) {
       setState("idle");
       setError(result.error);
@@ -409,14 +415,16 @@ export function FocusFeedback({
       <div className={styles.actions} role="group" aria-label={FEEDBACK.group}>
         <Button
           onClick={() => void send("agree")}
-          disabled={state !== "idle"}
+          disabled={done}
+          aria-disabled={state === "saving" || undefined}
           aria-pressed={state === "agree"}
         >
           {FEEDBACK.agree}
         </Button>
         <Button
           onClick={() => void send("not_completely")}
-          disabled={state !== "idle"}
+          disabled={done}
+          aria-disabled={state === "saving" || undefined}
           aria-pressed={state === "not_completely"}
         >
           {FEEDBACK.notCompletely}
@@ -432,12 +440,14 @@ export function FocusFeedback({
           </Button>
         )}
       </div>
-      <p role="status" className={styles.note}>
-        {state === "not_completely" && contextOpen
-          ? DISAGREE.noted
-          : done
-            ? FEEDBACK.noted
-            : (error ?? FEEDBACK.ask)}
+      <p role="status" className={`${styles.note} ${styles.feedbackStatus}`}>
+        {state === "saving"
+          ? FEEDBACK.saving
+          : state === "not_completely" && contextOpen
+            ? DISAGREE.noted
+            : done
+              ? FEEDBACK.noted
+              : (error ?? FEEDBACK.ask)}
       </p>
       <ContextForm
         focusSkillId={focusSkillId}

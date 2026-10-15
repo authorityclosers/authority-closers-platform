@@ -82,6 +82,21 @@ function contextSaveExample(): CoachingWriter {
   };
 }
 
+/** Slow agreement, one failure then retry; no account or feedback is written. */
+function feedbackSaveExample(): CoachingWriter {
+  let attempts = 0;
+  return {
+    ...REVIEW_WRITES,
+    feedback: async () => {
+      const attempt = ++attempts;
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      return attempt === 1
+        ? { data: null, error: "Not saved. Try again." }
+        : { data: true, error: null };
+    },
+  };
+}
+
 /** Keep the chosen level in the address, so a reload or a link opens it. */
 function remember(key: "view" | "data", value: string) {
   const url = new URL(window.location.href);
@@ -107,6 +122,7 @@ export function CoachingFixture() {
   const [chosenView, setView] = useState<View | null>(null);
   const [chosenData, setData] = useState<Data | null>(null);
   const [contextSaveWrites] = useState(contextSaveExample);
+  const [feedbackSaveWrites] = useState(feedbackSaveExample);
   const [sharingRead] = useState(sharingReadExample);
   const view: View =
     chosenView ?? (linked === "me" || linked === "team" ? linked : "call");
@@ -116,6 +132,8 @@ export function CoachingFixture() {
     data === "review" && query.get("example") === "context-save";
   const sharingRetry =
     data === "review" && query.get("example") === "sharing-retry";
+  const feedbackSave =
+    data === "review" && query.get("example") === "feedback-save";
   const set = data === "sandbox" ? acSandbox : sandbox;
   // An opt-in, dev-only reproduction of the retained long-quote lesson.
   const callPayload =
@@ -151,7 +169,13 @@ export function CoachingFixture() {
   );
   return (
     <CoachingWrites.Provider
-      value={contextSave ? contextSaveWrites : REVIEW_WRITES}
+      value={
+        contextSave
+          ? contextSaveWrites
+          : feedbackSave
+            ? feedbackSaveWrites
+            : REVIEW_WRITES
+      }
     >
       <CoachingSharingRead.Provider
         value={sharingRetry ? sharingRead : REVIEW_READ_SHARING}

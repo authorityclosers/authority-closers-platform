@@ -1050,6 +1050,15 @@
   gap: 8px;
 }
 
+.actions button[aria-disabled="true"] {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.feedbackStatus {
+  min-height: 2lh;
+}
+
 /* ---------- Mission and practice (pillar 4) ---------- */
 
 .missionBehavior {
