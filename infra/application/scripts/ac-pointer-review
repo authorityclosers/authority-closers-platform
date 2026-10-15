@@ -1,0 +1,45 @@
+#!/bin/bash
+# Automatic AI pointer reviews for newly finished Sales Xray reports.
+# Owner decision 16 Oct 2026 (rulebook 693645b0): the Report's 27 pointers and
+# overall score are an AI draft, everywhere once shipped. Each run reviews at
+# most 10 unreviewed reports from the last 48 hours, stops at 300 automatic
+# reviews a day per environment, and never retries a report that failed twice.
+# Before the release that carries the runner reaches an environment, it exits 0.
+#
+#   ac-pointer-review development-live | staging | production
+set -euo pipefail
+
+env_name=${1:?usage: ac-pointer-review development-live|staging|production}
+module=ac_platform.conversation_intelligence.pointer_review_cli
+common=(--recent-hours 48 --limit 10 --daily-cap 300 --apply)
+
+case "$env_name" in
+  development-live)
+    slot=$(cat /var/lib/ac-dev-live-backend/active-slot)
+    python=/srv/authority-closers/development/live-backend/$slot/.venv/bin/python
+    install -d -m 700 /var/lib/ac-pointer-review
+    cd /tmp
+    env -i PATH=/usr/bin:/bin "$python" -c "import $module" 2>/dev/null || exit 0
+    exec env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 PYTHONUNBUFFERED=1 \
+      "$python" -m "$module" \
+      --service-config /etc/authority-closers/development/service-live.json \
+      --database-url-file /etc/authority-closers/development/database-url-live \
+      --token-file /etc/authority-closers/development/identities/gemini/token \
+      --infisical /usr/local/bin/infisical \
+      --state-file /var/lib/ac-pointer-review/development-live.json \
+      "${common[@]}"
+    ;;
+  staging | production)
+    container=ac-application-$env_name-sales-xray-worker-1
+    docker exec "$container" python -c "import $module" 2>/dev/null || exit 0
+    exec docker exec "$container" python -m "$module" \
+      --service-config /run/ac-sales-xray/service.json \
+      --database-url-file /run/ac-sales-xray/database-url \
+      --state-file "/srv/authority-closers/sales-xray/$env_name/scratch/pointer-review-failures.json" \
+      "${common[@]}"
+    ;;
+  *)
+    echo "unknown environment: $env_name" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,10 @@
+[Unit]
+Description=Sales Xray AI pointer reviews for new reports (%i)
+Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/AGENTS.md
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-pointer-review %i
+Nice=10
+TimeoutStartSec=20min
