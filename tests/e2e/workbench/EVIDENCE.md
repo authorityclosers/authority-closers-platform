@@ -1,5 +1,26 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 20:44 UTC — Context pending/error/retry (D cba15b3e).
+New `fixture_coaching_context_save` **4/4 PASS**, 13.28s/launcher0 at
+671cc8ab on shared dev :3026, 1440/390 light/dark. Native selection retains
+all 74 Hindi/English characters; pending typing cannot replace the submitted
+note, textarea stays focusable/enabled/read-only, Save/Cancel disabled. Each
+attempt remains pending at2999ms and resolves at3000ms. Failure retains the
+exact note and permits editing; Enter retry succeeds and displays that exact
+note with its original explanatory sentence. Status height18.594px and Save
+document position unchanged; targets57/71x32 desktop, x44 phone, reachable.
+Mission/query retained, errors/undersized/clipping/overflow/API/media/refresh0.
+All12 final PNGs inspected, no product defect. Screens/receipts:
+`/home/acdev/strikes/1694/shots/2026-10-15-context-save/`.
+First run1FAIL11.63s stopped at my saved-status assertion, which omitted the
+existing explanatory sentence; retained original receipt and all3 inspected
+PNGs in `harness-saved-status-suffix/`. Corrected671cc8ab; preparation203382ad,
+Ruff/format/API import/diffPASS, no-server4skip/208deselected. Fictional in-page
+writer only; canonical persistence/authenticated access and command identity
+are not browser-proven (command reuse is builder unit coverage).
+v0.46 PR478 typefix retry stopped20:39:54Z on validate-python-tests(1);
+Python gates also FAILURE. No staging/production canaries, no health readback.
+
 15 October, 20:28 UTC — Team rep order (D e1d7c08b). New
 `fixture_team_rep_order` **4/4 PASS**, 24.74s/launcher0 at workbench 5c6d0e31,
 shared dev :3026, 1440/390 light/dark. Existing Sandbox60 and Design review2:
