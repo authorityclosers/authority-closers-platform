@@ -6330,14 +6330,30 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
     )
     with _journey(browser, viewport, "report-15oct") as journey:
         page = journey.page
-        api_requests: list[str] = []
+        bootstrap_reads: list[str] = []
+        api_mutations: list[str] = []
+        read_replies: dict[tuple[str, str, str], dict[str, object]] = {}
         media_requests: list[str] = []
 
-        def no_api(route: Route) -> None:
-            api_requests.append(route.request.method)
-            route.abort("blockedbyclient")
+        def fictional_read(route: Route) -> None:
+            request = route.request
+            if request.method not in {"GET", "HEAD"}:
+                api_mutations.append(request.method)
+                route.abort("blockedbyclient")
+                return
+            url = urlsplit(request.url)
+            bootstrap_reads.append(url.path)
+            key = (request.method, url.path, url.query)
+            if key not in read_replies:
+                read_replies[key] = _fictional_api_reply(*key)
+            reply = read_replies[key]
+            route.fulfill(
+                status=reply["status"],
+                content_type="application/json",
+                body=json.dumps(reply["body"]),
+            )
 
-        page.route("**/v1/**", no_api)
+        page.route("**/v1/**", fictional_read)
         page.on(
             "request",
             lambda request: (
@@ -6357,8 +6373,14 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
 
         def open_example(kind: str) -> None:
             journey.open(f"/review-fixture/report/story?example={kind}")
+            page.wait_for_load_state("load")
             expect(page.locator('[data-xray-part="overview"]')).to_be_visible()
             page.evaluate("() => document.fonts.ready")
+            assert parse_qs(urlsplit(page.url).query).get("example") == [kind]
+            if kind != "none":
+                expect(page.locator('[data-xray-part="outcome"]')).to_have_attribute(
+                    "data-outcome", kind, timeout=10_000
+                )
             nav = page.locator("[data-report-sections]:visible")
             expect(nav).to_have_count(1)
             expect(nav.get_by_role("link")).to_have_count(3)
@@ -6494,7 +6516,7 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
         capture(rows.first, "mapped-pointer-no-score")
         progress = page.get_by_role("progressbar", name="Pointers evaluated", exact=True)
         expect(progress).to_have_attribute("aria-valuenow", "0")
-        assert not api_requests, "The fictional Report attempted an API request"
+        assert not api_mutations, "The fictional Report attempted an API mutation"
         assert not media_requests, "Reading the Report requested media"
         assert journey.live_refreshes == 0, "Live source changed during rebuilt Report QA"
         journey.observations[-1]["report_15oct"] = {
@@ -6505,7 +6527,8 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
             "native_independent_disclosures_and_filter": True,
             "illustrative_outcomes": [label for _, label in outcome_cases],
             "missing_scores_remain_unscored": True,
-            "api_requests": len(api_requests),
+            "fictional_bootstrap_reads": bootstrap_reads,
+            "api_mutations": len(api_mutations),
             "media_requests": len(media_requests),
             "approved_scoring_authority_or_hosted_acceptance": False,
             "api_structure_fixture_mapping": "not covered by the legacy Amit fixture",

@@ -481,5 +481,6 @@ the four authored fictional final-outcome scenarios. `?example=none` checks the
 legacy Amit input honestly leaves the new overall/pointer scores unscored; it
 does not prove mapping of the API's new structure payload. The source example's
 numbers remain explicitly illustrative. No outcome write, source playback or
-provider action is invoked; API/media requests and live refreshes must be zero.
+provider action is invoked. Shell reads use the existing approved fictional
+bootstrap; API mutations, media requests and live refreshes must be zero.
 Existing six-part Document/Word evidence remains separate and is not replayed.
