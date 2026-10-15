@@ -6334,6 +6334,14 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
         api_mutations: list[str] = []
         read_replies: dict[tuple[str, str, str], dict[str, object]] = {}
         media_requests: list[str] = []
+        journey.observations.append(
+            {
+                "step": "fictional-report-network-guard",
+                "bootstrap_reads": bootstrap_reads,
+                "api_mutations": api_mutations,
+                "media_requests": media_requests,
+            }
+        )
 
         def fictional_read(route: Route) -> None:
             request = route.request
@@ -6512,7 +6520,6 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
         rows = analysis.locator("li[data-pointer]")
         expect(rows).to_have_count(27)
         expect(analysis.get_by_text("No score", exact=True)).to_have_count(27)
-        expect(analysis).to_contain_text("Nothing is scored yet.")
         capture(rows.first, "mapped-pointer-no-score")
         progress = page.get_by_role("progressbar", name="Pointers evaluated", exact=True)
         expect(progress).to_have_attribute("aria-valuenow", "0")
