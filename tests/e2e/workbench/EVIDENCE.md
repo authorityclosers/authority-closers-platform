@@ -1,5 +1,18 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October,23:20 UTC — saved scored-call preparation, NOT browser acceptance.
+Runner0ef247b0/07ace258 requires an explicit approved saved-call path and existing
+session, blocks mutations/media, checks three parts/all27 titles, score range,
+AI-draft labels and native expanded feedback. With WB_EXPECTED_OVERALL_SCORE,
+it checks the exact owner-supplied overall and requires quoted scored feedback.
+Ruff/format/API import/diffPASS; no-server4skip/228deselected. The Report owner
+supplied five call routes/scores and explicitly retained session access. QA did
+not access the session or run the calls; owner-side readback is pending.
+CorrectHost dev API read23:16:18Z was200/ready/release843dbee2, including AI-review
+81e0bafc; initial wrongHost400 was a QA request error, not a dev regression.
+UI7689d838 supplied unscored reasons remain a new populated-data branch, not
+covered by the closed fixture wave. No provider/reanalysis/deploy action by QA.
+
 15 October,22:48 UTC — rebuilt three-part Report (owner b4727ffd,
 36bd8a09/bc0bd174, reader tests1f75c11d; QA source d4406900).
 Only `-k fixture_report_15oct_structure`: **4/4 PASS**,68.80s/launcher0,
