@@ -36,6 +36,19 @@ bullshit. Everything just builds up in here itself."
 Protected business semantics, secrets, data-change and deletion approvals,
 evidence provenance, provider activation and AC-SVAL requirements still apply.
 
+# OWNER DECISION: REPORT AI SCORES (16 Oct 2026, about 04:00 IST)
+
+The owner approved AI-made scores for the new Sales Xray Report (15 Oct
+structure). The Report shows an overall score out of 100 and, for each of the
+27 pointers, a status, a 0-100 score and written feedback. On dev it shows now,
+labelled "AI draft - not reviewed by Dipak". It reaches staging and production
+when the owner says "ship". For this feature only, this decision supersedes the
+guardrail below against autonomous AI scoring before the AC-SVAL gates. The owner
+also approved re-running analysis on the owner's last 5 dev calls to test it,
+within the dev AI budget. The owner's laptop session builds the back end and
+the UI. Strike 1801 keeps its other work and leaves these Report scoring files
+alone.
+
 # CODEX NON-NEGOTIABLE GUARDRAILS
 
 - Do not infer protected business semantics.
@@ -50,7 +63,8 @@ evidence provenance, provider activation and AC-SVAL requirements still apply.
 - Do not couple payment provider state directly to access.
 - Do not turn analytics events into canonical progress/payment state.
 - Do not overwrite audit-critical history; supersede.
-- Do not create official autonomous AI scoring before AC-SVAL gates.
+- Do not create official autonomous AI scoring before AC-SVAL gates (exception:
+  the owner-approved Report AI scores above).
 - Do not process real calls externally before consent/retention/provenance/provider/professional gates.
 - Do not build full B2B/native/WhatsApp/voice merely because the architecture preserves those futures.
 - A P0 blocks its capability, not the whole project.
