@@ -1,5 +1,22 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 13:28 UTC — Worked/Didn't clip disclosure **4/4 PASS**, 44.29s/
+launcher0 at `0e848802` (includes B99a79943), live_refreshes0 after two quiet
+days; the 13 October 1/4 hot-rebuild stop is cleared. First two then all/fewer
+per card, independent cards and fold focus; pointer/Enter/Space select the
+original displayed bounds/title for 4/0/1 and 3/2/1 refs; all six findings and
+prose intact; tail clip 118x32/118x44 and all/fewer 106x32/106x44 reachable.
+Extra API reads/media/mutations/runtime/server/visual errors0. All eight PNGs
+inspected in `shots/2026-10-15-1326Z-worked-clips/`; the 1440 worked/didnt
+pairs are byte-identical because both cards sit side by side fully expanded
+at both snapshots (capture artefact). Mixed order/object identity remain unit
+proof; no real-audio/authenticated claim. B closure delivered.
+
+The same script's lesson pause/viewclose8 and moment view-close4 waves were
+killed with the launching session at about 13:28 UTC before any case finished
+(partial folder `2026-10-15-1326Z-lesson-pause-viewclose-killed/`, no result);
+relaunched detached at 13:40 UTC as `2026-10-15-1340Z-*`.
+
 13 October, 05:43 UTC — prepared only Worked/Didn't disclosure4 using
 B99a79943's exact existing authored-card boundary. Repeated own refs cover
 0/1/2/3/4, first-two/all/fewer and independent cards, pointer/Enter/Space,
