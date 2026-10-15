@@ -76,6 +76,8 @@ export type SalesReport = {
   report_content?: ReportContent;
   /** The analysis' own words for the six pillars; optional and lenient. */
   pillars?: ReportPillars;
+  /** The 15 Oct Report structure (27 pointers) from the API; read leniently by xray-report. */
+  structure?: unknown;
   summary: string;
   summary_evidence?: ReportEvidence[];
   strengths: Finding[];
@@ -592,6 +594,7 @@ function parseReport(
       "story",
       "report_content",
       "pillars",
+      "structure",
     ],
     "report",
   );
@@ -738,6 +741,9 @@ function parseReport(
       throw new ReportContractError("report_story_invalid");
     }
   }
+  // Kept as sent; the Report reads only the parts that check out.
+  if (report.structure !== undefined && report.structure !== null)
+    parsed.structure = report.structure;
   // Never fails the report: a part that does not check out is left out.
   if (
     report.pillars !== undefined &&
@@ -895,6 +901,7 @@ export function parseAcquisitionReport(
       "closing_analysis",
       "verdict",
       "overview",
+      "structure",
     ],
     "report_content",
   );
