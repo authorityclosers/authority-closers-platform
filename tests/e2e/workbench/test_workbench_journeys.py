@@ -5622,8 +5622,10 @@ def test_fixture_team_rep_order(browser: Browser, viewport: tuple[int, str]) -> 
                 if row["skill_id"] == selected["skill_id"]
             )
             # Design review normalizes raw labels to the approved taxonomy.
-            find = totals.get_by_role("listitem").nth(skill_index).get_by_role(
-                "button", name=re.compile(r"^Find reps working on ")
+            find = (
+                totals.get_by_role("listitem")
+                .nth(skill_index)
+                .get_by_role("button", name=re.compile(r"^Find reps working on "))
             )
             search.fill("no such fictional rep")
             journey.control_target(find, f"{kind}-find-reps")
