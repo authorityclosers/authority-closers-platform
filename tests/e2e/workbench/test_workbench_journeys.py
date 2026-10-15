@@ -5616,11 +5616,14 @@ def test_fixture_team_rep_order(browser: Browser, viewport: tuple[int, str]) -> 
             expect(order).to_have_value("name")
             check_order(alphabetical)
 
-            skill = next(
-                row for row in source["suggestions"] if row["skill_id"] == selected["skill_id"]
+            skill_index = next(
+                index
+                for index, row in enumerate(source["suggestions"])
+                if row["skill_id"] == selected["skill_id"]
             )
-            find = page.get_by_role(
-                "button", name=f"Find reps working on {skill['label']}", exact=True
+            # Design review normalizes raw labels to the approved taxonomy.
+            find = totals.get_by_role("listitem").nth(skill_index).get_by_role(
+                "button", name=re.compile(r"^Find reps working on ")
             )
             search.fill("no such fictional rep")
             journey.control_target(find, f"{kind}-find-reps")
