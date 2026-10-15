@@ -472,3 +472,14 @@ by existing approved analysis; QA must not invent ratings or new score mappings.
 The legacy six-section fixtures and completed evidence remain retained. New
 Report journeys will use the concrete rebuild source as it lands; no new
 Coaching QA is queued under the owner's current Report-only order.
+
+Select only `-k fixture_report_15oct_structure` for the rebuilt Report. Four
+viewport/theme journeys check its three parts, all27 exact owner titles/order,
+reachable View more row controls, independent native Enter/Space disclosure and
+the Good/All filter. Screens cover overview, pointer rows/details and each of
+the four authored fictional final-outcome scenarios. `?example=none` checks the
+legacy Amit input honestly leaves the new overall/pointer scores unscored; it
+does not prove mapping of the API's new structure payload. The source example's
+numbers remain explicitly illustrative. No outcome write, source playback or
+provider action is invoked; API/media requests and live refreshes must be zero.
+Existing six-part Document/Word evidence remains separate and is not replayed.

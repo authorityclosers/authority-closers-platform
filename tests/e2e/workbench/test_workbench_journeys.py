@@ -6314,3 +6314,198 @@ def test_fixture_coaching_feedback_save(
             "command_identity": "builder unit coverage only",
             "authenticated_or_canonical_feedback_acceptance": False,
         }
+
+
+def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, str]) -> None:
+    """The rebuilt Report has three readable parts and all27 owner-named pointers."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("The rebuilt Report journey uses signed-out fictional examples only")
+    contract = json.loads(Path(__file__).with_name("report-15oct-acceptance.json").read_text())
+    titles = contract["pointer_titles"]
+    assert len(titles) == 27
+    sections = (
+        ("overview", "Overview & Score"),
+        ("analysis", "Detailed Call Analysis"),
+        ("outcome", "Final Call Outcome"),
+    )
+    with _journey(browser, viewport, "report-15oct") as journey:
+        page = journey.page
+        api_requests: list[str] = []
+        media_requests: list[str] = []
+
+        def no_api(route: Route) -> None:
+            api_requests.append(route.request.method)
+            route.abort("blockedbyclient")
+
+        page.route("**/v1/**", no_api)
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append(request.resource_type)
+                if request.resource_type == "media"
+                else None
+            ),
+        )
+
+        def center(target: Locator) -> None:
+            target.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+
+        def capture(target: Locator, label: str) -> None:
+            center(target)
+            journey.snapshot(label)
+            journey.unclipped_text(target)
+
+        def open_example(kind: str) -> None:
+            journey.open(f"/review-fixture/report/story?example={kind}")
+            expect(page.locator('[data-xray-part="overview"]')).to_be_visible()
+            page.evaluate("() => document.fonts.ready")
+            nav = page.locator("[data-report-sections]:visible")
+            expect(nav).to_have_count(1)
+            expect(nav.get_by_role("link")).to_have_count(3)
+            assert nav.get_by_role("link").evaluate_all(
+                "els => els.map(el => el.getAttribute('aria-label'))"
+            ) == [label for _, label in sections]
+            assert page.locator("[data-xray-part]").evaluate_all(
+                "els => els.map(el => el.getAttribute('data-xray-part'))"
+            ) == [key for key, _ in sections]
+            for index, (key, label) in enumerate(sections, start=1):
+                part = page.locator(f'[data-report-mode-section="{key}"]:visible')
+                expect(
+                    part.get_by_role("heading", name=f"{index}. {label}", exact=True)
+                ).to_be_visible()
+                expect(part).not_to_contain_text("This part of the report couldn’t be shown")
+
+        def navigate(key: str, label: str) -> Locator:
+            page.locator("[data-report-sections]:visible").get_by_role(
+                "link", name=label, exact=True
+            ).click()
+            return page.locator(f'[data-xray-part="{key}"]')
+
+        open_example("follow_up")
+        overview = navigate("overview", "Overview & Score")
+        summary = overview.get_by_role("region", name="Call summary", exact=True)
+        score = overview.get_by_role("region", name="Overall score", exact=True)
+        expect(summary.get_by_role("heading", name="Call Summary", exact=True)).to_be_visible()
+        expect(score.get_by_text("Illustrative example", exact=True)).to_be_visible()
+        assert re.search(r"\b\d{1,3}\s*/100", score.inner_text()), "Illustrative score is absent"
+        capture(summary, "overview-summary")
+        capture(score.locator(":scope > div").first, "overview-score")
+        stats = score.get_by_role("heading", name="Call Statistics", exact=True)
+        capture(stats.locator(".."), "overview-statistics")
+        for words in ("Call Duration", "Talk Share", "Questions Asked", "Longest Turn"):
+            expect(score).to_contain_text(words)
+        about = score.get_by_role("button", name="About these numbers", exact=True)
+        center(about)
+        journey.control_target(about, "about-statistics")
+
+        analysis = navigate("analysis", "Detailed Call Analysis")
+        rows = analysis.locator("li[data-pointer]")
+        expect(rows).to_have_count(27)
+        original_ids = rows.evaluate_all("els => els.map(el => el.dataset.pointer)")
+        assert len(set(original_ids)) == 27, "Report pointer ids are duplicated"
+        capture(analysis.get_by_role("group", name="Show pointers", exact=True), "analysis-filters")
+        for index, title in enumerate(titles, start=1):
+            row = rows.nth(index - 1)
+            control = row.get_by_role("button", name=re.compile(rf"^{index}\. {re.escape(title)}:"))
+            expect(control).to_have_count(1)
+            expect(row.get_by_text(title, exact=True)).to_be_visible()
+            expect(control).to_have_attribute("aria-expanded", "false")
+            assert (control.get_attribute("aria-label") or "").endswith("View more")
+            center(control)
+            journey.control_target(control, f"pointer-{index}")
+            journey.unclipped_text(control)
+            if index in (1, 27):
+                journey.snapshot(f"analysis-row-{index}")
+        first = rows.first.get_by_role("button").first
+        second = rows.nth(1).get_by_role("button").first
+        first.focus()
+        page.keyboard.press("Enter")
+        expect(first).to_have_attribute("aria-expanded", "true")
+        detail = page.locator("#" + str(first.get_attribute("aria-controls")))
+        for heading in (
+            "What Happened?",
+            "Why It Matters?",
+            "Evidence from the Call",
+            "How to Improve?",
+        ):
+            expect(detail.get_by_role("heading", name=heading, exact=True)).to_be_visible()
+        capture(detail, "analysis-scored-details")
+        center(second)
+        second.click()
+        expect(second).to_have_attribute("aria-expanded", "true")
+        second_detail = page.locator("#" + str(second.get_attribute("aria-controls")))
+        expect(second_detail).to_contain_text("No score is given for this pointer.")
+        capture(second_detail, "analysis-unscored-details")
+        first.focus()
+        page.keyboard.press("Space")
+        expect(first).to_have_attribute("aria-expanded", "false")
+        expect(first).to_be_focused()
+        expect(second).to_have_attribute("aria-expanded", "true")
+        second.focus()
+        page.keyboard.press("Enter")
+        expect(second).to_have_attribute("aria-expanded", "false")
+        filters = analysis.get_by_role("group", name="Show pointers", exact=True)
+        good = filters.get_by_role("button", name=re.compile(r"^Good(?:\s|\d|$)"))
+        good_count = int(good.locator("span").inner_text())
+        center(good)
+        journey.control_target(good, "good-filter")
+        good.click()
+        expect(rows).to_have_count(good_count)
+        assert good_count > 0
+        assert all(
+            ": Good" in str(label)
+            for label in rows.get_by_role("button").evaluate_all(
+                "els => els.map(el => el.getAttribute('aria-label'))"
+            )
+        )
+        filters.get_by_role("button", name=re.compile(r"^All(?:\s|\d|$)")).click()
+        expect(rows).to_have_count(27)
+        assert rows.evaluate_all("els => els.map(el => el.dataset.pointer)") == original_ids
+
+        outcome_cases = (
+            ("follow_up", "Follow-up Set"),
+            ("won", "Won"),
+            ("lost", "Lost"),
+            ("decision_pending", "Decision Pending"),
+        )
+        for kind, label in outcome_cases:
+            if kind != "follow_up":
+                open_example(kind)
+            outcome = navigate("outcome", "Final Call Outcome")
+            expect(outcome).to_have_attribute("data-outcome", kind)
+            expect(outcome.get_by_text(label, exact=True)).to_be_visible()
+            capture(outcome.get_by_text("Deal Outcome", exact=True), f"outcome-{kind}")
+            notes = outcome.get_by_role("heading", name="Additional Notes", exact=True)
+            expect(notes).to_be_visible()
+            capture(notes.locator(".."), f"outcome-{kind}-notes")
+
+        open_example("none")
+        overview = navigate("overview", "Overview & Score")
+        score = overview.get_by_role("region", name="Overall score", exact=True)
+        expect(score).to_contain_text("Not scored yet")
+        expect(overview.get_by_text("Illustrative example", exact=True)).to_have_count(0)
+        capture(score.locator(":scope > div").first, "mapped-not-scored")
+        analysis = navigate("analysis", "Detailed Call Analysis")
+        rows = analysis.locator("li[data-pointer]")
+        expect(rows).to_have_count(27)
+        expect(analysis.get_by_text("No score", exact=True)).to_have_count(27)
+        expect(analysis).to_contain_text("Nothing is scored yet.")
+        capture(rows.first, "mapped-pointer-no-score")
+        progress = page.get_by_role("progressbar", name="Pointers evaluated", exact=True)
+        expect(progress).to_have_attribute("aria-valuenow", "0")
+        assert not api_requests, "The fictional Report attempted an API request"
+        assert not media_requests, "Reading the Report requested media"
+        assert journey.live_refreshes == 0, "Live source changed during rebuilt Report QA"
+        journey.observations[-1]["report_15oct"] = {
+            "source": "Owner b4727ffd; controlled27-pointer contract",
+            "parts": [label for _, label in sections],
+            "pointer_titles": titles,
+            "pointer_ids": original_ids,
+            "native_independent_disclosures_and_filter": True,
+            "illustrative_outcomes": [label for _, label in outcome_cases],
+            "missing_scores_remain_unscored": True,
+            "api_requests": len(api_requests),
+            "media_requests": len(media_requests),
+            "approved_scoring_authority_or_hosted_acceptance": False,
+            "api_structure_fixture_mapping": "not covered by the legacy Amit fixture",
+        }
