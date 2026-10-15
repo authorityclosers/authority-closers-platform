@@ -21,8 +21,9 @@ bullshit. Everything just builds up in here itself."
   `uv run python -c "import ac_platform.http"`. Before committing TypeScript,
   run a typecheck covering the touched files. Run focused checks and retain
   implementation evidence. Fix a dev regression promptly or revert your own file.
-- Focus on the Report's structure, UI and plain sales language per Dipak's
-  `/home/acdev/scratch/specs/final-xray-structure-2026-10-09.md`, then Coaching.
+- Focus on the Report's structure, UI and plain sales language per the owner's
+  "15th Oct sales x-ray structure" doc (owner text at
+  `/home/acdev/strikes/synth/context/report-structure-15oct.md`), then Coaching.
   Start other product work only on the owner's instruction.
 - Shipping belongs to the owner's operator or coordinator, through `ac-ship`:
   version checkpoint, CI, staging and tests, then production. Builders do not
