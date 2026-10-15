@@ -229,7 +229,9 @@ def test_pair_never_follows_links(validation, tmp_path):
         {"mode": "staging"},
         {"evidence_ref": "not-root-receipt"},
         {"admitted_at": (datetime.now(UTC) - timedelta(minutes=16)).isoformat()},
-        {"admitted_at": (datetime.now(UTC) + timedelta(minutes=1)).isoformat()},
+        # Parameters are built at collection time; a long shard must not age this
+        # future stamp into the 15-minute admission window before the case runs.
+        {"admitted_at": (datetime.now(UTC) + timedelta(days=1)).isoformat()},
     ],
 )
 def test_unknown_exhausted_stale_or_mismatched_root_admission_fails(changes):
