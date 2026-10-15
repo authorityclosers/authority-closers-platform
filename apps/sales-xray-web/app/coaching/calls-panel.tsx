@@ -241,7 +241,6 @@ export function CallsPanel({
                           ? CALLS.unavailable
                           : (call.focus_label ??
                             (they ? THEIR.callFallback : CALLS.fallback)),
-                    !filtered && call.recurring ? CALLS.recurring : null,
                     // The saved record on the current focus, marked like the
                     // progress history, so the full list scans without a filter.
                     !filtered && canFilter && pointState(call) ? (
@@ -252,6 +251,7 @@ export function CallsPanel({
                         {POINT_COPY[pointState(call)!]}
                       </span>
                     ) : null,
+                    !filtered && call.recurring ? CALLS.recurring : null,
                   ]}
                   end={
                     call.state === "ready" ? (
