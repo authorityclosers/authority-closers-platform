@@ -626,6 +626,10 @@
   flex: 0 1 180px;
 }
 
+.repOrder {
+  flex: 0 1 140px;
+}
+
 .repEmpty {
   padding: 0 14px 14px;
 }
@@ -643,7 +647,13 @@
 
   .repArea {
     flex-grow: 1;
-    flex-basis: 140px;
+    flex-basis: 110px;
+    min-width: 0;
+  }
+
+  .repOrder {
+    flex-grow: 1;
+    flex-basis: 126px;
     min-width: 0;
   }
 }

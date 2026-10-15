@@ -675,6 +675,124 @@ describe("anonymous Team coaching", () => {
     await act(async () => root.unmount());
     host.remove();
   });
+  it("orders existing reps before folding and keeps search, areas and totals intact", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const team = parseTeamCoaching({
+      ...sandboxTeam,
+      reps: sandboxTeam.reps.map((row, index) => ({
+        ...row,
+        latest_call_at:
+          index === 0 || index === 9 ? null : `2026-09-0${index + 1}T10:00:00Z`,
+      })),
+    })!;
+    const source = JSON.stringify(team);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      await act(async () => root.render(<TeamCoachingStory coaching={team} />));
+      const order = host.querySelector<HTMLSelectElement>(
+        'select[aria-label="Sort reps"]',
+      )!;
+      const list = host.querySelector(
+        'ul[aria-label="Reps and their current focus"]',
+      )!;
+      const names = () =>
+        [...list.querySelectorAll("a > span:first-child")].map(
+          (span) => span.textContent,
+        );
+      const totals = host.querySelector(
+        'ul[aria-label="Coaching areas"]',
+      )!.textContent;
+      const choose = (value: string) =>
+        act(async () => {
+          order.value = value;
+          order.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      const button = (text: string) =>
+        [...host.querySelectorAll("button")].find(
+          (item) => item.textContent === text,
+        )!;
+      expect(order.value).toBe("latest");
+      expect(names()).toEqual([
+        "Closer 9",
+        "Closer 8",
+        "Closer 7",
+        "Closer 6",
+        "Closer 5",
+        "Closer 4",
+        "Closer 3",
+        "Closer 2",
+      ]);
+      await act(async () => button("Show all 10 people").click());
+      // Unknown dates go last in their original order; no share date is used.
+      expect(names().slice(-2)).toEqual(["Closer 1", "Asha Rao"]);
+      await choose("name");
+      expect(names()).toEqual([
+        "Asha Rao",
+        "Closer 1",
+        "Closer 2",
+        "Closer 3",
+        "Closer 4",
+        "Closer 5",
+        "Closer 6",
+        "Closer 7",
+      ]);
+      expect(button("Show all 10 people").getAttribute("aria-expanded")).toBe(
+        "false",
+      );
+      expect(order.getAttribute("aria-controls")).toBe(list.parentElement!.id);
+      expect(list.querySelector("a")!.getAttribute("href")).toBe(
+        `/coaching?person=${team.reps[9].person_id}`,
+      );
+      expect(list.textContent).toContain("Confirm who decides before the sale");
+      const search = host.querySelector<HTMLInputElement>(
+        'input[type="search"]',
+      )!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value",
+        )!.set!.call(search, "  cLoSeR  ");
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(names()).toEqual([
+        "Closer 1",
+        "Closer 2",
+        "Closer 3",
+        "Closer 4",
+        "Closer 5",
+        "Closer 6",
+        "Closer 7",
+        "Closer 8",
+      ]);
+      await choose("latest");
+      expect(names()[0]).toBe("Closer 9");
+      expect(search.value).toBe("  cLoSeR  ");
+      await choose("name");
+      await act(async () =>
+        host
+          .querySelector<HTMLButtonElement>(
+            'button[aria-label="Find reps working on Qualification"]',
+          )!
+          .click(),
+      );
+      expect(search.value).toBe("");
+      expect(names()).toEqual(["Asha Rao"]);
+      expect(order.value).toBe("name");
+      await act(async () => button("Clear filters").click());
+      expect(order.value).toBe("name");
+      expect(names()[0]).toBe("Asha Rao");
+      expect(document.activeElement).toBe(search);
+      expect(
+        host.querySelector('ul[aria-label="Coaching areas"]')!.textContent,
+      ).toBe(totals);
+      expect(JSON.stringify(team)).toBe(source);
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
   it("reads another rep's coaching only as that rep's view", async () => {
     const person = "00000000-0000-4000-8000-000000000001";
     const fetch = vi

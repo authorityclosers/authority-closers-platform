@@ -36,6 +36,10 @@ const share = (part: number, whole: number) =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
 
 const NO_FOCUS = "no-focus";
+const REP_NAMES = new Intl.Collator("en-IN", {
+  sensitivity: "base",
+  numeric: true,
+});
 
 /** Emphasise literal search words without changing the original rep text. */
 function searchMatch(text: string, term: string) {
@@ -109,6 +113,7 @@ function RepList({
 }) {
   const [area, setArea] = useState("all");
   const [query, setQuery] = useState("");
+  const [order, setOrder] = useState("latest");
   const [all, setAll] = useState(false);
   const listId = useId();
   const search = useRef<HTMLInputElement>(null);
@@ -129,6 +134,13 @@ function RepList({
       (rep.name.toLocaleLowerCase().includes(term) ||
         (rep.focus_label?.toLocaleLowerCase().includes(term) ?? false)),
   );
+  // Sort a filtered copy before folding, never the source or team totals.
+  shown.sort((a, b) => {
+    if (order === "name") return REP_NAMES.compare(a.name, b.name);
+    if (!a.latest_call_at) return b.latest_call_at ? 1 : 0;
+    if (!b.latest_call_at) return -1;
+    return Date.parse(b.latest_call_at) - Date.parse(a.latest_call_at);
+  });
   const visible = all ? shown : shown.slice(0, 8);
   // Totals describe past call suggestions; named reps carry their current
   // focus. Keep the existing option order, then include any other current
@@ -186,6 +198,22 @@ function RepList({
               {hasMissingFocus ? (
                 <option value={NO_FOCUS}>{TEAM.noFocusShown}</option>
               ) : null}
+            </select>
+          </span>
+        ) : null}
+        {reps.length > 1 ? (
+          <span className={`${kitStyles.field} ${styles.repOrder}`}>
+            <select
+              aria-label={TEAM.sortReps}
+              aria-controls={listId}
+              value={order}
+              onChange={(event) => {
+                setOrder(event.target.value);
+                setAll(false);
+              }}
+            >
+              <option value="latest">{TEAM.latestFirst}</option>
+              <option value="name">{TEAM.nameOrder}</option>
             </select>
           </span>
         ) : null}
