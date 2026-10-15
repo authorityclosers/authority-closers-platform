@@ -84,7 +84,8 @@ cases, eight secondary-lesson disclosure cases and four controlled audio-startup
 cases, plus four controlled native moment-end/replay and four narration shortcut
 focus cases, sixteen interrupted-lesson resume and four Worked/Didn't clip disclosure
 cases and four moment view-close cases, plus four phone mastery-name, four Report
-clip-room, four call record-mark and four Team rep-record cases, collect 196 cases. The original Report
+clip-room, four call record-mark and four Team rep-record cases, eight latest-call
+shortcut cases and four Team rep-order cases, collect 208 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -411,3 +412,15 @@ same words and a 10 px dot equal to pillar 5's legend (Design review's latest
 call has no saved record; Sandbox shows "Needed work"). Links meet 32/44 px with
 reachable centres; See calls focuses the call list on All calls, folded as usual. Reads,
 writes, clipping, overflow and refreshes are checked as usual. Fixture-only.
+
+For Team's native Sort reps control, select `-k fixture_team_rep_order`.
+Four viewport/theme cases use the existing signed-out Sandbox and Design review
+Team views. They check Latest call against absolute source timestamps and Name
+A–Z against fixed en-IN base/numeric collation across every supplied rep, before
+the eight-row fold. Home/End retain native control focus; switching order folds.
+Name/area intersection, empty state, Clear filters and Find reps keep the order.
+Names, focus, records, counts, dates, dots, routes and aggregate totals stay
+unchanged. Targets meet 32/44 px and screenshots cover both folded orders.
+No product destination or API mutation is invoked. Missing/tied dates and a
+single-rep/anonymous Team are not supplied by these fixtures; those edges remain
+unit coverage, not browser acceptance.

@@ -5438,6 +5438,215 @@ def test_fixture_coaching_call_record_marks(browser: Browser, viewport: tuple[in
         }
 
 
+def test_fixture_team_rep_order(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Sort existing reps before folding, while retaining filters, records and routes."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Rep ordering uses only the signed-out, fictional Team views")
+    fixtures = (
+        Path(__file__).resolve().parents[3] / "apps/sales-xray-web/app/review-fixture/coaching"
+    )
+    read_rows = """list => [...list.querySelectorAll(':scope > li')].map(li => {
+      const link = li.querySelector('a');
+      const mark = li.querySelector('[data-state]');
+      const dot = mark ? getComputedStyle(mark, '::before') : null;
+      return {name: link.children[0].textContent, focus: link.children[1].textContent,
+        href: link.getAttribute('href'), meta: link.nextElementSibling.textContent,
+        marks: li.querySelectorAll('[data-state]').length,
+        state: mark?.getAttribute('data-state') ?? null,
+        record: mark?.textContent ?? null,
+        dot: dot ? [dot.backgroundColor, dot.borderTopColor, dot.borderTopStyle] : null};
+    })"""
+    with _journey(browser, viewport, "team-rep-order") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def read_only(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", read_only)
+        results = []
+        for kind, filename in (("sandbox", "sandbox-team.json"), ("review", "sandbox.json")):
+            source = json.loads((fixtures / filename).read_text())["team"]
+            reps = source["reps"]
+            # Python orders absolute call instants; shared_at is not an input.
+            latest = sorted(
+                reps,
+                key=lambda rep: (
+                    datetime.fromisoformat(rep["latest_call_at"]).timestamp()
+                    if rep.get("latest_call_at")
+                    else float("-inf")
+                ),
+                reverse=True,
+            )
+            journey.open(f"/review-fixture/coaching?data={kind}&view=team")
+            page.evaluate("() => document.fonts.ready")
+            team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
+            listing = team.get_by_role("list", name="Reps and their current focus", exact=True)
+            rows = listing.get_by_role("listitem")
+            order = team.get_by_role("combobox", name="Sort reps", exact=True)
+            search = team.get_by_role("searchbox", name="Find a rep", exact=True)
+            area = team.get_by_role("combobox", name="Coaching area", exact=True)
+            totals = page.get_by_role("list", name="Coaching areas", exact=True)
+            original_totals = totals.inner_text()
+            alphabetical_ids = page.evaluate(
+                """reps => [...reps].sort((a, b) => new Intl.Collator('en-IN', {
+                  sensitivity: 'base', numeric: true
+                }).compare(a.name, b.name)).map(rep => rep.person_id)""",
+                reps,
+            )
+            by_id = {rep["person_id"]: rep for rep in reps}
+            alphabetical = [by_id[person_id] for person_id in alphabetical_ids]
+            baseline: dict[str, object] = {}
+
+            def check_rows(
+                expected: list[dict[str, object]],
+                *,
+                rows: Locator = rows,
+                listing: Locator = listing,
+                baseline: dict[str, object] = baseline,
+                totals: Locator = totals,
+                original_totals: str = original_totals,
+            ) -> None:
+                expect(rows).to_have_count(len(expected))
+                actual = listing.evaluate(read_rows)
+                assert [row["name"] for row in actual] == [rep["name"] for rep in expected]
+                for row, rep in zip(actual, expected, strict=True):
+                    assert row["focus"] == (rep["focus_label"] or "No focus shown")
+                    assert row["href"] == f"/coaching?person={rep['person_id']}"
+                    unit = "call" if rep["calls"] == 1 else "calls"
+                    assert f"{rep['calls']} {unit}" in row["meta"]
+                    needed, window = rep.get("focus_calls"), rep.get("focus_window")
+                    if needed is not None and window is not None:
+                        unit = "call" if window == 1 else "calls"
+                        words = (
+                            f"Needed work in {needed} of {window} {unit}"
+                            if needed
+                            else f"Nothing to fix in {window} {unit}"
+                        )
+                        assert row["marks"] == 1 and row["record"] == words
+                        assert row["state"] == ("suggested" if needed else "no_suggestion")
+                    else:
+                        assert row["marks"] == 0 and row["record"] is None
+                    if row["href"] in baseline:
+                        assert row == baseline[row["href"]], "Sorting altered a rep's details"
+                    else:
+                        baseline[row["href"]] = row
+                assert totals.inner_text() == original_totals, "Team totals changed with order"
+
+            def check_order(
+                expected: list[dict[str, object]], *, expanded: bool = False, team: Locator = team
+            ) -> None:
+                check_rows(expected if expanded else expected[:8])
+                expect(team.get_by_role("status")).to_have_text(
+                    f"{len(expected)} rep" + ("s" if len(expected) != 1 else "")
+                )
+                if len(expected) > 8:
+                    toggle = team.get_by_role(
+                        "button",
+                        name="Show fewer people"
+                        if expanded
+                        else f"Show all {len(expected)} people",
+                        exact=True,
+                    )
+                    expect(toggle).to_have_attribute("aria-expanded", str(expanded).lower())
+
+            expect(order).to_have_value("latest")
+            check_order(latest)
+            if len(reps) > 8:
+                team.get_by_role("button", name=f"Show all {len(reps)} people", exact=True).click()
+                check_order(latest, expanded=True)
+            order.select_option(label="Name A–Z")
+            check_order(alphabetical)
+            assert order.get_attribute("aria-controls") == listing.locator("..").get_attribute("id")
+            order.focus()
+            order.press("Home")
+            expect(order).to_have_value("latest")
+            check_order(latest)
+            order.press("End")
+            expect(order).to_have_value("name")
+            expect(order).to_be_focused()
+            check_order(alphabetical)
+            if kind == "sandbox":
+                team.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
+                journey.snapshot("alphabetical-folded")
+            for control, label in ((order, "order"), (area, "area"), (search, "search")):
+                journey.control_target(control, f"{kind}-{label}")
+            journey.unclipped_text(team)
+            journey.row_link_target(rows.first.get_by_role("link"), f"{kind}-first-rep")
+            if len(reps) > 8:
+                toggle = team.get_by_role("button", name=f"Show all {len(reps)} people", exact=True)
+                journey.control_target(toggle, "expand-sorted-reps")
+                toggle.click()
+                check_order(alphabetical, expanded=True)
+                fewer = team.get_by_role("button", name="Show fewer people", exact=True)
+                journey.control_target(fewer, "fold-sorted-reps")
+                fewer.click()
+                expect(search).to_be_focused()
+                check_order(alphabetical)
+                toggle.click()
+            order.select_option(label="Latest call")
+            check_order(latest)
+            if kind == "sandbox":
+                team.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
+                journey.snapshot("latest-folded")
+
+            order.select_option("name")
+            selected = alphabetical[min(10, len(reps) - 1)]
+            search.fill(f"  {selected['name'].swapcase()}  ")
+            area.select_option(selected["skill_id"])
+            check_order([selected])
+            order.select_option("latest")
+            check_order([selected])
+            order.select_option("name")
+            other = next(rep["skill_id"] for rep in reps if rep["skill_id"] != selected["skill_id"])
+            area.select_option(other)
+            expect(rows).to_have_count(0)
+            expect(team.get_by_text("No reps match", exact=True)).to_be_visible()
+            clear = team.get_by_role("button", name="Clear filters", exact=True)
+            journey.control_target(clear, f"{kind}-clear")
+            clear.focus()
+            clear.press("Enter")
+            expect(search).to_have_value("")
+            expect(search).to_be_focused()
+            expect(area).to_have_value("all")
+            expect(order).to_have_value("name")
+            check_order(alphabetical)
+
+            skill = next(
+                row for row in source["suggestions"] if row["skill_id"] == selected["skill_id"]
+            )
+            find = page.get_by_role(
+                "button", name=f"Find reps working on {skill['label']}", exact=True
+            )
+            search.fill("no such fictional rep")
+            journey.control_target(find, f"{kind}-find-reps")
+            find.focus()
+            find.press("Enter")
+            expect(search).to_have_value("")
+            expect(search).to_be_focused()
+            expect(area).to_have_value(selected["skill_id"])
+            expect(order).to_have_value("name")
+            check_order([rep for rep in alphabetical if rep["skill_id"] == selected["skill_id"]])
+            results.append(
+                {"fixture": kind, "reps_checked": len(baseline), "orders": ["latest", "name"]}
+            )
+
+        assert not mutations, "Rep sorting attempted an API mutation"
+        assert journey.live_refreshes == 0, "Live source changed during the ordering check"
+        journey.observations[-1]["fictional_team_rep_order"] = {
+            "source": "D e1d7c08b; existing AC Sandbox and Design review Team fixtures",
+            "results": results,
+            "unknown_dates_ties_single_rep_browser_tested": False,
+            "original_records_counts_routes_and_totals_retained": True,
+            "api_mutations": len(mutations),
+            "authenticated_or_real_data_acceptance": False,
+        }
+
+
 def test_fixture_team_rep_records(browser: Browser, viewport: tuple[int, str]) -> None:
     """Team rows carry each rep's saved record on their current focus, with the history's dot."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":
