@@ -37,6 +37,10 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--force", action="store_true", help="review again even if saved")
+    # Outside the worker's mount namespace the identity token and Infisical
+    # live at their host paths (the worker bind-mounts them read-only).
+    parser.add_argument("--token-file", type=Path)
+    parser.add_argument("--infisical", type=Path)
     parser.add_argument(INNER, action="store_true", help=argparse.SUPPRESS)
     arguments = parser.parse_args(argv)
     if not 1 <= arguments.limit <= 10:
@@ -52,9 +56,10 @@ def _gemini_provider(config: Path) -> dict[str, Any]:
     raise SystemExit("pointer_review_provider_missing")
 
 
-def _reexec_inside_infisical(argv: list[str], config: Path) -> None:
-    provider = _gemini_provider(config)
-    token = Path(provider["token_file_ref"]).read_text().strip()
+def _reexec_inside_infisical(argv: list[str], arguments: argparse.Namespace) -> None:
+    provider = _gemini_provider(arguments.service_config)
+    token_file = arguments.token_file or Path(provider["token_file_ref"])
+    token = token_file.read_text().strip()
     if token.startswith("INFISICAL_TOKEN="):
         token = token[len("INFISICAL_TOKEN=") :]
     environment = {
@@ -64,7 +69,7 @@ def _reexec_inside_infisical(argv: list[str], config: Path) -> None:
     }
     environment["INFISICAL_TOKEN"] = token
     command = [
-        str(provider["executable"]),
+        str(arguments.infisical or provider["executable"]),
         "run",
         "--include-imports=false",
         "--expand=false",
@@ -264,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
     if not arguments.apply:
         # A dry run needs no provider key: read and report only.
         return _inner(arguments)
-    _reexec_inside_infisical([item for item in raw if item != INNER], arguments.service_config)
+    _reexec_inside_infisical([item for item in raw if item != INNER], arguments)
     return 0  # pragma: no cover - execvpe replaces this process
 
 
