@@ -2309,7 +2309,7 @@ def test_fixture_coaching_hear_lesson_focus(browser: Browser, viewport: tuple[in
         }
 
 
-@pytest.mark.parametrize("interruption", ("moment", "fold"))
+@pytest.mark.parametrize("interruption", ("moment", "fold", "pause", "viewclose"))
 def test_fixture_coaching_interrupted_lesson_resume(
     browser: Browser, viewport: tuple[int, str], interruption: str
 ) -> None:
@@ -2325,7 +2325,7 @@ def test_fixture_coaching_interrupted_lesson_resume(
             / "apps/sales-xray-web/app/review-fixture/coaching/sandbox.json"
         ).read_text()
     )["me"]
-    clip = payload["media_clips"][0 if interruption == "moment" else 1]
+    clip = payload["media_clips"][1 if interruption == "fold" else 0]
     source = (
         f"/v1/me/coaching/media/{clip['topic_id']}/{clip['revision']}/{clip['review_id']}/source"
     )
@@ -2414,9 +2414,9 @@ def test_fixture_coaching_interrupted_lesson_resume(
         more = page.locator("#coaching-better details[data-other-lessons]")
         summary = more.locator(":scope > summary")
         card = (
-            page.locator("#coaching-better article[data-recommended]")
-            if interruption == "moment"
-            else more.locator("article").first
+            more.locator("article").first
+            if interruption == "fold"
+            else page.locator("#coaching-better article[data-recommended]")
         )
         quote = page.locator("#coaching-evidence blockquote").first
         expect(quote).to_have_text(payload["evidence"][0]["quote"])
@@ -2427,6 +2427,7 @@ def test_fixture_coaching_interrupted_lesson_resume(
         expect(pause).to_be_visible()
         audio = card.locator("audio")
         expect(audio).to_have_attribute("src", source)
+        audio.evaluate("el => { window.__wbInterruptedLesson = el; }")
         page.wait_for_function(
             """({source, start}) => {
               const audio = document.querySelector(`audio[src="${source}"]`);
@@ -2442,17 +2443,32 @@ def test_fixture_coaching_interrupted_lesson_resume(
                 moment.get_by_role("button", name=re.compile(r"^Try audio again"))
             ).to_be_enabled()
             assert reads[call_source] >= 1
-        else:
+        elif interruption == "fold":
             summary.click()
             assert more.get_attribute("open") is None
-        page.wait_for_function(
-            'source => document.querySelector(`audio[src="${source}"]`)?.paused', arg=source
-        )
-        paused_at = audio.evaluate("el => Math.round(el.currentTime * 1000)")
+        elif interruption == "pause":
+            pause.click()
+        else:
+            page.get_by_role("button", name="This call", exact=True).click()
+            expect(page.get_by_role("button", name="This call", exact=True)).to_have_attribute(
+                "aria-pressed", "true"
+            )
+        page.wait_for_function("window.__wbInterruptedLesson.paused")
+        paused_at = page.evaluate("Math.round(window.__wbInterruptedLesson.currentTime * 1000)")
         saved = int(page.evaluate("key => localStorage.getItem(key)", storage_key) or 0)
         assert 0 < saved < 2000, "Interruption was not before the first device checkpoint"
         assert saved == paused_at - clip["start_ms"], "Saved offset differs from native paused time"
         resume = card.get_by_role("button", name="Resume clip", exact=True)
+        if interruption == "viewclose":
+            assert page.evaluate("window.__wbInterruptedLesson.isConnected") is False
+            before_return = dict(reads)
+            page.get_by_role("button", name="My coaching", exact=True).click()
+            ready()
+            assert reads == before_return, "Returning to Coaching eagerly requested media"
+            assert (
+                page.evaluate("Math.round(window.__wbInterruptedLesson.currentTime * 1000)")
+                == paused_at
+            )
         if interruption == "fold":
             summary.click()
         expect(resume).to_be_visible()
@@ -2494,7 +2510,7 @@ def test_fixture_coaching_interrupted_lesson_resume(
         assert not unexpected_media and not mutations
         assert journey.live_refreshes == 0, "Live source changed during interruption/resume"
         journey.observations[-1]["fictional_interrupted_lesson_resume"] = {
-            "source": "D135be632/b7623097 existing authored clips; local70s silent WAV/404 call",
+            "source": "D135be632/b7623097/f20b606f authored clips; local70s silent WAV/404 call",
             "interruption": interruption,
             "native_paused_at_ms": paused_at,
             "saved_window_offset_ms": saved,
@@ -2504,6 +2520,194 @@ def test_fixture_coaching_interrupted_lesson_resume(
             "source_reads_intercepted": sum(reads.values()),
             "api_mutations": len(mutations),
             "device_position_only_not_canonical_progress": True,
+            "real_recording_provider_or_authenticated_acceptance": False,
+        }
+
+
+def test_fixture_coaching_moment_view_close(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Leaving a fictional moment stops its detached player and preserves original replay."""
+    if (
+        os.environ.get("WB_MODE", "fixture") != "fixture"
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.skip("Moment teardown uses only the existing local Design review")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox.json"
+        ).read_text()
+    )["me"]
+    evidence = payload["evidence"][0]
+    source = f"/v1/conversation/acquisition/submissions/{evidence['submission_id']}/source"
+    start = evidence["start_ms"] / 1000
+    with BytesIO() as output:
+        with wave.open(output, "wb") as local_audio:
+            local_audio.setnchannels(1)
+            local_audio.setsampwidth(2)
+            local_audio.setframerate(8000)
+            local_audio.writeframes(b"\0\0" * round((evidence["end_ms"] / 1000 + 5) * 8000))
+        silent_wav = output.getvalue()
+    with _journey(browser, viewport, "moment-view-close") as journey:
+        page = journey.page
+        loading = False
+        pending: list[Route] = []
+        reads: list[str] = []
+        media: list[str] = []
+        mutations: list[str] = []
+        page.add_init_script("""(() => {
+          window.__wbLeavingMomentStarts = [];
+          const nativePlay = HTMLMediaElement.prototype.play;
+          HTMLMediaElement.prototype.play = function () {
+            window.__wbLeavingMomentStarts.push({
+              source: this.getAttribute('src'), at: this.currentTime,
+            });
+            this.muted = true;
+            return nativePlay.call(this);
+          };
+        })();""")
+
+        def local_read(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif url.netloc == "127.0.0.1:3026" and url.path == source:
+                reads.append(request.method)
+                if loading:
+                    pending.append(route)
+                    return
+                byte_range = re.fullmatch(r"bytes=(\d+)-(\d*)", request.headers.get("range", ""))
+                first = int(byte_range[1]) if byte_range else 0
+                last = (
+                    min(int(byte_range[2]), len(silent_wav) - 1)
+                    if byte_range and byte_range[2]
+                    else len(silent_wav) - 1
+                )
+                if first > last:
+                    route.fulfill(
+                        status=416, headers={"Content-Range": f"bytes */{len(silent_wav)}"}
+                    )
+                    return
+                body = silent_wav[first : last + 1]
+                headers = {"Accept-Ranges": "bytes", "Content-Length": str(len(body))}
+                if byte_range:
+                    headers["Content-Range"] = f"bytes {first}-{last}/{len(silent_wav)}"
+                route.fulfill(
+                    status=206 if byte_range else 200,
+                    content_type="audio/wav",
+                    headers=headers,
+                    body=body if request.method == "GET" else b"",
+                )
+            elif (
+                request.resource_type == "media"
+                or url.path.endswith("/source")
+                or (url.path.startswith("/v1/") and "/media/" in url.path)
+            ):
+                media.append("unexpected-source")
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/*", local_read)
+
+        def ready() -> None:
+            for label in ("Design review", "My coaching"):
+                expect(page.get_by_role("button", name=label, exact=True)).to_have_attribute(
+                    "aria-pressed", "true"
+                )
+            page.evaluate("() => document.fonts.ready")
+            expect(page.locator("audio,video")).to_have_count(0)
+
+        def leave_and_return() -> dict[str, object]:
+            page.get_by_role("button", name="This call", exact=True).click()
+            expect(page.get_by_role("button", name="This call", exact=True)).to_have_attribute(
+                "aria-pressed", "true"
+            )
+            old = page.evaluate("""() => ({
+              connected: window.__wbLeftMoment.isConnected,
+              paused: window.__wbLeftMoment.paused,
+              position: window.__wbLeftMoment.currentTime,
+            })""")
+            assert old["connected"] is False and old["paused"] is True
+            before_return = len(reads)
+            page.get_by_role("button", name="My coaching", exact=True).click()
+            ready()
+            assert len(reads) == before_return, "Returning eagerly fetched a moment source"
+            assert page.evaluate("window.__wbLeftMoment.currentTime") == old["position"]
+            return old
+
+        journey.open("/review-fixture/coaching?data=review&view=me")
+        ready()
+        assert not reads, "Reading Coaching eagerly fetched a moment source"
+        moment = page.locator("#coaching-evidence li").first
+        expect(moment.locator("blockquote")).to_have_text(evidence["quote"])
+        call_link = moment.get_by_role("link", name=evidence["call_label"], exact=True)
+        call_href = call_link.get_attribute("href")
+        play = moment.get_by_role("button", name=re.compile(r"^Play moment"))
+        original_label = play.get_attribute("aria-label")
+        play.click()
+        pause = moment.get_by_role("button", name=re.compile(r"^Pause moment"))
+        expect(pause).to_be_visible()
+        audio = moment.locator("audio")
+        expect(audio).to_have_attribute("src", source)
+        assert audio.evaluate("el => !el.paused")
+        audio.evaluate("el => {window.__wbLeftMoment = el;}")
+        closed_playing = leave_and_return()
+        expect(play).to_have_attribute("aria-label", original_label)
+        moment.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("playing-player-detached-return-ready")
+        journey.control_target(play, "returned-moment-play")
+        play.focus()
+        page.keyboard.press("Enter")
+        expect(pause).to_be_visible()
+        expect(pause).to_be_focused()
+        assert page.evaluate("window.__wbLeavingMomentStarts") == [
+            {"source": source, "at": start},
+            {"source": source, "at": start},
+        ]
+        journey.snapshot("original-source-replayed-native-focus")
+        journey.control_target(pause, "replayed-moment-pause")
+        pause.click()
+        # The same existing source also covers closing while metadata is held.
+        loading = True
+        response = page.reload(wait_until="domcontentloaded", timeout=60_000)
+        assert response and response.status < 400
+        ready()
+        with page.expect_request(lambda request: urlsplit(request.url).path == source):
+            play.click()
+        expect(moment.locator("audio")).to_have_attribute("src", source)
+        expect(moment.locator("button").first).to_be_disabled()
+        moment.locator("audio").evaluate("el => {window.__wbLeftMoment = el;}")
+        closed_loading = leave_and_return()
+        while pending:
+            with suppress(Exception):
+                pending.pop().fulfill(status=200, content_type="audio/wav", body=silent_wav)
+        page.evaluate("""() => new Promise(resolve => requestAnimationFrame(
+          () => requestAnimationFrame(resolve)))""")
+        assert page.evaluate("window.__wbLeavingMomentStarts") == []
+        assert page.evaluate("window.__wbLeftMoment.paused") is True
+        assert page.evaluate("window.__wbLeftMoment.currentTime") == closed_loading["position"]
+        expect(play).to_be_enabled()
+        expect(play).to_have_attribute("aria-label", original_label)
+        expect(moment.locator("blockquote")).to_have_text(evidence["quote"])
+        expect(call_link).to_have_attribute("href", call_href)
+        expect(page.locator("[data-active-mission]")).to_have_text(payload["mission"]["behavior"])
+        expect(page).to_have_url(re.compile(r"/review-fixture/coaching\?data=review&view=me$"))
+        moment.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("held-loading-player-detached-return-ready")
+        journey.control_target(play, "loading-close-return-play")
+        assert not media and not mutations
+        assert journey.live_refreshes == 0, "Live source changed during moment teardown"
+        journey.observations[-1]["fictional_moment_view_close"] = {
+            "source": "D37f7ef65 existing authored first moment; muted local PCM/held source",
+            "playing_detached_paused_position": closed_playing["position"],
+            "held_loading_detached_paused_position": closed_loading["position"],
+            "no_eager_return_or_native_play_after_loading_close": True,
+            "original_source_start_quote_call_mission_query_focus_and_32_44px_preserved": True,
+            "late_source_delivery_attempted_locally": True,
+            "unresolved_play_promise_browser_tested": False,
+            "api_mutations": len(mutations),
             "real_recording_provider_or_authenticated_acceptance": False,
         }
 
