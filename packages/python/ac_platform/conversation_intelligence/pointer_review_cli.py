@@ -43,6 +43,11 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         type=int,
         help="automatic mode: unreviewed reports from the last N hours, every workspace",
     )
+    parser.add_argument(
+        "--not-before",
+        type=datetime.fromisoformat,
+        help="automatic mode: only reports finished after this moment (new calls only)",
+    )
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument(
         "--daily-cap",
@@ -67,6 +72,10 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         parser.error("--limit must be 1-50")
     if arguments.recent_hours is not None and not 1 <= arguments.recent_hours <= 168:
         parser.error("--recent-hours must be 1-168")
+    if arguments.recent_hours is not None and arguments.not_before is None:
+        parser.error("--recent-hours needs --not-before: automatic mode never backfills")
+    if arguments.not_before is not None and arguments.not_before.tzinfo is None:
+        parser.error("--not-before needs a time zone, e.g. 2026-10-16T00:00:00+00:00")
     if arguments.recent_hours is not None and arguments.state_file is None:
         parser.error("--recent-hours needs --state-file (a writable path)")
     return arguments
@@ -141,7 +150,9 @@ def _latest_reports(connection: Any, tenant: UUID, limit: int) -> list[dict[str,
     return [dict(row) for row in rows]
 
 
-def _recent_unreviewed(connection: Any, hours: int, limit: int) -> list[dict[str, Any]]:
+def _recent_unreviewed(
+    connection: Any, hours: int, not_before: datetime, limit: int
+) -> list[dict[str, Any]]:
     from sqlalchemy import text
 
     rows = connection.execute(
@@ -154,6 +165,7 @@ def _recent_unreviewed(connection: Any, hours: int, limit: int) -> list[dict[str
             JOIN conversation_guest_submissions s ON s.recording_id = d.recording_id
             WHERE d.erased_at IS NULL
               AND d.created_at > now() - make_interval(hours => :hours)
+              AND d.created_at > :not_before
               AND NOT EXISTS (
                 SELECT 1 FROM conversation_pointer_reviews r
                 WHERE r.run_id = d.run_id AND r.source_sha256 = d.source_sha256
@@ -167,7 +179,7 @@ def _recent_unreviewed(connection: Any, hours: int, limit: int) -> list[dict[str
             LIMIT :limit
             """
         ),
-        {"hours": hours, "limit": limit},
+        {"hours": hours, "not_before": not_before, "limit": limit},
     ).mappings()
     return [dict(row) for row in rows]
 
@@ -284,7 +296,10 @@ def _inner(arguments: argparse.Namespace) -> int:
                 print(json.dumps({"reports": 0, "stopped": "daily_cap"}))
                 return 0
             reports = _recent_unreviewed(
-                connection, arguments.recent_hours, min(arguments.limit, room)
+                connection,
+                arguments.recent_hours,
+                arguments.not_before,
+                min(arguments.limit, room),
             )
         else:
             reports = _latest_reports(connection, arguments.tenant, arguments.limit)
@@ -357,6 +372,16 @@ def _inner(arguments: argparse.Namespace) -> int:
                 for status in {p["status"] for p in review["pointers"]}
             }
             line["tokens"] = [usage.get("promptTokenCount"), usage.get("candidatesTokenCount")]
+            # Gemini 3.8 Flash list price (admin_pricing): $0.75 in, $3.75 out per M; Rs 100/$.
+            line["est_paise"] = round(
+                (
+                    int(usage.get("promptTokenCount") or 0) * 0.75
+                    + int(usage.get("candidatesTokenCount") or 0) * 3.75
+                )
+                * 100
+                * 100
+                / 1_000_000
+            )
             print(json.dumps(line))
     return 1 if failures else 0
 
