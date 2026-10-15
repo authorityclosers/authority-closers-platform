@@ -1,5 +1,24 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October,21:16 UTC — Feedback pending/keyboard retry (D2d6dbc78).
+New `fixture_coaching_feedback_save` **8/8 PASS**,29.69s/launcher0 at6ab51270,
+shared3026, Agree/Not completely at1440/390 light/dark. Saving… through2999ms,
+first error at3000ms; both native controls remain enabled/focusable with
+aria-disabled while pending. Repeated Enter and native activation of the other
+choice stay inert. Failure retains initiating focus; same-choice Enter retry
+succeeds at3000ms and respects focus moved to I noticed it later. Original choice
+selected; Agree confirms unchanged mission, Not completely opens existing source
+evidence and empty What did we miss? context. Mission/query retained. Reserved
+status37.1875px through pending/error, targets65/122/104x32 desktop,x44 phone,
+centres reachable. Errors/undersized/clipping/overflow/API/media/refresh0.
+All24 saving/error/success PNGs inspected; no defect, no own harness failure.
+Screens/receipts:`/home/acdev/strikes/1694/shots/2026-10-15-feedback-save/`.
+Ruff/format/API import/diffPASS; no-server8skip/216deselected (224 total).
+Fictional in-page feedback only, no canonical/authenticated/Academy acceptance;
+command identity remains builder unit coverage. Earlier context4/sharing4 stand.
+v0.46 images still building at21:18Z; health readback remains conditional on
+both actual staging/production canaries. Later sharing/feedback UI is outside it.
+
 15 October, 21:01 UTC — Sharing-setting read recovery (D265372c0).
 New `fixture_coaching_sharing_retry` **4/4 PASS**,16.73s/launcher0 at9bcc8cb9
 on shared3026,1440/390 light/dark. Initial failed read offers only Try again;
