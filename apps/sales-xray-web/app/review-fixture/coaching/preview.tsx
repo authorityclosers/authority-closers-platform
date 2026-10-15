@@ -101,7 +101,9 @@ export function CoachingFixture() {
             data === "sandbox"
               ? [
                   "AC Sandbox",
-                  "3,360 fictional calls, 60 fictional reps",
+                  // The fixture's own totals, so a dataset refresh never leaves
+                  // a stale number in the header.
+                  `${acSandbox.team.analysed_calls.toLocaleString("en-IN")} fictional calls, ${acSandbox.team.rep_count} fictional reps`,
                   ...(currentFocusExample
                     ? ["Filter example: one current focus has no team total"]
                     : []),

@@ -644,6 +644,11 @@ export const TEAM = {
   showFewer: "Show fewer people",
   people: (count: number) => `${count} ${count === 1 ? "person" : "people"}`,
   repLatest: (date: string) => `Latest call ${date}`,
+  /** A rep's saved record on their current focus, in the history's words. */
+  repRecord: (needed: number, calls: number) =>
+    needed
+      ? `Needed work in ${needed} of ${calls} call${calls === 1 ? "" : "s"}`
+      : `Nothing to fix in ${calls} call${calls === 1 ? "" : "s"}`,
   latest: (date: string) => `Latest call ${date}.`,
   last40: "last 40",
   inView: "In this view",

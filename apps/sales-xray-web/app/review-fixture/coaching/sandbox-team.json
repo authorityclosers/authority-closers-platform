@@ -9,7 +9,7 @@
     "scope": "sandbox",
     "named_rep_details": true,
     "sandbox": true,
-    "analysed_calls": 3360,
+    "analysed_calls": 3879,
     "rep_count": 60,
     "pending_calls": 0,
     "unavailable_calls": 0,
@@ -19,32 +19,32 @@
       {
         "skill_id": "closing_decision_management",
         "label": "Closing & Decision Management",
-        "suggestion_calls": 674
+        "suggestion_calls": 776
       },
       {
         "skill_id": "discovery_deep_understanding",
         "label": "Discovery & Deep Understanding",
-        "suggestion_calls": 630
+        "suggestion_calls": 711
       },
       {
         "skill_id": "communication_tonality",
         "label": "Communication & Tonality",
-        "suggestion_calls": 610
+        "suggestion_calls": 691
       },
       {
         "skill_id": "certainty_objection_intelligence",
         "label": "Certainty & Objection Intelligence",
-        "suggestion_calls": 584
+        "suggestion_calls": 662
       },
       {
         "skill_id": "solution_relevance_presentation",
         "label": "Solution Relevance & Presentation",
-        "suggestion_calls": 555
+        "suggestion_calls": 657
       },
       {
         "skill_id": "qualification",
         "label": "Qualification",
-        "suggestion_calls": 307
+        "suggestion_calls": 382
       }
     ],
     "objections": [],
@@ -57,52 +57,64 @@
         "focus_label": "Make room for the buyer",
         "calls": 57,
         "latest_call_at": "2026-09-15T15:03:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "b689afce-dece-59c5-82f3-61d09e995538",
         "name": "Rohan Joglekar",
         "skill_id": "discovery_deep_understanding",
         "focus_label": "Diagnose before prescribing",
-        "calls": 77,
+        "calls": 83,
         "latest_call_at": "2026-09-15T14:32:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "aee4ffad-4464-5c6c-891d-3bc70064e960",
         "name": "Mira Velankarkar",
         "skill_id": "communication_tonality",
         "focus_label": "Make room for the buyer",
-        "calls": 43,
+        "calls": 49,
         "latest_call_at": "2026-09-15T13:21:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "38ccff7d-afb2-514e-ac20-97e613eeaedc",
         "name": "Nikhil Kovekar",
         "skill_id": "closing_decision_management",
         "focus_label": "Agree a clear next step",
-        "calls": 83,
+        "calls": 95,
         "latest_call_at": "2026-09-15T12:40:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "c86e3a7d-817e-5265-9df2-b9675bd85c03",
         "name": "Omkar Talvanekar",
         "skill_id": "qualification",
         "focus_label": "Map approval authority",
-        "calls": 40,
+        "calls": 46,
         "latest_call_at": "2026-09-15T12:26:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "9c285816-02fa-591b-98ef-0967da6b7084",
         "name": "Sana Savdekar",
         "skill_id": "certainty_objection_intelligence",
         "focus_label": "Understand the objection",
-        "calls": 77,
+        "calls": 89,
         "latest_call_at": "2026-09-15T11:49:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "fa14e1f6-8546-5c2c-8dd4-120a2fc4f1dd",
@@ -111,70 +123,108 @@
         "focus_label": "Diagnose before prescribing",
         "calls": 72,
         "latest_call_at": "2026-09-15T11:09:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
+      },
+      {
+        "person_id": "589d35e5-1089-50ad-84d8-ec0784aa10df",
+        "name": "Nikhil Joglekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree the review owner, task and date before ending the call",
+        "calls": 69,
+        "latest_call_at": "2026-09-14T14:40:00+05:30",
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "b7c01346-e6a0-507c-9803-3030e1635c06",
         "name": "Rohan Kovekar",
         "skill_id": "discovery_deep_understanding",
         "focus_label": "Diagnose before prescribing",
-        "calls": 62,
+        "calls": 68,
         "latest_call_at": "2026-09-14T14:20:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "d446bc31-dc16-5de4-8bae-584c29c085ac",
         "name": "Rohan Savdekar",
         "skill_id": "discovery_deep_understanding",
         "focus_label": "Diagnose before prescribing",
-        "calls": 48,
+        "calls": 60,
         "latest_call_at": "2026-09-14T13:29:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "35353cc7-04ad-52d1-bdad-8d04ba610783",
         "name": "Revati Dhotrekar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 56,
+        "calls": 74,
         "latest_call_at": "2026-09-14T12:32:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "4528470d-50b2-5e00-b11d-d978ee59b6d8",
         "name": "Mira Ambarsekar",
         "skill_id": "communication_tonality",
         "focus_label": "Make room for the buyer",
-        "calls": 73,
+        "calls": 88,
         "latest_call_at": "2026-09-14T11:25:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "5279f716-bc98-50c8-a75a-cf17b73afa8d",
         "name": "Sana Nivsekar",
         "skill_id": "certainty_objection_intelligence",
         "focus_label": "Understand the objection",
-        "calls": 55,
+        "calls": 61,
         "latest_call_at": "2026-09-14T10:06:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "f0b46b81-8358-5155-8336-678ac3102b03",
         "name": "Sana Joglekar",
         "skill_id": "certainty_objection_intelligence",
         "focus_label": "Understand the objection",
-        "calls": 52,
+        "calls": 67,
         "latest_call_at": "2026-09-11T15:13:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "0d4d9c7a-a426-5e0e-96c5-818d6a025ad9",
         "name": "Revati Ambarsekar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 51,
+        "calls": 60,
         "latest_call_at": "2026-09-11T14:04:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
+      },
+      {
+        "person_id": "26982dd8-fe9d-50b6-9f9a-093cc369667c",
+        "name": "Omkar Dhotrekar",
+        "skill_id": "qualification",
+        "focus_label": "Find the signer and participant owners before promising a programme start",
+        "calls": 46,
+        "latest_call_at": "2026-09-11T13:47:00+05:30",
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "e8c868b7-bcd8-5b67-8237-38e296866498",
@@ -183,412 +233,482 @@
         "focus_label": "Separate an operations inspection from authorised commercial approval",
         "calls": 23,
         "latest_call_at": "2026-09-11T13:41:00+05:30",
-        "shared_at": null
-      },
-      {
-        "person_id": "589d35e5-1089-50ad-84d8-ec0784aa10df",
-        "name": "Nikhil Joglekar",
-        "skill_id": "closing_decision_management",
-        "focus_label": "Agree a clear next step",
-        "calls": 60,
-        "latest_call_at": "2026-09-10T15:21:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 23,
+        "focus_window": 23
       },
       {
         "person_id": "e7aafe87-46cb-5537-b07d-d417d1944fea",
         "name": "Omkar Nivsekar",
         "skill_id": "qualification",
-        "focus_label": "Map approval authority",
-        "calls": 20,
+        "focus_label": "Confirm the signer and the person who can maintain planning inputs",
+        "calls": 23,
         "latest_call_at": "2026-09-10T15:15:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 23,
+        "focus_window": 23
       },
       {
         "person_id": "077a6cd6-389e-5ee2-8f9a-25c4373b131b",
         "name": "Revati Kovekar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 58,
+        "calls": 79,
         "latest_call_at": "2026-09-10T14:36:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "33abe97b-40f5-56fd-91b7-f8aff3472607",
         "name": "Revati Ransurekar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 50,
+        "calls": 56,
         "latest_call_at": "2026-09-10T13:05:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "21fe9519-ad96-5e1d-adba-5d3820956be0",
         "name": "Nikhil Nivsekar",
         "skill_id": "closing_decision_management",
         "focus_label": "Agree a clear next step",
-        "calls": 65,
+        "calls": 71,
         "latest_call_at": "2026-09-10T12:44:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "ea84a25c-16de-598a-b0d3-d12458ed55cf",
         "name": "Revati Kendrekar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 56,
+        "calls": 62,
         "latest_call_at": "2026-09-10T12:38:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "b0d1a9d9-3b72-5525-8f38-8c264c1067e9",
         "name": "Nikhil Velankarkar",
         "skill_id": "closing_decision_management",
         "focus_label": "Agree a clear next step",
-        "calls": 74,
+        "calls": 80,
         "latest_call_at": "2026-09-10T11:31:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "adbb9227-dd4c-5c42-a279-dfe915fca751",
         "name": "Rohan Ransurekar",
         "skill_id": "discovery_deep_understanding",
         "focus_label": "Diagnose before prescribing",
-        "calls": 58,
+        "calls": 64,
         "latest_call_at": "2026-09-10T10:34:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "22870334-909b-56ab-a4c9-12011e306440",
         "name": "Sana Ambarsekar",
         "skill_id": "certainty_objection_intelligence",
         "focus_label": "Understand the objection",
-        "calls": 61,
+        "calls": 64,
         "latest_call_at": "2026-09-09T14:28:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "abc70771-f5d9-5862-94e6-5fb3f274d55d",
         "name": "Omkar Ransurekar",
         "skill_id": "qualification",
         "focus_label": "Map approval authority",
-        "calls": 34,
+        "calls": 43,
         "latest_call_at": "2026-09-09T14:20:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "44a14eda-96d0-5482-8b1c-0ea4b3047a4e",
         "name": "Mira Kendrekar",
         "skill_id": "communication_tonality",
         "focus_label": "Make room for the buyer",
-        "calls": 68,
+        "calls": 74,
         "latest_call_at": "2026-09-09T13:11:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
+      },
+      {
+        "person_id": "da3a9301-d466-52cb-ba33-285415d81dd6",
+        "name": "Omkar Ambarsekar",
+        "skill_id": "qualification",
+        "focus_label": "Identify the purchase signer before asking for approval",
+        "calls": 47,
+        "latest_call_at": "2026-09-09T12:06:00+05:30",
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "c6615a36-4879-5201-a04a-a0a80b633f61",
         "name": "Nikhil Ransurekar",
         "skill_id": "closing_decision_management",
         "focus_label": "Agree a clear next step",
-        "calls": 75,
+        "calls": 90,
         "latest_call_at": "2026-09-09T11:49:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "77c32da2-3052-5182-9f48-6959a14ceb7f",
         "name": "Mira Talvanekar",
         "skill_id": "communication_tonality",
         "focus_label": "Pause for the buyer’s comparison question",
-        "calls": 65,
+        "calls": 71,
         "latest_call_at": "2026-09-09T10:02:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "77b2545e-3ec7-5690-9bdd-7642e3ef2e7b",
         "name": "Sana Kovekar",
         "skill_id": "certainty_objection_intelligence",
         "focus_label": "Understand the objection",
-        "calls": 57,
+        "calls": 63,
         "latest_call_at": "2026-09-08T14:10:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
+      },
+      {
+        "person_id": "98412a95-093c-5279-8eab-1c9718b7f808",
+        "name": "Mira Joglekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Answer the loading-access comparison briefly, then hear the remaining check",
+        "calls": 90,
+        "latest_call_at": "2026-09-08T12:24:00+05:30",
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "5ae8bac6-a40d-5c12-a29e-0dddc31977a2",
         "name": "Mira Ransurekar",
         "skill_id": "communication_tonality",
         "focus_label": "Make room for the buyer",
-        "calls": 66,
+        "calls": 72,
         "latest_call_at": "2026-09-08T12:22:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "1d5faf6a-cdae-573d-acce-d9bcc827a493",
         "name": "Nikhil Dhotrekar",
         "skill_id": "closing_decision_management",
         "focus_label": "Agree a clear next step",
-        "calls": 81,
+        "calls": 93,
         "latest_call_at": "2026-09-08T10:08:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "a81b2b62-af8e-5c62-b3fa-88dc5b4f1e2a",
         "name": "Mira Nivsekar",
         "skill_id": "communication_tonality",
         "focus_label": "Make room for the buyer",
-        "calls": 64,
+        "calls": 79,
         "latest_call_at": "2026-09-07T14:00:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "506a4117-f4b5-584f-8647-cdec042f8ea1",
         "name": "Revati Nivsekar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 63,
+        "calls": 66,
         "latest_call_at": "2026-09-07T12:00:00+05:30",
-        "shared_at": null
-      },
-      {
-        "person_id": "98412a95-093c-5279-8eab-1c9718b7f808",
-        "name": "Mira Joglekar",
-        "skill_id": "communication_tonality",
-        "focus_label": "Make room for the buyer",
-        "calls": 78,
-        "latest_call_at": "2026-09-07T10:18:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "53e8c32f-87ef-525b-a566-4bb329ce49f6",
         "name": "Sana Kendrekar",
         "skill_id": "certainty_objection_intelligence",
         "focus_label": "Understand the objection",
-        "calls": 63,
+        "calls": 69,
         "latest_call_at": "2026-09-04T12:28:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
+      },
+      {
+        "person_id": "44a1b5c6-c07f-5731-9c54-b7d0f86c50db",
+        "name": "Sana Talvanekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Answer the scope boundary before offering a buying path",
+        "calls": 56,
+        "latest_call_at": "2026-09-04T11:41:00+05:30",
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
+      },
+      {
+        "person_id": "29657265-381a-5312-b512-b1660d155abd",
+        "name": "Sana Velankarkar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Read the competing scope before answering the objection",
+        "calls": 60,
+        "latest_call_at": "2026-09-03T13:01:00+05:30",
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "808b5003-8087-5116-829c-6b508f123e4b",
         "name": "Rohan Velankarkar",
         "skill_id": "discovery_deep_understanding",
         "focus_label": "Diagnose before prescribing",
-        "calls": 65,
+        "calls": 83,
         "latest_call_at": "2026-09-03T12:44:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "b4985078-0f0f-58b1-8c5e-a6a44ad3c659",
         "name": "Omkar Velankarkar",
         "skill_id": "qualification",
         "focus_label": "Map approval authority",
-        "calls": 42,
+        "calls": 48,
         "latest_call_at": "2026-09-03T11:29:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "84b54903-32b2-5c19-a1b9-b2dd02dc0aad",
         "name": "Rohan Dhotrekar",
         "skill_id": "discovery_deep_understanding",
         "focus_label": "Diagnose before prescribing",
-        "calls": 49,
+        "calls": 52,
         "latest_call_at": "2026-09-03T10:40:00+05:30",
-        "shared_at": null
-      },
-      {
-        "person_id": "44a1b5c6-c07f-5731-9c54-b7d0f86c50db",
-        "name": "Sana Talvanekar",
-        "skill_id": "certainty_objection_intelligence",
-        "focus_label": "Understand the objection",
-        "calls": 47,
-        "latest_call_at": "2026-09-02T15:43:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "31103b6d-7625-5a32-8b1d-b68568f8c6b3",
         "name": "Sana Ransurekar",
         "skill_id": "certainty_objection_intelligence",
         "focus_label": "Understand the objection",
-        "calls": 53,
+        "calls": 62,
         "latest_call_at": "2026-09-01T15:41:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "b1b08b3e-b04c-55cf-acb1-53d22943ab73",
         "name": "Nikhil Savdekar",
         "skill_id": "closing_decision_management",
         "focus_label": "Agree a clear next step",
-        "calls": 70,
+        "calls": 88,
         "latest_call_at": "2026-09-01T14:00:00+05:30",
-        "shared_at": null
-      },
-      {
-        "person_id": "da3a9301-d466-52cb-ba33-285415d81dd6",
-        "name": "Omkar Ambarsekar",
-        "skill_id": "qualification",
-        "focus_label": "Map approval authority",
-        "calls": 35,
-        "latest_call_at": "2026-09-01T13:27:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "7a885030-b03f-5d40-9e87-e5c6fcd47e7c",
         "name": "Rohan Kendrekar",
         "skill_id": "discovery_deep_understanding",
         "focus_label": "Diagnose before prescribing",
-        "calls": 79,
+        "calls": 88,
         "latest_call_at": "2026-08-28T14:00:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "c83a5e2e-8b95-51d5-952b-cf05981a3f37",
         "name": "Omkar Kendrekar",
         "skill_id": "qualification",
         "focus_label": "Map approval authority",
-        "calls": 18,
+        "calls": 27,
         "latest_call_at": "2026-08-28T12:00:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 27,
+        "focus_window": 27
       },
       {
         "person_id": "dc2b4106-7592-505f-af77-d43e8e0ea53e",
         "name": "Revati Velankarkar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 61,
+        "calls": 79,
         "latest_call_at": "2026-08-28T11:27:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "37a754a5-c892-5857-9740-7ef7e9350fe7",
         "name": "Nikhil Talvanekar",
         "skill_id": "closing_decision_management",
         "focus_label": "Agree a clear next step",
-        "calls": 70,
+        "calls": 79,
         "latest_call_at": "2026-08-27T14:26:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
-        "person_id": "29657265-381a-5312-b512-b1660d155abd",
-        "name": "Sana Velankarkar",
-        "skill_id": "certainty_objection_intelligence",
-        "focus_label": "Understand the objection",
-        "calls": 51,
-        "latest_call_at": "2026-08-24T15:03:00+05:30",
-        "shared_at": null
+        "person_id": "1858cce4-553d-58fe-809e-5546e10a6fe2",
+        "name": "Nikhil Ambarsekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree the comparison review before leaving the call",
+        "calls": 50,
+        "latest_call_at": "2026-08-27T12:02:00+05:30",
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
-        "person_id": "26982dd8-fe9d-50b6-9f9a-093cc369667c",
-        "name": "Omkar Dhotrekar",
-        "skill_id": "qualification",
-        "focus_label": "Map approval authority",
-        "calls": 25,
-        "latest_call_at": "2026-08-24T14:00:00+05:30",
-        "shared_at": null
+        "person_id": "7f616655-7322-5353-b137-7975350b3bc0",
+        "name": "Rohan Talvanekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Ask how a customer status is produced before presenting the portal",
+        "calls": 66,
+        "latest_call_at": "2026-08-24T11:37:00+05:30",
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "53bdfac3-548b-5263-a6ad-1a8453076b36",
         "name": "Mira Savdekar",
         "skill_id": "communication_tonality",
         "focus_label": "Make room for the buyer",
-        "calls": 53,
+        "calls": 59,
         "latest_call_at": "2026-08-23T11:00:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "4a3041e5-2f28-54f2-8a01-72b30368f8ae",
         "name": "Sana Dhotrekar",
         "skill_id": "certainty_objection_intelligence",
         "focus_label": "Understand the objection",
-        "calls": 68,
+        "calls": 71,
         "latest_call_at": "2026-08-21T14:06:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "c83bb2d4-cdb0-5768-97eb-b511d957ccbd",
         "name": "Revati Talvanekar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 63,
+        "calls": 72,
         "latest_call_at": "2026-08-21T13:09:00+05:30",
-        "shared_at": null
-      },
-      {
-        "person_id": "1858cce4-553d-58fe-809e-5546e10a6fe2",
-        "name": "Nikhil Ambarsekar",
-        "skill_id": "closing_decision_management",
-        "focus_label": "Agree a clear next step",
-        "calls": 44,
-        "latest_call_at": "2026-08-21T13:07:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "8face590-3de8-5d74-863f-0b40345321d8",
         "name": "Omkar Savdekar",
         "skill_id": "qualification",
         "focus_label": "Map approval authority",
-        "calls": 37,
+        "calls": 43,
         "latest_call_at": "2026-08-20T14:46:00+05:30",
-        "shared_at": null
-      },
-      {
-        "person_id": "7f616655-7322-5353-b137-7975350b3bc0",
-        "name": "Rohan Talvanekar",
-        "skill_id": "discovery_deep_understanding",
-        "focus_label": "Diagnose before prescribing",
-        "calls": 51,
-        "latest_call_at": "2026-08-20T12:00:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "0a9bf6c8-7fb2-5e47-bf60-d972c52f4ec6",
         "name": "Revati Savdekar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 51,
+        "calls": 57,
         "latest_call_at": "2026-08-19T11:33:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "4e1ebc74-b6d1-5090-863c-532db3d4250a",
         "name": "Mira Kovekar",
         "skill_id": "communication_tonality",
         "focus_label": "Make room for the buyer",
-        "calls": 43,
+        "calls": 52,
         "latest_call_at": "2026-08-19T10:00:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "79fa12d1-9dd0-5f85-8486-255232d35329",
         "name": "Rohan Nivsekar",
         "skill_id": "discovery_deep_understanding",
         "focus_label": "Diagnose before prescribing",
-        "calls": 69,
+        "calls": 75,
         "latest_call_at": "2026-08-18T15:33:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "0c69fc6b-7065-50b9-9466-b730f7f8ea63",
         "name": "Revati Joglekar",
         "skill_id": "solution_relevance_presentation",
         "focus_label": "Explain value before trading price",
-        "calls": 46,
+        "calls": 52,
         "latest_call_at": "2026-08-15T10:00:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "b90c5f33-5c5d-5205-bd2f-610770beee26",
         "name": "Nikhil Kendrekar",
         "skill_id": "closing_decision_management",
         "focus_label": "Agree a clear next step",
-        "calls": 52,
+        "calls": 61,
         "latest_call_at": "2026-08-14T12:38:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 40,
+        "focus_window": 40
       },
       {
         "person_id": "1923ce0d-0f52-5ec0-af25-06181072d641",
         "name": "Omkar Kovekar",
         "skill_id": "qualification",
         "focus_label": "Map approval authority",
-        "calls": 33,
+        "calls": 36,
         "latest_call_at": "2026-08-08T14:00:00+05:30",
-        "shared_at": null
+        "shared_at": null,
+        "focus_calls": 36,
+        "focus_window": 36
       }
     ],
     "reps_basis": "fictional",
@@ -607,7 +727,7 @@
     "entitlement": "coaching",
     "entitlement_policy": "AUT-1678-open-access",
     "state": "ready",
-    "analysed_calls": 79,
+    "analysed_calls": 88,
     "pending_calls": 0,
     "unavailable_calls": 0,
     "history_limited": true,
@@ -771,7 +891,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33046,
-        "reason": "Dipak’s lesson on Discovery & Deep Understanding, the skill they’re working on. It helps with spotting the moment live, the likely reason here.",
+        "reason": "Dipak’s lesson on Discovery & Deep Understanding, the skill you’re working on. It helps with spotting the moment live, the likely reason here.",
         "takeaways": [
           "Ask for the last concrete example.",
           "Reflect the answer before going deeper."
@@ -1024,6 +1144,14 @@
         "recurring": true
       },
       {
+        "submission_id": "d5aa88d8-0b8e-5949-93a2-cd1eb835516b",
+        "call_label": "Edtech · Debashish Chatterjee · call 3",
+        "created_at": "2026-03-23T11:25:00+05:30",
+        "state": "ready",
+        "focus_label": "Discover who must do the reporting work before recommending a cohort",
+        "recurring": true
+      },
+      {
         "submission_id": "c420ff7e-964e-5e76-8ca9-cd752ec1b88a",
         "call_label": "Edtech · Kabir Bapat · call 1",
         "created_at": "2026-03-23T11:19:00+05:30",
@@ -1037,6 +1165,14 @@
         "created_at": "2026-03-20T14:38:00+05:30",
         "state": "ready",
         "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "a555c24d-1684-51f5-8800-72eb126eaa2c",
+        "call_label": "Edtech · Debashish Chatterjee · call 2",
+        "created_at": "2026-03-19T11:25:00+05:30",
+        "state": "ready",
+        "focus_label": "Discover who must do the reporting work before recommending a cohort",
         "recurring": true
       },
       {
@@ -1061,6 +1197,14 @@
         "created_at": "2026-03-16T12:38:00+05:30",
         "state": "ready",
         "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "90afcc0e-084f-5441-92cd-26c8fadce1f5",
+        "call_label": "Edtech · Debashish Chatterjee · call 1",
+        "created_at": "2026-03-16T11:25:00+05:30",
+        "state": "ready",
+        "focus_label": "Discover who must do the reporting work before recommending a cohort",
         "recurring": true
       },
       {
@@ -1118,51 +1262,9 @@
         "state": "ready",
         "focus_label": "Diagnose before prescribing",
         "recurring": true
-      },
-      {
-        "submission_id": "e6558a3e-3154-5dca-8709-ed0b43d4a434",
-        "call_label": "Edtech · Ritvik Ganguly · call 3",
-        "created_at": "2026-03-02T12:42:00+05:30",
-        "state": "ready",
-        "focus_label": "Diagnose before prescribing",
-        "recurring": true
-      },
-      {
-        "submission_id": "25a903b5-0015-5563-9f10-2c00bdb37fd2",
-        "call_label": "Edtech · Ritvik Ganguly · call 2",
-        "created_at": "2026-02-26T12:42:00+05:30",
-        "state": "ready",
-        "focus_label": "Diagnose before prescribing",
-        "recurring": true
-      },
-      {
-        "submission_id": "a56acfd8-99db-5fc7-8b03-68583369fb38",
-        "call_label": "Edtech · Ritvik Ganguly · call 1",
-        "created_at": "2026-02-23T12:42:00+05:30",
-        "state": "ready",
-        "focus_label": "Diagnose before prescribing",
-        "recurring": true
       }
     ],
     "progress": [
-      {
-        "submission_id": "a56acfd8-99db-5fc7-8b03-68583369fb38",
-        "created_at": "2026-02-23T12:42:00+05:30",
-        "state": "suggested",
-        "after_mission": false
-      },
-      {
-        "submission_id": "25a903b5-0015-5563-9f10-2c00bdb37fd2",
-        "created_at": "2026-02-26T12:42:00+05:30",
-        "state": "suggested",
-        "after_mission": false
-      },
-      {
-        "submission_id": "e6558a3e-3154-5dca-8709-ed0b43d4a434",
-        "created_at": "2026-03-02T12:42:00+05:30",
-        "state": "suggested",
-        "after_mission": false
-      },
       {
         "submission_id": "3364a65f-065c-54f5-9f69-763ef31bb3ae",
         "created_at": "2026-03-03T14:00:00+05:30",
@@ -1206,6 +1308,12 @@
         "after_mission": false
       },
       {
+        "submission_id": "90afcc0e-084f-5441-92cd-26c8fadce1f5",
+        "created_at": "2026-03-16T11:25:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
         "submission_id": "b8590397-275b-5807-ab1b-15050ff824e2",
         "created_at": "2026-03-16T12:38:00+05:30",
         "state": "suggested",
@@ -1224,6 +1332,12 @@
         "after_mission": false
       },
       {
+        "submission_id": "a555c24d-1684-51f5-8800-72eb126eaa2c",
+        "created_at": "2026-03-19T11:25:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
         "submission_id": "063f3c38-8393-5c13-b402-611a7ba9fa32",
         "created_at": "2026-03-20T14:38:00+05:30",
         "state": "suggested",
@@ -1232,6 +1346,12 @@
       {
         "submission_id": "c420ff7e-964e-5e76-8ca9-cd752ec1b88a",
         "created_at": "2026-03-23T11:19:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "d5aa88d8-0b8e-5949-93a2-cd1eb835516b",
+        "created_at": "2026-03-23T11:25:00+05:30",
         "state": "suggested",
         "after_mission": false
       },
@@ -1527,7 +1647,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33046,
-        "reason": "Dipak’s lesson on Discovery & Deep Understanding, the skill they’re working on. It helps with spotting the moment live, the likely reason here.",
+        "reason": "Dipak’s lesson on Discovery & Deep Understanding, the skill you’re working on. It helps with spotting the moment live, the likely reason here.",
         "takeaways": [
           "Ask for the last concrete example.",
           "Reflect the answer before going deeper."

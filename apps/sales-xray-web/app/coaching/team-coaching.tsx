@@ -226,6 +226,18 @@ function RepList({
                 }
                 href={`/coaching?person=${rep.person_id}`}
                 meta={[
+                  // Their saved record on the focus, with the history's dot,
+                  // so a manager scans how it is going without opening the rep.
+                  rep.focus_calls !== null && rep.focus_window !== null ? (
+                    <span
+                      className={styles.callPoint}
+                      data-state={
+                        rep.focus_calls ? "suggested" : "no_suggestion"
+                      }
+                    >
+                      {TEAM.repRecord(rep.focus_calls, rep.focus_window)}
+                    </span>
+                  ) : null,
                   `${rep.calls} call${rep.calls === 1 ? "" : "s"}`,
                   rep.latest_call_at
                     ? TEAM.repLatest(callDate(rep.latest_call_at))

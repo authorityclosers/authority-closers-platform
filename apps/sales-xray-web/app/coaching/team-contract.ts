@@ -33,6 +33,13 @@ export type TeamRep = {
   latest_call_at: string | null;
   /** When a real rep shared their coaching; absent for fictional reps. */
   shared_at: string | null;
+  /**
+   * Their saved record on the current focus, as their own progress history
+   * counts it: calls that needed work, out of calls with a record on the
+   * skill. Only as a consistent pair, and only with a focus; older APIs omit it.
+   */
+  focus_calls: number | null;
+  focus_window: number | null;
 };
 
 export type TeamCoaching = {
@@ -174,14 +181,28 @@ function parseReps(value: unknown, shared: boolean): TeamRep[] {
     // A real rep appears only with the date they shared.
     if (!id || !name || seen.has(id) || (shared && !sharedAt)) continue;
     seen.add(id);
+    const focusLabel =
+      typeof row.focus_label === "string" && row.focus_label.trim()
+        ? row.focus_label.slice(0, 240)
+        : null;
+    const whole = (n: unknown) =>
+      Number.isSafeInteger(n) && (n as number) >= 0 ? (n as number) : null;
+    const focusCalls = whole(row.focus_calls),
+      focusWindow = whole(row.focus_window);
+    // An impossible or half record is dropped; the rep still shows.
+    const record =
+      focusLabel &&
+      focusCalls !== null &&
+      focusWindow !== null &&
+      focusWindow >= 1 &&
+      focusCalls <= focusWindow;
     reps.push({
       person_id: id,
       name: name.slice(0, 120),
       skill_id: requestedSkill(row.skill_id) ?? null,
-      focus_label:
-        typeof row.focus_label === "string" && row.focus_label.trim()
-          ? row.focus_label.slice(0, 240)
-          : null,
+      focus_label: focusLabel,
+      focus_calls: record ? focusCalls : null,
+      focus_window: record ? focusWindow : null,
       calls:
         Number.isSafeInteger(row.calls) && (row.calls as number) > 0
           ? (row.calls as number)
