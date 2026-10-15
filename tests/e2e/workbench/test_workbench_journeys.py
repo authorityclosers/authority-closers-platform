@@ -6119,7 +6119,7 @@ def test_fixture_coaching_sharing_retry(browser: Browser, viewport: tuple[int, s
         expect(retry).to_be_enabled()
         expect(setting_actions).to_have_count(0)
         mission = page.locator("[data-active-mission]").inner_text()
-        document_started = page.evaluate("performance.timeOrigin")
+        original_document = page.evaluate_handle("document")
 
         def capture(state: str) -> None:
             panel.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
@@ -6160,9 +6160,10 @@ def test_fixture_coaching_sharing_retry(browser: Browser, viewport: tuple[int, s
         expect(page.locator("[data-active-mission]")).to_have_text(mission)
         expect(page).to_have_url(os.environ["WB_BASE_URL"].rstrip("/") + path)
         expect(page.locator("audio,video")).to_have_count(0)
-        assert page.evaluate("performance.timeOrigin") == document_started, (
+        assert page.evaluate("original => original === document", original_document), (
             "Sharing read recovery reloaded the document"
         )
+        original_document.dispose()
         assert not api_requests, "The fictional sharing reader attempted an API request"
         assert not media_requests, "Sharing read recovery requested media"
         assert journey.live_refreshes == 0, "Live source changed during sharing read recovery"
@@ -6175,7 +6176,7 @@ def test_fixture_coaching_sharing_retry(browser: Browser, viewport: tuple[int, s
             "loaded_recipient": "Priya Shah",
             "sharing_action_invoked": False,
             "mission_and_query_retained": True,
-            "same_document_time_origin": True,
+            "same_document_identity": True,
             "api_requests": len(api_requests),
             "media_requests": len(media_requests),
             "conflict_revision_or_mutation_acceptance": "builder unit coverage only",
