@@ -271,10 +271,7 @@ def test_real_full_backup_rejected_before_restore(tmp_path, docker_evidence):
 
 
 def test_workflow_always_names_and_summarizes_check_without_staging_secrets():
-    workflow = ROOT / ".github/workflows/migration-safety.yml"
-    if not workflow.exists():
-        pytest.skip("workflow held out of the workbench until AUT-1741 resumes")
-    source = workflow.read_text()
+    source = (ROOT / ".github/workflows/migration-safety.yml").read_text()
     assert "name: migration-safety" in source
     assert "if: always()" in source
     assert "GITHUB_STEP_SUMMARY" in source
