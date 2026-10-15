@@ -1,7 +1,7 @@
 {
   "source": "Owner via laptop Claude, INBOX 2026-10-16T04:00 IST; images reconciled by the owner Report session",
   "source_text": "/home/acdev/strikes/synth/context/report-structure-15oct.md",
-  "source_text_sha256": "70096af7ce4bf7fa57a1fff96d9f6fe2241205835a3ae0bc0cbbe0bb23540e88",
+  "source_text_sha256": "59866517eb09825e9b2d6bc9ea633bbf0df06f4aac5cf5bb3ccb0a775ce28b81",
   "precedence": "Owner correction replaces the exported text count of23 with27; all other controlled gates remain.",
   "parts": [
     "Overview and score",
@@ -55,5 +55,8 @@
     "Needs improvement"
   ],
   "pending_owner_decision": "Presenting the Solution and Positioning Solution Value remain separate until an explicit merge decision.",
-  "scope": "QA acceptance only; no product fields, score computation, outcomes or canonical data changed."
+  "scope": "QA acceptance only; no product fields, score computation, outcomes or canonical data changed.",
+  "source_text_bytes": 3932,
+  "original_export_sha256": "70096af7ce4bf7fa57a1fff96d9f6fe2241205835a3ae0bc0cbbe0bb23540e88",
+  "original_export_bytes": 2601
 }
