@@ -189,9 +189,11 @@ function Detail({
               {item ? item.label : "Not scored yet"}
             </h4>
             <p className={styles.body}>
-              {item
-                ? `${item.text} No score is given for this pointer.`
-                : "This call was analysed before pointer scores existed. Its next analysis scores this pointer."}
+              {pointer.whatHappened && item
+                ? pointer.whatHappened
+                : item
+                  ? `${item.text} No score is given for this pointer.`
+                  : "This call was analysed before pointer scores existed. Its next analysis scores this pointer."}
             </p>
           </div>
         </div>
