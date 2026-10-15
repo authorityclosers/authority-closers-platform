@@ -6634,7 +6634,7 @@ def test_fixture_report_scroll_training(browser: Browser, viewport: tuple[int, s
         journey.observations[-1]["analysis_heading"] = heading_hit
         assert heading_hit["reachable"], "Analysis heading is covered"
         row = part.locator('li[data-pointer="call_opening"]')
-        disclosure = row.get_by_role("button", name=re.compile(r"View more$"))
+        disclosure = row.locator('button[aria-controls="xray-pointer-call_opening"]')
         journey.control_target(disclosure, "pointer-disclosure")
         disclosure.focus()
         page.keyboard.press("Enter")
