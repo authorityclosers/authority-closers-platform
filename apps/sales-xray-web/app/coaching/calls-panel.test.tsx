@@ -346,6 +346,52 @@ describe("calls on the current skill", () => {
     expect(document.activeElement).toBe(host.querySelector("#coaching-calls"));
   });
 
+  it("marks each call's saved record on the current focus in the full list, with the history's dot", async () => {
+    await act(async () =>
+      root.render(
+        <CallsPanel
+          calls={[
+            { ...call(1), focus_label: "Another call focus" },
+            call(2),
+            call(3),
+            call(4, "pending"),
+          ]}
+          focusLabel="Explore the consequence"
+          progress={[
+            point(1, "suggested"),
+            point(2, "no_suggestion"),
+            point(3, "not_covered"),
+            point(4, "suggested"),
+          ]}
+        />,
+      ),
+    );
+    expect(button("All calls").getAttribute("aria-pressed")).toBe("true");
+    const rows = [...host.querySelectorAll("li")];
+    const marks = rows.map((row) =>
+      row.querySelector("[data-state]")?.getAttribute("data-state"),
+    );
+    // The call's own focus stays; a saved record on the current focus follows
+    // it. A no-opportunity call and an unanalysed call carry no mark.
+    expect(marks).toEqual(["suggested", "no_suggestion", undefined, undefined]);
+    expect(rows[0].textContent).toContain("Another call focus");
+    expect(rows[0].textContent).toContain("Needed work");
+    expect(rows[1].textContent).toContain("Skill used, nothing to fix");
+    expect(rows[2].textContent).not.toContain("Needed work");
+    expect(rows[3].textContent).toContain("Analysing…");
+    // Without a current focus, nothing is marked.
+    await act(async () =>
+      root.render(
+        <CallsPanel
+          calls={[call(1), call(2)]}
+          progress={[point(1, "suggested"), point(2, "suggested")]}
+        />,
+      ),
+    );
+    expect(host.querySelector("[data-state]")).toBeNull();
+    expect(host.textContent).not.toContain("Needed work");
+  });
+
   it("uses saved progress, excludes no-opportunity/unready/missing calls and preserves shared Report links", async () => {
     await act(async () =>
       root.render(

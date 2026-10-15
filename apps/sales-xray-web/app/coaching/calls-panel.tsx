@@ -83,6 +83,13 @@ export function CallsPanel({
     progress?.map((point) => [point.submission_id, point]),
   );
   const onSkill = callsOnSkill(calls, progress);
+  // A ready call's saved record on the current focus (as the skill filter).
+  const pointState = (call: CallSummary) => {
+    const state = points.get(call.submission_id)?.state;
+    return call.state === "ready" && state && state !== "not_covered"
+      ? state
+      : null;
+  };
   const canFilter = Boolean(focusLabel && onSkill.length);
   const canCompare =
     onSkill.some(
@@ -235,6 +242,16 @@ export function CallsPanel({
                           : (call.focus_label ??
                             (they ? THEIR.callFallback : CALLS.fallback)),
                     !filtered && call.recurring ? CALLS.recurring : null,
+                    // The saved record on the current focus, marked like the
+                    // progress history, so the full list scans without a filter.
+                    !filtered && canFilter && pointState(call) ? (
+                      <span
+                        className={styles.callPoint}
+                        data-state={pointState(call)}
+                      >
+                        {POINT_COPY[pointState(call)!]}
+                      </span>
+                    ) : null,
                   ]}
                   end={
                     call.state === "ready" ? (
