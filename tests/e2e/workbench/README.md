@@ -361,3 +361,13 @@ boundary: each existing fictional card repeats its own original source ref for
 Space selection of original displayed bounds/title, fold focus, unchanged six
 findings/prose and32–44px controls, with no added API/media/write. Mixed source
 order and original object identity stay unit-only; canonical payloads are untouched.
+
+For labelled Report clip chips ("18:42 · Play"), select only
+`-k fixture_report_clip_pause_room`. Four cases open the authored fictional
+Report and, in Worked/Didn't, Moments That Mattered and the first opened Skills
+row, swap the chip's word to Pause in the browser only (restored at once) and
+require zero movement of the chip, its time, its row and any neighbour, with the
+Pause text fitting the reserved width. The chip's real pointer area, including its
+`::after`, must reach 32 px desktop / 44 px phone with the centre reachable. The
+fixture never starts a clip, so the live Pause state during playback stays
+unit-only; no media, reads or writes are added by the checks.

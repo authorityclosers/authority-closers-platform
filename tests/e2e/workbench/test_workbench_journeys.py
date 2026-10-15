@@ -5092,3 +5092,188 @@ def test_fixture_coaching_mastery_names(browser: Browser, viewport: tuple[int, s
             "api_mutations": len(mutations),
             "authenticated_or_real_data_acceptance": False,
         }
+
+
+def test_fixture_report_clip_pause_room(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Labelled Report clips reserve room for Pause, so nothing moves when one plays."""
+    if (
+        os.environ.get("WB_MODE", "fixture") != "fixture"
+        or os.environ["WB_BASE_URL"].rstrip("/") != "http://127.0.0.1:3026"
+    ):
+        pytest.skip("Clip room checks use the authored fictional Report only")
+    pillars = ("moments", "missed", "skills")
+    with _journey(browser, viewport, "report-clip-pause-room") as journey:
+        page = journey.page
+        mutations: list[str] = []
+        media: list[str] = []
+        reads: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            request = route.request
+            path = urlsplit(request.url).path
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif (
+                request.resource_type == "media"
+                or path.endswith("/source")
+                or (path.startswith("/v1/") and "/media/" in path)
+            ):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            else:
+                if path.startswith("/v1/"):
+                    reads.append("read")
+                route.continue_()
+
+        page.route("**/*", observe_read)
+        journey.open("/review-fixture/report/story?view=story&section=moments")
+        expect(page.locator("[data-report-pillar]")).to_have_count(6)
+        page.evaluate("() => document.fonts.ready")
+        page.wait_for_load_state("networkidle", timeout=15_000)
+        before_reads = len(reads)
+        assert page.locator('[data-full-shell-fixture="true"]').count() == 1
+        labelled = page.locator("[data-report-pillar] button[aria-pressed]").filter(
+            has_text=re.compile(r"· Play$")
+        )
+        expect(labelled.first).to_be_visible()
+        counts: dict[str, int] = {}
+        geometry: dict[str, dict[str, object]] = {}
+        shortfalls: list[str] = []
+        for pillar in pillars:
+            section = page.locator(f'[data-report-pillar="{pillar}"]')
+            scope = section
+            if pillar == "skills":
+                # Skill clips sit inside the row's own disclosure; open the first row.
+                rows = section.locator("li:has(> details > summary)")
+                expect(rows).to_have_count(8)
+                rows.first.locator("summary").click()
+                expect(rows.first.locator("details")).to_have_attribute("open", "")
+                scope = rows.first
+            chips = scope.locator("button[aria-pressed]").filter(has_text=re.compile(r"· Play$"))
+            counts[pillar] = chips.count()
+            assert counts[pillar] >= 1, f"{pillar} shows no labelled clip"
+            # Every labelled chip is idle on the fixture: no clip plays here.
+            expect(section.locator('button[aria-pressed="true"]')).to_have_count(0)
+            for index in range(counts[pillar]):
+                assert (chips.nth(index).get_attribute("aria-label") or "").startswith("Play ")
+            first = chips.first
+            first.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            expect(first).to_be_visible()
+            # Browser-only word swap on the rendered chip: the shipped CSS must
+            # keep the chip, its time and its neighbours still when Play reads
+            # Pause. The word is restored at once; no product state changes.
+            measured = first.evaluate("""button => {
+              const word = button.querySelector('span > span');
+              if (!word || word.textContent !== 'Play') throw new Error('Missing Play word');
+              const row = button.parentElement;
+              const next = button.nextElementSibling;
+              const textWidth = () => {
+                const range = document.createRange();
+                range.selectNodeContents(word);
+                return range.getBoundingClientRect().width;
+              };
+              const read = () => {
+                const chip = button.getBoundingClientRect();
+                const span = word.getBoundingClientRect();
+                return {chipLeft: chip.left, chipWidth: chip.width, chipHeight: chip.height,
+                  wordLeft: span.left, wordWidth: span.width, text: textWidth(),
+                  rowHeight: row.getBoundingClientRect().height,
+                  nextLeft: next ? next.getBoundingClientRect().left : null,
+                  nextTop: next ? next.getBoundingClientRect().top : null,
+                  clipped: word.scrollWidth > word.clientWidth + 1};
+              };
+              const style = getComputedStyle(word);
+              const idle = read();
+              word.textContent = 'Pause';
+              const paused = read();
+              word.textContent = 'Play';
+              const restored = read();
+              return {idle, paused, restored, restoredWord: word.textContent,
+                minInlineSize: parseFloat(style.minInlineSize), display: style.display,
+                fontPx: parseFloat(style.fontSize), chipLabel: button.textContent};
+            }""")
+            assert measured["restoredWord"] == "Play"
+            idle, paused, restored = measured["idle"], measured["paused"], measured["restored"]
+            for key in (
+                "chipLeft",
+                "chipWidth",
+                "chipHeight",
+                "wordLeft",
+                "wordWidth",
+                "rowHeight",
+                "nextLeft",
+                "nextTop",
+            ):
+                if idle[key] is None:
+                    continue
+                assert abs(paused[key] - idle[key]) <= 0.5, (
+                    f"{pillar}: {key} moves by {paused[key] - idle[key]:.2f}px when Play "
+                    "reads Pause"
+                )
+                assert abs(restored[key] - idle[key]) <= 0.5, f"{pillar}: {key} not restored"
+            assert paused["text"] <= paused["wordWidth"] + 0.5, (
+                f"{pillar}: Pause ({paused['text']:.1f}px) exceeds its reserved "
+                f"{paused['wordWidth']:.1f}px"
+            )
+            assert not paused["clipped"] and not idle["clipped"], f"{pillar}: word is clipped"
+            assert measured["minInlineSize"] >= paused["text"] - 0.5, (
+                f"{pillar}: reserved {measured['minInlineSize']:.1f}px is narrower than Pause"
+            )
+            assert measured["display"] == "inline-block"
+            assert measured["fontPx"] >= 12
+            geometry[pillar] = {
+                "chip_width_px": round(idle["chipWidth"], 1),
+                "word_width_px": round(idle["wordWidth"], 1),
+                "pause_text_px": round(paused["text"], 1),
+                "reserved_px": round(measured["minInlineSize"], 1),
+                "shift_px_when_pause": round(
+                    max(abs(paused[k] - idle[k]) for k in ("chipWidth", "wordLeft", "rowHeight")),
+                    2,
+                ),
+                "neighbour_present": idle["nextLeft"] is not None,
+            }
+            journey.snapshot(f"{pillar}-play-chips")
+            # The chip's real pointer area, including its thumb-sized ::after.
+            target = first.evaluate("""el => {
+              const r = el.getBoundingClientRect();
+              const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+              const hits = (x, y) => {
+                const hit = document.elementFromPoint(x, y);
+                return hit === el || el.contains(hit);
+              };
+              let top = cy, bottom = cy, left = cx, right = cx;
+              while (top - 1 >= 0 && hits(cx, top - 1)) top -= 1;
+              while (bottom + 1 <= innerHeight && hits(cx, bottom + 1)) bottom += 1;
+              while (left - 1 >= 0 && hits(left - 1, cy)) left -= 1;
+              while (right + 1 <= innerWidth && hits(right + 1, cy)) right += 1;
+              return {visibleWidth: r.width, visibleHeight: r.height, reachable: hits(cx, cy),
+                hitWidth: right - left + 1, hitHeight: bottom - top + 1};
+            }""")
+            journey.observations[-1][f"target_{pillar}_first_clip"] = target
+            minimum = 44 if journey.width == 390 else 32
+            assert target["reachable"], f"{pillar}: first clip centre is covered"
+            if min(target["hitWidth"], target["hitHeight"]) < minimum:
+                shortfalls.append(f"{pillar}: clip hit area {target} is below {minimum}px")
+            geometry[pillar]["visible_height_px"] = round(target["visibleHeight"], 1)
+            geometry[pillar]["hit_height_px"] = target["hitHeight"]
+        pressed = page.locator('[data-report-pillar] button[aria-pressed="true"]')
+        expect(pressed.filter(has_text=re.compile(r"· (?:Play|Pause)$"))).to_have_count(0)
+        expect(page.locator("audio")).to_have_count(1)
+        assert page.locator("audio").evaluate("el => el.paused && !el.getAttribute('src')")
+        # The shell may finish a delayed read of its own; clips add no media or writes.
+        assert not media and not mutations
+        assert journey.live_refreshes == 0, "Live source changed during clip room checks"
+        journey.observations[-1]["fictional_report_clip_pause_room"] = {
+            "source": "B5f7d7ac1 labelled PlayChip; authored fictional Report, idle dock",
+            "labelled_clips": counts,
+            "geometry": geometry,
+            "clip_hit_area_shortfalls": shortfalls,
+            "word_swap_is_browser_only_and_restored": True,
+            "live_pause_state_during_playback_browser_tested": False,
+            "extra_api_reads": len(reads) - before_reads,
+            "media_requests": len(media),
+            "api_mutations": len(mutations),
+            "real_audio_provider_or_authenticated_acceptance": False,
+        }
+        assert not shortfalls, "; ".join(shortfalls)

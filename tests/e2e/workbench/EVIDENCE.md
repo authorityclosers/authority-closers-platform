@@ -1722,3 +1722,18 @@ External screenshots/JSON: `/home/acdev/strikes/1694/shots/`:
 
 Strike NOTES records current verdicts, commits and exact owning INBOX handoffs.
 Two queued checks ended 143; those incomplete runs do not establish acceptance.
+
+## Report clip Pause room — 2026-10-15T14:50Z
+`-k fixture_report_clip_pause_room` at workbench `6cb849d4` (product source
+B `5f7d7ac1`, shipped in v0.44.0), shared dev :3026, 1440/390 light/dark.
+Worked/Didn't and Skills chips: 118 px wide, Play word reserved 45 px, Pause text
+35 px, 0 px shift of chip/time/row when the word reads Pause, hit area 118x32
+desktop / 118x44 phone, centres reachable. Moments That Mattered range chip
+(158 px wide, 24 px pill): same zero shift, but real hit area 160x30 desktop /
+164x42 phone, under the 32/44 floor. Result **4/4 FAIL on that one shortfall**;
+errors/overflow/undersized text/media/writes 0, live refreshes 0. Exact defect
+sent to B (1677 INBOX). Four harness-only failures before this result (strict
+multi-element idle check, sticky-header scroll, over-broad pressed guard, late
+shell read) are retained in the shot folder's sub-directories. Receipts and PNGs:
+`/home/acdev/strikes/1694/shots/2026-10-15-report-clip-pause-room/`.
+Fixture-only; the live Pause state during playback is not browser-tested.
