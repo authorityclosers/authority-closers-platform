@@ -1,0 +1,59 @@
+{
+  "source": "Owner via laptop Claude, INBOX 2026-10-16T04:00 IST; images reconciled by the owner Report session",
+  "source_text": "/home/acdev/strikes/synth/context/report-structure-15oct.md",
+  "source_text_sha256": "70096af7ce4bf7fa57a1fff96d9f6fe2241205835a3ae0bc0cbbe0bb23540e88",
+  "precedence": "Owner correction replaces the exported text count of23 with27; all other controlled gates remain.",
+  "parts": [
+    "Overview and score",
+    "Pointers with View more",
+    "Final call outcome"
+  ],
+  "pointer_titles": [
+    "Call Opening & First Impression",
+    "Purpose & Agenda Setting",
+    "Tone and Energy",
+    "Active Listening",
+    "Asking Open-Ended Questions",
+    "Asking Enough Questions",
+    "Understanding the Prospect's Role",
+    "Identifying Needs and Challenges",
+    "Exploring Current Solution",
+    "Quantifying Business Impact",
+    "Understanding Decision Process",
+    "Identifying Stakeholders",
+    "Handling Objections",
+    "Positioning Solution Value",
+    "Discussing Pricing",
+    "Handling Competition",
+    "Checking for Concerns",
+    "Next Steps",
+    "Call Control",
+    "Question to Talk Ratio",
+    "Handling Silence",
+    "Professionalism",
+    "Closing Attitude",
+    "Building Rapport",
+    "Presenting the Solution",
+    "Creating Value",
+    "Overall Communication"
+  ],
+  "outcomes": [
+    "Won",
+    "Lost",
+    "Follow-up Set",
+    "Decision Pending"
+  ],
+  "scoring": {
+    "empty_label": "not scored",
+    "allowed_source": "existing approved analysis only",
+    "new_autonomous_scoring": false,
+    "invented_overall_or_pointer_scores": false
+  },
+  "ratings_when_supplied_by_existing_approved_analysis": [
+    "Excellent",
+    "Good",
+    "Needs improvement"
+  ],
+  "pending_owner_decision": "Presenting the Solution and Positioning Solution Value remain separate until an explicit merge decision.",
+  "scope": "QA acceptance only; no product fields, score computation, outcomes or canonical data changed."
+}

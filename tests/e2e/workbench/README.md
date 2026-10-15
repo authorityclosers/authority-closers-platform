@@ -463,3 +463,12 @@ evidence and empty What did we miss? context. The reserved status height stays
 steady through pending/error, retry targets meet32/44px, and saving/error/success
 screenshots cover each choice. API/media requests are blocked/counted; no account
 or canonical feedback is written. Command identity remains builder unit coverage.
+
+The owner's live Report rebuild follows the15Oct document and the later
+16Oct04:00IST correction, pinned in `report-15oct-acceptance.json`: three parts,
+27 named pointers (replacing the export's23), their View more actions, and final
+Won/Lost/Follow-up Set/Decision Pending. Scores stay not scored unless supplied
+by existing approved analysis; QA must not invent ratings or new score mappings.
+The legacy six-section fixtures and completed evidence remain retained. New
+Report journeys will use the concrete rebuild source as it lands; no new
+Coaching QA is queued under the owner's current Report-only order.

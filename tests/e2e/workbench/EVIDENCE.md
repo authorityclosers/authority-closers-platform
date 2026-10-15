@@ -1,5 +1,16 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October,21:36 UTC — v0.46.0 original-Host readback, after both canaries.
+Staging canary21:28:16Z, production canary/toolDONE21:33:22Z; both systemd units
+Result=success/ExecMainStatus0. Four foundation:8080 GETs, original staging and
+production web/API Hosts, no redirects/authentication/writes: all HTTP200 on
+b6cbab3019db1780e0e2301b7218c132907146e9. Read times 2026-10-15T21:36:49.961598+00:00 to 2026-10-15T21:36:49.982000+00:00.
+Receipts:`/home/acdev/strikes/1694/shots/2026-10-15-v0.46.0-health/`. Availability/served source only; populated hosted
+Report/Team acceptance remains unclaimed. Earlier dev context/sharing/feedback
+passes stand; the latter two product sources are outside this release.
+Owner's latest Report-only rebuild order/corrected27-pointer list consumed;
+new acceptance contract pinned, awaiting actual Report source before its QA.
+
 15 October,21:16 UTC — Feedback pending/keyboard retry (D2d6dbc78).
 New `fixture_coaching_feedback_save` **8/8 PASS**,29.69s/launcher0 at6ab51270,
 shared3026, Agree/Not completely at1440/390 light/dark. Saving… through2999ms,
