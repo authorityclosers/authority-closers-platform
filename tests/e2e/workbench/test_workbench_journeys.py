@@ -4993,3 +4993,102 @@ def test_fixture_document_print(browser: Browser, viewport: tuple[int, str]) -> 
         journey.observations.append(
             {"step": "print", "screenshot": str(shot), "pdf": str(pdf), "print_metrics": metrics}
         )
+
+
+def test_fixture_coaching_mastery_names(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Pillar 5's five mastery names stay whole, apart and unclipped on phones."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Mastery-name checks use the signed-out Design review and Sandbox views")
+    names = ["Emerging", "Developing", "Consistent", "Strong", "Mastered"]
+    minimum_gap = 8
+    with _journey(browser, viewport, "mastery-names") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        current_steps: dict[str, str | None] = {}
+        for data in ("review", "sandbox"):
+            journey.open(f"/review-fixture/coaching?data={data}&view=me")
+            stepper = page.get_by_role("list", name="Mastery journey", exact=True).first
+            expect(stepper.get_by_role("listitem")).to_have_text(names)
+            page.evaluate("() => document.fonts.ready")
+            stepper.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            geometry = stepper.evaluate(
+                """list => {
+                  const box = list.getBoundingClientRect();
+                  const labels = [...list.querySelectorAll(':scope > li')].map(item => {
+                    const span = item.querySelector('span');
+                    const range = document.createRange();
+                    range.selectNodeContents(span);
+                    // The text itself, not the stretched column box.
+                    const text = range.getBoundingClientRect();
+                    const lines = new Set(
+                      [...range.getClientRects()].map(rect => Math.round(rect.top))).size;
+                    const style = getComputedStyle(span);
+                    const clips = value => ['hidden', 'clip'].includes(value);
+                    const clipped = [item, span].some(el =>
+                      clips(getComputedStyle(el).overflowX) && el.scrollWidth > el.clientWidth + 1);
+                    return {text: span.textContent, left: text.left, right: text.right,
+                      top: text.top, bottom: text.bottom, lines, clipped,
+                      weight: Number(style.fontWeight), size: parseFloat(style.fontSize),
+                      current: item.getAttribute('aria-current') === 'step'};
+                  });
+                  return {left: box.left, right: box.right, labels,
+                    overflow: document.documentElement.scrollWidth -
+                      document.documentElement.clientWidth};
+                }"""
+            )
+            labels = geometry["labels"]
+            assert [label["text"] for label in labels] == names
+            for label in labels:
+                assert label["lines"] == 1, f"{label['text']} wraps onto {label['lines']} lines"
+                assert not label["clipped"], f"{label['text']} is clipped"
+                assert label["size"] >= 12, f"{label['text']} is {label['size']}px"
+                assert (
+                    label["left"] >= geometry["left"] - 0.5
+                    and label["right"] <= geometry["right"] + 0.5
+                ), f"{label['text']} leaves the journey box"
+            gaps: list[float] = []
+            for index, first in enumerate(labels):
+                for second in labels[index + 1 :]:
+                    same_line = first["top"] < second["bottom"] and second["top"] < first["bottom"]
+                    if same_line:
+                        gaps.append(second["left"] - first["right"])
+            assert gaps, "No two names share a line"
+            assert min(gaps) >= minimum_gap, f"Names on one line only {min(gaps):.1f}px apart"
+            assert geometry["overflow"] <= 1, f"Page overflows by {geometry['overflow']}px"
+            current = [label for label in labels if label["current"]]
+            assert len(current) <= 1, "More than one current step"
+            if current:
+                assert current[0]["weight"] >= 700, f"{current[0]['text']} is not bold"
+                assert all(label["weight"] < 700 for label in labels if not label["current"]), (
+                    "A non-current step is bold"
+                )
+            current_steps[data] = current[0]["text"] if current else None
+            journey.snapshot(f"{data}-mastery-names")
+            journey.unclipped_text(stepper)
+            journey.observations[-1]["mastery_names"] = {
+                "view": data,
+                "names_present_whole_and_unclipped": True,
+                "minimum_same_line_gap_px": round(min(gaps), 1),
+                "lines_per_name": [label["lines"] for label in labels],
+                "current_step": current_steps[data],
+                "current_step_bold": bool(current) and current[0]["weight"] >= 700,
+                "font_px": sorted({label["size"] for label in labels}),
+                "overflow_px": geometry["overflow"],
+            }
+        assert any(current_steps.values()), "Neither view rendered a current step"
+        assert not mutations, "Mastery-name checks attempted an API mutation"
+        journey.observations[-1]["fictional_mastery_names"] = {
+            "source": "D c3ec652c; signed-out Design review and AC Sandbox My coaching",
+            "current_steps": current_steps,
+            "api_mutations": len(mutations),
+            "authenticated_or_real_data_acceptance": False,
+        }

@@ -1,5 +1,22 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 13:42 UTC — lesson Pause and view-close resume **8/8 PASS**,
+36.67s/launcher0 at `261cacc4` (D f20b606f source; own EVIDENCE a39f45f5
+landed mid-wave, docs only), and moment view-close **4/4 PASS**, 19.25s/
+launcher0 at `a39f45f5` (D37f7ef65). Pause/viewclose store the exact native
+offset (849–954ms) before the first checkpoint; reload fetches no audio and
+Enter resumes the same source at that offset with focus and 40/44px targets.
+Leaving a playing moment pauses the detached audio at 103.09–103.16s and the
+held-loading close stays at 0; the return has no eager media and Enter replays
+the original 1:43 source with native focus; 62x32/62x44 targets reachable.
+Quote/lesson/access/transcript/mission/query unchanged; live_refreshes,
+runtime/server/visual errors, blocked mutations and API writes0. All 28 PNGs
+inspected in `shots/2026-10-15-1340Z-{lesson-pause-viewclose,moment-view-close}/`
+(16 unique lesson captures; the held-loading return pairs are byte-identical to
+the playing return pairs since both show the same ready state). Local silent
+PCM/404/held sources only; device position, no canonical progress, real
+recording, provider or authenticated claim. D and coordinator closures sent.
+
 15 October, 13:28 UTC — Worked/Didn't clip disclosure **4/4 PASS**, 44.29s/
 launcher0 at `0e848802` (includes B99a79943), live_refreshes0 after two quiet
 days; the 13 October 1/4 hot-rebuild stop is cleared. First two then all/fewer
