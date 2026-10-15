@@ -952,7 +952,7 @@
 .outcomeTop {
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1.38fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 .outcomeCard {
   align-items: flex-start;
@@ -978,7 +978,7 @@
 }
 .outcomeWord {
   color: var(--tone);
-  font-size: 25px;
+  font-size: 23px;
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.15;
@@ -1695,4 +1695,11 @@
     height: 44px;
     width: 44px;
   }
+}
+/* Quotes read as plain words (doc image10), not the app's serif blockquote. */
+.quote blockquote.quoteText {
+  border: 0;
+  font-family: inherit;
+  font-style: normal;
+  padding: 0;
 }

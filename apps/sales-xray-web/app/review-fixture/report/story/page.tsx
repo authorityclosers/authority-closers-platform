@@ -7,7 +7,8 @@ import { StoryShellPreview } from "./preview";
 /**
  * `?example=won|lost|follow_up|decision_pending` shows the 15 Oct doc's
  * illustrative example (default follow_up); `?example=none` shows the
- * fictional Amit call through the real data mapping.
+ * fictional Amit call through the real data mapping, and `?example=api` the
+ * same call with a saved AI pointer review, exactly as the API sends it.
  */
 export default async function Page({
   searchParams,
@@ -16,6 +17,7 @@ export default async function Page({
 }) {
   if (process.env.NODE_ENV !== "development") notFound();
   const { example } = await searchParams;
+  if (example === "api") return <StoryShellPreview key="api" apiStructure />;
   const kind =
     example === "none"
       ? null

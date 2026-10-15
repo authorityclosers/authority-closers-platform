@@ -301,6 +301,7 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
               key={kind}
               type="button"
               className={styles.chip}
+              data-outcome-choice={kind}
               aria-pressed={current === kind}
               aria-expanded={
                 kind === "lost" || kind === "follow_up"
