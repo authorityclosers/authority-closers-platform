@@ -6553,6 +6553,11 @@ def test_live_report_15oct_structure(browser: Browser, viewport: tuple[int, str]
     assert re.fullmatch(r"/analysis/calls/[0-9a-f-]{36}", path, re.IGNORECASE), (
         "Supply the exact approved saved-call route without example overrides"
     )
+    expected_overall = os.environ.get("WB_EXPECTED_OVERALL_SCORE")
+    if expected_overall is not None:
+        assert expected_overall.isdigit() and 0 <= int(expected_overall) <= 100, (
+            "WB_EXPECTED_OVERALL_SCORE must be the owner's supplied0–100 score"
+        )
     contract = json.loads(Path(__file__).with_name("report-15oct-acceptance.json").read_text())
     sections = (
         ("overview", "Overview & Score"),
@@ -6594,10 +6599,15 @@ def test_live_report_15oct_structure(browser: Browser, viewport: tuple[int, str]
             expect(score.get_by_text(draft)).to_be_visible()
         else:
             expect(score).to_contain_text("Not scored yet")
+        if expected_overall is not None:
+            assert overall is not None and float(overall[1]) == int(expected_overall), (
+                "Displayed overall score differs from the owner's saved-call handoff"
+            )
         analysis = page.locator('[data-xray-part="analysis"]')
         rows = analysis.locator("li[data-pointer]")
         expect(rows).to_have_count(27)
         scored = 0
+        scored_indices: list[int] = []
         for index, title in enumerate(contract["pointer_titles"], start=1):
             row = rows.nth(index - 1)
             control = row.get_by_role("button", name=re.compile(rf"^{index}\. {re.escape(title)}:"))
@@ -6608,6 +6618,7 @@ def test_live_report_15oct_structure(browser: Browser, viewport: tuple[int, str]
             if value:
                 assert 0 <= float(value[1]) <= 100, "Saved pointer score is outside0–100"
                 scored += 1
+                scored_indices.append(index - 1)
             else:
                 expect(row.get_by_text("No score", exact=True)).to_be_visible()
             control.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
@@ -6617,11 +6628,29 @@ def test_live_report_15oct_structure(browser: Browser, viewport: tuple[int, str]
             journey.unclipped_text(control)
         if scored:
             expect(analysis.get_by_text(draft)).to_be_visible()
-        first = rows.first.get_by_role("button").first
-        first.focus()
-        page.keyboard.press("Enter")
-        expect(first).to_have_attribute("aria-expanded", "true")
-        details = page.locator("#" + str(first.get_attribute("aria-controls")))
+        if expected_overall is not None:
+            assert scored_indices, "The scored-call handoff has no scored pointer rows"
+        # A score-pinned handoff also requires quoted feedback somewhere in the
+        # scored rows; do not assume the opening itself has saved evidence.
+        for index in scored_indices if expected_overall is not None else [0]:
+            control = rows.nth(index).get_by_role("button").first
+            control.focus()
+            page.keyboard.press("Enter")
+            expect(control).to_have_attribute("aria-expanded", "true")
+            details = page.locator("#" + str(control.get_attribute("aria-controls")))
+            if expected_overall is None or details.locator("blockquote").count():
+                break
+            page.keyboard.press("Space")
+            expect(control).to_have_attribute("aria-expanded", "false")
+        if expected_overall is not None:
+            for label in (
+                "What Happened?",
+                "Why It Matters?",
+                "Evidence from the Call",
+                "How to Improve?",
+            ):
+                expect(details.get_by_role("heading", name=label, exact=True)).to_be_visible()
+            assert details.locator("blockquote").count() > 0, "No scored feedback has a saved quote"
         expect(details).to_be_visible()
         details.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("pointer-details")
@@ -6643,6 +6672,7 @@ def test_live_report_15oct_structure(browser: Browser, viewport: tuple[int, str]
             "pointer_titles_checked": len(contract["pointer_titles"]),
             "pointer_scores_displayed": scored,
             "overall_score_displayed": overall is not None,
+            "matches_owner_supplied_score_and_has_quoted_feedback": expected_overall is not None,
             "ai_draft_label_required_when_scored": True,
             "session_issued_or_persisted": False,
             "media_requests": len(media_requests),

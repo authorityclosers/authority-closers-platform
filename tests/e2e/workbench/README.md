@@ -8,6 +8,10 @@ Select `live_report_15oct_structure` for a saved-call smoke only after supplying
 `WB_STORAGE_STATE=<approved-existing-session-reference>`. It blocks mutations
 and media, checks three parts/all27 names, native disclosure, score range and
 AI-draft labels when saved scores exist. It never issues or saves a session.
+For the owner's five scored-call handoff, also set `WB_EXPECTED_OVERALL_SCORE`
+to that call's supplied score. That requires the exact score, at least one
+scored pointer and expanded feedback with a saved quote. It does not assess
+scoring quality or certify that quote against the source API payload.
 The older six-part Report journeys below retain historical acceptance; they
 are not the rebuilt Report's current smoke. Independent Document checks remain
 separate. No real-call/AI-label browser pass is claimed until that smoke runs.
