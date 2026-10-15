@@ -371,3 +371,16 @@ Pause text fitting the reserved width. The chip's real pointer area, including i
 `::after`, must reach 32 px desktop / 44 px phone with the centre reachable. The
 fixture never starts a clip, so the live Pause state during playback stays
 unit-only; no media, reads or writes are added by the checks.
+
+For each call's saved record on the current focus, select only
+`-k fixture_coaching_call_record_marks`. Four width/theme cases open the signed-out
+Design review and AC Sandbox My coaching views, press All calls (Show all first
+where present) and compare every row against the fixture: a ready call with a
+saved `suggested` or `no_suggestion` record carries "Needed work" or "Skill used,
+nothing to fix" right after its own focus and before "Also on other calls", with a
+10 px dot whose fill, ring and style equal pillar 5's legend for the same state.
+Pending calls and calls without a saved record show no mark and no record words;
+Design review marks 6 of 8 rows, Sandbox every ready row. "On this skill" shows
+no marks (its filter keeps its own words) and All calls restores them. Report
+links `/analysis/calls/<id>` and row targets are unchanged; no reads, writes or
+media are added. The no-current-focus view stays unit-only.

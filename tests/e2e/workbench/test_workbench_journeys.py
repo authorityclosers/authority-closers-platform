@@ -5277,3 +5277,162 @@ def test_fixture_report_clip_pause_room(browser: Browser, viewport: tuple[int, s
             "real_audio_provider_or_authenticated_acceptance": False,
         }
         assert not shortfalls, "; ".join(shortfalls)
+
+
+def test_fixture_coaching_call_record_marks(browser: Browser, viewport: tuple[int, str]) -> None:
+    """All calls rows carry each call's saved record on the current focus, with its dot."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Call record marks use the signed-out Design review and Sandbox views")
+    fixtures = (
+        Path(__file__).resolve().parents[3] / "apps/sales-xray-web/app/review-fixture/coaching"
+    )
+    sources = {
+        "review": json.loads((fixtures / "sandbox.json").read_text())["me"],
+        "sandbox": json.loads((fixtures / "sandbox-team.json").read_text())["rep"],
+    }
+    labels = {"suggested": "Needed work", "no_suggestion": "Skill used, nothing to fix"}
+    with _journey(browser, viewport, "call-record-marks") as journey:
+        page = journey.page
+        mutations: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD"}:
+                mutations.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        summary: dict[str, dict[str, object]] = {}
+        for data, payload in sources.items():
+            points = {row["submission_id"]: row["state"] for row in payload["progress"]}
+            calls = payload["calls"]
+            fallback = f"One practice for {'your' if data == 'review' else 'their'} next call"
+            assert payload["focus"]["label"], f"{data}: fixture has no current focus"
+            expected = [
+                {
+                    "label": call["call_label"],
+                    "id": call["submission_id"],
+                    "ready": call["state"] == "ready",
+                    "focus": (
+                        "Analysing…"
+                        if call["state"] == "pending"
+                        else call["focus_label"] or fallback
+                    ),
+                    "mark": (
+                        points.get(call["submission_id"])
+                        if call["state"] == "ready" and points.get(call["submission_id"]) in labels
+                        else None
+                    ),
+                    "recurring": bool(call.get("recurring")),
+                }
+                for call in calls
+            ]
+            journey.open(f"/review-fixture/coaching?data={data}&view=me")
+            section = page.locator("#coaching-calls")
+            # My coaching says "Your recent calls"; One rep says "Their recent calls".
+            listing = section.get_by_role("list", name=re.compile(r"^(Your|Their) recent calls$"))
+            all_calls = section.get_by_role("button", name="All calls", exact=True)
+            on_skill = section.get_by_role("button", name="On this skill", exact=True)
+            expect(all_calls).to_have_attribute("aria-pressed", "true")
+            expect(listing.locator("li")).to_have_count(len(expected))
+            show_all = section.get_by_role("button", name=re.compile(r"^Show all \d+ calls$"))
+            if show_all.count():
+                show_all.click()
+            expect(listing.locator("li:visible")).to_have_count(len(expected))
+            page.evaluate("() => document.fonts.ready")
+            rows = listing.evaluate(
+                """list => [...list.querySelectorAll(':scope > li')].map(li => {
+                  const title = li.querySelector('a');
+                  const meta = title?.nextElementSibling;
+                  const items = meta ? [...meta.children].map(s => s.textContent) : [];
+                  const mark = li.querySelector('[data-state]');
+                  const dot = mark ? getComputedStyle(mark, '::before') : null;
+                  const report = li.querySelector('a[aria-label^="Open Report for "]');
+                  return {title: title?.textContent, href: title?.getAttribute('href'),
+                    items, state: mark?.getAttribute('data-state') ?? null,
+                    markIndex: mark ? [...meta.children].findIndex(s => s.contains(mark)) : null,
+                    markText: mark?.textContent ?? null,
+                    dot: dot ? {width: dot.width, height: dot.height, content: dot.content,
+                      background: dot.backgroundColor, border: dot.borderTopColor,
+                      style: dot.borderTopStyle} : null,
+                    report: report?.getAttribute('href') ?? null};
+                })"""
+            )
+            legend = page.locator('#coaching-progress p[aria-hidden="true"] span[data-state]')
+            legend_dots = legend.evaluate_all(
+                """spans => Object.fromEntries(spans.map(s => {
+                  const dot = getComputedStyle(s, '::before');
+                  return [s.getAttribute('data-state'), {width: dot.width,
+                    background: dot.backgroundColor, border: dot.borderTopColor,
+                    style: dot.borderTopStyle}];
+                }))"""
+            )
+            assert {"suggested", "no_suggestion"} <= set(legend_dots), "Legend lacks both states"
+            assert [row["title"] for row in rows] == [call["label"] for call in expected]
+            marked = 0
+            for row, call in zip(rows, expected, strict=True):
+                where = f"{data}: {call['label']}"
+                assert row["items"][1] == call["focus"], f"{where}: own focus changed"
+                if call["ready"]:
+                    assert row["report"] == f"/analysis/calls/{call['id']}", f"{where}: Report"
+                if call["mark"] is None:
+                    assert row["state"] is None, f"{where}: unexpected record mark"
+                    assert not any(text in row["items"] for text in labels.values()), (
+                        f"{where}: record words without a saved record"
+                    )
+                    continue
+                marked += 1
+                assert row["state"] == call["mark"], f"{where}: wrong saved record"
+                assert row["markText"] == labels[call["mark"]], f"{where}: wrong record words"
+                assert row["markIndex"] == 2, f"{where}: record not right after the focus"
+                if call["recurring"]:
+                    assert row["items"][3] == "Also on other calls", f"{where}: recurring order"
+                dot, legend_dot = row["dot"], legend_dots[call["mark"]]
+                assert dot["width"] == "10px" and dot["height"] == "10px", f"{where}: dot size"
+                assert dot["content"] != "none", f"{where}: no dot"
+                assert (dot["background"], dot["border"], dot["style"]) == (
+                    legend_dot["background"],
+                    legend_dot["border"],
+                    legend_dot["style"],
+                ), f"{where}: dot differs from the pillar 5 legend"
+            assert marked == sum(1 for call in expected if call["mark"]), f"{data}: mark count"
+            assert marked, f"{data}: no row carries a saved record"
+            section.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
+            journey.snapshot(f"{data}-call-record-marks")
+            journey.unclipped_text(listing)
+            first_ready = next(call for call in expected if call["ready"])
+            journey.row_link_target(
+                listing.get_by_role("link", name=first_ready["label"], exact=True),
+                f"{data}-first-ready-row",
+            )
+            # The skill filter keeps its own record words: no separate marks.
+            on_skill.click()
+            expect(on_skill).to_have_attribute("aria-pressed", "true")
+            expect(section.locator("[data-state]")).to_have_count(0)
+            expect(listing.locator("li").first).to_contain_text(
+                re.compile("Needed work|Skill used, nothing to fix")
+            )
+            all_calls.click()
+            expect(all_calls).to_have_attribute("aria-pressed", "true")
+            expect(section.locator("[data-state]")).to_have_count(marked)
+            summary[data] = {
+                "rows": len(expected),
+                "marked": marked,
+                "unmarked": [call["label"] for call in expected if call["mark"] is None][:4],
+                "states": sorted({call["mark"] for call in expected if call["mark"]}),
+                "recurring_rows": sum(1 for call in expected if call["recurring"]),
+                "legend_dot_width": legend_dots["suggested"]["width"],
+            }
+        assert summary["review"]["marked"] == 6 and summary["review"]["rows"] == 8
+        assert summary["sandbox"]["marked"] == summary["sandbox"]["rows"]
+        assert not mutations, "Call record marks attempted an API mutation"
+        assert journey.live_refreshes == 0, "Live source changed during call record marks"
+        journey.observations[-1]["fictional_call_record_marks"] = {
+            "source": "D f5f6ad82/73fbadc7; signed-out Design review and AC Sandbox My coaching",
+            "views": summary,
+            "mark_after_focus_before_recurring_and_dot_matches_legend": True,
+            "no_focus_view_browser_tested": False,
+            "api_mutations": len(mutations),
+            "authenticated_or_real_data_acceptance": False,
+        }
