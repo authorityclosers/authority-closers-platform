@@ -6588,6 +6588,7 @@ def test_fixture_report_scroll_training(browser: Browser, viewport: tuple[int, s
         page.route("**/*", read_only)
         journey.open("/review-fixture/report/story?example=follow_up")
         page.wait_for_load_state("load")
+        page.wait_for_load_state("networkidle")
         page.evaluate("() => document.fonts.ready")
         modes = page.locator("[data-report-modes]")
         expect(modes).to_have_attribute("data-view", "story")
