@@ -168,6 +168,11 @@ no extension and no additional reads. No customer data is sent externally.
 - Original provider regression test is unchanged; new mapping tests use
   `test_owner_report_structure.py`. All18 parked terminal source/proof bytes
   match the pre-edit checkpoint. UI edits by the owner's session stay separate.
-- Automatic-dev health/source verification follows the Report-only commit.
+- Automatic dev pickup verified 2026-10-15T22:01:41.388475+00:00: readiness200 serves
+  `fd02de1ce40f37eee9f32792e739efe53b6e7c6d`; all four runtime source
+  blobs match. Anonymous Report GET401. Receipt retained privately as
+  `1801/report-structure-dev-20261016.json`; no manual deployment or release.
+  Complete fictional response is available to the UI session in
+  `1801/report-structure-fictional-20261016.json`.
   Authenticated current-dev Report QA remains unavailable without the existing
   approved session/context; no credential probing or substitute identity used.
