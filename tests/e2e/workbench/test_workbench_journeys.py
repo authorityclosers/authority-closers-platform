@@ -6541,3 +6541,110 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
             "authenticated_call_acceptance": False,
             "api_structure_fixture_mapping": "not covered by the legacy Amit fixture",
         }
+
+
+def test_live_report_15oct_structure(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Read one explicitly supplied saved call using an existing approved session."""
+    if os.environ.get("WB_MODE") != "live":
+        pytest.skip("Saved Report smoke requires live mode and an approved existing session")
+    if not os.environ.get("WB_REPORT_PATH") or not os.environ.get("WB_STORAGE_STATE"):
+        pytest.skip("Supply the approved existing session reference and exact saved-call route")
+    path = _path("WB_REPORT_PATH", "/")
+    assert re.fullmatch(r"/analysis/calls/[0-9a-f-]{36}", path, re.IGNORECASE), (
+        "Supply the exact approved saved-call route without example overrides"
+    )
+    contract = json.loads(Path(__file__).with_name("report-15oct-acceptance.json").read_text())
+    sections = (
+        ("overview", "Overview & Score"),
+        ("analysis", "Detailed Call Analysis"),
+        ("outcome", "Final Call Outcome"),
+    )
+    draft = re.compile(r"^AI draft\s*[·–—-]\s*not reviewed by Dipak$")
+    with _journey(browser, viewport, "saved-report-15oct") as journey:
+        page = journey.page
+        media_requests: list[str] = []
+
+        def read_only(route: Route) -> None:
+            request = route.request
+            if request.method not in {"GET", "HEAD", "OPTIONS"}:
+                journey.blocked_mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif request.resource_type == "media":
+                media_requests.append(request.resource_type)
+                route.abort("blockedbyclient")
+            else:
+                route.fallback()
+
+        page.route("**/*", read_only)
+        journey.open(path)
+        page.wait_for_load_state("load")
+        expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
+        expect(page.locator('[data-xray-part="overview"]')).to_be_visible()
+        page.evaluate("() => document.fonts.ready")
+        assert urlsplit(page.url).path == path
+        nav = page.locator("[data-report-sections]:visible")
+        expect(nav.get_by_role("link")).to_have_count(3)
+        assert nav.get_by_role("link").evaluate_all(
+            "els => els.map(el => el.getAttribute('aria-label'))"
+        ) == [label for _, label in sections]
+        score = page.get_by_role("region", name="Overall score", exact=True)
+        overall = re.search(r"(?<![\w.])(-?\d+(?:\.\d+)?)\s*/100", score.inner_text())
+        if overall:
+            assert 0 <= float(overall[1]) <= 100, "Saved overall score is outside0–100"
+            expect(score.get_by_text(draft)).to_be_visible()
+        else:
+            expect(score).to_contain_text("Not scored yet")
+        analysis = page.locator('[data-xray-part="analysis"]')
+        rows = analysis.locator("li[data-pointer]")
+        expect(rows).to_have_count(27)
+        scored = 0
+        for index, title in enumerate(contract["pointer_titles"], start=1):
+            row = rows.nth(index - 1)
+            control = row.get_by_role("button", name=re.compile(rf"^{index}\. {re.escape(title)}:"))
+            expect(control).to_have_attribute("aria-expanded", "false")
+            value = re.search(
+                r", (-?\d+(?:\.\d+)?) out of 100\.", control.get_attribute("aria-label") or ""
+            )
+            if value:
+                assert 0 <= float(value[1]) <= 100, "Saved pointer score is outside0–100"
+                scored += 1
+            else:
+                expect(row.get_by_text("No score", exact=True)).to_be_visible()
+            control.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            if index == 1:
+                journey.snapshot("pointer-first")
+            journey.control_target(control, f"pointer-{index}")
+            journey.unclipped_text(control)
+        if scored:
+            expect(analysis.get_by_text(draft)).to_be_visible()
+        first = rows.first.get_by_role("button").first
+        first.focus()
+        page.keyboard.press("Enter")
+        expect(first).to_have_attribute("aria-expanded", "true")
+        details = page.locator("#" + str(first.get_attribute("aria-controls")))
+        expect(details).to_be_visible()
+        details.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("pointer-details")
+        journey.unclipped_text(details)
+        for index, (key, label) in enumerate(sections, start=1):
+            nav.get_by_role("link", name=label, exact=True).click()
+            part = page.locator(f'[data-report-mode-section="{key}"]:visible')
+            heading = part.get_by_role("heading", name=f"{index}. {label}", exact=True)
+            expect(heading).to_be_visible()
+            expect(part).not_to_contain_text("This part of the report couldn’t be shown")
+            expect(part.get_by_text("Illustrative example", exact=True)).to_have_count(0)
+            heading.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(key)
+            journey.unclipped_text(part)
+        assert not media_requests, "Reading the saved Report eagerly requested media"
+        assert journey.live_refreshes == 0, "Live source changed during saved Report smoke"
+        journey.observations[-1]["saved_report_15oct"] = {
+            "parts": len(sections),
+            "pointer_titles_checked": len(contract["pointer_titles"]),
+            "pointer_scores_displayed": scored,
+            "overall_score_displayed": overall is not None,
+            "ai_draft_label_required_when_scored": True,
+            "session_issued_or_persisted": False,
+            "media_requests": len(media_requests),
+            "api_payload_equality_or_scoring_quality_acceptance": False,
+        }

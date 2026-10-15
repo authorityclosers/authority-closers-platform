@@ -2,6 +2,16 @@ These opt-in Playwright journeys use an already running shared server. They do
 not start a server, create accounts, seed a database, call providers, deploy,
 send learner feedback or change sharing/billing. Run under the shared heavy slot.
 
+For the rebuilt 15 Oct Report, select `fixture_report_15oct_structure` on dev.
+Select `live_report_15oct_structure` for a saved-call smoke only after supplying
+`WB_MODE=live`, `WB_REPORT_PATH=/analysis/calls/<approved-id>` and
+`WB_STORAGE_STATE=<approved-existing-session-reference>`. It blocks mutations
+and media, checks three parts/all27 names, native disclosure, score range and
+AI-draft labels when saved scores exist. It never issues or saves a session.
+The older six-part Report journeys below retain historical acceptance; they
+are not the rebuilt Report's current smoke. Independent Document checks remain
+separate. No real-call/AI-label browser pass is claimed until that smoke runs.
+
 ```sh
 WB_BASE_URL=http://127.0.0.1:3026 \
 WB_SHOTS_DIR=/home/acdev/strikes/1694/shots/2026-10-11-workbench \
