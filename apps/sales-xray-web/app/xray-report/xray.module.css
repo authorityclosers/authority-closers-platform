@@ -1515,3 +1515,178 @@
   display: inline-flex;
   text-decoration: none;
 }
+
+/* ── Deal outcome editors ── */
+.srOnly {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+.chipNote {
+  background: color-mix(in srgb, var(--xr-green-mark) 16%, transparent);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+.editButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.valueEditor {
+  align-items: center;
+  background: var(--xr-card-2);
+  border: 1px solid var(--xr-blue-mark);
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--xr-blue-mark) 18%, transparent);
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+}
+.currency {
+  appearance: none;
+  background: var(--xr-card-3);
+  border: 0;
+  border-radius: 9px;
+  color: var(--xr-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 38px;
+  padding: 0 10px;
+}
+.amountBox {
+  display: grid;
+  min-width: 0;
+}
+.amount {
+  background: transparent;
+  border: 0;
+  color: var(--xr-text);
+  font: inherit;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-height: 22px;
+  outline: none;
+  padding: 2px 6px 0;
+  width: 150px;
+}
+.amount::placeholder {
+  color: var(--xr-muted);
+  font-weight: 500;
+}
+.amountPreview {
+  color: var(--xr-text-2);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px 2px;
+}
+.iconSave,
+.iconCancel {
+  align-items: center;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+.iconSave {
+  background: var(--xr-green-mark);
+  color: var(--xr-on-mark);
+}
+.iconSave:disabled {
+  opacity: 0.6;
+}
+.iconCancel {
+  background: transparent;
+  color: var(--xr-text-2);
+}
+.iconCancel:hover {
+  background: var(--xr-card-3);
+}
+.iconSave:focus-visible,
+.iconCancel:focus-visible,
+.currency:focus-visible,
+.quickDay:focus-visible,
+.askInput:focus-visible,
+.save:focus-visible,
+.cancel:focus-visible,
+.editButton:focus-visible {
+  outline: 2px solid var(--xr-blue-mark);
+  outline-offset: 2px;
+}
+.askPanel {
+  align-items: center;
+  background: var(--xr-card-2);
+  border: 1px solid var(--xr-line-2);
+  border-radius: 12px;
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.askLabel {
+  color: var(--xr-text);
+  font-size: 14px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+.askInput {
+  background: var(--xr-card);
+  border: 1px solid var(--xr-line-2);
+  border-radius: 9px;
+  color: var(--xr-text);
+  flex: 1 1 220px;
+  font: inherit;
+  font-size: 14px;
+  min-height: 38px;
+  padding: 0 12px;
+}
+.askInput[type="date"] {
+  flex: 0 1 180px;
+}
+.quickDays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.quickDay {
+  background: var(--xr-card);
+  border: 1px solid var(--xr-line-2);
+  border-radius: 999px;
+  color: var(--xr-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+.quickDay[aria-pressed="true"] {
+  background: var(--xr-green-soft);
+  border-color: var(--xr-green-mark);
+  color: var(--xr-green);
+  font-weight: 700;
+}
+.save:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+/* Jumping to a part keeps its head clear of the pinned title row. */
+.partHead {
+  scroll-margin-top: calc(var(--report-sticky-offset, 96px) + 16px);
+}
+.aiDraft {
+  border-color: var(--xr-purple-line);
+  border-style: solid;
+  color: var(--xr-purple);
+}

@@ -74,6 +74,8 @@ export type Pointer = {
     minutes: number | null;
     href: string | null;
   } | null;
+  /** What the analysis saw that bears on this pointer, without judging it. */
+  related: Line[];
 };
 
 export type Stat = { value: string; sub: string };
@@ -92,6 +94,8 @@ export type XrayView = {
   illustrative: boolean;
   /** A guest preview: the rest of the report waits behind a free account. */
   guest: boolean;
+  /** Scores came from the analysis: shown as an AI draft, not reviewed by Dipak. */
+  aiDraft: boolean;
   overview: {
     summary: Line | null;
     score: { value: number; label: string; line: string } | null;
@@ -295,6 +299,7 @@ export function unscoredPointers(): Pointer[] {
     evidence: [],
     howToImprove: [],
     training: null,
+    related: [],
   }));
 }
 

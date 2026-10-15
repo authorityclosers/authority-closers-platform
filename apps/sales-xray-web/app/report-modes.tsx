@@ -1377,8 +1377,11 @@ export function ReportModes({
           inline
           navigate={navigateToReport}
         >
-          {/* Coaching is one focused page: the header's call map waits here, hidden. */}
-          {view === "coaching" ? <div data-report-map-slot hidden /> : null}
+          {/* Coaching is one focused page, and the Report is only its three
+              parts (15 Oct doc): the header's call map waits here, hidden. */}
+          {view === "coaching" || (view === "story" && storyPanels.length) ? (
+            <div data-report-map-slot hidden />
+          ) : null}
           <div data-reading-panels hidden={view === "document"}>
             {renderReportPanels(
               view === "document" ? `${id}-source` : id,

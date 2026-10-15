@@ -3,6 +3,7 @@
 import {
   AudioLines,
   ChartPie,
+  Check,
   CircleCheck,
   CircleHelp,
   FileText,
@@ -11,6 +12,7 @@ import {
   Pencil,
   TrendingUp,
   Trophy,
+  X,
 } from "lucide-react";
 import { useId, useRef, useState, type ReactNode } from "react";
 
@@ -37,6 +39,15 @@ export const BAND_TONE = {
 
 export function Illustrative() {
   return <span className={styles.illustrative}>Illustrative example</span>;
+}
+
+/** Scores the analysis made, before Dipak reviews them (owner, 16 Oct). */
+export function AiDraft() {
+  return (
+    <span className={`${styles.illustrative} ${styles.aiDraft}`}>
+      AI draft &middot; not reviewed by Dipak
+    </span>
+  );
 }
 
 /** Words with their first source as a small play chip, when it has one. */
@@ -114,6 +125,42 @@ export function formatMoney(value: { amount: string; currency_code: string }) {
   }
 }
 
+const CURRENCIES = ["INR", "USD", "AED", "EUR", "GBP", "SGD", "AUD", "CAD"];
+
+const AMOUNT_HELP =
+  "That doesn’t look like an amount. Use numbers only, like 125000.";
+
+/** "12,50,000", "₹ 1250000" or "12.5" as the decimal string the API accepts. */
+export function plainAmount(input: string): string | null {
+  const digits = input.replace(/[\s,₹$€£]/g, "");
+  if (!digits) return null;
+  if (!/^\d{1,16}(?:\.\d{1,4})?$/.test(digits)) return null;
+  const [whole, fraction] = digits.split(".");
+  const trimmed = whole.replace(/^0+(?=\d)/, "");
+  return fraction ? `${trimmed}.${fraction}` : trimmed;
+}
+
+function isoDay(offset: number) {
+  const day = new Date();
+  day.setDate(day.getDate() + offset);
+  return [
+    day.getFullYear(),
+    String(day.getMonth() + 1).padStart(2, "0"),
+    String(day.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function shortDay(iso: string) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat("en-GB", {
+        day: "numeric",
+        month: "short",
+        timeZone: "UTC",
+      }).format(date)
+    : iso;
+}
+
 /**
  * Deal Outcome and Deal Value (image7): one tap records Won or Decision
  * Pending; Lost asks why, Follow-up asks the date. A person's record only:
@@ -122,7 +169,8 @@ export function formatMoney(value: { amount: string; currency_code: string }) {
 function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
   const { state, save } = useCallOutcome();
   const id = useId();
-  const [ask, setAsk] = useState<"lost" | "follow_up" | "value" | null>(null);
+  const [ask, setAsk] = useState<"lost" | "follow_up" | null>(null);
+  const [editingValue, setEditingValue] = useState(false);
   const [reason, setReason] = useState("");
   const [date, setDate] = useState("");
   const [amount, setAmount] = useState("");
@@ -140,6 +188,11 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
     (example
       ? (CHOICES.find(([, kind]) => kind === example)?.[0] ?? null)
       : null);
+  const typed = plainAmount(amount);
+  const preview =
+    typed !== null
+      ? formatMoney({ amount: typed, currency_code: currency })
+      : null;
 
   async function commit(
     next: Omit<HumanCallOutcome, "deal_value">,
@@ -152,10 +205,10 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
     } catch {
       setError(
         next.outcome === "lost" && !next.lost_reason?.trim()
-          ? OUTCOME_RECORD.needReason
+          ? "Add a short reason, then save."
           : next.outcome === "follow_up" && !next.follow_up_on
-            ? OUTCOME_RECORD.needDate
-            : OUTCOME_RECORD.checkValues,
+            ? "Pick the follow-up date, then save."
+            : AMOUNT_HELP,
       );
       return;
     }
@@ -165,6 +218,7 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
     try {
       await save(parsed);
       setAsk(null);
+      setEditingValue(false);
     } catch {
       setError(OUTCOME_RECORD.saveNotConfirmed);
     } finally {
@@ -176,23 +230,33 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
   function choose(kind: CallOutcomeKind) {
     if (!canEdit || saving) return;
     setError(null);
+    setEditingValue(false);
     if (kind === "lost") {
       setReason(record?.lost_reason ?? "");
-      setAsk("lost");
+      setAsk(ask === "lost" ? null : "lost");
       return;
     }
     if (kind === "follow_up") {
       setDate(record?.follow_up_on ?? "");
-      setAsk("follow_up");
+      setAsk(ask === "follow_up" ? null : "follow_up");
       return;
     }
     setAsk(null);
     void commit({ outcome: kind, lost_reason: null, follow_up_on: null });
   }
 
+  function startValue() {
+    setAsk(null);
+    setError(null);
+    setAmount(record?.deal_value?.amount ?? "");
+    setCurrency(record?.deal_value?.currency_code ?? "INR");
+    setEditingValue(true);
+  }
+
   function saveValue() {
-    if (!record) {
-      setError("Set the outcome first, then add the deal value.");
+    if (!record) return;
+    if (amount.trim() && typed === null) {
+      setError(AMOUNT_HELP);
       return;
     }
     void commit(
@@ -201,20 +265,24 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
         lost_reason: record.lost_reason,
         follow_up_on: record.follow_up_on,
       },
-      amount.trim()
-        ? {
-            amount: amount.trim(),
-            currency_code: currency.trim().toUpperCase(),
-          }
-        : null,
+      typed !== null ? { amount: typed, currency_code: currency } : null,
     );
   }
+
+  const cancel = () => {
+    setAsk(null);
+    setEditingValue(false);
+    setError(null);
+  };
 
   return (
     <section
       className={`${styles.card} ${styles.dealBar}`}
       aria-label="Deal outcome"
       aria-busy={saving}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && (ask || editingValue)) cancel();
+      }}
     >
       <span className={styles.square}>
         <TargetArrow />
@@ -234,6 +302,11 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
               type="button"
               className={styles.chip}
               aria-pressed={current === kind}
+              aria-expanded={
+                kind === "lost" || kind === "follow_up"
+                  ? ask === kind
+                  : undefined
+              }
               disabled={!canEdit || saving}
               onClick={() => choose(kind)}
             >
@@ -241,6 +314,13 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
                 <CircleCheck className={styles.chipCheck} aria-hidden="true" />
               ) : null}
               {label}
+              {current === kind &&
+              kind === "follow_up" &&
+              record?.follow_up_on ? (
+                <span className={styles.chipNote}>
+                  {shortDay(record.follow_up_on)}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -250,33 +330,101 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
         <span className={styles.square}>
           <MoneyBag />
         </span>
-        <div className={styles.dealValueText}>
-          <span>Deal Value</span>
-          <strong>
-            {record?.deal_value
-              ? formatMoney(record.deal_value)
-              : OUTCOME_RECORD.notSet}
-          </strong>
-        </div>
-        {canEdit ? (
-          <button
-            type="button"
-            className={styles.editButton}
-            aria-label="Edit deal value"
-            onClick={() => {
-              setAmount(record?.deal_value?.amount ?? "");
-              setCurrency(record?.deal_value?.currency_code ?? "INR");
-              setError(null);
-              setAsk(ask === "value" ? null : "value");
+        {editingValue ? (
+          <form
+            className={styles.valueEditor}
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveValue();
             }}
           >
-            <Pencil size={18} aria-hidden="true" />
-          </button>
-        ) : null}
+            <label className={styles.srOnly} htmlFor={`${id}-currency`}>
+              {OUTCOME_RECORD.currency}
+            </label>
+            <select
+              id={`${id}-currency`}
+              className={styles.currency}
+              value={currency}
+              disabled={saving}
+              onChange={(event) => setCurrency(event.target.value)}
+            >
+              {CURRENCIES.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+            <label className={styles.srOnly} htmlFor={`${id}-amount`}>
+              Deal value amount
+            </label>
+            <span className={styles.amountBox}>
+              <input
+                id={`${id}-amount`}
+                className={styles.amount}
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="e.g. 12,50,000"
+                value={amount}
+                disabled={saving}
+                onChange={(event) => setAmount(event.target.value)}
+                autoFocus
+              />
+              <span className={styles.amountPreview} aria-live="polite">
+                {preview ?? " "}
+              </span>
+            </span>
+            <button
+              type="submit"
+              className={styles.iconSave}
+              disabled={saving}
+              aria-label={saving ? OUTCOME_RECORD.saving : "Save deal value"}
+              title="Save"
+            >
+              <Check size={18} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={styles.iconCancel}
+              onClick={cancel}
+              aria-label="Cancel"
+              title="Cancel"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </form>
+        ) : (
+          <>
+            <div className={styles.dealValueText}>
+              <span>Deal Value</span>
+              <strong>
+                {record?.deal_value
+                  ? formatMoney(record.deal_value)
+                  : OUTCOME_RECORD.notSet}
+              </strong>
+            </div>
+            {canEdit ? (
+              <button
+                type="button"
+                className={styles.editButton}
+                aria-label="Edit deal value"
+                title={record ? "Edit deal value" : "Pick the outcome first"}
+                disabled={!record || saving}
+                onClick={startValue}
+              >
+                <Pencil size={18} aria-hidden="true" />
+              </button>
+            ) : null}
+          </>
+        )}
       </div>
+      {canEdit && !record && !example && !ask ? (
+        <p className={styles.dealNote}>
+          Pick the outcome first, then add the deal value.
+        </p>
+      ) : null}
       {ask === "lost" ? (
         <form
-          className={styles.dealForm}
+          className={styles.askPanel}
           onSubmit={(event) => {
             event.preventDefault();
             void commit({
@@ -286,31 +434,33 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
             });
           }}
         >
-          <label htmlFor={`${id}-reason`}>
+          <label htmlFor={`${id}-reason`} className={styles.askLabel}>
             {OUTCOME_RECORD.lostReason}
-            <input
-              id={`${id}-reason`}
-              maxLength={1000}
-              value={reason}
-              disabled={saving}
-              onChange={(event) => setReason(event.target.value)}
-              autoFocus
-            />
           </label>
-          <button type="submit" className={styles.save} disabled={saving}>
-            {saving ? OUTCOME_RECORD.saving : OUTCOME_RECORD.save}
-          </button>
+          <input
+            id={`${id}-reason`}
+            className={styles.askInput}
+            maxLength={1000}
+            placeholder="e.g. Chose a cheaper option"
+            value={reason}
+            disabled={saving}
+            onChange={(event) => setReason(event.target.value)}
+            autoFocus
+          />
           <button
-            type="button"
-            className={styles.cancel}
-            onClick={() => setAsk(null)}
+            type="submit"
+            className={styles.save}
+            disabled={saving || !reason.trim()}
           >
+            {saving ? OUTCOME_RECORD.saving : "Mark as Lost"}
+          </button>
+          <button type="button" className={styles.cancel} onClick={cancel}>
             Cancel
           </button>
         </form>
       ) : ask === "follow_up" ? (
         <form
-          className={styles.dealForm}
+          className={styles.askPanel}
           onSubmit={(event) => {
             event.preventDefault();
             void commit({
@@ -320,67 +470,49 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
             });
           }}
         >
-          <label htmlFor={`${id}-date`}>
-            {OUTCOME_RECORD.followUpDate}
-            <input
-              id={`${id}-date`}
-              type="date"
-              value={date}
-              disabled={saving}
-              onChange={(event) => setDate(event.target.value)}
-              autoFocus
-            />
+          <label htmlFor={`${id}-date`} className={styles.askLabel}>
+            When is the follow-up?
           </label>
-          <button type="submit" className={styles.save} disabled={saving}>
-            {saving ? OUTCOME_RECORD.saving : OUTCOME_RECORD.save}
-          </button>
-          <button
-            type="button"
-            className={styles.cancel}
-            onClick={() => setAsk(null)}
+          <div
+            className={styles.quickDays}
+            role="group"
+            aria-label="Quick dates"
           >
-            Cancel
-          </button>
-        </form>
-      ) : ask === "value" ? (
-        <form
-          className={styles.dealForm}
-          onSubmit={(event) => {
-            event.preventDefault();
-            saveValue();
-          }}
-        >
-          <label htmlFor={`${id}-amount`}>
-            {OUTCOME_RECORD.amount}
-            <input
-              id={`${id}-amount`}
-              inputMode="decimal"
-              value={amount}
-              disabled={saving}
-              onChange={(event) => setAmount(event.target.value)}
-              autoFocus
-            />
-          </label>
-          <label htmlFor={`${id}-currency`}>
-            {OUTCOME_RECORD.currency}
-            <input
-              id={`${id}-currency`}
-              maxLength={3}
-              size={4}
-              placeholder={OUTCOME_RECORD.currencyExample}
-              value={currency}
-              disabled={saving}
-              onChange={(event) => setCurrency(event.target.value)}
-            />
-          </label>
-          <button type="submit" className={styles.save} disabled={saving}>
-            {saving ? OUTCOME_RECORD.saving : OUTCOME_RECORD.save}
-          </button>
+            {(
+              [
+                ["Tomorrow", 1],
+                ["In 3 days", 3],
+                ["Next week", 7],
+              ] as const
+            ).map(([label, offset]) => (
+              <button
+                key={label}
+                type="button"
+                className={styles.quickDay}
+                aria-pressed={date === isoDay(offset)}
+                disabled={saving}
+                onClick={() => setDate(isoDay(offset))}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <input
+            id={`${id}-date`}
+            className={styles.askInput}
+            type="date"
+            value={date}
+            disabled={saving}
+            onChange={(event) => setDate(event.target.value)}
+          />
           <button
-            type="button"
-            className={styles.cancel}
-            onClick={() => setAsk(null)}
+            type="submit"
+            className={styles.save}
+            disabled={saving || !date}
           >
+            {saving ? OUTCOME_RECORD.saving : "Set follow-up"}
+          </button>
+          <button type="button" className={styles.cancel} onClick={cancel}>
             Cancel
           </button>
         </form>
@@ -437,7 +569,12 @@ export function OverviewScore({
           className={`${styles.score} ${band ? BAND_TONE[band] : styles.neutral}`}
         >
           <span className={styles.eyebrow}>
-            Overall Score {view.illustrative ? <Illustrative /> : null}
+            Overall Score{" "}
+            {view.illustrative ? (
+              <Illustrative />
+            ) : view.aiDraft && score ? (
+              <AiDraft />
+            ) : null}
           </span>
           {score ? (
             <>

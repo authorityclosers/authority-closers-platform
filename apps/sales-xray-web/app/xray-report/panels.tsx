@@ -15,6 +15,7 @@ import {
   type XrayView,
 } from "./model";
 import { OverviewScore } from "./overview";
+import { readStructure } from "./structure";
 import { FinalOutcome } from "./outcome";
 import { CallAnalysis, PointerProgress } from "./pointers";
 import styles from "./xray.module.css";
@@ -69,17 +70,25 @@ export function useXrayView(
       pair && talkTotal > 0
         ? Math.round((you.talk_ms / talkTotal) * 100)
         : null;
+    const api = readStructure(
+      data.report?.structure,
+      transcript,
+      seller,
+      prospect,
+    );
     return {
       illustrative: false,
       guest: Boolean(data.report?.preview),
+      aiDraft: api?.aiDraft ?? false,
       overview: {
         summary:
           story?.picture.summary ??
+          api?.overview.summary ??
           (data.report?.summary
             ? { text: data.report.summary, sources: [] }
             : null),
-        score: null,
-        stats: {
+        score: api?.overview.score ?? null,
+        stats: api?.overview.stats ?? {
           duration:
             durationMs > 0
               ? { value: clock(durationMs), sub: spelled(durationMs) }
@@ -105,10 +114,11 @@ export function useXrayView(
                 }
               : null,
         },
-        strength: story?.picture.strongest ?? null,
-        improvement: story?.picture.concern ?? null,
+        strength: api?.overview.strength ?? story?.picture.strongest ?? null,
+        improvement:
+          api?.overview.improvement ?? story?.picture.concern ?? null,
       },
-      pointers: unscoredPointers(),
+      pointers: api?.pointers ?? unscoredPointers(),
       outcome: story ? outcomeFromStory(story) : EMPTY_OUTCOME,
     };
   }, [illustration, model, transcript, seller, prospect, data.report]);
@@ -153,6 +163,7 @@ function AnalysisPart(props: PartProps) {
     <CallAnalysis
       pointers={view.pointers}
       illustrative={view.illustrative}
+      aiDraft={view.aiDraft}
       onSelect={props.onSelect}
     />
   );

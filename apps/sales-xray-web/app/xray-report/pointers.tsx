@@ -31,7 +31,7 @@ import {
   type PointerStatus,
   type UnscoredStatus,
 } from "./model";
-import { Illustrative } from "./overview";
+import { AiDraft, Illustrative, LineWithClip } from "./overview";
 import styles from "./xray.module.css";
 
 const STATUS: Record<
@@ -151,7 +151,7 @@ function StatusChip({ status }: { status: PointerStatus | null }) {
     return (
       <span className={`${styles.status} ${styles.neutral}`}>
         <Clock3 aria-hidden="true" />
-        Not evaluated yet
+        Not scored yet
       </span>
     );
   const item = STATUS[status];
@@ -186,15 +186,36 @@ function Detail({
           </span>
           <div className={styles.blockText}>
             <h4 className={styles.blockTitle}>
-              {item ? item.label : "Not evaluated yet"}
+              {item ? item.label : "Not scored yet"}
             </h4>
             <p className={styles.body}>
               {item
                 ? `${item.text} No score is given for this pointer.`
-                : "This pointer gets its status, score and feedback when the analysis evaluates it."}
+                : "This call was analysed before pointer scores existed. Its next analysis scores this pointer."}
             </p>
           </div>
         </div>
+        {pointer.related.length ? (
+          <div className={`${styles.card} ${styles.block}`}>
+            <span className={`${styles.disc} ${styles.purple}`}>
+              <BookOpen />
+            </span>
+            <div className={styles.blockText}>
+              <h4 className={styles.blockTitle}>What the analysis saw</h4>
+              <ul className={styles.bullets}>
+                {pointer.related.map((line, index) => (
+                  <li key={`${index}-${line.text}`}>
+                    <LineWithClip
+                      line={line}
+                      title={pointer.name}
+                      onSelect={onSelect}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -342,10 +363,12 @@ function Detail({
 export function CallAnalysis({
   pointers,
   illustrative,
+  aiDraft = false,
   onSelect,
 }: {
   pointers: Pointer[];
   illustrative: boolean;
+  aiDraft?: boolean;
   onSelect?: Select;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -404,8 +427,8 @@ export function CallAnalysis({
         </div>
       ) : (
         <p className={`${styles.card} ${styles.empty}`}>
-          These pointers get a status, a score and feedback when the analysis
-          evaluates this call. Nothing is scored yet.
+          This call was analysed before pointer scores existed, so none of the
+          27 is scored yet. Open any pointer to see what the analysis saw.
         </p>
       )}
       <div className={styles.filters} role="group" aria-label="Show pointers">
@@ -421,7 +444,7 @@ export function CallAnalysis({
             <span>{counts[value]}</span>
           </button>
         ))}
-        {illustrative ? <Illustrative /> : null}
+        {illustrative ? <Illustrative /> : aiDraft ? <AiDraft /> : null}
       </div>
       <div className={`${styles.card} ${styles.table}`}>
         <div className={styles.tableHead} aria-hidden="true">

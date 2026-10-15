@@ -288,6 +288,7 @@ const EXAMPLE_POINTERS: Pointer[] = POINTERS.map((pointer, index) => {
     status,
     score,
     ...(FEEDBACK[pointer.id] ?? EMPTY),
+    related: [],
   };
 });
 
@@ -518,6 +519,7 @@ export function exampleView(kind: OutcomeKind = "follow_up"): XrayView {
   return {
     illustrative: true,
     guest: false,
+    aiDraft: false,
     overview: OVERVIEW,
     pointers: EXAMPLE_POINTERS,
     outcome: OUTCOMES[kind],
