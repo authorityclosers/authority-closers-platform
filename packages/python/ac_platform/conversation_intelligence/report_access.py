@@ -168,7 +168,9 @@ def project_report(report: ReportDraft, *, access: ReportAccess) -> dict[str, An
     if account:
         from ac_platform.conversation_intelligence.dipak_report import project_pillars
         from ac_platform.conversation_intelligence.report_story import report_story
+        from ac_platform.conversation_intelligence.report_structure import project_report_structure
 
+        fields["structure"] = project_report_structure(report)
         story = report_story(report)
         if story is not None:
             fields["story"] = story
