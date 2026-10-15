@@ -1,5 +1,257 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+13 October, 05:43 UTC — prepared only Worked/Didn't disclosure4 using
+B99a79943's exact existing authored-card boundary. Repeated own refs cover
+0/1/2/3/4, first-two/all/fewer and independent cards, pointer/Enter/Space,
+original displayed bounds/title, fold focus and32–44px. All six finding
+paragraphs must remain byte-equal at the DOM text level; no canonical payload
+changes, added API/media/write. Mixed order/object identity stay unit-only.
+Ruff/format/API import/diff PASS; opt-in4skip/164deselected. Browser next
+through ordinary shared slot; earlier Report/Document/Word matrices retained.
+
+13 October, 05:26 UTC — interrupted lesson resume **8/8 PASS**,130.89s/
+launcher0 at unchanged `29364cc5`. Moment-switch and secondary-fold cases
+save exactly the native paused window offset (849–1124ms), before the first
+device checkpoint. Reload fetches no audio; Enter resumes the same source at
+the exact saved position with keyboard focus and32–44px targets. Original
+quote/lesson/UI access/transcript/mission/query remain unchanged, including
+the secondary15-second preview label. Runtime/server/font/overflow/refresh/
+unexpected-media/API writes0. All16 PNGs inspected/readable.
+
+Receipt/JUnit/log/screens: `shots/2026-10-13-lesson-interruption-0524Z/`.
+Native media is the local70s silent response; call source returns intercepted404.
+Only isolated browser device position changes; no canonical progress, actual
+recording/provider/authenticated acceptance. Own finite job exited. Previous
+audio4, ended4 and Hear4 passes retained; B's new Worked/Didn't disclosure is next.
+
+13 October, 05:19 UTC — prepared only interrupted-lesson resume8 from
+the completed D135be632/b7623097 handoff. Reuse its70-second local silent
+PCM response and intercepted404 call source. Check both moment-switch and
+secondary-fold interruptions before the first device checkpoint, exact native
+paused offset/window, reload without eager audio, exact source/timestamp Enter
+resume, focus/32–44px and original quote/lesson/access/transcript/mission/query.
+Only isolated device position changes; no canonical progress/provider/API write.
+Ruff/format/API import/diff PASS; opt-in8skip/156deselected. Browser pending
+05:24UTC normal interval; earlier audio4/ended4/Hear4 remain retained.
+
+13 October, 05:08 UTC — Hear Dipak **4/4 final PASS**: original three
+accepted pairs at `313c3f5e` plus affected desktop/dark retake1PASS12.59s/
+launcher0, source `9251ead4` -> `f20b606f`, refresh0. Pointer/Enter focus the
+stationary reachable playback control, next Tab stays inside, and observed
+404 preserves moved focus. The strict dark retake also requires loading
+through both captures; original other-three case durations/captures remain
+below the15-second deadline. Source/quote/lesson/access/transcript/mission/
+query and40–44px targets pass; final runtime/server/font/overflow/refresh/
+unexpected-media/API writes0. No real audio/provider/authenticated acceptance.
+
+All12 final capture contents inspected;16 original/interruption/retake PNGs
+accounted, one byte-equal. Original limited dark raw PASS and setup refresh
+failure remain unchanged below. Final dark receipt/JUnit/log/three PNGs:
+`shots/2026-10-13-hear-lesson-dark-settle/`. Own jobs exited.
+
+13 October, 05:03 UTC — strict desktop/dark retake at `3952d157` stops
+before any interaction: network-idle timeout with two Fast Refresh events,
+29.12s/launcher1. Receipt/JUnit/log/failure PNG retained in
+`shots/2026-10-13-hear-lesson-dark-loading/`; PNG inspected. No loading/error
+assertion ran, so it supplies no product verdict. Keep the original three
+accepted pairs and retry only desktop/dark after the new dev source settles.
+
+13 October, 04:55–04:56 UTC — first Hear Dipak run reports4 pytest PASS,
+46.20s/launcher0 at unchanged `313c3f5e`. All12 PNGs inspected. Desktop/dark
+Enter shows timeout/retry before the controlled-error step, so that pair's
+404-focus acceptance is **limited pending retake** despite the raw PASS.
+The other three pairs show loading in both captures and remain retained.
+The harness now waits for stationary reachable playback rather than an exact
+card centre, and requires loading/no-error through capture before returning404.
+Only desktop/dark will rerun; original raw result/images retained in
+`shots/2026-10-13-hear-lesson-0454Z/`. No product defect inferred.
+
+13 October, 04:45 UTC — prepared only the four narration-shortcut cases
+for D's completed `a97c3d38` return. Pointer and Enter must focus the existing
+recommended playback control at its settled centre, keep next Tab inside,
+and preserve moved focus after an observed intercepted404. Original quote,
+lesson/access/transcript/mission/query and40–44px playback targets are guarded.
+No media source reaches a provider/server. Ruff/format/API import/diff PASS;
+opt-in4skip/152deselected. Browser pending the04:54UTC normal interval;
+previous audio4 and native-ended4 final passes remain retained.
+
+13 October, 04:38 UTC — native recording-end **4/4 final PASS** across
+the retained three cases at `758d27fb` and the affected phone/dark retake
+at `135be632` (14.38s/launcher0). Native silent WAV ends at106.072s inside
+the saved excerpt; Enter replays the same source from103.072s, then pointer
+Pause stops it. Original quote/time/call link/mission/query and32–44px targets
+pass. Final runtime/server/font/overflow/refresh/media surprises/API writes0.
+This is local silent native playback only; no real recording/provider/hosted read.
+
+Original04:35 run retained **3 PASS,1 live-refresh FAIL**,40.57s/launcher1:
+phone/dark reaches all playback/source checks but records four Fast Refresh
+events. The strict guard was kept; only that pair reran. Eight final capture
+contents inspected/accounted; eleven original/retake PNGs total include three
+byte-equal images. Receipts/JUnit/logs in strike
+`shots/2026-10-13-moment-ended-0434Z/` and `moment-ended-dark-settle/`.
+Own jobs exited; prior controlled audio4PASS remains retained.
+
+13 October, 04:25 UTC — prepared only four native recording-end cases for
+D's completed `688a8670` return. Reuse its in-memory silent PCM/range source
+at the existing Design review moment; check actual native end inside the
+saved excerpt, Play recovery, Enter replay at the exact saved timestamp,
+pointer Pause, original quote/time/call link/mission/query and32–44px targets.
+All source requests stay browser-local; no real recording/provider/write.
+Ruff/format/API import/whitespace PASS; opt-in4skip/148deselected. Browser
+verdict waits the ordinary04:34UTC interval; prior audio4PASS is retained.
+
+13 October, 04:18 UTC — audio continuation **4/4 PASS**,31.12 seconds/
+launcher0 at unchanged `331f76a1` (D repair `688a8670`). Both players keep
+keyboard focus on same-source404 retry, ignore Enter during loading, and
+leave deliberately moved focus unchanged at the15-second timeout. Original
+quote/time/lesson/access/transcript/mission/query and32–44px reachable targets
+pass. Runtime/server/font/overflow/refresh/unexpected-media/API mutation0.
+Three user activations per player are checked; actual intercepted request
+count9 per pair remains in receipts. No request reaches a media provider.
+
+All16 final PNGs inspected/readable in strike
+`shots/2026-10-13-audio-focus-font-guard/`; earlier11 capture contents are
+also inspected, with five equal to previously inspected bytes. Original
+focus failure and all three harness failures remain unchanged below.
+This closes only controlled-source startup/focus. Real playback, preview,
+late promises, switching/unmount and authenticated hosted acceptance remain
+outside this browser criterion. Static/import checks pass; own jobs exited.
+
+13 October, 04:15 UTC — `95508b3e` first pair passes both players' source,
+deadline, keyboard focus, inert activation and moved-focus assertions, but
+the final generic `/media/` guard reports five unspecified unexpected reads:
+**1 guard FAIL,3 NOT RUN**,16.28 seconds/launcher1. Original diagnostics did
+not retain their types/paths. The guard now records safe type/local-path
+details and permits only same-origin Next static font assets, whose directory
+also contains `/media/`. Audio-source and external-media interception remains
+strict; no final PASS inferred. Original receipts/five PNGs retained in
+`audio-focus-playback-control/`.
+
+13 October, 04:14 UTC — `7d5aca8c` continuation retains the moment checks
+but the narration loading selector also finds two disabled seek controls:
+**1 test-selector FAIL,3 NOT RUN**,14.17 seconds/launcher1. Scope the loading
+guard to the card's original first playback control. The unavailable state,
+deadline, keyboard focus and exact source-request guards stay intact. Original
+receipts/three PNGs retained in `audio-focus-loading-selector/`; no product defect.
+
+13 October, 04:12 UTC — continuation at `88a2a99a` (including D's
+`688a8670`) reaches narration after the moment deadline/retry, keyboard
+focus, inert loading and moved-focus assertions pass. It then stops with
+**1 test-selector FAIL,3 NOT RUN**,16.99 seconds/launcher1: narration changes
+its accessible label while loading, so the original Play-labelled locator
+no longer resolves. The corrected loading selector still requires exactly
+one unavailable control and the same14999/15000ms deadline. This is a harness
+repair; no new product defect. Original JSON/JUnit/log/three PNGs retained in
+strike `shots/2026-10-13-audio-focus-continuation/`.
+
+13 October, 04:07 UTC — prepared the existing four-case audio continuation
+for the D-owned focus repair. It retains the original keyboard-retry guard,
+adds inert loading activation and deliberately moved-focus preservation for
+both players, and captures the recovered keyboard focus. All sources remain
+intercepted; no browser verdict yet. Corrected the previously unreachable
+final source-time assertion to expect the honest retry label after failure.
+Original03:57 failure/remaining NOT RUN are retained below.
+
+13 October, 03:57 UTC — first new audio-startup pair **1 FAIL,3 NOT RUN**
+(-x), source `17052c4f`,32.32 seconds/launcher1. Moment loading remains
+disabled at14999ms and becomes enabled retry at15000ms, with audio removed,
+unchanged quote/time/source and70.86x32px reachable target. Enter retry gets
+the same intercepted source/404 and becomes enabled, but keyboard focus is
+lost (`test_workbench_journeys.py:2140`). Narration was not reached.
+Refresh/runtime/server/font/overflow/API mutations0. Original receipt/log
+and two PNGs retained in strike `shots/2026-10-13-audio-startup-0356Z/`;
+failure image inspected. Exact scoped focus repair sent D/coordinator.
+The guard now also records safe active-element tag/focus/enabled diagnostics.
+No real media/provider/authenticated or production product acceptance follows.
+
+Independent03:53 original-Host foundation health4/4 HTTP200: staging and
+production core/web all serve `2df8a931`. Existing populated hosted context
+remains unavailable; no unsuitable-session matrix repeated. Health receipt:
+strike `shots/2026-10-13-v042-health/health.json`.
+
+13 October, 03:50 UTC — added only the four controlled audio-startup cases
+for D's `166c9940`. Explicit `data=review&view=me` selects the existing
+Design review moment/narration sources, which stay
+intercepted while the browser clock checks the15-second deadline, then
+keyboard retry receives an intercepted404 from the same path. The guard
+retains original quote/times/lesson/access/transcript/mission/query and
+32–44px retry targets. Ruff/format/API import/whitespace checks pass;
+no-server opt-in invocation skips4 with144 deselected. Browser verdict is
+pending builder's completed handoff and the ordinary interval. This does
+not test real playback, late play promises, preview limits or hosted access.
+
+13 October, 03:40 UTC — secondary-lesson phone repair **4/4 PASS**,
+38.19 seconds/launcher0, unchanged `297441de` including D's `166c9940`
+CSS repair. Outer, recommended and nested takeaway summaries each measure44px
+with reachable centres in both fictional personal/rep views and light/dark.
+Source text/access/preview/mission/query and native pointer/Enter/nested
+independence/focus/next Tab remain intact. Runtime/server/font/overflow/
+refresh/media/API mutations0. No playback attempted.
+
+All12 new phone captures inspected: strike
+`shots/2026-10-13-secondary-lessons-phone-repair/`.
+Combined with the retained desktop4 pass/12 inspected step images at `df87dbc3`,
+this criterion is **8/8 final PASS** across the two explicit sources.
+Original40px target failure and initial caller setup error remain below.
+Audio startup/retry source sharing the builder commit is outside this readback;
+real playback/provider and authenticated hosted acceptance remain separate.
+
+13 October, 03:34–03:35 UTC — new secondary-lesson disclosure:
+**4 desktop PASS,1 phone FAIL,3 phone NOT RUN** (-x), unchanged `df87dbc3`,
+41.49 seconds/launcher1. Personal390/light nested “Read key takeaways”
+measures332x40px, centre reachable, below the required44px. Outer “More
+lessons”358x44px passes. Native interactions, original recommendation/
+secondary title/reason/takeaways/transcript/access/preview/mission/query pass;
+runtime/server/font/overflow/refresh/media/API mutations0. Exact owned CSS
+repair request sent D/coordinator; next only affected phone cases.
+
+All16 retained PNG contents inspected, no other defect found. Receipts/JUnit/
+log/PNGs: strike `shots/2026-10-13-secondary-lessons-deps/`, with the exact
+failure measurement in `secondary-lessons-personal-390-light.json`.
+Initial `shots/2026-10-13-secondary-lessons-0333Z/` preserves caller setup
+failure: omitted documented browser library path, no page opened; corrected
+caller reused existing local dependencies, no product/environment change.
+Recommended takeaway target is now explicitly included in the same guard.
+Fictional source evidence only; playback/request-reveal/fold-pause and hosted
+authenticated criteria remain separate.
+
+13 October, 03:18–03:19 UTC — lesson/mission shortcuts16 + call/retained
+Report moments12 **28/28 PASS**, unchanged `23d64fc9`,61.21/49.35 seconds,
+both launchers0. Four existing fictional Coaching surfaces preserve original
+lesson/mission, query, folded lesson and native pointer/Enter/next-Tab focus.
+Call/Report links preserve original quotes/times/mission and focus labelled
+moments; actual heading hit tests clear sticky navigation. Controls32–44px,
+runtime/server/font/overflow/refresh/media/API mutations0.
+
+All72 step capture contents inspected:64 unique plus8 byte-identical call
+shortcut frames equal inspected lesson frames. No new defect found.
+Receipts/JUnit/log/PNGs: strike `shots/2026-10-13-focus-lesson-0318Z/`
+and `shots/2026-10-13-call-focus-moments-0318Z/`.
+Fictional UI only; canonical Report bootstrap, real playback/provider and
+authenticated hosted acceptance remain separate. New secondary-lesson fold
+is a distinct pending criterion, with no repeat of these completed checks.
+
+13 October, 02:55–03:02 UTC — saved-finding4 + skill-disclosure4
+**8/8 PASS**, source `b81e3ef1` unchanged,27.35/37.00 seconds, launchers0.
+Finding preserves explicit source6/4/2 counts, labels/order/IDs/Report routes,
+excludes pending/not-covered, intersects names, keeps finding on Clear and resets
+through All calls/progress with section→search focus. Skill disclosure preserves
+B's browser-only original0/4/5/6 refs, duplicates/order, independent rows,
+fold focus, original pointer/Enter/Space time selections and eight Coaching links.
+32–44px targets pass; runtime/server/visual/refresh/media/API mutation errors0.
+
+All28 final step captures inspected. Skill12 + finding phone8 receipts:
+`shots/2026-10-13-skill-clips-0255Z/`, `shots/2026-10-13-call-findings-0255Z/`.
+Desktop8 final: `shots/2026-10-13-call-findings-desktop-rows/`, source `af12bef2`,
+2PASS7.00s/launcher0. Earlier centred2PASS9.01s at `0b0f8747` retained in
+`shots/2026-10-13-call-findings-desktop-framing/`. Six latest desktop images
+equal inspected centred images; original no-fix frames also equal final bytes
+and were already complete. Only Clear/progress framing changed; no product
+repair or defect claim. Explicit full-viewport no-fix guard now passes.
+Fictional boundary lists alter in-memory authored refs only, no canonical fixture
+file or data write. Hosted/real audio/provider acceptance remains separate.
+New lesson/mission anchor criterion is pending its normal-interval run.
+
 13 October, 02:33–02:39 UTC — person-call search4 + distinct Team dates4
 + summary clips4 **12/12 final PASS** across bounded runs. Person/date cases
 pass at unchanged `298f412b`. Summary desktop/light passes at `e61dbe68`,

@@ -134,6 +134,20 @@ it("uses a source-checked server bootstrap without another read", async () => {
   await render(access, true);
   expect(container.textContent).toContain("Fictional API focus");
   expect(fetcher).not.toHaveBeenCalled();
+  const moments = container.querySelector<HTMLElement>("#report-coaching-why")!;
+  const momentShortcut = container.querySelector<HTMLAnchorElement>(
+    '#report-coaching-focus a[href="#report-coaching-why"]',
+  )!;
+  expect(momentShortcut.textContent?.trim()).toBe("See the moments");
+  expect(momentShortcut.getAttribute("aria-controls")).toBe(moments.id);
+  expect(moments.tabIndex).toBe(-1);
+  expect(moments.getAttribute("aria-labelledby")).toBe(`${moments.id}-heading`);
+  expect(
+    [...moments.querySelectorAll("blockquote")].map(
+      (quote) => quote.textContent,
+    ),
+  ).toEqual(fictionalCallCoaching().evidence.map((moment) => moment.quote));
+  expect(container.querySelector("audio")).toBeNull();
   const lesson = container.querySelector<HTMLElement>(
     "#report-coaching-better",
   )!;

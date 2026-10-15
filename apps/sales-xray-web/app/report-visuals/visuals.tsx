@@ -218,7 +218,18 @@ export function PlayChip({
           onClick={() => onSelect(source, title)}
         >
           <ClipPlayIcon playing={playing} size={9} />
-          {label ? `${at} · ${label}` : at}
+          {label === COMMON.play ? (
+            <span>
+              {at} ·{" "}
+              <span className={styles.playAction}>
+                {playing ? COMMON.pause : COMMON.play}
+              </span>
+            </span>
+          ) : label ? (
+            `${at} · ${label}`
+          ) : (
+            at
+          )}
         </button>
       )}
     </ClipPlayState>

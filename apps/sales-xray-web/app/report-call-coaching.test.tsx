@@ -26,6 +26,18 @@ it("opens legacy sourced findings without an overview or assessed skill", () => 
   const html = renderToStaticMarkup(<ReportCallCoaching data={{ report }} />);
   expect(html).toContain(report.improvements[0].explanation);
   expect(html).toContain("Your next-call mission");
+  const host = document.createElement("div");
+  host.innerHTML = html;
+  const moments = host.querySelector<HTMLElement>("#report-coaching-why")!;
+  const shortcut = host.querySelector<HTMLAnchorElement>(
+    '#report-coaching-focus a[href="#report-coaching-why"]',
+  )!;
+  expect(shortcut.textContent?.trim()).toBe("See the moments");
+  expect(shortcut.getAttribute("aria-controls")).toBe(moments.id);
+  expect(moments.tabIndex).toBe(-1);
+  expect(moments.textContent).toContain(
+    report.improvements[0].evidence[0].quote,
+  );
   expect(html).not.toContain("Not Enough Evidence");
 });
 
@@ -123,6 +135,7 @@ it("offers explicit skill choices when the report has no supported focus", () =>
   expect(html).toContain("Pick a skill below to work on");
   expect(html.match(/href="\/coaching\?focus=/g)).toHaveLength(8);
   expect(html).not.toContain("Your next-call mission");
+  expect(html).not.toContain("See the moments");
 });
 
 it("never derives full coaching from a partial guest projection", () => {

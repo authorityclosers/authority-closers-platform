@@ -1,8 +1,8 @@
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dipakTake, FocusHero } from "./coaching-ui";
-import { CoachingMedia } from "./media-player";
+import { CoachingMedia, requestClip } from "./media-player";
 import { parseClips, clipSource } from "./media-contract";
 import { fictionalClip } from "./coaching.fixture";
 
@@ -21,6 +21,7 @@ afterEach(async () => {
   host.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 const button = (name: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -72,7 +73,95 @@ describe("reviewed placeholder clips", () => {
     expect(host.textContent).not.toContain("your current focus");
     expect(host.textContent).toContain("Also relevant");
   });
-  it("'Hear Dipak's take' brings the recommended clip into view and plays it", async () => {
+  it("keeps only the recommendation open and preserves every secondary access rule", async () => {
+    const preview = {
+      ...fictionalClip,
+      topic_id: "fictional-preview",
+      title: "Another way to practise",
+      access: "preview" as const,
+      preview_end_ms: 3000,
+    };
+    const locked = {
+      ...fictionalClip,
+      topic_id: "fictional-locked",
+      title: "Full coaching lesson",
+      access: "locked" as const,
+    };
+    await act(async () =>
+      root.render(
+        <CoachingMedia
+          clips={[fictionalClip, preview, locked]}
+          headingLevel={4}
+        />,
+      ),
+    );
+    const disclosure = host.querySelector<HTMLDetailsElement>(
+      "details[data-other-lessons]",
+    )!;
+    expect(disclosure.open).toBe(false);
+    expect(disclosure.querySelector("summary")?.textContent).toBe(
+      "More lessons · 2",
+    );
+    expect(
+      [...disclosure.querySelectorAll("article")].map((card) => [
+        card.querySelector("h4")?.textContent,
+        card.getAttribute("data-access"),
+      ]),
+    ).toEqual([
+      [preview.title, "preview"],
+      [locked.title, "locked"],
+    ]);
+    expect(disclosure.textContent).toContain("Free preview · 0:02");
+    expect(disclosure.textContent).toContain("Get the full coaching");
+    expect(host.querySelector("audio")).toBeNull();
+    expect(disclosure.querySelector("[data-recommended]")).toBeNull();
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip]} />),
+    );
+    expect(host.querySelector("details[data-other-lessons]")).toBeNull();
+    await act(async () => root.render(<CoachingMedia clips={[]} />));
+    expect(host.textContent).toBe("");
+  });
+  it("reveals a requested secondary clip and folding pauses only that group", async () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    const second = { ...fictionalClip, topic_id: "fictional-secondary" };
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip, second]} />),
+    );
+    const disclosure = host.querySelector<HTMLDetailsElement>(
+      "details[data-other-lessons]",
+    )!;
+    await act(async () => requestClip(second));
+    expect(disclosure.open).toBe(true);
+    expect(document.activeElement).toBe(disclosure.querySelector("button"));
+    const audio = disclosure.querySelector("audio")!;
+    expect(audio.getAttribute("src")).toBe(clipSource(second));
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    const pause = vi.spyOn(audio, "pause");
+    const nested = disclosure.querySelector("details")!;
+    await act(async () =>
+      nested.dispatchEvent(new Event("toggle", { bubbles: true })),
+    );
+    expect(pause).not.toHaveBeenCalled();
+    await act(async () => {
+      disclosure.open = false;
+      disclosure.dispatchEvent(new Event("toggle"));
+    });
+    expect(pause).toHaveBeenCalledOnce();
+    expect(disclosure.textContent).toContain("Resume clip");
+    await act(async () => requestClip(fictionalClip));
+    const recommended = host.querySelector("[data-recommended]")!;
+    const firstAudio = recommended.querySelector("audio")!;
+    await act(async () =>
+      firstAudio.dispatchEvent(new Event("loadedmetadata")),
+    );
+    const firstPause = vi.spyOn(firstAudio, "pause");
+    firstPause.mockClear();
+    await act(async () => disclosure.dispatchEvent(new Event("toggle")));
+    expect(firstPause).not.toHaveBeenCalled();
+    expect(recommended.textContent).toContain("Pause");
+  });
+  it("'Hear Dipak's take' focuses the recommended playback control and plays only once", async () => {
     const scroll = vi.fn();
     HTMLElement.prototype.scrollIntoView = scroll;
     const take = dipakTake([fictionalClip]);
@@ -98,11 +187,27 @@ describe("reviewed placeholder clips", () => {
     )!;
     expect(hear.textContent).toBe("Hear Dipak’s take · 0:04");
     expect(host.querySelector("audio")).toBeNull();
+    hear.focus();
     await act(async () => hear.click());
     expect(scroll).toHaveBeenCalled();
+    const playback = host.querySelector("[data-recommended] button")!;
+    expect(document.activeElement).toBe(playback);
     const audio = host.querySelector("audio")!;
     await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
-    expect(audio.play).toHaveBeenCalled();
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(playback);
+    hear.focus();
+    await act(async () => hear.click());
+    expect(document.activeElement).toBe(playback);
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(host.querySelector("audio")).toBe(audio);
+    // A request for an absent clip cannot move focus or start another source.
+    hear.focus();
+    await act(async () =>
+      requestClip({ ...fictionalClip, topic_id: "not-on-this-page" }),
+    );
+    expect(document.activeElement).toBe(hear);
+    expect(audio.play).toHaveBeenCalledOnce();
     // A locked clip is never offered from the focus.
     expect(dipakTake([{ ...fictionalClip, access: "locked" }])).toBeNull();
     expect(dipakTake(undefined)).toBeNull();
@@ -129,6 +234,194 @@ describe("reviewed placeholder clips", () => {
     await act(async () => button("Try clip again").click());
     expect(host.querySelector("audio")).not.toBe(audio);
   });
+  it("times out missing narration metadata and retries without changing its allowed window", async () => {
+    vi.useFakeTimers();
+    const preview = {
+      ...fictionalClip,
+      access: "preview" as const,
+      preview_end_ms: 3000,
+    };
+    await act(async () => root.render(<CoachingMedia clips={[preview]} />));
+    await act(async () => button("Play coaching clip").click());
+    const first = host.querySelector("audio")!;
+    const source = first.getAttribute("src");
+    await act(async () => vi.advanceTimersByTime(14_999));
+    expect(button("Loading clip…").getAttribute("aria-disabled")).toBe("true");
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(button("Try clip again").disabled).toBe(false);
+    expect(host.querySelector("audio")).toBeNull();
+    expect(host.textContent).toContain(preview.reason);
+    expect(host.textContent).toContain(preview.transcript_excerpt);
+    expect(host.textContent).toContain("Narration is unavailable");
+    await act(async () => button("Try clip again").click());
+    const retry = host.querySelector("audio")!;
+    expect(retry).not.toBe(first);
+    expect(retry.getAttribute("src")).toBe(source);
+    await act(async () => retry.dispatchEvent(new Event("loadedmetadata")));
+    expect(retry.currentTime).toBe(preview.start_ms / 1000);
+    await act(async () => vi.advanceTimersByTime(16_000));
+    expect(button("Pause")).toBeTruthy();
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    retry.currentTime = preview.preview_end_ms / 1000;
+    await act(async () => retry.dispatchEvent(new Event("timeupdate")));
+    expect(button("Preview finished").disabled).toBe(true);
+    expect(host.textContent).toContain("That’s the free preview");
+  });
+  it.each(["resolve", "reject"] as const)(
+    "ignores a timed-out narration promise that later %ss during retry",
+    async (outcome) => {
+      vi.useFakeTimers();
+      let settle!: () => void;
+      vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            settle =
+              outcome === "resolve"
+                ? resolve
+                : () => reject(new Error("Late failure"));
+          }),
+      );
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      await act(async () => button("Play coaching clip").click());
+      const first = host.querySelector("audio")!;
+      await act(async () => first.dispatchEvent(new Event("loadedmetadata")));
+      await act(async () => vi.advanceTimersByTime(15_000));
+      expect(button("Try clip again")).toBeTruthy();
+      await act(async () => button("Try clip again").click());
+      await act(async () => settle());
+      expect(button("Loading clip…").getAttribute("aria-disabled")).toBe(
+        "true",
+      );
+      await act(async () =>
+        host.querySelector("audio")!.dispatchEvent(new Event("loadedmetadata")),
+      );
+      expect(button("Pause")).toBeTruthy();
+    },
+  );
+  it.each(["switch", "timeout", "leaving"] as const)(
+    "stops a late successful narration start after %s",
+    async (interruption) => {
+      vi.useFakeTimers();
+      let finish!: () => void;
+      vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+        () => new Promise<void>((resolve) => (finish = resolve)),
+      );
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      await act(async () => button("Play coaching clip").click());
+      const first = host.querySelector("audio")!;
+      await act(async () => first.dispatchEvent(new Event("loadedmetadata")));
+      if (interruption === "leaving") await act(async () => root.render(null));
+      else if (interruption === "timeout") {
+        await act(async () => vi.advanceTimersByTime(15_000));
+        await act(async () => button("Try clip again").click());
+        await act(async () =>
+          host
+            .querySelector("audio")!
+            .dispatchEvent(new Event("loadedmetadata")),
+        );
+      } else
+        await act(async () =>
+          window.dispatchEvent(
+            new CustomEvent("sx-coaching-play", { detail: "another-player" }),
+          ),
+        );
+      const words = host.textContent;
+      const pause = vi.spyOn(first, "pause").mockClear();
+      await act(async () => finish());
+      expect(pause).toHaveBeenCalledOnce();
+      expect(host.textContent).toBe(words);
+      if (interruption === "timeout") expect(button("Pause")).toBeTruthy();
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+  it("a late narration result leaves a newer resume on the same audio playing", async () => {
+    let finish!: () => void;
+    vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    );
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip]} />),
+    );
+    await act(async () => button("Play coaching clip").click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent("sx-coaching-play", { detail: "another-player" }),
+      ),
+    );
+    await act(async () => button("Resume clip").click());
+    expect(host.querySelector("audio")).toBe(audio);
+    expect(button("Pause")).toBeTruthy();
+    const pause = vi.spyOn(audio, "pause").mockClear();
+    await act(async () => finish());
+    expect(pause).not.toHaveBeenCalled();
+    expect(button("Pause")).toBeTruthy();
+  });
+  it.each(["timeout", "error"] as const)(
+    "keeps narration retry focused after %s and leaves another control focused",
+    async (failure) => {
+      vi.useFakeTimers();
+      HTMLElement.prototype.scrollIntoView = vi.fn();
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      const play = button("Play coaching clip");
+      play.focus();
+      await act(async () => play.click());
+      const audio = host.querySelector("audio")!;
+      expect(play.disabled).toBe(false);
+      expect(play.getAttribute("aria-disabled")).toBe("true");
+      expect(document.activeElement).toBe(play);
+      await act(async () => play.click());
+      await act(async () => requestClip(fictionalClip));
+      expect(host.querySelector("audio")).toBe(audio);
+      expect(audio.play).not.toHaveBeenCalled();
+      const fail = async () => {
+        if (failure === "timeout")
+          await act(async () => vi.advanceTimersByTime(15_000));
+        else
+          await act(async () =>
+            host.querySelector("audio")!.dispatchEvent(new Event("error")),
+          );
+      };
+      await fail();
+      expect(button("Try clip again")).toBe(play);
+      expect(play.getAttribute("aria-disabled")).toBeNull();
+      expect(document.activeElement).toBe(play);
+      const next = button("Next slide");
+      await act(async () => play.click());
+      next.focus();
+      await fail();
+      expect(document.activeElement).toBe(next);
+    },
+  );
+  it("clears a narration startup deadline when another player starts or the card unmounts", async () => {
+    vi.useFakeTimers();
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip]} />),
+    );
+    await act(async () => button("Play coaching clip").click());
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent("sx-coaching-play", { detail: "another-player" }),
+      ),
+    );
+    await act(async () => vi.advanceTimersByTime(16_000));
+    expect(button("Resume clip")).toBeTruthy();
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    vi.mocked(HTMLMediaElement.prototype.play).mockImplementationOnce(
+      () => new Promise<void>(() => {}),
+    );
+    await act(async () => button("Resume clip").click());
+    expect(vi.getTimerCount()).toBe(1);
+    await act(async () => root.render(null));
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("resumes where the learner stopped on a later visit", async () => {
     await act(async () =>
       root.render(<CoachingMedia clips={[fictionalClip]} />),
@@ -153,6 +446,121 @@ describe("reviewed placeholder clips", () => {
     next.currentTime = 5;
     await act(async () => next.dispatchEvent(new Event("timeupdate")));
     expect(window.localStorage.length).toBe(0);
+  });
+  it.each(["another player", "folding"])(
+    "keeps the exact narration position when interrupted by %s before the next timeupdate",
+    async (interruption) => {
+      const secondary = {
+        ...fictionalClip,
+        topic_id: "fictional-interrupted",
+      };
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip, secondary]} />),
+      );
+      const disclosure = host.querySelector<HTMLDetailsElement>(
+        "details[data-other-lessons]",
+      )!;
+      disclosure.open = true;
+      const card = disclosure.querySelector("article")!;
+      await act(async () =>
+        card.querySelector<HTMLButtonElement>("button")!.click(),
+      );
+      const audio = card.querySelector("audio")!;
+      await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+      // A switch/fold can arrive between the browser's timeupdate events and
+      // before the periodic two-second device checkpoint.
+      audio.currentTime = secondary.start_ms / 1000 + 1.25;
+      vi.spyOn(audio, "pause").mockImplementation(() => {
+        // Native playback can advance between a position read and pause().
+        audio.currentTime += 0.001;
+      });
+      expect(window.localStorage.length).toBe(0);
+      await act(async () => {
+        if (interruption === "folding") {
+          disclosure.open = false;
+          disclosure.dispatchEvent(new Event("toggle"));
+        } else {
+          window.dispatchEvent(
+            new CustomEvent("sx-coaching-play", { detail: "call-moment" }),
+          );
+        }
+      });
+      expect(audio.pause).toHaveBeenCalled();
+      expect(card.textContent).toContain("Resume clip");
+      const pausedAt = audio.currentTime;
+      await act(async () => root.unmount());
+      root = createRoot(host);
+      await act(async () => root.render(<CoachingMedia clips={[secondary]} />));
+      expect(host.querySelector("audio")).toBeNull();
+      expect(button("Resume clip")).toBeTruthy();
+      await act(async () => button("Resume clip").click());
+      const resumed = host.querySelector("audio")!;
+      expect(resumed.getAttribute("src")).toBe(clipSource(secondary));
+      await act(async () => resumed.dispatchEvent(new Event("loadedmetadata")));
+      expect(resumed.currentTime).toBe(pausedAt);
+    },
+  );
+  it.each(["pause", "leaving"])(
+    "keeps the exact narration position on %s between timeupdate events",
+    async (interruption) => {
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      await act(async () => button("Play coaching clip").click());
+      const audio = host.querySelector("audio")!;
+      await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+      audio.currentTime = fictionalClip.start_ms / 1000 + 1.25;
+      vi.spyOn(audio, "pause").mockImplementation(() => {
+        audio.currentTime += 0.001;
+      });
+      expect(window.localStorage.length).toBe(0);
+      if (interruption === "pause")
+        await act(async () => button("Pause").click());
+      await act(async () => root.unmount());
+      expect(audio.pause).toHaveBeenCalledOnce();
+      const pausedAt = audio.currentTime;
+      root = createRoot(host);
+      await act(async () =>
+        root.render(<CoachingMedia clips={[fictionalClip]} />),
+      );
+      expect(host.querySelector("audio")).toBeNull();
+      expect(button("Resume clip")).toBeTruthy();
+      await act(async () => button("Resume clip").click());
+      const resumed = host.querySelector("audio")!;
+      await act(async () => resumed.dispatchEvent(new Event("loadedmetadata")));
+      expect(resumed.currentTime).toBe(pausedAt);
+    },
+  );
+  it("starts and saves narration when development rechecks refs in Strict Mode", async () => {
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <CoachingMedia clips={[fictionalClip]} />
+        </StrictMode>,
+      ),
+    );
+    await act(async () => button("Play coaching clip").click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(button("Pause")).toBeTruthy();
+    audio.currentTime = fictionalClip.start_ms / 1000 + 1.25;
+    await act(async () => root.unmount());
+    expect(audio.paused).toBe(true);
+    root = createRoot(host);
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <CoachingMedia clips={[fictionalClip]} />
+        </StrictMode>,
+      ),
+    );
+    expect(host.querySelector("audio")).toBeNull();
+    await act(async () => button("Resume clip").click());
+    const resumed = host.querySelector("audio")!;
+    await act(async () => resumed.dispatchEvent(new Event("loadedmetadata")));
+    expect(resumed.currentTime).toBe(fictionalClip.start_ms / 1000 + 1.25);
+    expect(button("Pause")).toBeTruthy();
   });
   it("never restores a position outside the preview window", async () => {
     const [clip] = parseClips([

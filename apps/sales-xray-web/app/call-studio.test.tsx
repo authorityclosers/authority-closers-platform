@@ -219,7 +219,36 @@ async function render(props: CallStudioProps = {}) {
   await flush();
 }
 
-async function selectAudio(name = "call.wav", bytes = "synthetic audio") {
+function silentCaf(): Uint8Array<ArrayBuffer> {
+  // One second of 16 kHz mono signed little-endian PCM in a CAF container.
+  const bytes = new Uint8Array(32_068);
+  const view = new DataView(bytes.buffer);
+  const text = (offset: number, value: string) =>
+    bytes.set(new TextEncoder().encode(value), offset);
+  text(0, "caff");
+  view.setUint16(4, 1);
+  text(8, "desc");
+  view.setUint32(16, 32);
+  view.setFloat64(20, 16_000);
+  text(28, "lpcm");
+  for (const [offset, value] of [
+    [32, 2],
+    [36, 2],
+    [40, 1],
+    [44, 1],
+    [48, 16],
+  ])
+    view.setUint32(offset, value);
+  text(52, "data");
+  view.setUint32(60, 32_004);
+  return bytes;
+}
+
+async function selectAudio(
+  name = "call.wav",
+  bytes: string | Uint8Array<ArrayBuffer> = "synthetic audio",
+  metadata: number | "error" | "none" = 4,
+) {
   const file = new File([bytes], name, { type: "audio/wav" });
   const input = container.querySelector<HTMLInputElement>("#call-file");
   if (!input) throw new Error("Missing call file input");
@@ -234,9 +263,14 @@ async function selectAudio(name = "call.wav", bytes = "synthetic audio") {
   if (!audio) throw new Error("Missing local audio preview");
   Object.defineProperty(audio, "duration", {
     configurable: true,
-    value: 4,
+    value: typeof metadata === "number" ? metadata : 0,
   });
-  await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+  if (metadata !== "none")
+    await act(async () =>
+      audio.dispatchEvent(
+        new Event(metadata === "error" ? "error" : "loadedmetadata"),
+      ),
+    );
   await flush();
   return file;
 }
@@ -372,6 +406,124 @@ afterEach(async () => {
 });
 
 describe("CallStudio", () => {
+  const measuredEntry = {
+    enabled: true,
+    auth_mode: "account",
+    site_key: null,
+    challenge_action: null,
+    policy_revision: "synthetic-upload-v1",
+    allowance_seconds: 3600,
+  };
+  const measuredPolicy = {
+    schema: "ac.sales-xray.private-upload-consent/1",
+    policy_sha256: "f".repeat(64),
+    title: "Private upload",
+    description: "Store the original recording and measure it before analysis.",
+    max_cost_paise: 0,
+    maximum_file_bytes: 100_000_000,
+    maximum_call_seconds: 7200,
+    retention_days: 7,
+  };
+
+  function enableMeasuredUpload() {
+    const previous = handleApi;
+    handleApi = (path, init) =>
+      path.endsWith("/acquisition/entry")
+        ? response(measuredEntry)
+        : path.endsWith("/acquisition/upload-policy")
+          ? response(measuredPolicy)
+          : previous(path, init);
+  }
+
+  it.each([
+    [{ variant: "standalone" as const }, "/analysis/new?new=1"],
+    [{ variant: "embedded" as const, homeHref: "/home" }, "/sales-xray?new=1"],
+  ])(
+    "offers the existing measured upload after CAF mediaerror (%j)",
+    async (props, href) => {
+      enableMeasuredUpload();
+      await render(props);
+      await selectAudio("synthetic.caf", silentCaf(), "error");
+      expect(container.textContent).toContain("Preview unavailable");
+      expect(container.textContent).not.toContain("Reading duration…");
+      const link = container.querySelector<HTMLAnchorElement>(
+        `a[href="${href}"]`,
+      );
+      expect(link?.textContent).toContain("Continue with private upload");
+      expect(container.textContent).toContain(
+        "Choose this file in New analysis",
+      );
+      expect(
+        requests.every(({ init }) => !init.method || init.method === "GET"),
+      ).toBe(true);
+      expect(requests.some(({ url }) => url.endsWith("/intake/quote"))).toBe(
+        false,
+      );
+      expect(requests.some(({ url }) => url.endsWith("/source"))).toBe(false);
+      const input = container.querySelector<HTMLInputElement>("#call-file")!;
+      const choose = vi.spyOn(input, "click");
+      await act(async () => getButton("Choose another recording").click());
+      expect(choose).toHaveBeenCalledOnce();
+      await selectAudio("copy.wav");
+      expect(container.textContent).not.toContain("Preview unavailable");
+      expect(getButton("Continue to analysis").disabled).toBe(false);
+      await act(async () => getButton("Continue to analysis").click());
+      await flush();
+      const request = requests.find(({ url }) => url.endsWith("/intake/quote"));
+      expect(JSON.parse(String(request?.init.body)).duration_ms).toBe(4000);
+    },
+  );
+
+  it("recovers when no metadata or media error arrives", async () => {
+    vi.useFakeTimers();
+    enableMeasuredUpload();
+    await render();
+    await selectAudio("synthetic.caf", silentCaf(), "none");
+    expect(getButton("Continue to analysis").disabled).toBe(true);
+    await act(async () => vi.advanceTimersByTimeAsync(8000));
+    await flush();
+    expect(container.textContent).toContain("Continue with private upload");
+    expect(
+      requests.every(({ init }) => !init.method || init.method === "GET"),
+    ).toBe(true);
+  });
+
+  it.each([0, Infinity, NaN])(
+    "never quotes invalid browser duration %s",
+    async (duration) => {
+      enableMeasuredUpload();
+      await render();
+      await selectAudio("synthetic.caf", silentCaf(), duration);
+      expect(container.textContent).toContain("Continue with private upload");
+      expect(
+        requests.every(({ init }) => !init.method || init.method === "GET"),
+      ).toBe(true);
+    },
+  );
+
+  it("offers honest file recovery when the measured upload entry is disabled", async () => {
+    const previous = handleApi;
+    handleApi = (path, init) =>
+      path.endsWith("/acquisition/entry")
+        ? response({ enabled: false })
+        : previous(path, init);
+    await render({ variant: "embedded", homeHref: "/home" });
+    await selectAudio("synthetic.caf", silentCaf(), "error");
+    expect(container.textContent).toContain(
+      "private upload is unavailable here",
+    );
+    expect(container.textContent).toContain("Choose a WAV or MP3 copy");
+    expect(container.querySelector('a[href="/sales-xray?new=1"]')).toBeNull();
+    expect(requests.some(({ url }) => url.endsWith("/upload-policy"))).toBe(
+      false,
+    );
+    expect(
+      requests.every(({ init }) => !init.method || init.method === "GET"),
+    ).toBe(true);
+    await selectAudio("copy.wav");
+    expect(getButton("Continue to analysis").disabled).toBe(false);
+  });
+
   it("shows a canonical profile hold and stops polling the held run", async () => {
     vi.useFakeTimers();
     const originalHandler = handleApi;

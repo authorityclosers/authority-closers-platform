@@ -62,7 +62,7 @@ it("plays a clip when there is a player, else shows the time as text", () => {
         label="Play"
         range
       />,
-    ),
+    ).replace(/<[^>]*>/g, ""),
   ).toContain("06:35–06:58 · Play");
   expect(
     html(<PlayChip source={source} title="Goal" label="Play" />),

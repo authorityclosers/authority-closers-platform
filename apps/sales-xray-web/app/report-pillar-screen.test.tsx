@@ -13,9 +13,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: signIn, replace: vi.fn(), prefetch: vi.fn() }),
 }));
 import { LinkedProspectContext } from "./prospect-link-control";
-import { BIG_PICTURE, SKILLS } from "./report-copy";
+import { BIG_PICTURE, SKILLS, WORKED_DIDNT } from "./report-copy";
 import { ReportModes } from "./report-modes";
 import { REPORT_PILLARS } from "./report-pillars";
+import { WorkedDidnt } from "./report-sections/worked-didnt";
+import { reportStoryModel } from "./report-story-model";
 import {
   amitReport,
   amitTranscript,
@@ -181,6 +183,126 @@ it.each(["no sources", "different pillar summary"] as const)(
     expect(select).not.toHaveBeenCalled();
   },
 );
+
+const findingSources = amitReport.dimensions.flatMap(
+  (skill) => skill.evidence ?? [],
+);
+
+async function mountWorked(sources: (typeof findingSources)[]) {
+  const base = reportStoryModel(amitReport, amitTranscript);
+  const withSources = (items: typeof base.worked, index: number) =>
+    items.map((item, itemIndex) =>
+      itemIndex === 0 && sources[index]
+        ? { ...item, what: { ...item.what, sources: sources[index] } }
+        : item,
+    );
+  const model = {
+    ...base,
+    worked: withSources(base.worked, 0),
+    didnt: withSources(base.didnt, 1),
+  };
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const select = vi.fn();
+  await act(async () =>
+    root.render(<WorkedDidnt model={model} onSelect={select} />),
+  );
+  cleanup = () => {
+    act(() => root.unmount());
+    host.remove();
+  };
+  return { host, select };
+}
+
+it.each([0, 1, 2])(
+  "needs no Worked / Didn't disclosure for %i saved clips",
+  async (count) => {
+    const sources = findingSources.slice(0, count);
+    const { host, select } = await mountWorked([sources]);
+    const row = host.querySelector("li")!;
+    expect(row.querySelector("button[aria-controls]")).toBeNull();
+    const clips = [...row.querySelectorAll<HTMLButtonElement>("button")];
+    expect(clips).toHaveLength(count);
+    expect(row.textContent).toContain(amitReport.strengths[0].explanation);
+    expect(select).not.toHaveBeenCalled();
+    for (const [index, clip] of clips.entries()) {
+      await act(async () => clip.click());
+      expect(select).toHaveBeenCalledTimes(index + 1);
+      expect(select.mock.calls[index][0]).toBe(sources[index]);
+      expect(select.mock.calls[index][1]).toBe(amitReport.strengths[0].title);
+    }
+  },
+);
+
+it("reaches all Worked / Didn't clips in saved order, with independent cards and fold focus", async () => {
+  const sources = [
+    [
+      findingSources[4],
+      findingSources[0],
+      findingSources[2],
+      findingSources[0],
+    ],
+    findingSources.slice(1, 4),
+  ];
+  const { host, select } = await mountWorked(sources);
+  const section = host;
+  const columns = [
+    section.querySelector(
+      `section[aria-label="${WORKED_DIDNT.worked.label}"]`,
+    )!,
+    section.querySelector(`section[aria-label="${WORKED_DIDNT.didnt.label}"]`)!,
+  ];
+  const rows = columns.map((column) => column.querySelector("li")!);
+  const toggles = rows.map(
+    (row) => row.querySelector<HTMLButtonElement>("button[aria-controls]")!,
+  );
+  const groups = toggles.map(
+    (toggle) => document.getElementById(toggle.getAttribute("aria-controls")!)!,
+  );
+  const clips = (index: number) => [
+    ...groups[index].querySelectorAll<HTMLButtonElement>("button"),
+  ];
+  expect(groups[0]).not.toBe(groups[1]);
+  expect(columns[0].querySelectorAll("li")).toHaveLength(3);
+  expect(columns[1].querySelectorAll("li")).toHaveLength(3);
+  for (const [index, toggle] of toggles.entries()) {
+    expect(toggle.textContent).toBe(SKILLS.showAllClips(sources[index].length));
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(clips(index)).toHaveLength(2);
+  }
+  await act(async () => toggles[0].click());
+  expect(clips(0)).toHaveLength(4);
+  expect(clips(1)).toHaveLength(2);
+  await act(async () => toggles[1].click());
+  expect(clips(1)).toHaveLength(3);
+  expect(select).not.toHaveBeenCalled();
+  const titles = [
+    amitReport.strengths[0].title,
+    amitReport.improvements[0].title,
+  ];
+  for (const [rowIndex, refs] of sources.entries()) {
+    expect(toggles[rowIndex].getAttribute("aria-expanded")).toBe("true");
+    expect(toggles[rowIndex].textContent).toBe(SKILLS.showFewerClips);
+    for (const [index, clip] of clips(rowIndex).entries()) {
+      select.mockClear();
+      await act(async () => clip.click());
+      expect(select).toHaveBeenCalledTimes(1);
+      expect(select.mock.calls[0][0]).toBe(refs[index]);
+      expect(select.mock.calls[0][1]).toBe(titles[rowIndex]);
+    }
+  }
+  select.mockClear();
+  clips(0).at(-1)!.focus();
+  await act(async () => toggles[0].click());
+  expect(document.activeElement).toBe(toggles[0]);
+  expect(toggles[0].getAttribute("aria-expanded")).toBe("false");
+  expect(clips(0)).toHaveLength(2);
+  expect(clips(1)).toHaveLength(3);
+  expect(select).not.toHaveBeenCalled();
+  expect(rows[0].textContent).toContain(WORKED_DIDNT.whyHelped);
+  expect(rows[1].textContent).toContain(WORKED_DIDNT.whatAffected);
+});
 
 it("shows eight compact skill rows that expand to evidence and Coaching", async () => {
   const { host } = await mount(amitReport, amitTranscript);

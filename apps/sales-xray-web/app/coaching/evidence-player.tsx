@@ -2,7 +2,15 @@
 
 import { RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 import { ClipPlayIcon, ClipPlayState } from "../source-waveform";
 import { kitStyles } from "../ui/kit";
@@ -119,9 +127,19 @@ export function EvidencePlayer({
   // Where playback is inside this clip of the call, 0–1.
   const [progress, setProgress] = useState(0);
   const active = useRef(false);
+  const playRequest = useRef(0);
   const source = `/v1/conversation/acquisition/submissions/${evidence.submission_id}/source`;
   const span = `${timeLabel(evidence.start_ms)}–${timeLabel(evidence.end_ms)}`;
   const length = Math.max(1, evidence.end_ms - evidence.start_ms);
+  const stopCurrent = useCallback(() => {
+    active.current = false;
+    audio.current?.pause();
+  }, []);
+  useLayoutEffect(() => {
+    // Pause before React detaches the on-demand audio ref. Passive cleanup
+    // only cleared the flag, leaving a removed player's playback running.
+    return stopCurrent;
+  }, [stopCurrent]);
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
@@ -143,19 +161,42 @@ export function EvidencePlayer({
       window.removeEventListener("sx-coaching-fold", stopFolded);
     };
   }, [identity]);
+  useEffect(() => {
+    if (state !== "loading") return;
+    // A source can stall before metadata or before play() resolves.
+    const deadline = window.setTimeout(() => {
+      active.current = false;
+      audio.current?.pause();
+      setState("failed");
+    }, 15_000);
+    return () => window.clearTimeout(deadline);
+  }, [state, attempt]);
   const start = (player: HTMLAudioElement) => {
+    const request = ++playRequest.current;
+    const current = () =>
+      active.current &&
+      audio.current === player &&
+      playRequest.current === request;
     player.currentTime = evidence.start_ms / 1000;
     setProgress(0);
     void player
       .play()
       .then(() => {
-        if (active.current) setState("playing");
+        if (current()) setState("playing");
+        // A delayed start must not revive an abandoned player. Another
+        // request can reuse this audio, so leave that newer replay alone.
+        else if (!active.current || audio.current !== player) player.pause();
       })
       .catch(() => {
-        if (active.current) setState("failed");
+        if (current()) {
+          active.current = false;
+          player.pause();
+          setState("failed");
+        }
       });
   };
   const play = () => {
+    if (state === "loading") return;
     if (state === "playing") {
       active.current = false;
       audio.current?.pause();
@@ -182,7 +223,7 @@ export function EvidencePlayer({
           type="button"
           className={styles.time}
           onClick={play}
-          disabled={state === "loading"}
+          aria-disabled={state === "loading" || undefined}
           data-state={state}
           style={
             state === "playing"
@@ -262,7 +303,7 @@ export function EvidencePlayer({
           </p>
         ) : null}
       </div>
-      {attempt > 0 ? (
+      {attempt > 0 && state !== "failed" ? (
         <audio
           key={attempt}
           ref={audio}
@@ -281,6 +322,11 @@ export function EvidencePlayer({
               active.current = false;
               setState("idle");
             }
+          }}
+          onEnded={() => {
+            // The recording can finish before this excerpt's saved end time.
+            active.current = false;
+            setState("idle");
           }}
           onError={() => {
             active.current = false;

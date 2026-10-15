@@ -320,6 +320,9 @@ function CanonicalCallCoaching({
             explanation={focus.explanation}
             why={focus.why_it_matters}
             reason={focus.selected_reason}
+            evidenceAnchor={
+              coaching.evidence.length ? "report-coaching-why" : undefined
+            }
             lessonAnchor="report-coaching-better"
             mission={mission.behavior}
             missionAnchor="report-coaching-mission"
@@ -486,6 +489,7 @@ function RetainedCallCoaching({
             explanation={focus.finding.explanation}
             why={focus.why ?? focus.finding.explanation}
             reason={RETAINED.reason}
+            evidenceAnchor="report-coaching-why"
             mission={focus.behavior}
             missionAnchor="report-coaching-mission"
           />

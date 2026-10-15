@@ -3,8 +3,10 @@
 import { Lock, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -122,18 +124,23 @@ function ClipCard({
   recommended,
   forCall = false,
   headingLevel = 3,
+  foldId,
 }: {
   clip: CoachingClip;
   recommended: boolean;
   forCall?: boolean;
   headingLevel?: 3 | 4;
+  /** Only secondary lessons pause when their own disclosure closes. */
+  foldId?: string;
 }) {
   const Title = headingLevel === 4 ? "h4" : "h3";
   const they = useTheirCoaching();
   const identity = useId();
   const card = useRef<HTMLElement>(null);
+  const playButton = useRef<HTMLButtonElement>(null);
   const player = useRef<HTMLAudioElement>(null);
   const active = useRef(false);
+  const playRequest = useRef(0);
   const [playState, setState] = useState<ClipState>("idle");
   const [attempt, setAttempt] = useState(0);
   const [slide, setSlide] = useState(0);
@@ -147,21 +154,70 @@ function ClipCard({
     clip.access === "preview" && clip.preview_end_ms
       ? clip.preview_end_ms
       : clip.end_ms;
+  const key = resumeKey(clip);
+  const checkpoint = useCallback(
+    (audio: HTMLAudioElement | null) => {
+      if (!audio) return null;
+      audio.pause();
+      const at = Math.round(audio.currentTime * 1000);
+      const offset = Math.max(0, at - clip.start_ms);
+      if (offset <= 0 || at >= stopAt) return null;
+      saved.current = offset;
+      writeResume(key, offset);
+      return offset;
+    },
+    [key, clip.start_ms, stopAt],
+  );
+  // Audio mounts only on demand, so cleanup needs the latest player rather
+  // than the empty ref from the card's first render.
+  const checkpointCurrent = useCallback(
+    () => checkpoint(player.current),
+    [checkpoint],
+  );
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
       if (!active.current) return;
       active.current = false;
-      player.current?.pause();
+      // A switch or fold can fall between timeupdate events. Keep the actual
+      // paused position, including before the two-second device checkpoint.
+      const offset = checkpointCurrent();
+      if (offset !== null) setPosition(offset);
       setState("paused");
     };
+    const stopHidden = (event: Event) => {
+      if (foldId && (event as CustomEvent<string>).detail === foldId)
+        stopOther(event);
+    };
     window.addEventListener("sx-coaching-play", stopOther);
-    return () => window.removeEventListener("sx-coaching-play", stopOther);
-  }, [identity]);
+    window.addEventListener("sx-coaching-fold", stopHidden);
+    return () => {
+      window.removeEventListener("sx-coaching-play", stopOther);
+      window.removeEventListener("sx-coaching-fold", stopHidden);
+    };
+  }, [identity, foldId, checkpointCurrent]);
+  useEffect(() => {
+    if (playState !== "loading") return;
+    // Bound both a missing metadata response and an unresolved play().
+    const deadline = window.setTimeout(() => {
+      active.current = false;
+      player.current?.pause();
+      setState("failed");
+    }, 15_000);
+    return () => window.clearTimeout(deadline);
+  }, [playState, attempt]);
+  useLayoutEffect(() => {
+    return () => {
+      if (!active.current) return;
+      active.current = false;
+      // Layout cleanup runs before React detaches the audio ref. Ref rechecks
+      // in Strict Mode must not interrupt a newly mounted player's startup.
+      checkpointCurrent();
+    };
+  }, [checkpointCurrent]);
   // A stored position shows after hydration (the server renders 0), and only
   // inside the window the server allows; before the first play it reads as
   // a paused clip.
-  const key = resumeKey(clip);
   const stored = useSyncExternalStore(
     noSubscription,
     () => (locked ? 0 : readResume(key)),
@@ -181,22 +237,34 @@ function ClipCard({
     }
   };
   const begin = (audio: HTMLAudioElement, from: number) => {
+    const request = ++playRequest.current;
+    const current = () =>
+      active.current &&
+      player.current === audio &&
+      playRequest.current === request;
     audio.currentTime = from / 1000;
     void audio
       .play()
       .then(() => {
-        if (active.current) setState("playing");
+        if (current()) setState("playing");
+        // A delayed start must stay stopped after switching or leaving.
+        // A newer resume may still be using this same audio element.
+        else if (!active.current || player.current !== audio) audio.pause();
       })
       .catch(() => {
-        if (active.current) setState("failed");
+        if (current()) {
+          active.current = false;
+          audio.pause();
+          setState("failed");
+        }
       });
   };
   const toggle = () => {
-    if (locked || state === "limit") return;
+    if (locked || state === "limit" || state === "loading") return;
     if (state === "playing") {
       active.current = false;
-      player.current?.pause();
-      remember(position, true);
+      const offset = checkpointCurrent();
+      if (offset !== null) setPosition(offset);
       setState("paused");
       return;
     }
@@ -228,6 +296,12 @@ function ClipCard({
   useEffect(() => {
     const onRequest = (event: Event) => {
       if ((event as CustomEvent<string>).detail !== clipKey(clip)) return;
+      const disclosure = card.current?.closest<HTMLDetailsElement>(
+        "details[data-other-lessons]",
+      );
+      if (disclosure) disclosure.open = true;
+      // The shortcut moves the learner here; pause/retry must be next at hand.
+      playButton.current?.focus({ preventScroll: true });
       card.current?.scrollIntoView({ block: "center", behavior: "smooth" });
       if (!playing) latestToggle.current();
     };
@@ -257,12 +331,13 @@ function ClipCard({
     >
       <div className={styles.clipHead}>
         <button
+          ref={playButton}
           type="button"
           className={styles.clipPlay}
           onClick={toggle}
-          disabled={state === "loading" || state === "limit"}
+          disabled={state === "limit"}
           data-locked={locked ? "" : undefined}
-          aria-disabled={locked || undefined}
+          aria-disabled={locked || state === "loading" || undefined}
           title={locked ? CLIP.lockedTitle : PLAY_LABEL[state]}
         >
           {locked ? (
@@ -395,7 +470,7 @@ function ClipCard({
           </div>
         </details>
       )}
-      {attempt > 0 && !locked ? (
+      {attempt > 0 && !locked && state !== "failed" ? (
         <audio
           key={attempt}
           ref={player}
@@ -446,18 +521,47 @@ export function CoachingMedia({
   /** 4 inside the Report, where the pillars are h3. */
   headingLevel?: 3 | 4;
 }) {
+  const otherId = useId();
   if (!clips?.length) return null;
+  const [recommended, ...others] = clips;
   return (
     <div className={styles.clips}>
-      {clips.map((clip, index) => (
-        <ClipCard
-          key={clipKey(clip)}
-          clip={clip}
-          recommended={index === 0}
-          forCall={forCall}
-          headingLevel={headingLevel}
-        />
-      ))}
+      <ClipCard
+        key={clipKey(recommended)}
+        clip={recommended}
+        recommended
+        forCall={forCall}
+        headingLevel={headingLevel}
+      />
+      {others.length ? (
+        <details
+          className={styles.more}
+          data-other-lessons=""
+          onToggle={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !event.currentTarget.open
+            )
+              window.dispatchEvent(
+                new CustomEvent("sx-coaching-fold", { detail: otherId }),
+              );
+          }}
+        >
+          <summary aria-controls={otherId}>{MEDIA.more(others.length)}</summary>
+          <div id={otherId} className={styles.clips}>
+            {others.map((clip) => (
+              <ClipCard
+                key={clipKey(clip)}
+                clip={clip}
+                recommended={false}
+                forCall={forCall}
+                headingLevel={headingLevel}
+                foldId={otherId}
+              />
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

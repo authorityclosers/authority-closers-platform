@@ -78,7 +78,12 @@ plus eight focus-to-moment, eight call-search and four rep-call reset cases,
 plus four Insights People, four Organisation People search and four Team
 current-area cases, four Insights name-search and four Team missing-focus cases,
 plus four each for summary clips, supplied shared dates and person-call search,
-and four current-skill finding-filter cases, plus four skill-clip disclosure cases, collect 108 cases. The original Report
+and four current-skill finding-filter cases, plus four skill-clip disclosure cases,
+sixteen lesson/mission anchor cases, twelve call/retained-Report moment-anchor
+cases, eight secondary-lesson disclosure cases and four controlled audio-startup
+cases, plus four controlled native moment-end/replay and four narration shortcut
+focus cases, eight interrupted-lesson resume and four Worked/Didn't clip disclosure
+cases, collect 168 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -271,3 +276,73 @@ Four/all counts, literal source order, independent skills, fold focus, original
 selection times,32–44px and no eager media/extra reads/writes are checked.
 This explicitly altered fictional input is not a customer Report or native
 loaded-DB acceptance; no new fixture route or persisted data is created.
+
+For the new lesson shortcut, select only `-k fixture_coaching_focus_lesson`.
+Four existing fictional surfaces (personal, rep, call and rep-call) check
+See the lesson/mission with pointer and Enter, exact target/hash/query/focus,
+next Tab inside the folded lesson, unchanged source content, one-row32–44px
+controls and no media/source reads or API writes. These16cases do not prove
+canonical Report integration or authenticated lesson/sharing access.
+
+For the call-to-moments shortcut, select only `-k fixture_call_focus_moments`.
+Its three existing fictional surfaces retain original quotes/times/mission/query,
+check32–44px and pointer/Enter target focus, require an actual heading hit below
+sticky navigation and next Tab inside, with no media/source reads or writes.
+The retained Report example is authored UI evidence; canonical Report bootstrap
+and authenticated acceptance remain separate.
+
+For the new secondary-lesson fold, select only
+`-k fixture_coaching_secondary_lessons`. Its existing personal/fictional-rep
+sources preserve recommended and secondary titles/reasons/takeaways/transcript,
+access/preview labels and mission/query. Native pointer/Enter/nested disclosure
+independence, focus/next Tab and40–44px summary targets are checked without
+playback/source reads or writes. Audio-request/reveal and scoped fold-pause
+remain separate mocked unit evidence, as does authenticated acceptance.
+
+For the new stalled-audio recovery, select only
+`-k fixture_coaching_audio_startup`. Four cases use the existing local Design
+review at3026 and freeze the browser clock before interaction. The moment and
+recommended narration requests stay intercepted until their15-second deadline;
+keyboard retry receives an intercepted404 for that same source. A third stalled
+attempt checks loading activation stays inert, keeps keyboard focus, and leaves
+focus on another existing control when the user moves it before timeout. Original quote,
+times, lesson/access/transcript, mission/query and32–44px retry targets remain
+checked. No source request reaches a server or provider. Real playback, preview
+limits, late play promises, switch/unmount cleanup and authenticated acceptance
+remain outside this browser check; the builder's mocked unit coverage is separate.
+
+For the new early recording-end behavior, select only
+`-k fixture_coaching_moment_ended`. Four cases reuse the authored Design review
+moment and D's short silent WAV as an in-memory, byte-range browser response.
+Native muted playback ends before the saved excerpt's end; the existing Play
+control must return, Enter must replay its original timestamp, and pointer Pause
+must stop it. Source quote/time/call link/mission/query and32–44px targets remain
+checked. This exercises native browser playback of silence only; no real recording,
+provider, authenticated read or API write occurs.
+
+For the new “Hear Dipak’s take” focus behavior, select only
+`-k fixture_coaching_hear_lesson_focus`. Four cases check pointer and Enter on the
+existing Design review shortcut: the recommended playback button receives focus,
+is stationary/reachable at40–44px, and next Tab stays inside its card. Return an
+intercepted404 only after that focus moves; the error must leave focus alone.
+The source must still be loading through capture before that404 is returned.
+Original quote/lesson/access/transcript/mission/query remain unchanged. No real
+audio, provider, authenticated read or write is used.
+
+For the new interruption resume, select only
+`-k fixture_coaching_interrupted_lesson_resume`. Eight cases reuse the existing
+recommended/secondary Design review clips and D's native muted70-second silent
+WAV response. A call moment or secondary fold interrupts before the first device
+checkpoint; its saved window offset must equal the native paused time. Reload must
+request no audio; Enter must resume that same source at the exact saved position
+with focus/32–44px targets and original access/text/mission/query. The call source
+receives an intercepted404. Only the isolated browser's device position changes;
+no canonical progress, provider, real recording, authenticated read or API write.
+
+For the new Worked/Didn't clip controls, select only
+`-k fixture_worked_clip_disclosure`. Four cases reuse B's exact browser-only
+boundary: each existing fictional card repeats its own original source ref for
+0/1/2/3/4-ref counts. Check first two/all/fewer, independent cards, pointer/Enter/
+Space selection of original displayed bounds/title, fold focus, unchanged six
+findings/prose and32–44px controls, with no added API/media/write. Mixed source
+order and original object identity stay unit-only; canonical payloads are untouched.

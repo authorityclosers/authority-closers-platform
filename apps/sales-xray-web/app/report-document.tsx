@@ -114,7 +114,10 @@ function Play({
           {/* One flex item, so the word sits next to the time. */}
           <span>
             {at}
-            <span className={styles.playWord}> · {COMMON.play}</span>
+            <span className={styles.playWord}>
+              {" · "}
+              {playing ? COMMON.pause : COMMON.play}
+            </span>
           </span>
         </button>
       )}

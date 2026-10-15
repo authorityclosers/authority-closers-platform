@@ -486,7 +486,7 @@
   cursor: pointer;
 }
 
-.time:hover:not(:disabled) {
+.time:hover:not(:disabled, [aria-disabled="true"]) {
   background: color-mix(in oklab, var(--lx-teal) 16%, transparent);
 }
 
@@ -510,7 +510,8 @@
   transition: width 0.25s linear;
 }
 
-.time:disabled {
+.time:disabled,
+.time[aria-disabled="true"] {
   color: var(--sx-muted);
   cursor: default;
 }
@@ -825,7 +826,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: var(--sx-row-h);
+  min-height: max(var(--sx-row-h), var(--sx-control-h));
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
   font-weight: 600;
@@ -865,6 +866,10 @@
   gap: 10px;
 }
 
+.clips > .more > summary {
+  min-height: max(var(--sx-row-h), var(--sx-control-h));
+}
+
 .clip {
   display: grid;
   gap: 10px;
@@ -897,11 +902,12 @@
   cursor: pointer;
 }
 
-.clipPlay:hover:not(:disabled) {
+.clipPlay:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--lx-teal-hover);
 }
 
-.clipPlay:disabled {
+.clipPlay:disabled,
+.clipPlay[aria-disabled="true"]:not([data-locked]) {
   cursor: default;
   opacity: 0.6;
 }

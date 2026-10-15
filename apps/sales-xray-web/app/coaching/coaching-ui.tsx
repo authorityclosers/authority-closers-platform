@@ -153,7 +153,11 @@ export function FocusHero({
           <CardLabel>{FOCUS.whyFocus}</CardLabel>
           <p>{reason}</p>
           {evidenceAnchor ? (
-            <a className={styles.jump} href={`#${evidenceAnchor}`}>
+            <a
+              className={styles.jump}
+              href={`#${evidenceAnchor}`}
+              aria-controls={evidenceAnchor}
+            >
               {FOCUS.seeMoments} <ArrowDown size={13} aria-hidden="true" />
             </a>
           ) : null}
