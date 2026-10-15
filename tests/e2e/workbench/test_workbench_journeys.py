@@ -6055,7 +6055,7 @@ def test_fixture_coaching_context_save(browser: Browser, viewport: tuple[int, st
         page.clock.fast_forward(1)
         expect(area).to_have_count(0)
         saved = section.get_by_role("status").filter(has_text=f"Saved: “{note}”")
-        expect(saved).to_have_text(f"Saved: “{note}”")
+        expect(saved).to_have_text(f"Saved: “{note}”. It shows with the likely reason.")
         saved.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("saved")
         journey.unclipped_text(section)
