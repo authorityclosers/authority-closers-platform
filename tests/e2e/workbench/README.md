@@ -450,3 +450,16 @@ checking and loaded screenshots are audited for readability/overflow. Mission,
 query and the original document stay intact; no API/media request or sharing
 action is invoked. Conflict recovery/revision-bound mutation remains builder
 unit coverage, outside this read-only fictional browser evidence.
+
+For Agree/Not completely saving, select only `-k fixture_coaching_feedback_save`.
+Eight cases (both choices,1440/390 light/dark) open the existing Design review
+`example=feedback-save`. Enter announces Saving… for three seconds; native
+focusable controls use aria-disabled and repeated Enter/other-choice activation
+cannot submit again. The first error retains initiating focus and permits a
+same-choice Enter retry. Completion respects focus deliberately moved to the
+reflection answer, selects the original choice and keeps the mission/query.
+Agree retains its original confirmation; Not completely opens the existing
+evidence and empty What did we miss? context. The reserved status height stays
+steady through pending/error, retry targets meet32/44px, and saving/error/success
+screenshots cover each choice. API/media requests are blocked/counted; no account
+or canonical feedback is written. Command identity remains builder unit coverage.

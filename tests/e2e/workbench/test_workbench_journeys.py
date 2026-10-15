@@ -6182,3 +6182,135 @@ def test_fixture_coaching_sharing_retry(browser: Browser, viewport: tuple[int, s
             "conflict_revision_or_mutation_acceptance": "builder unit coverage only",
             "authenticated_or_canonical_state_acceptance": False,
         }
+
+
+@pytest.mark.parametrize("choice", ["Agree", "Not completely"])
+def test_fixture_coaching_feedback_save(
+    browser: Browser, viewport: tuple[int, str], choice: str
+) -> None:
+    """Feedback announces pending/failure and preserves keyboard focus through a retry."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Feedback pending/retry uses the fictional in-page writer, never an account")
+    name = "agree" if choice == "Agree" else "disagree"
+    with _journey(browser, viewport, f"feedback-save-{name}") as journey:
+        page = journey.page
+        api_requests: list[str] = []
+        media_requests: list[str] = []
+
+        def no_api(route: Route) -> None:
+            api_requests.append(route.request.method)
+            route.abort("blockedbyclient")
+
+        page.route("**/v1/**", no_api)
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append(request.resource_type)
+                if request.resource_type == "media"
+                else None
+            ),
+        )
+        path = "/review-fixture/coaching?data=review&view=me&example=feedback-save"
+        journey.open(path)
+        expect(page.get_by_role("button", name="My coaching", exact=True)).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        page.evaluate("() => document.fonts.ready")
+        page.clock.install()
+        page.clock.pause_at(datetime.now(UTC) + timedelta(seconds=1))
+        mission = page.locator("[data-active-mission]").inner_text()
+        section = page.locator("#coaching-path")
+        group = section.get_by_role("group", name="Your view", exact=True)
+        status = group.locator('xpath=following-sibling::p[@role="status"][1]')
+        selected = group.get_by_role("button", name=choice, exact=True)
+        other = group.get_by_role(
+            "button", name="Not completely" if choice == "Agree" else "Agree", exact=True
+        )
+        add_context = group.get_by_role("button", name="Add context", exact=True)
+        reserved_height = status.evaluate("el => el.getBoundingClientRect().height")
+        assert reserved_height > 0, "Feedback has no reserved live-status line"
+
+        def capture(state: str) -> None:
+            group.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(state)
+            journey.unclipped_text(group)
+            journey.unclipped_text(status)
+
+        selected.focus()
+        page.keyboard.press("Enter")
+        expect(status).to_have_text("Saving…")
+        for control in (selected, other):
+            expect(control).to_have_attribute("aria-disabled", "true")
+            expect(control).to_have_js_property("disabled", False)
+        expect(selected).to_be_focused()
+        assert status.evaluate("el => el.getBoundingClientRect().height") == reserved_height
+        # Use native keys on both pending choices. A second write would resolve
+        # the fictional writer successfully instead of producing the first error.
+        page.keyboard.press("Enter")
+        page.keyboard.press("Enter")
+        other.focus()
+        page.keyboard.press("Enter")
+        selected.focus()
+        capture("saving")
+        page.clock.fast_forward(2999)
+        expect(status).to_have_text("Saving…")
+        expect(section.get_by_role("textbox")).to_have_count(0)
+        page.clock.fast_forward(1)
+        expect(status).to_have_text("Not saved. Try again.")
+        expect(selected).not_to_have_attribute("aria-disabled", "true")
+        expect(other).not_to_have_attribute("aria-disabled", "true")
+        expect(selected).to_be_focused()
+        assert status.evaluate("el => el.getBoundingClientRect().height") == reserved_height
+        capture("retry")
+        for control, label in ((selected, "selected"), (other, "other"), (add_context, "context")):
+            journey.control_target(control, label)
+        expect(selected).to_be_focused()
+        page.keyboard.press("Enter")
+        expect(status).to_have_text("Saving…")
+        elsewhere = section.get_by_role("button", name="I noticed it later", exact=True)
+        elsewhere.focus()
+        page.clock.fast_forward(2999)
+        expect(status).to_have_text("Saving…")
+        expect(elsewhere).to_be_focused()
+        page.clock.fast_forward(1)
+        expect(selected).to_be_disabled()
+        expect(other).to_be_disabled()
+        expect(selected).to_have_attribute("aria-pressed", "true")
+        expect(other).to_have_attribute("aria-pressed", "false")
+        expect(elsewhere).to_be_focused()
+        if choice == "Agree":
+            expect(status).to_have_text("Noted. Your mission stays the same.")
+            expect(section.get_by_role("textbox")).to_have_count(0)
+        else:
+            expect(status).to_have_text(
+                "Noted. Here’s what this focus is based on. Tell us what we missed."
+            )
+            missed = section.get_by_role("textbox", name=re.compile(r"^What did we miss\?"))
+            expect(missed).to_be_visible()
+            expect(missed).to_have_value("")
+            evidence = section.get_by_role("list", name="This focus is based on", exact=True)
+            expect(evidence).to_be_visible()
+            assert evidence.get_by_role("listitem").count() > 0
+        capture("saved")
+        expect(page.locator("[data-active-mission]")).to_have_text(mission)
+        expect(page).to_have_url(os.environ["WB_BASE_URL"].rstrip("/") + path)
+        expect(page.locator("audio,video")).to_have_count(0)
+        assert not api_requests, "Fictional feedback attempted an API request"
+        assert not media_requests, "Feedback requested media"
+        assert journey.live_refreshes == 0, "Live source changed during feedback saving"
+        journey.observations[-1]["fictional_feedback_save"] = {
+            "source": "D 2d6dbc78; signed-out Design review in-page feedback writer",
+            "choice": choice,
+            "pending_ms_each_attempt": 3000,
+            "status_reserved_height": reserved_height,
+            "native_pending_controls_enabled_with_aria_disabled": True,
+            "repeated_enter_and_other_choice_guarded": True,
+            "failure_retains_initiating_focus": True,
+            "same_choice_enter_retry": True,
+            "success_preserves_deliberately_moved_focus": True,
+            "mission_and_query_retained": True,
+            "api_requests": len(api_requests),
+            "media_requests": len(media_requests),
+            "command_identity": "builder unit coverage only",
+            "authenticated_or_canonical_feedback_acceptance": False,
+        }
