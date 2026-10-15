@@ -1,5 +1,28 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October,22:48 UTC — rebuilt three-part Report (owner b4727ffd,
+36bd8a09/bc0bd174, reader tests1f75c11d; QA source d4406900).
+Only `-k fixture_report_15oct_structure`: **4/4 PASS**,68.80s/launcher0,
+shared3026 at1440/390 light/dark, source unchanged throughout. Three parts in
+order, all27 exact owner names/order with independent native Enter/Space
+View more controls, Good13/All27 filter, all four authored fictional outcomes,
+and legacy Amit's27 No score/overall Not scored yet/progress0 pass. About these
+numbers32x32 desktop/44x44 phone, centres reachable; illustrative labels and
+Lost reason badges meet12px. Good filter94x36/44, pointer rows at least50px
+at1440/123.6875px at390. No runtime/server/overflow/clipping/small-text errors,
+API mutations, media requests or live refreshes. The38/40 intercepted shell
+GETs per pair receive the approved fictional bootstrap, never the live API.
+All72 final PNGs inspected; content and four outcomes readable in both themes,
+no new defect. Receipts/screens:
+`/home/acdev/strikes/1694/shots/2026-10-15-report-15oct/`.
+Original harness outcome-label/bootstrap/readiness/copy failures and one live
+refresh interruption remain in named subfolders. Product floor defects were
+reported to the Report UI owner/coordinator and are now independently closed.
+The AGENTS693645b0 Report-only AI-score approval is recorded in QA's contract;
+this fixture run does not prove actual API structure mapping or AI-draft labels
+on saved calls. Those await the owner's existing approved read-only dev
+context/routes. No Document/Word/Coaching replay, provider/reanalysis or ship.
+
 15 October,21:36 UTC — v0.46.0 original-Host readback, after both canaries.
 Staging canary21:28:16Z, production canary/toolDONE21:33:22Z; both systemd units
 Result=success/ExecMainStatus0. Four foundation:8080 GETs, original staging and
