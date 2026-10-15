@@ -1915,3 +1915,30 @@ multi-element idle check, sticky-header scroll, over-broad pressed guard, late
 shell read) are retained in the shot folder's sub-directories. Receipts and PNGs:
 `/home/acdev/strikes/1694/shots/2026-10-15-report-clip-pause-room/`.
 Fixture-only; the live Pause state during playback is not browser-tested.
+
+
+### Report title scroll and null-href training — 2026-10-15 23:57 UTC
+
+`fixture_report_scroll_training`: **4/4 PASS**, 17.68s, launcher exit0 at
+`88058b6e`, product `77717316` plus retained later fixture source `bae78551`.
+Only `/review-fixture/report/story?example=follow_up`, shared3026,1440/390,
+light/dark. Title position static and bottom -812.59/-1633px above scrollports
+72/48px; analysis heading centre reachable at88.05/158.14px. Navigation33x32 /
+96x44; pointer disclosure982x53.69 /356x123.69; training247x44 on both widths;
+all centres reachable. Enter on authored opening training.href=null opens
+Coaching for call00000000-0000-4000-8000-000000000077, preserving example query,
+document marker/timeOrigin and tab. Document requests during switch0; media,
+writes, runtime/server errors, undersized/clipped text, overflow and refreshes0.
+Ten intercepted fictional GETs per case, including two same-id Coaching reads;
+no live API access. All8 changed-state PNGs inspected and readable.
+
+Screens/receipts: `/home/acdev/strikes/1694/shots/2026-10-16-report-scroll-training/`.
+Two initial harness failures are retained separately: detached navigation during
+portal mount (4.58s), then locator name changing from View more to Hide details
+(9.86s). Their two captures inspected; fixed06983a7c/88058b6e without weakening
+acceptance. Initial preparation80b20476; Ruff/format/API import/diffPASS.
+No completed all27/outcome/legacy suite replay or build. Fixture navigation only:
+the illustrative Siddhant Report overlays the existing fictional Amit source,
+so Coaching still shows that underlying authored focus; this does not establish
+saved-call feedback/lesson mapping or real saved outcome acceptance. Those
+remain the owner's existing signed-in readback, already requested07ace258.
