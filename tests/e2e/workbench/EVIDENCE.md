@@ -1,5 +1,30 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 20:28 UTC — Team rep order (D e1d7c08b). New
+`fixture_team_rep_order` **4/4 PASS**, 24.74s/launcher0 at workbench 5c6d0e31,
+shared dev :3026, 1440/390 light/dark. Existing Sandbox60 and Design review2:
+Latest call follows absolute source timestamps; Name A–Z follows fixed en-IN
+base/numeric collation across every supplied rep, before the eight-row fold.
+Native Home/End preserves focus; both order changes fold expanded lists.
+Name/area intersection, no match, Enter Clear filters and Enter Find reps
+retain the chosen order; shortening restores search focus. Original names,
+focus, records/dots, counts/dates, person routes and aggregate totals retained.
+Order140x32 desktop / 140.5–145x44 phone, all measured controls32/44 and
+reachable; stretched first-row links73.5/98 (Sandbox),72.5/97 (review), all five
+hit points pass. Undersized/clipping/overflow/errors/writes/refreshes0.
+All eight final PNGs inspected: both sort labels and row details readable,
+phone filters on two rows; no defect. Screens/receipts:
+`/home/acdev/strikes/1694/shots/2026-10-15-team-rep-order/`.
+Initial stopped run1FAIL27.01s used the raw Design review label "qualification"
+for Find reps; the fixture normalizes that label to the approved taxonomy.
+Own locator fixed to its source summary row; all three initial PNGs inspected
+and original receipt retained in `harness-normalized-review-label/`. Earlier
+Ruff closure/format failures corrected; final Ruff/format/API import pass.
+208 cases collect (4 selected/204 deselected); no-server selection4skip.
+Missing/tied dates, single-rep and anonymous Team edges remain unit coverage,
+not supplied browser cases. Fictional UI evidence only. v0.46 retry log stopped
+20:27:13Z on validate-python-static before deployment; no release readback due.
+
 15 October, 18:01 UTC — Pillar 1 latest-call shortcut (D 393c32e3). New
 `fixture_coaching_latest_call_shortcut` **8/8 PASS** (7 in 25.18s, then the one
 Sandbox 390 light case rerun in 3.52s after two live dev rebuilds tripped the
