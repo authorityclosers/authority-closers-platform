@@ -2,7 +2,7 @@
   "source": "Owner via laptop Claude, INBOX 2026-10-16T04:00 IST; images reconciled by the owner Report session",
   "source_text": "/home/acdev/strikes/synth/context/report-structure-15oct.md",
   "source_text_sha256": "59866517eb09825e9b2d6bc9ea633bbf0df06f4aac5cf5bb3ccb0a775ce28b81",
-  "precedence": "Owner correction replaces the exported text count of23 with27; all other controlled gates remain.",
+  "precedence": "Owner correction replaces the exported text count of23 with27. AGENTS.md owner decision 693645b0 subsequently approves Report AI-draft scores; other controlled gates remain.",
   "parts": [
     "Overview and score",
     "Pointers with View more",
@@ -45,9 +45,13 @@
   ],
   "scoring": {
     "empty_label": "not scored",
-    "allowed_source": "existing approved analysis only",
-    "new_autonomous_scoring": false,
-    "invented_overall_or_pointer_scores": false
+    "allowed_source": "saved analysis, including owner-approved Report AI scores",
+    "new_autonomous_scoring": "Report-only owner exception recorded in AGENTS.md at 693645b0",
+    "required_ai_score_label": "AI draft - not reviewed by Dipak",
+    "range": [0, 100],
+    "missing_scores_remain_unscored": true,
+    "invented_browser_overall_or_pointer_scores": false,
+    "qa_provider_calls_or_reanalysis": false
   },
   "ratings_when_supplied_by_existing_approved_analysis": [
     "Excellent",

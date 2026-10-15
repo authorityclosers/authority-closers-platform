@@ -6527,7 +6527,7 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
         assert not media_requests, "Reading the Report requested media"
         assert journey.live_refreshes == 0, "Live source changed during rebuilt Report QA"
         journey.observations[-1]["report_15oct"] = {
-            "source": "Owner b4727ffd; controlled27-pointer contract",
+            "source": "Owner b4727ffd/36bd8a09/bc0bd174; controlled27-pointer contract",
             "parts": [label for _, label in sections],
             "pointer_titles": titles,
             "pointer_ids": original_ids,
@@ -6537,6 +6537,7 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
             "fictional_bootstrap_reads": bootstrap_reads,
             "api_mutations": len(api_mutations),
             "media_requests": len(media_requests),
-            "approved_scoring_authority_or_hosted_acceptance": False,
+            "ai_score_label_browser_coverage": False,
+            "authenticated_call_acceptance": False,
             "api_structure_fixture_mapping": "not covered by the legacy Amit fixture",
         }

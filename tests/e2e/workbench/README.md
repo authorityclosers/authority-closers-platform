@@ -467,8 +467,10 @@ or canonical feedback is written. Command identity remains builder unit coverage
 The owner's live Report rebuild follows the15Oct document and the later
 16Oct04:00IST correction, pinned in `report-15oct-acceptance.json`: three parts,
 27 named pointers (replacing the export's23), their View more actions, and final
-Won/Lost/Follow-up Set/Decision Pending. Scores stay not scored unless supplied
-by existing approved analysis; QA must not invent ratings or new score mappings.
+Won/Lost/Follow-up Set/Decision Pending. The later owner decision recorded in
+AGENTS.md at `693645b0` approves Report AI scores, labelled "AI draft - not
+reviewed by Dipak". Saved scores must be within 0–100; missing scores stay
+unscored. QA does not generate scores or run reanalysis/provider calls.
 The legacy six-section fixtures and completed evidence remain retained. New
 Report journeys will use the concrete rebuild source as it lands; no new
 Coaching QA is queued under the owner's current Report-only order.
