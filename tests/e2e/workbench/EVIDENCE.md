@@ -1,5 +1,17 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 14:23 UTC — v0.44.0 served-source readback. Ship log: staging
+live/canary PASS 14:15:07, production snapshot 20261015T141515Z-before-v0.44.0,
+production live/canary PASS 14:23:06, ship done 14:23:07; ac-canary@staging and
+@production units Result=success/ExecMainStatus=0. Original-Host foundation
+:8080 reads at 14:23:13–14: staging and production web `/health` and API
+`/health/ready` all HTTP200 with release_id
+`d5beefbcffedaeb900c53891592de14482d60f47` (main d5beefb from workbench
+1e98c0d1); the 14:17:59 reads showed staging already on d5beefb while
+production still served adb834f. Receipts `shots/2026-10-15-v0.44.0-health/`.
+Availability and served source only; no populated authenticated acceptance
+and no operator action. Coordinator note delivered.
+
 15 October, 13:58 UTC — phone mastery-journey names **4/4 PASS**, 11.93s/
 launcher0 at `fbd4864f` (D c3ec652c). New `test_fixture_coaching_mastery_names`
 opens the signed-out Design review and AC Sandbox My coaching views: the five
