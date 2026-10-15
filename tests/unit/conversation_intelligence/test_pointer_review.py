@@ -63,7 +63,21 @@ def answer(**changes: dict) -> dict:
             )
         entry.update(changes.get(pointer_id, {}))
         pointers.append(entry)
-    return {"score_line": "A solid call.", "pointers": pointers}
+    return {
+        "score_line": "A solid call.",
+        "pointers": pointers,
+        "outcome": {
+            "stages": ["Discovery", "Initial Contact", "Lunch"],
+            "reasons": ["They want a partner's view.", " "],
+            "objections": [{"text": "It costs too much.", "handled": False}, {"handled": True}],
+            "next_steps": [
+                {"text": "Send the proposal.", "owner": "you", "when": "Friday 4 PM"},
+                {"text": "Talk to partner.", "owner": "boss", "when": None},
+            ],
+            "notes": ["speaker_1 runs an 8-person agency."],
+            "suggested_action": "Call after Friday.",
+        },
+    }
 
 
 def test_prompt_lists_every_pointer_and_never_the_raw_ids_as_names() -> None:
@@ -191,3 +205,30 @@ def test_merge_overlays_scores_as_an_ai_draft() -> None:
 def test_payload_digest_is_stable() -> None:
     review = parse_review(answer(), SEGMENTS)
     assert payload_sha256(review) == payload_sha256(json.loads(json.dumps(review)))
+
+
+def test_outcome_details_are_cleaned_and_kept_to_the_calls_own_words() -> None:
+    review = parse_review(answer(), SEGMENTS)
+    outcome = review["outcome"]
+    assert outcome["stages"] == ["Initial Contact", "Discovery"]  # known stages, in order
+    assert outcome["reasons"] == ["They want a partner's view."]
+    assert outcome["objections"] == [{"text": "It costs too much.", "handled": False}]
+    assert outcome["next_steps"][0] == {
+        "text": "Send the proposal.",
+        "owner": "you",
+        "when": "Friday 4 PM",
+    }
+    assert outcome["next_steps"][1]["owner"] is None
+    assert "speaker_1" not in outcome["notes"][0]
+    merged = merge_into_structure({"overview": {}, "pointers": []}, review)
+    assert merged["call_outcome_details"]["suggested_action"] == "Call after Friday."
+
+
+def test_a_review_without_outcome_details_still_parses() -> None:
+    raw = answer()
+    del raw["outcome"]
+    review = parse_review(raw, SEGMENTS)
+    assert review["outcome"] is None
+    assert "call_outcome_details" not in merge_into_structure(
+        {"overview": {}, "pointers": []}, review
+    )

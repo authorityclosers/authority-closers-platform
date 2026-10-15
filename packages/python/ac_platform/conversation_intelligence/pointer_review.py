@@ -22,11 +22,12 @@ from typing import Any
 from ac_platform.conversation_intelligence.report_structure import POINTERS as STRUCTURE_POINTERS
 
 VERSION = "pointer-review/1"
-PROMPT_REVISION = "pointer-review-prompt/1"
+PROMPT_REVISION = "pointer-review-prompt/2"
 MODEL_ID = "gemini-3.8-flash"
 MAX_OUTPUT_TOKENS = 8000
 
 SCORED = ("excellent", "good", "average", "needs_improvement")
+STAGES = ("Initial Contact", "Discovery", "Solution Presentation", "Negotiation", "Closing")
 UNSCORED = ("not_observed", "not_applicable", "insufficient_evidence")
 STATUSES = SCORED + UNSCORED
 
@@ -45,7 +46,8 @@ EVALUATES: dict[str, str] = {
     "decision_process": "How well you explored their decision-making process and timeline.",
     "stakeholders": "Whether you discussed other people involved in the decision.",
     "handling_objections": "How you addressed concerns or objections raised by the prospect.",
-    "solution_value": "How clearly you connected your solution to their specific needs.",
+    # Kept distinct from presenting_solution (owner: keep all 27): value, not explanation.
+    "solution_value": "How clearly you tied the value and results of your solution to their needs.",
     "discussing_pricing": "How confidently and transparently you handled pricing discussions.",
     "handling_competition": "How well you positioned your differentiation against competitors.",
     "checking_concerns": "Whether you asked if they had any other concerns before moving forward.",
@@ -57,7 +59,7 @@ EVALUATES: dict[str, str] = {
     "closing_attitude": "Your confidence and intent to move the deal forward.",
     "building_rapport": "Whether you built rapport and created a comfortable conversation.",
     "presenting_solution": (
-        "Whether you connected your solution to their specific needs and challenges."
+        "Whether you explained what your solution is and how it works, in a clear order."
     ),
     "creating_value": "Whether you clearly communicated the value and benefits of your solution.",
     "overall_communication": "Whether your communication was clear, structured and easy to follow.",
@@ -131,6 +133,18 @@ For every pointer return exactly one entry:
 
 Also return score_line: one sentence that sums up how the call went overall.
 
+And return outcome, about where the deal stands after this call:
+- stages: which of these the call covered, in order: Initial Contact,
+  Discovery, Solution Presentation, Negotiation, Closing.
+- reasons: up to 4 short reasons the deal stands where it does.
+- objections: up to 4 concerns the prospect raised; handled is true when you
+  answered it well on the call.
+- next_steps: up to 4 agreed actions; owner is "you" or "prospect"; when is the
+  time said on the call (like "Friday 4 PM"), or null if none was said.
+- notes: up to 3 other useful facts from the call.
+- suggested_action: one sentence on the best next move for you.
+Only include what the call says; leave a list empty rather than guess.
+
 Pointers:
 {rows}
 """
@@ -184,9 +198,49 @@ def response_schema() -> dict[str, Any]:
         "type": "object",
         "properties": {
             "score_line": {"type": "string"},
+            "outcome": {
+                "type": "object",
+                "properties": {
+                    "stages": {"type": "array", "items": {"type": "string", "enum": list(STAGES)}},
+                    "reasons": {"type": "array", "items": {"type": "string"}},
+                    "objections": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string"},
+                                "handled": {"type": "boolean"},
+                            },
+                            "required": ["text", "handled"],
+                        },
+                    },
+                    "next_steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string"},
+                                "owner": {"type": "string", "enum": ["you", "prospect"]},
+                                "when": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                            },
+                            "required": ["text", "owner", "when"],
+                        },
+                    },
+                    "notes": {"type": "array", "items": {"type": "string"}},
+                    "suggested_action": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                },
+                "required": [
+                    "stages",
+                    "reasons",
+                    "objections",
+                    "next_steps",
+                    "notes",
+                    "suggested_action",
+                ],
+            },
             "pointers": {"type": "array", "items": entry},
         },
-        "required": ["score_line", "pointers"],
+        "required": ["score_line", "pointers", "outcome"],
     }
 
 
@@ -317,6 +371,45 @@ def parse_review(raw: dict[str, Any], segments: list[dict[str, Any]]) -> dict[st
             "scored_pointers": len(scores),
         },
         "pointers": pointers,
+        "outcome": _outcome(raw.get("outcome")),
+    }
+
+
+def _outcome(value: Any) -> dict[str, Any] | None:
+    """The call's own facts about where the deal stands; never the outcome itself."""
+    if not isinstance(value, dict):
+        return None
+
+    def texts(items: Any, count: int, limit: int) -> list[str]:
+        found = [_words(item, limit) for item in items] if isinstance(items, list) else []
+        return [item for item in found if item][:count]
+
+    raw_stages = value.get("stages")
+    stages: list[Any] = raw_stages if isinstance(raw_stages, list) else []
+    objections = []
+    for item in value.get("objections") or []:
+        words = _words(item.get("text"), 240) if isinstance(item, dict) else None
+        if words:
+            objections.append({"text": words, "handled": item.get("handled") is True})
+    steps = []
+    for item in value.get("next_steps") or []:
+        words = _words(item.get("text"), 200) if isinstance(item, dict) else None
+        if words:
+            owner = item.get("owner")
+            steps.append(
+                {
+                    "text": words,
+                    "owner": owner if owner in {"you", "prospect"} else None,
+                    "when": _words(item.get("when"), 60),
+                }
+            )
+    return {
+        "stages": [stage for stage in STAGES if stage in stages],
+        "reasons": texts(value.get("reasons"), 4, 240),
+        "objections": objections[:4],
+        "next_steps": steps[:4],
+        "notes": texts(value.get("notes"), 3, 240),
+        "suggested_action": _words(value.get("suggested_action"), 240),
     }
 
 
@@ -359,6 +452,8 @@ def merge_into_structure(structure: dict[str, Any], review: dict[str, Any]) -> d
             if item.get("training_topic")
             else None
         )
+    if review.get("outcome"):
+        merged["call_outcome_details"] = deepcopy(review["outcome"])
     merged["review_status"] = "ai_draft_not_dipak_reviewed"
     return merged
 

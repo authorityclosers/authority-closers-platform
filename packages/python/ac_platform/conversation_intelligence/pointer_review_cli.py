@@ -17,6 +17,7 @@ environment. Nothing here prints transcript text, prompts or credentials.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -26,6 +27,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 INNER = "--inner"
+AUTOMATIC = "automatic:pointer-review"
+OPERATOR = "operator:report-ui-20261016"
 _PROVIDER = "gemini"
 
 
@@ -33,9 +36,26 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="pointer_review_cli")
     parser.add_argument("--service-config", required=True, type=Path)
     parser.add_argument("--database-url-file", required=True, type=Path)
-    parser.add_argument("--tenant", required=True, type=UUID)
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--tenant", type=UUID, help="one workspace's latest reports")
+    target.add_argument(
+        "--recent-hours",
+        type=int,
+        help="automatic mode: unreviewed reports from the last N hours, every workspace",
+    )
     parser.add_argument("--limit", type=int, default=5)
+    parser.add_argument(
+        "--daily-cap",
+        type=int,
+        default=200,
+        help="automatic mode stops once this many automatic reviews ran in 24 hours",
+    )
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument(
+        "--state-file",
+        type=Path,
+        help="automatic mode: runs that failed twice are not retried (each try costs a call)",
+    )
     parser.add_argument("--force", action="store_true", help="review again even if saved")
     # Outside the worker's mount namespace the identity token and Infisical
     # live at their host paths (the worker bind-mounts them read-only).
@@ -43,8 +63,12 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--infisical", type=Path)
     parser.add_argument(INNER, action="store_true", help=argparse.SUPPRESS)
     arguments = parser.parse_args(argv)
-    if not 1 <= arguments.limit <= 10:
-        parser.error("--limit must be 1-10")
+    if not 1 <= arguments.limit <= 50:
+        parser.error("--limit must be 1-50")
+    if arguments.recent_hours is not None and not 1 <= arguments.recent_hours <= 168:
+        parser.error("--recent-hours must be 1-168")
+    if arguments.recent_hours is not None and arguments.state_file is None:
+        parser.error("--recent-hours needs --state-file (a writable path)")
     return arguments
 
 
@@ -115,6 +139,66 @@ def _latest_reports(connection: Any, tenant: UUID, limit: int) -> list[dict[str,
         {"tenant": tenant, "limit": limit},
     ).mappings()
     return [dict(row) for row in rows]
+
+
+def _recent_unreviewed(connection: Any, hours: int, limit: int) -> list[dict[str, Any]]:
+    from sqlalchemy import text
+
+    rows = connection.execute(
+        text(
+            """
+            SELECT s.submission_id, d.id AS draft_id, d.tenant_id, d.recording_id, d.run_id,
+                   d.source_sha256, d.payload ->> 'transcript_revision' AS transcript_revision,
+                   d.transcript -> 'normalized' -> 'segments' AS segments
+            FROM conversation_report_drafts d
+            JOIN conversation_guest_submissions s ON s.recording_id = d.recording_id
+            WHERE d.erased_at IS NULL
+              AND d.created_at > now() - make_interval(hours => :hours)
+              AND NOT EXISTS (
+                SELECT 1 FROM conversation_pointer_reviews r
+                WHERE r.run_id = d.run_id AND r.source_sha256 = d.source_sha256
+                  AND r.transcript_revision = d.payload ->> 'transcript_revision'
+              )
+              AND d.created_at = (
+                SELECT max(n.created_at) FROM conversation_report_drafts n
+                WHERE n.recording_id = d.recording_id AND n.erased_at IS NULL
+              )
+            ORDER BY d.created_at DESC
+            LIMIT :limit
+            """
+        ),
+        {"hours": hours, "limit": limit},
+    ).mappings()
+    return [dict(row) for row in rows]
+
+
+def _automatic_today(connection: Any) -> int:
+    from sqlalchemy import text
+
+    return int(
+        connection.execute(
+            text(
+                "SELECT count(*) FROM conversation_pointer_reviews"
+                " WHERE created_by = :who AND created_at > now() - interval '24 hours'"
+            ),
+            {"who": AUTOMATIC},
+        ).scalar_one()
+    )
+
+
+def _failures(path: Path) -> dict[str, int]:
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    return {str(k): int(v) for k, v in value.items()} if isinstance(value, dict) else {}
+
+
+def _remember_failure(path: Path, run_id: str) -> None:
+    failures = _failures(path)
+    failures[run_id] = failures.get(run_id, 0) + 1
+    with contextlib.suppress(OSError):
+        path.write_text(json.dumps(failures))
 
 
 def _withheld(connection: Any, recording_id: UUID, revision: str) -> set[str]:
@@ -193,10 +277,24 @@ def _inner(arguments: argparse.Namespace) -> int:
     engine = create_engine(url, pool_pre_ping=True)
     failures = 0
     with engine.connect() as connection:
-        reports = _latest_reports(connection, arguments.tenant, arguments.limit)
+        automatic = arguments.recent_hours is not None
+        if automatic:
+            room = arguments.daily_cap - _automatic_today(connection)
+            if room <= 0:
+                print(json.dumps({"reports": 0, "stopped": "daily_cap"}))
+                return 0
+            reports = _recent_unreviewed(
+                connection, arguments.recent_hours, min(arguments.limit, room)
+            )
+        else:
+            reports = _latest_reports(connection, arguments.tenant, arguments.limit)
         print(json.dumps({"reports": len(reports), "apply": arguments.apply}))
         for report in reports:
             line: dict[str, Any] = {"submission": str(report["submission_id"])}
+            if automatic and _failures(arguments.state_file).get(str(report["run_id"]), 0) >= 2:
+                line["skipped"] = "failed_twice"
+                print(json.dumps(line))
+                continue
             withheld = _withheld(connection, report["recording_id"], report["transcript_revision"])
             segments = [
                 segment
@@ -226,6 +324,8 @@ def _inner(arguments: argparse.Namespace) -> int:
             except (PointerReviewError, RuntimeError) as error:
                 line["error"] = str(error)
                 failures += 1
+                if automatic:
+                    _remember_failure(arguments.state_file, str(report["run_id"]))
                 print(json.dumps(line))
                 continue
             usage = response.get("usageMetadata") or {}
@@ -245,7 +345,7 @@ def _inner(arguments: argparse.Namespace) -> int:
                     payload_sha256=payload_sha256(review),
                     input_tokens=usage.get("promptTokenCount"),
                     output_tokens=usage.get("candidatesTokenCount"),
-                    created_by="operator:report-ui-20261016",
+                    created_by=AUTOMATIC if automatic else OPERATOR,
                     created_at=datetime.now(UTC),
                 )
             )
