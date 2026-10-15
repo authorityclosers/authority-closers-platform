@@ -1,5 +1,16 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October, 13:58 UTC — phone mastery-journey names **4/4 PASS**, 11.93s/
+launcher0 at `fbd4864f` (D c3ec652c). New `test_fixture_coaching_mastery_names`
+opens the signed-out Design review and AC Sandbox My coaching views: the five
+names render whole on one line each at 12px, inside the journey box and
+unclipped; the smallest same-line gap is 124px at 1440 and 75.5px at 390 (the
+even steps drop to a second line); page overflow0; Sandbox's single current
+step Emerging is bold and the Design review view has none; API writes0,
+refreshes/runtime/server/visual errors0. All eight PNGs inspected in
+`shots/2026-10-15-1357Z-mastery-names/`. Fixture geometry only; no
+authenticated or real-data claim. D closure delivered.
+
 15 October, 13:42 UTC — lesson Pause and view-close resume **8/8 PASS**,
 36.67s/launcher0 at `261cacc4` (D f20b606f source; own EVIDENCE a39f45f5
 landed mid-wave, docs only), and moment view-close **4/4 PASS**, 19.25s/
