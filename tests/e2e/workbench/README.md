@@ -438,3 +438,15 @@ mission/query, readability, overflow and absence of API/media requests or live
 refreshes are checked. The fixture uses an in-page writer: canonical persistence,
 authenticated access and command identity are outside this browser evidence
 (same-note command reuse remains covered by the builder's unit tests).
+
+For a failed sharing-setting read, select only `-k fixture_coaching_sharing_retry`.
+Four viewport/theme cases open the existing Design review `example=sharing-retry`.
+The failed read shows its honest message and reachable Try again, with no sharing
+action. Pointer (light) or Enter (dark) starts the three-second fictional retry;
+Checking sharing… is a live status, retry stays disabled and no sharing action
+appears at2999ms. At3000ms the current Private setting names Priya Shah and offers
+the original Share with your admins action. Targets meet32/44px and failed,
+checking and loaded screenshots are audited for readability/overflow. Mission,
+query and the original document stay intact; no API/media request or sharing
+action is invoked. Conflict recovery/revision-bound mutation remains builder
+unit coverage, outside this read-only fictional browser evidence.

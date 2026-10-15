@@ -6079,3 +6079,101 @@ def test_fixture_coaching_context_save(browser: Browser, viewport: tuple[int, st
             "command_identity": "unit-covered; not exposed by the fictional browser writer",
             "authenticated_or_canonical_persistence_acceptance": False,
         }
+
+
+def test_fixture_coaching_sharing_retry(browser: Browser, viewport: tuple[int, str]) -> None:
+    """A failed sharing-setting read recovers in place before offering a sharing action."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Sharing read recovery uses the fictional in-page reader, never an account")
+    with _journey(browser, viewport, "sharing-retry") as journey:
+        page = journey.page
+        api_requests: list[str] = []
+        media_requests: list[str] = []
+
+        def no_api(route: Route) -> None:
+            api_requests.append(route.request.method)
+            route.abort("blockedbyclient")
+
+        page.route("**/v1/**", no_api)
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append(request.resource_type)
+                if request.resource_type == "media"
+                else None
+            ),
+        )
+        path = "/review-fixture/coaching?data=review&view=me&example=sharing-retry"
+        journey.open(path)
+        expect(page.get_by_role("button", name="My coaching", exact=True)).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        page.evaluate("() => document.fonts.ready")
+        panel = page.get_by_role("region", name="Who sees your coaching", exact=True)
+        retry = panel.get_by_role("button", name="Try again", exact=True)
+        status = panel.get_by_role("status")
+        setting_actions = panel.get_by_role(
+            "button", name=re.compile("Share with your admins|Stop sharing")
+        )
+        expect(status).to_have_text("Sharing setting couldn’t be loaded. Try again.")
+        expect(retry).to_be_enabled()
+        expect(setting_actions).to_have_count(0)
+        mission = page.locator("[data-active-mission]").inner_text()
+
+        def capture(state: str) -> None:
+            panel.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(state)
+            journey.unclipped_text(panel)
+
+        capture("failed")
+        journey.control_target(retry, "read-retry")
+        page.clock.install()
+        page.clock.pause_at(datetime.now(UTC) + timedelta(seconds=1))
+        keyboard = journey.theme == "dark"
+        if keyboard:
+            retry.focus()
+            page.keyboard.press("Enter")
+        else:
+            retry.click()
+        expect(status).to_have_text("Checking sharing…")
+        expect(retry).to_be_disabled()
+        expect(setting_actions).to_have_count(0)
+        capture("checking")
+        page.clock.fast_forward(2999)
+        expect(status).to_have_text("Checking sharing…")
+        expect(retry).to_be_disabled()
+        expect(setting_actions).to_have_count(0)
+        page.clock.fast_forward(1)
+        share = panel.get_by_role("button", name="Share with your admins", exact=True)
+        expect(share).to_be_enabled()
+        expect(setting_actions).to_have_count(1)
+        expect(retry).to_have_count(0)
+        expect(panel).to_contain_text("Private")
+        expect(panel).to_contain_text("Only you can see it.")
+        expect(panel).to_contain_text("Priya Shah")
+        expect(panel).not_to_contain_text(re.compile("couldn’t be loaded|Checking sharing"))
+        capture("loaded")
+        journey.control_target(share, "loaded-share")
+        # Read-only QA stops before this action: recipients and revision-bound
+        # mutations remain the builder's separate unit/API acceptance.
+        expect(page.locator("[data-active-mission]")).to_have_text(mission)
+        expect(page).to_have_url(os.environ["WB_BASE_URL"].rstrip("/") + path)
+        expect(page.locator("audio,video")).to_have_count(0)
+        assert journey.main_navigations == 1, "Sharing read recovery reloaded the document"
+        assert not api_requests, "The fictional sharing reader attempted an API request"
+        assert not media_requests, "Sharing read recovery requested media"
+        assert journey.live_refreshes == 0, "Live source changed during sharing read recovery"
+        journey.observations[-1]["fictional_sharing_read_retry"] = {
+            "source": "D 265372c0; signed-out Design review in-page sharing reader",
+            "activation": "Enter" if keyboard else "pointer",
+            "pending_ms": 3000,
+            "no_action_before_current_setting": True,
+            "loaded_state": "Private",
+            "loaded_recipient": "Priya Shah",
+            "sharing_action_invoked": False,
+            "mission_and_query_retained": True,
+            "api_requests": len(api_requests),
+            "media_requests": len(media_requests),
+            "conflict_revision_or_mutation_acceptance": "builder unit coverage only",
+            "authenticated_or_canonical_state_acceptance": False,
+        }
