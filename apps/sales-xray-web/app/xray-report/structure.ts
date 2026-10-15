@@ -148,6 +148,13 @@ export type StructureView = {
     stats: XrayView["overview"]["stats"] | null;
   };
   pointers: Pointer[] | null;
+  /** Where the deal stands, in the call's own words (AI review); never the outcome itself. */
+  outcome: Partial<
+    Pick<
+      XrayView["outcome"],
+      "stages" | "reasons" | "objections" | "nextSteps" | "notes" | "suggested"
+    >
+  > | null;
   /** True when any score came from the analysis (shown as an AI draft). */
   aiDraft: boolean;
   roles: StructureRoles;
@@ -275,7 +282,68 @@ export function readStructure(
       stats: statsFrom(stats),
     },
     pointers,
+    outcome: outcomeDetails(structure.call_outcome_details),
     aiDraft,
     roles: apiRoles,
   };
+}
+
+const STAGES = [
+  "Initial Contact",
+  "Discovery",
+  "Solution Presentation",
+  "Negotiation",
+  "Closing",
+];
+
+function outcomeDetails(value: unknown): StructureView["outcome"] {
+  if (!isObject(value)) return null;
+  const list = (items: unknown, count: number) =>
+    Array.isArray(items)
+      ? items
+          .map((item) => text(item, 400))
+          .filter((item): item is string => item !== null)
+          .slice(0, count)
+      : [];
+  const stages = Array.isArray(value.stages)
+    ? STAGES.filter((stage) => (value.stages as unknown[]).includes(stage))
+    : [];
+  const objections = Array.isArray(value.objections)
+    ? value.objections
+        .filter(isObject)
+        .map((item) => ({
+          text: text(item.text, 400) ?? "",
+          sources: [],
+          handled: item.handled === true,
+        }))
+        .filter((item) => item.text)
+        .slice(0, 4)
+    : [];
+  const steps = Array.isArray(value.next_steps)
+    ? value.next_steps
+        .filter(isObject)
+        .map((item) => ({
+          text: text(item.text, 300) ?? "",
+          date: text(item.when, 60),
+          owner:
+            item.owner === "you" || item.owner === "prospect"
+              ? (item.owner as "you" | "prospect")
+              : null,
+          source: null,
+        }))
+        .filter((item) => item.text)
+        .slice(0, 4)
+    : [];
+  const found: NonNullable<StructureView["outcome"]> = {};
+  if (stages.length) found.stages = stages;
+  const reasons = list(value.reasons, 4);
+  if (reasons.length)
+    found.reasons = reasons.map((t) => ({ text: t, sources: [] }));
+  if (objections.length) found.objections = objections;
+  if (steps.length) found.nextSteps = steps;
+  const notes = list(value.notes, 3);
+  if (notes.length) found.notes = notes.map((t) => ({ text: t, sources: [] }));
+  const suggested = text(value.suggested_action, 400);
+  if (suggested) found.suggested = suggested;
+  return found;
 }

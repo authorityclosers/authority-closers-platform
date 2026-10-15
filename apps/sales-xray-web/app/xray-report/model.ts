@@ -119,7 +119,7 @@ export type XrayView = {
     date: string | null;
     stages: string[];
     reasons: Line[];
-    objections: Line[];
+    objections: Array<Line & { handled?: boolean }>;
     nextSteps: NextStep[];
     notes: Line[];
     suggested: string | null;
@@ -208,8 +208,9 @@ export const POINTERS: ReadonlyArray<{
   {
     id: "solution_value",
     name: "Positioning Solution Value",
+    // Kept distinct from Presenting the Solution (owner: keep all 27).
     evaluates:
-      "How clearly you connected your solution to their specific needs.",
+      "How clearly you tied the value and results of your solution to their needs.",
   },
   {
     id: "pricing",
@@ -271,7 +272,7 @@ export const POINTERS: ReadonlyArray<{
     id: "presenting_solution",
     name: "Presenting the Solution",
     evaluates:
-      "Whether you connected your solution to their specific needs and challenges.",
+      "Whether you explained what your solution is and how it works, in a clear order.",
   },
   {
     id: "creating_value",

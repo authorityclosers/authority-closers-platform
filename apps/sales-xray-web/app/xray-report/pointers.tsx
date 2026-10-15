@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
-import { notify } from "../notice-center";
 import { PlayChip, type Select } from "../report-visuals/visuals";
 import {
   QuoteMark,
@@ -168,11 +167,9 @@ function StatusChip({ status }: { status: PointerStatus | null }) {
 function Detail({
   pointer,
   onSelect,
-  illustrative,
 }: {
   pointer: Pointer;
   onSelect?: Select;
-  illustrative: boolean;
 }) {
   if (!isScored(pointer.status)) {
     const item = pointer.status
@@ -332,15 +329,12 @@ function Detail({
                     window.open(pointer.training.href, "_blank", "noopener");
                     return;
                   }
-                  notify({
-                    id: "xray-training-video",
-                    tone: "info",
-                    title: "Training videos are on the way",
-                    message: illustrative
-                      ? "This is the illustrative example; its videos are not linked yet."
-                      : "This lesson isn't linked to a video yet.",
-                    timeout: 5000,
-                  });
+                  // Dipak's lessons and their videos live in this call's Coaching.
+                  window.dispatchEvent(
+                    new CustomEvent("ac:report-open-view", {
+                      detail: "coaching",
+                    }),
+                  );
                 }}
               >
                 <CirclePlay aria-hidden="true" />
@@ -510,11 +504,7 @@ export function CallAnalysis({
                   </button>
                   {isOpen ? (
                     <div id={`xray-pointer-${pointer.id}`}>
-                      <Detail
-                        pointer={pointer}
-                        onSelect={onSelect}
-                        illustrative={illustrative}
-                      />
+                      <Detail pointer={pointer} onSelect={onSelect} />
                     </div>
                   ) : null}
                 </li>

@@ -5,6 +5,7 @@ import {
   CalendarClock,
   CalendarDays,
   Check,
+  CircleAlert,
   CircleCheck,
   FilePen,
   Hourglass,
@@ -129,7 +130,7 @@ function Checks({
   onSelect,
   title,
 }: {
-  lines: Line[];
+  lines: Array<Line & { handled?: boolean }>;
   tone: string;
   ranked?: boolean;
   onSelect?: Select;
@@ -143,6 +144,12 @@ function Checks({
             <span className={styles.rank} aria-hidden="true">
               {index + 1}
             </span>
+          ) : line.handled === false ? (
+            // A concern the call left open is not a tick.
+            <CircleAlert
+              className={`${styles.checkMark} ${styles.amber}`}
+              aria-label="Still open"
+            />
           ) : (
             <CircleCheck className={styles.checkMark} aria-hidden="true" />
           )}

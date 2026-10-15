@@ -119,7 +119,10 @@ export function useXrayView(
           api?.overview.improvement ?? story?.picture.concern ?? null,
       },
       pointers: api?.pointers ?? unscoredPointers(),
-      outcome: story ? outcomeFromStory(story) : EMPTY_OUTCOME,
+      outcome: {
+        ...(story ? outcomeFromStory(story) : EMPTY_OUTCOME),
+        ...(api?.outcome ?? {}),
+      },
     };
   }, [illustration, model, transcript, seller, prospect, data.report]);
 }
