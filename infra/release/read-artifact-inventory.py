@@ -12,12 +12,13 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 ATTEMPTS = 3
 TIMEOUT_SECONDS = 120
 PAGE_SIZE = 100
+EXPIRY_MARGIN_SECONDS = 300
 
 
 def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -55,10 +56,24 @@ def artifact_created_at(artifact: dict[str, Any]) -> datetime:
         raise ValueError("invalid artifact schema: created_at") from None
 
 
+def expiry_can_remove(artifact: dict[str, Any], now: datetime) -> bool:
+    """Only explicit expiry evidence can explain an absent older identity."""
+    if artifact["expired"]:
+        return True
+    try:
+        expires = datetime.fromisoformat(artifact["expires_at"].replace("Z", "+00:00"))
+        return expires.tzinfo is not None and expires <= now + timedelta(
+            seconds=EXPIRY_MARGIN_SECONDS
+        )
+    except (KeyError, AttributeError, TypeError, ValueError):
+        return False
+
+
 def validate_inventory(
-    raw: str, *, snapshot: InventorySnapshot | None = None
+    raw: str, *, snapshot: InventorySnapshot | None = None, now: datetime | None = None
 ) -> tuple[list[dict[str, Any]], int]:
     snapshot = snapshot or InventorySnapshot()
+    now = now or datetime.now(UTC)
     try:
         pages = json.loads(raw, object_pairs_hook=unique_object)
     except ValueError:
@@ -126,10 +141,17 @@ def validate_inventory(
             expected = page["total_count"] - len(recent)
             if snapshot.expected_count is None:
                 snapshot.expected_count = expected
-            elif expected != snapshot.expected_count:
-                raise ValueError("older artifact count changed during inventory")
-    if len(older) != snapshot.expected_count or not snapshot.known.keys() <= older.keys():
+    # Pagination can skip a still-live row when an earlier row expires. Retry
+    # that sweep; only a complete later sweep plus known expiry identities can
+    # reconcile a smaller count. Never infer the identity of an unseen removal.
+    missing = snapshot.known.keys() - older.keys()
+    expired_missing = {
+        identity for identity in missing if expiry_can_remove(snapshot.known[identity], now)
+    }
+    if missing != expired_missing:
         raise ValueError("incomplete inventory")
+    if len(older) + len(expired_missing) != snapshot.expected_count:
+        raise ValueError("incomplete inventory: older artifact count changed during inventory")
     # Older completeness alone cannot bound unseen uploads at the front of
     # already-read pages. Require this sweep to account for every reported row;
     # otherwise restart at page one, preserving all previously observed bounds.

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { CoachingRoute, CoachingSkeleton } from "./coaching-page";
+import { PAGE } from "./coaching-copy";
 import { requestedCall } from "./coaching-read";
 import { loadServerCoaching } from "./coaching-server";
 
@@ -16,19 +17,28 @@ export default async function Page({
     );
   const query = await searchParams;
   const callId = requestedCall(query.call);
-  const team = !callId && query.view === "team";
+  const person = callId ? null : requestedCall(query.person);
+  const team = !callId && !person && query.view === "team";
   const result =
     query.call !== undefined && !callId
       ? ({
           data: null,
-          error: "This call link is invalid. Open the call’s report again.",
+          error: PAGE.badCallLink,
         } as const)
-      : await loadServerCoaching(team ? "team" : callId);
+      : !callId && query.person !== undefined && !person
+        ? ({
+            data: null,
+            error: PAGE.badTeamLink,
+          } as const)
+        : await loadServerCoaching(
+            team ? "team" : person ? `person:${person}` : callId,
+          );
   return (
     <Suspense fallback={<CoachingSkeleton />}>
       <CoachingRoute
         initialCallId={callId}
         initialTeam={team}
+        initialPerson={person}
         initialResult={result}
       />
     </Suspense>

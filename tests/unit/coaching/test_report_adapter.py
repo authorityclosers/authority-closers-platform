@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+import pytest
+
 from ac_platform.coaching.report_adapter import from_report
 
 NOW, CALL = datetime(2026, 10, 10, tzinfo=UTC), UUID(int=10)
@@ -156,3 +158,105 @@ def test_missing_malformed_or_withheld_findings_never_supply_fallback_evidence()
     data["report"]["content"]["dimensions"] = []
     data["report"]["content"]["improvements"][0]["explanation"] = "[Withheld for privacy]"
     assert adapt(data).skills == ()
+
+
+def test_history_keeps_the_first_quoted_strength_only() -> None:
+    data = envelope()
+    ref = {"segment_id": "seg-2", "quote": "Tell me more.", "start_ms": 4000, "end_ms": 6000}
+    data["report"]["content"]["strengths"] = [
+        {"title": "No quote", "explanation": "Missing moment.", "evidence": []},
+        {"title": "Follow-up", "explanation": "You asked a follow-up.", "evidence": [ref]},
+    ]
+    result = adapt(data)
+    assert result is not None and result.strength is not None
+    assert result.strength.title == "Follow-up"
+    assert result.strength.evidence[0].quote == "Tell me more."
+    data["report"]["content"]["strengths"] = []
+    assert adapt(data).strength is None
+
+
+@pytest.mark.parametrize("bad", [{"quote": "x" * 2001}, {"segment_id": ""}])
+def test_a_malformed_strength_is_skipped_without_losing_the_call(bad: dict[str, Any]) -> None:
+    data = envelope()
+    ref = {"segment_id": "seg-2", "quote": "Tell me more.", "start_ms": 4000, "end_ms": 6000}
+    data["report"]["content"]["strengths"] = [
+        {"title": "Broken", "explanation": "Bad moment.", "evidence": [{**ref, **bad}]},
+        {"title": "Follow-up", "explanation": "You asked a follow-up.", "evidence": [ref]},
+    ]
+    result = adapt(data)
+    assert result is not None and result.skills
+    assert result.strength is not None and result.strength.title == "Follow-up"
+
+
+def v8_envelope(
+    link: int | None = 1, mission: str | None = "Ask what the delay costs."
+) -> dict[str, Any]:
+    """A v8 report: compatibility `improvements` follow `pillars.didnt` in order; no overview."""
+    data = envelope()
+    content = data["report"]["content"]
+    content.pop("overview")
+    first = content["improvements"][0]
+    second = {
+        "title": "Moved to price early",
+        "explanation": "Price came before the delay was clear.",
+        "evidence": [
+            {"segment_id": "seg-2", "quote": "Here is the price.", "start_ms": 4000, "end_ms": 6000}
+        ],
+    }
+    content["improvements"] = [first, second]
+    content["pillars"] = {
+        "version": "report-pillars/1",
+        "didnt": [
+            {**first, "what": first["explanation"], "what_it_affected": "Value stayed vague."},
+            {
+                **second,
+                "what": second["explanation"],
+                "what_it_affected": "The buyer had no reason to act now.",
+            },
+        ],
+        "deal": {"coaching_mission": mission, "coaching_mission_for": link},
+    }
+    return data
+
+
+def test_a_v8_report_coaches_its_own_mission_on_the_issue_it_links() -> None:
+    result = adapt(v8_envelope())
+    assert result is not None
+    row = next(row for row in result.skills if row.mission)
+    assert row.mission.behavior == "Ask what the delay costs."
+    assert row.label == "Moved to price early"
+    assert row.improvement == "Price came before the delay was clear."
+    assert row.why_it_matters == "The buyer had no reason to act now."
+    assert [m.quote for m in row.evidence] == ["Here is the price."]
+    assert row.mission.done_when.startswith("You do it once on your next call")
+
+
+def test_a_v8_mission_linked_to_the_first_issue_keeps_its_skill_link() -> None:
+    result = adapt(v8_envelope(link=0))
+    assert result is not None
+    row = next(row for row in result.skills if row.mission)
+    # The first issue shares its quote with the impact skill: a unique link.
+    assert row.skill_id == "problem_impact_desire"
+    assert row.mission.behavior == "Ask what the delay costs."
+    assert row.why_it_matters == "Value stayed vague."
+
+
+@pytest.mark.parametrize("link,mission", [(None, "Ask what the delay costs."), (5, "x"), (1, None)])
+def test_a_v8_mission_without_a_valid_link_is_never_attached_by_guess(
+    link: int | None, mission: str | None
+) -> None:
+    result = adapt(v8_envelope(link=link, mission=mission))
+    assert result is not None
+    assert all(
+        row.mission is None or row.mission.behavior != "Ask what the delay costs."
+        for row in result.skills
+    )
+
+
+def test_a_v7_overview_always_wins_over_v8_pillars() -> None:
+    data = v8_envelope()
+    data["report"]["content"]["overview"] = envelope()["report"]["content"]["overview"]
+    result = adapt(data)
+    assert result is not None
+    row = next(row for row in result.skills if row.mission)
+    assert row.mission.behavior == "Ask one impact question."

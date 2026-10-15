@@ -56,6 +56,7 @@ from ac_platform.conversation_intelligence.inference import (
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
@@ -1365,7 +1366,7 @@ def test_hosted_intake_http_rejects_capacity_after_existing_recording(
                 oversized = await client.post(
                     "/v1/conversation/intake/quote",
                     headers={**headers, "Idempotency-Key": "hosted-oversized-source"},
-                    json={**payload, "source_bytes": 32 * 1024 * 1024 + 1},
+                    json={**payload, "source_bytes": MAX_AUDIO_BYTES + 1},
                 )
             assert response.status_code == 409, response.text
             assert "capacity" in response.text.lower()
@@ -1373,7 +1374,7 @@ def test_hosted_intake_http_rejects_capacity_after_existing_recording(
             assert any(
                 error["loc"] == ["body", "source_bytes"]
                 and error["type"] == "less_than_equal"
-                and error["ctx"]["le"] == 32 * 1024 * 1024
+                and error["ctx"]["le"] == MAX_AUDIO_BYTES
                 for error in oversized.json()["detail"]
             )
             assert setup.broker.calls == 0

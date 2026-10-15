@@ -13,6 +13,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
@@ -38,7 +39,6 @@ import {
   isAccountName,
   suggestYou,
   useSpeakerProfiles,
-  voiceStyle,
   type SpeakerProfile,
 } from "./speaker-profiles";
 import styles from "./call-map.module.css";
@@ -79,6 +79,23 @@ const LENSES: Array<{ key: Lens; label: string; short: string }> = [
   { key: "talk-share", label: "Talk share by minute", short: "Talk share" },
 ];
 const LENS_KEY = "ac.xray.map-lens";
+const LENS_CHANGE = "ac.xray.map-lens-change";
+
+function subscribeLens(notify: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === LENS_KEY) notify();
+  };
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(LENS_CHANGE, notify);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(LENS_CHANGE, notify);
+  };
+}
+
+function serverLens(): Lens {
+  return "who";
+}
 
 function readLens(): Lens {
   try {
@@ -311,7 +328,9 @@ export function CallMap({
     anchor: HTMLElement;
   } | null>(null);
   const [declined, setDeclined] = useState<string[]>([]);
-  const [lens, setLens] = useState<Lens>(readLens);
+  const savedLens = useSyncExternalStore(subscribeLens, readLens, serverLens);
+  const [localLens, setLocalLens] = useState<Lens | null>(null);
+  const lens = localLens ?? savedLens;
   const {
     profiles,
     drafts,
@@ -370,6 +389,18 @@ export function CallMap({
     const id = facts.voices[voice];
     return id === undefined ? undefined : profiles[id];
   };
+  // Match the timeline: a confirmed seller is teal, all other lanes neutral.
+  // Speaking first never establishes a seller role.
+  const laneStyle = (lane: number): CSSProperties => {
+    const speakerId = lanes[lane]?.speakerId;
+    const role = speakerId ? profiles[speakerId]?.role : null;
+    return {
+      "--voice":
+        role === "you" || role === "salesperson"
+          ? "var(--lx-teal)"
+          : "var(--lx-muted)",
+    } as CSSProperties;
+  };
   const nameOf = (voice: number) => {
     const profile = profileOf(voice);
     if (profile?.name) return profile.name;
@@ -383,9 +414,10 @@ export function CallMap({
   );
 
   function chooseLens(next: Lens) {
-    setLens(next);
+    setLocalLens(next);
     try {
       localStorage.setItem(LENS_KEY, next);
+      window.dispatchEvent(new Event(LENS_CHANGE));
     } catch {
       // A remembered view is a convenience only.
     }
@@ -552,6 +584,7 @@ export function CallMap({
               <button
                 key={option.key}
                 type="button"
+                aria-label={option.label}
                 aria-pressed={activeLens === option.key}
                 data-short={option.short}
                 onClick={() => chooseLens(option.key)}
@@ -599,7 +632,7 @@ export function CallMap({
                         type="button"
                         className={styles.speaker}
                         data-voice={lane.lane}
-                        style={voiceStyle(lane.lane)}
+                        style={laneStyle(lane.lane)}
                         aria-expanded={
                           editable ? editingVoice === lane.lane : undefined
                         }
@@ -736,7 +769,7 @@ export function CallMap({
                 }
                 style={
                   activeLens === "who" && focusVoice !== null
-                    ? voiceStyle(focusVoice)
+                    ? laneStyle(focusVoice)
                     : undefined
                 }
                 viewBox={`0 0 ${BIN_COUNT * 4} 56`}
@@ -818,7 +851,7 @@ export function CallMap({
                   key={lane.lane}
                   className={styles.lane}
                   data-voice={lane.lane}
-                  style={voiceStyle(lane.lane)}
+                  style={laneStyle(lane.lane)}
                   data-dim={
                     focusVoice !== null && focusVoice !== lane.lane
                       ? "true"
@@ -912,7 +945,7 @@ export function CallMap({
                   {turn && voice >= 0 ? (
                     <span
                       data-voice={laneOf[voice]}
-                      style={voiceStyle(laneOf[voice] ?? voice)}
+                      style={laneStyle(laneOf[voice] ?? voice)}
                     >
                       <SpeakerAvatar
                         voice={laneOf[voice] ?? voice}
@@ -948,7 +981,7 @@ export function CallMap({
       </div>
 
       <figcaption className={styles.stats}>
-        <div className={styles.stat} data-tone="teal">
+        <div className={styles.stat}>
           <span className={styles.icon} aria-hidden="true">
             <MessagesSquare size={15} />
           </span>
@@ -965,7 +998,7 @@ export function CallMap({
                     key={lane.lane}
                     data-voice={lane.lane}
                     style={{
-                      ...voiceStyle(lane.lane),
+                      ...laneStyle(lane.lane),
                       flexGrow: Math.max(lane.share, 0.01),
                     }}
                   />
@@ -974,7 +1007,7 @@ export function CallMap({
             ) : null}
           </span>
         </div>
-        <div className={styles.stat} data-tone="amber">
+        <div className={styles.stat}>
           <span className={styles.icon} aria-hidden="true">
             <Timer size={15} />
           </span>
@@ -988,7 +1021,7 @@ export function CallMap({
             <b>{formatClock(facts.longest.ms)}</b>
           </span>
         </div>
-        <div className={styles.stat} data-tone="blue">
+        <div className={styles.stat}>
           <span className={styles.icon} aria-hidden="true">
             <MessageCircleQuestion size={15} />
           </span>
@@ -1002,7 +1035,7 @@ export function CallMap({
             </b>
           </span>
         </div>
-        <div className={styles.stat} data-tone="violet">
+        <div className={styles.stat}>
           <span className={styles.icon} aria-hidden="true">
             <Target size={15} />
           </span>

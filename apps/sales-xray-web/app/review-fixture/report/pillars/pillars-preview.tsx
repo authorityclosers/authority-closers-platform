@@ -6,62 +6,151 @@ import { DipakOverview } from "../../../dipak-overview";
 import { SalesSkills } from "../../../sales-skills";
 import type { ReportEvidence } from "../../../report-contract";
 import { syntheticReport, syntheticCallRecord } from "../synthetic-report";
+import { contentReport, contentTranscript } from "./content-fixture";
+import { StoryShellPreview, type StoryFixture } from "../story/preview";
 import styles from "../../../report-pillar-screen.module.css";
 
-export function PillarsPreview() {
+export function PillarsPreview({
+  nativeFixture,
+}: {
+  nativeFixture: StoryFixture;
+}) {
+  const [nativeMode, setNativeMode] = useState(true);
+  const [contentMode, setContentMode] = useState(false);
   const [source, setSource] = useState<ReportEvidence | null>(null);
+  const [closingKind, setClosingKind] = useState<"won" | "lost" | null>(null);
+  const report = contentMode
+    ? contentReport
+    : closingKind
+      ? {
+          ...syntheticReport,
+          // Simulate a misleading analysis label, never a human-entered fact.
+          story: {
+            version: "report-story/1" as const,
+            phases: [],
+            outcome: {
+              kind: closingKind,
+              next_step_rung: "none" as const,
+              next_step_when: null,
+              evidence: syntheticReport.strengths[0].evidence,
+            },
+            next_step: null,
+            prospect_commitments: [],
+            seller_commitments: [],
+          },
+        }
+      : syntheticReport;
   return (
-    <main className={styles.preview} data-synthetic-report>
-      <div className={styles.previewFrame}>
-        <h1>Report · fictional display preview</h1>
-        <p>
-          No recording, customer, account, audio or provider call exists here.
-        </p>
-        <ReportModes
-          structure="pillars"
-          initialView="story"
-          lightSurface={false}
-          documentData={{
-            report: syntheticReport,
-            callRecord: syntheticCallRecord,
-            callLength: "00:35",
-            title: "Fictional Report pillars",
+    <>
+      <div
+        className={styles.previewControls}
+        aria-label="Fictional analysis labels"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setSource(null);
+            setNativeMode(false);
+            setContentMode(true);
+            setClosingKind(null);
           }}
-          panels={[
-            {
-              id: "overview",
-              label: "Overview",
-              content: (
-                <DipakOverview
-                  showHeading={false}
-                  report={syntheticReport}
-                  onSelectEvidence={setSource}
-                  callRecord={syntheticCallRecord}
-                />
-              ),
-            },
-            {
-              id: "skills",
-              label: "Sales skills",
-              content: (
-                <SalesSkills
-                  dimensions={syntheticReport.dimensions}
-                  onSelectEvidence={setSource}
-                />
-              ),
-            },
-          ]}
-          onSelectEvidence={setSource}
-        />
-        <aside role="status" className={styles.previewSource}>
-          {source ? (
-            <p>{source.quote}</p>
-          ) : (
-            <p>Select a source to inspect the fictional words.</p>
-          )}
-          No audio exists in this preview.
-        </aside>
+        >
+          Revised Report
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setSource(null);
+            setNativeMode(true);
+          }}
+        >
+          Native v8 Report
+        </button>
+        {(["won", "lost"] as const).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            onClick={() => {
+              setSource(null);
+              setNativeMode(false);
+              setContentMode(false);
+              setClosingKind(kind);
+            }}
+          >
+            Simulate {kind} analysis
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => {
+            setSource(null);
+            setNativeMode(false);
+            setContentMode(false);
+            setClosingKind(null);
+          }}
+        >
+          Older report
+        </button>
       </div>
-    </main>
+      {nativeMode ? (
+        <StoryShellPreview fixture={nativeFixture} />
+      ) : (
+        <main className={styles.preview} data-synthetic-report>
+          <div className={styles.previewFrame}>
+            <h1>Report · fictional display preview</h1>
+            <p>
+              No recording, customer, account, audio or provider call exists
+              here.
+            </p>
+            <ReportModes
+              fixture
+              structure="pillars"
+              initialView="story"
+              lightSurface={false}
+              documentData={{
+                report,
+                callRecord: contentMode ? undefined : syntheticCallRecord,
+                transcript: contentMode ? contentTranscript : undefined,
+                callLength: contentMode ? "00:06" : "00:35",
+                title: "Fictional Report pillars",
+              }}
+              panels={[
+                {
+                  id: "overview",
+                  label: "Overview",
+                  content: (
+                    <DipakOverview
+                      showHeading={false}
+                      report={report}
+                      onSelectEvidence={setSource}
+                      callRecord={syntheticCallRecord}
+                    />
+                  ),
+                },
+                {
+                  id: "skills",
+                  label: "Sales skills",
+                  content: (
+                    <SalesSkills
+                      dimensions={report.dimensions}
+                      onSelectEvidence={setSource}
+                    />
+                  ),
+                },
+              ]}
+              onSelectEvidence={setSource}
+            />
+            <aside role="status" className={styles.previewSource}>
+              {source ? (
+                <p>{source.quote}</p>
+              ) : (
+                <p>Select a source to inspect the fictional words.</p>
+              )}
+              No audio exists in this preview.
+            </aside>
+          </div>
+        </main>
+      )}
+    </>
   );
 }

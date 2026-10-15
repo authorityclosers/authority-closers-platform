@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.admin_recordings import AdminConversationRecordings
@@ -80,7 +81,11 @@ def install_conversation_admin_http(
         raise ValueError("Internal proof import is limited to the local test composition.")
     router = APIRouter(prefix="/v1/admin/conversation", tags=["conversation-admin"])
     dependency = Depends(require_actor, scope="function")
-    recording_tenant_ids = tuple(sorted(sales_xray_served_tenant_ids(settings, intake), key=str))
+
+    async def recording_tenants(database: AsyncSession) -> tuple[UUID, ...]:
+        return tuple(
+            sorted(await sales_xray_served_tenant_ids(settings, intake, database), key=str)
+        )
 
     def surface(request: Request, response: Response) -> None:
         require_admin_surface(request, settings)
@@ -166,7 +171,7 @@ def install_conversation_admin_http(
             return await AdminConversationRecordings(
                 ConversationApplication(auth.database),
                 operations_tenant_id,
-                recording_tenant_ids=recording_tenant_ids,
+                recording_tenant_ids=await recording_tenants(auth.database),
                 recovery_enabled=recovery_storage is not None,
             ).list(
                 auth.resolved.actor,
@@ -195,14 +200,14 @@ def install_conversation_admin_http(
                 recovered = await RetainedC5RecoveryService(
                     ConversationApplication(auth.database),
                     operations_tenant_id=operations_tenant_id,
-                    recording_tenant_ids=recording_tenant_ids,
+                    recording_tenant_ids=await recording_tenants(auth.database),
                 ).admin_report(auth.resolved.actor, run_id)
                 if recovered is not None:
                     return recovered
             return await AdminConversationReports(
                 ConversationApplication(auth.database),
                 operations_tenant_id,
-                recording_tenant_ids=recording_tenant_ids,
+                recording_tenant_ids=await recording_tenants(auth.database),
             ).get(auth.resolved.actor, run_id)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
@@ -353,7 +358,7 @@ def install_conversation_admin_http(
                 return await RetainedC5RecoveryService(
                     ConversationApplication(auth.database),
                     operations_tenant_id=operations_tenant_id,
-                    recording_tenant_ids=recording_tenant_ids,
+                    recording_tenant_ids=await recording_tenants(auth.database),
                 ).revalidate(
                     auth.resolved.actor,
                     run_id,
@@ -382,7 +387,7 @@ def install_conversation_admin_http(
                 return await RetainedC5RecoveryService(
                     ConversationApplication(auth.database),
                     operations_tenant_id=operations_tenant_id,
-                    recording_tenant_ids=recording_tenant_ids,
+                    recording_tenant_ids=await recording_tenants(auth.database),
                 ).revalidate(
                     auth.resolved.actor,
                     run_id,
@@ -427,7 +432,8 @@ def install_conversation_admin_http(
         router,
         settings=settings,
         require_actor=require_actor,
-        recording_tenant_ids=recording_tenant_ids,
+        recording_tenant_ids=(),
+        recording_tenant_resolver=recording_tenants,
         storage=recovery_storage,
     )
     app.include_router(router)

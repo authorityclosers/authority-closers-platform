@@ -19,7 +19,8 @@
   overflow-wrap: anywhere;
 }
 
-.root :is(h2, h3, h4, p, ul, ol, dl, dd, blockquote, figure) {
+.root :is(h2, h3, h4, p, ul, ol, dl, dd, blockquote, figure),
+.conversation :is(h2, h3, h4, p, ul, ol, dl, dd, blockquote, figure) {
   margin: 0;
 }
 
@@ -58,10 +59,208 @@
     grid-template-columns: minmax(0, 1fr) 336px;
   }
 
-  /* The rail already shows the mission beside the focus. */
-  .hero .nextCall,
-  .root .moreMoments {
+  /* Wide screens already open with two moments and eight calls. */
+  .root .moreMoments:not([data-many]),
+  .root .moreCalls:not([data-many]) {
     display: none;
+  }
+
+  .moments:not([data-expanded]) > [data-extra]:nth-child(n + 3),
+  .callList:not([data-expanded]) li:nth-child(n + 9) {
+    display: none;
+  }
+}
+
+/* One conversation: the six pillars read top to bottom in Dipak's order,
+   one column like the Report (spec 3, 7, 9). */
+.conversation {
+  display: grid;
+  gap: 28px;
+  align-items: start;
+  min-width: 0;
+  max-width: 980px;
+}
+
+.conversation > * {
+  min-width: 0;
+}
+
+/* ---------- Pillars: Strike A's heading and cards (report-visuals) ---------- */
+
+.pillar {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  scroll-margin-top: 72px;
+}
+
+/* A's heading keeps its own bottom margin; the pillar's gap does the rest. */
+.pillar > header {
+  margin-bottom: 0;
+}
+
+/* A plain card, and the Report's callout with its coloured left edge. */
+/* A list card: the same frame as A's StoryCard, rows run edge to edge. */
+.card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+}
+
+.listHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding: 14px 16px 2px;
+  color: var(--sx-muted);
+  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+}
+
+.listHead > span {
+  margin-left: auto;
+  font-weight: 500;
+}
+
+.card[data-flush] {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.card[data-flush] > .moreMoments {
+  margin: 0 16px 12px;
+}
+
+/* Sub-labels inside a card, in A's quiet label style. */
+.cardLabel {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--sx-muted);
+  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+}
+
+.cardLabelMuted {
+  font-weight: 400;
+}
+
+/* "Hear Dipak's take": a quiet button under the focus, never the hero. */
+.take {
+  justify-self: start;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
+}
+
+.chip[data-tone="accent"],
+.chip[data-tone="good"] {
+  background: color-mix(in oklab, var(--lx-teal) 10%, var(--lx-surface));
+  color: var(--lx-teal);
+}
+
+/* A labelled line inside a card: a thin left rule, no second box. */
+.fact {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--sx-line-strong);
+  color: var(--sx-ink-2);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+}
+
+/* Label-value lines, as Dipak writes them ("Pattern: …", "Status: …"). */
+.diagnosis {
+  display: grid;
+  gap: 10px;
+}
+
+.diagnosis > div {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 2px 12px;
+}
+
+.diagnosis dt {
+  padding-top: 2px;
+  color: var(--sx-muted);
+  font: 600 var(--sx-text-xs) / 1.5 var(--lx-font-ui);
+}
+
+.diagnosis dd {
+  color: var(--sx-ink);
+}
+
+@container (max-width: 560px) {
+  .diagnosis > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.framework {
+  display: grid;
+  gap: 6px;
+}
+
+.route {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route li {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.route li[data-now] {
+  border-color: color-mix(in oklab, var(--sx-accent) 45%, var(--sx-line));
+  background: var(--sx-accent-soft);
+}
+
+.route li > span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+@container (max-width: 560px) {
+  .route {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -76,18 +275,15 @@
 }
 
 /* One column: pillars keep their order, the call list goes last, and only
-   the first two moments show until asked (spec 9, mobile). */
+   the first moment and three newest calls show until asked (spec 9, 12.7). */
 @container (max-width: 899.98px) {
   .main,
   .rail {
     display: contents;
   }
 
-  .late {
-    order: 1;
-  }
-
-  .moments:not([data-expanded]) > [data-extra] {
+  .moments:not([data-expanded]) > [data-extra],
+  .callList:not([data-expanded]) li:nth-child(n + 4) {
     display: none;
   }
 }
@@ -96,10 +292,6 @@
   display: grid;
   gap: 12px;
   padding: 14px;
-}
-
-.section {
-  scroll-margin-top: 72px;
 }
 
 .label {
@@ -126,16 +318,6 @@
 
 /* ---------- Focus hero (pillar 1) ---------- */
 
-.hero {
-  display: grid;
-  gap: 12px;
-  padding: 16px 18px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
-  box-shadow: inset 3px 0 0 var(--sx-accent);
-}
-
 .focusTitle {
   color: var(--sx-ink);
   font: var(--sx-text-title);
@@ -147,16 +329,6 @@
   color: var(--sx-ink-2);
   font-size: var(--sx-text-md);
   line-height: 1.55;
-}
-
-.facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px 24px;
-}
-
-.facts dd {
-  color: var(--sx-ink-2);
 }
 
 .nextCall {
@@ -183,11 +355,19 @@
   font-size: var(--sx-text-xs);
 }
 
+.nextCallActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
 .jump {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 4px;
+  min-height: var(--sx-control-h);
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
   font-weight: 600;
@@ -200,10 +380,26 @@
 
 /* ---------- Evidence moments (pillar 2) ---------- */
 
+.evidenceTarget {
+  scroll-margin-top: 80px;
+}
+
+.pillar:focus-visible,
+.evidenceTarget:focus-visible,
+.callsSection:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
 .moments {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.moments:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: -2px;
 }
 
 .moment {
@@ -212,6 +408,11 @@
   align-items: start;
   gap: 4px 12px;
   padding: 12px 14px;
+}
+
+/* Moments inside a padded card (the strength) need no own inset. */
+.inset > .moment {
+  padding: 6px 0;
 }
 
 .moment + .moment {
@@ -245,12 +446,19 @@
 .momentMeta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 2px 8px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
 }
 
 .momentMeta a {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: var(--sx-control-h);
+  min-width: var(--sx-control-h);
+  padding-block: 4px;
   color: var(--sx-accent);
   text-decoration: none;
 }
@@ -266,9 +474,9 @@
   min-height: var(--sx-control-h);
   box-sizing: border-box;
   padding: 0 10px;
-  border: 1px solid var(--sx-line);
+  border: 1px solid color-mix(in oklab, var(--lx-teal) 30%, transparent);
   border-radius: 999px;
-  background: var(--sx-surface);
+  background: color-mix(in oklab, var(--lx-teal) 8%, transparent);
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-xs);
@@ -278,37 +486,250 @@
   cursor: pointer;
 }
 
-.time:hover:not(:disabled) {
-  background: var(--sx-accent-soft);
+.time:hover:not(:disabled, [aria-disabled="true"]) {
+  background: color-mix(in oklab, var(--lx-teal) 16%, transparent);
 }
 
 .time[data-state="playing"] {
+  position: relative;
+  overflow: hidden;
   border-color: transparent;
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
 }
 
-.time:disabled {
+/* How far into this clip of the call playback is, inside the pill. */
+.time[data-state="playing"]::after {
+  content: "";
+  position: absolute;
+  inset: auto auto 0 0;
+  width: var(--clip, 0%);
+  height: 3px;
+  background: var(--sx-accent-ink);
+  opacity: 0.7;
+  transition: width 0.25s linear;
+}
+
+.time:disabled,
+.time[aria-disabled="true"] {
   color: var(--sx-muted);
   cursor: default;
 }
 
-.moreMoments {
+/* The Report's "With context" beside a moment's time. */
+.withContext {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  cursor: pointer;
+}
+
+.withContext[aria-pressed="true"] {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.withContext:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+.moreMoments,
+.moreCalls {
   justify-self: start;
   margin: 0 14px 12px;
+}
+
+.moreCalls {
+  margin-top: 8px;
+}
+
+/* "Add context": the learner's own words about the focus. */
+.contextForm {
+  display: grid;
+  flex-basis: 100%;
+  gap: 8px;
+}
+
+/* "Not completely": the moments the focus rests on, before the question. */
+.basis {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+}
+
+.basisHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--sx-muted);
+  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+}
+
+.basisHead a {
+  /* A taller tap area for a small inline link, without moving the line. */
+  display: inline-block;
+  margin-block: -4px;
+  padding-block: 4px;
+  color: var(--sx-accent);
+  text-decoration: none;
+}
+
+.basisHead a:hover {
+  text-decoration: underline;
+}
+
+.basis ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--sx-ink-2);
+}
+
+.basis li > span {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.learnerContext {
+  display: block;
+  margin-top: 4px;
+  color: var(--sx-ink-2);
+  font-style: italic;
+}
+
+/* Team: find a person within the already shared or fictional rep list. */
+.repFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 4px;
+}
+
+.repSearch {
+  flex: 1 1 180px;
+}
+
+.repArea {
+  flex: 0 1 180px;
+}
+
+.repEmpty {
+  padding: 0 14px 14px;
+}
+
+@media (max-width: 600px) {
+  .repList a {
+    display: grid;
+    align-content: center;
+    min-height: 44px;
+  }
+
+  .repSearch {
+    flex-basis: 100%;
+  }
+
+  .repArea {
+    flex-grow: 1;
+    flex-basis: 140px;
+    min-width: 0;
+  }
+}
+
+.repFocus {
+  display: block;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  white-space: normal;
+}
+
+.repMatch {
+  border-radius: 2px;
+  background: var(--sx-accent-soft);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--sx-accent);
+  text-underline-offset: 2px;
+}
+
+.repCallLinks {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 0;
+  border-block: 1px solid var(--sx-line);
+}
+
+.repCallLinks .actions {
+  gap: 6px;
+}
+
+.repCallTitle {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.callsSection {
+  scroll-margin-top: 80px;
+}
+
+/* Keep each saved call's full name beside its separate Report action. */
+.callTitle {
+  display: block;
+  white-space: normal;
+}
+
+.callFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.callFilter p {
+  flex-basis: 100%;
+}
+
+.callSearch {
+  flex: 1 1 220px;
+}
+
+.callFinding {
+  flex: 0 1 230px;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .callSearch,
+  .callFinding {
+    flex-basis: 100%;
+  }
+}
+
+/* Segmented's inset is visual; each call filter keeps the full tap floor. */
+.callFilter button {
+  min-height: var(--sx-control-h);
 }
 
 .status {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-}
-
-.hypothesis {
-  display: grid;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-sunken);
 }
 
 /* ---------- Lesson (pillar 3) ---------- */
@@ -377,6 +798,12 @@
   background: var(--sx-accent-soft);
 }
 
+/* Spec 3.6: a quoted strength from this call, to build the mission on. */
+.strengthTitle {
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
 .wording {
   display: grid;
   gap: 4px;
@@ -399,7 +826,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: var(--sx-row-h);
+  min-height: max(var(--sx-row-h), var(--sx-control-h));
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
   font-weight: 600;
@@ -439,6 +866,10 @@
   gap: 10px;
 }
 
+.clips > .more > summary {
+  min-height: max(var(--sx-row-h), var(--sx-control-h));
+}
+
 .clip {
   display: grid;
   gap: 10px;
@@ -471,11 +902,12 @@
   cursor: pointer;
 }
 
-.clipPlay:hover:not(:disabled) {
+.clipPlay:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--lx-teal-hover);
 }
 
-.clipPlay:disabled {
+.clipPlay:disabled,
+.clipPlay[aria-disabled="true"]:not([data-locked]) {
   cursor: default;
   opacity: 0.6;
 }
@@ -492,7 +924,7 @@
   min-width: 0;
 }
 
-.clipTitle h3 {
+.clipTitle :is(h3, h4) {
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
   font-weight: 600;
@@ -600,12 +1032,6 @@
 
 /* ---------- Mission and practice (pillar 4) ---------- */
 
-.mission {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-}
-
 .missionBehavior {
   color: var(--sx-ink);
   font: var(--sx-text-panel);
@@ -613,7 +1039,14 @@
 
 .terms {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px 20px;
+}
+
+.terms dt {
+  color: var(--sx-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .terms dd {
@@ -622,20 +1055,23 @@
 
 .cue {
   justify-self: start;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border: 1px dashed color-mix(in oklab, var(--sx-accent) 60%, transparent);
   border-radius: 999px;
   color: var(--sx-accent);
-  font-size: var(--sx-text-xs);
+  font-size: 13px;
   font-weight: 600;
 }
 
-.practice {
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--sx-line);
-  background: color-mix(in oklab, var(--sx-sunken) 50%, transparent);
+.cue > span {
+  margin-inline-end: 6px;
+  color: var(--sx-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quoteToggle {
+  justify-self: start;
 }
 
 /* ---------- Progress and path (pillars 5 and 6) ---------- */
@@ -656,7 +1092,8 @@
 }
 
 .timeline li,
-.legend span::before {
+.legend span::before,
+.callPoint::before {
   box-sizing: border-box;
   width: 14px;
   height: 14px;
@@ -665,14 +1102,30 @@
 }
 
 .timeline [data-state="suggested"],
-.legend [data-state="suggested"]::before {
+.legend [data-state="suggested"]::before,
+.callPoint[data-state="suggested"]::before {
   border-color: transparent;
   background: var(--sx-warn);
 }
 
 .timeline [data-state="no_suggestion"],
-.legend [data-state="no_suggestion"]::before {
+.legend [data-state="no_suggestion"]::before,
+.callPoint[data-state="no_suggestion"]::before {
   border-color: var(--sx-accent);
+}
+
+/* A call row's saved record on the current focus, with the history's dot. */
+.callPoint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.callPoint::before {
+  content: "";
+  flex: none;
+  width: 10px;
+  height: 10px;
 }
 
 .timeline [data-state="not_covered"],
@@ -720,48 +1173,144 @@
   content: "";
 }
 
+/* The timeline's mission bar, named in the legend. */
+.legend [data-mark="mission"]::before {
+  width: 2px;
+  height: 12px;
+  border: 0;
+  border-radius: 1px;
+  background: var(--sx-ink-2);
+}
+
+/* Dipak's mastery journey: Emerging → … → Mastered, the current step bold.
+   Each step is at least as wide as its name, so names show whole. */
 .stepper {
-  display: flex;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(min-content, 1fr));
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .stepper li {
-  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: 12px;
+}
+
+.stepper li::before {
   height: 6px;
   border-radius: 999px;
   background: var(--sx-line);
+  content: "";
 }
 
-.stepper li[data-on] {
+.stepper li[data-on]::before {
   background: var(--sx-accent);
 }
 
-.path {
-  display: grid;
-  gap: 8px;
+.stepper li[aria-current] {
+  color: var(--sx-ink);
+  font-weight: 700;
 }
 
-.path > div {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 8px;
+.stepper li > span {
+  white-space: nowrap;
 }
 
-.path dt {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-  font-weight: 600;
+/* Phones: names sit under their bars, the ends flush with the edges.
+   Five whole names do not fit one 390 px line at 12 px, so the even steps
+   drop to a second line: neighbours never touch, each stays under its bar. */
+@media (max-width: 400px) {
+  .stepper {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .stepper li {
+    text-align: center;
+  }
+
+  .stepper li:nth-child(even) > span {
+    margin-top: 16px;
+  }
+
+  .stepper li:first-child {
+    text-align: start;
+  }
+
+  .stepper li:last-child {
+    text-align: end;
+  }
+}
+
+/* Too narrow for five names: only the current one shows, or the two ends
+   while there is none (all stay readable to screen readers and in tooltips). */
+@media (max-width: 352px) {
+  .stepper:has([aria-current]) li:not([aria-current]) > span,
+  .stepper:not(:has([aria-current])) li:not(:first-child, :last-child) > span {
+    font-size: 0;
+  }
 }
 
 .reflection {
-  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
   border-radius: var(--sx-radius-sm);
   background: var(--sx-sunken);
+}
+
+.reflectionQuestion {
   color: var(--sx-ink);
   font-weight: 600;
+}
+
+.answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.answer {
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: 500 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  cursor: pointer;
+}
+
+.answer:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--sx-accent) 45%, var(--sx-line));
+}
+
+.answer[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.answer:disabled {
+  cursor: default;
+}
+
+.answer:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .answer {
+    min-height: 44px;
+  }
 }
 
 /* ---------- Team ---------- */
@@ -783,6 +1332,20 @@
 .share > span:last-child {
   min-width: 34px;
   text-align: right;
+}
+
+.areaActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .areaActions {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+  }
 }
 
 /* ---------- Recovery and loading ---------- */
@@ -827,14 +1390,26 @@
   background: var(--sx-surface);
 }
 
+/* Narrow columns: panel titles keep one line; subtitles are secondary. */
+@container (max-width: 560px) {
+  .root h2 > small {
+    display: none;
+  }
+
+  .share {
+    width: 92px;
+  }
+}
+
 @media (max-width: 760px) {
+  .quoteToggle,
+  .momentMeta a {
+    min-height: 44px;
+  }
+
   .root,
   .skeleton {
     padding: 14px var(--sx-gutter) 32px;
-  }
-
-  .hero {
-    padding: 14px;
   }
 
   .clipHead {
@@ -848,6 +1423,11 @@
 }
 
 @media (pointer: coarse) {
+  .jump,
+  .withContext {
+    min-height: 44px;
+  }
+
   .clipPlay {
     width: 44px;
     height: 44px;

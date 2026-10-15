@@ -76,7 +76,7 @@ async def test_me_reads_share_allowance_and_refuse_guest_or_foreign_workspace(
                 assert response.json() == {
                     "plan": {"key": "trial", "name": "Trial"},
                     "allowance": allowance,
-                    "longest_call_seconds": 6000,
+                    "longest_call_seconds": 7200,
                 }
             else:
                 assert response.json() == {"allowance": allowance, **usage.return_value}

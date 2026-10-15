@@ -31,6 +31,10 @@ _EVIDENCE_MARKER = "AC_TASK_ADAPTER: gemini-json-v4\nMODEL: "
 _PRACTICAL_MARKER = "AC_TASK_ADAPTER: gemini-json-v5\nMODEL: "
 _CALL_MAP_MARKER = "AC_TASK_ADAPTER: gemini-json-v6\nMODEL: "
 _CALL_MAP_DEPTH_MARKER = "COACHING_MAP: honest-call-map-v7."
+_REPORT_MARKER = "AC_TASK_ADAPTER: gemini-json-v8\nMODEL: "
+_REPORT_DEPTH_MARKER = "REPORT_CONTENT: report-content/1"
+_DIPAK_MARKER = "AC_TASK_ADAPTER: gemini-json-v7\nMODEL: "
+_DIPAK_DEPTH_MARKER = "REPORT_STRUCTURE: dipak-six-pillars-v8."
 _DEPTH_MARKER = "COACHING_DEPTH: evidence-meaning-action-v5."
 _PRACTICAL_DEPTH_MARKER = "COACHING_DEPTH: practical-whole-call-v6."
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
@@ -65,7 +69,7 @@ def _config(
     if structured_coaching:
         if task != "coaching":
             raise GeminiTaskError("task_prompt_invalid")
-        if structured_schema_version not in {2, 3, 4, 5, 6}:
+        if structured_schema_version not in {2, 3, 4, 5, 6, 7, 8}:
             raise GeminiTaskError("task_prompt_invalid")
         config["responseJsonSchema"] = (
             coaching_response_json_schema()
@@ -76,6 +80,8 @@ def _config(
                     4: "coaching-v5",
                     5: "coaching-v6",
                     6: "coaching-v7",
+                    7: "coaching-v8",
+                    8: "report-c5-v1",
                 }[structured_schema_version]
             )
         )
@@ -151,7 +157,11 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
         task=task,
         structured_coaching=structured_coaching,
         structured_schema_version=(
-            6
+            8
+            if _REPORT_DEPTH_MARKER in messages[0]["content"]
+            else 7
+            if _DIPAK_DEPTH_MARKER in messages[0]["content"]
+            else 6
             if _CALL_MAP_DEPTH_MARKER in messages[0]["content"]
             else 5
             if _PRACTICAL_DEPTH_MARKER in messages[0]["content"]
@@ -162,7 +172,11 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
     )
     marker = (
         (
-            _CALL_MAP_MARKER
+            _REPORT_MARKER
+            if _REPORT_DEPTH_MARKER in messages[0]["content"]
+            else _DIPAK_MARKER
+            if _DIPAK_DEPTH_MARKER in messages[0]["content"]
+            else _CALL_MAP_MARKER
             if _CALL_MAP_DEPTH_MARKER in messages[0]["content"]
             else _PRACTICAL_MARKER
             if _PRACTICAL_DEPTH_MARKER in messages[0]["content"]
@@ -217,11 +231,15 @@ def gemini_prompt_view(
         evidence_structured = texts[0].startswith(_EVIDENCE_MARKER)
         practical_structured = texts[0].startswith(_PRACTICAL_MARKER)
         call_map_structured = texts[0].startswith(_CALL_MAP_MARKER)
+        report_structured = texts[0].startswith(_REPORT_MARKER)
+        dipak_structured = texts[0].startswith(_DIPAK_MARKER)
         structured_coaching = (
             legacy_structured
             or evidence_structured
             or practical_structured
             or call_map_structured
+            or dipak_structured
+            or report_structured
             or texts[0].startswith(_STRUCTURED_MARKER)
         )
         if structured_coaching and (
@@ -235,9 +253,23 @@ def gemini_prompt_view(
             marker = _PRACTICAL_MARKER
         if call_map_structured:
             marker = _CALL_MAP_MARKER
+        if dipak_structured:
+            marker = _DIPAK_MARKER
+        if report_structured:
+            marker = _REPORT_MARKER
+        has_report_depth = _REPORT_DEPTH_MARKER in texts[0]
         has_v5_depth = _DEPTH_MARKER in texts[0]
         has_v6_depth = _PRACTICAL_DEPTH_MARKER in texts[0]
         has_v7_depth = _CALL_MAP_DEPTH_MARKER in texts[0]
+        has_v8_depth = _DIPAK_DEPTH_MARKER in texts[0]
+        if report_structured != has_report_depth or (
+            report_structured and (has_v5_depth or has_v6_depth or has_v7_depth or has_v8_depth)
+        ):
+            raise ValueError
+        if dipak_structured != has_v8_depth or (
+            dipak_structured and (has_v5_depth or has_v6_depth or has_v7_depth)
+        ):
+            raise ValueError
         if call_map_structured != has_v7_depth or (
             call_map_structured and (has_v5_depth or has_v6_depth)
         ):
@@ -271,7 +303,11 @@ def gemini_prompt_view(
             task=task,
             structured_coaching=structured_coaching,
             structured_schema_version=(
-                6
+                8
+                if report_structured
+                else 7
+                if dipak_structured
+                else 6
                 if call_map_structured
                 else 5
                 if practical_structured

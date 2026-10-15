@@ -1,0 +1,33 @@
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.callLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sx-control-h);
+  padding: 0 8px;
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.callLink:hover {
+  background: var(--sx-accent-soft);
+}
+
+.callLink:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (max-width: 759.98px) {
+  .callLink {
+    min-height: 44px;
+  }
+}

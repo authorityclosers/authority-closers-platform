@@ -94,6 +94,7 @@ export function FullShellPreview() {
       <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
         <AcquisitionShell
           authenticated
+          pageName="Report"
           homeHref="/review-fixture/shell"
           active="analyse"
           mobileFit
@@ -162,6 +163,7 @@ export function FullShellPreview() {
                     onRequestDeletion={() => {}}
                   />
                   <ReportModes
+                    fixture
                     documentData={{
                       report: syntheticReport,
                       transcript,

@@ -1,0 +1,1262 @@
+{
+ "schema": "ac.sales-xray.coaching-placeholder-media/1",
+ "source": "Strike F synthetic-v1 coaching-media, verified neutral narration",
+ "topics": [
+  {
+   "topic_id": "syn-coach-video-008",
+   "title": "Objection: Answer Nahi, Diagnose",
+   "kind": "video",
+   "skill_id": "certainty_objection_intelligence",
+   "gap_type": "judgment",
+   "topic_tag": "undiagnosed_objection",
+   "priority": 8,
+   "start_ms": 0,
+   "end_ms": 33542,
+   "narration": "Prospect: “Mujhe sochna hai.” Bad: “Sure sir, kab call karun?” But “think” could mean price, value, spouse, fear, comparison, self-doubt, implementation, genuine processing, polite rejection. “Of course. Exactly kis part ke baare mein aapko sochna hai?” If prospect identifies something: diagnose it. If they genuinely need space: respect it. “Diagnosis ka goal har objection ko destroy karna nahi. Goal clarity create karna hai.”",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-008-S01",
+     "title": "Diagnose the objection",
+     "bullets": [
+      "Clarify what the buyer means.",
+      "Respond to the blocker and check resolution."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Clarify what the buyer means.",
+    "Respond to the blocker and check resolution."
+   ],
+   "audio_sha256": "96ed3b428aac14cd09a55133e8e8b0177c53d503f7ea80693665818f4f3ad16a",
+   "audio_bytes": 204452,
+   "free": true
+  },
+  {
+   "topic_id": "syn-coach-video-010",
+   "title": "“Too Expensive” ke Different Meanings",
+   "kind": "video",
+   "skill_id": "certainty_objection_intelligence",
+   "gap_type": "judgment",
+   "topic_tag": "price_diagnosis",
+   "priority": 10,
+   "start_ms": 0,
+   "end_ms": 49451,
+   "narration": "1. CANNOT AFFORD Money genuinely unavailable. This is a capacity issue. 2. EXPECTED LOWER PRICE Prospect expected ₹30–35K. Money may exist. Problem is anchor…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-010-S01",
+     "title": "Clarify “too expensive”",
+     "bullets": [
+      "Ask what the buyer is comparing with.",
+      "Separate budget, value and payment timing."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Ask what the buyer is comparing with.",
+    "Separate budget, value and payment timing."
+   ],
+   "audio_sha256": "0868636e41ad556fda46de5db182bf7818c716fc5f1af1b8f1445d2879c3affd",
+   "audio_bytes": 299903,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "9a0da52cd5c335f47daaa01f03731aa8787381f91e1dff1dd0ba2ee76e490c0f",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-013",
+   "title": "An Objection Is Information, Not an Enemy",
+   "kind": "audio",
+   "skill_id": "certainty_objection_intelligence",
+   "gap_type": "judgment",
+   "topic_tag": "undiagnosed_objection",
+   "priority": 28,
+   "start_ms": 0,
+   "end_ms": 29937,
+   "narration": "Harvard Negotiation Project का एक foundational principle भी यही distinction करता है: Positions are what people say they want. Interests are the underlying…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-013-S01",
+     "title": "Learn from resistance",
+     "bullets": [
+      "Separate the stated position from its meaning.",
+      "Respect a refusal while clarifying uncertainty."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Separate the stated position from its meaning.",
+    "Respect a refusal while clarifying uncertainty."
+   ],
+   "audio_sha256": "baab8a55ddcfd5fd2d68547a6b4e04a39c57f728963328f73661979300724420",
+   "audio_bytes": 182823,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "1e5fbe7417159247ed74690cebec6aeea05feff3a6f04b9768fe5a9370f3058f",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-014",
+   "title": "Before Handling an Objection: “Apart From That?”",
+   "kind": "audio",
+   "skill_id": "certainty_objection_intelligence",
+   "gap_type": "judgment",
+   "topic_tag": "unisolated_objection",
+   "priority": 29,
+   "start_ms": 0,
+   "end_ms": 27142,
+   "narration": "यही reason है कि objection handling से पहले objection isolation जरूरी हो सकती है. लेकिन isolation का मतलब manipulation नहीं: “अगर मैं price solve कर दूँ तो आप…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-014-S01",
+     "title": "Check other blockers",
+     "bullets": [
+      "Ask what else remains unresolved.",
+      "A resolved issue does not establish purchase intent."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Ask what else remains unresolved.",
+    "A resolved issue does not establish purchase intent."
+   ],
+   "audio_sha256": "f6c73e76992fe9a641ee39f04e0b00fb901212b3ba05498a2a0eca7796a1b7b4",
+   "audio_bytes": 166052,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "c6b802f9b77fad77c8ab0da596d38b58024d1b387606d0c143bbca865ca75e98",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-015",
+   "title": "Price Is High… Compared to What?",
+   "kind": "audio",
+   "skill_id": "certainty_objection_intelligence",
+   "gap_type": "judgment",
+   "topic_tag": "price_diagnosis",
+   "priority": 30,
+   "start_ms": 0,
+   "end_ms": 33856,
+   "narration": "एक consultant ₹2 lakh quote करता है. Prospect: “बहुत expensive.” अगर comparison है: “मैंने सोचा था consulting ₹50,000 की होगी.” तो ये expectation gap है. अगर…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-015-S01",
+     "title": "Identify the reference price",
+     "bullets": [
+      "Ask what the buyer is comparing with.",
+      "Compare scope before discussing a concession."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Ask what the buyer is comparing with.",
+    "Compare scope before discussing a concession."
+   ],
+   "audio_sha256": "120fd0a55e13381aef3c589943ca3940ee6f816c031bc038bd4fd5e9a08ff93a",
+   "audio_bytes": 206333,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "cc878541837b2e00f9242c3205a7ead6e2fec8fb7130bd7c234fdc880a11f8ba",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-021",
+   "title": "“I Need to Think” Is NOT One Objection",
+   "kind": "audio",
+   "skill_id": "certainty_objection_intelligence",
+   "gap_type": "judgment",
+   "topic_tag": "undiagnosed_objection",
+   "priority": 36,
+   "start_ms": 0,
+   "end_ms": 51932,
+   "narration": "यही sales में dangerous shortcut है. Closer sentence सुनता है— और meaning assume कर लेता है. “I need to think” = “Price objection.” या: “Trust issue.” या:…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-021-S01",
+     "title": "Understand “I need to think”",
+     "bullets": [
+      "Ask which part still needs consideration.",
+      "Agree a useful next event without pressure."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Ask which part still needs consideration.",
+    "Agree a useful next event without pressure."
+   ],
+   "audio_sha256": "b8b82006efd927c382d89aedc4fab3db0965eb641adc0ff51ae27fbe17bfa371",
+   "audio_bytes": 314793,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "2f5539db603e56fec38eecddb03d2c1e4ee9955b78c191e68a360175d625118f",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-023",
+   "title": "Can't Afford vs Doesn't Want to Pay",
+   "kind": "audio",
+   "skill_id": "certainty_objection_intelligence",
+   "gap_type": "judgment",
+   "topic_tag": "price_diagnosis",
+   "priority": 38,
+   "start_ms": 0,
+   "end_ms": 41692,
+   "narration": "Cannot afford and does not want to pay describe different constraints. Ask what makes the quoted amount difficult. Is the budget genuinely unavailable, is…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-023-S01",
+     "title": "Distinguish budget and value",
+     "bullets": [
+      "Ask whether the constraint is funding or confidence.",
+      "Use an authorised payment schedule only when relevant."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Ask whether the constraint is funding or confidence.",
+    "Use an authorised payment schedule only when relevant."
+   ],
+   "audio_sha256": "c82ac4b19cc3298f3e1102d255bf8b94c663909425885b5ed47ca5c7bafa493b",
+   "audio_bytes": 253353,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "6d57daf8cb4c548782b9744d618e878e708baa6e85f328331c6a611d8c133136",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-024",
+   "title": "Price Problem vs Price Expectation Problem",
+   "kind": "audio",
+   "skill_id": "certainty_objection_intelligence",
+   "gap_type": "judgment",
+   "topic_tag": "price_diagnosis",
+   "priority": 39,
+   "start_ms": 0,
+   "end_ms": 42972,
+   "narration": "A price problem concerns the buyer’s available budget. A price expectation problem concerns the amount they thought this scope would cost. Start by asking what…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-024-S01",
+     "title": "Clarify the price expectation",
+     "bullets": [
+      "Find the scope and price used for comparison.",
+      "Change a quote only with a reason and approval."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Find the scope and price used for comparison.",
+    "Change a quote only with a reason and approval."
+   ],
+   "audio_sha256": "c6b38f4825b2d1b04e18386156a456229768de2adaab760534fcfa994cd9f4dc",
+   "audio_bytes": 261033,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "ed23e308564b8be5ae32b19157ec471e151a3087bbc711b83b56a6f96d61eecf",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-025",
+   "title": "When Price Resistance Is Actually a Value Problem",
+   "kind": "audio",
+   "skill_id": "certainty_objection_intelligence",
+   "gap_type": "judgment",
+   "topic_tag": "value_gap",
+   "priority": 40,
+   "start_ms": 0,
+   "end_ms": 39786,
+   "narration": "Sometimes price resistance is a value problem. The buyer may understand the features while remaining unclear about what will change in their work. Return to…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-025-S01",
+     "title": "Check the value connection",
+     "bullets": [
+      "Return to the buyer’s example.",
+      "Connect one relevant feature to a checkable outcome."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Return to the buyer’s example.",
+    "Connect one relevant feature to a checkable outcome."
+   ],
+   "audio_sha256": "ffafa62b2da771eb7b34a6fc16765d9db94e42caddd0dc7daffd0039e170ac4e",
+   "audio_bytes": 241912,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "f5c1f19c59409e74a1c1c35c802d0e37e844cd944b8e16acb7531727770123e6",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-video-011",
+   "title": "Buying Signals + Stop Over-Selling",
+   "kind": "video",
+   "skill_id": "closing_decision_management",
+   "gap_type": "judgment",
+   "topic_tag": "overselling_after_signal",
+   "priority": 11,
+   "start_ms": 0,
+   "end_ms": 33856,
+   "narration": "Buying signal ka matlab hamesha: “I am buying.” nahi hota. It may indicate a shift from: “Should I buy?” toward: “If I buy, what happens?” Common signals: price/payment questions, EMI, start date, onboarding, implementation, support, delivery, exact plan/version, accountability, future-tense ownership language. “Meri team ko kaise onboard karoge?” This is stronger than: “Aapka product kaise kaam karta hai?”",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-011-S01",
+     "title": "Notice a buying signal",
+     "bullets": [
+      "Explore the implementation question.",
+      "Check readiness before asking for a decision."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Explore the implementation question.",
+    "Check readiness before asking for a decision."
+   ],
+   "audio_sha256": "cb71949c13ec6988c76c67148f67d7cc008ac7fc444fade49d6117afcbe13740",
+   "audio_bytes": 206333,
+   "free": true
+  },
+  {
+   "topic_id": "syn-coach-video-012",
+   "title": "Ask for the Decision",
+   "kind": "video",
+   "skill_id": "closing_decision_management",
+   "gap_type": "execution",
+   "topic_tag": "missing_decision_ask",
+   "priority": 12,
+   "start_ms": 0,
+   "end_ms": 55224,
+   "narration": "Before asking: problem clear? desired outcome clear? fit established? major objections surfaced? price understood? decision authority known? implementation…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-012-S01",
+     "title": "Next-call mission",
+     "bullets": [
+      "Confirm fit and unresolved issues.",
+      "Ask a direct question, then listen."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Confirm fit and unresolved issues.",
+    "Ask a direct question, then listen."
+   ],
+   "audio_sha256": "e1a6a3b383e0fa1cb82620d4d5e003d3d2e229ce1c76b696af007bbf0f1d08cf",
+   "audio_bytes": 334542,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "a0f23e069c6f1a12b9722a50bf2c92a0f8f4215628dd82c78628a723fcd32f69",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-video-015",
+   "title": "Push vs Stop / Disqualify",
+   "kind": "video",
+   "skill_id": "closing_decision_management",
+   "gap_type": "judgment",
+   "topic_tag": "pushing_past_consent",
+   "priority": 15,
+   "start_ms": 0,
+   "end_ms": 36024,
+   "narration": "Push/challenge when: prospect is qualified, solution genuinely fits, enough certainty exists, concern diagnosable/addressable hai, prospect engaged hai,…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-015-S01",
+     "title": "Choose when to stop",
+     "bullets": [
+      "Clarify uncertainty with permission.",
+      "Respect refusal and record a poor fit."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Clarify uncertainty with permission.",
+    "Respect refusal and record a poor fit."
+   ],
+   "audio_sha256": "ac1ffe61fbf19dff75a8b2e18245e474e6007b35c04fc9c1b7e1f3c6a228a76f",
+   "audio_bytes": 219342,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "6c8c7cde1113342022e241b8c60d673ff0b01b8f9971b826891411e3640f783f",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-017",
+   "title": "Buying Signals Mean: Stop Over-Selling",
+   "kind": "audio",
+   "skill_id": "closing_decision_management",
+   "gap_type": "judgment",
+   "topic_tag": "overselling_after_signal",
+   "priority": 32,
+   "start_ms": 0,
+   "end_ms": 25706,
+   "narration": "Buying signal सिर्फ question नहीं. कुछ signals language में भी आ सकते हैं: “अगर हम start करें…” “जब मेरी team use करेगी…” “क्या हम monthly की जगह annual कर…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-017-S01",
+     "title": "Respond to a buying signal",
+     "bullets": [
+      "Implementation questions deserve a direct answer.",
+      "A signal still needs a readiness check."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Implementation questions deserve a direct answer.",
+    "A signal still needs a readiness check."
+   ],
+   "audio_sha256": "d186ed11f84b6d1586b0aa667a2f791ef1cd480d6b6aaf5d4e743cdcf59b8c7c",
+   "audio_bytes": 157432,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "82b3189587d99d1c270887e262c1b92cd876d428abb16833dbd4120e46157404",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-018",
+   "title": "Ask for the Decision",
+   "kind": "audio",
+   "skill_id": "closing_decision_management",
+   "gap_type": "execution",
+   "topic_tag": "missing_decision_ask",
+   "priority": 33,
+   "start_ms": 0,
+   "end_ms": 23459,
+   "narration": "अब ये समझना जरूरी है: Ask for the decision ≠ Ask for the sale at any cost. दो अलग philosophies. Manipulative closer: “Yes कैसे निकलवाऊँ?” Authority Closer:…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-018-S01",
+     "title": "Make the decision question clear",
+     "bullets": [
+      "Ask without making refusal uncomfortable.",
+      "Record the answer and a specific next event."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Ask without making refusal uncomfortable.",
+    "Record the answer and a specific next event."
+   ],
+   "audio_sha256": "f4b16f382bdfdaa25f21b913bd57ef64d9597a525b1a41b9809d6391fe8c0819",
+   "audio_bytes": 143952,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "46da072856a09540c2ba74a7bb47020012c6ea23b4b24d24f1e583ccec76eeae",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-020",
+   "title": "Push Toward Clarity. Never Push Past Consent.",
+   "kind": "audio",
+   "skill_id": "closing_decision_management",
+   "gap_type": "judgment",
+   "topic_tag": "pushing_past_consent",
+   "priority": 35,
+   "start_ms": 0,
+   "end_ms": 31374,
+   "narration": "और यहाँ एक बहुत important belief break है. कुछ sales cultures सिखाती हैं: “Every no is just an objection.” मैं इससे agree नहीं करता. हर no objection नहीं है.…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-020-S01",
+     "title": "Respect the decision boundary",
+     "bullets": [
+      "Clarify an unresolved concern with permission.",
+      "Stop when the buyer declines further discussion."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Clarify an unresolved concern with permission.",
+    "Stop when the buyer declines further discussion."
+   ],
+   "audio_sha256": "748ca13b9cf591464941fa8054446cd9655b9ed338d7f6021c0e614046e5d8f4",
+   "audio_bytes": 191443,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "89a75e71d9556ad23560e02f0dd8035c7c0fefce5861ee7f57cf101e69df1c71",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-video-009",
+   "title": "Price Confidence",
+   "kind": "video",
+   "skill_id": "communication_tonality",
+   "gap_type": "confidence",
+   "topic_tag": "price_confidence",
+   "priority": 9,
+   "start_ms": 0,
+   "end_ms": 53944,
+   "narration": "Before price: calm, normal, conversational. After price: speed increases, voice changes, justification starts. “Prospect ne objection diya bhi nahi—and closer already objection handle kar raha hai.” You may literally create doubt that wasn’t there. “Closer anxiety is not a prospect objection.” State Price → Pause → Observe → Diagnose Actual Reaction “Sir, investment ₹60,000 plus GST hai.” Then let prospect respond. If useful in that context: “Kya ye us range ke around hai jo aapne mind mein sochi thi?” The purpose is information, not awkward guessing. “Agli call mein price bolne ke baad consciously 2–3 seconds ka pause rakho.” Don’t rescue the silence. Just observe. “State the price. Stay the same person.”",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-009-S01",
+     "title": "Next-call mission",
+     "bullets": [
+      "State scope and approved price calmly.",
+      "Allow the buyer to respond before changing terms."
+     ]
+    }
+   ],
+   "takeaways": [
+    "State scope and approved price calmly.",
+    "Allow the buyer to respond before changing terms."
+   ],
+   "audio_sha256": "cac2b885ddf9591fe81013b3a806f3ac2e90aa379bd2257b7a7d634c82182541",
+   "audio_bytes": 326862,
+   "free": true
+  },
+  {
+   "topic_id": "syn-coach-video-013",
+   "title": "Silence / Pause / Tonality",
+   "kind": "video",
+   "skill_id": "communication_tonality",
+   "gap_type": "execution",
+   "topic_tag": "silence_management",
+   "priority": 13,
+   "start_ms": 0,
+   "end_ms": 59534,
+   "narration": "Silence may mean: thinking, calculating, remembering, processing emotion, deciding, discomfort, disengagement. “Silence itself is not the diagnosis. Context…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-013-S01",
+     "title": "Next-call mission",
+     "bullets": [
+      "A pause can have several meanings.",
+      "Clarify confusion without guessing an objection."
+     ]
+    }
+   ],
+   "takeaways": [
+    "A pause can have several meanings.",
+    "Clarify confusion without guessing an objection."
+   ],
+   "audio_sha256": "768e76bca46c492933b3effe0db1c1775395694b2cc23f910d2a78eb9f809faa",
+   "audio_bytes": 360403,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "c273f3cd09be93d3a347bf63f08e19181c78bc2d3d9bd0ef26fdef05b049020d",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-016",
+   "title": "Say the Price. Then Stop Talking.",
+   "kind": "audio",
+   "skill_id": "communication_tonality",
+   "gap_type": "confidence",
+   "topic_tag": "price_confidence",
+   "priority": 31,
+   "start_ms": 0,
+   "end_ms": 40177,
+   "narration": "अब सबसे important part. Prospect क्या answer देता है? अगर बोले: “हाँ, comfortable हूँ.” Great. तो endless talking मत शुरू कीजिए. Maybe decision पर move कीजिए.…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-016-S01",
+     "title": "State price, then listen",
+     "bullets": [
+      "Give the approved price with its scope.",
+      "Use the response to understand the decision."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Give the approved price with its scope.",
+    "Use the response to understand the decision."
+   ],
+   "audio_sha256": "fd9105199e4b589befe8a5bdd140bcbd80a65dca26b00c1b778e8719c9ecc868",
+   "audio_bytes": 244263,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "75de121f11d3798b6a88554ea09c0ed5ea23fc187b5a8af010ee83c9712fa110",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-019",
+   "title": "Don’t Rescue the Prospect From Silence",
+   "kind": "audio",
+   "skill_id": "communication_tonality",
+   "gap_type": "execution",
+   "topic_tag": "silence_management",
+   "priority": 34,
+   "start_ms": 0,
+   "end_ms": 40804,
+   "narration": "Imagine prospect से आपने पूछा: “आपने पिछले दो vendors change किए. क्या चीज़ दोनों बार काम नहीं की?” Prospect: “Hmm…” 2 seconds. आप nervous. “Service issue था?”…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-019-S01",
+     "title": "Avoid filling every silence",
+     "bullets": [
+      "Give the buyer time to process.",
+      "Do not supply an objection they did not raise."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Give the buyer time to process.",
+    "Do not supply an objection they did not raise."
+   ],
+   "audio_sha256": "4957bdb1f652806cdca81e66626422f04df3dd5de2329e0389f9581e5a69449c",
+   "audio_bytes": 248024,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "337cfdf074523a1a5d704620483bb4dbaa5dbc5816f30975ee6ada0d38e50bc6",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-video-001",
+   "title": "Discovery: Surface Answer se Real Problem tak kaise jaayein",
+   "kind": "video",
+   "skill_id": "discovery_deep_understanding",
+   "gap_type": "judgment",
+   "topic_tag": "surface_diagnosis",
+   "priority": 1,
+   "start_ms": 0,
+   "end_ms": 33046,
+   "narration": "Ab “Sales nahi aa rahi” example use karo. Prospect: “Sir sales nahi aa rahi.” “Main is point par ye decide nahi karunga ki problem kya hai. Main pehle statement ko specific banaunga.” “Jab aap bol rahe ho sales nahi aa rahi, pehle better thi aur recently decline hui hai, ya conversion hamesha se low raha hai?” Prospect: “Pehle achhi thi, last 4 months se gir gayi.” Ab aapke paas new context hai. “Okay. Aur leads bhi kam hui hain ya leads roughly same aa rahi hain?”",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-001-S01",
+     "title": "Unpack a vague problem",
+     "bullets": [
+      "Ask for the last concrete example.",
+      "Reflect the answer before going deeper."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Ask for the last concrete example.",
+    "Reflect the answer before going deeper."
+   ],
+   "audio_sha256": "00d43fab555256308a4dcffbd4b027e152d2061cbeef532390b4776fb8cc56b8",
+   "audio_bytes": 201474,
+   "free": true
+  },
+  {
+   "topic_id": "syn-coach-video-002",
+   "title": "Listening → Right Follow-up",
+   "kind": "video",
+   "skill_id": "discovery_deep_understanding",
+   "gap_type": "execution",
+   "topic_tag": "disconnected_follow_up",
+   "priority": 2,
+   "start_ms": 0,
+   "end_ms": 27612,
+   "narration": "Same situation: Prospect: “Humne agency hire ki thi, but result nahi aaya.” “Got it. Agency exactly kya handle kar rahi thi?” “Aur aapko expected kya tha…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-002-S01",
+     "title": "Follow the answer",
+     "bullets": [
+      "Use the buyer’s words in your follow-up.",
+      "Acknowledge, then ask a connected question."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Use the buyer’s words in your follow-up.",
+    "Acknowledge, then ask a connected question."
+   ],
+   "audio_sha256": "1f8fa54b53e108dfcfb6578cc0d96fd2acd39e160598274312c2f4c4ea2a577b",
+   "audio_bytes": 168873,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "c743e359a93be5079f660dcb6d2abfb783ad161880ebadc49182471055c4f69e",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-001",
+   "title": "Sales Is Diagnosis, Not Persuasion",
+   "kind": "audio",
+   "skill_id": "discovery_deep_understanding",
+   "gap_type": "judgment",
+   "topic_tag": "surface_diagnosis",
+   "priority": 16,
+   "start_ms": 0,
+   "end_ms": 35763,
+   "narration": "“Price high है” का मतलब हो सकता है: budget नहीं है, expected price कम था, value clear नहीं हुई, competitor cheaper है, या prospect खुद implementation को लेकर…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-001-S01",
+     "title": "Diagnose before responding",
+     "bullets": [
+      "One objection can describe several realities.",
+      "Clarify the meaning before choosing a response."
+     ]
+    }
+   ],
+   "takeaways": [
+    "One objection can describe several realities.",
+    "Clarify the meaning before choosing a response."
+   ],
+   "audio_sha256": "2a89bc8f1c58fb191fbfae84152267e7f89fda5ce31c15abae4617aebf590f04",
+   "audio_bytes": 217775,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "3ed671f31d30c07e117372c7260f63c264714a9222e8debf96252ac50c00e51c",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-002",
+   "title": "The Prospect's First Answer Is NOT the Diagnosis",
+   "kind": "audio",
+   "skill_id": "discovery_deep_understanding",
+   "gap_type": "judgment",
+   "topic_tag": "surface_diagnosis",
+   "priority": 17,
+   "start_ms": 0,
+   "end_ms": 24739,
+   "narration": "याद रखिए— “The first answer can be true… and still be incomplete.” Prospect झूठ नहीं बोल रहा. वो शायद सिर्फ उतना बता रहा है जितना उसे अभी clearly दिख रहा है.…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-002-S01",
+     "title": "Go beyond the first answer",
+     "bullets": [
+      "A truthful answer can still be incomplete.",
+      "Ask what the vague phrase means in practice."
+     ]
+    }
+   ],
+   "takeaways": [
+    "A truthful answer can still be incomplete.",
+    "Ask what the vague phrase means in practice."
+   ],
+   "audio_sha256": "e27574aa95197c4d5b1076c2857dfe46af4b8d089a95d3e77c0b8e9ea4e046c6",
+   "audio_bytes": 151632,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "0bf2a7e3319b376275ea4c6f6713ab25bdc07173944aae86d99321e8263d73ea",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-003",
+   "title": "Never Assume. Get Curious.",
+   "kind": "audio",
+   "skill_id": "discovery_deep_understanding",
+   "gap_type": "judgment",
+   "topic_tag": "untested_assumption",
+   "priority": 18,
+   "start_ms": 0,
+   "end_ms": 35214,
+   "narration": "Prospect बोलता है: “पहले एक agency के साथ experience अच्छा नहीं था.” आपका brain तुरंत story बना सकता है: “Trust issue है.” Maybe. लेकिन maybe नहीं. Maybe…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-003-S01",
+     "title": "Test your assumption",
+     "bullets": [
+      "Keep possible explanations separate from facts.",
+      "Ask a question that could change your first view."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Keep possible explanations separate from facts.",
+    "Ask a question that could change your first view."
+   ],
+   "audio_sha256": "d3b04c0b3191acd9b9902bcd9803451810e6b70849959f08fc0904e85d7cd3af",
+   "audio_bytes": 214483,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "71a9bcaafd490a7f6f94ef89ab33728a4ee07559672def795f9149f7590b503b",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-004",
+   "title": "Listen to the Prospect's Exact Words",
+   "kind": "audio",
+   "skill_id": "discovery_deep_understanding",
+   "gap_type": "execution",
+   "topic_tag": "misheard_problem",
+   "priority": 19,
+   "start_ms": 0,
+   "end_ms": 44331,
+   "narration": "लेकिन salespeople अक्सर black box सुनते ही नहीं. वो उसका summary बना लेते हैं. Prospect कहता है: “मुझे confidence नहीं है कि मेरी team इसे implement करेगी.”…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-004-S01",
+     "title": "Preserve the buyer’s words",
+     "bullets": [
+      "Do not translate a specific concern into a label.",
+      "Check the meaning of the phrase they used."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Do not translate a specific concern into a label.",
+    "Check the meaning of the phrase they used."
+   ],
+   "audio_sha256": "1760264ae6e8d41d5c58088a75078df9a38fd9ea385c4aa8351e59ec6566835c",
+   "audio_bytes": 269183,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "20fae964274411b9b618b49cc66003cbab65739f786992f8f3439d6ff1199810",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-005",
+   "title": "Your Next Question Should Come From Their Last Answer",
+   "kind": "audio",
+   "skill_id": "discovery_deep_understanding",
+   "gap_type": "execution",
+   "topic_tag": "disconnected_follow_up",
+   "priority": 20,
+   "start_ms": 0,
+   "end_ms": 31766,
+   "narration": "अब next question naturally बनता है: “Lead आने के बाद exactly क्या होता है?” Client: “Team call करती है.” “कितनी जल्दी?” Client: “कभी same day, कभी next day.”…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-005-S01",
+     "title": "Choose a connected question",
+     "bullets": [
+      "Follow a useful detail in the last answer.",
+      "Avoid returning to an unrelated checklist."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Follow a useful detail in the last answer.",
+    "Avoid returning to an unrelated checklist."
+   ],
+   "audio_sha256": "9ac782770cb66e224384da6b36bda9f8985bd65450bf5ed9ab0c90bd768fb2af",
+   "audio_bytes": 193794,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "f1571551abe95f9c6eacba0f80ad1b87f0e9ae0eac9467e672e86155594cae5a",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-006",
+   "title": "Discovery: Surface → Context → Root Cause → Impact",
+   "kind": "audio",
+   "skill_id": "discovery_deep_understanding",
+   "gap_type": "judgment",
+   "topic_tag": "surface_diagnosis",
+   "priority": 21,
+   "start_ms": 0,
+   "end_ms": 42424,
+   "narration": "अब Discovery शुरू होती है. “पहले कितना conversion था?” “12% था. अब 5% है.” Interesting. अब context मिला. “Change कब से आया?” “तीन महीने से.” “तीन महीने पहले…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-006-S01",
+     "title": "Explore one layer deeper",
+     "bullets": [
+      "Move from a surface phrase to a real example.",
+      "Check cause and impact with the buyer."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Move from a surface phrase to a real example.",
+    "Check cause and impact with the buyer."
+   ],
+   "audio_sha256": "f137c588c732435397662b796f3f01e808d66b881430297498ff2f18f24e81c9",
+   "audio_bytes": 257742,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "af9e4731adc3082e18ab072dc2711e7a0fab9992843cff9d4d4670b0ef8758a9",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-video-005",
+   "title": "Discovery vs Interrogation",
+   "kind": "video",
+   "skill_id": "human_connection_trust",
+   "gap_type": "execution",
+   "topic_tag": "interrogative_discovery",
+   "priority": 5,
+   "start_ms": 0,
+   "end_ms": 36259,
+   "narration": "Weak: Question → Question → Question → Question. Question → Understand → Acknowledge/Reflect → Relevant Follow-up And sometimes: Question → Understand → Value/Insight → Question Prospect: “Agency try ki thi but result nahi mila.” Instead of: “Okay. Revenue kitna hai?” Say: “Got it. Ye important hai. Agency exactly kya handle kar rahi thi?” Reflect: “Okay, so lead generation hui, but actual conversion improve nahi hua.” “Conversion mein aapko breakdown kahan lagta hai?”",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-005-S01",
+     "title": "Keep discovery conversational",
+     "bullets": [
+      "Reflect an answer before another question.",
+      "Explain why a sensitive question matters."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Reflect an answer before another question.",
+    "Explain why a sensitive question matters."
+   ],
+   "audio_sha256": "4be1c955237703d6ae410859ff67aaca910a7f61873380f6e200ef1d3f0ebd8b",
+   "audio_bytes": 220752,
+   "free": true
+  },
+  {
+   "topic_id": "syn-coach-video-003",
+   "title": "Pain / Impact Quantification",
+   "kind": "video",
+   "skill_id": "problem_impact_desire",
+   "gap_type": "judgment",
+   "topic_tag": "unquantified_impact",
+   "priority": 3,
+   "start_ms": 0,
+   "end_ms": 52742,
+   "narration": "1. MONEY Ask: “Roughly iska financial impact kitna hai?” Possible: missed revenue, wasted spend, extra cost, missed profit. 2. TIME “Is problem pe aap personally ya team kitna extra time spend kar rahi hai?” 10–15 founder hours/week. 3. EFFORT “Kitna manual work ya repeated effort lag raha hai?” rework, coordination, management burden. 4. EMOTIONAL IMPACT Relevant ho tab: “Mentally iska kitna stress/frustration hai?” But don't force it. 5. OPPORTUNITY “Agar ye problem na hoti, wo time/money/capacity kahan use hoti?” Could mean: missed deals, delayed scale, strategy, family/personal time, another growth opportunity.",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-003-S01",
+     "title": "Make impact clear",
+     "bullets": [
+      "Explore time, money, effort and desired change.",
+      "Keep unknown numbers unknown."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Explore time, money, effort and desired change.",
+    "Keep unknown numbers unknown."
+   ],
+   "audio_sha256": "d74a229935c977c3748a3253f93e4ff951e0d82c25f10adaee760d16b35805cb",
+   "audio_bytes": 319652,
+   "free": true
+  },
+  {
+   "topic_id": "syn-coach-audio-007",
+   "title": "Quantify the Problem: Money, Time, Effort, Emotion, Opportunity",
+   "kind": "audio",
+   "skill_id": "problem_impact_desire",
+   "gap_type": "judgment",
+   "topic_tag": "unquantified_impact",
+   "priority": 22,
+   "start_ms": 0,
+   "end_ms": 37121,
+   "narration": "यहाँ एक line याद रखिए: “Never manufacture gravity. Measure the gravity that's already there.” इसलिए impact को सिर्फ money में मत फँसाइए. कभी biggest cost…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-007-S01",
+     "title": "Explore the actual impact",
+     "bullets": [
+      "Use relevant time, money or effort examples.",
+      "Ask rather than invent the cost."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Use relevant time, money or effort examples.",
+    "Ask rather than invent the cost."
+   ],
+   "audio_sha256": "268f88926b927be76af7f1a36189b89610bd839fccb774435453fdce345effcf",
+   "audio_bytes": 225925,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "2c16689e277f3f708fdc3cb4e294b512c694cda6bd98e81162d9966e549c299e",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-008",
+   "title": "Don't Just Discover Pain—Discover What They Actually Want",
+   "kind": "audio",
+   "skill_id": "problem_impact_desire",
+   "gap_type": "judgment",
+   "topic_tag": "unclear_desired_outcome",
+   "priority": 23,
+   "start_ms": 0,
+   "end_ms": 31609,
+   "narration": "क्योंकि— “You cannot connect a solution to a future the prospect has never defined.” और एक warning. Desire discover करने का मतलब fantasy sell करना नहीं है.…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-008-S01",
+     "title": "Define the desired change",
+     "bullets": [
+      "Let the buyer describe success.",
+      "Separate their goal from your preferred goal."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Let the buyer describe success.",
+    "Separate their goal from your preferred goal."
+   ],
+   "audio_sha256": "6df1a57312214db629cc94c21c9386d8975e010f9c76c80f9b92fc3f0209af4d",
+   "audio_bytes": 192854,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "cb66035610a3db45ad31c5e4ea8bdc1798a08f04816bab579f68f86612ee478c",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-video-006",
+   "title": "Qualification: Need / Desire / Decision / Budget / Urgency / Fit",
+   "kind": "video",
+   "skill_id": "qualification",
+   "gap_type": "judgment",
+   "topic_tag": "incomplete_qualification",
+   "priority": 6,
+   "start_ms": 0,
+   "end_ms": 32889,
+   "narration": "“Qualification call ke ek 5-minute section mein complete nahi hoti.” Early call → initial signals Discovery → need + desire Before presentation → authority + budget context After price → actual willingness/economics Before close → readiness + remaining blocker Minute 3: “Budget issue nahi hai.” Minute 35: “₹60,000 expected se kaafi zyada hai.” Wrong: “But aapne bola tha budget issue nahi.”",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-006-S01",
+     "title": "Qualify the opportunity",
+     "bullets": [
+      "Explore need, decision, budget, timing and fit.",
+      "Treat a missing fact as a question to clarify."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Explore need, decision, budget, timing and fit.",
+    "Treat a missing fact as a question to clarify."
+   ],
+   "audio_sha256": "bd5def6cb86cf63451c587be769781f0023a6c61d828df20d01b25875bf5bf56",
+   "audio_bytes": 200534,
+   "free": true
+  },
+  {
+   "topic_id": "syn-coach-video-014",
+   "title": "Wife / Partner / Decision-Maker",
+   "kind": "video",
+   "skill_id": "qualification",
+   "gap_type": "judgment",
+   "topic_tag": "missing_decision_maker",
+   "priority": 14,
+   "start_ms": 0,
+   "end_ms": 32001,
+   "narration": "Ask naturally: “Is decision mein unka approval required hota hai, ya aap generally unko informed rakhna prefer karte ho?” or: “Aap dono normally is type ke…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-014-S01",
+     "title": "Understand shared decisions",
+     "bullets": [
+      "Separate evaluation from signing authority.",
+      "Agree a review with the relevant stakeholder."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Separate evaluation from signing authority.",
+    "Agree a review with the relevant stakeholder."
+   ],
+   "audio_sha256": "be8ede880d11fa8e0d4ecc087597dd890f3eda3211963940d31b525a9424041c",
+   "audio_bytes": 195205,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "f1384a0b0ab99911c0f4b1610246add201072fe14d31071863498f6e649e25d2",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-009",
+   "title": "Qualification Essentials",
+   "kind": "audio",
+   "skill_id": "qualification",
+   "gap_type": "judgment",
+   "topic_tag": "incomplete_qualification",
+   "priority": 24,
+   "start_ms": 0,
+   "end_ms": 36259,
+   "narration": "अब छह links याद रखिए: 1. NEED क्या meaningful problem है? 2. DESIRE क्या वो इसे genuinely solve करना चाहता है? 3. DECISION Decision कैसे और किसके through होगा?…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-009-S01",
+     "title": "Check qualification gaps",
+     "bullets": [
+      "Explore the decision process as well as need.",
+      "Do not infer budget or fit from enthusiasm."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Explore the decision process as well as need.",
+    "Do not infer budget or fit from enthusiasm."
+   ],
+   "audio_sha256": "45d05fd95539d64b66ef2090009869487cc9b58a8c174cc1e313fb308a6ceb4a",
+   "audio_bytes": 220752,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "5ebd5aa27c08f47c90eb09512b19d0083b48c2d4e2ee66bb76373cd107568222",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-022",
+   "title": "“I Need to Ask My Wife/Partner” — Objection or Real Decision Process?",
+   "kind": "audio",
+   "skill_id": "qualification",
+   "gap_type": "judgment",
+   "topic_tag": "missing_decision_maker",
+   "priority": 37,
+   "start_ms": 0,
+   "end_ms": 42424,
+   "narration": "When someone says they need to ask a partner, start with the real decision process. Do not assume it is an excuse. Ask: what would your partner need to…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-022-S01",
+     "title": "Clarify a shared decision",
+     "bullets": [
+      "Identify the evaluator and the approver.",
+      "Offer a joint review with agreed scope and price."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Identify the evaluator and the approver.",
+    "Offer a joint review with agreed scope and price."
+   ],
+   "audio_sha256": "3f4ed972d518354e8e8df201b8939b09430c97a7635bde73a94299f88d77b7d5",
+   "audio_bytes": 257742,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "cc9ab3d416d1f6483e1312bf5f55996379b03674e677b60a17e8cabbadbb8e33",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-video-004",
+   "title": "Diagnose Before You Prescribe",
+   "kind": "video",
+   "skill_id": "solution_relevance_presentation",
+   "gap_type": "judgment",
+   "topic_tag": "premature_prescription",
+   "priority": 4,
+   "start_ms": 0,
+   "end_ms": 24817,
+   "narration": "Could be: bad leads, weak qualification, poor discovery, weak objection handling, offer problem, pricing, follow-up, manager issue, no process. “Aapka product relevant ho sakta hai. But relevant hona aur prove hona different cheezein hain.” “Don’t fit the prospect into your solution. Understand whether your solution fits the prospect.”",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-004-S01",
+     "title": "Check the diagnosis",
+     "bullets": [
+      "Confirm the problem before recommending scope.",
+      "Explain why this solution fits this case."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Confirm the problem before recommending scope.",
+    "Explain why this solution fits this case."
+   ],
+   "audio_sha256": "9d827f244db4c3c091f20a46e670f5cdfed1b44e280ef5de2f9ac79d9e72ac46",
+   "audio_bytes": 152103,
+   "free": true
+  },
+  {
+   "topic_id": "syn-coach-video-007",
+   "title": "Feature → Relevance → Outcome",
+   "kind": "video",
+   "skill_id": "solution_relevance_presentation",
+   "gap_type": "execution",
+   "topic_tag": "feature_dumping",
+   "priority": 7,
+   "start_ms": 0,
+   "end_ms": 29128,
+   "narration": "Weak: “Hamare paas AI call analysis hai, dashboard hai, reports hain, coaching hai, team visibility hai…” Strong: “Aapne bola ki founder ko har salesperson ki…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-video-007-S01",
+     "title": "Translate a feature",
+     "bullets": [
+      "Connect the feature to the buyer’s situation.",
+      "Check whether the outcome matters to them."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Connect the feature to the buyer’s situation.",
+    "Check whether the outcome matters to them."
+   ],
+   "audio_sha256": "c1ee4ea8a459727d2d82c9719498d8cb8492632dbdf07ab2f530245df73a51e9",
+   "audio_bytes": 177964,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "1107cdb68d9a405a03e675109921c95e8ccb112d39581ba028a13f617cb44094",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-010",
+   "title": "Diagnose Before You Prescribe",
+   "kind": "audio",
+   "skill_id": "solution_relevance_presentation",
+   "gap_type": "judgment",
+   "topic_tag": "premature_prescription",
+   "priority": 25,
+   "start_ms": 0,
+   "end_ms": 36416,
+   "narration": "और यही sales में भी होना चाहिए. Prospect: “Conversion कम है.” Weak closer: “Training चाहिए.” Maybe. लेकिन अभी— आपने सिर्फ warning light देखी है. System failure…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-010-S01",
+     "title": "Let evidence guide scope",
+     "bullets": [
+      "The same symptom can have different causes.",
+      "Confirm the problem before presenting a solution."
+     ]
+    }
+   ],
+   "takeaways": [
+    "The same symptom can have different causes.",
+    "Confirm the problem before presenting a solution."
+   ],
+   "audio_sha256": "55344498bb322a2a6b22edcfca68a35ca4ffb50e1e6fca01d473458a161d5606",
+   "audio_bytes": 221693,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "0b8b5a7ae92ef8959ee252e6a01c02d86005016e487d0a37415cf02c26338683",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-011",
+   "title": "Feature → Relevance → Outcome",
+   "kind": "audio",
+   "skill_id": "solution_relevance_presentation",
+   "gap_type": "execution",
+   "topic_tag": "feature_dumping",
+   "priority": 26,
+   "start_ms": 0,
+   "end_ms": 41222,
+   "narration": "अब insurance example. Feature: ₹1 crore term cover. ये अभी सिर्फ number है. Relevance: अगर earning member के साथ कुछ होता है— family के major financial…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-011-S01",
+     "title": "Connect feature and relevance",
+     "bullets": [
+      "Use the buyer’s stated situation as the bridge.",
+      "Describe an outcome without inventing a guarantee."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Use the buyer’s stated situation as the bridge.",
+    "Describe an outcome without inventing a guarantee."
+   ],
+   "audio_sha256": "06b32e24eee0f887e171e4bda8deb21a3f11ed2088e7e6b34459aa669b761b8b",
+   "audio_bytes": 250532,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "436c79a6c979d6308202395c7a338858d5c84e73f90c7c1ccc1b3d02ccda434a",
+   "preview_bytes": 90279
+  },
+  {
+   "topic_id": "syn-coach-audio-012",
+   "title": "Stop Feature Dumping",
+   "kind": "audio",
+   "skill_id": "solution_relevance_presentation",
+   "gap_type": "execution",
+   "topic_tag": "feature_dumping",
+   "priority": 27,
+   "start_ms": 0,
+   "end_ms": 34901,
+   "narration": "Imagine एक insurance advisor prospect को 14 riders समझा रहा है. या trainer अपने course के 37 modules. या agency: SEO. Meta Ads. Google Ads. Funnels.…",
+   "slides": [
+    {
+     "segment_id": "syn-coach-audio-012-S01",
+     "title": "Keep the presentation focused",
+     "bullets": [
+      "Choose the features that address this buyer’s need.",
+      "Check understanding before adding more detail."
+     ]
+    }
+   ],
+   "takeaways": [
+    "Choose the features that address this buyer’s need.",
+    "Check understanding before adding more detail."
+   ],
+   "audio_sha256": "77e275c9cf34de3f9e93028d16ade6b0a429779257bb18fcb2f687f2bf922f80",
+   "audio_bytes": 212602,
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "c76af797987c5cd6af6a0f95756ac00a08658711e72a4c1d57fb3860c9eeafe0",
+   "preview_bytes": 90279
+  }
+ ]
+}

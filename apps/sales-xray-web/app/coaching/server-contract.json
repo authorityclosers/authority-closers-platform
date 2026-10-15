@@ -1,0 +1,360 @@
+{
+  "call": {
+    "authority": "provisional",
+    "basis": "skill_evidence",
+    "call_label": "Fictional sales call",
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "evidence": [
+      {
+        "call_label": "Fictional sales call",
+        "created_at": "2026-10-10T00:00:00Z",
+        "end_ms": 3000,
+        "observation": "The consequence remained unclear.",
+        "playable": true,
+        "quote": "Handover takes time.",
+        "recording_id": "00000000-0000-0000-0000-000000000014",
+        "segment_id": "seg-1",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "start_ms": 1000,
+        "submission_id": "00000000-0000-0000-0000-00000000000a",
+        "transcript_revision": "fictional-v1"
+      }
+    ],
+    "focus": {
+      "explanation": "Explore one consequence.",
+      "label": "Impact clarity",
+      "selected_at": "2026-10-10T00:00:00Z",
+      "selected_reason": "This call's report suggested it. Your mission across calls doesn't change.",
+      "skill_id": "problem_impact_desire",
+      "status": "provisional",
+      "verdict": "Ask one impact question.",
+      "why_it_matters": "A solution needs a clear purpose."
+    },
+    "lesson": {
+      "better_direction": "Ask one impact question.",
+      "checklist": [
+        "Is the problem clear?",
+        "Is the impact clear?",
+        "Is the desired outcome clear?",
+        "Only then move to the solution."
+      ],
+      "example_wording": [
+        "What usually goes wrong when that happens?",
+        "How much of your week goes into dealing with it?",
+        "What does this stop you from focusing on?"
+      ],
+      "framework": ["Problem", "Impact", "Desired outcome", "Then solution"],
+      "good_looks_like": "Stay with the problem long enough to understand one or more real consequences: lost revenue, time, effort, slow growth, stress or risk. Use the prospect's own words. Don't fill in a number or a feeling they haven't given you.",
+      "next_call_connection": "Ask one impact question.",
+      "own_call": {
+        "call_label": "Fictional sales call",
+        "created_at": "2026-10-10T00:00:00Z",
+        "end_ms": 3000,
+        "observation": "The consequence remained unclear.",
+        "playable": true,
+        "quote": "Handover takes time.",
+        "recording_id": "00000000-0000-0000-0000-000000000014",
+        "segment_id": "seg-1",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "start_ms": 1000,
+        "submission_id": "00000000-0000-0000-0000-00000000000a",
+        "transcript_revision": "fictional-v1"
+      },
+      "quick_idea": "Good discovery is not about asking more questions. When a prospect tells you a problem, your job is not to prove at once that you can solve it. First understand what that problem is actually causing.",
+      "source": "Owner's Sales Xray specification, 9 Oct 2026 \u00b7 Coaching \u00a73 and \u00a75.6",
+      "title": "Understand the impact before you present the solution",
+      "when_not": "Don't keep asking impact questions once the consequence is clear and the prospect has given enough detail. Don't repeat a question they've answered or push after a clear no. The goal is clarity, not interrogation.",
+      "when_to_use": "When the prospect raises a real problem and what it costs them is still unclear. Check what they have already told you first.",
+      "why_it_matters": "The prospect already knows the problem. Until its cost is clear, your solution can feel useful but not necessary. Impact gives the buyer a reason to change, and it makes the value and price conversation easier later."
+    },
+    "limitations": [
+      "This coaching is about one call. It doesn't show a pattern or mastery.",
+      "It stays with this report and doesn't replace your mission across calls.",
+      "When no Dipak lesson fits this focus, the written lesson stands in."
+    ],
+    "media_clips": [],
+    "mission": {
+      "active_since": "2026-10-10T00:00:00Z",
+      "behavior": "Ask one impact question.",
+      "context": "When the same kind of moment comes up on a call.",
+      "cue": "Read your one mission before the call.",
+      "done_when": "One consequence explored.",
+      "origin_submission_id": "00000000-0000-0000-0000-00000000000a",
+      "skill_id": "problem_impact_desire",
+      "status": "active"
+    },
+    "other_suggestions": 1,
+    "person_id": "00000000-0000-0000-0000-000000000001",
+    "practice": {
+      "estimated_minutes": null,
+      "exercise": "Practise one follow-up.",
+      "gap_type": "uncertain",
+      "success_condition": "The question explores impact."
+    },
+    "recommended_media": null,
+    "recording_id": "00000000-0000-0000-0000-000000000014",
+    "rep_name": null,
+    "rep_person_id": null,
+    "report_revision": "ae11921cee5ac25a2350e149210b0dc0f68d7bd747db297760b3ef9d1a29494f",
+    "root_cause": {
+      "alternatives": [],
+      "confidence": "uncertain",
+      "gap_type": "uncertain",
+      "hypothesis": "We don't have enough evidence yet to say why this happens.",
+      "learner_context": null
+    },
+    "sandbox": false,
+    "schema": "ac.sales-xray.call-coaching/1",
+    "session_id": "00000000-0000-0000-0000-000000000003",
+    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "state": "ready",
+    "strength": {
+      "evidence": [
+        {
+          "call_label": "Fictional sales call",
+          "created_at": "2026-10-10T00:00:00Z",
+          "end_ms": 6000,
+          "observation": "You asked a follow-up.",
+          "playable": true,
+          "quote": "Tell me more.",
+          "recording_id": "00000000-0000-0000-0000-000000000014",
+          "segment_id": "seg-2",
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "start_ms": 4000,
+          "submission_id": "00000000-0000-0000-0000-00000000000a",
+          "transcript_revision": "fictional-v1"
+        }
+      ],
+      "explanation": "You asked a follow-up.",
+      "title": "Curious follow-up"
+    },
+    "submission_id": "00000000-0000-0000-0000-00000000000a",
+    "tenant_id": "00000000-0000-0000-0000-000000000002",
+    "transcript_revision": "fictional-v1"
+  },
+  "me": {
+    "analysed_calls": 1,
+    "authority": "provisional",
+    "calls": [
+      {
+        "call_label": "Fictional sales call",
+        "created_at": "2026-10-10T00:00:00Z",
+        "focus_label": "Impact clarity",
+        "recurring": null,
+        "state": "ready",
+        "submission_id": "00000000-0000-0000-0000-00000000000a"
+      }
+    ],
+    "development_path": {
+      "current": "Impact clarity",
+      "explanation": "Your next focus depends on your next calls. Your current mission stays until then.",
+      "later": null,
+      "likely_next": null,
+      "maintain": null
+    },
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "evidence": [
+      {
+        "call_label": "Fictional sales call",
+        "created_at": "2026-10-10T00:00:00Z",
+        "end_ms": 3000,
+        "observation": "The consequence remained unclear.",
+        "playable": true,
+        "quote": "Handover takes time.",
+        "recording_id": "00000000-0000-0000-0000-000000000014",
+        "segment_id": "seg-1",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "start_ms": 1000,
+        "submission_id": "00000000-0000-0000-0000-00000000000a",
+        "transcript_revision": "fictional-v1"
+      }
+    ],
+    "feedback_available": false,
+    "focus": {
+      "explanation": "Explore one consequence.",
+      "label": "Impact clarity",
+      "selected_at": "2026-10-10T00:00:00Z",
+      "selected_reason": "One call suggested this. We're still learning your pattern.",
+      "skill_id": "problem_impact_desire",
+      "status": "provisional",
+      "verdict": "Ask one impact question.",
+      "why_it_matters": "A solution needs a clear purpose."
+    },
+    "history_limited": false,
+    "lesson": {
+      "better_direction": "Ask one impact question.",
+      "checklist": [
+        "Is the problem clear?",
+        "Is the impact clear?",
+        "Is the desired outcome clear?",
+        "Only then move to the solution."
+      ],
+      "example_wording": [
+        "What usually goes wrong when that happens?",
+        "How much of your week goes into dealing with it?",
+        "What does this stop you from focusing on?"
+      ],
+      "framework": ["Problem", "Impact", "Desired outcome", "Then solution"],
+      "good_looks_like": "Stay with the problem long enough to understand one or more real consequences: lost revenue, time, effort, slow growth, stress or risk. Use the prospect's own words. Don't fill in a number or a feeling they haven't given you.",
+      "next_call_connection": "Ask one impact question.",
+      "own_call": {
+        "call_label": "Fictional sales call",
+        "created_at": "2026-10-10T00:00:00Z",
+        "end_ms": 3000,
+        "observation": "The consequence remained unclear.",
+        "playable": true,
+        "quote": "Handover takes time.",
+        "recording_id": "00000000-0000-0000-0000-000000000014",
+        "segment_id": "seg-1",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "start_ms": 1000,
+        "submission_id": "00000000-0000-0000-0000-00000000000a",
+        "transcript_revision": "fictional-v1"
+      },
+      "quick_idea": "Good discovery is not about asking more questions. When a prospect tells you a problem, your job is not to prove at once that you can solve it. First understand what that problem is actually causing.",
+      "source": "Owner's Sales Xray specification, 9 Oct 2026 \u00b7 Coaching \u00a73 and \u00a75.6",
+      "title": "Understand the impact before you present the solution",
+      "when_not": "Don't keep asking impact questions once the consequence is clear and the prospect has given enough detail. Don't repeat a question they've answered or push after a clear no. The goal is clarity, not interrogation.",
+      "when_to_use": "When the prospect raises a real problem and what it costs them is still unclear. Check what they have already told you first.",
+      "why_it_matters": "The prospect already knows the problem. Until its cost is clear, your solution can feel useful but not necessary. Impact gives the buyer a reason to change, and it makes the value and price conversation easier later."
+    },
+    "limitations": [
+      "This is Sales Xray's reading of your calls. It can change when you add context.",
+      "Your reports show where a skill came up. They don't prove why, or that you have mastered it.",
+      "Your focus is worked out from your saved calls each time you open Coaching."
+    ],
+    "mastery": {
+      "baseline": null,
+      "confidence": "uncertain",
+      "correct_count": null,
+      "explanation": "Mastery means doing the skill well in real moments, more than once. Your reports don't count those moments yet, so no mastery level is shown. More calls are not the same as mastery.",
+      "historical_achievement": null,
+      "relevant_count": null,
+      "state": "not_enough_evidence",
+      "trend": "not_enough_evidence"
+    },
+    "media_clips": [],
+    "mission": {
+      "active_since": "2026-10-10T00:00:00Z",
+      "behavior": "Ask one impact question.",
+      "context": "When the same kind of moment comes up on a call.",
+      "cue": "Read your one mission before the call.",
+      "done_when": "One consequence explored.",
+      "origin_submission_id": "00000000-0000-0000-0000-00000000000a",
+      "skill_id": "problem_impact_desire",
+      "status": "active"
+    },
+    "other_format": null,
+    "pattern": {
+      "attention_call_count": 1,
+      "contexts": [],
+      "exceptions": [],
+      "occurrence_count": null,
+      "relevant_call_count": 1,
+      "relevant_opportunities": null,
+      "summary": "So far this comes from one call. It isn't a pattern yet."
+    },
+    "pending_calls": 0,
+    "person_id": "00000000-0000-0000-0000-000000000001",
+    "person_name": null,
+    "practice": {
+      "estimated_minutes": null,
+      "exercise": "Practise one follow-up.",
+      "gap_type": "uncertain",
+      "success_condition": "The question explores impact."
+    },
+    "progress": [
+      {
+        "after_mission": false,
+        "created_at": "2026-10-10T00:00:00Z",
+        "state": "suggested",
+        "submission_id": "00000000-0000-0000-0000-00000000000a"
+      }
+    ],
+    "recommended_media": null,
+    "reflection_question": "What stopped you here?",
+    "regression": {
+      "action": "We need more calls on this skill to tell whether it is slipping.",
+      "evidence": [],
+      "state": "unknown"
+    },
+    "root_cause": {
+      "alternatives": [],
+      "confidence": "uncertain",
+      "gap_type": "uncertain",
+      "hypothesis": "We don't have enough evidence yet to say why this happens.",
+      "learner_context": null
+    },
+    "sandbox": false,
+    "sandbox_reps": 0,
+    "schema": "ac.sales-xray.coaching/1",
+    "session_id": "00000000-0000-0000-0000-000000000003",
+    "state": "ready",
+    "strength": {
+      "evidence": [
+        {
+          "call_label": "Fictional sales call",
+          "created_at": "2026-10-10T00:00:00Z",
+          "end_ms": 6000,
+          "observation": "You asked a follow-up.",
+          "playable": true,
+          "quote": "Tell me more.",
+          "recording_id": "00000000-0000-0000-0000-000000000014",
+          "segment_id": "seg-2",
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "start_ms": 4000,
+          "submission_id": "00000000-0000-0000-0000-00000000000a",
+          "transcript_revision": "fictional-v1"
+        }
+      ],
+      "explanation": "You asked a follow-up.",
+      "title": "Curious follow-up"
+    },
+    "tenant_id": "00000000-0000-0000-0000-000000000002",
+    "unavailable_calls": 0
+  },
+  "team": {
+    "analysed_calls": 1,
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "history_limited": false,
+    "latest_call_at": "2026-10-10T00:00:00Z",
+    "limitations": [
+      "Counts are report suggestions. They don\u2019t prove a repeated mistake.",
+      "Totals never name a rep or show their calls, quotes, focus or mission.",
+      "A rep appears by name, with their current focus, only after they share. They can stop at any time, and any change to their membership ends it.",
+      "Owners and admins of the organisation see these totals."
+    ],
+    "named_rep_details": false,
+    "objection_calls": 1,
+    "objections": [
+      {
+        "calls": 1,
+        "handled": 1,
+        "heard": 2,
+        "kind": "price_concern",
+        "label": "Price"
+      }
+    ],
+    "pending_calls": 0,
+    "person_id": "00000000-0000-0000-0000-000000000001",
+    "rep_count": 1,
+    "reps": [],
+    "reps_basis": "none",
+    "sandbox": false,
+    "schema": "ac.sales-xray.team-coaching/1",
+    "scope": "anonymous",
+    "session_id": "00000000-0000-0000-0000-000000000003",
+    "suggestions": [
+      {
+        "label": "Problem, Impact & Desire Clarity",
+        "skill_id": "problem_impact_desire",
+        "suggestion_calls": 1
+      }
+    ],
+    "tenant_id": "00000000-0000-0000-0000-000000000002",
+    "unavailable_calls": 0
+  }
+}

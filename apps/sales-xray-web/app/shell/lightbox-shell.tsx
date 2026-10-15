@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BarChart3,
   Building2,
   ChevronDown,
   Ellipsis,
@@ -67,14 +68,16 @@ import {
 import {
   CREATE_ORGANISATION_EVENT,
   getShellState,
+  markSidebar,
   OPEN_SWITCHER_EVENT,
-  RECENTS_CHANGED_EVENT,
   recentCallsForContext,
-  updateShellState,
+  RECENTS_CHANGED_EVENT,
   type ShellRecentCall,
+  updateShellState,
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
+import { allowEarlyConversationReads, dropEarlyReads } from "../early-reads";
 import { CreateOrganisationDialog } from "./create-organisation-dialog";
 import { dropInvite, refreshInvites, useInvites } from "./invites-store";
 import {
@@ -105,11 +108,17 @@ export type LightboxShellProps = {
     | "account"
     | "organisation"
     | "prospects"
-    | "coaching";
+    | "coaching"
+    | "insights";
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
   heroStage?: "welcome" | "ready" | "processing" | "attention";
+  /**
+   * Names the page in the top bar when the content knows better than the
+   * route, e.g. "Report" while a call's report is open.
+   */
+  pageName?: string;
   /** Kept for API compatibility; the shell shows no greeting banner. */
   displayName?: string | null;
   /** Label the explicit local review fixture without implying a real job. */
@@ -137,7 +146,8 @@ function pageHeading(
           description:
             "A read-only preview of how your call moves from upload to report.",
         }
-      : { title: "Analysing your call" };
+      : // Short enough for a phone's bar; the panel says "Analysing your call".
+        { title: "Analysing" };
   // The panel names what happened (failed, paused, needs attention).
   if (stage === "attention") return { title: "Your call" };
   if (stage === "welcome") return { title: "New analysis" };
@@ -147,7 +157,9 @@ function pageHeading(
 function resolvePageTitle(
   active: LightboxShellProps["active"],
   heading: PageHeading | null,
+  pageName?: string,
 ): string | null {
+  if (pageName) return pageName;
   if (active === "dashboard") return "Dashboard";
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
@@ -155,6 +167,10 @@ function resolvePageTitle(
   if (active === "coaching") return "Coaching";
   if (active === "account") return "Account";
   if (active === "organisation") return "Organisation";
+  if (active === "insights") return "Insights";
+  // The studio names its stage once it loads; until then (and while a route
+  // loads) the bar already says where you are, so nothing swaps in later.
+  if (active === "analyse") return "New analysis";
   return null;
 }
 
@@ -190,6 +206,7 @@ function LightboxShellFrame({
   mobileFit = false,
   welcome = false,
   heroStage,
+  pageName,
   previewHero = false,
   allowance = null,
   displayName = null,
@@ -315,7 +332,7 @@ function LightboxShellFrame({
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
   const pathname = usePathname();
   const place = shellActiveFor(pathname, active);
-  const pageTitle = resolvePageTitle(place, heading);
+  const pageTitle = resolvePageTitle(place, heading, pageName);
   const phoneTab = phoneTabFor(pathname, active);
 
   const toggleCollapsed = () => {
@@ -323,6 +340,7 @@ function LightboxShellFrame({
     focusTogglePendingRef.current = true;
     setCollapsed(next);
     updateShellState({ collapsed: next });
+    markSidebar(next);
     try {
       localStorage.setItem("sx.sidebar.collapsed", String(next));
     } catch {}
@@ -534,6 +552,10 @@ function LightboxShellFrame({
       if (next) window.location.assign(next);
       return Boolean(next);
     }
+    // Nothing read for the old workspace may answer a read for the new one,
+    // and the next page reads conversations only once Sales Xray is known on.
+    dropEarlyReads();
+    allowEarlyConversationReads(false);
     try {
       const res = await fetch("/v1/context", {
         method: "POST",
@@ -640,6 +662,13 @@ function LightboxShellFrame({
     (workspace) =>
       workspace.tenant_id === effectiveTenantId &&
       workspace.kind === "organisation",
+  );
+  // The company view (Insights) is for the organisation's owners and admins.
+  const orgAdmin = workspaces.some(
+    (workspace) =>
+      workspace.tenant_id === effectiveTenantId &&
+      workspace.kind === "organisation" &&
+      (workspace.role === "owner" || workspace.role === "admin"),
   );
   const branding = useBranding(inOrganisation);
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
@@ -868,6 +897,19 @@ function LightboxShellFrame({
                 <span style={RAIL_NAME_STYLE}>Organisation</span>
               </Link>
             ) : null}
+            {orgAdmin || place === "insights" ? (
+              <Link
+                className={`${styles.stripBtn}${place === "insights" ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/organisation/insights"
+                prefetch={false}
+                aria-label="Insights"
+                data-rail-tip="Insights"
+                aria-current={place === "insights" ? "page" : undefined}
+              >
+                <BarChart3 size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>Insights</span>
+              </Link>
+            ) : null}
           </div>
           <div className={styles.stripBottom}>
             {bell}
@@ -1070,7 +1112,7 @@ function LightboxShellFrame({
           <div className={styles.panelSpacer} />
         </div>
       </aside>
-      <div className={styles.content}>
+      <div className={styles.content} data-shell-content="">
         <header className={styles.mobileBar}>
           {/* r17: the lens, then where you are: workspace over page title. */}
           {workspaceLabel || pageTitle ? (
@@ -1081,9 +1123,11 @@ function LightboxShellFrame({
                   workspaceLabel ? `Workspace: ${workspaceLabel}` : undefined
                 }
               >
-                {workspaceLabel ? (
-                  <small>{pageTitle ? workspaceLabel : "Workspace"}</small>
-                ) : null}
+                {/* Two lines from the first paint: the workspace line is a
+                    placeholder while it loads, so the title never drops. */}
+                <small className={styles.mobileContext}>
+                  {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
+                </small>
                 <b>{pageTitle ?? workspaceLabel}</b>
               </span>
             </div>
@@ -1273,6 +1317,7 @@ function LightboxShellFrame({
           photoUrl={profile?.photo_url}
           allowance={shownAllowance}
           organisation={inOrganisation}
+          insights={orgAdmin}
           workspaces={workspaces.filter(
             (workspace) => workspace.sales_xray_enabled,
           )}
@@ -1301,10 +1346,14 @@ const PersistentShellContext = createContext<
  * chrome (active item, heading, allowance) instead of drawing a second one.
  */
 export function PersistentShell({ children }: { children: ReactNode }) {
-  const [page, setPage] = useState<ShellPage>({
-    authenticated: false,
-    loading: true,
-  });
+  // Pages hand the frame their settings before paint; until then it starts
+  // from what the session already knows, so a page drawn on the server with
+  // its session (dev) arrives with its full bar, not loading placeholders.
+  const access = useWorkspaceAccess();
+  const [page, setPage] = useState<ShellPage>(() => ({
+    authenticated: access?.authenticated === true,
+    loading: !access || access.status === "loading",
+  }));
   return (
     <PersistentShellContext.Provider value={setPage}>
       <LightboxShellFrame {...page}>{children}</LightboxShellFrame>

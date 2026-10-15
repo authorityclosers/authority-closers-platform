@@ -26,31 +26,32 @@ const EN_COPY: ReportUiCopy = {
   factorsLabel: "Sales factors",
   factorsTitle: "Explore the sales factors",
   factorsNote:
-    "Open a factor to read the draft observation. Evidence found does not mean a positive or negative score.",
+    "Open a skill to see what was noticed on this call. These are notes from the call, not scores.",
+  // Dipak's skill states where they apply (report-copy.ts SKILL_STATES).
   factorStatus: {
-    observed: "Evidence found",
+    observed: "Observed",
     partial: "Partly seen",
-    insufficient_evidence: "Need more evidence",
-    not_applicable: "Not relevant here",
-    conflicted: "Mixed evidence",
-    unknown: "Not assessed",
+    insufficient_evidence: "Not Enough Evidence",
+    not_applicable: "Not Applicable",
+    conflicted: "Mixed signals",
+    unknown: "Not covered",
   },
   transcriptTitle: "Read full transcript",
-  segmentsLabel: "segments",
+  segmentsLabel: "lines",
   searchLabel: "Search transcript",
   searchInputLabel: "Search transcript phrases",
   searchPlaceholder: "Find a phrase",
   speakerLabel: "Speaker",
   speakerFilterLabel: "Filter transcript by speaker",
   allSpeakers: "All speakers",
-  unlabelledSpeaker: "Unlabelled speaker",
+  unlabelledSpeaker: "Unknown speaker",
   speakerNote:
-    "Speaker labels come from the source and are unverified. Filter labels may be IDs rather than names.",
+    "Sales Xray works out who is speaking. It can be wrong, and some names may show as codes.",
   speakerNamesNote:
     "Names come from the call map at the top. Choose a name there to change it.",
-  matchingSegments: "matching segments",
+  matchingSegments: "matching lines",
   showing: "showing",
-  noMatches: "No transcript segments match.",
+  noMatches: "No lines match.",
   loadMore: (count) => `Load ${count} more`,
 };
 

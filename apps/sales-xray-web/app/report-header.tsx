@@ -5,6 +5,7 @@ import {
   Clock3,
   Download,
   Ellipsis,
+  Languages,
   Link2,
   Pencil,
   Plus,
@@ -19,11 +20,13 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { callTitle, type CallLabel } from "./call-label";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-studio.module.css";
+import pinned from "./report-header.module.css";
 
 export type ReportHeaderProps = {
   /** Measured recording duration from the saved transcript. */
@@ -54,7 +57,10 @@ export type ReportHeaderProps = {
    * pinned title row, this one grows into the space beside the title.
    */
   compactVisual?: ReactNode;
-  /** The call at a glance, beside the title until the compact map lands. */
+  /**
+   * Formerly the call at a glance beside the title. The six-part Report now
+   * starts with its conclusion, so the header no longer shows it.
+   */
   context?: ReactNode;
   /** Rename wiring; offered only for a claimed call with a server label. */
   rename?: {
@@ -142,13 +148,13 @@ export function ReportHeader({
   rename,
   visual,
   compactVisual,
-  context,
 }: ReportHeaderProps) {
   const menu = useRef<HTMLDetailsElement>(null);
   const bar = useRef<HTMLDivElement>(null);
   const visualBox = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
-  const hasCompact = Boolean(visual && compactVisual);
+  const mapSlot = useMapSlot(bar, Boolean(visual));
+  const hasCompact = Boolean(visual && compactVisual && mapSlot === null);
   const [renaming, setRenaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -339,7 +345,7 @@ export function ReportHeader({
     <>
       <div
         ref={bar}
-        className={styles.reportHeader}
+        className={`${styles.reportHeader} ${pinned.pinned}`}
         data-report-sticky
         data-compact={compact ? "true" : undefined}
       >
@@ -374,12 +380,14 @@ export function ReportHeader({
               {formatClock(durationMs)}
             </span>
             {languageLabel ? (
-              <span>Report language: {languageLabel}</span>
+              <span title={`Report language: ${languageLabel}`}>
+                <Languages size={14} aria-hidden="true" />
+                <span className={pinned.hidden}>Report language: </span>
+                {languageLabel}
+              </span>
             ) : null}
-            <span className={styles.reportDraft}>Draft coaching</span>
           </p>
         </div>
-        {context}
         {hasCompact ? (
           <div
             className={styles.reportCompact}
@@ -402,13 +410,13 @@ export function ReportHeader({
           {onOpenTranscript ? (
             <button
               type="button"
-              className={styles.reportAction}
+              className={`${styles.reportAction} ${pinned.action}`}
               onClick={onOpenTranscript}
               aria-label="Open transcript reader"
               title="Open transcript reader"
             >
               <BookOpen size={16} aria-hidden="true" />
-              <span>Transcript</span>
+              <span className={pinned.wideOnly}>Transcript</span>
             </button>
           ) : null}
           {/* Every action lives in one calm menu; "New analysis" is in the app header. */}
@@ -424,7 +432,7 @@ export function ReportHeader({
             }}
           >
             <summary
-              className={styles.reportAction}
+              className={`${styles.reportAction} ${pinned.action}`}
               aria-label="More report actions"
               title="More report actions"
             >
@@ -466,7 +474,7 @@ export function ReportHeader({
               >
                 <Download size={16} aria-hidden="true" />
                 Download report
-                <small>.docx</small>
+                <small className={pinned.fileType}>.docx</small>
               </button>
               <button
                 type="button"
@@ -552,11 +560,38 @@ export function ReportHeader({
           </details>
         </div>
       </div>
-      {visual ? (
+      {visual && mapSlot ? createPortal(visual, mapSlot) : null}
+      {visual && mapSlot === null ? (
         <div ref={visualBox} className={styles.reportVisual}>
           {visual}
         </div>
       ) : null}
     </>
   );
+}
+
+/**
+ * Where the call map belongs. The six-part Report opens with its conclusion
+ * and offers a slot in "How the Call Played Out"; the classic views have no
+ * slot, so the map stays under the title. Undefined until mounted, so the
+ * map never flashes in the wrong place.
+ */
+function useMapSlot(
+  bar: { current: HTMLElement | null },
+  enabled: boolean,
+): HTMLElement | null | undefined {
+  const [slot, setSlot] = useState<HTMLElement | null | undefined>(undefined);
+  useEffect(() => {
+    if (!enabled) return;
+    const scope =
+      bar.current?.closest<HTMLElement>("section, main") ?? document.body;
+    const find = () =>
+      setSlot(scope.querySelector<HTMLElement>("[data-report-map-slot]"));
+    find();
+    if (typeof MutationObserver === "undefined") return;
+    const observer = new MutationObserver(find);
+    observer.observe(scope, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [bar, enabled]);
+  return enabled ? slot : null;
 }

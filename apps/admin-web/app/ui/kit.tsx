@@ -243,7 +243,13 @@ export function Kpi({
         {label}
       </span>
       <span className={styles.tileMain}>
-        <strong className={styles.tileValue}>
+        <strong
+          className={styles.tileValue}
+          // Words ("Not available") read at heading size; numbers stay large.
+          data-words={
+            typeof value === "string" && !/\d/.test(value) ? "" : undefined
+          }
+        >
           {value}
           {unit ? <small>{unit}</small> : null}
         </strong>

@@ -9,7 +9,8 @@ export type SkeletonVariant =
   | "list"
   | "account"
   | "studio"
-  | "call";
+  | "call"
+  | "report";
 
 // Fixed heights so server and client render the same placeholder wave.
 const WAVE = Array.from({ length: 64 }, (_, index) => {
@@ -41,9 +42,21 @@ function Bar({
  * loading lasts long enough to notice, so quick loads never flash; one light
  * sheen passes across every placeholder together.
  */
-export function PageSkeleton({ variant }: { variant: SkeletonVariant }) {
+export function PageSkeleton({
+  variant,
+  instant = false,
+}: {
+  variant: SkeletonVariant;
+  /** Takes over from the same outline already on screen: no fade-in. */
+  instant?: boolean;
+}) {
   return (
-    <div className={styles.skeleton} data-variant={variant} aria-hidden="true">
+    <div
+      className={styles.skeleton}
+      data-variant={variant}
+      data-instant={instant ? "" : undefined}
+      aria-hidden="true"
+    >
       {variant === "dashboard" ? (
         <div className={styles.dashboard}>
           <div className={styles.stack}>
@@ -111,6 +124,55 @@ export function PageSkeleton({ variant }: { variant: SkeletonVariant }) {
               <div key={index} className={styles.settingRow}>
                 <Bar w="26%" h={13} />
                 <Bar w={140} h={32} r={8} className={styles.pushRight} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : variant === "report" ? (
+        // A saved call opens as its Report: title, the first pillar's heading,
+        // the Big Picture card and the cards under it, where they will be.
+        <div className={styles.report}>
+          <div className={styles.reportHead}>
+            <div className={styles.stack}>
+              <Bar w="min(360px, 70%)" h={30} r={8} />
+              <Bar w={96} h={12} />
+            </div>
+            <Bar w={104} h={40} r={10} className={styles.pushRight} />
+            <Bar w={40} h={40} r={999} />
+          </div>
+          {/* Phones: the Report / Coaching bar and the pillar tabs. */}
+          <div className={styles.reportModes}>
+            <Bar w={158} h={40} r={12} />
+            <Bar w={20} h={6} r={3} />
+          </div>
+          <div className={styles.reportTabs}>
+            <Bar w={92} h={14} />
+            <Bar w={92} h={14} />
+            <Bar w={92} h={14} />
+          </div>
+          <div className={styles.pillarHead}>
+            <Bar w={28} h={28} r={999} />
+            <div className={styles.stack}>
+              <Bar w={190} h={22} r={7} />
+              <Bar w="min(230px, 60vw)" h={12} />
+            </div>
+          </div>
+          <div className={`${styles.reportCard} ${styles.reportHero}`}>
+            <Bar w={150} h={32} r={999} />
+            <Bar w="100%" h={14} />
+            <Bar w="94%" h={14} />
+            <Bar w="68%" h={14} />
+          </div>
+          <div className={styles.reportCard}>
+            <Bar w={170} h={12} />
+            <Bar w="86%" h={14} />
+          </div>
+          <div className={styles.reportPair}>
+            {Array.from({ length: 2 }, (_, index) => (
+              <div key={index} className={styles.reportCard}>
+                <Bar w={120} h={12} />
+                <Bar w="92%" h={14} />
+                <Bar w="58%" h={14} />
               </div>
             ))}
           </div>

@@ -37,6 +37,54 @@ describe("call-specific coaching read", () => {
     expect(parsed.lesson?.framework).toEqual([]);
     expect(parsed.lesson?.when_not).toContain("boundary");
   });
+  it("keeps a quoted strength and drops a malformed or foreign one alone", () => {
+    const moment = fictionalCallCoaching.evidence[0];
+    const strength = {
+      title: "Asked for a consequence",
+      explanation: "It made the problem specific.",
+      evidence: [moment],
+    };
+    const kept = parseCallCoaching(
+      { ...fictionalCallCoaching, strength },
+      callId,
+    )!;
+    expect(kept.strength?.title).toBe("Asked for a consequence");
+    expect(kept.strength?.evidence[0].submission_id).toBe(callId);
+    for (const bad of [
+      { ...strength, evidence: [] },
+      { ...strength, title: "" },
+      {
+        ...strength,
+        evidence: [{ ...moment, source_sha256: "b".repeat(64) }],
+      },
+      "not an object",
+    ]) {
+      const parsed = parseCallCoaching(
+        { ...fictionalCallCoaching, strength: bad },
+        callId,
+      );
+      expect(parsed?.focus?.label).toBe(fictionalCallCoaching.focus?.label);
+      expect(parsed?.strength).toBeNull();
+    }
+    expect(
+      parseCallCoaching(fictionalCallCoaching, callId)?.strength,
+    ).toBeNull();
+  });
+  it("reads how many other suggestions the report holds, defaulting to none", () => {
+    expect(
+      parseCallCoaching(
+        { ...fictionalCallCoaching, other_suggestions: 2 },
+        callId,
+      )?.other_suggestions,
+    ).toBe(2);
+    for (const bad of [undefined, -1, 1.5, "2", 99]) {
+      const parsed = parseCallCoaching(
+        { ...fictionalCallCoaching, other_suggestions: bad },
+        callId,
+      );
+      expect(parsed?.other_suggestions).toBe(bad === 99 ? 20 : 0);
+    }
+  });
   it("rejects crossed call/mission/lesson sources and unparsed media", () => {
     for (const raw of [
       {
@@ -99,7 +147,7 @@ describe("call-specific coaching read", () => {
     fetch.mockRejectedValue(new Error("private diagnostic"));
     expect(await readCoaching(callId)).toEqual({
       data: null,
-      error: "Coaching could not be loaded. Try again.",
+      error: "Coaching didn’t load. Try again.",
     });
   });
   it("does not send malformed call selectors or expose missing-route diagnostics", async () => {

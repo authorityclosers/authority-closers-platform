@@ -8,10 +8,6 @@ skipped database test as passed. No server, provider, keys or paid route is acti
 from __future__ import annotations
 
 import asyncio
-import os
-import re
-import subprocess
-import sys
 from collections.abc import Coroutine, Iterator
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -24,12 +20,9 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import Engine, create_engine, delete, func, select, text, update
-from sqlalchemy.engine import make_url
+from sqlalchemy import Engine, delete, func, select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import Session
-from sqlalchemy.schema import CreateSchema, DropSchema
 
 from ac_platform.audit.service import verify_audit_chain
 from ac_platform.conversation_intelligence.application import (
@@ -68,6 +61,7 @@ from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Membership, Tenant
+from tests.database.conversation_harness import conversation_harness
 
 ROOT = Path(__file__).parents[2]
 
@@ -82,107 +76,7 @@ def _migration_head() -> str:
 
 @pytest.fixture(scope="module")
 def postgres_harness() -> Iterator[Engine]:
-    raw = os.getenv("AC_CONVERSATION_POSTGRES_TEST_URL") or os.getenv("AC_TEST_DATABASE_URL")
-    if not raw:
-        pytest.fail(
-            "NOT EXECUTED: an explicit disposable loopback PostgreSQL URL is required",
-            pytrace=False,
-        )
-    try:
-        url = make_url(raw)
-    except Exception:
-        pytest.fail(
-            "invalid disposable PostgreSQL URL; value intentionally not displayed", pytrace=False
-        )
-    if url.get_backend_name() != "postgresql" or url.host not in {"127.0.0.1", "localhost", "::1"}:
-        pytest.fail("Sales Xray database proof refuses non-loopback PostgreSQL", pytrace=False)
-    if any(key.lower() in {"host", "hostaddr", "service", "servicefile"} for key in url.query):
-        pytest.fail(
-            "alternate PostgreSQL host/service routing is forbidden in this harness", pytrace=False
-        )
-    url = url.set(drivername="postgresql+psycopg")
-    schema = f"conversation_proof_{uuid4().hex}"
-    admin = create_engine(url)
-    scoped: Engine | None = None
-    created = False
-    try:
-        with admin.begin() as connection:
-            connection.execute(CreateSchema(schema))
-        created = True
-        options = f"-csearch_path={schema} -clock_timeout=10000 -cstatement_timeout=30000"
-        scoped_url = url.set(query={**url.query, "options": options})
-        scoped = create_engine(scoped_url)
-        environment = os.environ.copy()
-        environment.update(
-            # env.py feeds this URL to Alembic's ConfigParser. Percent-encoded query
-            # options would trigger interpolation; keep schema scoping in PGOPTIONS.
-            AC_DATABASE_URL=url.render_as_string(hide_password=False),
-            AC_DATABASE_MIGRATOR_URL=url.render_as_string(hide_password=False),
-            AC_ENVIRONMENT="test",
-            PGOPTIONS=options,
-            PYTHONPATH=str(ROOT / "packages/python"),
-        )
-
-        def migrate(target: str) -> None:
-            try:
-                result = subprocess.run(  # noqa: S603 - fixed Alembic command, disposable local schema
-                    [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", target],
-                    cwd=ROOT,
-                    env=environment,
-                    capture_output=True,
-                    text=True,
-                    timeout=180,
-                    check=False,
-                )
-            except (OSError, subprocess.TimeoutExpired) as error:
-                pytest.fail(
-                    f"Sales Xray migration process failed: {type(error).__name__}", pytrace=False
-                )
-            if result.returncode:
-                # Never echo URL/environment or unbounded driver tracebacks containing credentials.
-                exception_types = sorted(
-                    set(
-                        re.findall(
-                            r"(?m)^((?:[A-Za-z_]\w*\.)*[A-Za-z_]\w*(?:Error|Exception))(?=:)",
-                            result.stderr,
-                        )
-                    )
-                    | {
-                        f"psycopg.errors.{name}"
-                        for name in re.findall(
-                            r"\bpsycopg\.errors\.([A-Za-z_]\w*)\b",
-                            result.stderr,
-                        )
-                    }
-                )
-                diagnostic = ", ".join(exception_types) or "exception type unavailable"
-                pytest.fail(
-                    f"Migration to {target} failed (exit {result.returncode}; {diagnostic})",
-                    pytrace=False,
-                )
-
-        migrate("20260910_0029")
-        preserved_tenant = uuid4()
-        with Session(scoped) as database, database.begin():
-            database.add(
-                Tenant(
-                    id=preserved_tenant,
-                    slug=preserved_tenant.hex,
-                    name="Disposable pre-Sales-Xray tenant",
-                )
-            )
-        migrate("head")
-        with Session(scoped) as database:
-            existing = database.get(Tenant, preserved_tenant)
-            assert existing is not None and existing.name == "Disposable pre-Sales-Xray tenant"
-        yield scoped
-    finally:
-        if scoped is not None:
-            scoped.dispose()
-        if created:
-            with admin.begin() as connection:
-                connection.execute(DropSchema(schema, cascade=True))
-        admin.dispose()
+    yield from conversation_harness(ROOT)
 
 
 @dataclass(frozen=True)

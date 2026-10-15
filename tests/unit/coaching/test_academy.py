@@ -87,4 +87,4 @@ def test_missing_route_or_timed_out_read_does_not_crash_coaching() -> None:
         raise TimeoutError()
 
     result = asyncio.run(resolve_academy_target(reference(), timed_out))
-    assert result.target is None and "temporarily unavailable" in result.error
+    assert result.target is None and "didn’t load" in result.error

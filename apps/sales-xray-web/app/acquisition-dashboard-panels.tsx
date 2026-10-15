@@ -55,10 +55,11 @@ const steps = [
   },
 ] as const;
 
-const supportedAudioName = /\.(mp3|mpeg|wav|m4a|ogg|flac)$/i;
+const supportedAudioName =
+  /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i;
 
 function fileSizeLabel(bytes: number): string {
-  const megabytes = bytes / 1048576;
+  const megabytes = bytes / 1_000_000;
   return `${Number(megabytes.toFixed(1))} MB`;
 }
 
@@ -294,7 +295,7 @@ export function AcquisitionGuideRail({
                 <ArrowRight size={17} aria-hidden="true" />
               </summary>
               <ul className={styles.helpTips}>
-                <li>Choose a supported audio file up to 32 MB.</li>
+                <li>Choose a audio or video file up to 100 MB.</li>
                 <li>
                   Check the language and privacy details before you continue.
                 </li>

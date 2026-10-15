@@ -1,109 +1,163 @@
 "use client";
 
 import Link from "next/link";
-import { FileSearch } from "lucide-react";
-import { Empty, Panel } from "../ui/kit";
+import { FileSearch, FileText, GraduationCap, Users } from "lucide-react";
+import { StoryCard } from "../report-visuals/visuals";
+import { Empty, List, Panel, Row } from "../ui/kit";
 import type { CallCoaching } from "./coaching-read";
-import { FocusHero, LessonPanel, MissionPanel } from "./coaching-ui";
+import {
+  CALL,
+  CALL_PILLARS,
+  FOCUS,
+  NEXT,
+  THEIR,
+  THEIR_CALL_PILLARS,
+  WHY,
+} from "./coaching-copy";
+import {
+  dipakTake,
+  FocusHero,
+  LessonPanel,
+  MissionPanel,
+  Pillar,
+  type Chip,
+} from "./coaching-ui";
+import { TheirCoaching } from "./coaching-voice";
 import { MomentList } from "./evidence-player";
 import styles from "./coaching.module.css";
 
 const BASIS = {
-  skill_evidence: "From this call’s skill evidence",
-  report_suggestion: "From this call’s report",
-  general_practice: "General practice",
-  unavailable: "Unavailable",
+  skill_evidence: FOCUS.fromSkills,
+  report_suggestion: FOCUS.fromReport,
+  general_practice: FOCUS.general,
+  unavailable: CALL.unavailable,
 } as const;
+
+/** Where one call's focus came from, as the chip on its focus card. */
+export function basisChip(basis: keyof typeof BASIS): Chip {
+  return {
+    text: BASIS[basis],
+    tone: basis === "general_practice" ? "neutral" : "accent",
+  };
+}
 
 /** Level 1: one call → one focus, its moments, a lesson and one mission. */
 export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
   const { focus, lesson, mission, practice, evidence } = coaching;
+  // AC Sandbox calls are fictional records with no report page; Team lists them.
+  const report = coaching.sandbox
+    ? { href: "/coaching?view=team", title: CALL.backToTeam }
+    : {
+        href: `/analysis/calls/${coaching.submission_id}`,
+        title: CALL.backToReport,
+      };
   if (!focus || !lesson || !mission || !practice)
     return (
-      <Panel title="Coaching for this call">
+      <Panel title={CALL.title}>
         <Empty
           icon={FileSearch}
-          title="This call’s coaching is unavailable"
-          text="Its evidence is withheld or not ready. The report shows what is available."
+          title={CALL.notReady}
+          text={CALL.notReadyText}
           action={{
-            href: `/analysis/calls/${coaching.submission_id}`,
-            label: "Open the report",
+            href: report.href,
+            label: coaching.sandbox ? CALL.openTeam : CALL.openReport,
           }}
         />
       </Panel>
     );
+  // A fictional rep's call is read by the person who imported it: "their".
+  const theirs = Boolean(coaching.sandbox && coaching.rep_person_id);
+  const pillars = theirs ? THEIR_CALL_PILLARS : CALL_PILLARS;
   return (
-    <div className={styles.layout}>
-      <div className={styles.main}>
-        <FocusHero
-          heading="One focus for this call"
-          label={focus.label}
-          badges={[
-            {
-              text: BASIS[coaching.basis],
-              tone:
-                coaching.basis === "general_practice" ? "neutral" : "accent",
-            },
-          ]}
-          explanation={focus.explanation}
-          why={focus.why_it_matters}
-          reason={focus.selected_reason}
-          mission={mission.behavior}
-          missionAnchor="call-mission"
-        />
-        <Panel
-          title="Why this is the focus for this call"
-          sub={
-            evidence.length
-              ? `${evidence.length} moment${evidence.length === 1 ? "" : "s"}`
-              : undefined
-          }
-        >
+    <TheirCoaching.Provider value={theirs}>
+      <div className={styles.conversation}>
+        <Pillar id="coaching-focus" copy={pillars.focus}>
+          <FocusHero
+            label={focus.label}
+            chips={[
+              basisChip(coaching.basis),
+              ...(coaching.sandbox ? [{ text: FOCUS.sandbox }] : []),
+            ]}
+            explanation={focus.explanation}
+            why={focus.why_it_matters}
+            reason={focus.selected_reason}
+            evidenceAnchor={evidence.length ? "coaching-why" : undefined}
+            lessonAnchor="coaching-better"
+            mission={mission.behavior}
+            missionAnchor="call-mission"
+            take={dipakTake(coaching.media_clips)}
+          />
+        </Pillar>
+        <Pillar id="coaching-why" copy={pillars.why}>
           {evidence.length ? (
-            <MomentList
-              evidence={evidence}
-              showCall={false}
-              label="Moments from this call"
-            />
-          ) : (
-            <div className={styles.body}>
-              <p className={styles.momentNote}>
-                This report kept no timestamp for this suggestion.{" "}
-                <Link href={`/analysis/calls/${coaching.submission_id}`}>
-                  Open the report
-                </Link>{" "}
-                to read it in context.
-              </p>
+            <div className={styles.card} data-flush="">
+              <MomentList
+                evidence={evidence}
+                showCall={false}
+                heading={WHY.callEvidence}
+                label={CALL.moments}
+                fictional={coaching.sandbox}
+              />
             </div>
+          ) : (
+            <StoryCard>
+              <p className={styles.momentNote}>
+                {WHY.noTimestamp}{" "}
+                <Link href={report.href}>{CALL.openReport}</Link>
+              </p>
+            </StoryCard>
           )}
-        </Panel>
+        </Pillar>
         <LessonPanel
+          copy={pillars.better}
           lesson={lesson}
           clips={coaching.media_clips}
           fallbackObservation={focus.explanation}
+          strength={coaching.strength}
         />
-      </div>
-      <aside className={styles.rail} aria-label="Next call" data-sticky>
         <MissionPanel
           id="call-mission"
+          copy={pillars.next}
           mission={mission}
           practice={practice}
-          foot="One call shows a suggestion, not a recurring pattern. My coaching keeps your focus across calls."
+          foot={
+            theirs ? THEIR.oneCall(coaching.rep_name ?? null) : NEXT.oneCall
+          }
         />
-        <Panel title="Keep going">
-          <div className={styles.body}>
-            <Link
-              className={styles.jump}
-              href={`/analysis/calls/${coaching.submission_id}`}
-            >
-              Back to this call’s report
-            </Link>
-            <Link className={styles.jump} href="/coaching">
-              My coaching across calls
-            </Link>
-          </div>
+        <Panel title={CALL.keepGoing}>
+          <List label={CALL.keepGoing}>
+            <Row
+              icon={
+                coaching.sandbox ? (
+                  <Users size={15} aria-hidden="true" />
+                ) : (
+                  <FileText size={15} aria-hidden="true" />
+                )
+              }
+              title={report.title}
+              href={report.href}
+              meta={
+                coaching.other_suggestions
+                  ? [CALL.moreSuggestions(coaching.other_suggestions)]
+                  : undefined
+              }
+            />
+            {coaching.sandbox && coaching.rep_person_id ? (
+              <Row
+                icon={<GraduationCap size={15} aria-hidden="true" />}
+                title={CALL.repAcross(coaching.rep_name ?? null)}
+                href={`/coaching?person=${coaching.rep_person_id}`}
+              />
+            ) : (
+              <Row
+                icon={<GraduationCap size={15} aria-hidden="true" />}
+                title={CALL.mineAcross}
+                href="/coaching"
+              />
+            )}
+          </List>
         </Panel>
-      </aside>
-    </div>
+      </div>
+    </TheirCoaching.Provider>
   );
 }

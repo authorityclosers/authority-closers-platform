@@ -4,9 +4,11 @@ Three read-only views over the served Sales Xray recordings, for the same
 operations control accounts that may open Admin reports today:
 
 * ``queue``: the newest calls in a bounded window, filterable by organisation,
-  rep, report language, provider, status and upload date;
+  rep, report language, provider, coaching prompt revision, status and upload
+  date;
 * ``call``: one recording with every analysis run (prompt version, provider
-  and whether a report exists), for comparing runs;
+  and whether a report exists), for comparing runs, and its failed steps
+  (stored codes only) for the existing admin job retry;
 * ``bundle``: one run's report and transcript, withheld per the recording's
   sensitive-segment marks and audited like ``admin_report_view``.
 
@@ -30,6 +32,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitorClaim,
 )
+from ac_platform.conversation_intelligence.admin_analysis_health import failed_job_view
 from ac_platform.conversation_intelligence.admin_recordings import _owner_view
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -50,18 +53,26 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.plan_facts import plan_facts as _plan_facts
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.report_story import report_story
+from ac_platform.conversation_intelligence.review_labels import (
+    REVIEW_STATES,
+    ReviewLabels,
+    review_state,
+)
 from ac_platform.conversation_intelligence.review_service import ConversationReviewService
 from ac_platform.conversation_intelligence.sensitive_segments import withhold
 from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Tenant
 
 QUEUE_WINDOW = 500
 MAX_PAGE = 100
+MAX_FAILED_JOBS = 20
 STATUSES = ("ready", "analysing", "failed", "uploaded")
 LANGUAGES = ("en", "hi-Deva+en", "mr-Deva+en")
 
@@ -87,38 +98,6 @@ def _offset(cursor: str | None) -> int:
 
 def _iso(value: datetime | None) -> str | None:
     return None if value is None else utc(value).isoformat()
-
-
-def _plan_facts(plan: ConversationProcessingPlan | None) -> dict[str, Any]:
-    """What a plan says about how a call was analysed; missing fields stay None."""
-
-    manifest: dict[str, Any] = (
-        plan.manifest if plan is not None and isinstance(plan.manifest, dict) else {}
-    )
-    raw_stages = manifest.get("stages")
-    stages: list[Any] = raw_stages if isinstance(raw_stages, list) else []
-    by_stage = {
-        item.get("stage"): item for item in stages if isinstance(item, dict) and item.get("stage")
-    }
-    coaching = by_stage.get("C5") or {}
-    transcription = by_stage.get("C2") or {}
-    language = manifest.get("report_language")
-    duration = manifest.get("duration_ms")
-    return {
-        "plan_id": None if plan is None else str(plan.id),
-        "plan_state": None if plan is None else plan.state,
-        "language": language if isinstance(language, str) else "en" if manifest else None,
-        "duration_ms": duration if isinstance(duration, int) else None,
-        "prompt_revision": manifest.get("coaching_prompt_revision"),
-        "fact_prompt_revision": manifest.get("fact_prompt_revision"),
-        "analysis_settings_revision": manifest.get("analysis_settings_revision"),
-        "output_profile": manifest.get("output_profile"),
-        "retry_of": manifest.get("retry_of"),
-        "provider": coaching.get("provider_id"),
-        "model": coaching.get("model_id"),
-        "transcription_provider": transcription.get("provider_id"),
-        "transcription_model": transcription.get("model_id"),
-    }
 
 
 def _status(
@@ -323,6 +302,34 @@ class AdminCallReview:
         )
         return {run_id: plan_id for run_id, plan_id in rows.all()}
 
+    async def _failed_jobs(
+        self, recording_id: UUID, runs: Sequence[ConversationRun]
+    ) -> list[dict[str, Any]]:
+        """One call's dead-lettered steps, newest first: the local run job and its stages."""
+
+        stage_by_job: dict[UUID, str] = {run.job_id: "C1" for run in runs}
+        rows = await self.database.execute(
+            select(ConversationInferenceTask.job_id, ConversationInferenceTask.stage).where(
+                ConversationInferenceTask.tenant_id.in_(self.recording_tenant_ids),
+                ConversationInferenceTask.recording_id == recording_id,
+            )
+        )
+        stage_by_job.update({job_id: stage for job_id, stage in rows.all()})
+        if not stage_by_job:
+            return []
+        jobs = (
+            await self.database.scalars(
+                select(Job)
+                .where(Job.id.in_(stage_by_job), Job.status == "dead_letter")
+                .order_by(Job.created_at.desc())
+                .limit(MAX_FAILED_JOBS)
+            )
+        ).all()
+        return [
+            failed_job_view(job, stage=stage_by_job[job.id], recording_id=recording_id)
+            for job in jobs
+        ]
+
     # ---------- Views ----------
 
     async def queue(
@@ -333,7 +340,9 @@ class AdminCallReview:
         rep: UUID | None = None,
         language: str | None = None,
         provider: str | None = None,
+        prompt: str | None = None,
         status: str | None = None,
+        review: str | None = None,
         since: date | None = None,
         until: date | None = None,
         cursor: str | None = None,
@@ -344,6 +353,8 @@ class AdminCallReview:
             raise ConversationError("Use a queue page size between 1 and 100.")
         if status is not None and status not in STATUSES:
             raise ConversationError("Use a known call status.")
+        if review is not None and review not in REVIEW_STATES:
+            raise ConversationError("Use a known review state.")
         if language is not None and language not in LANGUAGES:
             raise ConversationError("Use a known report language.")
         if since is not None and until is not None and until < since:
@@ -381,6 +392,11 @@ class AdminCallReview:
         runs = await self._runs(ids)
         plans = await self._plans(ids)
         reports = await self._reports(ids)
+        label_rows = await ReviewLabels(
+            self.application,
+            self.operations_tenant_id,
+            recording_tenant_ids=self.recording_tenant_ids,
+        ).rows(ids)
 
         items: list[dict[str, Any]] = []
         for recording in window:
@@ -406,6 +422,15 @@ class AdminCallReview:
                     "provider": facts["provider"],
                     "model": facts["model"],
                     "prompt_revision": facts["prompt_revision"],
+                    # Every prompt this call was analysed with, latest or not.
+                    "prompt_revisions": sorted(
+                        {
+                            value
+                            for plan in recording_plans
+                            if isinstance(value := _plan_facts(plan)["prompt_revision"], str)
+                            and value
+                        }
+                    ),
                     "runs": len(recording_runs),
                     "latest_run": None
                     if latest_run is None
@@ -416,6 +441,7 @@ class AdminCallReview:
                         "completed_at": _iso(latest_run.completed_at),
                     },
                     "report_run_id": None if report_run is None else str(report_run.id),
+                    "review": review_state(label_rows.get(recording.id, [])),
                 }
             )
 
@@ -426,17 +452,24 @@ class AdminCallReview:
             items = [item for item in items if item["language"] == language]
         if provider is not None:
             items = [item for item in items if item["provider"] == provider]
+        if prompt is not None:
+            items = [item for item in items if prompt in item["prompt_revisions"]]
         counts = {name: 0 for name in STATUSES}
+        review_counts = {name: 0 for name in REVIEW_STATES}
         for item in items:
             counts[item["status"]] += 1
+            review_counts[item["review"]] += 1
         if status is not None:
             items = [item for item in items if item["status"] == status]
+        if review is not None:
+            items = [item for item in items if item["review"] == review]
         page = items[offset : offset + limit]
         following = offset + limit
         return {
             "items": page,
             "total": len(items),
             "counts": counts,
+            "review_counts": review_counts,
             "facets": facets,
             "next_cursor": _cursor(following) if following < len(items) else None,
             "window": {"size": QUEUE_WINDOW, "truncated": truncated},
@@ -493,6 +526,7 @@ class AdminCallReview:
                 }
                 for run in runs
             ],
+            "failed_jobs": await self._failed_jobs(recording.id, runs),
         }
 
     async def bundle(self, actor: ActorContext, run_id: UUID) -> dict[str, Any]:
@@ -620,4 +654,18 @@ def _facets(items: Sequence[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         "providers": tally(
             lambda item: (item["provider"], item["provider"]) if item["provider"] else None
         ),
+        "prompts": _multi_tally(item["prompt_revisions"] for item in items),
     }
+
+
+def _multi_tally(groups: Iterable[Sequence[str]]) -> list[dict[str, Any]]:
+    """Calls per value when a call can have several (e.g. the prompts it was analysed with)."""
+
+    counted: dict[str, int] = defaultdict(int)
+    for values in groups:
+        for value in set(values):
+            counted[value] += 1
+    return [
+        {"value": value, "label": value, "count": count}
+        for value, count in sorted(counted.items(), key=lambda entry: (-entry[1], entry[0]))
+    ]

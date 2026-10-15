@@ -1,37 +1,21 @@
 "use client";
 
-import {
-  ArrowRight,
-  ChevronRight,
-  FileSearch,
-  PhoneCall,
-  RefreshCw,
-} from "lucide-react";
+import { FileSearch, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import {
-  Badge,
   Button,
   Empty,
   kitStyles,
-  List,
   PageHeader,
   Panel,
   QueryTabs,
-  Row,
-  Skeleton,
 } from "../ui/kit";
 import { StandaloneStudio } from "../standalone-studio";
 import { useWorkspaceAccess } from "../workspace-access";
-import type {
-  CallSummary,
-  Coaching,
-  MasteryState,
-  ProgressPoint,
-} from "./coaching-client";
 import { CallCoachingStory } from "./call-coaching";
 import {
   isCallCoaching,
@@ -40,412 +24,28 @@ import {
   requestedCall,
   type CoachingResult,
 } from "./coaching-read";
-import {
-  callDate,
-  FocusHero,
-  gapLabel,
-  LessonPanel,
-  MissionPanel,
-} from "./coaching-ui";
+import { PAGE } from "./coaching-copy";
+import { callDate } from "./coaching-ui";
 import { TeamCoachingStory } from "./team-coaching";
-import { MomentList } from "./evidence-player";
-import {
-  requestedSkill,
-  requestedSkillLabel,
-  type RequestedSkill,
-} from "./focus-request";
+import { CoachingSkeleton } from "./coaching-skeleton";
+import { CoachingStory } from "./my-coaching";
+import { requestedSkill, type RequestedSkill } from "./focus-request";
 import styles from "./coaching.module.css";
 
-const masteryLabel: Record<MasteryState, string> = {
-  not_enough_evidence: "Not Enough Evidence",
-  emerging: "Emerging",
-  developing: "Developing",
-  consistent: "Consistent",
-  strong: "Strong",
-  mastered: "Mastered",
-  regression_detected: "Regression Detected",
-  re_stabilizing: "Re-stabilizing",
-};
-const JOURNEY: MasteryState[] = [
-  "emerging",
-  "developing",
-  "consistent",
-  "strong",
-  "mastered",
-];
-
-/** Mirrors the final grid, so nothing moves when the data arrives. */
-export function CoachingSkeleton() {
-  return (
-    <div
-      className={styles.skeleton}
-      role="status"
-      aria-busy="true"
-      aria-label="Loading Coaching"
-    >
-      <Skeleton width={220} height={24} />
-      <Skeleton width={320} height={13} />
-      <div className={styles.layout}>
-        <div className={styles.main}>
-          <span className={styles.skeletonBlock} style={{ height: 232 }} />
-          <span className={styles.skeletonBlock} style={{ height: 200 }} />
-          <span className={styles.skeletonBlock} style={{ height: 280 }} />
-        </div>
-        <div className={styles.rail}>
-          <span className={styles.skeletonBlock} style={{ height: 300 }} />
-          <span className={styles.skeletonBlock} style={{ height: 160 }} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const POINT: Record<ProgressPoint["state"], string> = {
-  suggested: "Suggested again",
-  no_suggestion: "Evidence, no suggestion",
-  not_covered: "Not covered",
-};
-
-/** Comparable calls, oldest first. Reports say what they saw, never success. */
-function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
-  if (!points?.length) return null;
-  const after = points.filter((point) => point.after_mission);
-  const quiet = after.filter((point) => point.state === "no_suggestion");
-  const firstAfter = points.findIndex((point) => point.after_mission);
-  return (
-    <div className={styles.progress}>
-      <ol
-        className={styles.timeline}
-        aria-label="Comparable calls, oldest first"
-      >
-        {points.map((point, index) => (
-          <li
-            key={point.submission_id}
-            data-state={point.state}
-            data-mission-start={index === firstAfter ? "" : undefined}
-            title={`${callDate(point.created_at)} · ${POINT[point.state]}`}
-          >
-            <span className={styles.srOnly}>
-              {callDate(point.created_at)}: {POINT[point.state]}
-            </span>
-          </li>
-        ))}
-      </ol>
-      <p className={styles.legend} aria-hidden="true">
-        {(Object.keys(POINT) as ProgressPoint["state"][]).map((state) => (
-          <span key={state} data-state={state}>
-            {POINT[state]}
-          </span>
-        ))}
-      </p>
-      <p>
-        {after.length
-          ? `Since your mission started: ${quiet.length} of ${after.length} comparable call${after.length === 1 ? "" : "s"} had evidence for this skill and no suggestion. That is not proof of change yet.`
-          : "No comparable call since your mission started. Your next call is the first check."}
-      </p>
-    </div>
-  );
-}
-
-/** Every analysed call has its own coaching, even before a pattern exists. */
-function CallsPanel({ calls }: { calls?: CallSummary[] }) {
-  if (!calls?.length) return null;
-  return (
-    <Panel title="Coaching for each call" sub={`${calls.length} recent`}>
-      <List label="Your recent calls">
-        {calls.map((call) => (
-          <Row
-            key={call.submission_id}
-            icon={<PhoneCall size={15} aria-hidden="true" />}
-            title={call.call_label}
-            href={
-              call.state === "ready"
-                ? `/coaching?call=${call.submission_id}`
-                : `/analysis/calls/${call.submission_id}`
-            }
-            meta={[
-              callDate(call.created_at),
-              call.state === "pending"
-                ? "Analysing…"
-                : call.state === "unavailable"
-                  ? "No usable report"
-                  : (call.focus_label ?? "One practice for your next call"),
-            ]}
-            end={
-              call.state === "ready" ? (
-                <ChevronRight size={15} aria-hidden="true" />
-              ) : null
-            }
-          />
-        ))}
-      </List>
-    </Panel>
-  );
-}
-
-function StartCoaching({ coaching }: { coaching: Coaching }) {
-  return (
-    <div className={styles.layout}>
-      <div className={styles.main}>
-        <section className={styles.hero} aria-labelledby="coaching-focus">
-          <div className={styles.eyebrow}>
-            <h2 id="coaching-focus" className={styles.label}>
-              What You Should Work On Now
-            </h2>
-            <Badge>Still learning your pattern</Badge>
-          </div>
-          <p className={styles.focusTitle}>
-            {coaching.analysed_calls
-              ? "Start with one call’s coaching"
-              : "Analyse a call to start"}
-          </p>
-          <p className={styles.lead}>
-            {coaching.analysed_calls
-              ? "Your calls do not yet show one skill to work on across calls. Each analysed call below already has its own focus and next-call mission."
-              : "Coaching follows your own analysed calls. Your first report brings one focus and one mission for your next call."}
-          </p>
-          {coaching.pending_calls > 0 ? (
-            <p className={styles.note}>
-              {coaching.pending_calls} call
-              {coaching.pending_calls === 1 ? " is" : "s are"} still being
-              analysed.
-            </p>
-          ) : null}
-          <div className={styles.actions}>
-            <Link
-              className={kitStyles.button}
-              data-variant={coaching.analysed_calls ? undefined : "primary"}
-              href="/analysis/new"
-            >
-              Analyse a call <ArrowRight size={14} aria-hidden="true" />
-            </Link>
-          </div>
-        </section>
-        <CallsPanel calls={coaching.calls} />
-      </div>
-    </div>
-  );
-}
-
-export function CoachingStory({
-  coaching,
-  requestedFocus,
-}: {
-  coaching: Coaching;
-  requestedFocus?: RequestedSkill;
-}) {
-  const { focus, mission, lesson, evidence, practice, mastery } = coaching;
-  if (!focus || !mission || !lesson || !practice)
-    return <StartCoaching coaching={coaching} />;
-  const pattern = coaching.pattern;
-  const recurring = focus.status === "active";
-  const step = JOURNEY.indexOf(mastery.state);
-  return (
-    <div className={styles.layout}>
-      <div className={styles.main}>
-        <FocusHero
-          heading="What You Should Work On Now"
-          label={focus.label}
-          badges={[
-            recurring
-              ? { text: "Active focus", tone: "accent" }
-              : { text: "Provisional focus" },
-            ...(pattern.relevant_call_count > 1
-              ? [
-                  {
-                    text: `In ${pattern.attention_call_count} of ${pattern.relevant_call_count} comparable calls`,
-                  },
-                ]
-              : []),
-            ...(mastery.state !== "not_enough_evidence"
-              ? [{ text: masteryLabel[mastery.state], tone: "good" as const }]
-              : []),
-          ]}
-          explanation={focus.explanation}
-          why={focus.why_it_matters}
-          reason={focus.selected_reason}
-          mission={mission.behavior}
-          missionAnchor="mission"
-        >
-          {requestedFocus && requestedFocus !== focus.skill_id ? (
-            <p className={styles.note}>
-              Your report brought you here for{" "}
-              {requestedSkillLabel(requestedFocus)}. Your current next-call
-              mission stays active.
-            </p>
-          ) : null}
-        </FocusHero>
-        <Panel
-          title="Why This Keeps Happening"
-          sub={`${evidence.length} moment${evidence.length === 1 ? "" : "s"}`}
-        >
-          <div className={styles.body}>
-            <p>{pattern.summary}</p>
-            <div className={styles.hypothesis}>
-              <span className={styles.eyebrow}>
-                Likely reason · a working hypothesis
-                <Badge>{gapLabel(coaching.root_cause.gap_type)}</Badge>
-              </span>
-              <p>{coaching.root_cause.hypothesis}</p>
-            </div>
-          </div>
-          <MomentList evidence={evidence} />
-          {evidence.length === 1 ? (
-            <p className={styles.body}>
-              <span className={styles.note}>
-                Only one supporting moment so far. We will not invent more.
-              </span>
-            </p>
-          ) : null}
-        </Panel>
-        <LessonPanel
-          lesson={lesson}
-          clips={coaching.media_clips}
-          fallbackObservation={focus.explanation}
-        />
-        <div className={styles.late}>
-          <CallsPanel calls={coaching.calls} />
-        </div>
-      </div>
-      <aside className={styles.rail} aria-label="Mission and progress">
-        <MissionPanel
-          id="mission"
-          mission={mission}
-          practice={practice}
-          since={callDate(mission.active_since)}
-          foot="The mission stays until real calls show the change. A lesson view or a new date does not complete it."
-        />
-        <Panel title="See How You’re Improving">
-          <div className={styles.body}>
-            <span className={styles.eyebrow}>
-              Mastery
-              <Badge
-                tone={
-                  mastery.state === "not_enough_evidence" ? "neutral" : "good"
-                }
-              >
-                {masteryLabel[mastery.state]}
-              </Badge>
-            </span>
-            <ol className={styles.stepper} aria-label="Mastery journey">
-              {JOURNEY.map((state, index) => (
-                <li
-                  key={state}
-                  title={masteryLabel[state]}
-                  data-on={step >= index ? "" : undefined}
-                  aria-current={mastery.state === state ? "step" : undefined}
-                >
-                  <span className={styles.srOnly}>{masteryLabel[state]}</span>
-                </li>
-              ))}
-            </ol>
-            <ProgressStrip points={coaching.progress} />
-            <p className={styles.note}>{mastery.explanation}</p>
-            {mastery.relevant_count !== null ? (
-              <p>
-                {mastery.correct_count} successful executions in{" "}
-                {mastery.relevant_count} relevant opportunities.
-              </p>
-            ) : null}
-            {mastery.baseline ? (
-              <p className={styles.note}>
-                Previous baseline: {mastery.baseline}
-              </p>
-            ) : null}
-            <details className={styles.more}>
-              <summary>Regression and history</summary>
-              <div className={styles.moreBody}>
-                <p>{coaching.regression.action}</p>
-                {mastery.historical_achievement ? (
-                  <p>
-                    Previous achievement:{" "}
-                    {masteryLabel[mastery.historical_achievement]}
-                  </p>
-                ) : null}
-                <p className={styles.note}>
-                  Watching a lesson is participation. Improvement needs evidence
-                  from real opportunities.
-                </p>
-              </div>
-            </details>
-          </div>
-        </Panel>
-        <Panel title="Where We Go From Here">
-          <div className={styles.body}>
-            <dl className={styles.path}>
-              <div>
-                <dt>Working on now</dt>
-                <dd>{coaching.development_path.current ?? focus.label}</dd>
-              </div>
-              <div>
-                <dt>Likely next</dt>
-                <dd>
-                  {coaching.development_path.likely_next ??
-                    "Still gathering evidence"}
-                </dd>
-              </div>
-              <div>
-                <dt>Maintain</dt>
-                <dd>
-                  {coaching.development_path.maintain ??
-                    "No established strength yet"}
-                </dd>
-              </div>
-              <div>
-                <dt>Later</dt>
-                <dd>
-                  {coaching.development_path.later ??
-                    "Your future calls will guide this"}
-                </dd>
-              </div>
-            </dl>
-            <p className={styles.note}>
-              {coaching.development_path.explanation}
-            </p>
-            {coaching.reflection_question ? (
-              <p className={styles.reflection}>
-                {coaching.reflection_question}
-              </p>
-            ) : null}
-            <div
-              className={styles.actions}
-              aria-label="Learner response unavailable"
-            >
-              {["Agree", "Not completely", "Add context"].map((label) => (
-                <Button key={label} disabled>
-                  {label}
-                </Button>
-              ))}
-            </div>
-            <p className={styles.note}>
-              Your context matters. Saving agreement, disagreement and
-              reflection is not available yet.
-            </p>
-          </div>
-        </Panel>
-        <details className={`${styles.more} ${styles.late}`}>
-          <summary>Evidence scope and limitations</summary>
-          <ul className={styles.takeaways}>
-            {coaching.limitations.map((limitation) => (
-              <li key={limitation}>{limitation}</li>
-            ))}
-          </ul>
-        </details>
-      </aside>
-    </div>
-  );
-}
+export { CoachingSkeleton, CoachingStory };
 
 function CoachingResultBody({
   result,
   callId,
   requestedFocus,
   retry,
+  readOnly = false,
 }: {
   result: CoachingResult | null;
   callId: string | null;
   requestedFocus?: RequestedSkill;
   retry: () => void;
+  readOnly?: boolean;
 }) {
   const data = result?.data;
   return (
@@ -456,17 +56,21 @@ function CoachingResultBody({
         ) : isTeamCoaching(data) ? (
           <TeamCoachingStory coaching={data} />
         ) : (
-          <CoachingStory coaching={data} requestedFocus={requestedFocus} />
+          <CoachingStory
+            coaching={data}
+            requestedFocus={requestedFocus}
+            readOnly={readOnly}
+          />
         )
       ) : result?.error ? (
         <Panel title="Coaching">
           <Empty
             icon={FileSearch}
-            title="Coaching is temporarily unavailable"
-            text="Your calls and reports are unaffected. Open the call to check its report and analysis status."
+            title={PAGE.failed}
+            text={PAGE.failedText}
             action={{
               href: callId ? `/analysis/calls/${callId}` : "/analysis/calls",
-              label: callId ? "Open the call" : "Open calls",
+              label: callId ? PAGE.openCall : PAGE.openCalls,
             }}
           />
         </Panel>
@@ -497,6 +101,7 @@ function AccountCoaching({
   initialResult,
   invalidCall,
   team,
+  sharedPersonId,
 }: {
   personId: string;
   tenantId: string;
@@ -506,42 +111,42 @@ function AccountCoaching({
   initialResult: CoachingResult | null;
   invalidCall: boolean;
   team: boolean;
+  sharedPersonId: string | null;
 }) {
   const [result, setResult] = useState<CoachingResult | null>(initialResult);
+  const target = team
+    ? "team"
+    : sharedPersonId
+      ? `person:${sharedPersonId}`
+      : callId;
+  // Another rep's view belongs to that rep; every other view is the viewer's.
+  const owner = sharedPersonId ?? personId;
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (invalidCall) return;
     if (attempt === 0 && initialResult !== null) return;
     const controller = new AbortController();
-    void readCoaching(team ? "team" : callId, {
+    void readCoaching(target, {
       signal: controller.signal,
     }).then((view) => {
       if (controller.signal.aborted) return;
       if (
         view.data &&
-        (view.data.person_id !== personId ||
+        (view.data.person_id !== owner ||
           view.data.tenant_id !== tenantId ||
           (view.data.session_id != null && view.data.session_id !== sessionId))
       )
-        setResult({ data: null, error: "Your workspace changed. Try again." });
+        setResult({ data: null, error: PAGE.workspaceChanged });
       else setResult(view);
     });
     return () => controller.abort();
-  }, [
-    attempt,
-    personId,
-    tenantId,
-    sessionId,
-    callId,
-    initialResult,
-    invalidCall,
-    team,
-  ]);
+  }, [attempt, owner, target, tenantId, sessionId, initialResult, invalidCall]);
   return (
     <CoachingResultBody
       result={result}
       callId={callId}
       requestedFocus={requestedFocus}
+      readOnly={sharedPersonId !== null}
       retry={() => {
         if (!invalidCall) setResult(null);
         setAttempt((value) => value + 1);
@@ -556,12 +161,15 @@ export function CoachingPage({
   initialResult = null,
   invalidCall = false,
   team = false,
+  sharedPersonId = null,
 }: {
   requestedFocus?: RequestedSkill;
   callId?: string | null;
   initialResult?: CoachingResult | null;
   invalidCall?: boolean;
   team?: boolean;
+  /** Another rep's coaching: a fictional AC Sandbox rep for its importer. */
+  sharedPersonId?: string | null;
 } = {}) {
   const access = useWorkspaceAccess();
   const ready =
@@ -576,7 +184,7 @@ export function CoachingPage({
     (!seedScope || seedScope === scope) &&
     (!ready ||
       !initialResult.data ||
-      (initialResult.data.person_id === ready.personId &&
+      (initialResult.data.person_id === (sharedPersonId ?? ready.personId) &&
         initialResult.data.tenant_id === ready.tenantId &&
         (!initialResult.data.session_id ||
           initialResult.data.session_id === ready.sessionId)))
@@ -596,6 +204,14 @@ export function CoachingPage({
       (workspace.role === "owner" || workspace.role === "admin"));
   const seededCall =
     callId && seed?.data && isCallCoaching(seed.data) ? seed.data : null;
+  const seededPerson =
+    sharedPersonId &&
+    seed?.data &&
+    !isCallCoaching(seed.data) &&
+    !isTeamCoaching(seed.data)
+      ? seed.data
+      : null;
+  const sandbox = seed?.data?.sandbox === true;
   return (
     <AcquisitionShell
       authenticated={authenticated}
@@ -605,50 +221,63 @@ export function CoachingPage({
         <PageHeader
           title={
             callId
-              ? "Coaching for this call"
-              : team
-                ? "Team coaching"
-                : "My coaching"
+              ? PAGE.call
+              : sharedPersonId
+                ? (seededPerson?.person_name ?? PAGE.rep)
+                : team
+                  ? PAGE.team
+                  : PAGE.mine
           }
           context={
             callId
               ? [
-                  seededCall?.call_label ?? "One focus from this call’s report",
+                  seededCall?.call_label ?? PAGE.callContext,
                   seededCall?.focus
                     ? callDate(seededCall.focus.selected_at)
                     : "",
                 ]
-              : team
-                ? ["Anonymous totals from your team’s analysed calls"]
-                : ["Your focus, mission and progress across calls"]
+              : sharedPersonId
+                ? sandbox
+                  ? [...PAGE.sandboxRep]
+                  : [PAGE.sharedRep]
+                : team
+                  ? sandbox
+                    ? [...PAGE.sandboxTeam]
+                    : [PAGE.teamContext]
+                  : [PAGE.mineContext]
           }
           back={
-            callId
-              ? { href: `/analysis/calls/${callId}`, label: "Back to report" }
-              : undefined
+            sharedPersonId || (callId && sandbox)
+              ? { href: "/coaching?view=team", label: PAGE.backToTeam }
+              : callId
+                ? {
+                    href: `/analysis/calls/${callId}`,
+                    label: PAGE.backToReport,
+                  }
+                : undefined
           }
           actions={
             callId ? (
               <Link className={kitStyles.button} href="/coaching">
-                My coaching
+                {PAGE.mine}
               </Link>
             ) : undefined
           }
         />
-        {!callId && showTeam ? (
+        {!callId && !sharedPersonId && showTeam ? (
           <QueryTabs
             base="/coaching"
             param="view"
             current={team ? "team" : "me"}
             items={[
-              { key: "me", label: "My coaching" },
-              { key: "team", label: "Team" },
+              { key: "me", label: PAGE.mine },
+              { key: "team", label: PAGE.tabTeam },
             ]}
           />
         ) : null}
         {ready ? (
           <AccountCoaching
-            key={JSON.stringify([scope, callId, team, seed])}
+            key={JSON.stringify([scope, callId, team, sharedPersonId, seed])}
             personId={ready.personId}
             tenantId={ready.tenantId}
             sessionId={ready.sessionId}
@@ -657,12 +286,14 @@ export function CoachingPage({
             initialResult={seed}
             invalidCall={invalidCall}
             team={team}
+            sharedPersonId={sharedPersonId}
           />
         ) : awaitingAccess ? (
           <CoachingResultBody
             result={seed}
             callId={callId}
             requestedFocus={requestedFocus}
+            readOnly={sharedPersonId !== null}
             retry={() => access?.retry()}
           />
         ) : (
@@ -671,13 +302,13 @@ export function CoachingPage({
               icon={FileSearch}
               title={
                 access.authenticated === false
-                  ? "Sign in for your Coaching"
-                  : "Choose your workspace"
+                  ? PAGE.signIn
+                  : PAGE.chooseWorkspace
               }
-              text="Coaching follows your own analysed calls in the selected workspace."
+              text={PAGE.signInText}
               action={
                 access.authenticated === false
-                  ? { href: "/login", label: "Sign in" }
+                  ? { href: "/login", label: PAGE.signInAction }
                   : undefined
               }
             />
@@ -693,23 +324,31 @@ export function CoachingRoute({
   initialResult = null,
   initialCallId = null,
   initialTeam = false,
+  initialPerson = null,
 }: {
   initialResult?: CoachingResult | null;
   initialCallId?: string | null;
   initialTeam?: boolean;
+  initialPerson?: string | null;
 } = {}) {
   const access = useWorkspaceAccess();
   const query = useSearchParams();
   const callId = requestedCall(query.get("call"));
-  const team = !callId && query.get("view") === "team";
+  const person = callId ? null : requestedCall(query.get("person"));
+  const team = !callId && !person && query.get("view") === "team";
   const invalidCall =
-    query.has("call") && (!callId || query.getAll("call").length !== 1);
+    (query.has("call") && (!callId || query.getAll("call").length !== 1)) ||
+    (!callId &&
+      query.has("person") &&
+      (!person || query.getAll("person").length !== 1));
   const seed = invalidCall
     ? ({
         data: null,
-        error: "This call link is invalid. Open the call’s report again.",
+        error: query.has("call") ? PAGE.badCallLink : PAGE.badTeamLink,
       } as const)
-    : callId === initialCallId && team === initialTeam
+    : callId === initialCallId &&
+        team === initialTeam &&
+        person === initialPerson
       ? initialResult
       : null;
   const page = (
@@ -718,6 +357,7 @@ export function CoachingRoute({
       initialResult={seed}
       invalidCall={invalidCall}
       team={team}
+      sharedPersonId={person}
       requestedFocus={requestedSkill(query.get("focus"))}
     />
   );

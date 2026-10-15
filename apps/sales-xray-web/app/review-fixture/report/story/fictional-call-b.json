@@ -1,0 +1,1020 @@
+{
+  "_note": "Corpus call B: an invented script (no real person or company) run through the real staging pipeline. Real C5 output shape; used for layout checks only.",
+  "report": {
+    "closing_analysis": [
+      {
+        "evidence": [
+          {
+            "end_ms": 152320,
+            "quote": "I can bring our implementation lead. It would help to have you and one regional manager who handles assignments.",
+            "segment_id": "s27",
+            "start_ms": 145580
+          },
+          {
+            "end_ms": 164140,
+            "quote": "Let's review the sample mapping and that comparison next Thursday. I will send a brief outline today.",
+            "segment_id": "s29",
+            "start_ms": 158180
+          },
+          {
+            "end_ms": 176680,
+            "quote": "I will. We will use those numbers as checks, and we can decide together whether a pilot is worth planning.",
+            "segment_id": "s31",
+            "start_ms": 170360
+          }
+        ],
+        "explanation": "You established a concrete next step by proposing a follow-up review for next Thursday with specific stakeholder roles, an agreed sample review agenda, and explicit alignment criteria.",
+        "title": "Collaborative next step established with agreed criteria"
+      }
+    ],
+    "dimensions": [
+      {
+        "citations": [
+          {
+            "doc": "Doc-1",
+            "sections": ["§8–§10", "§52", "§54–§56"]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": ["§6"]
+          }
+        ],
+        "dimension_id": "human_connection_trust",
+        "evidence": [
+          {
+            "end_ms": 5560,
+            "quote": "Thanks for making time. I'm Sela from Avana Path. Is now still good for a short conversation?",
+            "segment_id": "s1",
+            "start_ms": 60
+          },
+          {
+            "end_ms": 141160,
+            "quote": "Agreed. We can review a small fictional example first, then decide whether your fields are ready.",
+            "segment_id": "s25",
+            "start_ms": 134680
+          },
+          {
+            "end_ms": 189160,
+            "quote": "Perfect. I will send the outline and a calendar invitation for next Thursday. Thanks for explaining the process.",
+            "segment_id": "s33",
+            "start_ms": 182600
+          }
+        ],
+        "label": "Human Connection & Trust",
+        "observation": "You checked time availability upfront and respected operational caution regarding CRM data safeguards.",
+        "status": "observed"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-1",
+            "sections": ["§4–§7", "§11–§16"]
+          },
+          {
+            "doc": "Doc-3",
+            "sections": ["§5–§11", "§16", "§45–§52"]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": ["§7–§10"]
+          }
+        ],
+        "dimension_id": "discovery_deep_understanding",
+        "evidence": [
+          {
+            "end_ms": 18600,
+            "quote": "To start, how does a new sales inquiry move from the first reply to the person who owns it?",
+            "segment_id": "s3",
+            "start_ms": 13200
+          },
+          {
+            "end_ms": 29080,
+            "quote": "What tends to happen after the assignment email goes out?",
+            "segment_id": "s5",
+            "start_ms": 25800
+          },
+          {
+            "end_ms": 48820,
+            "quote": "What does that delay mean for the prospect or for your team?",
+            "segment_id": "s9",
+            "start_ms": 45380
+          },
+          {
+            "end_ms": 79720,
+            "quote": "If you could improve one part first, which change would matter most?",
+            "segment_id": "s15",
+            "start_ms": 75880
+          }
+        ],
+        "label": "Discovery & Deep Understanding",
+        "observation": "You mapped the operational handoff from initial inquiry through email routing to business and forecasting consequences.",
+        "status": "observed"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-3",
+            "sections": ["§17–§18", "§44"]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": ["§11–§13"]
+          }
+        ],
+        "dimension_id": "qualification",
+        "evidence": [
+          {
+            "end_ms": 91100,
+            "quote": "How many people need to use that view, and how many new inquiries do you receive?",
+            "segment_id": "s17",
+            "start_ms": 86420
+          },
+          {
+            "end_ms": 101080,
+            "quote": "Have you set a budget or a range for a first year?",
+            "segment_id": "s19",
+            "start_ms": 98100
+          },
+          {
+            "end_ms": 152320,
+            "quote": "I can bring our implementation lead. It would help to have you and one regional manager who handles assignments.",
+            "segment_id": "s27",
+            "start_ms": 145580
+          }
+        ],
+        "label": "Qualification",
+        "observation": "You gathered specific volume numbers, user counts, budget constraints, and stakeholder roles for the upcoming evaluation.",
+        "status": "observed"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-3",
+            "sections": ["§7–§15", "§19"]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": ["§14–§17"]
+          }
+        ],
+        "dimension_id": "problem_impact_desire",
+        "evidence": [
+          {
+            "end_ms": 38420,
+            "quote": "How often do those gaps show up in a typical week?",
+            "segment_id": "s7",
+            "start_ms": 35540
+          },
+          {
+            "end_ms": 56560,
+            "quote": "The first reply can wait a day. Our forecast also looks less reliable because managers cannot tell whether anyone owns a lead.",
+            "segment_id": "s10",
+            "start_ms": 49740
+          },
+          {
+            "end_ms": 85260,
+            "quote": "One queue with a clear owner and a due date. I also want a simple view of inquiries with no next action.",
+            "segment_id": "s16",
+            "start_ms": 80640
+          }
+        ],
+        "label": "Problem, Impact & Desire Clarity",
+        "observation": "You clarified the frequency of routing gaps, impact on initial reply latency, forecast reliability, and the exact desired workflow view.",
+        "status": "observed"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-3",
+            "sections": ["§20–§26"]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": ["§18–§21"]
+          }
+        ],
+        "dimension_id": "solution_relevance_presentation",
+        "evidence": [
+          {
+            "end_ms": 115040,
+            "quote": "That helps. Avana Path keeps the handoff owner and next date together with a queue for items that need attention.",
+            "segment_id": "s21",
+            "start_ms": 107400
+          },
+          {
+            "end_ms": 127380,
+            "quote": "We can start with a scheduled export and map the account key. I would check the fields before any live import.",
+            "segment_id": "s23",
+            "start_ms": 121080
+          }
+        ],
+        "label": "Solution Relevance & Presentation",
+        "observation": "You tailored the product explanation directly to the stated need for visible queues, explicit owners, and low-risk field mapping.",
+        "status": "observed"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-4",
+            "sections": ["§3–§6", "§8–§18", "§40–§70"]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": ["§22–§28"]
+          }
+        ],
+        "dimension_id": "certainty_objection_intelligence",
+        "evidence": [
+          {
+            "end_ms": 120200,
+            "quote": "Would it connect with our CRM, or would reps have to keep copying notes between two systems?",
+            "segment_id": "s22",
+            "start_ms": 115560
+          },
+          {
+            "end_ms": 127380,
+            "quote": "We can start with a scheduled export and map the account key. I would check the fields before any live import.",
+            "segment_id": "s23",
+            "start_ms": 121080
+          },
+          {
+            "end_ms": 141160,
+            "quote": "Agreed. We can review a small fictional example first, then decide whether your fields are ready.",
+            "segment_id": "s25",
+            "start_ms": 134680
+          }
+        ],
+        "label": "Certainty & Objection Intelligence",
+        "observation": "When concerns about CRM integrity arose, you validated the operational risk and proposed a staged review using fictional data.",
+        "status": "observed"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-3",
+            "sections": ["§34–§42", "§48–§52"]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": ["§29–§32", "§39–§42"]
+          }
+        ],
+        "dimension_id": "closing_decision_management",
+        "evidence": [
+          {
+            "end_ms": 164140,
+            "quote": "Let's review the sample mapping and that comparison next Thursday. I will send a brief outline today.",
+            "segment_id": "s29",
+            "start_ms": 158180
+          },
+          {
+            "end_ms": 169680,
+            "quote": "Thursday works. Please include the nine-seat estimate and the $1,200 monthly budget in the outline.",
+            "segment_id": "s30",
+            "start_ms": 164700
+          },
+          {
+            "end_ms": 176680,
+            "quote": "I will. We will use those numbers as checks, and we can decide together whether a pilot is worth planning.",
+            "segment_id": "s31",
+            "start_ms": 170360
+          }
+        ],
+        "label": "Closing & Decision Management",
+        "observation": "You agreed upon a specific follow-up date and agenda while setting mutual evaluation criteria rather than forcing an early commitment.",
+        "status": "observed"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-2",
+            "sections": ["§1–§5", "§9–§16", "§31–§55"]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": ["§33–§37", "§63–§66"]
+          }
+        ],
+        "dimension_id": "communication_tonality",
+        "evidence": [
+          {
+            "end_ms": 5560,
+            "quote": "Thanks for making time. I'm Sela from Avana Path. Is now still good for a short conversation?",
+            "segment_id": "s1",
+            "start_ms": 60
+          },
+          {
+            "end_ms": 79720,
+            "quote": "If you could improve one part first, which change would matter most?",
+            "segment_id": "s15",
+            "start_ms": 75880
+          },
+          {
+            "end_ms": 164140,
+            "quote": "Let's review the sample mapping and that comparison next Thursday. I will send a brief outline today.",
+            "segment_id": "s29",
+            "start_ms": 158180
+          }
+        ],
+        "label": "Communication & Tonality",
+        "observation": "Your questions were brief, structured, and focused on operational details without long unprompted monologues.",
+        "status": "observed"
+      }
+    ],
+    "improvements": [
+      {
+        "evidence": [
+          {
+            "end_ms": 101080,
+            "quote": "Have you set a budget or a range for a first year?",
+            "segment_id": "s19",
+            "start_ms": 98100
+          },
+          {
+            "end_ms": 115040,
+            "quote": "That helps. Avana Path keeps the handoff owner and next date together with a queue for items that need attention.",
+            "segment_id": "s21",
+            "start_ms": 107400
+          }
+        ],
+        "explanation": "When Daryl shared an approved budget of about $1,200 monthly, you moved directly into explaining the product instead of verifying how that budget compares to expected seat tiers or procurement approvals.",
+        "title": "Explore budget flexibility and approval mechanics before transitioning to product capabilities"
+      }
+    ],
+    "missed_opportunities": [
+      {
+        "evidence": [
+          {
+            "end_ms": 106820,
+            "quote": "We have about $1,200 a month approved. If the setup reduces manual review, I can make the case.",
+            "segment_id": "s20",
+            "start_ms": 102040
+          },
+          {
+            "end_ms": 115040,
+            "quote": "That helps. Avana Path keeps the handoff owner and next date together with a queue for items that need attention.",
+            "segment_id": "s21",
+            "start_ms": 107400
+          }
+        ],
+        "explanation": "You did not ask what specific metrics would allow Daryl to justify expanding or maintaining the budget if the nine-seat setup requires additional investment.",
+        "title": "Investigate the criteria required to make an internal business case"
+      }
+    ],
+    "objection_analysis": [
+      {
+        "evidence": [
+          {
+            "end_ms": 120200,
+            "quote": "Would it connect with our CRM, or would reps have to keep copying notes between two systems?",
+            "segment_id": "s22",
+            "start_ms": 115560
+          },
+          {
+            "end_ms": 127380,
+            "quote": "We can start with a scheduled export and map the account key. I would check the fields before any live import.",
+            "segment_id": "s23",
+            "start_ms": 121080
+          },
+          {
+            "end_ms": 133420,
+            "quote": "That sounds safer. I do not want an automated process changing our CRM records before the team sees a sample.",
+            "segment_id": "s24",
+            "start_ms": 128020
+          },
+          {
+            "end_ms": 141160,
+            "quote": "Agreed. We can review a small fictional example first, then decide whether your fields are ready.",
+            "segment_id": "s25",
+            "start_ms": 134680
+          }
+        ],
+        "explanation": "Daryl expressed hesitation around automated processes altering CRM records. You acknowledged the technical concern immediately by suggesting a scheduled export and a fictional sample check before live integration.",
+        "title": "De-escalated CRM integration concern with phased verification"
+      }
+    ],
+    "overview": {
+      "business_impact": {
+        "missing_inputs": [
+          "Avana Path list pricing per seat",
+          "Brindle Cart procurement thresholds",
+          "Implementation lead availability"
+        ],
+        "status": "insufficient_data"
+      },
+      "conversation_change": {
+        "after": {
+          "evidence": [
+            {
+              "end_ms": 141160,
+              "quote": "Agreed. We can review a small fictional example first, then decide whether your fields are ready.",
+              "segment_id": "s25",
+              "start_ms": 134680
+            }
+          ],
+          "text": "Agreed. We can review a small fictional example first, then decide whether your fields are ready."
+        },
+        "before": {
+          "evidence": [
+            {
+              "end_ms": 127380,
+              "quote": "We can start with a scheduled export and map the account key. I would check the fields before any live import.",
+              "segment_id": "s23",
+              "start_ms": 121080
+            }
+          ],
+          "text": "We can start with a scheduled export and map the account key. I would check the fields before any live import."
+        },
+        "change": {
+          "evidence": [
+            {
+              "end_ms": 133420,
+              "quote": "That sounds safer. I do not want an automated process changing our CRM records before the team sees a sample.",
+              "segment_id": "s24",
+              "start_ms": 128020
+            }
+          ],
+          "text": "That sounds safer. I do not want an automated process changing our CRM records before the team sees a sample."
+        },
+        "interpretation_kind": "inference",
+        "possible_effect": "Daryl visibly relaxed regarding technical risk, opening the door to planning a joint stakeholder session with regional management."
+      },
+      "diagnosis": {
+        "evidence": [
+          {
+            "end_ms": 25240,
+            "quote": "We have seven reps in three regions. A shared spreadsheet tracks inquiries, and someone assigns each row by email.",
+            "segment_id": "s4",
+            "start_ms": 19520
+          },
+          {
+            "end_ms": 35100,
+            "quote": "Sometimes the rep misses it, or the row has no follow-up date, and another person checks the same account.",
+            "segment_id": "s6",
+            "start_ms": 30080
+          },
+          {
+            "end_ms": 56560,
+            "quote": "The first reply can wait a day. Our forecast also looks less reliable because managers cannot tell whether anyone owns a lead.",
+            "segment_id": "s10",
+            "start_ms": 49740
+          }
+        ],
+        "text": "Spreadsheet routing across three regions causes dropped leads, delayed prospect contact, and unreliable forecasting."
+      },
+      "ethics_notes": [],
+      "final_assessment": {
+        "assessment": "You conducted a crisp discovery conversation that uncovered key operational metrics and constraints. You handled technical caution constructively by proposing a staged sample test. Deepening qualification around budget sign-off mechanics will ensure smoother commercial alignment in future calls.",
+        "fix_first": "Clarify approval parameters and commercial flexibility right after a prospect discloses an approved budget figure.",
+        "next_focus": "Explore internal evaluation criteria before proposing follow-up agendas.",
+        "repeat": "Keep using structured, concise discovery questions that link operational breakdowns directly to business impact."
+      },
+      "golden_moments": [
+        {
+          "evidence_index": 1,
+          "strength_index": 1,
+          "why_effective": "Proposing a staged export and field check removed technical friction and directly addressed the prospect's concern about CRM corruption."
+        }
+      ],
+      "improvement_details": [
+        {
+          "business_impact": {
+            "missing_inputs": [
+              "Per-seat cost model",
+              "Contract length requirements",
+              "Procurement authority levels"
+            ],
+            "status": "insufficient_data"
+          },
+          "finding_index": 0,
+          "replacement_behavior": "Acknowledge the figure and ask one clarifying question about approval boundaries: 'Got it, $1,200 a month approved. Who else needs to review that figure if your nine seats require adjustments?'",
+          "what_happened": {
+            "evidence": [
+              {
+                "end_ms": 106820,
+                "quote": "We have about $1,200 a month approved. If the setup reduces manual review, I can make the case.",
+                "segment_id": "s20",
+                "start_ms": 102040
+              },
+              {
+                "end_ms": 115040,
+                "quote": "That helps. Avana Path keeps the handoff owner and next date together with a queue for items that need attention.",
+                "segment_id": "s21",
+                "start_ms": 107400
+              }
+            ],
+            "text": "After Daryl mentioned an approved budget of about $1,200 a month, you transitioned directly into describing product capabilities without exploring procurement limits or potential seat cost variances."
+          },
+          "why_it_matters": "Understanding budget approval mechanics early prevents surprises if seat requirements or integration scope exceed standard pricing tiers."
+        }
+      ],
+      "missed_details": [
+        {
+          "closer_response": {
+            "evidence": [
+              {
+                "end_ms": 115040,
+                "quote": "That helps. Avana Path keeps the handoff owner and next date together with a queue for items that need attention.",
+                "segment_id": "s21",
+                "start_ms": 107400
+              }
+            ],
+            "text": "That helps. Avana Path keeps the handoff owner and next date together with a queue for items that need attention."
+          },
+          "finding_index": 0,
+          "follow_up": "What specific time savings or operational milestones would help you make that internal business case to leadership?",
+          "potential_impact": "Could have established clear ROI metrics to anchor future pricing discussions.",
+          "prospect_signal": {
+            "evidence": [
+              {
+                "end_ms": 106820,
+                "quote": "We have about $1,200 a month approved. If the setup reduces manual review, I can make the case.",
+                "segment_id": "s20",
+                "start_ms": 102040
+              }
+            ],
+            "text": "If the setup reduces manual review, I can make the case."
+          }
+        }
+      ],
+      "next_call_focus": {
+        "behavior": "Explore budget constraints and approval thresholds before introducing product details.",
+        "improvement_index": 0,
+        "target": "Uncover financial sign-off boundaries whenever a budget limit is stated."
+      },
+      "outcome": {
+        "evidence": [
+          {
+            "end_ms": 164140,
+            "quote": "Let's review the sample mapping and that comparison next Thursday. I will send a brief outline today.",
+            "segment_id": "s29",
+            "start_ms": 158180
+          },
+          {
+            "end_ms": 169680,
+            "quote": "Thursday works. Please include the nine-seat estimate and the $1,200 monthly budget in the outline.",
+            "segment_id": "s30",
+            "start_ms": 164700
+          },
+          {
+            "end_ms": 189160,
+            "quote": "Perfect. I will send the outline and a calendar invitation for next Thursday. Thanks for explaining the process.",
+            "segment_id": "s33",
+            "start_ms": 182600
+          }
+        ],
+        "kind": "follow_up",
+        "text": "Agreed to hold a review meeting next Thursday with the implementation lead and west region manager to assess a fictional data sample."
+      },
+      "practice": {
+        "improvement_index": 0,
+        "instructions": "In your next discovery roleplay, when the buyer states a monthly budget, pause, confirm the number, and ask who is involved in approving changes to that figure.",
+        "success_condition": "Seller asks one diagnostic question about procurement or approval mechanics before discussing solution features."
+      },
+      "progress": null,
+      "prospect_interpretations": [
+        {
+          "interpretation_kind": "inference",
+          "possible_concern": "Daryl may worry that an uncontrolled third-party tool could corrupt CRM data records or disrupt current operations.",
+          "source": {
+            "evidence": [
+              {
+                "end_ms": 133420,
+                "quote": "That sounds safer. I do not want an automated process changing our CRM records before the team sees a sample.",
+                "segment_id": "s24",
+                "start_ms": 128020
+              }
+            ],
+            "text": "That sounds safer. I do not want an automated process changing our CRM records before the team sees a sample."
+          }
+        }
+      ],
+      "rewatch": [
+        {
+          "evidence": [
+            {
+              "end_ms": 127380,
+              "quote": "We can start with a scheduled export and map the account key. I would check the fields before any live import.",
+              "segment_id": "s23",
+              "start_ms": 121080
+            }
+          ],
+          "purpose": "must_watch",
+          "text": "Review how calmly addressing technical integration safeguards immediately lowered prospect risk perception."
+        }
+      ],
+      "strength_details": [
+        {
+          "finding_index": 0,
+          "why_it_matters": "Asking sequential, open questions allows the prospect to articulate real operational bottlenecks and business impact."
+        },
+        {
+          "finding_index": 1,
+          "why_it_matters": "Offering a staged evaluation using fictional data builds trust and addresses integration anxiety without stalling the conversation."
+        }
+      ],
+      "version": "dipak-14-point-v1"
+    },
+    "report_sections": [
+      {
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": ["§53"]
+          }
+        ],
+        "number": 1,
+        "required": "Evidence-bound summary; no score.",
+        "title": "EXECUTIVE SUMMARY"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": ["§53"]
+          }
+        ],
+        "number": 2,
+        "required": "Eight withheld dimensions; Ethics PASS/CONCERN/FAIL hard constraint.",
+        "title": "SCORECARD"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": ["§53"]
+          }
+        ],
+        "number": 3,
+        "required": "Up to three evidence-backed strengths.",
+        "title": "WHAT YOU DID WELL"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": ["§53"]
+          }
+        ],
+        "number": 4,
+        "required": "Specific moments with missingness.",
+        "title": "BIGGEST MISSED OPPORTUNITIES"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": ["§53"]
+          }
+        ],
+        "number": 5,
+        "required": "At most three behavioral changes with evidence.",
+        "title": "TOP 3 IMPROVEMENTS"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": ["§53"]
+          }
+        ],
+        "number": 6,
+        "required": "Stated/likely objection, uncertainty, evidence, handling and next move.",
+        "title": "OBJECTION ANALYSIS"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": ["§53"]
+          }
+        ],
+        "number": 7,
+        "required": "Readiness, ask, confidence and next step; future date/no when relevant.",
+        "title": "CLOSING ANALYSIS"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": ["§53"]
+          }
+        ],
+        "number": 8,
+        "required": "Short evidence-linked practice plan.",
+        "title": "COACHING INSTRUCTION"
+      },
+      {
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": ["§53"]
+          }
+        ],
+        "number": 9,
+        "required": "Nonnumeric conclusion with evidence gaps and ethics state.",
+        "title": "FINAL VERDICT"
+      }
+    ],
+    "review_status": "draft_not_dipak_adjudicated",
+    "source_label": "Scribe transcript revision 66efe405a2371d9f2d8babb24ef85b98e9a64b8f6a03a78b9246f2b2283796d1 · source-bound",
+    "strengths": [
+      {
+        "evidence": [
+          {
+            "end_ms": 18600,
+            "quote": "To start, how does a new sales inquiry move from the first reply to the person who owns it?",
+            "segment_id": "s3",
+            "start_ms": 13200
+          },
+          {
+            "end_ms": 29080,
+            "quote": "What tends to happen after the assignment email goes out?",
+            "segment_id": "s5",
+            "start_ms": 25800
+          },
+          {
+            "end_ms": 38420,
+            "quote": "How often do those gaps show up in a typical week?",
+            "segment_id": "s7",
+            "start_ms": 35540
+          },
+          {
+            "end_ms": 48820,
+            "quote": "What does that delay mean for the prospect or for your team?",
+            "segment_id": "s9",
+            "start_ms": 45380
+          }
+        ],
+        "explanation": "You asked structured discovery questions that traced the inquiry process from initial spreadsheet tracking to missed follow-ups and forecast inaccuracies.",
+        "title": "Logical discovery progression uncovering operational impact"
+      },
+      {
+        "evidence": [
+          {
+            "end_ms": 127380,
+            "quote": "We can start with a scheduled export and map the account key. I would check the fields before any live import.",
+            "segment_id": "s23",
+            "start_ms": 121080
+          },
+          {
+            "end_ms": 141160,
+            "quote": "Agreed. We can review a small fictional example first, then decide whether your fields are ready.",
+            "segment_id": "s25",
+            "start_ms": 134680
+          }
+        ],
+        "explanation": "When Daryl raised concerns about automated CRM changes, you offered an export-first approach with fictional data to validate field mapping safely.",
+        "title": "Pragmatic response to data integration concerns"
+      }
+    ],
+    "summary": "You conducted an effective discovery conversation with Daryl Pell at Brindle Cart, uncovering lead routing bottlenecks and agreed budget parameters before securing a follow-up review for next Thursday.",
+    "transcript_revision": "66efe405a2371d9f2d8babb24ef85b98e9a64b8f6a03a78b9246f2b2283796d1",
+    "verdict": "Well-executed discovery call that identified root problems, mitigated technical objections, and scheduled a qualified joint stakeholder review."
+  },
+  "transcript": {
+    "revision": "66efe405a2371d9f2d8babb24ef85b98e9a64b8f6a03a78b9246f2b2283796d1",
+    "timebase_id": "elevenlabs-scribe-native-seconds",
+    "duration_ms": 194530,
+    "segments": [
+      {
+        "end_ms": 5560,
+        "id": "s1",
+        "speaker_id": "speaker_0",
+        "start_ms": 60,
+        "text": "Thanks for making time. I'm Sela from Avana Path. Is now still good for a short conversation?"
+      },
+      {
+        "end_ms": 12580,
+        "id": "s2",
+        "speaker_id": "speaker_1",
+        "start_ms": 6540,
+        "text": "Yes. I have about 20 minutes. I'm Daryl Pell, sales operations lead at Brindle Cart. We are reviewing our handoffs."
+      },
+      {
+        "end_ms": 18600,
+        "id": "s3",
+        "speaker_id": "speaker_0",
+        "start_ms": 13200,
+        "text": "To start, how does a new sales inquiry move from the first reply to the person who owns it?"
+      },
+      {
+        "end_ms": 25240,
+        "id": "s4",
+        "speaker_id": "speaker_1",
+        "start_ms": 19520,
+        "text": "We have seven reps in three regions. A shared spreadsheet tracks inquiries, and someone assigns each row by email."
+      },
+      {
+        "end_ms": 29080,
+        "id": "s5",
+        "speaker_id": "speaker_0",
+        "start_ms": 25800,
+        "text": "What tends to happen after the assignment email goes out?"
+      },
+      {
+        "end_ms": 35100,
+        "id": "s6",
+        "speaker_id": "speaker_1",
+        "start_ms": 30080,
+        "text": "Sometimes the rep misses it, or the row has no follow-up date, and another person checks the same account."
+      },
+      {
+        "end_ms": 38420,
+        "id": "s7",
+        "speaker_id": "speaker_0",
+        "start_ms": 35540,
+        "text": "How often do those gaps show up in a typical week?"
+      },
+      {
+        "end_ms": 44220,
+        "id": "s8",
+        "speaker_id": "speaker_1",
+        "start_ms": 39380,
+        "text": "A few times every week. We only spot them when our Thursday review finds an old inquiry without an update."
+      },
+      {
+        "end_ms": 48820,
+        "id": "s9",
+        "speaker_id": "speaker_0",
+        "start_ms": 45380,
+        "text": "What does that delay mean for the prospect or for your team?"
+      },
+      {
+        "end_ms": 56560,
+        "id": "s10",
+        "speaker_id": "speaker_1",
+        "start_ms": 49740,
+        "text": "The first reply can wait a day. Our forecast also looks less reliable because managers cannot tell whether anyone owns a lead."
+      },
+      {
+        "end_ms": 59400,
+        "id": "s11",
+        "speaker_id": "speaker_0",
+        "start_ms": 57120,
+        "text": "When did this become a noticeable problem?"
+      },
+      {
+        "end_ms": 65379,
+        "id": "s12",
+        "speaker_id": "speaker_1",
+        "start_ms": 60360,
+        "text": "In May, after we added two regions. Before that, I could check the sheet myself, but now it changes all day."
+      },
+      {
+        "end_ms": 68320,
+        "id": "s13",
+        "speaker_id": "speaker_0",
+        "start_ms": 65880,
+        "text": "What tools are already part of the process?"
+      },
+      {
+        "end_ms": 75360,
+        "id": "s14",
+        "speaker_id": "speaker_1",
+        "start_ms": 69300,
+        "text": "Our CRM stores accounts and notes. The spreadsheet fills the gaps for routing, due dates, and manager's weekly review."
+      },
+      {
+        "end_ms": 79720,
+        "id": "s15",
+        "speaker_id": "speaker_0",
+        "start_ms": 75880,
+        "text": "If you could improve one part first, which change would matter most?"
+      },
+      {
+        "end_ms": 85260,
+        "id": "s16",
+        "speaker_id": "speaker_1",
+        "start_ms": 80640,
+        "text": "One queue with a clear owner and a due date. I also want a simple view of inquiries with no next action."
+      },
+      {
+        "end_ms": 91100,
+        "id": "s17",
+        "speaker_id": "speaker_0",
+        "start_ms": 86420,
+        "text": "How many people need to use that view, and how many new inquiries do you receive?"
+      },
+      {
+        "end_ms": 97480,
+        "id": "s18",
+        "speaker_id": "speaker_1",
+        "start_ms": 92000,
+        "text": "Nine people would need access. We receive around 45 new inquiries in a normal week, more near events."
+      },
+      {
+        "end_ms": 101080,
+        "id": "s19",
+        "speaker_id": "speaker_0",
+        "start_ms": 98100,
+        "text": "Have you set a budget or a range for a first year?"
+      },
+      {
+        "end_ms": 106820,
+        "id": "s20",
+        "speaker_id": "speaker_1",
+        "start_ms": 102040,
+        "text": "We have about $1,200 a month approved. If the setup reduces manual review, I can make the case."
+      },
+      {
+        "end_ms": 115040,
+        "id": "s21",
+        "speaker_id": "speaker_0",
+        "start_ms": 107400,
+        "text": "That helps. Avana Path keeps the handoff owner and next date together with a queue for items that need attention."
+      },
+      {
+        "end_ms": 120200,
+        "id": "s22",
+        "speaker_id": "speaker_1",
+        "start_ms": 115560,
+        "text": "Would it connect with our CRM, or would reps have to keep copying notes between two systems?"
+      },
+      {
+        "end_ms": 127380,
+        "id": "s23",
+        "speaker_id": "speaker_0",
+        "start_ms": 121080,
+        "text": "We can start with a scheduled export and map the account key. I would check the fields before any live import."
+      },
+      {
+        "end_ms": 133420,
+        "id": "s24",
+        "speaker_id": "speaker_1",
+        "start_ms": 128020,
+        "text": "That sounds safer. I do not want an automated process changing our CRM records before the team sees a sample."
+      },
+      {
+        "end_ms": 141160,
+        "id": "s25",
+        "speaker_id": "speaker_0",
+        "start_ms": 134680,
+        "text": "Agreed. We can review a small fictional example first, then decide whether your fields are ready."
+      },
+      {
+        "end_ms": 144580,
+        "id": "s26",
+        "speaker_id": "speaker_1",
+        "start_ms": 141680,
+        "text": "Who would need to join the review from your side and from Brindle Cart?"
+      },
+      {
+        "end_ms": 152320,
+        "id": "s27",
+        "speaker_id": "speaker_0",
+        "start_ms": 145580,
+        "text": "I can bring our implementation lead. It would help to have you and one regional manager who handles assignments."
+      },
+      {
+        "end_ms": 157680,
+        "id": "s28",
+        "speaker_id": "speaker_1",
+        "start_ms": 152980,
+        "text": "I can invite our west region manager. I'd also want to compare the current Thursday review time with the proposed queue."
+      },
+      {
+        "end_ms": 164140,
+        "id": "s29",
+        "speaker_id": "speaker_0",
+        "start_ms": 158180,
+        "text": "Let's review the sample mapping and that comparison next Thursday. I will send a brief outline today."
+      },
+      {
+        "end_ms": 169680,
+        "id": "s30",
+        "speaker_id": "speaker_1",
+        "start_ms": 164700,
+        "text": "Thursday works. Please include the nine-seat estimate and the $1,200 monthly budget in the outline."
+      },
+      {
+        "end_ms": 176680,
+        "id": "s31",
+        "speaker_id": "speaker_0",
+        "start_ms": 170360,
+        "text": "I will. We will use those numbers as checks, and we can decide together whether a pilot is worth planning."
+      },
+      {
+        "end_ms": 182000,
+        "id": "s32",
+        "speaker_id": "speaker_1",
+        "start_ms": 177300,
+        "text": "Good. I will bring one week of fictionalized inquiry rows, and we can review the owners and due dates."
+      },
+      {
+        "end_ms": 189160,
+        "id": "s33",
+        "speaker_id": "speaker_0",
+        "start_ms": 182600,
+        "text": "Perfect. I will send the outline and a calendar invitation for next Thursday. Thanks for explaining the process."
+      },
+      {
+        "end_ms": 194400,
+        "id": "s34",
+        "speaker_id": "speaker_1",
+        "start_ms": 189780,
+        "text": "Thanks, Sela. A clear sample should help me get the regional manager's view before we choose a direction"
+      }
+    ]
+  }
+}

@@ -216,11 +216,6 @@ jobs:
         run: python -m pip install --disable-pip-version-check uv==0.12.7
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile && uv sync --frozen
-      - name: "PRE-VALIDATION: Build Sales Xray static preview"
-        env:
-          AC_SALES_XRAY_STATIC_PREVIEW: "1"
-          NEXT_TELEMETRY_DISABLED: "1"
-        run: pnpm --filter @ac/sales-xray-web build
       - name: Require codec, filesystem and locked browser prerequisites
         timeout-minutes: 13
         run: uv run --frozen python scripts/ci/ci_prerequisites.py codec filesystem browser
@@ -331,14 +326,6 @@ jobs:
           tests/infra/test_sales_xray_database_provision.py
           -o cache_dir=/run/ac-hosted-activation-pytest-cache
           --junitxml="${{ runner.temp }}/hosted-activation-root.xml"
-      - name: Retain hosted activation test receipt
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: hosted-activation-root-${{ github.sha }}
-          path: ${{ runner.temp }}/hosted-activation-root.xml
-          if-no-files-found: error
-          retention-days: 14
       - name: Require codec, filesystem and locked browser prerequisites
         timeout-minutes: 13
         run: uv run --frozen python scripts/ci/ci_prerequisites.py codec filesystem browser
@@ -492,6 +479,19 @@ jobs:
           AC_MIGRATION_REHEARSAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_migration_rehearsal_ci
           AC_REQUIRE_MIGRATION_REHEARSAL_POSTGRES_TEST: "1"
         run: uv run pytest tests/integration/test_migration_rehearsal_postgresql.py
+      - name: "PRE-VALIDATION: Build Sales Xray static preview"
+        env:
+          AC_SALES_XRAY_STATIC_PREVIEW: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/sales-xray-web build
+      - name: Prove Sales Xray static export browser journeys
+        timeout-minutes: 5
+        run: >-
+          uv run --frozen pytest
+          tests/e2e/test_sales_xray_standalone_browser.py
+          tests/e2e/test_sales_xray_report_browser.py
+          -r s
+          --junitxml="${{ runner.temp }}/sales-xray-static-browser.xml"
       - name: Build learner standalone for registration proof
         env:
           NEXT_TELEMETRY_DISABLED: "1"
@@ -504,6 +504,17 @@ jobs:
         run: >-
           uv run --frozen python scripts/verify-registration-browser.py
           --evidence-dir "${{ runner.temp }}/registration-browser-${{ github.sha }}"
+
+      - name: Retain hosted activation test receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hosted-activation-root-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/hosted-activation-root.xml
+            ${{ runner.temp }}/sales-xray-static-browser.xml
+          if-no-files-found: error
+          retention-days: 14
 
   validate:
     if: always()

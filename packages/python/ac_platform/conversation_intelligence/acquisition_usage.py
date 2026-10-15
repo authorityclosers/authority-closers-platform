@@ -34,7 +34,7 @@ from ac_platform.conversation_intelligence.submission_label_models import (
 )
 
 ALLOWANCE_SECONDS = 3600
-LONGEST_CALL_SECONDS = 6000
+LONGEST_CALL_SECONDS = 7200
 TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE = (
     "Your remaining trial minutes are not enough for this recording. Contact AC for more access."
 )
@@ -173,6 +173,7 @@ async def account_usage(
         "released": "not_charged",
         "completed": "charged",
         "no_work_performed": "not_charged",
+        "terminal_failure": "not_charged",
     }
     return {
         "calls": [

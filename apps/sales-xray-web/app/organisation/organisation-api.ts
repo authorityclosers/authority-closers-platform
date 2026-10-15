@@ -1,5 +1,6 @@
 /** Organisation reads and changes against the selected session workspace. */
 import { acquisition, AcquisitionError } from "../acquisition-client";
+import { earlyFetch } from "../early-reads";
 import type { ActivityDay } from "../dashboard/dashboard-data";
 
 export type OrgRole = "owner" | "admin" | "member";
@@ -106,7 +107,8 @@ async function call(
     headers.set("Content-Type", "application/json");
   if (init.method && init.method !== "GET")
     headers.set("Idempotency-Key", requestKey ?? crypto.randomUUID());
-  const response = await fetch(`/v1/organisation${path}`, {
+  // A page's first GETs may already have been started with the HTML.
+  const response = await earlyFetch(`/v1/organisation${path}`, {
     credentials: "same-origin",
     cache: "no-store",
     redirect: "error",
@@ -349,7 +351,21 @@ const counts = (item: Record<string, unknown>): ActivityCounts => ({
 });
 
 export async function readActivity(signal?: AbortSignal): Promise<OrgActivity> {
-  const data = obj(await call("/activity?days=30", { signal }));
+  return parseActivity(await call("/activity?days=30", { signal }));
+}
+
+/** The activity over the last `days` (the server takes 1-90). */
+export async function readActivityDays(
+  days: number,
+  signal?: AbortSignal,
+): Promise<OrgActivity> {
+  const window = Math.min(90, Math.max(1, Math.round(days)));
+  return parseActivity(await call(`/activity?days=${window}`, { signal }));
+}
+
+/** The 30-day activity answer, tolerant of missing fields (see readActivity). */
+export function parseActivity(value: unknown): OrgActivity {
+  const data = obj(value);
   return {
     perDay: list(data.per_day).map((raw) => {
       const item = obj(raw);
@@ -373,23 +389,64 @@ export async function readActivity(signal?: AbortSignal): Promise<OrgActivity> {
         lastCallAt: text(item.last_call_at),
       };
     }),
-    // A row links to its call, so it needs a real call id and date.
-    calls: list(data.calls).flatMap((raw) => {
+    calls: parseCalls(data.calls),
+  };
+}
+
+// A row links to its call, so it needs a real call id and date.
+function parseCalls(value: unknown): OrgActivity["calls"] {
+  return list(value).flatMap((raw) => {
+    const item = obj(raw);
+    const callId = text(item.id)?.toLowerCase() ?? "";
+    if (!id(callId) || !date(item.created_at) || item.created_at === null)
+      return [];
+    return {
+      id: callId,
+      ownerPersonId: text(item.owner_person_id) ?? "",
+      ownerName: text(item.owner_name),
+      label: text(item.label),
+      createdAt: text(item.created_at) ?? "",
+      durationSeconds: num(item.duration_seconds),
+      state: text(item.state) ?? "",
+      hasReport: item.has_report === true,
+    };
+  });
+}
+
+/** One person's calls week by week (GET /members/{id}/activity). */
+export type PersonWeeks = {
+  personId: string;
+  /** Oldest first; `start` is when each 7-day week began (ISO). */
+  weeks: Array<ActivityCounts & { start: string }>;
+  totals: ActivityCounts;
+  /** The newest calls (up to 50), newest first. */
+  calls: OrgActivity["calls"];
+};
+
+export async function readPersonActivity(
+  personId: string,
+  weeks: number,
+  signal?: AbortSignal,
+): Promise<PersonWeeks> {
+  return parsePersonActivity(
+    await call(
+      `/members/${encodeURIComponent(personId)}/activity?weeks=${weeks}`,
+      { signal },
+    ),
+  );
+}
+
+/** Tolerant of missing fields, like parseActivity. */
+export function parsePersonActivity(value: unknown): PersonWeeks {
+  const data = obj(value);
+  return {
+    personId: text(data.person_id) ?? "",
+    weeks: list(data.weeks).map((raw) => {
       const item = obj(raw);
-      const callId = text(item.id)?.toLowerCase() ?? "";
-      if (!id(callId) || !date(item.created_at) || item.created_at === null)
-        return [];
-      return {
-        id: callId,
-        ownerPersonId: text(item.owner_person_id) ?? "",
-        ownerName: text(item.owner_name),
-        label: text(item.label),
-        createdAt: text(item.created_at) ?? "",
-        durationSeconds: num(item.duration_seconds),
-        state: text(item.state) ?? "",
-        hasReport: item.has_report === true,
-      };
+      return { start: text(item.start) ?? "", ...counts(item) };
     }),
+    totals: counts(obj(data.totals)),
+    calls: parseCalls(data.calls),
   };
 }
 

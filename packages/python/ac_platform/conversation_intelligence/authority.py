@@ -63,6 +63,7 @@ from ac_platform.conversation_intelligence.gemini_tasks import (
 from ac_platform.conversation_intelligence.guest_models import (
     ConversationGuestSubmission,
     ConversationProcessingLease,
+    ConversationProcessingPrincipal,
 )
 from ac_platform.conversation_intelligence.inference import (
     INFERENCE_JOB,
@@ -117,7 +118,7 @@ from ac_platform.conversation_intelligence.stage_supplements import (
 from ac_platform.identity.models import Person
 from ac_platform.outbox.models import Job, JobStatus
 from ac_platform.outbox.repository import canonical_receipt_digest
-from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
 ApprovalLoader = Callable[[], HostedApprovalBundle]
 
@@ -192,7 +193,9 @@ class ConversationAuthority:
 
     def recipient(self, bundle: HostedApprovalBundle, actor: ConversationActor) -> None:
         if isinstance(actor, ProcessingActor):
-            policy = bundle.acquisition_policy_for(actor.tenant_id)
+            policy = bundle.acquisition_policy_for(
+                actor.tenant_id, registered_organisation=True, processing_person_id=actor.person_id
+            )
             if policy is None or not policy.matches_actor(actor):
                 raise ConversationDenied(
                     "This processing lease has no approved acquisition provider policy."
@@ -208,6 +211,7 @@ class ConversationAuthority:
         self, app: ConversationApplication, actor: ConversationActor
     ) -> HostedApprovalBundle:
         bundle = self.current(await app.admit(actor))
+        await self._default_organisation_principal(app, actor, bundle)
         if isinstance(actor, ProcessingActor) or any(
             item.tenant_id == actor.tenant_id and item.person_id == actor.person_id
             for item in bundle.allowances
@@ -224,6 +228,30 @@ class ConversationAuthority:
             if tester is None:
                 raise ConversationDenied("This account has no approved processing allowance.")
         return bundle
+
+    async def _default_organisation_principal(
+        self, app: ConversationApplication, actor: ConversationActor, bundle: HostedApprovalBundle
+    ) -> None:
+        if (
+            not isinstance(actor, ProcessingActor)
+            or actor.tenant_id in bundle.acquisition_tenant_ids()
+        ):
+            return
+        principal = await app.database.scalar(
+            select(ConversationProcessingPrincipal.person_id)
+            .join(Organisation, Organisation.tenant_id == ConversationProcessingPrincipal.tenant_id)
+            .join(Tenant, Tenant.id == Organisation.tenant_id)
+            .where(
+                Organisation.tenant_id == actor.tenant_id,
+                Tenant.status == "active",
+                ConversationProcessingPrincipal.person_id == actor.person_id,
+                ConversationProcessingPrincipal.revoked_at.is_(None),
+            )
+        )
+        if principal != actor.person_id or actor.tenant_id == self.operations_tenant_id:
+            raise ConversationDenied(
+                "An active registered organisation and its processing principal are required."
+            )
 
     async def reconcile_existing_minute_account(
         self,
@@ -433,9 +461,13 @@ class ConversationAuthority:
     ) -> None:
         bundle = await self.admit(app, actor)
         if intent.source_bytes > MAX_AUDIO_BYTES:
-            raise ConversationDenied("Choose a recording up to 32 MB for this processing route.")
+            raise ConversationDenied(
+                "Choose an audio or video recording up to 100 MB for this processing route."
+            )
         if isinstance(actor, ProcessingActor):
-            policy = bundle.acquisition_policy_for(actor.tenant_id)
+            policy = bundle.acquisition_policy_for(
+                actor.tenant_id, registered_organisation=True, processing_person_id=actor.person_id
+            )
             if policy is None or not policy.matches_actor(actor):
                 raise ConversationDenied(
                     "This processing lease has no approved acquisition upload policy."
@@ -523,6 +555,7 @@ class ConversationAuthority:
             operations_tenant_id=self.operations_tenant_id,
         )
         bundle = self.current(now)
+        await self._default_organisation_principal(app, actor, bundle)
         # Named testers may bypass the finite account allowance and recording
         # count, but they still need a current identity and the exact stage,
         # route, provider budget, and source permissions below.  Keep the
@@ -758,7 +791,9 @@ class ConversationAuthority:
         """
 
         if isinstance(actor, ProcessingActor):
-            policy = bundle.acquisition_policy_for(actor.tenant_id)
+            policy = bundle.acquisition_policy_for(
+                actor.tenant_id, registered_organisation=True, processing_person_id=actor.person_id
+            )
             if policy is None or not policy.matches_actor(actor):
                 return None
             candidates = tuple(
@@ -796,7 +831,7 @@ class ConversationAuthority:
 
         if isinstance(actor, ProcessingActor):
             policy: AcquisitionProviderPolicy | None = bundle.acquisition_policy_for(
-                actor.tenant_id
+                actor.tenant_id, registered_organisation=True, processing_person_id=actor.person_id
             )
             if policy is None or not policy.matches_actor(actor):
                 return None
@@ -1564,7 +1599,14 @@ class ConversationAuthority:
             return candidates[0].configuration_sha256
         if (
             isinstance(actor, ProcessingActor)
-            and (policy := bundle.acquisition_policy_for(actor.tenant_id)) is not None
+            and (
+                policy := bundle.acquisition_policy_for(
+                    actor.tenant_id,
+                    registered_organisation=True,
+                    processing_person_id=actor.person_id,
+                )
+            )
+            is not None
         ):
             for configuration_sha256 in policy.configuration_digests():
                 try:

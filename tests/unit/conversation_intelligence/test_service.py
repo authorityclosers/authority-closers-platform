@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -97,6 +99,10 @@ async def test_shutdown_disposes_engine_and_stops_new_work(
 
     engine = Engine()
 
+    @asynccontextmanager
+    async def listener(_url: str) -> AsyncIterator[tuple[asyncio.Event, asyncio.Event]]:
+        yield asyncio.Event(), asyncio.Event()
+
     def create_engine(*args: Any, **kwargs: Any) -> Engine:
         engine_options.update(kwargs)
         return engine
@@ -121,6 +127,7 @@ async def test_shutdown_disposes_engine_and_stops_new_work(
     monkeypatch.setitem(sys.modules, native_module.__name__, native_module)
     monkeypatch.setattr(service, "load_database_url", lambda path: "synthetic-dsn")
     monkeypatch.setattr(service, "create_async_engine", create_engine)
+    monkeypatch.setattr(service, "committed_work_listener", listener)
     monkeypatch.setattr(service, "async_sessionmaker", lambda *args, **kwargs: object())
     monkeypatch.setattr(service, "PrivateLocalRecordingStorage", lambda *args: object())
     monkeypatch.setattr(service, "HostedConversationWorker", lambda *args, **kwargs: MustNotRun())

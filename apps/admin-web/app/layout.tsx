@@ -9,6 +9,7 @@ import "./styles.css";
 import "./ui/tokens.css";
 import "./ui/sx-tokens.css";
 import "./ui/legacy-bridge.css";
+import "./ui/legacy-skin.css";
 import { AdminDevelopmentBridgeNotice } from "./components/admin-development-bridge-notice";
 import { ThemeScript } from "./ui/theme-script";
 

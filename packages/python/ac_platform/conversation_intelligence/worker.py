@@ -20,7 +20,8 @@ from tempfile import TemporaryDirectory
 from typing import Any, Literal, TypeVar, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import String, select
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.conversation_intelligence.application import (
@@ -119,13 +120,14 @@ class _RecordingStorageFence:
     """Cross-process fence for all local conversation storage effects.
 
     The domain deletion worker and the local inspection worker use the same
-    private-root lock. A single global lock is intentional: the database row
-    lock is acquired only after this fence, so deletion cannot deadlock behind
-    an inspection phase that is waiting for its final database transaction.
+    private-root lock. Immutable processing work uses shared admission;
+    deletion/recovery uses exclusive admission and waits for every reader.
+    Both acquire this fence before database rows, preserving lock order.
     """
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, exclusive: bool = True) -> None:
         self.path = root / _WORKER_LOCK_NAME
+        self.exclusive = exclusive
         self._handle: Any | None = None
         self._locked = False
 
@@ -165,7 +167,7 @@ class _RecordingStorageFence:
 
                 fcntl.flock(  # type: ignore[attr-defined,unused-ignore]
                     self._handle.fileno(),
-                    fcntl.LOCK_EX,  # type: ignore[attr-defined,unused-ignore]
+                    fcntl.LOCK_EX if self.exclusive else fcntl.LOCK_SH,
                 )
             self._locked = True
         except StorageError:
@@ -211,9 +213,9 @@ class _RecordingStorageFence:
 class _FencedExecutor:
     """Own a storage fence and all synchronous work until its thread is joined."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, exclusive: bool = True) -> None:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="conversation-worker")
-        self._fence = _RecordingStorageFence(root)
+        self._fence = _RecordingStorageFence(root, exclusive=exclusive)
         self._entered = False
 
     async def __aenter__(self) -> _FencedExecutor:
@@ -340,6 +342,7 @@ class OfflineConversationWorker:
                 limit=1,
                 lease_for=min(self.lease_for, timedelta(seconds=30)),
             )
+            await self._recover_terminal_local_job(db, recovery.generation)
             if not jobs:
                 return None
             job = jobs[0]
@@ -349,6 +352,109 @@ class OfflineConversationWorker:
             # before starting a native phase so the first heartbeat has headroom.
             await repository.renew(job, job.lease_token, lease_for=self.lease_for)
             return Work(job.id, job.lease_token, recovery.generation, job.kind)
+
+    async def _recover_terminal_local_job(self, db: AsyncSession, generation: int) -> None:
+        """Persist one exhausted C1 run without executing or settling its work.
+
+        The queue owns lease expiry, scheduled backoff and the attempt ceiling.
+        Take only uncontended current-source rows after its terminal transition;
+        publication uses the same job lock and cannot survive a lost lease.
+        Neither a local execution marker nor this event is a customer release.
+        """
+        candidate = (
+            await db.execute(
+                select(Job, ConversationRun, ConversationRecording)
+                .join(
+                    ConversationRun,
+                    (ConversationRun.job_id == Job.id)
+                    & (ConversationRun.tenant_id == Job.tenant_id)
+                    & (sql_cast(ConversationRun.id, String) == Job.payload["run_id"].as_string()),
+                )
+                .join(
+                    ConversationRecording,
+                    (ConversationRecording.id == ConversationRun.recording_id)
+                    & (ConversationRecording.tenant_id == ConversationRun.tenant_id)
+                    & (ConversationRecording.person_id == ConversationRun.person_id)
+                    & (ConversationRecording.generation == ConversationRun.generation),
+                )
+                .join(
+                    ConversationQuote,
+                    (sql_cast(ConversationQuote.id, String) == Job.payload["quote_id"].as_string())
+                    & (ConversationQuote.recording_id == ConversationRecording.id)
+                    & (ConversationQuote.tenant_id == ConversationRecording.tenant_id)
+                    & (ConversationQuote.person_id == ConversationRecording.person_id),
+                )
+                .where(
+                    Job.kind == LOCAL_JOB,
+                    Job.external_side_effect.is_(False),
+                    Job.recovery_generation == 0,
+                    Job.status == "dead_letter",
+                    Job.lease_token.is_(None),
+                    Job.leased_until.is_(None),
+                    Job.provider_receipt.is_(None),
+                    Job.dead_lettered_at.is_not(None),
+                    ConversationRun.state.in_(("queued", "running")),
+                    ConversationRun.recipe_revision == self.c1_recipe,
+                    ConversationRecording.state == "ready",
+                    Job.payload["recording_id"].as_string()
+                    == sql_cast(ConversationRecording.id, String),
+                    sql_cast(Job.payload["generation"], String)
+                    == sql_cast(ConversationRun.generation, String),
+                    ConversationQuote.quote["source"]["source_sha256"].as_string()
+                    == ConversationRecording.source_sha256,
+                    ConversationQuote.quote["source"]["tenant_id"].as_string()
+                    == sql_cast(ConversationRecording.tenant_id, String),
+                    ConversationQuote.quote["source"]["recording_id"].as_string()
+                    == sql_cast(ConversationRecording.id, String),
+                    ConversationQuote.quote["source"]["source_revision"].as_string()
+                    == sql_cast(ConversationRecording.source_revision, String),
+                    ~select(ConversationCheckpoint.id)
+                    .where(
+                        ConversationCheckpoint.tenant_id == ConversationRecording.tenant_id,
+                        ConversationCheckpoint.person_id == ConversationRecording.person_id,
+                        ConversationCheckpoint.recording_id == ConversationRecording.id,
+                        ConversationCheckpoint.stage == "C1",
+                        ConversationCheckpoint.erased_at.is_(None),
+                    )
+                    .exists(),
+                )
+                .order_by(Job.updated_at, Job.id)
+                .limit(1)
+                .with_for_update(of=(Job, ConversationRun, ConversationRecording), skip_locked=True)
+                .execution_options(populate_existing=True)
+            )
+        ).first()
+        if candidate is None:
+            return
+        job, run, recording = candidate
+        if type(job.payload.get("generation")) is not int:
+            return
+        now = datetime.now(UTC)
+        run.state, run.completed_at = "failed", now
+        from ac_platform.audit.service import AuditRepository
+
+        await AuditRepository(db).append(
+            tenant_id=recording.tenant_id,
+            actor_person_id=None,
+            actor_type="system",
+            action="conversation.local_job_recovery_required",
+            resource_type="job",
+            resource_id=job.id,
+            payload={
+                "schema": "ac.sales-xray.local-job-recovery/1",
+                "run_id": str(run.id),
+                "recording_id": str(recording.id),
+                "source_sha256": recording.source_sha256,
+                "source_revision": recording.source_revision,
+                "generation": run.generation,
+                "recovery_generation": generation,
+                "claim_count": job.attempt_count,
+                "claim_limit": job.max_attempts,
+                "run_state": "failed",
+            },
+            reason="Terminal local job reconciled; no execution or customer-minute settlement.",
+            now=now,
+        )
 
     async def _renew(self, work: Work) -> None:
         async with self.sessions() as db, db.begin():
@@ -727,7 +833,7 @@ class OfflineConversationWorker:
             self._verify_object(key, sha, expected_bytes)
 
     async def _inspect_job(self, work: Work) -> None:
-        async with _FencedExecutor(self.storage.root) as fenced:
+        async with _FencedExecutor(self.storage.root, exclusive=False) as fenced:
             async with self.sessions() as db, db.begin():
                 job = await self._job(db, work)
                 recording, _, quoted, _ = await self._scope(db, job)
@@ -937,6 +1043,9 @@ class OfflineConversationWorker:
                     )
                     run.completed_at = datetime.now(UTC)
                     await JobRepository(db).complete(work.job_id, work.lease_token)
+                    from ac_platform.conversation_intelligence.stage_handoff import make_plans_due
+
+                    await make_plans_due(db, recording)
 
     async def _erase_job(self, work: Work) -> None:
         from ac_platform.conversation_intelligence.source_objects import release_source_object
@@ -1059,14 +1168,35 @@ class OfflineConversationWorker:
             # A fenced/started job is intentionally left to its existing
             # recovery path; this branch never refunds or rewrites run state.
             return True
-        except Exception:
+        except Exception as error:
             # No provider/media exception text enters shared operational logs.
             # A failed local attempt is not a no-charge receipt: leave any
             # dispatched reservation held for explicit reconciliation.
             async with self.sessions() as db, db.begin():
-                await self._job(db, work)
+                job = await self._job(db, work)
+                if job.tenant_id is None:
+                    raise ConversationConflict("The local job has no workspace binding.") from None
                 await JobRepository(db).fail(
                     work.job_id, work.lease_token, "conversation_local_phase_failed"
+                )
+                from ac_platform.audit.service import AuditRepository
+                from ac_platform.conversation_intelligence.local_failure import local_failure_code
+
+                await AuditRepository(db).append(
+                    tenant_id=job.tenant_id,
+                    actor_person_id=None,
+                    actor_type="system",
+                    action="conversation.local_failure_observed",
+                    resource_type="job",
+                    resource_id=job.id,
+                    payload={
+                        "schema": "ac.sales-xray.local-failure/1",
+                        "phase": "local_inspection" if work.kind == LOCAL_JOB else "erasure",
+                        "failure_code": local_failure_code(error),
+                        "attempt_count": job.attempt_count,
+                        "recovery_generation": work.recovery_generation,
+                    },
+                    now=datetime.now(UTC),
                 )
             raise RuntimeError(
                 "The local conversation job failed; see its durable state."

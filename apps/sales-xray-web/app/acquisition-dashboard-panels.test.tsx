@@ -61,7 +61,7 @@ it("shows locally verified multi-file facts without claiming a batch upload", ()
     <AcquisitionGuideRail
       stage="selected"
       stagedFiles={files}
-      maximumFileBytes={32 * 1048576}
+      maximumFileBytes={32_000_000}
     />,
   );
 
@@ -83,14 +83,14 @@ it("does not mark an unsupported or oversized staged file as validated", () => {
         { name: "Discovery.m4a", size: 12 * 1048576 },
         { name: "notes.txt", size: 40 * 1048576 },
       ]}
-      maximumFileBytes={32 * 1048576}
+      maximumFileBytes={32_000_000}
     />,
   );
   const single = renderToStaticMarkup(
     <AcquisitionGuideRail
       stage="selected"
       stagedFiles={[{ name: "Discovery.m4a", size: 12 * 1048576 }]}
-      maximumFileBytes={32 * 1048576}
+      maximumFileBytes={32_000_000}
     />,
   );
 

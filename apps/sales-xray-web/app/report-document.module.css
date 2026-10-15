@@ -1,103 +1,749 @@
+/* The Document view: a white A4-wide sheet on a quiet canvas, like a Google
+   Doc. Tokens only (ui/sx-tokens.css); the Report workspace keeps this view on
+   the light surface in both themes, so the page always reads as paper. */
 .document {
+  /* The --sx-* aliases resolve at :root, so re-point them here: the Report
+     workspace puts this view on the light surface, and paper stays white. */
+  --sx-paper: var(--lx-paper);
+  --sx-surface: var(--lx-surface);
+  --sx-sunken: var(--lx-sunken);
+  --sx-ink: var(--lx-ink);
+  --sx-ink-2: var(--lx-ink-2);
+  --sx-muted: var(--lx-muted);
+  --sx-line: var(--lx-line);
+  --sx-line-strong: var(--lx-line-strong);
+  --sx-accent: var(--lx-teal);
+  --sx-accent-ink: var(--lx-on-teal);
+  --sx-accent-soft: color-mix(in oklab, var(--lx-teal) 12%, transparent);
+  --sx-good: var(--lx-success);
+  --sx-warn: var(--lx-warning);
+  --doc-scale: 1;
+  --doc-body: calc(15px * var(--doc-scale));
   min-width: 0;
   width: 100%;
-  color: #222;
-  font:
-    14px Arial,
-    sans-serif;
+  color: var(--sx-ink);
+  font-family: var(--lx-font-ui);
 }
+
 .actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
-  padding: 16px;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 0;
 }
-.actions span {
-  color: #6b6b6b;
-}
-.download {
+
+.action,
+.retry {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 0;
-  border-radius: 8px;
-  padding: 12px 18px;
-  background: #16283f;
-  color: white;
-  font: inherit;
+  min-height: var(--sx-control-h);
+  padding: 0 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: 600 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  cursor: pointer;
+}
+.action[data-primary] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+.short {
+  display: none;
+}
+.action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.action:focus-visible,
+.retry:focus-visible,
+.play:focus-visible,
+.contents a:focus-visible,
+.links a:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+.action svg,
+.retry svg {
+  width: 16px;
+  height: 16px;
+}
+
+.failed {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.canvas {
+  padding: 28px 24px 40px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.unavailable {
+  margin: 0 auto;
+  max-width: 794px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* ---------- The sheet ---------- */
+.sheet {
+  box-sizing: border-box;
+  max-width: 794px; /* A4 at 96 dpi */
+  margin: 0 auto;
+  padding: 64px 72px 56px;
+  border: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--lx-film) 10%, transparent);
+  font-size: var(--doc-body);
+  line-height: 1.6;
+}
+
+.head {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--sx-line);
+}
+.docKicker {
+  margin: 0 0 8px;
+  color: var(--sx-accent);
+  font: 700 var(--sx-text-xs) / 1.2 var(--lx-font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.title {
+  margin: 0;
+  color: var(--sx-ink);
+  font: 700 calc(28px * var(--doc-scale)) / 1.2 var(--lx-font-ui);
+  overflow-wrap: anywhere;
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 12px 0 0;
+}
+.facts div {
+  display: flex;
+  gap: 6px;
+}
+.facts dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+.facts dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+.draft {
+  margin: 10px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-style: italic;
+}
+
+.contents {
+  margin-top: 16px;
+}
+.contents p {
+  margin: 0 0 4px;
+  color: var(--sx-muted);
+  font: 700 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.contents ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.contents a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sx-control-h);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
   text-decoration: none;
 }
-.download:disabled {
-  opacity: 0.5;
+.contents a:hover {
+  text-decoration: underline;
 }
-.download svg,
-.document button svg {
-  width: 18px;
-  height: 18px;
+
+/* ---------- Pillars and parts ---------- */
+.section {
+  padding-top: 32px;
 }
-.document > p {
+.pillar {
+  margin: 0;
+  color: var(--sx-ink);
+  font: 700 calc(22px * var(--doc-scale)) / 1.25 var(--lx-font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  scroll-margin-top: var(--report-scroll-target-offset, 80px);
+}
+.pillar:focus {
+  outline: none;
+}
+.subtitle {
+  margin: 4px 0 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--sx-accent);
+  color: var(--sx-ink-2);
+  font-weight: 600;
+}
+.part {
+  padding-top: 18px;
+}
+.partHeading {
+  margin: 0 0 6px;
+  color: var(--sx-ink);
+  font: 700 calc(16px * var(--doc-scale)) / 1.35 var(--lx-font-ui);
+}
+
+.text,
+.strong {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.strong {
+  font-weight: 700;
+}
+.label {
+  margin: 12px 0 2px;
+  color: var(--sx-ink);
+  font-weight: 700;
+}
+.subheading {
+  margin: 18px 0 4px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--sx-line);
+  color: var(--sx-ink);
+  font: 700 calc(15px * var(--doc-scale)) / 1.4 var(--lx-font-ui);
+}
+.list {
+  margin: 0 0 8px;
+  padding-left: 22px;
+}
+.list li {
+  margin: 2px 0;
+}
+.note {
+  margin: 8px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.statusRow {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 16px;
+  gap: 8px 12px;
+  margin: 0 0 8px;
 }
-.retry,
-.document > p button {
+.status {
+  color: var(--sx-ink);
+  font: 800 calc(20px * var(--doc-scale)) / 1.2 var(--lx-font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.status[data-tone="good"] {
+  color: var(--sx-good);
+}
+.status[data-tone="warn"] {
+  color: var(--sx-warn);
+}
+.status[data-tone="accent"] {
+  color: var(--sx-accent);
+}
+.origin {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.possible {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  color: var(--sx-muted);
+  font: 600 var(--sx-text-xs) / 18px var(--lx-font-ui);
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
+.time,
+.play {
+  color: var(--sx-accent);
+  font: 700 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.play {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--lx-line, #cbd5e1);
-  border-radius: var(--lx-radius-sm, 8px);
-  background: var(--lx-surface, #ffffff);
-  color: var(--lx-ink-2, #334155);
-  font: 600 13px/1 var(--lx-font-ui, inherit);
+  gap: 5px;
+  min-height: var(--sx-control-h);
+  padding: 0 8px;
+  border: 1px solid color-mix(in oklab, var(--sx-accent) 35%, transparent);
+  border-radius: 999px;
+  background: var(--sx-accent-soft);
   cursor: pointer;
-  transition: background-color 140ms ease;
+  vertical-align: 1px;
 }
-.retry:hover,
-.document > p button:hover {
-  background: var(--lx-paper-2, #f1f5f9);
+.play[aria-pressed="true"] {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
 }
-.scroll {
-  overflow: auto;
-  max-width: 100%;
-  background: #e9ebee;
+.playRow {
+  margin: 0 0 8px;
 }
-.pages {
-  min-width: calc(21cm + 40px);
-  zoom: calc(var(--document-fit, 1) * var(--document-zoom));
-  font-family: Calibri, Arial, sans-serif;
+.plays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
 }
-.pages :global(.report-docx-wrapper) {
-  padding: 20px;
+
+.quote {
+  margin: 4px 0 10px;
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--sx-line-strong);
+  color: var(--sx-ink-2);
+  font-family: var(--lx-font-quote);
+  font-size: calc(16px * var(--doc-scale));
 }
-.pages :global(section.report-docx) {
-  flex-shrink: 0;
-  font-family: Calibri, Arial, sans-serif;
+.quote cite {
+  display: block;
+  color: var(--sx-ink);
+  font: 700 var(--sx-text-sm) / 1.5 var(--lx-font-ui);
+  font-style: normal;
 }
-.pages :global(section.report-docx span) {
-  font-family: Calibri, Arial, sans-serif;
+
+/* Worked / didn't items and moments */
+.card {
+  margin: 0 0 12px;
+  padding: 12px 16px 6px;
+  border: 1px solid var(--sx-line);
+  border-left: 3px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  break-inside: avoid;
 }
-.pages :global([data-report-mode-section]) {
-  scroll-margin-top: var(--report-scroll-target-offset, 80px);
+.card[data-tone="good"] {
+  border-left-color: var(--sx-good);
 }
-@media (prefers-reduced-motion: no-preference) {
-  .scroll {
-    scroll-behavior: smooth;
+.card[data-tone="warn"] {
+  border-left-color: var(--sx-warn);
+}
+.card[data-tone="accent"] {
+  border-left-color: var(--sx-accent);
+}
+.kicker {
+  margin: 0 0 2px;
+  color: var(--sx-muted);
+  font: 800 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.card[data-tone="good"] .kicker {
+  color: var(--sx-good);
+}
+.card[data-tone="warn"] .kicker {
+  color: var(--sx-warn);
+}
+.card[data-tone="accent"] .kicker {
+  color: var(--sx-accent);
+}
+.cardTitle {
+  margin: 0 0 6px;
+  color: var(--sx-ink);
+  font: 700 calc(16px * var(--doc-scale)) / 1.35 var(--lx-font-ui);
+}
+
+/* Call numbers */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 4px 0 0;
+}
+.metrics div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+}
+.metrics dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font: 700 calc(20px * var(--doc-scale)) / 1.1 var(--lx-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+.metrics dt {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+.metrics small {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+/* Conversation timeline: one bar, then the stages in words */
+.timeline {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  margin: 6px 0 10px;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border-radius: 999px;
+}
+.timeline li,
+.stages li::before {
+  background: color-mix(in oklab, var(--sx-accent) 85%, transparent);
+}
+.timeline li[data-stage="1"],
+.stages li[data-stage="1"]::before {
+  background: color-mix(in oklab, var(--sx-accent) 62%, transparent);
+}
+.timeline li[data-stage="2"],
+.stages li[data-stage="2"]::before {
+  background: color-mix(in oklab, var(--sx-accent) 44%, transparent);
+}
+.timeline li[data-stage="3"],
+.stages li[data-stage="3"]::before {
+  background: color-mix(in oklab, var(--sx-accent) 28%, transparent);
+}
+.timeline li[data-stage="4"],
+.stages li[data-stage="4"]::before {
+  background: color-mix(in oklab, var(--sx-accent) 16%, transparent);
+}
+.timeline li {
+  flex-basis: 0;
+  min-width: 4px;
+}
+.stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stages li {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  column-gap: 8px;
+  align-items: baseline;
+}
+.stages li::before {
+  content: "";
+  grid-row: span 2;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  align-self: center;
+}
+.stages strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+.stages span {
+  grid-column: 2;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Before / The switch / After */
+.steps {
+  display: grid;
+  gap: 22px;
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.steps li {
+  position: relative;
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  break-inside: avoid;
+}
+.steps li + li::before {
+  content: "↓";
+  position: absolute;
+  top: -21px;
+  left: 18px;
+  color: var(--sx-muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+.steps li[data-switch] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+.steps p {
+  margin: 2px 0 0;
+}
+/* Someone's own words in a step: in quotes, with who said it. */
+.stepSaid {
+  color: var(--sx-ink-2);
+  font-family: var(--lx-font-quote);
+}
+.stepSaid cite {
+  display: block;
+  margin-top: 2px;
+  color: var(--sx-ink);
+  font: 700 var(--sx-text-xs) / 1.5 var(--lx-font-ui);
+  font-style: normal;
+}
+.stepTitle {
+  display: block;
+  margin-top: 2px;
+  color: var(--sx-ink);
+  font: 700 calc(16px * var(--doc-scale)) / 1.35 var(--lx-font-ui);
+}
+.stepLabel {
+  color: var(--sx-ink);
+  font: 800 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Your skills: compact rows, everything open (a document can't be clicked) */
+.skills {
+  display: grid;
+  border-top: 1px solid var(--sx-line);
+}
+.skill {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(130px, 0.7fr) minmax(
+      0,
+      2fr
+    );
+  gap: 4px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sx-line);
+  break-inside: avoid;
+}
+.skill > p {
+  margin: 0;
+}
+.skillName {
+  color: var(--sx-ink);
+  font-weight: 700;
+}
+.skillBody .text {
+  margin-bottom: 4px;
+}
+.state {
+  display: inline-block;
+  color: var(--sx-muted);
+  font: 700 var(--sx-text-sm) / 1.5 var(--lx-font-ui);
+}
+.state[data-tone="good"] {
+  color: var(--sx-good);
+}
+.state[data-tone="warn"] {
+  color: var(--sx-warn);
+}
+.state[data-tone="accent"] {
+  color: var(--sx-accent);
+}
+
+.gaps {
+  margin: 14px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+.gaps span {
+  font-weight: 700;
+}
+
+/* Report end summary */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 0;
+  margin: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  break-inside: avoid;
+}
+.summary div {
+  padding: 10px 12px;
+  border-right: 1px solid var(--sx-line);
+}
+.summary div:last-child {
+  border-right: 0;
+}
+.summary dt {
+  color: var(--sx-muted);
+  font: 700 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.summary dd {
+  margin: 2px 0 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.foot {
+  margin-top: 32px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sx-line);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+.foot p {
+  margin: 0 0 8px;
+}
+/* On screen the two buttons say it; paper and Word keep the sentence. */
+.closing {
+  display: none;
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sx-control-h);
+  padding: 0 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+.footer {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* ---------- Phones: the sheet fills the width ---------- */
+@media (max-width: 720px) {
+  .canvas {
+    margin-inline: -4px;
+    padding: 12px 0 24px;
+    border-radius: 0;
   }
-}
-@media print {
-  .actions,
-  .document > p {
+  .sheet {
+    padding: 28px 18px 24px;
+    border-inline: 0;
+  }
+  .title {
+    font-size: calc(23px * var(--doc-scale));
+  }
+  .pillar {
+    font-size: calc(19px * var(--doc-scale));
+  }
+  .contents ol {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .skill {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .skillBody {
+    grid-column: 1 / -1;
+  }
+  .summary div {
+    border-right: 0;
+    border-bottom: 1px solid var(--sx-line);
+  }
+  .summary div:last-child {
+    border-bottom: 0;
+  }
+  .actions {
+    justify-content: stretch;
+  }
+  .long {
     display: none;
   }
-  .scroll {
-    overflow: visible;
+  .short {
+    display: inline;
   }
-  .pages {
-    zoom: 1;
+  .action {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+}
+
+/* ---------- Print: just the sheet ---------- */
+@media print {
+  /* The shell uses "transition: all". Freeze it before the print rules hide
+     the shell, so its search and account controls don't paint over the sheet. */
+  :global(body):has(.document) :global(*),
+  :global(body):has(.document) :global(*::before),
+  :global(body):has(.document) :global(*::after) {
+    transition: none !important;
+    animation: none !important;
+  }
+  .actions,
+  .links {
+    display: none !important;
+  }
+  .closing {
+    display: block;
+  }
+  .canvas {
+    padding: 0;
+    background: none;
+  }
+  .sheet {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  .play {
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .contents a {
+    display: inline;
+    min-height: 0;
+  }
+  .play svg,
+  .playWord {
+    display: none;
+  }
+  .pillar,
+  .partHeading,
+  .label,
+  .kicker,
+  .cardTitle {
+    break-after: avoid;
+  }
+  .section {
+    break-inside: auto;
   }
 }

@@ -983,6 +983,18 @@ describe("provider control contract", () => {
   });
 
   it("disables save and import mutations while a preset activation is pending", async () => {
+    const nativeDigest = crypto.subtle.digest.bind(crypto.subtle);
+    let releaseDigest!: () => void;
+    const digestGate = new Promise<void>((resolve) => {
+      releaseDigest = resolve;
+    });
+    let pendingDigest!: Promise<ArrayBuffer>;
+    const digest = vi
+      .spyOn(crypto.subtle, "digest")
+      .mockImplementation((...args) => {
+        pendingDigest = digestGate.then(() => nativeDigest(...args));
+        return pendingDigest;
+      });
     const current = {
       id: "registry-proof",
       revision: 3,
@@ -1038,8 +1050,11 @@ describe("provider control contract", () => {
       [...host.querySelectorAll("button")]
         .find((button) => button.textContent?.includes("Check profile"))
         ?.click();
-      await Promise.resolve();
-      await Promise.resolve();
+    });
+    expect(digest).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      releaseDigest();
+      await pendingDigest;
     });
     const importedSave = [...host.querySelectorAll("button")].find((button) =>
       button.textContent?.includes("Save imported revision"),

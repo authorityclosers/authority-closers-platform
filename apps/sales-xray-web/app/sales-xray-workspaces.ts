@@ -1,3 +1,5 @@
+import { earlyFetch } from "./early-reads";
+
 export type SalesXrayWorkspace = Readonly<{
   tenant_id: string;
   kind: "personal" | "organisation";
@@ -59,7 +61,7 @@ export function parseSalesXrayWorkspaces(
 }
 
 export async function readSalesXrayWorkspaces(signal: AbortSignal) {
-  const response = await fetch("/v1/me/sales-xray-workspaces", {
+  const response = await earlyFetch("/v1/me/sales-xray-workspaces", {
     method: "GET",
     credentials: "same-origin",
     cache: "no-store",

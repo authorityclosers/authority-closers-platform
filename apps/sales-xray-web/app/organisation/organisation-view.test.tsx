@@ -2,6 +2,7 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 import { resetInvitesForTests } from "../shell/invites-store";
 import { CREATE_ORGANISATION_EVENT } from "../shell/shell-store";
 import { WorkspaceAccessContext } from "../workspace-access";
@@ -306,6 +307,38 @@ it.each([
       ).toBeGreaterThan(1);
   },
 );
+it("starts from the app's workspace directory, so its own reads start at once", async () => {
+  const directory = routes["/v1/me/sales-xray-workspaces"] as {
+    workspaces: SalesXrayWorkspace[];
+  };
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: { personId: ownerId, sessionId: "s-1", tenantId },
+          workspaces: directory.workspaces,
+          retry: accessRetry,
+        }}
+      >
+        <OrganisationView />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  const paths = fetchMock.mock.calls.map(([path]) => path);
+  // No second directory read before the organisation's own reads.
+  expect(paths).not.toContain("/v1/me/sales-xray-workspaces");
+  expect(paths).toEqual(
+    expect.arrayContaining([
+      "/v1/organisation",
+      "/v1/organisation/members",
+      "/v1/organisation/activity?days=30",
+    ]),
+  );
+  expect(host.querySelector("h1")?.textContent).toBe("Authority Closers");
+});
+
 it("cancels a role change without writing", async () => {
   await render();
   await click("Members");
@@ -353,6 +386,16 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
   expect(button("Remove Admin")).toBeUndefined();
   expect(button("Remove Dipak").disabled).toBe(false);
   expect(button("Revoke invite for new@example.com").disabled).toBe(false);
+  // Every row opens that person's profile (an invitation by its id).
+  expect(
+    [...host.querySelectorAll('a[href^="/organisation/people/"]')].map((link) =>
+      link.getAttribute("href"),
+    ),
+  ).toEqual([
+    `/organisation/people/${ownerId}`,
+    `/organisation/people/${inviteId}`,
+    `/organisation/people/${memberId}`,
+  ]);
 });
 it("uses the API role and shows members only their own row read-only", async () => {
   org().role = "member";
@@ -626,8 +669,11 @@ it("reconciles every Overview figure with the calls it lists", async () => {
     /^Sales call · \S/,
   );
   expect(rows[0].textContent).toContain("Report ready");
-  // One sparse day is not a trend in the figure strip.
-  expect(host.querySelector('dl [role="img"]')).toBeNull();
+  // One sparse day is not a trend in the figure strip (share bars stay).
+  expect(host.querySelector('dl [aria-label^="Calls per day"]')).toBeNull();
+  expect(
+    host.querySelector('dl [aria-label="100% of calls have a ready report"]'),
+  ).not.toBeNull();
 });
 
 it("lists active people first and folds quiet and test accounts away", async () => {
@@ -639,6 +685,12 @@ it("lists active people first and folds quiet and test accounts away", async () 
     );
   expect(people()).toHaveLength(1);
   expect(people()[0]).toContain("1 call");
+  // The whole row opens the person's profile.
+  expect(
+    host
+      .querySelector('[aria-labelledby="org-people"] li a')
+      ?.getAttribute("href"),
+  ).toMatch(/^\/organisation\/people\/[0-9a-f-]{36}$/);
   // Two people share a name, so each shows the email that tells them apart.
   expect(people()[0]).toContain("admin@fictional-studio.in");
   expect(host.textContent).not.toContain("Dipak");
@@ -649,13 +701,142 @@ it("lists active people first and folds quiet and test accounts away", async () 
   expect(host.textContent).toContain("No calls");
 });
 
-it("draws a 30-day bar only with at least three active days", async () => {
+const peopleSection = () =>
+  host.querySelector<HTMLElement>('[aria-labelledby="org-people"]')!;
+const peopleRows = () => [...peopleSection().querySelectorAll("li")];
+const peopleSearch = () =>
+  peopleSection().querySelector<HTMLInputElement>("input")!;
+async function searchPeople(value: string) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(peopleSearch(), value);
+    peopleSearch().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+it("finds both same-name people in source order without changing calls, figures or reads", async () => {
   activityRoutes([0, 3, 9]);
   await render();
+  const figures = host.querySelector("dl")!.textContent;
+  const calls = host.querySelector('[aria-label="Team calls"]')!.textContent;
+  const reads = fetchMock.mock.calls.length;
+  expect(peopleSearch().closest("label")?.textContent).toBe("Search people");
+  await searchPeople("  aDmIn  ");
+  expect(peopleSection().querySelector('[role="status"]')?.textContent).toBe(
+    "Matches: 2 of 4 people",
+  );
   expect(
-    host.querySelector('[aria-label="Calls per day over the last 30 days"]')
-      ?.children,
-  ).toHaveLength(30);
+    peopleRows().map((row) => row.querySelector("a")?.getAttribute("href")),
+  ).toEqual([
+    `/organisation/people/${ownerId}`,
+    `/organisation/people/${deskId}`,
+  ]);
+  expect(peopleRows()[0].textContent).toContain("admin@fictional-studio.in");
+  expect(peopleRows()[0].textContent).toContain("3 calls13 min · 1 report");
+  expect(peopleRows()[1].textContent).toContain("desk@fictional-mail.in");
+  expect(peopleRows()[1].hasAttribute("data-quiet")).toBe(true);
+  expect(peopleRows()[1].textContent).toContain("0 callsNo calls");
+  expect(host.querySelector("dl")!.textContent).toBe(figures);
+  expect(host.querySelector('[aria-label="Team calls"]')!.textContent).toBe(
+    calls,
+  );
+  expect(fetchMock.mock.calls).toHaveLength(reads);
+  expect(writes()).toHaveLength(0);
+});
+
+it("searches names only and clears an honest empty result back to the folded list with focus", async () => {
+  activityRoutes();
+  await render();
+  await searchPeople("fictional-studio.in");
+  expect(peopleRows()).toHaveLength(0);
+  expect(peopleSection().textContent).toContain("No people match this name.");
+  expect(peopleSection().textContent).toContain("Matches: 0 of 4 people");
+  expect(peopleSection().textContent).not.toContain("Nobody has saved a call");
+  await click("Clear search");
+  expect(peopleSearch().value).toBe("");
+  expect(document.activeElement).toBe(peopleSearch());
+  expect(peopleRows()).toHaveLength(1);
+  expect(
+    button("3 more people with no calls or test accounts").getAttribute(
+      "aria-expanded",
+    ),
+  ).toBe("false");
+  expect(peopleSection().textContent).not.toContain("No people match");
+  expect(peopleSection().textContent).toContain("Showing 1 of 4 people");
+});
+
+it("makes a folded test person searchable without inventing calls or hiding their test label", async () => {
+  activityRoutes();
+  await render();
+  await searchPeople("Quinn");
+  expect(peopleRows()).toHaveLength(1);
+  expect(peopleRows()[0].querySelector("a")?.getAttribute("href")).toBe(
+    `/organisation/people/${testId}`,
+  );
+  expect(peopleRows()[0].textContent).toContain("Quinn FixtureTest");
+  expect(peopleRows()[0].textContent).toContain("0 callsNo calls");
+  expect(peopleRows()[0].hasAttribute("data-quiet")).toBe(true);
+  expect(peopleSection().textContent).toContain("Matches: 1 of 4 people");
+  expect(peopleSection().querySelector("[aria-expanded]")).toBeNull();
+  expect(writes()).toHaveLength(0);
+});
+
+it("does not search an unnamed person's email used as their display fallback", async () => {
+  activityRoutes();
+  const directory = routes["/v1/organisation/members"] as {
+    members: { name: string | null }[];
+  };
+  directory.members[2].name = null;
+  await render();
+  await click("3 more people with no calls or test accounts");
+  expect(peopleSection().textContent).toContain("dipak@fictional-studio.in");
+  await searchPeople("dipak");
+  expect(peopleRows()).toHaveLength(0);
+  expect(peopleSection().textContent).toContain("No people match this name.");
+});
+
+it("keeps the expanded disclosure and every row's identity and content when clearing a search", async () => {
+  activityRoutes();
+  await render();
+  await click("3 more people with no calls or test accounts");
+  const rows = peopleRows().map((row) => row.innerHTML);
+  await searchPeople("Dipak");
+  expect(peopleRows()).toHaveLength(1);
+  expect(peopleRows()[0].querySelector("a")?.getAttribute("href")).toBe(
+    `/organisation/people/${memberId}`,
+  );
+  await click("Clear search");
+  expect(document.activeElement).toBe(peopleSearch());
+  expect(peopleRows().map((row) => row.innerHTML)).toEqual(rows);
+  expect(
+    button("Show only people with calls").getAttribute("aria-expanded"),
+  ).toBe("true");
+  expect(writes()).toHaveLength(0);
+});
+
+it("treats whitespace as no name filter while keeping clear available", async () => {
+  activityRoutes();
+  await render();
+  await searchPeople("   ");
+  expect(peopleRows()).toHaveLength(1);
+  expect(peopleSection().textContent).toContain("Showing 1 of 4 people");
+  expect(button("Clear search").disabled).toBe(false);
+  await click("Clear search");
+  expect(button("Clear search").disabled).toBe(true);
+  expect(document.activeElement).toBe(peopleSearch());
+});
+
+it("draws a 14-day sparkline only with at least three active days", async () => {
+  activityRoutes([0, 3, 9]);
+  await render();
+  const spark = host.querySelector(
+    'dl [aria-label^="Calls per day, last 14 days"]',
+  );
+  expect(spark?.children).toHaveLength(14);
+  // Today is the lit column, as on the Dashboard.
+  expect(spark?.lastElementChild?.hasAttribute("data-on")).toBe(true);
   expect(kpi("Reports ready")).toBe("Reports ready1of 3 calls");
   expect(host.textContent).toContain("Analysis in progress");
 });

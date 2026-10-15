@@ -18,6 +18,7 @@
   padding: 0;
   overflow: hidden;
   list-style: none;
+  container: recent / inline-size;
 }
 
 .item + .item,
@@ -34,6 +35,10 @@
   column-gap: 16px;
   padding: 0 14px 0 16px;
   color: var(--lx-ink);
+  /* Its own size and face, so the rows read the same on New analysis
+     (inside the studio's scope) as on the Dashboard. */
+  font-family: var(--lx-font-ui);
+  font-size: 13px;
   text-decoration: none;
 }
 
@@ -145,8 +150,10 @@
   background: var(--lx-teal);
 }
 
+/* One teal accent: a call still running is a teal ring (ready is filled). */
 .status[data-tone="active"] i {
-  background: var(--lx-info);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--lx-teal);
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -164,9 +171,10 @@
 
 /* ---------- Loading rows ---------- */
 
+/* Content-box: the divider adds its pixel outside, as on the loaded rows. */
 .skeletonRow {
   display: grid;
-  box-sizing: border-box;
+  box-sizing: content-box;
   height: 44px;
   grid-template-columns: minmax(0, 1fr) 156px;
   align-items: center;
@@ -200,6 +208,24 @@
   }
 }
 
+/* A narrower list (tablets, a half-width Dashboard card): the owner shows as
+   initials (the name stays for screen readers and on hover), so the call's
+   own name keeps its room. Phones below 720 px have their own layout. */
+@container recent (max-width: 859px) {
+  .list[data-owners] .row {
+    grid-template-columns: minmax(0, 1fr) 24px 96px 64px 156px 16px;
+  }
+
+  .owner > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 720px) {
   .row,
   .list[data-owners] .row {
@@ -224,6 +250,21 @@
   .date,
   .length {
     display: none;
+  }
+
+  /* A phone row gives the name two lines instead of cutting it. */
+  .row {
+    height: auto;
+    min-height: var(--row);
+    padding-block: 6px;
+  }
+
+  .name {
+    display: -webkit-box;
+    line-height: 1.35;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 }
 

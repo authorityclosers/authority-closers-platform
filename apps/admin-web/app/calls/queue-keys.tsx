@@ -3,7 +3,8 @@
 /**
  * Keyboard-first queue: J / ↓ and K / ↑ move between calls, Enter opens one.
  * Only while the queue has focus or nothing else does; typing in a field
- * never triggers it.
+ * never triggers it. A click anywhere on a call's row opens it too (Ctrl or
+ * Cmd: in a new tab), except on its own controls or while selecting text.
  */
 import { useEffect } from "react";
 
@@ -38,8 +39,28 @@ export function QueueKeys() {
       links[next]?.focus();
       links[next]?.scrollIntoView({ block: "nearest" });
     };
+    const click = (event: MouseEvent) => {
+      if (event.button !== 0 || event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        !target ||
+        target.closest("a, button, input, select, textarea, label")
+      )
+        return;
+      const link = target
+        .closest("tr")
+        ?.querySelector<HTMLAnchorElement>("a[data-call-link]");
+      if (!link || window.getSelection()?.toString()) return;
+      if (event.metaKey || event.ctrlKey)
+        window.open(link.href, "_blank", "noopener");
+      else link.click();
+    };
     document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
+    document.addEventListener("click", click);
+    return () => {
+      document.removeEventListener("keydown", key);
+      document.removeEventListener("click", click);
+    };
   }, []);
   return null;
 }

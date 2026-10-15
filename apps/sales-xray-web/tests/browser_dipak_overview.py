@@ -171,7 +171,7 @@ def main() -> None:
             fixture["report"]["overview"]["conversation_change"]["possible_effect"],
         ]:
             expect(overview.get_by_text(value, exact=False)).to_be_visible()
-        expect(overview.get_by_text("Possible concern · inference", exact=True)).to_be_visible()
+        expect(overview.get_by_text("Possible concern · a guess", exact=True)).to_be_visible()
         expect(overview.locator('[data-review-point="13"]')).to_have_count(0)
         clips = overview.locator('[data-review-point="08"] button')
         expect(clips).to_have_count(2)

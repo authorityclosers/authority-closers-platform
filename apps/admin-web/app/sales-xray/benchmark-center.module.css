@@ -1,172 +1,98 @@
+/* Benchmark tab: only what the kit doesn't draw. Tokens only. */
+
 .page {
   display: grid;
-  gap: 22px;
-  max-width: 1120px;
+  gap: var(--sx-gap);
 }
 
-.hero,
-.panel,
-.notice,
-.endpoint,
-.details {
-  display: grid;
-  gap: 9px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+.actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
 }
 
 .details {
-  padding: 0;
-  border: 0;
-  background: transparent;
+  border-top: 1px solid var(--sx-line);
 }
 
-.details summary {
-  padding: 13px 16px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--signal);
-  cursor: pointer;
-  font-size: 0.84rem;
-  font-weight: 700;
-}
-
-.details[open] summary {
-  border-bottom-color: transparent;
-}
-
-.details > .panel {
+.details:first-of-type {
   border-top: 0;
 }
 
-.hero {
-  border-color: color-mix(in srgb, var(--amber) 42%, var(--line));
-  background: color-mix(in srgb, var(--amber) 7%, var(--panel));
+.details > summary {
+  padding: 10px 16px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.notice {
-  border-color: var(--info);
-}
-
-.hero h2,
-.panel h2,
-.notice h2,
-.endpoint h3,
-.hero p,
-.panel p,
-.notice p,
-.endpoint p {
-  margin: 0;
-}
-
-.hero p,
-.panel p,
-.notice p,
-.endpoint p,
-.endpoint dt,
-.endpoint dd,
-.panel li {
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.eyebrow {
-  color: var(--quiet);
-  font-family: var(--font-mono), monospace;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.endpointList {
+.endpoints {
   display: grid;
-  gap: 12px;
-}
-
-.endpoint {
-  grid-template-columns: minmax(140px, 0.7fr) minmax(0, 1.3fr);
-  align-items: start;
-  gap: 14px;
-}
-
-.endpoint h3 {
-  font-size: 0.95rem;
-}
-
-.endpoint p {
-  grid-column: 2;
-  margin-top: -3px;
-}
-
-.method {
-  display: inline-flex;
-  width: fit-content;
-  padding: 5px 7px;
-  border: 1px solid var(--line-strong);
-  color: var(--text);
-  font-family: var(--font-mono), monospace;
-  font-size: 0.68rem;
-  font-weight: 700;
-}
-
-.endpoint code {
-  color: var(--text);
-  font-family: var(--font-mono), monospace;
-  font-size: 0.78rem;
-  overflow-wrap: anywhere;
-}
-
-.panel ul {
-  display: grid;
-  gap: 8px;
+  gap: 4px;
   margin: 0;
-  padding-left: 19px;
+  padding: 0 16px 14px;
+  font-size: var(--sx-text-sm);
 }
 
-.buttonRow {
+.endpoints dt {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.error,
-.forbidden,
-.loading {
-  display: grid;
+  align-items: baseline;
   gap: 8px;
-  padding: 18px;
-  border: 1px solid var(--line-strong);
-  background: var(--panel);
+  margin-top: 8px;
 }
 
-.error,
-.forbidden {
-  border-color: var(--danger);
+.endpoints dt span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
 }
 
-.error h2,
-.forbidden h2,
-.loading h2,
-.error p,
-.forbidden p,
-.loading p {
+.endpoints dd {
   margin: 0;
+  color: var(--sx-muted);
 }
 
-.error p,
-.forbidden p,
-.loading p {
-  color: var(--muted);
+.endpoints code,
+.list code {
+  overflow-wrap: anywhere;
+  font-family: var(--lx-font-mono);
+  font-size: var(--sx-text-xs);
 }
 
-@media (max-width: 680px) {
-  .endpoint {
-    grid-template-columns: 1fr;
-  }
+.list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 16px 14px 34px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.5;
+}
 
-  .endpoint p {
-    grid-column: auto;
-  }
+.state {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.state h2 {
+  margin: 0;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.state p {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
 }

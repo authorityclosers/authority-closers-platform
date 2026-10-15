@@ -1,0 +1,685 @@
+/* One person in the organisation: the page kit's pieces, --sx-* tokens only
+   (call status dots use the app's semantic --lx-* colours, as Organisation). */
+
+.page {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-family: var(--lx-font-ui);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+/* ---------- Header ---------- */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
+  min-width: 0;
+}
+
+.who {
+  display: grid;
+  flex: 1 1 260px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 0;
+  font: var(--sx-text-title);
+  letter-spacing: -0.01em;
+}
+
+.name > span:first-child {
+  overflow-wrap: anywhere;
+}
+
+/* Each fact carries a 14 px separator and the line is clipped by that much
+   on the left, so a fact that starts a wrapped line shows none. */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 0 0 -14px;
+  clip-path: inset(0 0 0 14px);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.facts > span::before {
+  display: inline-block;
+  width: 14px;
+  content: "·";
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.select,
+.quiet,
+.primary {
+  height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.select {
+  padding-right: 8px;
+}
+
+.primary {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.primary[data-tone="bad"] {
+  border-color: var(--sx-bad);
+  background: var(--sx-bad);
+}
+
+.select:disabled,
+.quiet:disabled,
+.primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.confirm > span {
+  color: var(--sx-ink-2);
+}
+
+/* ---------- Layout ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* Panels share a row's height; their own rows stay at the top. */
+.grid > * {
+  align-content: start;
+}
+
+@media (max-width: 899.98px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.quietLine {
+  margin: 0;
+  padding: 14px;
+  color: var(--sx-muted);
+}
+
+/* ---------- Weekly chart ---------- */
+
+.chart {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 14px 14px 10px 36px;
+}
+
+.plot {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: end;
+  gap: 4px;
+  height: 120px;
+  border-bottom: 1px solid var(--sx-line-strong);
+  background: linear-gradient(var(--sx-line), var(--sx-line)) top / 100% 1px
+    no-repeat;
+}
+
+.axisTop,
+.axisZero {
+  position: absolute;
+  left: -28px;
+  width: 22px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
+}
+
+.axisTop {
+  top: -6px;
+}
+
+.axisZero {
+  bottom: -6px;
+}
+
+.bar {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+}
+
+.bar i {
+  display: block;
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: color-mix(in oklab, var(--sx-accent) 55%, transparent);
+}
+
+.bar[data-now] i {
+  background: var(--sx-accent);
+}
+
+.ticks {
+  display: flex;
+  justify-content: space-between;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* ---------- Outcomes ---------- */
+
+.bars {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  list-style: none;
+}
+
+.bars li {
+  display: grid;
+  grid-template-columns: minmax(96px, 150px) minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 10px;
+}
+
+.bars b {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--sx-sunken);
+}
+
+.track i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--sx-accent);
+}
+
+/* ---------- Skills ---------- */
+
+.skills {
+  display: grid;
+  gap: 10px;
+  padding: 4px 14px 14px;
+}
+
+.matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sx-text-xs);
+}
+
+@media (max-width: 759.98px) {
+  .matrix {
+    table-layout: fixed;
+  }
+
+  .matrix tbody th,
+  .matrix thead th:first-child {
+    width: 40%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.matrix th,
+.matrix td {
+  height: 36px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--sx-line);
+  text-align: center;
+}
+
+.matrix thead th {
+  color: var(--sx-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.matrix thead a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.matrix thead a:hover {
+  color: var(--sx-accent);
+}
+
+.matrix tbody th,
+.matrix thead th:first-child {
+  min-width: 140px;
+  padding-left: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  text-align: left;
+}
+
+.matrix thead th:first-child {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+/* Phones keep the four newest calls. */
+@media (max-width: 759.98px) {
+  .matrix th:nth-child(n + 2):nth-last-child(n + 5),
+  .matrix td:nth-last-child(n + 5) {
+    display: none;
+  }
+}
+
+.mark {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--sx-accent);
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.mark[data-mark="full"] {
+  background: var(--sx-accent);
+}
+
+.mark[data-mark="half"] {
+  background: linear-gradient(90deg, var(--sx-accent) 50%, transparent 50%);
+}
+
+.mark[data-mark="mixed"] {
+  border-style: dashed;
+}
+
+.mark[data-mark="none"] {
+  width: 8px;
+  height: 2px;
+  border: 0;
+  border-radius: 1px;
+  background: var(--sx-line-strong);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Calls ---------- */
+
+.callSearch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.callSearchField {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.callSearchField input {
+  width: 100%;
+  min-width: 0;
+  height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.callSearchField input::placeholder {
+  color: var(--sx-muted);
+}
+
+.callSearchField input:focus-visible,
+.callSearch .quiet:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.callCount {
+  grid-column: 1 / -1;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.calls {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calls li + li {
+  border-top: 1px solid var(--sx-line);
+}
+
+.callRow {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 96px 56px 150px;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.callRow:hover {
+  background: var(--sx-sunken);
+}
+
+.callRow:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: inset var(--sx-focus-ring);
+}
+
+.callRow > svg {
+  color: var(--sx-muted);
+}
+
+.callName {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.callDate,
+.callLength {
+  color: var(--sx-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.callLength {
+  text-align: right;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--sx-ink-2);
+}
+
+.status i {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--lx-muted-2);
+}
+
+.status[data-tone="ready"] i {
+  background: var(--lx-teal);
+}
+
+/* One teal accent: a call still running is a teal ring (ready is filled). */
+.status[data-tone="active"] i {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--lx-teal);
+}
+
+.status[data-tone="attention"] i {
+  background: var(--lx-warning);
+}
+
+@media (max-width: 759.98px) {
+  .callRow {
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon name status"
+      "icon date status";
+    row-gap: 0;
+    min-height: 56px;
+    padding: 8px 14px;
+  }
+
+  .callRow > svg {
+    grid-area: icon;
+  }
+
+  .callName {
+    grid-area: name;
+    white-space: normal;
+  }
+
+  .callDate {
+    grid-area: date;
+    font-size: var(--sx-text-xs);
+  }
+
+  .callLength {
+    display: none;
+  }
+
+  .status {
+    grid-area: status;
+  }
+}
+
+.more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  border-top: 1px solid var(--sx-line);
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---------- Coaching ---------- */
+
+.coaching {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.coaching dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.coaching dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.focusContent,
+.focusLoading,
+.focusUnavailable,
+.latestCall {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 136px;
+  padding: 14px;
+  overflow-wrap: anywhere;
+}
+
+.focusContent > span {
+  justify-self: start;
+}
+
+.focusName,
+.latestName {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.focusReason,
+.focusUnavailable p,
+.previousReport {
+  margin: 0;
+  color: var(--sx-ink-2);
+}
+
+.focusUnavailable button {
+  justify-self: start;
+}
+
+.latestMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.actionLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--sx-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.actionLink:hover {
+  background: var(--sx-accent-soft);
+}
+
+.actionLink:focus-visible,
+.previousReport a:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.previousReport a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sx-control-h);
+  color: var(--sx-accent);
+}
+
+/* Phone actions keep their floor with either touch or mouse input. */
+@media (max-width: 759.98px) {
+  .select,
+  .quiet,
+  .primary,
+  .callSearchField input,
+  .actionLink,
+  .previousReport a {
+    min-height: 44px;
+  }
+}
+
+/* ---------- Loading ---------- */
+
+.skeleton {
+  display: grid;
+  gap: 16px;
+}
+
+.skeletonTiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+}
+
+.skeletonBlock {
+  display: block;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.skeletonBlock[data-h="tile"] {
+  height: var(--sx-tile-min-h);
+}
+
+.skeletonBlock[data-h="chart"] {
+  height: 214px;
+}
+
+@media (max-width: 759.98px) {
+  .skeletonTiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

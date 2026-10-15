@@ -12,6 +12,14 @@ import {
 } from "./call-metrics";
 import { formatClock } from "./lightbox/time";
 import type { Transcript } from "./report-contract";
+import {
+  MEASURE,
+  playAt,
+  playLabel,
+  speakerN,
+  talkShareChart,
+  wentQuiet,
+} from "./report-copy";
 import styles from "./overview-call-visuals.module.css";
 
 function smooth(points: Array<[number, number]>): string {
@@ -56,10 +64,12 @@ function PlayControl({
   startMs,
   onSeek,
   label,
+  ariaLabel,
 }: {
   startMs: number | null;
   onSeek: (ms: number) => void;
   label?: string;
+  ariaLabel?: string;
 }) {
   if (startMs === null) return null;
   return (
@@ -68,9 +78,10 @@ function PlayControl({
       className={styles.playButton}
       onClick={() => onSeek(startMs)}
       aria-label={
-        label
+        ariaLabel ??
+        (label
           ? `Play ${label} at ${formatClock(startMs)}`
-          : `Play from ${formatClock(startMs)}`
+          : `Play from ${formatClock(startMs)}`)
       }
     >
       <Play size={11} aria-hidden="true" />
@@ -83,10 +94,13 @@ export function OverviewCallVisuals({
   transcript,
   callMap = null,
   onSeek,
+  nameOf,
 }: {
   transcript: Transcript;
   callMap?: CallMap | null;
   onSeek: (ms: number) => void;
+  /** The call's own name for a voice; unnamed voices read "Speaker n". */
+  nameOf?: (speakerId: string) => string | null | undefined;
 }) {
   const metrics = useMemo(
     () => computeCallMetrics(transcript.segments, transcript.duration_ms),
@@ -105,16 +119,17 @@ export function OverviewCallVisuals({
 
   const chartGradientId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const speakerEntries = Object.entries(metrics.speakers);
+  const speakerIds = speakerEntries.map(([id]) => id);
+  const name = (id: string) =>
+    nameOf?.(id) || speakerN(Math.max(0, speakerIds.indexOf(id)));
 
   return (
     <div className={styles.visualsRoot} data-overview-call-visuals>
       {/* System cards: always visible with transcript data */}
-      <section className={styles.section} aria-label="System call measurements">
+      <section className={styles.section} aria-label={MEASURE.title}>
         <header className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>Call measurements</h3>
-          <span className={styles.sectionSubtitle}>
-            Measured from transcript timing
-          </span>
+          <h3 className={styles.sectionTitle}>{MEASURE.title}</h3>
+          <span className={styles.sectionSubtitle}>{MEASURE.subtitle}</span>
         </header>
 
         {/* Time used */}
@@ -122,21 +137,17 @@ export function OverviewCallVisuals({
           <div className={styles.summaryPill}>
             <span>
               {transcript.duration_ms && transcript.duration_ms > 0
-                ? "Call length"
-                : "Timed transcript span"}
+                ? MEASURE.callLength
+                : MEASURE.transcriptLength}
             </span>
             <b>
               {metrics.time_used_ms > 0
                 ? formatClock(metrics.time_used_ms)
-                : "Unavailable"}
+                : MEASURE.notMeasured}
             </b>
           </div>
         </div>
-        <p className={styles.measurementMeaning}>
-          Talk share compares each speaker’s timed transcript segments. Gaps
-          between segments are excluded; overlapping speakers count separately.
-          Questions count question marks in the transcript. Listen to confirm.
-        </p>
+        <p className={styles.measurementMeaning}>{MEASURE.meaning}</p>
 
         {/* Talk time, talk share, 60s engagement curve, and questions for every speaker */}
         <div className={styles.speakerCardsGrid}>
@@ -157,24 +168,26 @@ export function OverviewCallVisuals({
             return (
               <div key={speakerId} className={styles.speakerCard}>
                 <div className={styles.speakerHeader}>
-                  <h4 className={styles.speakerLabel}>{speakerId}</h4>
+                  <h4 className={styles.speakerLabel}>{name(speakerId)}</h4>
                   <div className={styles.speakerMetricsGroup}>
                     <span className={styles.metricBadge}>
-                      <strong>
-                        {sMetrics.talk_share !== null &&
-                        sMetrics.talk_share !== undefined
-                          ? `${Math.round(sMetrics.talk_share * 100)}%`
-                          : "unavailable"}
-                      </strong>{" "}
-                      talk share
+                      {sMetrics.talk_share !== null &&
+                      sMetrics.talk_share !== undefined ? (
+                        <>
+                          <strong>{`${Math.round(sMetrics.talk_share * 100)}%`}</strong>{" "}
+                          {MEASURE.talkShare}
+                        </>
+                      ) : (
+                        MEASURE.talkShareNotMeasured
+                      )}
                     </span>
                     <span className={styles.metricBadge}>
-                      Questions:{" "}
+                      {MEASURE.questions}{" "}
                       <strong>
                         {sMetrics.questions !== null &&
                         sMetrics.questions !== undefined
                           ? sMetrics.questions
-                          : "unavailable"}
+                          : MEASURE.notCounted}
                       </strong>
                     </span>
                   </div>
@@ -184,15 +197,14 @@ export function OverviewCallVisuals({
                 <div className={styles.chartContainer}>
                   <div className={styles.chartMeta}>
                     <span className={styles.chartMetaTitle}>
-                      Talk share by minute
+                      {MEASURE.byMinute}
                     </span>
                     {quiet !== null && quietMinute !== null ? (
                       <span
                         className={styles.quietTag}
                         data-recovered={quiet.recovered ? "true" : undefined}
                       >
-                        Quiet start: min {quietMinute} ·{" "}
-                        {quiet.recovered ? "recovered" : "unrecovered"}
+                        {wentQuiet(quietMinute, quiet.recovered)}
                       </span>
                     ) : null}
                   </div>
@@ -275,15 +287,13 @@ export function OverviewCallVisuals({
                     </svg>
 
                     <div className={styles.srOnly}>
-                      Talk-share curve for speaker {speakerId} across{" "}
-                      {series.length} minutes.
-                      {quiet !== null && quietMinute !== null
-                        ? ` Quiet run starts at minute ${quietMinute}, ${
-                            quiet.recovered
-                              ? "labeled recovered."
-                              : "not recovered."
-                          }`
-                        : " No quiet run detected."}
+                      {talkShareChart(
+                        name(speakerId),
+                        series.length,
+                        quiet !== null && quietMinute !== null
+                          ? { minute: quietMinute, cameBack: quiet.recovered }
+                          : null,
+                      )}
                     </div>
                   </div>
                 </div>
@@ -293,22 +303,20 @@ export function OverviewCallVisuals({
         </div>
 
         <details className={styles.timingDetails}>
-          <summary>Talk time and longest monologues</summary>
+          <summary>{MEASURE.timesTitle}</summary>
           <div className={styles.timingBody}>
             <dl className={styles.talkTimes}>
               {speakerEntries.map(([speakerId, speaker]) => (
                 <div key={speakerId}>
-                  <dt>{speakerId}</dt>
-                  <dd>Talk time: {formatClock(speaker.talk_ms)}</dd>
+                  <dt>{name(speakerId)}</dt>
+                  <dd>
+                    {MEASURE.talkTime} {formatClock(speaker.talk_ms)}
+                  </dd>
                 </div>
               ))}
             </dl>
             <p className={styles.measurementMeaning}>
-              Times come from transcript segments, which can include pauses.
-              Longest monologues join the same speaker’s turns across gaps of up
-              to 2 seconds when no other speaker starts between them. Quiet
-              markers mean under 10% talk share for 3 minutes; recovered means a
-              later minute reaches 25%.
+              {MEASURE.timesMeaning.join(" ")}
             </p>
             {metrics.monologues.length > 0 ? (
               <div>
@@ -316,7 +324,7 @@ export function OverviewCallVisuals({
                   className={styles.sectionHeader}
                   style={{ marginBottom: 8 }}
                 >
-                  <h4 className={styles.detailTitle}>Longest monologues</h4>
+                  <h4 className={styles.detailTitle}>{MEASURE.longest}</h4>
                 </header>
                 <div className={styles.monologuesGrid}>
                   {metrics.monologues.map((m: Monologue, idx: number) => {
@@ -328,7 +336,7 @@ export function OverviewCallVisuals({
                       >
                         <div className={styles.monologueInfo}>
                           <span className={styles.monologueSpeaker}>
-                            {m.speaker_id}
+                            {name(m.speaker_id)}
                           </span>
                           <span className={styles.monologueTimes}>
                             {formatClock(m.start_ms)} – {formatClock(m.end_ms)}{" "}
@@ -338,7 +346,12 @@ export function OverviewCallVisuals({
                         <PlayControl
                           startMs={m.start_ms}
                           onSeek={onSeek}
-                          label={`Play ${formatClock(m.start_ms)}`}
+                          label={playAt(formatClock(m.start_ms))}
+                          ariaLabel={playLabel(
+                            false,
+                            formatClock(m.start_ms),
+                            `${name(m.speaker_id)}, ${MEASURE.longestTurn}`,
+                          )}
                         />
                       </div>
                     );

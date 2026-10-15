@@ -2,14 +2,24 @@
 
 import { Lock, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Badge, kitStyles } from "../ui/kit";
 import {
   clipSource,
   FULL_COACHING_HREF,
   type CoachingClip,
 } from "./media-contract";
+import { CLIP, MEDIA, THEIR } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
+import { useTheirCoaching } from "./coaching-voice";
 import styles from "./coaching.module.css";
 
 type ClipState =
@@ -22,14 +32,49 @@ type ClipState =
   | "failed";
 
 const PLAY_LABEL: Record<ClipState, string> = {
-  idle: "Play coaching clip",
-  loading: "Loading clip…",
-  playing: "Pause",
-  paused: "Resume clip",
-  done: "Play again",
-  limit: "Preview finished",
-  failed: "Try clip again",
+  idle: CLIP.play,
+  loading: CLIP.loading,
+  playing: CLIP.pause,
+  paused: CLIP.resume,
+  done: CLIP.again,
+  limit: CLIP.limit,
+  failed: CLIP.retry,
 };
+
+/**
+ * Where the learner stopped a reviewed clip, on this device only (spec 3.4,
+ * "resume playback if learner returns"). A position, never progress.
+ */
+/** Stable identity of one reviewed clip (also the "Hear Dipak's take" target). */
+export const clipKey = (clip: CoachingClip) =>
+  `${clip.topic_id}:${clip.revision}:${clip.review_id}`;
+
+/** Asks the page's card for this clip to come into view and play. */
+export function requestClip(clip: CoachingClip) {
+  window.dispatchEvent(
+    new CustomEvent("sx-coaching-clip-request", { detail: clipKey(clip) }),
+  );
+}
+
+const resumeKey = (clip: CoachingClip) =>
+  `sx-coaching-clip:${clip.topic_id}:${clip.revision}:${clip.review_id}`;
+function readResume(key: string): number {
+  try {
+    const saved = Number(window.localStorage.getItem(key));
+    return Number.isFinite(saved) && saved > 0 ? Math.floor(saved) : 0;
+  } catch {
+    return 0;
+  }
+}
+const noSubscription = () => () => {};
+function writeResume(key: string, offset: number | null) {
+  try {
+    if (offset === null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, String(offset));
+  } catch {
+    // Storage may be unavailable (private mode); resuming is optional.
+  }
+}
 
 /** The funnel to Dipak's full coaching: credits and entitlements only. */
 export function ClipOfferCard({
@@ -41,21 +86,14 @@ export function ClipOfferCard({
 }) {
   const offer = clip.offer;
   return (
-    <div className={styles.offer} role="group" aria-label="Full coaching">
+    <div className={styles.offer} role="group" aria-label={CLIP.offer}>
       <div className={styles.offerHead}>
         <span className={styles.offerIcon} aria-hidden="true">
           <Lock size={14} />
         </span>
         <div>
-          <strong>
-            {finished
-              ? "That’s the free preview"
-              : "Part of Dipak’s full coaching"}
-          </strong>
-          <p>
-            Hear the complete lesson and every clip for this skill with full
-            coaching.
-          </p>
+          <strong>{finished ? CLIP.previewDone : CLIP.partOfFull}</strong>
+          <p>{CLIP.offerText}</p>
         </div>
       </div>
       <div className={styles.actions}>
@@ -64,7 +102,7 @@ export function ClipOfferCard({
           className={kitStyles.button}
           data-variant="primary"
         >
-          Get the full coaching
+          {CLIP.getFull}
         </Link>
         {offer?.academy ? (
           <a
@@ -72,9 +110,8 @@ export function ClipOfferCard({
             className={kitStyles.button}
             target="_blank"
             rel="noopener noreferrer"
-            title={offer.academy.label}
           >
-            Open the course on the Learner’s Academy
+            {offer.academy.label}
           </a>
         ) : null}
       </div>
@@ -85,17 +122,31 @@ export function ClipOfferCard({
 function ClipCard({
   clip,
   recommended,
+  forCall = false,
+  headingLevel = 3,
+  foldId,
 }: {
   clip: CoachingClip;
   recommended: boolean;
+  forCall?: boolean;
+  headingLevel?: 3 | 4;
+  /** Only secondary lessons pause when their own disclosure closes. */
+  foldId?: string;
 }) {
+  const Title = headingLevel === 4 ? "h4" : "h3";
+  const they = useTheirCoaching();
   const identity = useId();
+  const card = useRef<HTMLElement>(null);
+  const playButton = useRef<HTMLButtonElement>(null);
   const player = useRef<HTMLAudioElement>(null);
   const active = useRef(false);
-  const [state, setState] = useState<ClipState>("idle");
+  const playRequest = useRef(0);
+  const [playState, setState] = useState<ClipState>("idle");
   const [attempt, setAttempt] = useState(0);
   const [slide, setSlide] = useState(0);
-  const [position, setPosition] = useState(0);
+  const [playPosition, setPosition] = useState(0);
+  const resumeFrom = useRef(0);
+  const saved = useRef(0);
   const locked = clip.access === "locked";
   const length = clip.end_ms - clip.start_ms;
   // The server decides the window; the player only stops where it was told.
@@ -103,33 +154,117 @@ function ClipCard({
     clip.access === "preview" && clip.preview_end_ms
       ? clip.preview_end_ms
       : clip.end_ms;
+  const key = resumeKey(clip);
+  const checkpoint = useCallback(
+    (audio: HTMLAudioElement | null) => {
+      if (!audio) return null;
+      audio.pause();
+      const at = Math.round(audio.currentTime * 1000);
+      const offset = Math.max(0, at - clip.start_ms);
+      if (offset <= 0 || at >= stopAt) return null;
+      saved.current = offset;
+      writeResume(key, offset);
+      return offset;
+    },
+    [key, clip.start_ms, stopAt],
+  );
+  // Audio mounts only on demand, so cleanup needs the latest player rather
+  // than the empty ref from the card's first render.
+  const checkpointCurrent = useCallback(
+    () => checkpoint(player.current),
+    [checkpoint],
+  );
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
       if (!active.current) return;
       active.current = false;
-      player.current?.pause();
+      // A switch or fold can fall between timeupdate events. Keep the actual
+      // paused position, including before the two-second device checkpoint.
+      const offset = checkpointCurrent();
+      if (offset !== null) setPosition(offset);
       setState("paused");
     };
+    const stopHidden = (event: Event) => {
+      if (foldId && (event as CustomEvent<string>).detail === foldId)
+        stopOther(event);
+    };
     window.addEventListener("sx-coaching-play", stopOther);
-    return () => window.removeEventListener("sx-coaching-play", stopOther);
-  }, [identity]);
+    window.addEventListener("sx-coaching-fold", stopHidden);
+    return () => {
+      window.removeEventListener("sx-coaching-play", stopOther);
+      window.removeEventListener("sx-coaching-fold", stopHidden);
+    };
+  }, [identity, foldId, checkpointCurrent]);
+  useEffect(() => {
+    if (playState !== "loading") return;
+    // Bound both a missing metadata response and an unresolved play().
+    const deadline = window.setTimeout(() => {
+      active.current = false;
+      player.current?.pause();
+      setState("failed");
+    }, 15_000);
+    return () => window.clearTimeout(deadline);
+  }, [playState, attempt]);
+  useLayoutEffect(() => {
+    return () => {
+      if (!active.current) return;
+      active.current = false;
+      // Layout cleanup runs before React detaches the audio ref. Ref rechecks
+      // in Strict Mode must not interrupt a newly mounted player's startup.
+      checkpointCurrent();
+    };
+  }, [checkpointCurrent]);
+  // A stored position shows after hydration (the server renders 0), and only
+  // inside the window the server allows; before the first play it reads as
+  // a paused clip.
+  const stored = useSyncExternalStore(
+    noSubscription,
+    () => (locked ? 0 : readResume(key)),
+    () => 0,
+  );
+  const fresh =
+    attempt === 0 &&
+    playState === "idle" &&
+    stored > 0 &&
+    clip.start_ms + stored < stopAt - 1000;
+  const state: ClipState = fresh ? "paused" : playState;
+  const position = fresh ? stored : playPosition;
+  const remember = (offset: number | null, force = false) => {
+    if (force || offset === null || Math.abs(offset - saved.current) >= 2000) {
+      saved.current = offset ?? 0;
+      writeResume(key, offset);
+    }
+  };
   const begin = (audio: HTMLAudioElement, from: number) => {
+    const request = ++playRequest.current;
+    const current = () =>
+      active.current &&
+      player.current === audio &&
+      playRequest.current === request;
     audio.currentTime = from / 1000;
     void audio
       .play()
       .then(() => {
-        if (active.current) setState("playing");
+        if (current()) setState("playing");
+        // A delayed start must stay stopped after switching or leaving.
+        // A newer resume may still be using this same audio element.
+        else if (!active.current || player.current !== audio) audio.pause();
       })
       .catch(() => {
-        if (active.current) setState("failed");
+        if (current()) {
+          active.current = false;
+          audio.pause();
+          setState("failed");
+        }
       });
   };
   const toggle = () => {
-    if (locked || state === "limit") return;
+    if (locked || state === "limit" || state === "loading") return;
     if (state === "playing") {
       active.current = false;
-      player.current?.pause();
+      const offset = checkpointCurrent();
+      if (offset !== null) setPosition(offset);
       setState("paused");
       return;
     }
@@ -137,20 +272,43 @@ function ClipCard({
       new CustomEvent("sx-coaching-play", { detail: identity }),
     );
     active.current = true;
+    const resume =
+      state === "paused" && position > 0 && clip.start_ms + position < stopAt;
     if (attempt === 0 || state === "failed") {
+      resumeFrom.current = resume ? position : 0;
       setState("loading");
-      setPosition(0);
+      setPosition(resume ? position : 0);
       setAttempt((value) => value + 1);
       return;
     }
     const audio = player.current;
     if (!audio) return;
-    const resume =
-      state === "paused" && position > 0 && clip.start_ms + position < stopAt;
     setState("loading");
     if (!resume) setPosition(0);
     begin(audio, resume ? clip.start_ms + position : clip.start_ms);
   };
+  // "Hear Dipak's take" in pillar 1: bring this card into view and play it.
+  const latestToggle = useRef(toggle);
+  useEffect(() => {
+    latestToggle.current = toggle;
+  });
+  const playing = state === "playing";
+  useEffect(() => {
+    const onRequest = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== clipKey(clip)) return;
+      const disclosure = card.current?.closest<HTMLDetailsElement>(
+        "details[data-other-lessons]",
+      );
+      if (disclosure) disclosure.open = true;
+      // The shortcut moves the learner here; pause/retry must be next at hand.
+      playButton.current?.focus({ preventScroll: true });
+      card.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (!playing) latestToggle.current();
+    };
+    window.addEventListener("sx-coaching-clip-request", onRequest);
+    return () =>
+      window.removeEventListener("sx-coaching-clip-request", onRequest);
+  }, [clip, playing]);
   const currentSlide = clip.slides[slide];
   const preview =
     clip.access === "preview" && clip.preview_end_ms
@@ -166,19 +324,21 @@ function ClipCard({
           : Play;
   return (
     <article
+      ref={card}
       className={styles.clip}
       data-recommended={recommended ? "" : undefined}
       data-access={clip.access}
     >
       <div className={styles.clipHead}>
         <button
+          ref={playButton}
           type="button"
           className={styles.clipPlay}
           onClick={toggle}
-          disabled={state === "loading" || state === "limit"}
+          disabled={state === "limit"}
           data-locked={locked ? "" : undefined}
-          aria-disabled={locked || undefined}
-          title={locked ? "Part of the full coaching" : PLAY_LABEL[state]}
+          aria-disabled={locked || state === "loading" || undefined}
+          title={locked ? CLIP.lockedTitle : PLAY_LABEL[state]}
         >
           {locked ? (
             <Lock size={16} aria-hidden="true" />
@@ -186,23 +346,31 @@ function ClipCard({
             <Icon size={16} aria-hidden="true" />
           )}
           <span className={styles.srOnly}>
-            {locked ? "Locked coaching clip" : PLAY_LABEL[state]}
+            {locked ? CLIP.locked : PLAY_LABEL[state]}
           </span>
         </button>
         <div className={styles.clipTitle}>
           <span className={styles.eyebrow}>
-            {recommended ? "Recommended for your focus" : "Also relevant"}
+            {recommended
+              ? forCall
+                ? MEDIA.recommendedCall
+                : they
+                  ? THEIR.recommended
+                  : MEDIA.recommended
+              : MEDIA.other}
           </span>
-          <h3>{clip.title}</h3>
+          <Title>{clip.title}</Title>
           <span className={styles.note}>
-            Dipak’s script · {clip.kind === "video" ? "video" : "audio"} lesson
-            · placeholder voice · {timeLabel(length)}
+            {MEDIA.byline} · {MEDIA.kind(clip.kind === "video")} · {MEDIA.voice}{" "}
+            · {timeLabel(length)}
           </span>
         </div>
         {clip.access === "preview" && preview ? (
-          <Badge tone="accent">Free preview · {timeLabel(preview)}</Badge>
+          <Badge tone="accent">
+            {MEDIA.freePreview} · {timeLabel(preview)}
+          </Badge>
         ) : locked ? (
-          <Badge>Full coaching</Badge>
+          <Badge>{MEDIA.locked}</Badge>
         ) : null}
       </div>
       {locked ? null : (
@@ -210,7 +378,7 @@ function ClipCard({
           <div
             className={styles.bar}
             role="progressbar"
-            aria-label="Clip progress"
+            aria-label={CLIP.progress}
             aria-valuemin={0}
             aria-valuemax={Math.round(length / 1000)}
             aria-valuenow={Math.round(position / 1000)}
@@ -221,7 +389,7 @@ function ClipCard({
             {preview ? (
               <b
                 style={{ left: `${(preview / length) * 100}%` }}
-                title="End of the free preview"
+                title={CLIP.previewEnd}
               />
             ) : null}
           </div>
@@ -229,34 +397,40 @@ function ClipCard({
             <span>{timeLabel(position)}</span>
             <span>
               {state === "loading"
-                ? "Loading…"
+                ? CLIP.loadingShort
                 : state === "playing"
-                  ? "Playing"
+                  ? CLIP.playing
                   : timeLabel(length)}
             </span>
           </div>
         </div>
       )}
-      <p>
-        <span className={styles.label}>Why this fits your focus</span>
-        {clip.reason}
-      </p>
-      <ul className={styles.takeaways}>
-        {clip.takeaways.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
+      {locked ? (
+        <p className={styles.note}>{clip.reason}</p>
+      ) : (
+        <>
+          <p>
+            <span className={styles.label}>{MEDIA.why}</span>
+            {clip.reason}
+          </p>
+          <ul className={styles.takeaways}>
+            {clip.takeaways.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </>
+      )}
       {locked || state === "limit" ? (
         <ClipOfferCard clip={clip} finished={state === "limit"} />
       ) : null}
       {state === "failed" ? (
         <p role="status" className={styles.status}>
-          Narration is unavailable. Try again, or read the clip below.
+          {CLIP.failed}
         </p>
       ) : null}
       {locked ? null : (
         <details className={styles.more}>
-          <summary>Read this clip</summary>
+          <summary>{MEDIA.takeaways}</summary>
           <div className={styles.moreBody}>
             {currentSlide ? (
               <div className={styles.slide} aria-live="polite">
@@ -273,7 +447,7 @@ function ClipCard({
                     disabled={slide === 0}
                     onClick={() => setSlide((value) => value - 1)}
                   >
-                    Previous slide
+                    {CLIP.previousSlide}
                   </button>
                   <span>
                     {slide + 1} / {clip.slides.length}
@@ -284,43 +458,45 @@ function ClipCard({
                     disabled={slide === clip.slides.length - 1}
                     onClick={() => setSlide((value) => value + 1)}
                   >
-                    Next slide
+                    {CLIP.nextSlide}
                   </button>
                 </div>
               </div>
             ) : null}
             <p>{clip.transcript_excerpt}</p>
             <p className={styles.note}>
-              Placeholder · neutral narration of Dipak’s script. Listening does
-              not complete your mission.
+              {they ? THEIR.narrationNote : MEDIA.narrationNote}
             </p>
           </div>
         </details>
       )}
-      {attempt > 0 && !locked ? (
+      {attempt > 0 && !locked && state !== "failed" ? (
         <audio
           key={attempt}
           ref={player}
           src={clipSource(clip)}
           preload="metadata"
-          aria-label="Placeholder coaching narration"
+          aria-label={CLIP.audio}
           onLoadedMetadata={() => {
             if (!player.current || !active.current) return;
-            begin(player.current, clip.start_ms);
+            begin(player.current, clip.start_ms + resumeFrom.current);
           }}
           onTimeUpdate={() => {
             const audio = player.current;
             if (!audio || !active.current) return;
             const at = Math.round(audio.currentTime * 1000);
-            setPosition(Math.max(0, Math.min(length, at - clip.start_ms)));
+            const offset = Math.max(0, Math.min(length, at - clip.start_ms));
+            setPosition(offset);
             if (at >= stopAt) {
               audio.pause();
               active.current = false;
+              remember(null);
               setState(stopAt < clip.end_ms ? "limit" : "done");
-            }
+            } else remember(offset);
           }}
           onEnded={() => {
             active.current = false;
+            remember(null);
             setState(stopAt < clip.end_ms ? "limit" : "done");
           }}
           onError={() => {
@@ -334,17 +510,58 @@ function ClipCard({
 }
 
 /** One recommended clip first; any others stay secondary (spec 6.2, 6.3). */
-export function CoachingMedia({ clips }: { clips?: CoachingClip[] }) {
+export function CoachingMedia({
+  clips,
+  forCall = false,
+  headingLevel = 3,
+}: {
+  clips?: CoachingClip[];
+  /** One call's coaching (and the Report): its focus is the call's own. */
+  forCall?: boolean;
+  /** 4 inside the Report, where the pillars are h3. */
+  headingLevel?: 3 | 4;
+}) {
+  const otherId = useId();
   if (!clips?.length) return null;
+  const [recommended, ...others] = clips;
   return (
     <div className={styles.clips}>
-      {clips.map((clip, index) => (
-        <ClipCard
-          key={`${clip.topic_id}:${clip.revision}:${clip.review_id}`}
-          clip={clip}
-          recommended={index === 0}
-        />
-      ))}
+      <ClipCard
+        key={clipKey(recommended)}
+        clip={recommended}
+        recommended
+        forCall={forCall}
+        headingLevel={headingLevel}
+      />
+      {others.length ? (
+        <details
+          className={styles.more}
+          data-other-lessons=""
+          onToggle={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !event.currentTarget.open
+            )
+              window.dispatchEvent(
+                new CustomEvent("sx-coaching-fold", { detail: otherId }),
+              );
+          }}
+        >
+          <summary aria-controls={otherId}>{MEDIA.more(others.length)}</summary>
+          <div id={otherId} className={styles.clips}>
+            {others.map((clip) => (
+              <ClipCard
+                key={clipKey(clip)}
+                clip={clip}
+                recommended={false}
+                forCall={forCall}
+                headingLevel={headingLevel}
+                foldId={otherId}
+              />
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,665 @@
+// @vitest-environment happy-dom
+import { act, StrictMode, type ReactNode } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+import { WorkspaceAccessContext } from "../workspace-access";
+import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
+import { DashboardView as DashboardPage } from "./dashboard-view";
+import { InitialSessionProvider } from "../initial-session";
+
+/** The session the server read this document's data for. */
+const SERVED = {
+  identity: { person_id: "person-1", session_id: "session-1" },
+  directory: { selected_tenant_id: "tenant-1" },
+};
+
+// Exercise the real dashboard reads without the shell's separate profile reads.
+vi.mock("../shell/lightbox-shell", () => ({
+  LightboxShell: ({ children }: { children: ReactNode }) => (
+    <main>{children}</main>
+  ),
+}));
+
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
+let root: Root;
+let host: HTMLDivElement;
+let fetchMock: ReturnType<typeof vi.fn>;
+const signIn = vi.fn();
+const base = "/v1/conversation/acquisition";
+
+async function renderPage(
+  authenticated: boolean,
+  workspaces?: readonly SalesXrayWorkspace[],
+) {
+  await act(async () => {
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: authenticated ? "ready" : "unauthenticated",
+          authenticated,
+          ...(workspaces ? { workspaces } : {}),
+          context: authenticated
+            ? {
+                personId: "person-1",
+                sessionId: "session-1",
+                tenantId: "tenant-1",
+              }
+            : null,
+          retry: () => {},
+          requestAccountSignIn: signIn,
+        }}
+      >
+        <DashboardPage />
+      </WorkspaceAccessContext.Provider>,
+    );
+  });
+}
+
+beforeEach(() => {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  signIn.mockClear();
+  fetchMock = vi
+    .fn()
+    .mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 }),
+    );
+  vi.stubGlobal("fetch", fetchMock);
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  vi.unstubAllGlobals();
+});
+
+it("skips all dashboard reads for guests and uses the existing sign-in action", async () => {
+  await renderPage(false);
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("Sign in to see your dashboard");
+  expect(host.textContent).not.toContain("Couldn't load");
+  // Signed out, this is the public landing ("/" redirects here): the site's
+  // footer stays. Signed-in pages never show it (owner, 10 Oct).
+  const policyLinks = host.querySelectorAll<HTMLAnchorElement>(
+    'nav[aria-label="Sales Xray policy pages"] a',
+  );
+  expect([...policyLinks].map((link) => link.getAttribute("href"))).toEqual([
+    "/pricing",
+    "/terms",
+    "/privacy",
+    "/refunds",
+    "/delivery",
+    "/contact",
+  ]);
+  const link = host.querySelector<HTMLAnchorElement>('a[href="/login"]')!;
+  expect(link.textContent).toBe("Sign in");
+  await act(async () => link.click());
+  expect(signIn).toHaveBeenCalledOnce();
+});
+
+it("starts the four account reads after sign-in and preserves missing-route errors", async () => {
+  await renderPage(false);
+  await renderPage(true);
+  expect(
+    host.querySelector('nav[aria-label="Sales Xray policy pages"]'),
+  ).toBeNull();
+  expect(fetchMock.mock.calls.map(([path]) => path).sort()).toEqual(
+    [
+      "/submissions/summary",
+      "/activity",
+      "/session",
+      // Owners and admins get each call's owner; others' lists are unchanged.
+      "/submissions?include_owners=true",
+    ]
+      .map((path) => base + path)
+      .sort(),
+  );
+  expect(host.textContent).not.toContain("Sign in to see your dashboard");
+  // Summary/activity keep their existing unavailable state; session/recents
+  // keep their errors. A missing API must not become invented empty data.
+  expect(host.textContent).toContain("Not available yet");
+  // Failed reads keep their skeletons and raise one corner card that retries.
+  expect(host.textContent).not.toContain("Couldn't load");
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "Some dashboard numbers could not load",
+  );
+});
+
+it("aborts pending reads and removes the cards when the session signs out", async () => {
+  fetchMock.mockImplementation(() => new Promise(() => {}));
+  await renderPage(true);
+  const signals = fetchMock.mock.calls.map(
+    ([, init]) => init.signal as AbortSignal,
+  );
+  expect(signals).toHaveLength(4);
+  expect(signals.every((signal) => !signal.aborted)).toBe(true);
+  await renderPage(false);
+  expect(signals.every((signal) => signal.aborted)).toBe(true);
+  expect(host.textContent).toContain("Sign in to see your dashboard");
+  expect(host.textContent).not.toContain("Calls analysed");
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+});
+
+it("explains a workspace without Sales Xray access instead of failing each card", async () => {
+  fetchMock.mockImplementation(
+    async () =>
+      new Response(JSON.stringify({ detail: "Forbidden" }), { status: 403 }),
+  );
+  await renderPage(true);
+  expect(host.textContent).toContain(
+    "Sales Xray isn't on for this workspace yet",
+  );
+  expect(host.textContent).not.toContain("Couldn't load");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(
+    [...host.querySelectorAll("button")].some(
+      (button) => button.textContent === "Switch account",
+    ),
+  ).toBe(true);
+});
+
+it("renders both the ring and used-minutes text for finite allowances", async () => {
+  fetchMock.mockImplementation(async (url: string) => {
+    if (url.endsWith("/session")) {
+      return new Response(
+        JSON.stringify({
+          allowance: {
+            allowance_seconds: 6000,
+            committed_seconds: 1800,
+            available_seconds: 4200,
+            unlimited: false,
+          },
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response(JSON.stringify({ detail: "Not Found" }), {
+      status: 404,
+    });
+  });
+
+  await renderPage(true);
+
+  expect(host.textContent).toContain("70 min");
+  expect(host.textContent).toContain("left of 100 min");
+  const usedElement = host.querySelector('[title="30 of 100 min used"]');
+  expect(usedElement).not.toBeNull();
+  expect(usedElement?.textContent).toContain("30");
+  expect(usedElement?.textContent).toContain("min used");
+  const gaugeSvg = host.querySelector("svg");
+  expect(gaugeSvg).not.toBeNull();
+});
+
+it("renders unlimited allowances with clock icon and without used-minutes text", async () => {
+  fetchMock.mockImplementation(async (url: string) => {
+    if (url.endsWith("/session")) {
+      return new Response(
+        JSON.stringify({
+          allowance: {
+            allowance_seconds: 0,
+            committed_seconds: 0,
+            available_seconds: 0,
+            unlimited: true,
+          },
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response(JSON.stringify({ detail: "Not Found" }), {
+      status: 404,
+    });
+  });
+
+  await renderPage(true);
+
+  expect(host.textContent).toContain("Unlimited");
+  expect(host.textContent).toContain("Analysis time");
+  expect(host.querySelector('[title*="min used"]')).toBeNull();
+  expect(host.textContent).not.toContain("min used");
+});
+
+function routeReads(routes: Record<string, () => Response>) {
+  fetchMock.mockImplementation(async (url: string) => {
+    const path = url.replace(base, "");
+    return (
+      routes[path]?.() ??
+      new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 })
+    );
+  });
+}
+
+it("shows one Get started panel for a brand-new account instead of zero figures", async () => {
+  routeReads({
+    "/submissions/summary": () =>
+      Response.json({
+        total: 0,
+        processing: 0,
+        completed: 0,
+        needs_attention: 0,
+      }),
+    "/submissions?include_owners=true": () =>
+      Response.json({ submissions: [], next_cursor: null }),
+    "/session": () =>
+      Response.json({
+        allowance: {
+          allowance_seconds: 1800,
+          committed_seconds: 0,
+          available_seconds: 1800,
+          unlimited: false,
+        },
+      }),
+  });
+  await renderPage(true);
+  expect(host.querySelector("h2#get-started")?.textContent).toBe(
+    "Analyse your first call",
+  );
+  expect(host.querySelector('[aria-label="Dashboard figures"]')).toBeNull();
+  expect(host.querySelectorAll("ol li")).toHaveLength(3);
+  expect(host.querySelector('a[href="/analysis/new"]')?.textContent).toContain(
+    "Analyse a call",
+  );
+});
+
+it("says a failed read did not load instead of keeping a skeleton forever", async () => {
+  routeReads({
+    "/submissions/summary": () =>
+      new Response(JSON.stringify({ detail: "Unavailable" }), { status: 503 }),
+    "/submissions?include_owners=true": () =>
+      Response.json({ submissions: [], next_cursor: null }),
+  });
+  await renderPage(true);
+  const ready = host.querySelector("#metric-reports-ready")!;
+  expect(ready.textContent).toContain("Not loaded");
+  expect(ready.querySelector('[aria-hidden="true"]')).toBeNull();
+  expect(host.textContent).toContain("Not loaded. It retries by itself.");
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "Some dashboard numbers could not load",
+  );
+});
+
+it("never paints Not loaded for reads cancelled by a re-run of the page effect", async () => {
+  // Every read waits: StrictMode's first effect run is cancelled, and only
+  // the second run's reads are answered, with a brand-new account's data.
+  const bodies: Record<string, unknown> = {
+    "/submissions/summary": {
+      total: 0,
+      processing: 0,
+      completed: 0,
+      needs_attention: 0,
+    },
+    "/submissions?include_owners=true": { submissions: [], next_cursor: null },
+    "/session": {
+      allowance: {
+        allowance_seconds: 1800,
+        committed_seconds: 0,
+        available_seconds: 1800,
+        unlimited: false,
+      },
+    },
+  };
+  const pending: Array<() => void> = [];
+  fetchMock.mockImplementation(
+    (url: string, init?: RequestInit) =>
+      new Promise<Response>((resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(new DOMException("Aborted", "AbortError")),
+        );
+        const body = bodies[url.replace(base, "")];
+        pending.push(() =>
+          resolve(
+            body
+              ? Response.json(body)
+              : new Response(JSON.stringify({ detail: "Not Found" }), {
+                  status: 404,
+                }),
+          ),
+        );
+      }),
+  );
+  await act(async () => {
+    root.render(
+      <StrictMode>
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: {
+              personId: "person-1",
+              sessionId: "session-1",
+              tenantId: "tenant-1",
+            },
+            retry: () => {},
+            requestAccountSignIn: signIn,
+          }}
+        >
+          <DashboardPage />
+        </WorkspaceAccessContext.Provider>
+      </StrictMode>,
+    );
+  });
+  expect(host.textContent).not.toContain("Not loaded");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => pending.forEach((answer) => answer()));
+  expect(host.textContent).not.toContain("Not loaded");
+  expect(host.querySelector("h2#get-started")).not.toBeNull();
+});
+
+it("says which figures are the owner's own and which are the team's", async () => {
+  routeReads({
+    "/submissions/summary": () =>
+      Response.json({
+        total: 9,
+        processing: 1,
+        completed: 7,
+        needs_attention: 1,
+      }),
+    "/submissions?include_owners=true": () =>
+      Response.json({ submissions: [], next_cursor: null }),
+  });
+  await act(async () => {
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: {
+            personId: "person-1",
+            sessionId: "session-1",
+            tenantId: "org-1",
+          },
+          workspaces: [
+            {
+              tenant_id: "org-1",
+              kind: "organisation",
+              name: "Fictional Org",
+              role: "owner",
+              sales_xray_enabled: true,
+            },
+          ],
+          retry: () => {},
+          requestAccountSignIn: signIn,
+        }}
+      >
+        <DashboardPage />
+      </WorkspaceAccessContext.Provider>,
+    );
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  // /activity is the viewer's own; /submissions/summary is everyone's.
+  expect(host.querySelector("#metric-analysed dt")?.textContent).toBe(
+    "Your calls analysed",
+  );
+  expect(host.querySelector("#metric-reports-ready")?.textContent).toContain(
+    "of 9 team calls",
+  );
+  expect(host.textContent).toContain("Your calls analysed per day");
+  expect(host.textContent).toContain("Everyone in the organisation");
+});
+
+it("shows a rename made elsewhere in Recent calls at once", async () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  routeReads({
+    "/submissions/summary": () =>
+      Response.json({
+        total: 1,
+        processing: 0,
+        completed: 1,
+        needs_attention: 0,
+      }),
+    "/submissions?include_owners=true": () =>
+      Response.json({
+        submissions: [
+          {
+            submission_id: id,
+            created_at: "2026-10-09T06:30:00Z",
+            duration_seconds: 300,
+            state: "completed",
+            has_report: true,
+            display_name: "Old name",
+            display_name_revision: 1,
+          },
+        ],
+        next_cursor: null,
+      }),
+  });
+  await renderPage(true);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  const list = () => host.querySelector('ul[aria-label="Recent calls"]');
+  expect(list()?.textContent).toContain("Old name");
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent("sales-xray:call-label", {
+        detail: {
+          submissionId: id,
+          label: { displayName: "New name", revision: 2 },
+        },
+      }),
+    );
+  });
+  expect(list()?.textContent).toContain("New name");
+  // An older revision arriving late never undoes it.
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent("sales-xray:call-label", {
+        detail: {
+          submissionId: id,
+          label: { displayName: "Stale name", revision: 1 },
+        },
+      }),
+    );
+  });
+  expect(list()?.textContent).toContain("New name");
+});
+
+it("arrives whole from the server's reads, without reading again", async () => {
+  const summary = { total: 9, processing: 1, completed: 7, needs_attention: 1 };
+  await act(async () => {
+    root.render(
+      <InitialSessionProvider value={SERVED}>
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: {
+              personId: "person-1",
+              sessionId: "session-1",
+              tenantId: "tenant-1",
+            },
+            retry: () => {},
+            requestAccountSignIn: signIn,
+          }}
+        >
+          <DashboardPage
+            initial={{
+              summary: { status: 200, body: summary },
+              activity: { status: 404, body: null },
+              allowance: {
+                status: 200,
+                body: {
+                  allowance: {
+                    allowance_seconds: 6000,
+                    committed_seconds: 1800,
+                    available_seconds: 4200,
+                    unlimited: false,
+                  },
+                },
+              },
+              recent: {
+                status: 200,
+                body: { submissions: [], next_cursor: null },
+              },
+            }}
+          />
+        </WorkspaceAccessContext.Provider>
+      </InitialSessionProvider>,
+    );
+  });
+  // Shown at once (no skeleton) and nothing read again in the browser.
+  expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(host.querySelector("#metric-reports-ready")?.textContent).toContain(
+    "7",
+  );
+  expect(host.textContent).toContain("70 min");
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("reads in the browser only what the server could not", async () => {
+  await act(async () => {
+    root.render(
+      <InitialSessionProvider value={SERVED}>
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: {
+              personId: "person-1",
+              sessionId: "session-1",
+              tenantId: "tenant-1",
+            },
+            retry: () => {},
+            requestAccountSignIn: signIn,
+          }}
+        >
+          <DashboardPage
+            initial={{
+              summary: {
+                status: 200,
+                body: {
+                  total: 0,
+                  processing: 0,
+                  completed: 0,
+                  needs_attention: 0,
+                },
+              },
+              activity: null,
+              allowance: { status: 401, body: null },
+              recent: {
+                status: 200,
+                body: { submissions: [], next_cursor: null },
+              },
+            }}
+          />
+        </WorkspaceAccessContext.Provider>
+      </InitialSessionProvider>,
+    );
+  });
+  expect(fetchMock.mock.calls.map(([path]) => path).sort()).toEqual(
+    [`${base}/activity`, `${base}/session`].sort(),
+  );
+});
+
+it("never seeds another session (signed in again in place) with the server's reads", async () => {
+  await act(async () => {
+    root.render(
+      <InitialSessionProvider
+        value={{
+          ...SERVED,
+          identity: { person_id: "person-1", session_id: "session-0" },
+        }}
+      >
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: {
+              personId: "person-1",
+              sessionId: "session-1",
+              tenantId: "tenant-1",
+            },
+            retry: () => {},
+            requestAccountSignIn: signIn,
+          }}
+        >
+          <DashboardPage
+            initial={{
+              summary: {
+                status: 200,
+                body: {
+                  total: 9,
+                  processing: 1,
+                  completed: 7,
+                  needs_attention: 1,
+                },
+              },
+            }}
+          />
+        </WorkspaceAccessContext.Provider>
+      </InitialSessionProvider>,
+    );
+  });
+  expect(fetchMock.mock.calls.map(([path]) => path)).toContain(
+    `${base}/submissions/summary`,
+  );
+});
+
+it("explains the fictional AC Sandbox to its owner, with links to its views", async () => {
+  fetchMock.mockImplementation(async (path: string) =>
+    path === "/v1/organisation/sandbox"
+      ? new Response(
+          JSON.stringify({
+            sandbox: true,
+            businesses: 10,
+            representatives: 60,
+            calls: 3360,
+            reports: 3360,
+            outcomes: 3360,
+            history_summaries: 177615,
+            approved_at: "2026-10-11T20:48:00+00:00",
+          }),
+          { status: 200 },
+        )
+      : new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 }),
+  );
+  await renderPage(true, [
+    {
+      tenant_id: "tenant-1",
+      kind: "organisation",
+      name: "AC Sandbox",
+      role: "owner",
+      sales_xray_enabled: true,
+    },
+  ]);
+  expect(fetchMock.mock.calls.map(([path]) => path)).toContain(
+    "/v1/organisation/sandbox",
+  );
+  expect(host.textContent).toContain("Nobody here is real");
+  expect(host.textContent).toContain("3,360");
+  expect(host.textContent).toContain("1,77,615");
+  const views = [
+    ...host.querySelectorAll<HTMLAnchorElement>(
+      'nav[aria-label="Sandbox views"] a',
+    ),
+  ].map((link) => link.getAttribute("href"));
+  expect(views).toEqual([
+    "/organisation/insights?range=all",
+    "/coaching?view=team",
+    "/organisation?tab=members",
+    "/analysis/calls",
+  ]);
+});
+
+it("asks nothing about a sandbox for a plain member or a personal workspace", async () => {
+  await renderPage(true, [
+    {
+      tenant_id: "tenant-1",
+      kind: "organisation",
+      name: "A real team",
+      role: "member",
+      sales_xray_enabled: true,
+    },
+  ]);
+  expect(fetchMock.mock.calls.map(([path]) => path)).not.toContain(
+    "/v1/organisation/sandbox",
+  );
+  expect(host.textContent).not.toContain("Nobody here is real");
+});

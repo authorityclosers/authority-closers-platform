@@ -1,16 +1,22 @@
 "use client";
 
-import { ArrowRight, Info, RefreshCw, Search, Users } from "lucide-react";
+import { RefreshCw, Search, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { useWorkspaceAccess } from "../workspace-access";
 import { initials } from "../speaker-profiles";
-import { fetchProspectsList, type ProspectSummary } from "../prospects-client";
+import { prospectRow } from "../prospect-brief-model";
+import {
+  fetchProspectsList,
+  ProspectsContractError,
+  type ProspectSummary,
+} from "../prospects-client";
 import styles from "./prospects.module.css";
 import informationStyles from "../prospect-information.module.css";
 import { PageSkeleton } from "../shell/page-skeleton";
+import { ProspectsAccessState } from "./prospects-access-state";
 
 function formatCreatedDate(createdAt: string | null) {
   if (!createdAt) return "Not available";
@@ -33,15 +39,14 @@ export function ProspectsListView() {
   const [prospects, setProspects] = useState<ProspectSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
+  // No stage is stored yet; stage filters appear once the API offers stages.
+  const [stagesOffered, setStagesOffered] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<string | null>(null);
-  const [hoveredProspectId, setHoveredProspectId] = useState<string | null>(
-    null,
-  );
   const [attempt, setAttempt] = useState(0);
   const contextKey = `${access?.context?.personId}:${access?.context?.tenantId}:${access?.context?.sessionId}:${searchQuery}:${stageFilter}`;
   const [loadedContext, setLoadedContext] = useState<string | null>(null);
@@ -63,6 +68,7 @@ export function ProspectsListView() {
         setProspects(page.prospects);
         setTotal(page.total);
         setNextOffset(page.next_offset);
+        setStagesOffered(page.stage_filters.length > 0);
         setLoadedContext(contextKey);
         setError(null);
         setLoading(false);
@@ -71,9 +77,10 @@ export function ProspectsListView() {
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         const msg =
-          err instanceof Error
+          // A contract mismatch is our fault: never show its technical text.
+          err instanceof Error && !(err instanceof ProspectsContractError)
             ? err.message
-            : "Prospects could not be loaded. Try again; your completed work remains private.";
+            : "Prospects didn't load. Try again.";
         setError(msg);
         setErrorContext(contextKey);
         setLoading(false);
@@ -120,9 +127,10 @@ export function ProspectsListView() {
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         const msg =
-          err instanceof Error
+          // A contract mismatch is our fault: never show its technical text.
+          err instanceof Error && !(err instanceof ProspectsContractError)
             ? err.message
-            : "Prospects could not be loaded. Try again; your completed work remains private.";
+            : "Prospects didn't load. Try again.";
         setError(msg);
         setErrorContext(contextKey);
       })
@@ -137,6 +145,23 @@ export function ProspectsListView() {
   const visibleProspects = current && !visibleError ? prospects : [];
   const showLoading = authenticated && (loading || (!current && !visibleError));
 
+  if (!authenticated)
+    return (
+      <AcquisitionShell
+        authenticated={access?.authenticated === true}
+        loading={
+          !access ||
+          access.authenticated === null ||
+          access.status === "loading"
+        }
+        active="prospects"
+      >
+        <div className={styles.root}>
+          <ProspectsAccessState access={access} />
+        </div>
+      </AcquisitionShell>
+    );
+
   return (
     <AcquisitionShell
       authenticated={authenticated}
@@ -148,7 +173,8 @@ export function ProspectsListView() {
           <div>
             <h1 className={styles.title}>Prospects</h1>
             <p className={styles.summary}>
-              Cross-call prospect intelligence and conversation history.
+              Everyone you&apos;re selling to, their main problem and what
+              happens next.
               {current && !visibleError && total > 0
                 ? ` (${total} recorded)`
                 : ""}
@@ -188,47 +214,41 @@ export function ProspectsListView() {
               />
             </div>
 
-            <div
-              className={styles.filterGroup}
-              role="group"
-              aria-label="Stage filters"
-            >
-              <button
-                type="button"
-                className={`${styles.filterBtn}${stageFilter === null ? ` ${styles.filterBtnActive}` : ""}`}
-                onClick={() => setStageFilter(null)}
-                aria-pressed={stageFilter === null}
+            {stagesOffered || stageFilter !== null ? (
+              <div
+                className={styles.filterGroup}
+                role="group"
+                aria-label="Stage filters"
               >
-                All
-              </button>
-              <button
-                type="button"
-                className={`${styles.filterBtn}${stageFilter === "__missing__" ? ` ${styles.filterBtnActive}` : ""}`}
-                onClick={() =>
-                  setStageFilter((prev) =>
-                    prev === "__missing__" ? null : "__missing__",
-                  )
-                }
-                aria-pressed={stageFilter === "__missing__"}
-              >
-                Missing stage
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className={`${styles.filterBtn}${stageFilter === null ? ` ${styles.filterBtnActive}` : ""}`}
+                  onClick={() => setStageFilter(null)}
+                  aria-pressed={stageFilter === null}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.filterBtn}${stageFilter === "__missing__" ? ` ${styles.filterBtnActive}` : ""}`}
+                  onClick={() =>
+                    setStageFilter((prev) =>
+                      prev === "__missing__" ? null : "__missing__",
+                    )
+                  }
+                  aria-pressed={stageFilter === "__missing__"}
+                >
+                  Missing stage
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {showLoading ? (
             <div aria-busy="true" aria-label="Loading prospects">
               <PageSkeleton variant="list" />
             </div>
-          ) : !authenticated ? (
-            <p className={styles.emptyText}>
-              Choose your signed-in workspace to see prospects.
-            </p>
-          ) : visibleError ? (
-            <p className={styles.emptyText}>
-              Prospects are unavailable. Try again.
-            </p>
-          ) : visibleProspects.length === 0 ? (
+          ) : visibleError ? null : visibleProspects.length === 0 ? (
             <div className={styles.empty} data-testid="empty-prospects">
               <Users
                 size={32}
@@ -252,122 +272,63 @@ export function ProspectsListView() {
               role="feed"
               aria-label="Prospects list"
             >
-              {visibleProspects.map((prospect) => (
-                <div
-                  key={prospect.prospect_id}
-                  className={styles.prospectRow}
-                  data-testid={`prospect-row-${prospect.prospect_id}`}
-                  onMouseEnter={() =>
-                    setHoveredProspectId(prospect.prospect_id)
-                  }
-                  onMouseLeave={() => setHoveredProspectId(null)}
-                >
+              {visibleProspects.map((prospect) => {
+                const row = prospectRow(prospect);
+                return (
                   <Link
+                    key={prospect.prospect_id}
                     href={`/prospects/${prospect.prospect_id}`}
-                    className={styles.prospectLeft}
+                    className={styles.prospectRow}
+                    data-testid={`prospect-row-${prospect.prospect_id}`}
                     aria-label={`Open prospect ${prospect.name}`}
                   >
-                    <div className={styles.avatar} aria-hidden="true">
-                      {initials(prospect.name)}
-                    </div>
-                    <div className={styles.prospectMeta}>
-                      <span className={styles.prospectName}>
-                        {prospect.name}
+                    <span className={styles.prospectLeft}>
+                      <span className={styles.avatar} aria-hidden="true">
+                        {initials(prospect.name)}
                       </span>
-                      <div className={styles.prospectSub}>
-                        <span>
-                          {prospect.call_count}{" "}
-                          {prospect.call_count === 1
-                            ? "visible call"
-                            : "visible calls"}
+                      <span className={styles.prospectMeta}>
+                        <span className={styles.prospectName}>
+                          {prospect.name}
+                          {row.detected ? (
+                            <span className={styles.detectedTag}>Detected</span>
+                          ) : null}
                         </span>
-                        <span>•</span>
-                        <span>
-                          Last call: {formatCreatedDate(prospect.last_call)}
+                        <span className={styles.prospectSub}>
+                          {row.subtitle ?? "Role and company not recorded"}
                         </span>
-                      </div>
-                    </div>
-                  </Link>
-
-                  <div className={styles.prospectRight}>
-                    <span className={`${styles.badge} ${styles.badgeMissing}`}>
-                      {prospect.stage ? prospect.stage : "Missing stage"}
+                      </span>
                     </span>
-
-                    <button
-                      type="button"
-                      className={styles.hoverTrigger}
-                      aria-label={`Hover summary for ${prospect.name}`}
-                      onMouseEnter={() =>
-                        setHoveredProspectId(prospect.prospect_id)
-                      }
-                      onFocus={() => setHoveredProspectId(prospect.prospect_id)}
-                      onBlur={() => setHoveredProspectId(null)}
-                    >
-                      <Info size={16} aria-hidden="true" />
-                    </button>
-
-                    <Link
-                      href={`/prospects/${prospect.prospect_id}`}
-                      className={styles.hoverTrigger}
-                      aria-label={`View ${prospect.name}`}
-                    >
-                      <ArrowRight size={16} aria-hidden="true" />
-                    </Link>
-
-                    {hoveredProspectId === prospect.prospect_id ? (
-                      <div
-                        className={styles.hoverCard}
-                        role="tooltip"
-                        data-testid={`hover-card-${prospect.prospect_id}`}
-                      >
-                        <div className={styles.hoverCardRow}>
-                          <span className={styles.hoverCardLabel}>
-                            Prospect ID
-                          </span>
-                          <span
-                            className={`${styles.hoverCardValue} ${styles.hoverCardMono}`}
-                          >
-                            {prospect.prospect_id}
-                          </span>
-                        </div>
-                        <div className={styles.hoverCardRow}>
-                          <span className={styles.hoverCardLabel}>
-                            Visible calls
-                          </span>
-                          <span className={styles.hoverCardValue}>
-                            {prospect.call_count}
-                          </span>
-                        </div>
-                        <div className={styles.hoverCardRow}>
-                          <span className={styles.hoverCardLabel}>
-                            Last visible call
-                          </span>
-                          <span className={styles.hoverCardValue}>
-                            {formatCreatedDate(prospect.last_call)}
-                          </span>
-                        </div>
-                        <div className={styles.hoverCardRow}>
-                          <span className={styles.hoverCardLabel}>
-                            Next step
-                          </span>
-                          <span className={styles.hoverCardValue}>
-                            {prospect.next_step ?? "None recorded"}
-                          </span>
-                        </div>
-                        <div className={styles.hoverCardRow}>
-                          <span className={styles.hoverCardLabel}>
-                            Last promise
-                          </span>
-                          <span className={styles.hoverCardValue}>
-                            {prospect.last_promise ?? "None recorded"}
-                          </span>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
+                    <span className={styles.prospectProblem}>
+                      {row.problem ?? (
+                        <span className={styles.muted}>
+                          Main problem unknown
+                        </span>
+                      )}
+                    </span>
+                    <span className={styles.prospectStage}>
+                      {prospect.stage ? (
+                        <span className={styles.badge}>{prospect.stage}</span>
+                      ) : (
+                        <span className={styles.muted}>No stage yet</span>
+                      )}
+                    </span>
+                    <span className={styles.prospectNext}>
+                      {row.nextStep ?? (
+                        <span className={styles.muted}>No next step</span>
+                      )}
+                    </span>
+                    <span className={styles.prospectLast}>
+                      {formatCreatedDate(prospect.last_call)}
+                      <small>
+                        {prospect.call_count}{" "}
+                        {prospect.call_count === 1
+                          ? "visible call"
+                          : "visible calls"}
+                      </small>
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           )}
 

@@ -1,3 +1,41 @@
+# WORKBENCH MODE (owner order, 11 Oct 2026, about 19:00 IST)
+
+This order supersedes delivery rules below about branches, pull requests, task
+gates, lanes, worktrees, merge trains and single-track. The owner's instruction:
+"Whatever is live on dev, every agent is working on that ... no branching, no
+bullshit. Everything just builds up in here itself."
+
+- Everyone uses `/home/acdev/src/dev-live/authority-closers-platform`, branch
+  `dev/live`. Sales Xray dev hot-reloads this checkout; Python and migration
+  commits redeploy the live API with health checks and rollback.
+- Do not create branches, PRs, lanes or worktrees, or run `ac_task.py`.
+  `git checkout/switch/reset/stash/rebase/pull/merge/push` and plain `git commit`
+  are blocked in the workbench. The authorized release tool owns release PRs.
+- Claim files and folders under `## Claimed paths` in your strike's `NOTES.md`.
+  Edit only those paths. Ask another file's owner through
+  `/home/acdev/strikes/<card>/INBOX.md`, with an exact, testable request.
+- Commit only your own paths, small and often, through
+  `wb-commit -m "what the owner can now see" -- <your paths>`. It serializes
+  commits so another agent's unfinished edits are preserved.
+- Keep shared dev shippable. Before committing Python, run
+  `uv run python -c "import ac_platform.http"`. Before committing TypeScript,
+  run a typecheck covering the touched files. Run focused checks and retain
+  implementation evidence. Fix a dev regression promptly or revert your own file.
+- Focus on the Report's structure, UI and plain sales language per Dipak's
+  `/home/acdev/scratch/specs/final-xray-structure-2026-10-09.md`, then Coaching.
+  Start other product work only on the owner's instruction.
+- Shipping belongs to the owner's operator or coordinator, through `ac-ship`:
+  version checkpoint, CI, staging and tests, then production. Builders do not
+  deploy or start competing ships. Never edit staging or production by hand.
+- Read your INBOX first and after each commit; retain completed requests and
+  source pins in NOTES. Preserve other agents' edits across session restarts.
+- Use subscriptions only and stop at limits. The owner switched these server
+  seats to Codex / Sol 6.1 on 12 Oct at about 04:10 IST; do not silently fall back
+  to Claude Opus or paid API credits.
+
+Protected business semantics, secrets, data-change and deletion approvals,
+evidence provenance, provider activation and AC-SVAL requirements still apply.
+
 # CODEX NON-NEGOTIABLE GUARDRAILS
 
 - Do not infer protected business semantics.
@@ -17,7 +55,6 @@
 - Do not build full B2B/native/WhatsApp/voice merely because the architecture preserves those futures.
 - A P0 blocks its capability, not the whole project.
 - Every code change must leave tests and implementation evidence.
-
 
 # DELIVERY CONSTITUTION (binding for every agent and person)
 
@@ -77,12 +114,78 @@
    may move them into Infisical or the team password manager as set out in
    OWNER-APPROVED SECRETS.
 
+# DELIVERY AMENDMENT (owner order, 9 Oct 2026)
+
+These rules supersede older delivery wording where they conflict.
+
+- **Feature strike path:** for each owner-visible feature, the CEO saves a one-page
+  `strike-brief` document with the screen, states, data, acceptance checks and
+  preview URL. One Sol builder builds the API, UI and tests end to end in one
+  lane checkout with that lane's live preview. One PR, about 1,500 changed lines
+  at most; one CTO review. CEO approval follows only for sensitive paths
+  (billing, payments, identity/auth/security/secrets, migrations, infra,
+  workflows, the gate, data-change scripts, AGENTS.md, lockfiles or manifests).
+  Pilots: [AUT-1579](/AUT/issues/AUT-1579) (Card C) and [AUT-1350](/AUT/issues/AUT-1350). Owner permissions in rule 5 still apply.
+- **Review deadline:** a green PR gets a verdict within 60 minutes. Otherwise
+  the watchdog routes it to the backup reviewer (CTO, pod lead or CEO).
+  Silence is never approval; reviews and approvals remain bound to the head SHA.
+- **Done means in production:** the release engine closes the task with the
+  production version. A review, merge or dev preview is delivery evidence,
+  not task completion.
+- **Managers:** CEO and CTO are woken only for decisions and reviews. Each posts
+  at most one comment per run and creates at most three new cards per day.
+
+# PULSE MODE AND OWNER DECISIONS (owner orders, 10 Oct 2026)
+
+These rules supersede older wording where they conflict, including rule 1's
+one-small-change limit for strikes. They were recorded on [AUT-1701](/AUT/issues/AUT-1701).
+
+- **Strikes (until 17 Oct 2026, 24:00 IST; then reviewed with the owner):** each
+  owner-listed feature runs as one long direct session on the server
+  (`ac-strike@<card>`), on one branch `task/<lane>/<card>-strike-<name>` with one
+  open PR. The features are AUT-1663 (screens), AUT-1677 (report and prospect),
+  AUT-1676 (stuck analyses and charges), AUT-1678 (coaching) and AUT-1694
+  (organisations). A strike is a whole feature, not a small change, and not a
+  bypass.
+- **Strike merges:** the watchdog squash-merges a strike PR on green CI at most
+  every 2 hours, with no review, unless it touches billing, payments, sign-in,
+  database migrations, secrets, dependencies, `.github/`, `infra/` or this file.
+  Staging deploys `main` automatically, and dev takes `main` every 10 minutes.
+  Production promotes only on the owner's explicit "ship it".
+- **Owner decisions are final and fast.** Each of these is a full sign-off for
+  that PR's green head for 48 hours, and it lifts earlier CEO/CTO holds:
+  - a board comment by the owner or the owner's session reading
+    `Owner approved merge: PR #n` (optionally `@ <sha>`);
+  - a Telegram reply `approve #n`;
+  - the Telegram Approve button.
+
+  `Owner: hold PR #n` stops it.
+
+- **Sign-off deadline:** a green PR that needs a sign-off goes to its reviewer.
+  After 30 minutes without a verdict, the watchdog sends it to the owner on
+  Telegram with Approve and Hold buttons. Silence never blocks for longer.
+- **Holds:**
+  - Every CEO/CTO `Merge hold` names what clears it.
+  - A hold expires after 4 hours unless it is renewed with new evidence.
+  - A hold that would block an owner order goes to the owner the same hour, as
+    one decision. Agents never contain an owner order on their own.
+- **One rulebook:** an owner decision made in chat is written into this file
+  within the hour, by the owner's session or the CEO. Until it lands, the
+  owner's recorded order on the board binds every agent.
+- **Next: machine gates ([AUT-1741](/AUT/issues/AUT-1741)).** A migration-safety
+  check (upgrade and downgrade on a copy of the staging schema) and an
+  authorization diff test replace human review of routine risk. When they pass,
+  migrations and access-rule changes merge like ordinary changes. Only billing,
+  payments, secrets and the core sign-in keep a person's sign-off. Database
+  changes ship first, as tiny PRs.
+
 # OWNER-APPROVED DATA CHANGES
 
 Purpose: make urgent account, workspace and access changes in minutes, without
 waiting for a feature release.
 
 Allowed kinds (dev, staging, production):
+
 - memberships and roles (owner, admin, member), ownership transfer
 - permission grants and product switches per workspace (e.g. Sales Xray on)
 - workspace create/rename and verified email domains
@@ -91,12 +194,14 @@ Allowed kinds (dev, staging, production):
 - permanent deletion, only as set out in OWNER-APPROVED DELETIONS
 
 Never through this path:
+
 - rewriting audit history (supersede instead)
 - payments, billing, credit balances, plan prices
 - secrets or credentials (Infisical only)
 - schema changes (migrations only)
 
 How:
+
 1. Approval: the owner writes "approve data change: <what>, <environment>" in
    chat or on the issue. The owner may pre-approve a repeatable kind once (e.g.
    "add @authorityclosers.com staff to the AC organisation"); every run is
@@ -118,6 +223,7 @@ Claude session), never during a release.
 
 Permanent deletion (users, calls, recordings, reports, duplicates, files) is
 allowed once the owner approves that exact request:
+
 1. The agent first shows the exact list (ids, names, environment, count) and
    what cannot be recovered.
 2. The owner answers "approve delete: <that list>, <environment>" (or "go
@@ -132,6 +238,7 @@ allowed once the owner approves that exact request:
 When the owner asks, an agent may copy a password, token or API key from where
 it is created (e.g. a provider console) into Infisical or the team password
 manager, and read it from there to configure a service.
+
 - Use methods that do not print the value: clipboard paste into the target
   field, `infisical secrets set` from stdin, or injection at runtime.
 - Never repeat the value in chat, logs, task comments, commits, pull requests
@@ -146,6 +253,7 @@ manager, and read it from there to configure a service.
 Use the CSV/JSON manifest. Fetch by exact Drive ID/URL, not filename guesses.
 
 ## Required first
+
 1. Master Index
 2. BRD
 3. AC-IMP-00
@@ -155,15 +263,18 @@ Use the CSV/JSON manifest. Fetch by exact Drive ID/URL, not filename guesses.
 7. AC-IMP-05
 
 ## Required before first-slice code
+
 PRD, IA, UX Research, UX States, UI System, SRS, Data/Tenancy, API/MCP, Security, QA, DevOps, Admin, Telemetry, ADR/Risk.
 
 ## Assurance as relevant
+
 AC-UXA-01 for learner/admin/recovery/accessibility work.
 AC-SVAL-01 before any scoring/evaluation work.
 AC-GOV-AUD-001 before provider/store/recording/AI data activation.
 Hostile audit findings are normalized into AC-IMP-03; do not invent original missing issue text.
 
 ## Raw founder evidence
+
 Use only for context and to verify intent. Controlled docs win.
 
 ## Cloud research orchestration

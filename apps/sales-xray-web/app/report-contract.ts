@@ -1,5 +1,10 @@
+import { parseReportContent, type ReportContent } from "./report-content";
 import { parseCallLabel, type CallLabel } from "./call-label";
 import { parseReportStory, type ReportStory } from "./report-story";
+import {
+  parseReportPillars,
+  type ReportPillars,
+} from "./report-pillars-contract";
 import {
   parseDetailedOverview,
   type DetailedOverview,
@@ -68,6 +73,9 @@ export type SalesReport = {
   preview?: GuestReportPreview;
   overview?: DetailedOverview;
   story?: ReportStory;
+  report_content?: ReportContent;
+  /** The analysis' own words for the six pillars; optional and lenient. */
+  pillars?: ReportPillars;
   summary: string;
   summary_evidence?: ReportEvidence[];
   strengths: Finding[];
@@ -303,7 +311,7 @@ function parseEvidence(
   value: unknown,
   code: string,
   durationMs: number,
-  bindingTranscript?: Transcript,
+  sourceSegments?: ReadonlyMap<string, TranscriptSegment>,
 ): ReportEvidence {
   const evidence = object(value, `${code}_invalid`);
   keys(evidence, ["segment_id", "quote", "start_ms", "end_ms"], code);
@@ -312,10 +320,8 @@ function parseEvidence(
   const startMs = integer(evidence.start_ms, `${code}_start_ms`, 0, durationMs);
   const endMs = integer(evidence.end_ms, `${code}_end_ms`, 1, durationMs);
   if (endMs <= startMs) throw new ReportContractError(`${code}_timing_invalid`);
-  if (bindingTranscript) {
-    const segment = bindingTranscript.segments.find(
-      (candidate) => candidate.id === segmentId,
-    );
+  if (sourceSegments) {
+    const segment = sourceSegments.get(segmentId);
     if (!segment) throw new ReportContractError(`${code}_segment_unknown`);
     if (!segment.text.includes(quote))
       throw new ReportContractError(`${code}_quote_mismatch`);
@@ -334,7 +340,7 @@ function parseFinding(
   value: unknown,
   code: string,
   durationMs: number,
-  bindingTranscript?: Transcript,
+  sourceSegments?: ReadonlyMap<string, TranscriptSegment>,
 ): Finding {
   const finding = object(value, `${code}_invalid`);
   keys(finding, ["title", "explanation", "evidence"], code);
@@ -344,7 +350,7 @@ function parseFinding(
         entry,
         `${code}_evidence_${index}`,
         durationMs,
-        bindingTranscript,
+        sourceSegments,
       ),
   );
   return {
@@ -357,7 +363,7 @@ function parseFinding(
 function parseDimensions(
   value: unknown,
   durationMs: number,
-  bindingTranscript?: Transcript,
+  sourceSegments?: ReadonlyMap<string, TranscriptSegment>,
 ): ReportDimension[] {
   return array(value, "report_dimensions", 8, 8).map((entry, index) => {
     const dimension = object(entry, `report_dimension_${index}`);
@@ -381,8 +387,10 @@ function parseDimensions(
     );
     if (!DIMENSION_STATES.has(status))
       throw new ReportContractError(`report_dimension_${index}_status_invalid`);
+    // Canonical optional metadata may be absent or explicitly null on older
+    // serializers. Neither supplies evidence or establishes a call state.
     const evidence =
-      dimension.evidence === undefined
+      dimension.evidence === undefined || dimension.evidence === null
         ? undefined
         : array(
             dimension.evidence,
@@ -395,12 +403,10 @@ function parseDimensions(
               entry,
               code,
               durationMs,
-              bindingTranscript,
+              sourceSegments,
             );
             identifier(parsed.segment_id, `${code}_segment_id`);
-            const segment = bindingTranscript?.segments.find(
-              (candidate) => candidate.id === parsed.segment_id,
-            );
+            const segment = sourceSegments?.get(parsed.segment_id);
             if (
               segment &&
               (parsed.start_ms !== segment.start_ms ||
@@ -427,11 +433,15 @@ function parseDimensions(
       ),
       label: text(dimension.label, `report_dimension_${index}_label`, 160),
       status,
-      observation: text(
-        dimension.observation,
-        `report_dimension_${index}_observation`,
-        4_000,
-      ),
+      // A cited skill may carry no note (""): its state and evidence speak.
+      observation:
+        dimension.observation === "" && evidence?.length
+          ? ""
+          : text(
+              dimension.observation,
+              `report_dimension_${index}_observation`,
+              4_000,
+            ),
       citations: array(
         dimension.citations,
         `report_dimension_${index}_citations`,
@@ -444,7 +454,7 @@ function parseDimensions(
         ),
       ),
     };
-    if (dimension.call_state !== undefined) {
+    if (dimension.call_state !== undefined && dimension.call_state !== null) {
       const state = text(dimension.call_state, "report_call_state", 32);
       if (
         ![
@@ -580,6 +590,8 @@ function parseReport(
       "overview",
       "provider_extras",
       "story",
+      "report_content",
+      "pillars",
     ],
     "report",
   );
@@ -609,6 +621,18 @@ function parseReport(
   );
   if (binding.transcript && transcriptRevision !== binding.transcript.revision)
     throw new ReportContractError("report_transcript_revision_mismatch");
+  // Build once for this read; repeated references do not rescan a long call.
+  // Keep the first match, as the previous Array.find did. parseTranscript
+  // already rejects duplicate IDs, and no index survives into another read.
+  const sourceSegments = binding.transcript
+    ? new Map<string, TranscriptSegment>()
+    : undefined;
+  if (binding.transcript && sourceSegments) {
+    for (const segment of binding.transcript.segments) {
+      if (!sourceSegments.has(segment.id))
+        sourceSegments.set(segment.id, segment);
+    }
+  }
   const parsed: SalesReport = {
     summary: text(report.summary, "report_summary", 4_000),
     strengths: array(report.strengths, "report_strengths", 0, 3).map(
@@ -617,7 +641,7 @@ function parseReport(
           entry,
           `report_strength_${index}`,
           binding.durationMs,
-          binding.transcript,
+          sourceSegments,
         ),
     ),
     missed_opportunities: array(
@@ -630,7 +654,7 @@ function parseReport(
         entry,
         `report_missed_${index}`,
         binding.durationMs,
-        binding.transcript,
+        sourceSegments,
       ),
     ),
     improvements: array(report.improvements, "report_improvements", 0, 3).map(
@@ -639,7 +663,7 @@ function parseReport(
           entry,
           `report_improvement_${index}`,
           binding.durationMs,
-          binding.transcript,
+          sourceSegments,
         ),
     ),
     objection_analysis: array(
@@ -652,7 +676,7 @@ function parseReport(
         entry,
         `report_objection_${index}`,
         binding.durationMs,
-        binding.transcript,
+        sourceSegments,
       ),
     ),
     closing_analysis: array(
@@ -665,7 +689,7 @@ function parseReport(
         entry,
         `report_closing_${index}`,
         binding.durationMs,
-        binding.transcript,
+        sourceSegments,
       ),
     ),
     verdict: text(report.verdict, "report_verdict", 4_000),
@@ -676,11 +700,36 @@ function parseReport(
     dimensions: parseDimensions(
       report.dimensions,
       binding.durationMs,
-      binding.transcript,
+      sourceSegments,
     ),
     report_sections: projected ? [] : parseSections(report.report_sections),
   };
-  if (report.story !== undefined) {
+  if (report.report_content !== undefined && report.report_content !== null) {
+    if (!binding.transcript)
+      throw new ReportContractError("report_content_source_required");
+    parsed.report_content = parseReportContent(
+      report.report_content,
+      binding.transcript,
+    );
+    if (
+      parsed.summary !==
+        parsed.report_content.summary_sentences.map((n) => n.text).join(" ") ||
+      parsed.dimensions.some((d) => !d.call_state)
+    )
+      throw new ReportContractError("report_content_summary_or_states_missing");
+    for (const d of parsed.dimensions)
+      for (const e of d.evidence ?? []) {
+        const source = binding.transcript.segments.find(
+          (s) => s.id === e.segment_id,
+        )!;
+        if (
+          parsed.report_content.roles[source.speaker_id ?? ""] !== "seller" ||
+          e.quote !== source.text
+        )
+          throw new ReportContractError("report_content_skill_actor");
+      }
+  }
+  if (report.story !== undefined && report.story !== null) {
     if (!binding.transcript)
       throw new ReportContractError("report_story_source_required");
     try {
@@ -689,15 +738,26 @@ function parseReport(
       throw new ReportContractError("report_story_invalid");
     }
   }
+  // Never fails the report: a part that does not check out is left out.
+  if (
+    report.pillars !== undefined &&
+    report.pillars !== null &&
+    binding.transcript
+  ) {
+    const pillars = parseReportPillars(report.pillars, (value, code) =>
+      parseEvidence(value, code, binding.durationMs, sourceSegments),
+    );
+    if (pillars) parsed.pillars = pillars;
+  }
   for (const field of ["summary_evidence", "verdict_evidence"] as const) {
-    if (Object.hasOwn(report, field)) {
+    if (Object.hasOwn(report, field) && report[field] !== null) {
       parsed[field] = array(report[field], `report_${field}`, 1, 3).map(
         (entry, index) =>
           parseEvidence(
             entry,
             `report_${field}_${index}`,
             binding.durationMs,
-            binding.transcript,
+            sourceSegments,
           ),
       );
     }
@@ -712,11 +772,9 @@ function parseReport(
             value,
             "report_overview_evidence",
             binding.durationMs,
-            binding.transcript,
+            sourceSegments,
           );
-          const segment = binding.transcript?.segments.find(
-            (item) => item.id === evidence.segment_id,
-          );
+          const segment = sourceSegments?.get(evidence.segment_id);
           if (
             segment &&
             (evidence.start_ms !== segment.start_ms ||
@@ -830,6 +888,8 @@ export function parseAcquisitionReport(
       "summary_evidence",
       "verdict_evidence",
       "story",
+      "report_content",
+      "pillars",
       "improvements",
       "objection_analysis",
       "closing_analysis",

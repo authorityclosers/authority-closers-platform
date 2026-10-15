@@ -300,7 +300,8 @@
 }
 
 /* The status mark: ready pops in with one ripple, in progress plays a small
-   equaliser, needs attention nudges now and then, idle is a quiet ring. */
+   teal equaliser (one accent: the shape tells them apart), needs attention
+   nudges now and then, idle is a quiet ring. */
 .mark {
   position: relative;
   display: flex;
@@ -351,7 +352,7 @@
   width: 2px;
   height: 11px;
   border-radius: 2px;
-  background: var(--lx-info);
+  background: var(--lx-teal);
   animation: eq 900ms ease-in-out infinite;
 }
 .mark[data-tone="active"] i:nth-child(2) {

@@ -163,12 +163,17 @@ def project_report(report: ReportDraft, *, access: ReportAccess) -> dict[str, An
         fields["verdict_evidence"] = [
             item.model_dump(mode="json") for item in report.verdict_evidence
         ]
+    if account and report.report_content is not None:
+        fields["report_content"] = report.report_content.model_dump(mode="json")
     if account:
+        from ac_platform.conversation_intelligence.dipak_report import project_pillars
         from ac_platform.conversation_intelligence.report_story import report_story
 
         story = report_story(report)
         if story is not None:
             fields["story"] = story
+        if report.pillars is not None:
+            fields["pillars"] = project_pillars(report.pillars)
     preview = None if account else _guest_preview(fields)
     return {
         "schema": "ac.sales-xray.report-access/2",

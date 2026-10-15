@@ -132,18 +132,19 @@ a.trigger {
   color: transparent;
 }
 
+/* Each bar sits inside its line's own box (no margins), so the loaded name
+   takes exactly the same height and the panel below never moves. */
 .trigger[data-loading] .copy b,
 .trigger[data-loading] .copy small {
   width: 92px;
-  border-radius: 5px;
-  background: var(--lx-sunken);
+  background: linear-gradient(var(--lx-sunken), var(--lx-sunken)) left center /
+    100% 72% no-repeat;
   color: transparent;
   animation: loading 1.4s ease-in-out infinite;
 }
 
 .trigger[data-loading] .copy small {
   width: 64px;
-  margin-top: 4px;
 }
 
 /* ---------- Menu ---------- */

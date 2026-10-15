@@ -512,6 +512,9 @@ export function Avatar({
           loading="lazy"
           onError={() => setFailed(true)}
         />
+      ) : size < 22 ? (
+        // Initials stay at 12 px or more: a small avatar has room for one.
+        Array.from(initials(name))[0]
       ) : (
         initials(name)
       )}

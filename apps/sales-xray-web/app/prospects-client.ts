@@ -449,6 +449,39 @@ export function parseProspectDetail(value: unknown): ProspectDetail {
   };
 }
 
+export const PROSPECT_READ_TIMEOUT_MS = 15_000;
+const READ_UNAVAILABLE = "Prospect information is unavailable. Try again.";
+
+/** Bound the whole GET, including JSON, even if an adapter ignores cancellation. */
+async function prospectRead<T>(
+  parent: AbortSignal | undefined,
+  read: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  if (parent?.aborted) throw new Error(READ_UNAVAILABLE);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const cancelled = () => new Error(READ_UNAVAILABLE);
+  let cancel: () => void = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    cancel = () => reject(cancelled());
+    controller.signal.addEventListener("abort", cancel, { once: true });
+  });
+  parent?.addEventListener("abort", abort, { once: true });
+  const timer = setTimeout(abort, PROSPECT_READ_TIMEOUT_MS);
+  try {
+    const result = await Promise.race([read(controller.signal), aborted]);
+    if (controller.signal.aborted) throw cancelled();
+    return result;
+  } finally {
+    clearTimeout(timer);
+    parent?.removeEventListener("abort", abort);
+    controller.signal.removeEventListener("abort", cancel);
+    // Release a native fetch/body without aborting the caller's scope. No
+    // automatic retry or write is permitted by this read-only boundary.
+    controller.abort();
+  }
+}
+
 export async function fetchProspectsList({
   search = "",
   stage = null,
@@ -467,46 +500,45 @@ export async function fetchProspectsList({
 
   const qs = params.toString();
   const url = `${PROSPECTS_API}${qs ? `?${qs}` : ""}`;
-  const response = await fetch(url, {
-    method: "GET",
-    credentials: "same-origin",
-    cache: "no-store",
-    redirect: "error",
-    headers: { accept: "application/json" },
-    signal,
-  });
+  return prospectRead(signal, async (readSignal) => {
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      headers: { accept: "application/json" },
+      signal: readSignal,
+    });
 
-  if (!response.ok) {
-    let detail: string | undefined;
-    try {
-      const data = await response.json();
-      if (
-        data &&
-        typeof data === "object" &&
-        typeof (data as { detail?: unknown }).detail === "string"
-      ) {
-        detail = (data as { detail: string }).detail;
+    if (!response.ok) {
+      let detail: string | undefined;
+      try {
+        const data = await response.json();
+        if (
+          data &&
+          typeof data === "object" &&
+          typeof (data as { detail?: unknown }).detail === "string"
+        ) {
+          detail = (data as { detail: string }).detail;
+        }
+      } catch {}
+      if (response.status === 401) {
+        throw new Error(detail || "Sign in to read your prospects.");
       }
-    } catch {}
-    if (response.status === 401) {
-      throw new Error(detail || "Sign in to read your prospects.");
+      if (response.status === 403) {
+        throw new Error(
+          detail || "Prospects are not enabled for this workspace.",
+        );
+      }
+      if (response.status === 422) {
+        throw new Error(detail || "Use the prospect page's supported filters.");
+      }
+      throw new Error(detail || "Prospects didn't load. Try again.");
     }
-    if (response.status === 403) {
-      throw new Error(
-        detail || "Prospects are not enabled for this workspace.",
-      );
-    }
-    if (response.status === 422) {
-      throw new Error(detail || "Use the prospect page's supported filters.");
-    }
-    throw new Error(
-      detail ||
-        "Prospects could not be loaded. Try again; your completed work remains private.",
-    );
-  }
 
-  const json = await response.json();
-  return parseProspectListPage(json);
+    const json = await response.json();
+    return parseProspectListPage(json);
+  });
 }
 
 export async function fetchProspectDetail({
@@ -525,49 +557,48 @@ export async function fetchProspectDetail({
   if (offset > 0) params.set("offset", String(offset));
   const qs = params.toString();
   const url = `${PROSPECTS_API}/${prospectId}${qs ? `?${qs}` : ""}`;
-  const response = await fetch(url, {
-    method: "GET",
-    credentials: "same-origin",
-    cache: "no-store",
-    redirect: "error",
-    headers: { accept: "application/json" },
-    signal,
-  });
+  return prospectRead(signal, async (readSignal) => {
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      headers: { accept: "application/json" },
+      signal: readSignal,
+    });
 
-  if (!response.ok) {
-    let detail: string | undefined;
-    try {
-      const data = await response.json();
-      if (
-        data &&
-        typeof data === "object" &&
-        typeof (data as { detail?: unknown }).detail === "string"
-      ) {
-        detail = (data as { detail: string }).detail;
+    if (!response.ok) {
+      let detail: string | undefined;
+      try {
+        const data = await response.json();
+        if (
+          data &&
+          typeof data === "object" &&
+          typeof (data as { detail?: unknown }).detail === "string"
+        ) {
+          detail = (data as { detail: string }).detail;
+        }
+      } catch {}
+      if (response.status === 401) {
+        throw new Error(detail || "Sign in to read your prospects.");
       }
-    } catch {}
-    if (response.status === 401) {
-      throw new Error(detail || "Sign in to read your prospects.");
+      if (response.status === 403) {
+        throw new Error(
+          detail || "Prospects are not enabled for this workspace.",
+        );
+      }
+      if (response.status === 404) {
+        throw new Error(detail || "This prospect is unavailable.");
+      }
+      throw new Error(detail || "This prospect didn't load. Try again.");
     }
-    if (response.status === 403) {
-      throw new Error(
-        detail || "Prospects are not enabled for this workspace.",
-      );
-    }
-    if (response.status === 404) {
-      throw new Error(detail || "This prospect is unavailable.");
-    }
-    throw new Error(
-      detail ||
-        "Prospect could not be loaded. Try again; your completed work remains private.",
-    );
-  }
 
-  const json = await response.json();
-  const detail = parseProspectDetail(json);
-  if (detail.prospect.prospect_id !== prospectId)
-    throw new ProspectsContractError("prospect_detail_binding");
-  return detail;
+    const json = await response.json();
+    const detail = parseProspectDetail(json);
+    if (detail.prospect.prospect_id !== prospectId)
+      throw new ProspectsContractError("prospect_detail_binding");
+    return detail;
+  });
 }
 
 /** Save only a person's typed value; the server appends and locks the revision. */

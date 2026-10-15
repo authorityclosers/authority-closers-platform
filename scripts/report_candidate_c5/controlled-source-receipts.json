@@ -1,0 +1,150 @@
+{
+  "provenance": "Reused exact-ID controlled source attachment 4ca7744c-7bc2-4df3-a853-ecc368385037 from AUT-1785; read in required order 2026-10-12. No fresh Drive access or immutable Office revision claim. Older business documents do not supersede current task/owner decisions.",
+  "attachment_sha256": "b294c66ee5155c035edacc394c901022fabfa00b8a2b0ca81121886b77c99f06",
+  "records": [
+    {
+      "key": "MASTER-INDEX",
+      "drive_id": "1gC6BdFZ2LfjrpjM-qPKcX1qWMTUBSAXo3b-AlaOYqus",
+      "captured_revision_id": "AHj4eMQlnSlUpeDtuhnrglAbL5Rxvs1DtyoMaquBRaPG0NrY_DyVO89LDvPugWvwduKDSqUonerLPnuvZBEfHpoYPc2BXjU__f5bn5IBUU0",
+      "text_sha256": "4126ed4a6070a7bea48cb20d2310bd1a24551162f7d3ffe9492283c78dcd439b"
+    },
+    {
+      "key": "BRD",
+      "drive_id": "1HEp7QN4u3c_636uACznnkruYHhGYHAJWXH7Dlfjybpk",
+      "captured_revision_id": "AHj4eMTLqU8gtxS1k_jHdDbtPejTtTNteklRuKVC0rVzwFLZWe6tvU-yVPKl8yoOrtxwF2wAejpo6TUxaqNx-tIBP2VyHcxZaVlS8XCuWd0",
+      "text_sha256": "85c43f5941325a889cbb082d027a979e52daa8ef3bf598938b9075d62df90f96"
+    },
+    {
+      "key": "AC-IMP-00",
+      "drive_id": "10tKbAIJWONFNTzK2-NHffy4h1wKgoQP7VdJH_K2eR-A",
+      "captured_revision_id": "AHj4eMRWcaNlpxPKxP0vV6XriNjRvH4CzCyQtNqMNk9XgT1vqepN4FfynWoJRSo83uW0QrHQUdzHUKhnn5JwY7DD3iahL_6GlBP2W3wyhw4",
+      "text_sha256": "4789951d970499a3826afa047d1327a02ba0df40c62451d30adc1b6c45eff61c"
+    },
+    {
+      "key": "AC-IMP-01",
+      "drive_id": "1JVnCjDdE79YseM-1PuhvW00xcoicwmhoHtUvEuKKrdU",
+      "captured_revision_id": "AHj4eMQyq7p9924T-5NsucG5Uk8QKUfk_j7JeXGcjUPheBp07j8xN-HmmXSlVdSMc5-C6OTasBU8M80z7j_8gpuRN7-4aTfQ-_k6H3YTY50",
+      "text_sha256": "755fedf70f6023974928f3efc7a57e1d1a6e70ed1a03ed543afdea459ff8aa65"
+    },
+    {
+      "key": "AC-IMP-03",
+      "drive_id": "1ncsRMiMMiQ39tCn7dV3vpqwUnirY06BgSuVdm_BuIFo",
+      "captured_revision_id": "AHj4eMS_OPWFhG4up0h-jlgc8TYPQKlmM8-JozuSVrgVbKOL4yV-PCL7R0B1vxmT9gjEIKYLovVv965GGJqrShKDja1HYcEESYJh9cx4a_M",
+      "text_sha256": "27dea0b4ec1709d92fbf21fe02ee85f07ef6a8c95d97fa445f0f1803ed3cb921"
+    },
+    {
+      "key": "AC-IMP-04",
+      "drive_id": "1gQnsY1JjphpmOmfyCRZkfI-p0TWZjF1PkY1xF744Gnc",
+      "captured_revision_id": "AHj4eMR_VPKMFc5cyvsxqi9SKinM4VGnpxXA5M_1lkWp01f22LbwaoeHVwzDOGbo1J7kld3SVtDnBhMxY6tziPfWIbVzi756gvuMa9PDRvM",
+      "text_sha256": "fc21a55a97406d8daa860f89a822a43c6fa390c6ad515dc63f02d8f67d17a131"
+    },
+    {
+      "key": "AC-IMP-05",
+      "drive_id": "1Vvf1wCA_JjrJQwhkTsgyDM_9179G4M899pWWc3-UdXw",
+      "captured_revision_id": "AHj4eMSAdtKqH7cgfhuQTUQgeUuKcfDicxD608ZjMXxW_4a16r1Ktw_XNNCfUSAm6aCRxfdZE2Mah8--jKxvtR-NjvdlcZ8Fdm1SXDXDyaU",
+      "text_sha256": "da6d24f55dbd78b95e31c125a72fe6f39d70fec9ac4aff6857ab266193b20ae0"
+    },
+    {
+      "key": "PRD",
+      "drive_id": "1vZGxiP5GRA7He0gA7oF6hmTeHqoEZUIJko_QBUtDW_k",
+      "captured_revision_id": "AHj4eMRUOQV_pyvT-nBKLjcFZzJML1MpP32hLpZr0xf0QEyguRu0WK3E53f3tgwtViym1CbAM8BhoW2DQcudYvwA5nA3CBwJnIXXVAp8bhM",
+      "text_sha256": "aee8c3e22c6eec63652baee6f23baa2d119179cb4ba728c991a5c0d321a85436"
+    },
+    {
+      "key": "IA",
+      "drive_id": "1VLJTswU2sqlimfoSIROVvlJ9Z6ue-6Dd45oEcu1ddhs",
+      "captured_revision_id": "AHj4eMTbxkjxKnBcam_ievU64b9eEdqRrnzo9cyHH5eU7rGUCy3hZvP3_s7dtFOkON1-yySUBv17kzEx19C6xoKpissTHFXnsoOEI4JO42o",
+      "text_sha256": "02f5e1974723e3cf81a3df4005ce16a9bd0ba272b2f31d76d32fbaf17791bb30"
+    },
+    {
+      "key": "UX-RESEARCH",
+      "drive_id": "1M_IlSgZwWfHVk1IU3JBzY-EhT3RIfXO07WII8MbwxPM",
+      "captured_revision_id": "AHj4eMSHhhiJYf4U8cmMyXdgSTS_99gGoFMOW8H0qfed8tel3Dmb1atwNetj2n5IjII93lPmGsGst2kVrtZOin9xNKQ9o4cJh_QPBcp2-kE",
+      "text_sha256": "239fb07e4e353d53af999637eb86dc621150ac20398d7841f235d11b8cf18fbf"
+    },
+    {
+      "key": "UX-STATES",
+      "drive_id": "10HzU7kLk78WBHd_Y23jYaP0rIaScq7gW27e5D7D-08E",
+      "captured_revision_id": "AHj4eMTYRVbn_0r8ebP_H2WgaLUC4iMXUYS9sBo9KlGtqhr4Z36oeEm8oH4dRB_eLdoHIo4XC8CcLfZm3KZhgoVeT-Dfx_8fihGDnzKAbzk",
+      "text_sha256": "7d67367936ce0e7a32644fcaee8832abb46b9a22c17d040e2b4f91ab31204d0e"
+    },
+    {
+      "key": "UI-SYSTEM",
+      "drive_id": "1y7yCqro9ABW8Yn61ZVmnLV8eGlelcq3BisCDTx40SsI",
+      "captured_revision_id": "AHj4eMTusBYAjhmIRcoyO9aQDeVtSFxM-yDvkvNUwrWfc2_W4i1yZFKCJyKTHFS8x0BnWdGGT5O1VnVYi59xPW5rJK38st3z5MTa7mZkVlk",
+      "text_sha256": "7183b8f99ae93c16794a034529bc648af6bc536721c3e7d2f6cd06927a1dd4f4"
+    },
+    {
+      "key": "SRS",
+      "drive_id": "1qE_ASXOBN-AAuIglfs4-5Fi_HN3x-jDItBYdb95Ou2g",
+      "captured_revision_id": "AHj4eMQvJPvnSrQZIfCLIV2cvt4zcRCVZvuQF5pEV0UdgGz_JUlT_5G3qNXV4WVqnLKLgZskKrc-0D3PuH2CjYfHaVRDhyjdSZSgUHuMqp8",
+      "text_sha256": "b3a82c33e361524dfddfe310d479cb1fbc7c67f0db1cbca6a0244eb9387f7267"
+    },
+    {
+      "key": "DATA-TENANCY",
+      "drive_id": "1SUxNYTu30NXwBEbk7os1OBVn4H5qBky-LnzLuOvwaYw",
+      "captured_revision_id": "AHj4eMRuXEwbggEPgYkqo2QUevvJTWa4AbuTa8d8WOLQ7n7-tREq9KlHj5YdEQ1gT_0xJ-gq-SBhgcxv2Y0FjpNLep7DEGISo0OgPyY0KyY",
+      "text_sha256": "65e605d5d230812681636ea0777383861d4919bb3c62b8b84dfa3e83bfd18cf1"
+    },
+    {
+      "key": "API-MCP",
+      "drive_id": "1kWawS57AGVv7jT5Kp2V0Mk8kK0B6BwPzlG6KiAOtpt0",
+      "captured_revision_id": "AHj4eMSNHH4VWdjRSwW_Q6mu-VYn00q10uVA9-7X2TeIvdtAACMAQWlowWhVu8R0CZhDBKafViAJo0dIf3cCoMapsHSr9NxS86BhaMkXi9Y",
+      "text_sha256": "16b95755680c8b310dd76ab4c3b1cf51761aaabc743210df8e8012d4f6a3edc9"
+    },
+    {
+      "key": "SECURITY",
+      "drive_id": "1rFTiq7BI4dpLLMIDacC8qMhpAbAmOct8W_I65Ydqbmw",
+      "captured_revision_id": "AHj4eMTFHM8Wl4zd0iyjtSU8Uazn3xM3M08qP1KZY6HD3n5cRoZDRIDX3MoLgw7dRYWT_NbrSL9KHJ_u19sXNxp2XokITklnWhZVMgffIwc",
+      "text_sha256": "fc6495e67a8afc0989d9e5842f6de1152b53b918406202254b26badca159095c"
+    },
+    {
+      "key": "ADMIN",
+      "drive_id": "12-VjN02jx8M7S8wJrZLcl4OwLcXIFGXKu74wxdJrWuY",
+      "captured_revision_id": "AHj4eMTEJS2AYz89PWCIYLLM3lF_TURx2QQeK6fpQ-T5bSC0tinekCMJiK2-rgucYJVwN5IYCJXo4J4HDcgIMMmlCDT7HaMNbCTg5B_OrDA",
+      "text_sha256": "63e4dd847d48e3929857868758f7008f64957531794e67cac369377fd22bac56"
+    },
+    {
+      "key": "TELEMETRY",
+      "drive_id": "1ggdrD_ldZL3ItJsAMONq_ygQFjbR6dOURpeHGXd4M4I",
+      "captured_revision_id": "AHj4eMR2KgIHd1CZyUhLeYwMD4Oe758nizmFjEaSkAR9eqep7LeKhaHz6O_XLgS5QwK1hPH2gUU5NHawgdFK6VzHSE76gJon5EEjBWvLD8g",
+      "text_sha256": "91c3e4e934465baec4ff8c23bc1ee37593a774fc7acab166c0529433fefc4d01"
+    },
+    {
+      "key": "DEVOPS-SRE",
+      "drive_id": "1r1P2XdYSY8XhcgLR6icYqhlN1vEbqKagj8Rb16JpcJs",
+      "captured_revision_id": "AHj4eMSXt7vKxfqXfxZgBg1CiHLf_bEcfJYo3rrZrRfPEAQKc8Jf0PudlaJrj4eHwYrBDPJ973UU1ozDi21ft7yCQrDo5fG8d3qqvC7bYUc",
+      "text_sha256": "ca2c09d8bc2fb9205d6b9ea4bb0aec9bb048cb6c33ca530b5467e40eba8ef04a"
+    },
+    {
+      "key": "QA-RELEASE",
+      "drive_id": "1DUx9JIHNC1KCR62Qso6KTFPoBxmfhU6GSuNqSl87hBg",
+      "captured_revision_id": "AHj4eMSorS6j-mUizRSHimR_LDYahBW_jMx5kwZbmHEVguGj2X8lkX3t41ebgMXAgIUHe_ejvpaGg5RXym7gnLR7Oz0xj6CL6jm-8jVT9-s",
+      "text_sha256": "bf68714c6b1bd757473e7ed36024cbf083ae6d315e51959d49e74d6b341bdbf3"
+    },
+    {
+      "key": "ADR-RISK",
+      "drive_id": "1cNE-8DB0iX28U5IR_StkO-JGE2TPG-pbKn6LQ-bZSaY",
+      "captured_revision_id": "AHj4eMR-cqiHobKI_lphAxQ04N553Hk6YMoWekAMheZH9zdJ5cnyBmkoAhNDDftHxJ3Adj7OJmJXn0e0crYtMtbt8Va_fe3lqw-IpttS_eA",
+      "text_sha256": "2107a3b75aad99544655d878ed248c2001e796d6a36af76c8ce8de85d766f373"
+    },
+    {
+      "key": "AC-UXA-01",
+      "drive_id": "1ZRyNPkkfc8DsBAlpKE9ksb6Oi-nB9BX-",
+      "captured_revision_id": null,
+      "text_sha256": "21f92016cc566551016505d62bfedcd441144004138334dbb36836de6da35e2b"
+    },
+    {
+      "key": "AC-SVAL-01",
+      "drive_id": "11yOvguvLLj4WRi7-gJonWM3nSzkGk0NC",
+      "captured_revision_id": null,
+      "text_sha256": "e5d838c877fc14ed7cd29a1ea213e9318b8b16f38f50fde87e72e1adbeca1753"
+    },
+    {
+      "key": "AC-GOV-AUD-001",
+      "drive_id": "17Gs86tkRo4jr8XcqgMPyO-UojXeTANnY",
+      "captured_revision_id": null,
+      "text_sha256": "fa7c7dadea1ec65c3d0d892d84cf2f82ba84d8bed65fe4d7fbc27f7e127a6d2c"
+    }
+  ]
+}

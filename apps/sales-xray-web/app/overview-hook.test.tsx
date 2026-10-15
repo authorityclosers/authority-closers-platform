@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OverviewHook, shareChartSegments } from "./overview-hook";
 import { talkShareSeries } from "./call-data";
 import type { SalesReport, Transcript } from "./report-contract";
+import { MOMENTS } from "./report-copy";
 import { ReportReadingProvider } from "./report-reading-context";
 import { ReportModes } from "./report-modes";
 import type { DocumentReportData } from "./report-document-data";
@@ -162,6 +163,18 @@ async function renderOverview(
   );
 }
 
+it("keeps Missed chances visible with an honest empty line and no invented finding", async () => {
+  await renderOverview();
+  const heading = [...host.querySelectorAll("h3")].find(
+    (node) => node.textContent === MOMENTS.missedTitle,
+  );
+  expect(heading).toBeDefined();
+  const section = heading!.closest("section")!;
+  expect(section.textContent).toContain(MOMENTS.noneMissed);
+  expect(section.textContent).not.toContain(MOMENTS.missedHint);
+  expect(section.querySelectorAll("article, q, button")).toHaveLength(0);
+});
+
 it.each(["", "&print=1"])(
   "passes the full source summary to Document without opening the Reading disclosure%s",
   async (printQuery) => {
@@ -232,8 +245,10 @@ describe("OverviewHook phase cards", () => {
       report.summary,
     );
     expect(visuals.textContent).toContain("Call length02:00");
-    expect(visuals.textContent).toContain("alex");
-    expect(visuals.textContent).toContain("sam");
+    // Unnamed voices read as the rest of the report names them, never by id.
+    expect(visuals.textContent).toContain("Speaker 1");
+    expect(visuals.textContent).toContain("Speaker 2");
+    expect(visuals.textContent).not.toMatch(/alex|sam/);
     expect(
       visuals.querySelector('[aria-label="Call map AI visual readings"]'),
     ).toBeNull();
@@ -246,7 +261,7 @@ describe("OverviewHook phase cards", () => {
 
   it("shows unavailable call signals until roles are assigned", async () => {
     await renderOverview(transcript, null);
-    expect(host.textContent).toContain("assign roles to measure");
+    expect(host.textContent).toContain("pick the salesperson to count");
     expect(host.textContent).not.toContain("0 signals");
   });
 
@@ -272,6 +287,8 @@ describe("OverviewHook phase cards", () => {
     };
     await renderOverview(noMatches);
     expect(host.textContent).toContain("0 signals");
+    // The prospect door counts insights, as the Report's "prospect insights".
+    expect(host.textContent).toContain("0 insights");
   });
 
   it("keeps silent minutes as gaps in the chart", () => {

@@ -420,6 +420,23 @@
   display: none;
 }
 
+/* Too many chips for one row (measured, calls-chip-row.ts): search, rep and
+   sort stay on top and the chips get the full width below, never clipped. */
+.toolbar[data-chips-row] {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.toolbar[data-chips-row] .search {
+  margin-right: auto;
+}
+
+.toolbar[data-chips-row] .filters {
+  order: 1;
+  flex: 1 1 100%;
+  margin-right: 0;
+}
+
 .filters button {
   display: inline-flex;
   flex: none;
@@ -684,13 +701,17 @@
   font-weight: 500;
 }
 
+/* The phone row's quiet line wraps between its parts rather than cutting
+   the rep's name ("Rahul …" at 360 px). */
 .meta {
   display: none;
   min-width: 0;
   overflow: hidden;
   color: var(--lx-muted);
   font-size: 12px;
-  text-overflow: ellipsis;
+}
+
+.meta > span {
   white-space: nowrap;
 }
 
@@ -1050,10 +1071,6 @@
   gap: 16px;
 }
 
-.skeletonStrip .kpi {
-  gap: 8px;
-}
-
 .skeleton i {
   display: block;
   border-radius: var(--lx-radius-xs);
@@ -1061,37 +1078,33 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-.skeletonStrip i[data-w="label"] {
-  width: 64px;
-  height: 12px;
-}
-
-.skeletonStrip i[data-w="value"] {
+/* The loading outline uses the loaded strip and toolbar themselves, so every
+   tile, control and row keeps its box; only the words wait. */
+.skeleton i.phValue {
   width: 48px;
   height: 28px;
 }
 
-.skeletonStrip i[data-w="context"] {
-  width: 112px;
-  height: 12px;
+/* A word-shaped bar inside a line of text: the line keeps its height. */
+.skeleton i.phText {
+  display: inline-block;
+  width: var(--w, 8em);
+  max-width: 100%;
+  height: 0.8em;
+  vertical-align: -0.05em;
 }
 
-.skeletonToolbar {
-  display: flex;
-  gap: 8px;
+.skeleton .phControl {
+  border-color: transparent;
+  background: var(--lx-sunken);
+  animation: pulse 1.4s ease-in-out infinite;
 }
 
-.skeletonToolbar i {
-  height: 32px;
-  border-radius: var(--lx-radius-sm);
-}
-
-.skeletonToolbar i[data-w="search"] {
-  width: 260px;
-}
-
-.skeletonToolbar i[data-w="chips"] {
-  width: 300px;
+.skeleton .phChip {
+  display: inline-block;
+  width: 72px;
+  min-height: var(--lx-control-compact-h, 32px);
+  border-radius: var(--lx-radius-pill);
 }
 
 .skeletonRow {
@@ -1118,7 +1131,8 @@
 
 @keyframes pulse {
   50% {
-    opacity: 0.55;
+    /* Keep the slate dot above 3:1 on light surfaces throughout the pulse. */
+    opacity: 0.75;
   }
 }
 
@@ -1147,6 +1161,28 @@
   .item {
     grid-template-columns: minmax(0, 1fr) 96px 64px 132px 16px;
     gap: 12px;
+  }
+}
+
+/*
+ * Tablets: the call's name needs the room more than its length does (r17:
+ * names are never cut; at 820 px the Call column was 166 px). Length stays
+ * in the Call time figure, the preview and the call itself.
+ */
+@container calls-page (max-width: 840px) {
+  .headCells,
+  .item {
+    grid-template-columns: minmax(0, 1fr) 96px 132px 16px;
+  }
+
+  .page[data-reps] .headCells,
+  .page[data-reps] .item {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 132px) 96px 132px 16px;
+  }
+
+  .lengthHead,
+  .length {
+    display: none;
   }
 }
 
@@ -1184,8 +1220,25 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* r17 S5: compact figures on phones, each name and number on one line
+     (the number takes its own line when both don't fit) and what it counts
+     below, so the list starts sooner. */
   .kpi {
-    padding: 12px 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    align-items: baseline;
+    column-gap: 8px;
+    row-gap: 2px;
+    padding: 10px 12px;
+  }
+
+  .kpi dt {
+    flex: 1 0 auto;
+  }
+
+  .kpi dd:first-of-type {
+    min-height: 0;
   }
 
   .kpi + .kpi {
@@ -1205,8 +1258,7 @@
   }
 
   .spark {
-    width: 64px;
-    height: 22px;
+    display: none;
   }
 
   .privacy {
@@ -1330,8 +1382,23 @@
     overflow-wrap: anywhere;
   }
 
+  /* Every part carries a 14 px separator; the line is shifted left and
+     clipped by that much, so a part that starts a line shows none. */
   .meta {
-    display: block;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    margin-left: -14px;
+    clip-path: inset(0 0 0 14px);
+  }
+
+  .meta > span::before,
+  .meta > span + span::before {
+    display: inline-block;
+    width: 14px;
+    margin: 0;
+    content: "·";
+    text-align: center;
   }
 
   .snippet,
@@ -1356,8 +1423,12 @@
     display: none;
   }
 
+  /* Two lines kept for every tile, so a tile's height never depends on
+     its words (and the loading outline lands on the same lines). */
   .kpiContext {
     display: -webkit-box;
+    flex-basis: 100%;
+    min-height: 2lh;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -1376,15 +1447,6 @@
   .skeletonRow {
     min-height: 64px;
     padding-left: 14px;
-  }
-
-  .skeletonToolbar i[data-w="search"] {
-    flex: 1;
-    width: auto;
-  }
-
-  .skeletonToolbar i[data-w="chips"] {
-    width: 120px;
   }
 
   .bulk {
@@ -1409,6 +1471,10 @@
 }
 
 @media (pointer: coarse) {
+  .skeleton .phChip {
+    min-height: var(--lx-row-min-h, 44px);
+  }
+
   .refresh,
   .tool,
   .primary,

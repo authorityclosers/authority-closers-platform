@@ -71,16 +71,19 @@ describe("console navigation", () => {
     );
   });
 
-  it("never lists a section before its screen exists", () => {
+  it("lists every built section in local preview", () => {
     const everything = hrefs({ ...base, state: "preview" });
-    expect(everything).not.toContain("/gold");
-    expect(everything).not.toContain("/releases");
+    expect(everything).toContain("/gold");
+    expect(everything).toContain("/safety");
   });
 
   it("marks the most specific matching section, including query-addressed tabs", () => {
     const groups = visibleNavigation({ ...base, state: "preview" });
     expect(activeHref("/", groups)).toBe("/");
     expect(activeHref("/calls/abc", groups)).toBe("/calls");
+    expect(activeHref("/sales-xray/review/report/abc", groups)).toBe(
+      "/reviewers",
+    );
     expect(activeHref("/sales-xray/providers", groups, "tab=benchmark")).toBe(
       "/sales-xray/providers",
     );

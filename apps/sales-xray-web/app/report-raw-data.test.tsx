@@ -6,6 +6,7 @@ import fixture from "../tests/fixtures/dipak-overview.json";
 import { csvCell, ReportRawData } from "./report-raw-data";
 import { ReportReadingProvider } from "./report-reading-context";
 import type { SalesReport, Transcript } from "./report-contract";
+import { amitReport } from "./review-fixture/report/story/amit-call";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -58,14 +59,14 @@ afterEach(async () => {
   host.remove();
 });
 
-async function render(documentView = false) {
+async function render(documentView = false, sourceReport = report) {
   await act(async () =>
     root.render(
       <ReportReadingProvider reading={documentView} documentView={documentView}>
         <ReportRawData
           callId="6c1e2f3a-4b5d-4e6f-8a9b-0c1d2e3f4a5b"
           transcript={transcript}
-          report={report}
+          report={sourceReport}
           durationMs={transcript.duration_ms}
           runId="9f8e7d6c-0000-4000-8000-000000000000"
           onSeek={onSeek}
@@ -80,6 +81,49 @@ function section(title: string) {
     element.querySelector("h3")?.textContent?.startsWith(title),
   )!;
 }
+
+it("shows the Report's skill states and short names when the call supplies them", async () => {
+  await render(false, amitReport);
+  const rows = [...section("Skills checked").querySelectorAll("li")];
+  expect(rows.map((row) => row.lastElementChild?.textContent)).toEqual([
+    "Human Connection & Trust",
+    "Discovery",
+    "Qualification",
+    "Problem / Impact / Desire",
+    "Presentation & Value",
+    "Objection Intelligence",
+    "Closing",
+    "Communication",
+  ]);
+  expect(rows.map((row) => row.firstElementChild?.textContent)).toEqual([
+    "Strongly Demonstrated",
+    "Needs Attention",
+    "Observed",
+    "Observed",
+    "Observed",
+    "Observed",
+    "Strongly Demonstrated",
+    "Observed",
+  ]);
+});
+
+it("keeps the evidence status and an unknown skill's name on older reports", async () => {
+  await render(false, {
+    ...amitReport,
+    dimensions: [
+      {
+        ...amitReport.dimensions[0],
+        dimension_id: "legacy_skill",
+        label: "An older skill name",
+        call_state: undefined,
+        status: "observed",
+      },
+    ],
+  });
+  const row = section("Skills checked").querySelector("li")!;
+  expect(row.firstElementChild?.textContent).toBe("Seen");
+  expect(row.lastElementChild?.textContent).toBe("An older skill name");
+});
 
 it("lists the real questions, numbers and price talk from the call", () => {
   const questions = section("Questions asked");

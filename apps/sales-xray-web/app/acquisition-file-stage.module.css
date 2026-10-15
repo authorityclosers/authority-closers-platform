@@ -56,6 +56,17 @@
   pointer-events: none;
 }
 
+/* The empty drop area's wave: a strip, not the analysis screen's full height. */
+.idleWave {
+  display: block;
+  width: min(420px, 100%);
+  margin-bottom: 4px;
+}
+
+.idleWave.idleWave > * {
+  --wave-h: 52px;
+}
+
 .uploadMark {
   width: 36px;
   height: 36px;
@@ -251,7 +262,7 @@
   justify-content: flex-start;
   margin: 0;
   padding-left: 54px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .selection {
@@ -283,7 +294,7 @@
 .selectionHeader small {
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -360,7 +371,7 @@
 .fileCopy small {
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -379,7 +390,7 @@
   background: var(--lx-teal-soft);
   color: var(--lx-strength-ink);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -419,7 +430,7 @@
   justify-content: space-between;
   gap: 8px;
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .pagination button {
@@ -454,13 +465,13 @@
 
   .stage[data-has-files="true"] .browse {
     min-height: 17px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .facts {
     gap: 2px 8px;
     padding-left: 37px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .facts svg {
@@ -504,7 +515,7 @@
   .stage[data-has-files="true"] .select {
     min-height: 24px;
     padding: 2px 7px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .remove {
@@ -534,10 +545,14 @@
     height: 29px;
   }
 
+  .idleWave.idleWave > * {
+    --wave-h: 40px;
+  }
+
   .facts {
     gap: 4px 10px;
     margin-top: 3px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .dropArea {
@@ -553,7 +568,7 @@
 
   .stage[data-has-files="true"] .facts {
     padding-left: 39px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .selection {
@@ -582,7 +597,7 @@
   }
 
   .facts {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .facts {
@@ -681,12 +696,11 @@
 .stage.stage[data-has-files="true"] .selectionHeader {
   min-height: 24px;
 }
+/* A quiet label, not caps (r17: no eyebrow caps). */
 .stage.stage[data-has-files="true"] .selectionHeader strong {
-  color: var(--lx-muted);
-  font-size: 11.5px;
-  font-weight: 750;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  color: var(--lx-ink-3);
+  font-size: 13px;
+  font-weight: 600;
 }
 .stage.stage[data-has-files="true"] .selectionHeader small {
   display: none;
@@ -731,14 +745,13 @@
     0 0 0 4px var(--lx-teal-tint),
     var(--lx-shadow-2);
 }
-/* The recording as a document: a vivid tile with a live equaliser. */
+/* The recording as a document: one teal tile with a live equaliser. */
 .stage.stage[data-has-files="true"] .fileIcon {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: var(--lx-gradient-brand);
-  box-shadow: 0 10px 20px -12px var(--lx-teal);
-  color: var(--lx-film-text);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
 }
 .stage.stage[data-has-files="true"] .fileIcon svg {
   width: 26px;
@@ -770,6 +783,20 @@
 .stage.stage[data-has-files="true"] .fileCopy {
   gap: 4px;
 }
+/* The chosen call's wave runs under its name, the card's full width. */
+.stage.stage[data-has-files="true"] .fileCard[data-selected="true"] {
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+/* The name gives way, so only the wave starts a new row. */
+.stage.stage[data-has-files="true"] .fileCard[data-selected="true"] .fileCopy {
+  flex: 1 1 0;
+}
+.fileWave {
+  display: block;
+  flex: 1 0 100%;
+  min-width: 0;
+}
 .stage.stage[data-has-files="true"] .fileCopy strong {
   color: var(--lx-ink);
   font-size: 16px;
@@ -796,10 +823,13 @@
   transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
 }
 /* "Add another": a slim, quiet drop row. */
+/* The limits take their own line when they don't fit beside "Add another"
+   (they ran past the card's edge at 1440 with the privacy card beside it). */
 .stage.stage[data-has-files="true"] .dropArea {
   min-height: 62px;
   flex-direction: row;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  row-gap: 6px;
   align-items: center;
   gap: 14px;
   padding: 10px 16px;
@@ -846,8 +876,9 @@
 }
 .stage.stage[data-has-files="true"] .facts {
   width: auto;
-  flex-wrap: nowrap;
-  gap: 14px;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px 14px;
   margin: 0 0 0 auto;
   padding: 0;
   font-size: 12px;
@@ -900,4 +931,35 @@
 
 .stage.stage[data-has-files="true"] .dropCopy strong {
   white-space: nowrap;
+}
+
+/* Phones: the file's name keeps the row ("Disco…" at 390); "Selected"
+   shows as its check, and the word stays for screen readers. */
+@media (max-width: 480px) {
+  .stage.stage[data-has-files="true"] .fileCard {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .stage.stage[data-has-files="true"] .fileIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .stage.stage[data-has-files="true"] .selectedBadge {
+    gap: 0;
+    padding: 6px;
+    font-size: 0;
+  }
+
+  .stage.stage[data-has-files="true"] .fileCopy strong {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
 }

@@ -53,15 +53,55 @@
   color: var(--lx-muted);
 }
 
+/* Working: a small equaliser, the call being listened to (static when
+   motion is reduced). */
+.eq {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+}
+
+.eq i {
+  width: 2.5px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: center;
+  animation: eq-bar 1.1s ease-in-out infinite;
+}
+
+.eq i:nth-child(2) {
+  animation-delay: -0.35s;
+}
+
+.eq i:nth-child(3) {
+  animation-delay: -0.7s;
+}
+
+.eq i:nth-child(4) {
+  animation-delay: -0.2s;
+}
+
+@keyframes eq-bar {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 /* Working: one soft pulse, the only motion on the screen. */
-.signal i {
+.signal > i {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: currentColor;
 }
 
-.signal[data-phase="working"] i {
+.signal[data-phase="working"] > i {
   animation: progress-pulse 1.6s var(--lx-ease-move, ease-in-out) infinite;
 }
 
@@ -261,6 +301,14 @@
   padding-block: 0;
 }
 
+/* One teal accent (the studio's global button is the legacy cobalt). */
+.actions :global(.primary-button) {
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-size: var(--sx-text-sm);
+}
+
 .actions :global(.text-button) {
   color: var(--sx-muted);
 }
@@ -314,12 +362,15 @@
 
 /* ---------- File ---------- */
 
+/* The call being analysed leads the panel, its actions in the ⋯ menu. */
 .file {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
   min-height: 40px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--lx-line-soft);
   color: var(--lx-muted);
 }
 
@@ -441,8 +492,25 @@
   }
 }
 
+/* Narrow phones: a step's status goes under its words, which keep the width. */
+@media (max-width: 479.98px) {
+  .step {
+    grid-template-columns: 20px minmax(0, 1fr);
+    row-gap: 2px;
+  }
+
+  .stepStatus {
+    grid-column: 2;
+  }
+
+  .stepStatus:empty {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .signal[data-phase="working"] i {
+  .signal[data-phase="working"] > i,
+  .eq i {
     animation: none;
   }
 }

@@ -45,3 +45,19 @@ def test_example_is_authored_and_no_intake_or_paid_route_is_exposed():
         assert "Authored" in sample["provenance"]
         assert client.post("/v1/conversation/recordings", content=b"media").status_code == 404
         assert client.post("/v1/conversation/runs", json={}).status_code == 404
+
+
+@pytest.mark.parametrize(
+    "content_type", ["audio/aiff", "video/mp4", "video/quicktime", "video/3gpp", "video/x-matroska"]
+)
+def test_recording_accepts_new_container_types_at_exact_decimal_upload_limit(content_type):
+    payload = dict(
+        source_sha256="a" * 64,
+        source_bytes=100_000_000,
+        content_type=content_type,
+        permission_reference="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        purpose="internal_analysis",
+    )
+    assert RecordingIntent.model_validate(payload).source_bytes == 100_000_000
+    with pytest.raises(ValidationError):
+        RecordingIntent.model_validate({**payload, "source_bytes": 100_000_001})

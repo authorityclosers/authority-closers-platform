@@ -14,3 +14,5 @@ tests/integration/test_staging_seed_postgresql.py
 tests/integration/test_studio_draft_authoring_postgresql.py
 tests/integration/test_studio_revision_postgresql.py
 tests/integration/test_studio_video_worker_fence_postgresql.py
+tests/e2e/test_sales_xray_standalone_browser.py
+tests/e2e/test_sales_xray_report_browser.py

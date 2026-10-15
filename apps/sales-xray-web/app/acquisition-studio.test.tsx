@@ -33,7 +33,7 @@ import {
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import * as sourcePlaybackContext from "./source-playback-context";
 import * as processingReviewPort from "./processing-review-port";
-import { spokenClipRange } from "./lightbox/time";
+import { formatClock, spokenClipRange } from "./lightbox/time";
 import {
   allowance,
   entry,
@@ -53,6 +53,12 @@ const secondReportSummary =
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+// The measured waveform has its own tests (analysis-wave.test.tsx); here it
+// stays out of the fetch sequence the plan polls use.
+vi.mock("./analysis-wave", async (original) => ({
+  ...(await original<typeof import("./analysis-wave")>()),
+  useMeasuredWave: () => null,
+}));
 vi.mock("./upload-check", () => ({
   UploadCheck: ({ onToken }: { onToken: (token: string) => void }) => (
     <button onClick={() => onToken("synthetic-one-use-challenge")}>
@@ -303,10 +309,27 @@ async function saveDeferredSource() {
   await settleAll();
 }
 
+/** Reduced motion: the report shows at once, without the reveal's beat. */
+function stubMotion(reduce: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    (query: string) =>
+      ({
+        matches: reduce && query.includes("prefers-reduced-motion"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+      }) as unknown as MediaQueryList,
+  );
+}
+
 beforeEach(() => {
   navigateToAccount.mockReset();
   replaceToLogin.mockReset();
   vi.useFakeTimers();
+  stubMotion(true);
   calls = [];
   existing = false;
   workspaceUnauthorized = false;
@@ -632,19 +655,19 @@ it("shows real account recent calls on home and opens the selected saved report"
   const preview = container.querySelector(".calls-library-preview");
   expect(preview?.textContent).toContain("Recent calls");
   expect(preview?.textContent).toContain("Report ready");
-  // The library length is the reserved estimate: always "About".
-  expect(preview?.textContent).toContain("About 01:01");
-  expect(
-    preview
-      ?.querySelector(".calls-library-duration")
-      ?.getAttribute("aria-label"),
-  ).toBe("Estimated length: About 01:01");
+  // The Dashboard's rows: the length the server measured, as a clock.
+  expect(preview?.textContent).toContain("1:01");
+  expect(preview?.textContent).not.toMatch(/About|Estimated|PRIVATE/);
   expect(
     preview?.querySelector('a[href="/analysis/calls"]')?.textContent,
   ).toContain("View all calls");
   expect(container.querySelectorAll("main")).toHaveLength(1);
   await act(async () =>
-    preview?.querySelector<HTMLButtonElement>(".calls-library-item")?.click(),
+    preview
+      ?.querySelector<HTMLAnchorElement>(
+        `a[href="/analysis/calls/${secondSubmissionId}"]`,
+      )
+      ?.click(),
   );
   expect(navigateToAccount).toHaveBeenCalledWith(
     `/analysis/calls/${secondSubmissionId}`,
@@ -1088,6 +1111,31 @@ it("reconciles the locally hashed source after a lost PUT response without a sec
   ).toHaveLength(1);
 });
 
+it("holds 'Your report is ready' for a beat, then the report rises in where the panel was", async () => {
+  stubMotion(false);
+  await mountWithAccountAccess();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await flush();
+  const panel = container.querySelector('[aria-label="Analysis progress"]');
+  expect(panel?.querySelector("h2")?.textContent).toBe("Your report is ready");
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).toBeNull();
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  await flush();
+  expect(
+    container.querySelector('[aria-label="Analysis progress"]'),
+  ).toBeNull();
+  const report = container.querySelector('[aria-label="Sales call report"]');
+  expect(report).not.toBeNull();
+  expect(report?.hasAttribute("data-reveal")).toBe(true);
+});
+
 it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
   await mountWithAccountAccess();
   expect(
@@ -1197,19 +1245,28 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   );
   expect(container.textContent).toContain("Sign in to save");
   expect(container.textContent).toContain("Download report");
+  // A finished call opens on the six-part Report.
   expect(
     container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("reading");
+  ).toBe("story");
   expect(
     container.querySelectorAll('[aria-label="Explore your sales report"] a'),
-  ).toHaveLength(7);
+  ).toHaveLength(6);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
     expect(call.init.redirect).toBe("error");
   }
-  await clickReportSection("Moments");
-  expect(container.textContent).toContain("कल timing discuss करूया.");
+  await clickReportSection("Moments That Mattered");
+  // The supported Commitment stays in Moments; legacy misses may be gated.
+  expect(
+    container.querySelector('[data-report-pillar="missed"]')?.textContent,
+  ).toContain("तीन बजे ठीक है, please send details.");
+  // Every original turn remains readable, including the legacy miss's quote.
+  await click("Transcript");
+  expect(
+    document.querySelector('[aria-label="Transcript reader"]')?.textContent,
+  ).toContain("कल timing discuss करूया.");
 });
 
 it.each([
@@ -1306,6 +1363,14 @@ it("shows the advertised trial allowance for a clean visitor", async () => {
   await mount();
   expect(container.textContent).toContain("Up to 100m trial allowance");
   expect(container.textContent).not.toContain("unavailable until your session");
+});
+
+it("never shows a signed-in account the guest trial cap while its balance loads", async () => {
+  await mountWithAccountAccess();
+  expect(container.textContent).not.toContain("trial allowance");
+  expect(container.textContent).toContain(
+    "Remaining analysis time · checking…",
+  );
 });
 
 it("clears consent when the selected file changes", async () => {
@@ -1862,7 +1927,7 @@ it("shows the live processing stages without inventing a percentage", async () =
   expect(container.querySelector('[role="status"] h2')?.textContent).toBe(
     "Analysing your call",
   );
-  expect(container.textContent).toContain("Usually about 2–4 minutes");
+  expect(container.textContent).toContain("Usually 2–3 minutes");
   expect(
     container.querySelector('[aria-label="Processing stages"]'),
   ).not.toBeNull();
@@ -2678,7 +2743,7 @@ it("keeps one steady headline through a long wait without changing progress, ide
   expect(container.querySelector("[data-update-delayed]")).toBeNull();
   expect(
     container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("reading");
+  ).toBe("story");
 });
 
 it("replaces delayed guidance with real paused recovery without restarting analysis", async () => {
@@ -2693,7 +2758,7 @@ it("replaces delayed guidance with real paused recovery without restarting analy
   expect(container.querySelector("[data-update-delayed]")).toBeNull();
   expect(container.textContent).toContain("Analysis paused");
   expect(container.textContent).toContain(
-    "The completed transcript stays attached",
+    "The transcript is saved with this call",
   );
   expect(
     calls.filter(({ init }) => init.method && init.method !== "GET"),
@@ -2712,10 +2777,10 @@ it("shows saved completed work when an uncertain stage pauses processing", async
     "This stage needs checking before analysis can continue",
   );
   expect(container.textContent).toContain(
-    "Some conversation analysis is saved with this call",
+    "Part of the analysis is saved with this call",
   );
   expect(container.textContent).toContain(
-    "The completed transcript stays attached",
+    "The transcript is saved with this call",
   );
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
     "Done",
@@ -2755,6 +2820,29 @@ it("explains provider credential pauses without exposing the raw failure", async
   expect(container.textContent).not.toContain(
     "conversation_broker_service_identity_unavailable",
   );
+});
+
+it("says a failed run once: the panel's Analysis failed and Try again, no corner card", async () => {
+  existing = true;
+  progressOverride = {
+    ...progress,
+    state: "active",
+    local_state: "failed",
+    has_report: false,
+    run_state: "failed",
+    minute_state: "released",
+    retry_available: true,
+    stages: [{ stage: "C2", state: "not_started" }],
+  };
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).toContain("Analysis failed");
+  expect(container.textContent).toContain(
+    "Your minutes have been released. Your recording is saved.",
+  );
+  expect(button("Try again")).toBeDefined();
+  expect(container.textContent).not.toContain("This analysis needs attention");
+  expect(container.querySelector('[role="alert"]')).toBeNull();
 });
 
 function reloadHeldCall() {
@@ -2932,10 +3020,10 @@ it.each(["failed", "cancelled"])(
       container.querySelector('[data-phase][data-paused="true"]'),
     ).not.toBeNull();
     expect(container.textContent).toContain(
-      "A completed transcript has not been confirmed yet",
+      "The full transcript isn’t confirmed yet",
     );
     expect(container.textContent).not.toContain(
-      "The completed transcript stays attached",
+      "The transcript is saved with this call",
     );
   },
 );
@@ -2978,10 +3066,10 @@ it("keeps an uncertain transcription honest about missing completed work", async
     "Paused · needs attention",
   );
   expect(container.textContent).toContain(
-    "A completed transcript has not been confirmed yet",
+    "The full transcript isn’t confirmed yet",
   );
   expect(container.textContent).not.toContain(
-    "The completed transcript stays attached",
+    "The transcript is saved with this call",
   );
   expect(container.textContent).not.toContain("Review and continue analysis");
   expect(
@@ -3203,6 +3291,8 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
       '[aria-label="Sales Xray navigation"] [aria-current="page"]',
     )?.textContent,
   ).toBe("Calls");
+  // The bar names the page: a report, not "New analysis" or "Calls".
+  expect(container.querySelector("header b")?.textContent).toBe("Report");
   const savedAudio = container.querySelector(
     '[aria-label="Call audio player"] audio',
   );
@@ -3217,9 +3307,10 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     savedAudio?.closest('[aria-label="Call audio player"]'),
   );
   expect(savedAudio?.getAttribute("src")).toBe(source);
+  // A saved call opens straight on the six-part Report, nothing hidden.
   expect(
     container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("reading");
+  ).toBe("story");
   expect(
     container.querySelectorAll("[data-report-mode-section][hidden]"),
   ).toHaveLength(0);
@@ -3230,38 +3321,13 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
       ),
     ].map((link) => link.getAttribute("aria-label")),
   ).toEqual([
-    "Overview",
-    "Moments",
-    "Prospect",
-    "Next-call plan",
-    "Sales skills",
-    "Call signals",
-    "Raw data",
-  ]);
-  await act(async () =>
-    container
-      .querySelector<HTMLButtonElement>('button[title="Story view"]')!
-      .click(),
-  );
-  await flush();
-  expect(
-    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("story");
-  const reportSections = [
     "The Big Picture",
     "How the Call Played Out",
-    "What Worked & What Didn't",
+    "What Worked — & What Didn't",
     "Moments That Mattered",
     "Your Skills on This Call",
     "Where the Deal Stands",
-  ];
-  expect(
-    [
-      ...container.querySelectorAll<HTMLAnchorElement>(
-        '[aria-label="Explore your sales report"] a',
-      ),
-    ].map((link) => link.getAttribute("aria-label")),
-  ).toEqual(reportSections);
+  ]);
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")
     .mockResolvedValue(undefined);
@@ -3279,11 +3345,11 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   ).not.toBeNull();
   expect(container.querySelector('a[href="/prospects"]')).not.toBeNull();
   const prospectSource = envelope.report.content.strengths[0].evidence[0];
-  // The clip shows its time; its accessible name says what it plays.
+  // The play chip shows its time; its accessible name says what it plays.
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(
-        `[aria-label="Play source moment, ${spokenClipRange(prospectSource.start_ms, prospectSource.end_ms)}"]`,
+        `[aria-label="Play ${formatClock(prospectSource.start_ms)}: Strongest part"]`,
       )!
       .click(),
   );
@@ -3305,7 +3371,8 @@ it("stops an excerpt at its cited end and lets the dock resume the full call", a
   existing = true;
   claimed = true;
   accepted = true;
-  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  // The classic Reading view keeps every original clip control.
+  window.history.replaceState(null, "", `/?call=${submissionId}&view=reading`);
   await mount();
   const audio = container.querySelector<HTMLAudioElement>(
     '[aria-label="Call audio player"] audio',
@@ -3398,7 +3465,8 @@ it("toggles every visible clip control against the one shared player", async () 
   existing = true;
   claimed = true;
   accepted = true;
-  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  // The classic Reading view keeps every original clip control.
+  window.history.replaceState(null, "", `/?call=${submissionId}&view=reading`);
   await mount();
   const audio = container.querySelector<HTMLAudioElement>(
     '[aria-label="Call audio player"] audio',
@@ -3512,7 +3580,8 @@ it("keeps the current evidence stop boundary when contextual playback revalidati
   existing = true;
   claimed = true;
   accepted = true;
-  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  // The classic Reading view keeps every original clip control.
+  window.history.replaceState(null, "", `/?call=${submissionId}&view=reading`);
   await mount();
   const audio = container.querySelector<HTMLAudioElement>(
     '[aria-label="Call audio player"] audio',
@@ -3580,6 +3649,11 @@ it("does not expose a report when an explicit call selector is denied", async ()
     container.querySelector('[aria-label="Sales call report"]'),
   ).toBeNull();
   expect(container.textContent).toContain("Saved call unavailable");
+  // One calm card that starts with its title (no small caps "SAVED CALL" label).
+  expect(
+    container.querySelector('[aria-labelledby="existing-call-entry-heading"]')
+      ?.textContent,
+  ).toMatch(/^Saved call unavailable/);
   expect(calls.some((call) => call.path.endsWith("/report"))).toBe(false);
   expect(calls.some((call) => call.path.endsWith("/claim"))).toBe(false);
 });

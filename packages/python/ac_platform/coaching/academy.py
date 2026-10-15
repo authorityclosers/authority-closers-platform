@@ -55,7 +55,7 @@ async def resolve_academy_target(
     try:
         payload = await read_json(f"/v1/programs/{quote(reference.slug, safe='')}")
     except Exception:
-        return AcademyRead(target=None, error="The Academy catalogue is temporarily unavailable.")
+        return AcademyRead(target=None, error="Academy lessons didn’t load. Try again later.")
     if payload is None:
         return AcademyRead(target=None, error="The matching Academy course is unavailable.")
     try:

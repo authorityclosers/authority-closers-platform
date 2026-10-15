@@ -362,6 +362,7 @@ class SensitiveSegmentsStore:
         transcript_revision: str,
         reason_prefix: str = "",
         model_segments: Sequence[tuple[str, str]] = (),
+        model_revision: str = "coaching-v7",
     ) -> tuple[ConversationSensitiveSegmentMark, ...]:
         """Detect and append in the caller's transaction; operator releases win forever.
 
@@ -371,10 +372,12 @@ class SensitiveSegmentsStore:
         """
         recording = await self._recording(recording_id, lock=True)
         texts = await self._revision(recording, transcript_revision)
+        if model_revision not in {"coaching-v7", "coaching-v8"}:
+            raise SensitiveSegmentInvalid("The model detection revision is unavailable.")
         hits = [
             *detect_sensitive_terms(texts.items()),
             *(
-                (segment_id, category, "coaching-v7:sensitive_segments")
+                (segment_id, category, f"{model_revision}:sensitive_segments")
                 for segment_id, category in model_segments
             ),
         ]
@@ -401,7 +404,7 @@ class SensitiveSegmentsStore:
                 raise SensitiveSegmentInvalid("The detected segment or category is unavailable.")
             reason = _reason_ref(
                 rule_id
-                if rule_id == "coaching-v7:sensitive_segments"
+                if rule_id in {"coaching-v7:sensitive_segments", "coaching-v8:sensitive_segments"}
                 else f"{reason_prefix}{VERSION}:{rule_id}"
             )
             if segment_id not in released and (segment_id, category) not in occupied:

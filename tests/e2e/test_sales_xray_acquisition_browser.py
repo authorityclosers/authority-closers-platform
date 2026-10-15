@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 import os
 import re
 import secrets
 import subprocess
 import tempfile
+import zipfile
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -789,33 +791,29 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     journey_checks.update(await db(assert_single_settlement()))
                     assert broker.routes == ["elevenlabs", "gemini", "gemini"]
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
-                    reading_view = page.get_by_role("button", name="Reading view", exact=True)
-                    tabbed_view = page.get_by_role("button", name="Tabbed view", exact=True)
+                    report_view = page.get_by_role("button", name="Report view", exact=True)
+                    details_view = page.get_by_role("button", name="Details view", exact=True)
+                    more_views = page.locator('summary[aria-label="More views"]')
                     # Intended default: a bound report URL without view= opens
-                    # in Tabbed view on a desktop-width (>=1100px) viewport.
-                    await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
-                    await expect(reading_view).to_have_attribute("aria-pressed", "false")
-                    # The reader can explicitly choose Reading view: one
-                    # horizontal row of section links, all sections shown.
-                    # The transcript lives in its own reader, not in Reading.
-                    await reading_view.click()
-                    await expect(reading_view).to_have_attribute("aria-pressed", "true")
-                    reading_nav = page.get_by_role(
+                    # on the six-part Report, whatever the viewport width.
+                    # Details and Document wait behind "More views".
+                    await expect(report_view).to_have_attribute("aria-pressed", "true")
+                    await more_views.click()
+                    await expect(details_view).to_have_attribute("aria-pressed", "false")
+                    report_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
                     )
-                    await expect(reading_nav.get_by_role("link")).to_have_count(7)
+                    await expect(report_nav.get_by_role("link")).to_have_count(6)
                     await expect(
-                        reading_nav.get_by_role("link", name="Transcript", exact=True)
-                    ).to_have_count(0)
-                    await expect(
-                        page.get_by_role(
-                            "navigation", name="Explore your sales report", exact=True
-                        ).get_by_role("link", name="Raw data", exact=True)
-                    ).to_be_visible()
-                    assert "view=reading" in page.url
-                    await tabbed_view.click()
-                    await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
+                        report_nav.get_by_role("link", name="The Big Picture", exact=True)
+                    ).to_have_count(1)
+                    # Details keeps every original section, transcript and raw data.
+                    await details_view.click()
+                    await expect(details_view).to_have_attribute("aria-pressed", "true")
                     assert "view=tabs" in page.url
+                    await expect(
+                        page.get_by_role("tab", name="Raw data", exact=True)
+                    ).to_have_count(1)
                     await page.get_by_role("tab", name="Moments", exact=True).click()
                     assert (
                         await page.locator("audio").get_attribute("src")
@@ -901,9 +899,12 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         library_page.get_by_role("region", name="Sales call report")
                     ).to_be_visible(timeout=20000)
-                    tabbed_view = library_page.get_by_role("button", name="Tabbed view", exact=True)
-                    await tabbed_view.click()
-                    await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
+                    details_view = library_page.get_by_role(
+                        "button", name="Details view", exact=True
+                    )
+                    await library_page.locator('summary[aria-label="More views"]').click()
+                    await details_view.click()
+                    await expect(details_view).to_have_attribute("aria-pressed", "true")
                     await library_page.get_by_role("tab", name="Moments", exact=True).click()
                     player = library_page.locator("audio")
                     await expect(player).to_have_count(1)
@@ -925,6 +926,90 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         path=str(receipt / "account-library-report-playback.png"), full_page=True
                     )
                     assert broker.calls == 3
+                    # A person records the call's outcome: saved through the real
+                    # API into the disposable database, then read back after a
+                    # full reload by the Report, the Document view and Word file.
+                    await library_page.get_by_role("button", name="Report view", exact=True).click()
+                    picture = library_page.locator('[data-report-pillar="overview"]')
+                    lost = picture.get_by_role("button", name="Lost", exact=True)
+                    await expect(lost).to_be_visible(timeout=20000)
+                    await lost.click()
+                    await picture.get_by_label("Why was it lost?").fill("Chose another program.")
+                    async with library_page.expect_response(
+                        lambda response: (
+                            response.url.endswith("/outcome") and response.request.method == "PUT"
+                        )
+                    ) as saved_outcome:
+                        await picture.get_by_role("button", name="Save", exact=True).click()
+                    assert (await saved_outcome.value).status == 200
+                    await expect(picture).to_contain_text("Set by your team")
+                    await library_page.reload(wait_until="domcontentloaded")
+                    picture = library_page.locator('[data-report-pillar="overview"]')
+                    await expect(picture).to_contain_text("Chose another program.", timeout=20000)
+
+                    def outcome_block(text: str, start: str, end: str) -> str:
+                        """The words of one numbered part, e.g. 1.1 up to 1.2.
+
+                        A part with nothing to say is left out (6.2 appears only when
+                        the prospect stated a position), so the block then ends at the
+                        next numbered part that is shown.
+                        """
+                        flat = re.sub(r"\s+", " ", text)
+                        begin = flat.find(start)
+                        assert begin >= 0, start
+                        stop = flat.find(end, begin + len(start))
+                        if stop < 0:
+                            following = re.search(r" \d\.\d+ [A-Z]", flat[begin + len(start) :])
+                            assert following is not None, end
+                            stop = begin + len(start) + following.start()
+                        assert stop > begin, end
+                        return flat[begin:stop]
+
+                    # 1.1 on screen: the person's status first, then who set it.
+                    report_picture = re.sub(r"\s+", " ", await picture.inner_text())
+                    assert report_picture.startswith("Lost Set by your team"), report_picture[:60]
+                    assert "Chose another program." in report_picture
+                    # 6.1 on screen follows the same record.
+                    deal = re.sub(
+                        r"\s+",
+                        " ",
+                        await library_page.locator('[data-report-pillar="facts"]').inner_text(),
+                    )
+                    assert deal.startswith("Current status Lost Set by your team"), deal[:60]
+                    await library_page.locator('summary[aria-label="More views"]').click()
+                    await library_page.get_by_role(
+                        "button", name="Document view", exact=True
+                    ).click()
+                    document_region = library_page.get_by_role("region", name="Report document")
+                    await expect(document_region).to_contain_text(
+                        "Chose another program.", timeout=20000
+                    )
+                    document_text = await document_region.inner_text()
+                    for start, end in (
+                        ("1.1 Call Outcome", "1.2"),
+                        ("6.1 Current Status", "6.2"),
+                    ):
+                        part = outcome_block(document_text, start, end)
+                        assert "lost" in part.lower() and "Set by your team" in part, part
+                    assert "Chose another program." in outcome_block(
+                        document_text, "1.1 Call Outcome", "1.2"
+                    )
+                    async with library_page.expect_download() as word_file:
+                        await library_page.get_by_role(
+                            "button", name=re.compile("Word")
+                        ).first.click()
+                    word_path = await (await word_file.value).path()
+
+                    def word_document_xml() -> str:
+                        with zipfile.ZipFile(io.BytesIO(Path(word_path).read_bytes())) as archive:
+                            return archive.read("word/document.xml").decode("utf-8")
+
+                    word_text = re.sub(r"<[^>]+>", " ", await asyncio.to_thread(word_document_xml))
+                    word_outcome = outcome_block(word_text, "1.1 Call Outcome", "1.2")
+                    assert "lost" in word_outcome.lower(), word_outcome
+                    assert "Set by your team" in word_outcome, word_outcome
+                    assert "Chose another program." in word_outcome, word_outcome
+                    journey_checks["outcome_persisted_report_document_word"] = True
                     report_actions = library_page.get_by_role(
                         "region", name="Sales call report", exact=True
                     ).get_by_role("group", name="Report actions", exact=True)

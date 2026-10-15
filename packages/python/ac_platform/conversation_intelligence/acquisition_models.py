@@ -76,6 +76,7 @@ class ConversationAcquisitionUsage(Base):
         Index("ix_conversation_acquisition_usage_person", "tenant_id", "person_id"),
         Index("ix_conversation_acquisition_usage_visitor", "tenant_id", "visitor_id"),
         UniqueConstraint("tenant_id", "submission_id"),
+        UniqueConstraint("id", "tenant_id", "source_sha256"),
         ForeignKeyConstraint(
             ["visitor_id", "tenant_id"],
             ["conversation_visitors.id", "conversation_visitors.tenant_id"],
@@ -85,7 +86,7 @@ class ConversationAcquisitionUsage(Base):
             ["memberships.tenant_id", "memberships.person_id"],
         ),
         CheckConstraint("(visitor_id IS NULL) <> (person_id IS NULL)", name="one_owner"),
-        CheckConstraint("reserved_seconds BETWEEN 1 AND 6000", name="duration_bound"),
+        CheckConstraint("reserved_seconds BETWEEN 1 AND 7200", name="duration_bound"),
         CheckConstraint("length(source_sha256) = 64", name="source_hash"),
         CheckConstraint("length(duration_evidence_sha256) = 64", name="duration_evidence"),
     )
@@ -104,11 +105,16 @@ class ConversationAcquisitionUsage(Base):
 class ConversationAcquisitionSettlement(Base):
     __tablename__ = "conversation_acquisition_settlements"
     __table_args__ = (
-        CheckConstraint("charged_seconds BETWEEN 0 AND 6000", name="duration_bound"),
+        CheckConstraint("charged_seconds BETWEEN 0 AND 7200", name="duration_bound"),
         CheckConstraint("length(receipt_sha256) = 64", name="receipt_hash"),
-        CheckConstraint("kind IN ('completed', 'no_work_performed')", name="kind"),
+        CheckConstraint(
+            "kind IN ('completed', 'no_work_performed', 'terminal_failure')", name="kind"
+        ),
         CheckConstraint(
             "kind <> 'no_work_performed' OR charged_seconds = 0", name="no_work_charge"
+        ),
+        CheckConstraint(
+            "kind <> 'terminal_failure' OR charged_seconds = 0", name="terminal_failure_charge"
         ),
     )
     usage_id: Mapped[UUID] = mapped_column(
@@ -128,7 +134,7 @@ class ConversationReportMinuteEvent(Base):
         UniqueConstraint("usage_id", "key"),
         CheckConstraint("revision >= 1", name="positive_revision"),
         CheckConstraint("kind IN ('reserved','released','delivered')", name="kind"),
-        CheckConstraint("seconds BETWEEN 0 AND 6000", name="duration_bound"),
+        CheckConstraint("seconds BETWEEN 0 AND 7200", name="duration_bound"),
         CheckConstraint("(kind = 'released') = (seconds = 0)", name="release_zero"),
         CheckConstraint("(kind = 'delivered') = (report_draft_id IS NOT NULL)", name="delivery"),
         CheckConstraint("length(receipt_sha256) = 64", name="receipt_hash"),

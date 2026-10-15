@@ -55,7 +55,7 @@ async function renderStage(props: Partial<AcquisitionFileStageProps> = {}) {
       <AcquisitionFileStage
         files={[]}
         selectedFile={null}
-        maxBytes={32 * 1048576}
+        maxBytes={100_000_000}
         maxMinutes={60}
         disabled={false}
         {...callbacks}
@@ -69,7 +69,7 @@ it("offers accessible local browse and only supplied file limits", async () => {
   await renderStage();
   expect(host.textContent).toContain("Drop your call recording here");
   expect(host.textContent).toContain(
-    "MP3, MPEG, WAV, M4A, OGG or FLAC · up to 32 MB · 60 min per call",
+    "Audio or video recordings · up to 100 MB · 60 min per call",
   );
   expect(host.textContent).toContain("Choose a file");
   const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
@@ -80,6 +80,38 @@ it("offers accessible local browse and only supplied file limits", async () => {
   expect(click).toHaveBeenCalledOnce();
   expect(input.multiple).toBe(true);
 });
+
+it.each([
+  "amr",
+  "awb",
+  "aac",
+  "3ga",
+  "webm",
+  "opus",
+  "mp4",
+  "mov",
+  "m4b",
+  "3gp",
+  "mkv",
+  "mka",
+  "aiff",
+  "aif",
+  "wma",
+  "asf",
+  "wmv",
+  "caf",
+])(
+  "keeps a phone %s file selectable even without a browser MIME type",
+  async (extension) => {
+    const phone = new File(["fictional"], `Phone call.${extension}`);
+    await renderStage({ files: [phone], selectedFile: null });
+    const select = host.querySelector<HTMLButtonElement>("li button")!;
+    expect(select.disabled).toBe(false);
+    expect(host.textContent).not.toContain("Unsupported");
+    await act(async () => select.click());
+    expect(callbacks.onSelect).toHaveBeenCalledWith(phone);
+  },
+);
 
 it("shows local file facts and selects or removes one file without claiming a duration", async () => {
   await renderStage({ files: [first, second], selectedFile: first });
@@ -155,4 +187,22 @@ it("disables browse, selection, removal and drop during an active action", async
     host.querySelector('[role="group"]')!.dispatchEvent(drop),
   );
   expect(callbacks.onAddFiles).not.toHaveBeenCalled();
+});
+
+it("shows the call's wave, quiet and hidden from screen readers, until a file is added", async () => {
+  await renderStage();
+  const wave = host.querySelector('[data-state="idle"]');
+  expect(wave).not.toBeNull();
+  expect(wave?.closest('[aria-hidden="true"]')).not.toBeNull();
+  await renderStage({ files: [first], selectedFile: first });
+  // The drop area gives the wave to the chosen file's card, which keeps its
+  // room from the start (the motif until the file is measured).
+  expect(
+    host.querySelector(
+      '[aria-label="Add sales call audio files"] [data-state]',
+    ),
+  ).toBeNull();
+  const card = host.querySelector('li[data-selected="true"]')!;
+  expect(card.querySelector('[role="img"][data-compact]')).not.toBeNull();
+  expect(host.querySelectorAll('li [role="img"]')).toHaveLength(1);
 });

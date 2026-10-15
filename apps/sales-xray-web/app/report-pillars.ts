@@ -57,26 +57,9 @@ export function reportPillars(
       ? { label, text, evidence, hypothesis }
       : gap(label, "No supporting quote was supplied for this observation.");
   const picture: PillarEntry[] = [
-    story?.outcome.evidence.length &&
-    ["won", "lost", "disqualified"].includes(story.outcome.kind)
-      ? {
-          label: "Call outcome",
-          text: { won: "Won", lost: "Lost", disqualified: "Disqualified" }[
-            story.outcome.kind as "won" | "lost" | "disqualified"
-          ],
-          evidence: story.outcome.evidence,
-        }
-      : story?.outcome.kind === "follow_up" &&
-          story.next_step &&
-          ["dated_call", "invite_sent", "committed"].includes(
-            story.outcome.next_step_rung,
-          )
-        ? {
-            label: "Call outcome",
-            text: "Follow-up Set",
-            evidence: story.outcome.evidence,
-          }
-        : gap("Call outcome"),
+    // C5 describes a conversation; only the separate human outcome read can
+    // establish a recorded deal result. Never promote its label into that fact.
+    gap("Call outcome"),
     {
       label: "Call summary",
       text: report.summary,
@@ -87,6 +70,15 @@ export function reportPillars(
           gap(
             "Summary evidence",
             "No supporting quote was supplied for the summary.",
+          ),
+        ]
+      : []),
+    ...(story?.outcome.evidence.length
+      ? [
+          sourced(
+            "Closing evidence",
+            "Review the closing moment before entering the deal outcome.",
+            story.outcome.evidence,
           ),
         ]
       : []),

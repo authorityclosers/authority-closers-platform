@@ -11,7 +11,7 @@ export const PROCESSING_STEPS = [
   {
     id: "C2",
     title: "Listening",
-    description: "Transcribing and separating the speakers",
+    description: "Writing down what was said, and who said it",
   },
   {
     id: "C4",
@@ -21,7 +21,7 @@ export const PROCESSING_STEPS = [
   {
     id: "C5",
     title: "Preparing your report",
-    description: "Turning the findings into your report",
+    description: "Putting it all into your report",
   },
 ] as const;
 

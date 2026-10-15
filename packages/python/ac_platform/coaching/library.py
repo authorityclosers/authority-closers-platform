@@ -11,8 +11,9 @@ from sqlalchemy import func, select
 
 from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CallHistory, CallSummary, CoachingView
-from ac_platform.coaching.learner import build_learner
+from ac_platform.coaching.learner import build_learner, recurring_focus
 from ac_platform.coaching.report_adapter import _text, from_report
+from ac_platform.coaching.sharing_store import member_name, rep_has_shared, shared_reps
 from ac_platform.coaching.team import TeamCoachingView, summarize_team
 from ac_platform.conversation_intelligence.acquisition_library import (
     _account_library_query,
@@ -122,6 +123,8 @@ class CoachingLibrary:
                     history.append((owner, call))
             except (ConversationError, ValueError, KeyError):
                 unavailable += 1
+        # Named only after a rep shares (owner decision 2); read fresh.
+        shared = await shared_reps(self.database, actor=actor, tenant_id=self.ownership.tenant_id)
         return summarize_team(
             tuple(history),
             person_id=actor.person_id,
@@ -129,6 +132,7 @@ class CoachingLibrary:
             pending_calls=pending,
             unavailable_calls=unavailable,
             history_limited=len(rows) > HISTORY_LIMIT,
+            shared=tuple((rep.person_id, rep.name, rep.shared_at) for rep in shared),
         )
 
     async def read(self, actor: ActorContext) -> CoachingView:
@@ -149,6 +153,50 @@ class CoachingLibrary:
                 .limit(HISTORY_LIMIT + 1)
             )
         ).all()
+        return await self._learner(actor, actor.person_id, rows, organisation=False)
+
+    async def read_shared(self, actor: ActorContext, rep_person_id: UUID) -> CoachingView:
+        """A rep's own Coaching, only while they share it with this owner/admin.
+
+        Private by default (owner decision 10 Oct): org role alone never reads
+        it. The share, the viewer's role and the rep's membership are all read
+        fresh; every report is re-authorized with existing organisation access.
+        """
+        now = await self.ownership.sessions._admit()
+        await self.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
+        tenant_id = self.ownership.tenant_id
+        if (
+            rep_person_id == actor.person_id
+            or not await self.ownership.organisation_call_reader(actor)
+            or not await rep_has_shared(
+                self.database, tenant_id=tenant_id, rep_person_id=rep_person_id
+            )
+        ):
+            raise ConversationNotFound("This coaching is not shared with you.")
+        has_report, state = _report_columns()
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionUsage as Usage,
+        )
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationVisitorClaim as Claim,
+        )
+
+        rows = (
+            await self.database.execute(
+                _account_library_query(actor, now, every_owner=True)
+                .where(func.coalesce(Usage.person_id, Claim.person_id) == rep_person_id)
+                .add_columns(has_report, state)
+                .order_by(Usage.created_at.desc(), Usage.submission_id.desc())
+                .limit(HISTORY_LIMIT + 1)
+            )
+        ).all()
+        view = await self._learner(actor, rep_person_id, rows, organisation=True)
+        name = await member_name(self.database, person_id=rep_person_id)
+        return view.model_copy(update={"person_id": rep_person_id, "person_name": name})
+
+    async def _learner(
+        self, actor: ActorContext, person_id: UUID, rows: Any, *, organisation: bool
+    ) -> CoachingView:
         reports = AcquisitionReports(self.ownership)
         history: list[CallHistory] = []
         summaries: list[CallSummary] = []
@@ -173,6 +221,9 @@ class CoachingLibrary:
                 )
             )
 
+        # Authorize and read every report first (fresh access/withholding on
+        # each), then resolve evaluator receipts for all calls in a few queries.
+        readable: list[tuple[Any, dict[str, Any]]] = []
         for usage, ready, plan_state in reversed(rows[:HISTORY_LIMIT]):
             if not ready:
                 pending += int(plan_state == "active")
@@ -184,59 +235,24 @@ class CoachingLibrary:
                     usage.submission_id,
                     actor=actor,
                     shared_identity_locks=True,
+                    allow_organisation_read=organisation,
                 )
-                recording_id = UUID(envelope["recording_id"])
-                # Comparable suggestions need the canonical evaluator receipt;
-                # a shared candidate profile alone does not link revisions.
-                draft = await self.database.scalar(
-                    select(ConversationReportDraft)
-                    .join(ConversationRun, ConversationRun.id == ConversationReportDraft.run_id)
-                    .join(
-                        ConversationRecording,
-                        ConversationRecording.id == ConversationReportDraft.recording_id,
-                    )
-                    .where(
-                        ConversationReportDraft.recording_id == recording_id,
-                        ConversationReportDraft.tenant_id == actor.tenant_id,
-                        ConversationReportDraft.erased_at.is_(None),
-                        ConversationReportDraft.payload.is_not(None),
-                        ConversationRun.generation == ConversationRecording.generation,
-                        ConversationRun.state == "completed",
-                        ConversationReportDraft.run_id == UUID(envelope["run_id"]),
-                    )
-                    .order_by(ConversationReportDraft.created_at.desc())
-                    .limit(1)
-                )
-                if envelope.get("recovery") is not None:
-                    draft = None
-                recipe = (
-                    await self.database.scalar(
-                        select(ConversationRun.recipe_revision).where(
-                            ConversationRun.id == UUID(envelope["run_id"])
-                        )
-                    )
-                    if draft is not None
-                    else None
-                )
-                comparison = f"unlinked:{usage.submission_id}"
-                proof = draft.evidence_receipt if draft is not None else None
-                if (
-                    isinstance(proof, dict)
-                    and proof.get("schema_id") == "ac.sales-xray.durable-draft-proof/1"
-                    and recipe
-                ):
-                    checkpoint = await self.database.get(
-                        ConversationCheckpoint, UUID(proof["coaching_checkpoint_id"])
-                    )
-                    recording = await self.database.get(ConversationRecording, recording_id)
-                    if checkpoint is not None and recording is not None:
-                        verified = verified_checkpoint(checkpoint, binding_for(recording))
-                        comparison = evaluator_key(verified.as_dict(), recipe)
+                UUID(envelope["recording_id"]), UUID(envelope["run_id"])
+                readable.append((usage, envelope))
+            except (ConversationError, ValueError, KeyError):
+                unavailable += 1
+                summary(usage, "unavailable")
+        keys = await self._comparison_keys(actor, [envelope for _, envelope in readable])
+        for usage, envelope in readable:
+            try:
                 call = from_report(
                     envelope,
                     submission_id=usage.submission_id,
                     created_at=usage.created_at,
-                    comparison_key=comparison,
+                    comparison_key=keys.get(
+                        (UUID(envelope["recording_id"]), UUID(envelope["run_id"])),
+                        f"unlinked:{usage.submission_id}",
+                    ),
                 )
                 if call is None:
                     unavailable += 1
@@ -253,15 +269,115 @@ class CoachingLibrary:
             except (ConversationError, ValueError, KeyError):
                 unavailable += 1
                 summary(usage, "unavailable")
+        # Summaries were appended oldest first within each pass; show newest first.
+        summaries.sort(key=lambda row: (row.created_at, str(row.submission_id)))
+        recurring = recurring_focus(tuple(history))
+        summaries = [
+            row.model_copy(update={"recurring": recurring.get(row.submission_id)})
+            for row in summaries
+        ]
         view = build_learner(
             tuple(history),
-            person_id=actor.person_id,
+            person_id=person_id,
             tenant_id=self.ownership.tenant_id,
             pending_calls=pending,
             unavailable_calls=unavailable,
             history_limited=len(rows) > HISTORY_LIMIT,
+            # Only an owner/admin's read of a rep's shared coaching is about "them".
+            their=organisation,
         )
         return view.model_copy(update={"calls": tuple(reversed(summaries))})
+
+    async def _comparison_keys(
+        self, actor: ActorContext, envelopes: list[dict[str, Any]]
+    ) -> dict[tuple[UUID, UUID], str]:
+        """Evaluator comparison keys for authorized reports, in three queries.
+
+        Comparable suggestions need the canonical evaluator receipt; a shared
+        candidate profile alone does not link revisions. Only receipt columns
+        are loaded, never report or transcript content.
+        """
+        wanted = {
+            (UUID(envelope["recording_id"]), UUID(envelope["run_id"]))
+            for envelope in envelopes
+            if envelope.get("recovery") is None
+        }
+        if not wanted:
+            return {}
+        rows = (
+            await self.database.execute(
+                select(
+                    ConversationReportDraft.recording_id,
+                    ConversationReportDraft.run_id,
+                    ConversationReportDraft.evidence_receipt,
+                    ConversationRun.recipe_revision,
+                )
+                .join(ConversationRun, ConversationRun.id == ConversationReportDraft.run_id)
+                .join(
+                    ConversationRecording,
+                    ConversationRecording.id == ConversationReportDraft.recording_id,
+                )
+                .where(
+                    ConversationReportDraft.recording_id.in_({key[0] for key in wanted}),
+                    ConversationReportDraft.run_id.in_({key[1] for key in wanted}),
+                    ConversationReportDraft.tenant_id == actor.tenant_id,
+                    ConversationReportDraft.erased_at.is_(None),
+                    ConversationReportDraft.payload.is_not(None),
+                    ConversationRun.generation == ConversationRecording.generation,
+                    ConversationRun.state == "completed",
+                )
+                .order_by(ConversationReportDraft.created_at.desc())
+            )
+        ).all()
+        receipts: dict[tuple[UUID, UUID], tuple[Any, str | None]] = {}
+        for recording_id, run_id, receipt, recipe in rows:
+            if (recording_id, run_id) in wanted:
+                # The newest draft for an exact recording/run pair wins.
+                receipts.setdefault((recording_id, run_id), (receipt, recipe))
+        durable: dict[tuple[UUID, UUID], tuple[UUID, str]] = {}
+        for key, (proof, recipe) in receipts.items():
+            try:
+                if (
+                    isinstance(proof, dict)
+                    and proof.get("schema_id") == "ac.sales-xray.durable-draft-proof/1"
+                    and recipe
+                ):
+                    durable[key] = (UUID(proof["coaching_checkpoint_id"]), recipe)
+            except (KeyError, TypeError, ValueError):
+                continue  # A malformed receipt stays unlinked, never comparable.
+        if not durable:
+            return {}
+        checkpoints = {
+            row.id: row
+            for row in (
+                await self.database.scalars(
+                    select(ConversationCheckpoint).where(
+                        ConversationCheckpoint.id.in_({value[0] for value in durable.values()})
+                    )
+                )
+            )
+        }
+        recordings = {
+            row.id: row
+            for row in (
+                await self.database.scalars(
+                    select(ConversationRecording).where(
+                        ConversationRecording.id.in_({key[0] for key in durable})
+                    )
+                )
+            )
+        }
+        keys: dict[tuple[UUID, UUID], str] = {}
+        for key, (checkpoint_id, recipe) in durable.items():
+            checkpoint, recording = checkpoints.get(checkpoint_id), recordings.get(key[0])
+            if checkpoint is None or recording is None:
+                continue
+            try:
+                verified = verified_checkpoint(checkpoint, binding_for(recording))
+                keys[key] = evaluator_key(verified.as_dict(), recipe)
+            except (ConversationError, KeyError, TypeError, ValueError):
+                continue  # Unverifiable lineage stays unlinked, never comparable.
+        return keys
 
     async def _display_names(self, submission_ids: list[UUID]) -> dict[UUID, str]:
         """Owner-chosen call names in one query, for rows already in library scope."""

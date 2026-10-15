@@ -7,6 +7,7 @@ from uuid import UUID
 import httpx
 import pytest
 
+from ac_platform.coaching import placeholder
 from ac_platform.coaching.dataset import read_topics
 from ac_platform.tenancy.models import Tenant
 from tests.database.test_coaching_postgresql import draft_for, install
@@ -31,6 +32,8 @@ def test_reviewed_placeholder_clips_same_request_and_private_source(
         record = topic(root)
         monkeypatch.setattr("ac_platform.coaching.http.read_topics", lambda: read_topics(root))
         monkeypatch.setattr("ac_platform.coaching.http.DATASET_ROOT", root)
+        # Reviewed exports only here; the packaged placeholders have their own test.
+        monkeypatch.setattr("ac_platform.coaching.placeholder.clips_for", lambda _skill, **_: ())
         setup = await _setup(postgres_harness, tmp_path)
         install(setup)
         try:
@@ -93,6 +96,53 @@ def test_reviewed_placeholder_clips_same_request_and_private_source(
                     tenant.status = "suspended"
                 denied = await client.get(source)
                 assert denied.status_code in {401, 403} and AUDIO not in denied.content
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_packaged_placeholders_free_lesson_streams_and_locked_lesson_only_its_preview(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    async def exercise() -> None:
+        monkeypatch.setattr("ac_platform.coaching.http.read_topics", lambda: ())
+        setup = await _setup(postgres_harness, tmp_path)
+        install(setup)
+        try:
+            call = await direct_call(setup)
+            await draft_for(setup, call, dimension_evidence=True)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                result = await client.get(f"/v1/me/coaching/calls/{call}")
+                assert result.status_code == 200, result.text
+                free, locked = result.json()["media_clips"]
+                assert free["access"] == "full" and free["topic_id"].startswith("syn-coach-")
+                assert locked["access"] == "preview" and locked["offer"]["academy"]
+                assert locked["preview_end_ms"] == locked["start_ms"] + 15_000
+                assert "relative_path" not in free and "audio_sha256" not in free
+
+                def source(clip: dict[str, Any]) -> str:
+                    return (
+                        f"/v1/me/coaching/media/{clip['topic_id']}/{clip['revision']}/"
+                        f"{clip['review_id']}/source"
+                    )
+
+                audio = (placeholder.MEDIA / f"{free['topic_id']}.mp3").read_bytes()
+                media = await client.get(source(free), headers={"Range": "bytes=0-9"})
+                assert media.status_code == 206 and media.content == audio[:10]
+                assert media.headers["cache-control"] == "private, no-store"
+                # The locked lesson's URL serves its 15-second cut, never the lesson.
+                cut = (placeholder.MEDIA / f"{locked['topic_id']}.preview.mp3").read_bytes()
+                teaser = await client.get(source(locked))
+                assert teaser.status_code == 200 and teaser.content == cut
+                assert teaser.headers["cache-control"] == "private, no-store"
+                beyond = await client.get(source(locked), headers={"Range": f"bytes={len(cut)}-"})
+                assert beyond.status_code == 416
+                client.cookies.clear()
+                assert (await client.get(source(free))).status_code == 401
         finally:
             await setup.engine.dispose()
 

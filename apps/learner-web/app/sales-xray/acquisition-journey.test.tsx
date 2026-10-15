@@ -263,6 +263,12 @@ it("runs the actual learner upload and report journey under one Academy main and
   expect(host.querySelector('input[type="checkbox"]')).toBeNull();
   expect(host.textContent).not.toContain("Maximum processing cost");
   expect(host.textContent).not.toContain("synthetic-provider");
+  // A call analysed on this page holds "Your report is ready" for a beat
+  // before the report rises in (the studio's REVEAL_BEAT_MS).
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  await flush();
   expect(host.querySelector('[aria-label="Sales call report"]')).not.toBeNull();
   expect(host.textContent).toContain(envelope.report.content.summary);
   expect(host.textContent).not.toContain("Sign in to save this call");
@@ -270,8 +276,12 @@ it("runs the actual learner upload and report journey under one Academy main and
   expect(host.querySelector("audio")?.getAttribute("src")).toBe(
     `/v1/conversation/acquisition/submissions/${submissionId}/source`,
   );
-  expect(button("Reading view").getAttribute("aria-pressed")).toBe("true");
-  await click("Tabbed view");
+  // A finished call opens on the six-part Report; Details keeps every section.
+  const view = (title: string) =>
+    host.querySelector<HTMLButtonElement>(`button[title="${title}"]`)!;
+  expect(view("Report view").getAttribute("aria-pressed")).toBe("true");
+  await act(async () => view("Details view").click());
+  await flush();
   await click("Moments");
   expect(host.textContent).toContain("कल timing discuss करूया.");
   expect(requests.filter(({ init }) => init.method === "PUT")).toHaveLength(1);

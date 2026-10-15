@@ -22,10 +22,10 @@
       "label": "Explain value before trading price",
       "explanation": "You offered 10% off before the buyer asked about price or the scope was clear. The buyer’s real question was whether the service fits.",
       "why_it_matters": "An unapproved early discount makes price the topic and leaves finance with a number it cannot rely on.",
-      "selected_reason": "Selected from this call’s report. Your across-call mission stays unchanged.",
+      "selected_reason": "This call’s report suggested it. Your mission across calls doesn’t change.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "provisional",
-      "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+      "verdict": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return."
     },
     "evidence": [
       {
@@ -78,7 +78,7 @@
     },
     "lesson": {
       "title": "Explain value before you trade on price",
-      "quick_idea": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "quick_idea": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return.",
       "framework": ["Concern", "Value", "Scope", "Approved trade"],
       "why_it_matters": "An early, unapproved discount answers a question the buyer did not ask, and makes the price the topic instead of the fit.",
       "good_looks_like": "You find the buyer’s real concern, connect the scope to it, and only then discuss a concession that is approved and traded for something.",
@@ -109,19 +109,19 @@
         "observation": "A 10% discount was offered before the buyer raised price or the scope was clear.",
         "playable": true
       },
-      "next_call_connection": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+      "next_call_connection": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return."
     },
     "practice": {
-      "exercise": "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.",
+      "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
       "success_condition": "Your rewrite names the concern and the value before any number.",
       "gap_type": "execution",
       "estimated_minutes": 3
     },
     "mission": {
       "skill_id": "certainty_objection_intelligence",
-      "behavior": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "behavior": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return.",
       "context": "When a buyer raises cost, scope or risk before any concession is approved.",
-      "done_when": "No unsolicited discount; any concession has explicit approval and a reciprocal condition.",
+      "done_when": "No discount the buyer didn’t ask for. Anything given is approved and comes with something back.",
       "cue": "Concern first. Value next. Trade, never give.",
       "active_since": "2026-07-27T11:00:00+05:30",
       "origin_submission_id": "5a0d0000-0000-4000-8000-000000000100",
@@ -129,70 +129,85 @@
     },
     "media_clips": [
       {
-        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "topic_id": "syn-coach-video-008",
+        "revision": "96ed3b428aac14cd09a55133e8e8b0177c53d503f7ea80693665818f4f3ad16a",
+        "review_id": "11b807ad-6f2a-542a-b321-7968f7d2eb76",
+        "title": "Objection: Answer Nahi, Diagnose",
+        "kind": "video",
         "placeholder": true,
         "voice": "neutral",
-        "kind": "audio",
-        "reason": "Your calls move to a discount before the buyer’s concern is clear. This lesson shows how to diagnose first.",
-        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
+        "access": "full",
+        "entitlement_policy": "AUT-1678-open-access",
+        "start_ms": 0,
+        "end_ms": 33542,
+        "reason": "Dipak’s lesson on Certainty & Objection Intelligence, the skill you’re working on.",
+        "takeaways": [
+          "Clarify what the buyer means.",
+          "Respond to the blocker and check resolution."
+        ],
+        "transcript_excerpt": "Prospect: “Mujhe sochna hai.” Bad: “Sure sir, kab call karun?” But “think” could mean price, value, spouse, fear, comparison, self-doubt, implementation, genuine processing, polite rejection. “Of course. Exactly kis part ke baare mein aapko sochna hai?” If prospect identifies something: diagnose it. If they genuinely need space: respect it. “Diagnosis ka goal har objection ko destroy karna nahi. Goal clarity create karna hai.”",
         "slides": [
           {
-            "segment_id": "hook",
-            "title": "Diagnose first",
+            "segment_id": "syn-coach-video-008-S01",
+            "title": "Diagnose the objection",
             "bullets": [
-              "Ask what is true before you answer.",
-              "A price objection is a symptom, not the diagnosis."
+              "Clarify what the buyer means.",
+              "Respond to the blocker and check resolution."
             ]
           }
         ],
-        "topic_id": "syn-coach-audio-001",
-        "review_id": "5a0d0000-0000-4000-8000-000000000301",
-        "title": "Diagnose before you discount",
+        "offer": null
+      },
+      {
+        "topic_id": "syn-coach-video-010",
+        "revision": "0868636e41ad556fda46de5db182bf7818c716fc5f1af1b8f1445d2879c3affd",
+        "review_id": "af074c4f-e8ff-5ce7-b4bd-4b9cca30046e",
+        "title": "“Too Expensive” ke Different Meanings",
+        "kind": "video",
+        "placeholder": true,
+        "voice": "neutral",
         "access": "preview",
-        "entitlement_policy": "sandbox-preview-plan",
+        "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
-        "end_ms": 171000,
-        "preview_end_ms": 3000,
+        "end_ms": 49451,
+        "reason": "Another lesson on Certainty & Objection Intelligence, from Dipak’s full coaching. The first 15 seconds are free.",
         "takeaways": [
-          "Treat “price is high” as a symptom.",
-          "Ask one question about the real concern before any number.",
-          "Name the concern, then show the value."
+          "Ask what the buyer is comparing with.",
+          "Separate budget, value and payment timing."
         ],
+        "transcript_excerpt": "1. CANNOT AFFORD Money genuinely unavailable. This is a capacity issue. 2. EXPECTED LOWER PRICE Prospect expected ₹30–35K. Money may exist. Problem is anchor…",
+        "slides": [],
         "offer": {
           "full_coaching_href": "/plans",
           "academy": {
-            "href": "https://learn.authorityclosers.com/courses/diagnosis",
-            "label": "Diagnose before you discount"
+            "href": "https://learner.authorityclosers.com/",
+            "label": "Dipak's courses on the Learner's Academy"
           }
-        }
-      },
-      {
-        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "placeholder": true,
-        "voice": "neutral",
-        "kind": "audio",
-        "reason": "A short follow-on for when the buyer does ask for a discount.",
-        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
-        "slides": [
-          {
-            "segment_id": "hook",
-            "title": "Diagnose first",
-            "bullets": [
-              "Ask what is true before you answer.",
-              "A price objection is a symptom, not the diagnosis."
-            ]
-          }
-        ],
-        "topic_id": "syn-coach-audio-014",
-        "review_id": "5a0d0000-0000-4000-8000-000000000302",
-        "title": "Trade, never give: handling a discount request",
-        "access": "locked",
-        "entitlement_policy": "sandbox-preview-plan",
-        "start_ms": 0,
-        "end_ms": 204000,
-        "takeaways": ["Every concession buys a commitment."]
+        },
+        "preview_end_ms": 15000
       }
     ],
+    "strength": {
+      "title": "Asked for a recent example and consequence",
+      "explanation": "You asked for a recent example and its consequence. It made the buyer’s operational problem specific.",
+      "evidence": [
+        {
+          "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+          "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "transcript_revision": "synthetic-v1",
+          "created_at": "2026-07-27T11:00:00+05:30",
+          "call_label": "ArthaPath · Kunal K. · Scope call",
+          "segment_id": "L004",
+          "quote": "Could you walk me through one recent example, and what happened because of it?",
+          "start_ms": 38947,
+          "end_ms": 44904,
+          "observation": "You asked for a recent example and its consequence. It made the buyer’s operational problem specific.",
+          "playable": true
+        }
+      ]
+    },
+    "other_suggestions": 0,
     "limitations": ["Synthetic sandbox call."],
     "recommended_media": null
   },
@@ -214,15 +229,15 @@
       "label": "Explain value before trading price",
       "explanation": "When the buyer raises a concern, you move to a discount before the concern and the value are clear.",
       "why_it_matters": "Early discounts make price the conversation, cost margin and leave finance with numbers it cannot use.",
-      "selected_reason": "5 of 7 comparable calls include a coaching suggestion for this. This does not prove the same behaviour each time.",
+      "selected_reason": "It needed work in 4 of your last 6 calls on this skill.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "active",
-      "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+      "verdict": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return."
     },
     "pattern": {
-      "relevant_call_count": 7,
-      "attention_call_count": 5,
-      "summary": "Five of your last seven comparable calls include this suggestion. Replay the moments to compare the situations."
+      "relevant_call_count": 6,
+      "attention_call_count": 4,
+      "summary": "It needed work on 4 different calls. Replay the moments below and see what you did each time."
     },
     "root_cause": {
       "hypothesis": "You may treat any hesitation as a price objection and reach for a discount to keep momentum.",
@@ -288,16 +303,16 @@
       }
     ],
     "practice": {
-      "exercise": "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.",
+      "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
       "success_condition": "Your rewrite names the concern and the value before any number.",
       "gap_type": "execution",
       "estimated_minutes": 3
     },
     "mission": {
       "skill_id": "certainty_objection_intelligence",
-      "behavior": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "behavior": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return.",
       "context": "When a buyer raises cost, scope or risk before any concession is approved.",
-      "done_when": "No unsolicited discount; any concession has explicit approval and a reciprocal condition.",
+      "done_when": "No discount the buyer didn’t ask for. Anything given is approved and comes with something back.",
       "cue": "Concern first. Value next. Trade, never give.",
       "active_since": "2026-07-27T11:00:00+05:30",
       "origin_submission_id": "5a0d0000-0000-4000-8000-000000000100",
@@ -319,7 +334,7 @@
     },
     "lesson": {
       "title": "Explain value before you trade on price",
-      "quick_idea": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "quick_idea": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return.",
       "framework": ["Concern", "Value", "Scope", "Approved trade"],
       "why_it_matters": "An early, unapproved discount answers a question the buyer did not ask, and makes the price the topic instead of the fit.",
       "good_looks_like": "You find the buyer’s real concern, connect the scope to it, and only then discuss a concession that is approved and traded for something.",
@@ -350,76 +365,90 @@
         "observation": "A 10% discount was offered before the buyer raised price or the scope was clear.",
         "playable": true
       },
-      "next_call_connection": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+      "next_call_connection": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return."
     },
     "media_clips": [
       {
-        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "topic_id": "syn-coach-video-008",
+        "revision": "96ed3b428aac14cd09a55133e8e8b0177c53d503f7ea80693665818f4f3ad16a",
+        "review_id": "11b807ad-6f2a-542a-b321-7968f7d2eb76",
+        "title": "Objection: Answer Nahi, Diagnose",
+        "kind": "video",
         "placeholder": true,
         "voice": "neutral",
-        "kind": "audio",
-        "reason": "Your calls move to a discount before the buyer’s concern is clear. This lesson shows how to diagnose first.",
-        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
+        "access": "full",
+        "entitlement_policy": "AUT-1678-open-access",
+        "start_ms": 0,
+        "end_ms": 33542,
+        "reason": "Dipak’s lesson on Certainty & Objection Intelligence, the skill you’re working on.",
+        "takeaways": [
+          "Clarify what the buyer means.",
+          "Respond to the blocker and check resolution."
+        ],
+        "transcript_excerpt": "Prospect: “Mujhe sochna hai.” Bad: “Sure sir, kab call karun?” But “think” could mean price, value, spouse, fear, comparison, self-doubt, implementation, genuine processing, polite rejection. “Of course. Exactly kis part ke baare mein aapko sochna hai?” If prospect identifies something: diagnose it. If they genuinely need space: respect it. “Diagnosis ka goal har objection ko destroy karna nahi. Goal clarity create karna hai.”",
         "slides": [
           {
-            "segment_id": "hook",
-            "title": "Diagnose first",
+            "segment_id": "syn-coach-video-008-S01",
+            "title": "Diagnose the objection",
             "bullets": [
-              "Ask what is true before you answer.",
-              "A price objection is a symptom, not the diagnosis."
+              "Clarify what the buyer means.",
+              "Respond to the blocker and check resolution."
             ]
           }
         ],
-        "topic_id": "syn-coach-audio-001",
-        "review_id": "5a0d0000-0000-4000-8000-000000000301",
-        "title": "Diagnose before you discount",
+        "offer": null
+      },
+      {
+        "topic_id": "syn-coach-video-010",
+        "revision": "0868636e41ad556fda46de5db182bf7818c716fc5f1af1b8f1445d2879c3affd",
+        "review_id": "af074c4f-e8ff-5ce7-b4bd-4b9cca30046e",
+        "title": "“Too Expensive” ke Different Meanings",
+        "kind": "video",
+        "placeholder": true,
+        "voice": "neutral",
         "access": "preview",
-        "entitlement_policy": "sandbox-preview-plan",
+        "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
-        "end_ms": 171000,
-        "preview_end_ms": 3000,
+        "end_ms": 49451,
+        "reason": "Another lesson on Certainty & Objection Intelligence, from Dipak’s full coaching. The first 15 seconds are free.",
         "takeaways": [
-          "Treat “price is high” as a symptom.",
-          "Ask one question about the real concern before any number.",
-          "Name the concern, then show the value."
+          "Ask what the buyer is comparing with.",
+          "Separate budget, value and payment timing."
         ],
+        "transcript_excerpt": "1. CANNOT AFFORD Money genuinely unavailable. This is a capacity issue. 2. EXPECTED LOWER PRICE Prospect expected ₹30–35K. Money may exist. Problem is anchor…",
+        "slides": [],
         "offer": {
           "full_coaching_href": "/plans",
           "academy": {
-            "href": "https://learn.authorityclosers.com/courses/diagnosis",
-            "label": "Diagnose before you discount"
+            "href": "https://learner.authorityclosers.com/",
+            "label": "Dipak's courses on the Learner's Academy"
           }
-        }
-      },
-      {
-        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "placeholder": true,
-        "voice": "neutral",
-        "kind": "audio",
-        "reason": "A short follow-on for when the buyer does ask for a discount.",
-        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
-        "slides": [
-          {
-            "segment_id": "hook",
-            "title": "Diagnose first",
-            "bullets": [
-              "Ask what is true before you answer.",
-              "A price objection is a symptom, not the diagnosis."
-            ]
-          }
-        ],
-        "topic_id": "syn-coach-audio-014",
-        "review_id": "5a0d0000-0000-4000-8000-000000000302",
-        "title": "Trade, never give: handling a discount request",
-        "access": "locked",
-        "entitlement_policy": "sandbox-preview-plan",
-        "start_ms": 0,
-        "end_ms": 204000,
-        "takeaways": ["Every concession buys a commitment."]
+        },
+        "preview_end_ms": 15000
       }
     ],
     "recommended_media": null,
     "other_format": null,
+    "strength": {
+      "title": "Answered a scope question with a clear limit",
+      "explanation": "You answered a specific scope question with an explicit limit. It made the comparison more concrete.",
+      "evidence": [
+        {
+          "submission_id": "5a0d0000-0000-4000-8000-000000000106",
+          "recording_id": "5a0d0000-0000-4000-8000-000000000206",
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "transcript_revision": "synthetic-v1",
+          "created_at": "2026-09-07T12:00:00+05:30",
+          "call_label": "ArthaPath · Chennai clinic · Close",
+          "segment_id": "L018",
+          "quote": "That is for your own accounts adviser to decide. The commercial quote will name the purchaser and service clearly. I should not infer tax treatment from the account used for payment.",
+          "start_ms": 181063,
+          "end_ms": 194254,
+          "observation": "You answered a specific scope question with an explicit limit. It made the comparison more concrete.",
+          "playable": true
+        }
+      ]
+    },
     "calls": [
       {
         "submission_id": "5a0d0000-0000-4000-8000-000000000150",
@@ -544,8 +573,9 @@
     "entitlement": "coaching",
     "entitlement_policy": "AUT-1678-open-access",
     "scope": "anonymous",
-    "named_rep_details": false,
+    "named_rep_details": true,
     "analysed_calls": 40,
+    "rep_count": 6,
     "pending_calls": 2,
     "unavailable_calls": 1,
     "history_limited": true,
@@ -577,9 +607,30 @@
       }
     ],
     "limitations": [
-      "Counts describe report suggestions, not proven recurring mistakes or mastery.",
+      "Counts are report suggestions. They don’t prove a repeated mistake.",
       "No rep’s focus, root cause, mission, identity or call evidence is disclosed.",
       "Synthetic sandbox team (synthetic-v1)."
+    ],
+    "reps_basis": "shared",
+    "reps": [
+      {
+        "person_id": "00000000-0000-4000-8000-00000000b001",
+        "name": "Kunal Kulkarni",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Certainty & Objection Intelligence",
+        "calls": 9,
+        "latest_call_at": "2026-09-07T10:00:00+05:30",
+        "shared_at": "2026-09-08T09:30:00+05:30"
+      },
+      {
+        "person_id": "00000000-0000-4000-8000-00000000b002",
+        "name": "Meera Joshi",
+        "skill_id": "qualification",
+        "focus_label": "Qualification",
+        "calls": 6,
+        "latest_call_at": "2026-09-05T15:00:00+05:30",
+        "shared_at": "2026-09-01T12:00:00+05:30"
+      }
     ]
   }
 }

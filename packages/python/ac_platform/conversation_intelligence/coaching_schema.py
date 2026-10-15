@@ -45,6 +45,75 @@ _COACHING_V4 = "coaching-v4"
 _COACHING_V5 = "coaching-v5"
 _COACHING_V6 = "coaching-v6"
 _COACHING_V7 = "coaching-v7"
+_COACHING_V8 = "coaching-v8"
+
+
+def _coaching_v8_schema() -> dict[str, Any]:
+    from ac_platform.conversation_intelligence.dipak_report import ReportPillars
+
+    v7 = _coaching_v7_schema()
+    defs = {key: deepcopy(v7["$defs"][key]) for key in ("dimension", "evidence_ref")}
+    for variant in defs["dimension"]["anyOf"]:
+        statuses = variant["properties"]["status"]["enum"]
+        states = (
+            ["strongly_demonstrated", "observed", "needs_attention"]
+            if statuses == ["observed"]
+            else ["not_applicable", "insufficient_evidence"]
+            if "not_applicable" in statuses
+            else ["insufficient_evidence"]
+        )
+        variant["properties"]["call_state"] = {"type": "string", "enum": states}
+        variant["required"] = [*variant["required"], "call_state"]
+
+    def wire(value: Any) -> Any:
+        if isinstance(value, dict):
+            result = {
+                key: wire(child)
+                for key, child in value.items()
+                if key != "default" and (key != "title" or not isinstance(child, str))
+            }
+            if "$ref" in result:
+                name = result["$ref"].split("/")[-1]
+                result["$ref"] = "#/$defs/" + (
+                    "evidence_ref" if name == "PillarEvidence" else "pillar_" + name
+                )
+            if "const" in result:
+                result["enum"] = [result.pop("const")]
+            return result
+        if isinstance(value, list):
+            return [wire(child) for child in value]
+        return value
+
+    pillars = wire(ReportPillars.model_json_schema())
+    defs.update(
+        {
+            "pillar_" + key: value
+            for key, value in pillars.pop("$defs").items()
+            if key != "PillarEvidence"
+        }
+    )
+    # Empty authored presentation reasons are a canonical import exception,
+    # never a permitted model response.
+    defs["pillar_PillarMoment"]["properties"]["why"]["minLength"] = 1
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "pillars": pillars,
+            "dimensions": v7["properties"]["dimensions"],
+            "summary_evidence": v7["properties"]["summary_evidence"],
+            "sensitive_segments": v7["properties"]["sensitive_segments"],
+            "review_status": v7["properties"]["review_status"],
+        },
+        "required": [
+            "pillars",
+            "dimensions",
+            "summary_evidence",
+            "sensitive_segments",
+            "review_status",
+        ],
+        "$defs": defs,
+    }
 
 
 def _coaching_v7_schema() -> dict[str, Any]:
@@ -306,7 +375,7 @@ def _bound_v7_schema(schema: dict[str, Any]) -> None:
     )
 
 
-def coaching_v7_bounds_instruction() -> str:
+def coaching_v7_bounds_instruction(revision: str = _COACHING_V7) -> str:
     """State every local wire limit in the prompt without changing provider schemas."""
     groups: dict[tuple[str, int], set[str]] = {}
 
@@ -323,12 +392,12 @@ def coaching_v7_bounds_instruction() -> str:
         for index, child in enumerate(node.get("anyOf", [])):
             visit(child, f"{path}.option{index}")
 
-    schema = coaching_response_json_schema(_COACHING_V7)
+    schema = coaching_response_json_schema(revision)
     visit(schema, "report")
     for key, node in schema["$defs"].items():
         visit(node, key)
     return (
-        "V7 WIRE LIMITS (bounds, not quotas): "
+        f"{revision.replace('coaching-', '').upper()} WIRE LIMITS (bounds, not quotas): "
         + " ".join(
             f"At most {maximum} {unit}: {', '.join(sorted(paths))}."
             for (unit, maximum), paths in sorted(groups.items())
@@ -347,6 +416,47 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
     server resolves those references to quote and timing fields.
     """
 
+    if revision == "report-c5-v1":
+        from ac_platform.conversation_intelligence.report_content import report_content_schema
+
+        schema = coaching_response_json_schema(_COACHING_V5)
+        content = report_content_schema()
+        definitions = content.pop("$defs")
+
+        def relocate(node: Any) -> Any:
+            if isinstance(node, list):
+                return [relocate(child) for child in node]
+            if not isinstance(node, dict):
+                return node
+            return {
+                key: value.replace("#/$defs/", "#/$defs/report_")
+                if key == "$ref"
+                else relocate(value)
+                for key, value in node.items()
+            }
+
+        schema["$defs"].update(
+            {"report_" + key: relocate(value) for key, value in definitions.items()}
+        )
+        schema["properties"]["report_content"] = relocate(content)
+        schema["required"].append("report_content")
+        variants = schema["$defs"]["dimension"]["anyOf"]
+        for variant in variants:
+            variant["properties"]["call_state"] = {
+                "type": "string",
+                "enum": [
+                    "strongly_demonstrated",
+                    "observed",
+                    "needs_attention",
+                    "insufficient_evidence",
+                    "not_applicable",
+                ],
+            }
+            variant["required"].append("call_state")
+            variant["properties"]["evidence"]["items"] = {"$ref": "#/$defs/report_OverviewEvidence"}
+        return schema
+    if revision == _COACHING_V8:
+        return _coaching_v8_schema()
     if revision == _COACHING_V7:
         return _coaching_v7_schema()
     if revision not in {_COACHING_V4, _COACHING_V5, _COACHING_V6}:
@@ -644,7 +754,7 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
 def coaching_generation_json_schema(revision: str = _COACHING_V4) -> dict[str, Any]:
     """Describe wire shape while leaving numeric/cardinality validation local."""
     local_bounds = {"minItems", "maxItems", "minimum", "maximum"}
-    if revision == _COACHING_V7:
+    if revision in {_COACHING_V7, _COACHING_V8}:
         local_bounds |= {"minLength", "maxLength", "pattern"}
 
     def shape(value: Any) -> Any:

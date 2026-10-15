@@ -84,12 +84,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.speaker > span[aria-hidden="true"] {
+  font-size: 12px;
+}
+/* The shared avatar sets its own inline voice colour; inside this map it
+   follows the lane instead, without changing avatars elsewhere. */
+.speaker > span[aria-hidden="true"],
+.peekHead span[data-voice] > span[aria-hidden="true"] {
+  --voice: inherit !important;
+}
 .speaker small {
   padding: 2px 6px;
   border-radius: var(--lx-radius-pill);
   background: color-mix(in srgb, var(--voice) 14%, transparent);
   color: color-mix(in srgb, var(--voice) 75%, var(--lx-ink));
-  font: 700 10px/1.2 var(--lx-font-ui);
+  font: 700 12px/1.2 var(--lx-font-ui);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -119,7 +128,7 @@
   border-radius: var(--lx-radius-pill);
   background: transparent;
   color: var(--lx-ink-3);
-  font: 650 11.5px/1 var(--lx-font-ui);
+  font: 650 12px/1 var(--lx-font-ui);
   cursor: pointer;
   transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
 }
@@ -339,7 +348,7 @@
   border-radius: var(--lx-radius-pill);
   background: var(--lx-sunken);
   color: var(--lx-muted);
-  font: 650 11px/1 var(--lx-font-ui);
+  font: 650 12px/1 var(--lx-font-ui);
 }
 .peekHead > span[data-voice] {
   padding: 2px 8px 2px 2px;
@@ -360,7 +369,7 @@
   align-items: center;
   gap: 5px;
   color: var(--lx-muted-2);
-  font: 600 11px/1 var(--lx-font-ui);
+  font: 600 12px/1 var(--lx-font-ui);
 }
 
 /* ---------- Moment dots on the top edge ---------- */
@@ -428,15 +437,15 @@
 }
 .pin[data-tone="objection"],
 .legend [data-tone="objection"] {
-  --tone: var(--lx-objection);
+  --tone: var(--lx-teal);
 }
 .pin[data-tone="missed"],
 .legend [data-tone="missed"] {
-  --tone: var(--lx-missed);
+  --tone: var(--lx-warning);
 }
 .pin[data-tone="closing"],
 .legend [data-tone="closing"] {
-  --tone: var(--lx-closing);
+  --tone: var(--lx-teal);
 }
 .pin[data-tone="improve"],
 .legend [data-tone="improve"] {
@@ -494,7 +503,7 @@
   gap: 6px;
   color: var(--lx-muted);
   font-style: normal;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 .tip em::before {
@@ -522,7 +531,7 @@
 .time {
   min-width: 36px;
   color: var(--lx-muted-2);
-  font: 600 11px/1 var(--lx-font-ui);
+  font: 600 12px/1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 .time:last-child {
@@ -538,7 +547,7 @@
   justify-content: flex-end;
   gap: 2px;
   color: var(--lx-muted);
-  font: 500 11.5px/1.3 var(--lx-font-ui);
+  font: 500 12px/1.3 var(--lx-font-ui);
 }
 .legend > span {
   display: inline-flex;
@@ -569,6 +578,8 @@
   border-top: 1px solid var(--lx-line-soft);
 }
 .stat {
+  --tile: var(--lx-muted);
+  --tile-soft: var(--lx-paper-2);
   display: flex;
   min-width: 0;
   align-items: center;
@@ -587,22 +598,6 @@
 }
 .stat:hover {
   background: color-mix(in srgb, var(--tile-soft) 45%, transparent);
-}
-.stat[data-tone="teal"] {
-  --tile: var(--lx-teal);
-  --tile-soft: var(--lx-teal-soft);
-}
-.stat[data-tone="amber"] {
-  --tile: var(--lx-warning);
-  --tile-soft: var(--lx-warning-soft);
-}
-.stat[data-tone="blue"] {
-  --tile: var(--lx-closing);
-  --tile-soft: var(--lx-closing-soft);
-}
-.stat[data-tone="violet"] {
-  --tile: var(--lx-missed);
-  --tile-soft: var(--lx-missed-soft);
 }
 .icon {
   display: grid;
@@ -639,7 +634,7 @@
 .body > small {
   overflow: hidden;
   color: var(--lx-muted);
-  font: 500 11.5px/1.3 var(--lx-font-ui);
+  font: 500 12px/1.3 var(--lx-font-ui);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -808,13 +803,13 @@
   --tone: var(--lx-strength);
 }
 .miniDot[data-tone="objection"] {
-  --tone: var(--lx-objection);
+  --tone: var(--lx-teal);
 }
 .miniDot[data-tone="missed"] {
-  --tone: var(--lx-missed);
+  --tone: var(--lx-warning);
 }
 .miniDot[data-tone="closing"] {
-  --tone: var(--lx-closing);
+  --tone: var(--lx-teal);
 }
 .miniDot[data-tone="improve"] {
   --tone: var(--lx-warning);
@@ -846,7 +841,7 @@
 .miniTotal {
   min-width: 38px;
   color: var(--lx-muted-2);
-  font: 650 11.5px/1 var(--lx-font-ui);
+  font: 650 12px/1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -912,7 +907,7 @@
   background: var(--lx-sunken);
 }
 .lenses button {
-  min-height: 28px;
+  min-height: 32px;
   padding: 0 12px;
   border: 0;
   border-radius: 9px;
@@ -1030,7 +1025,7 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .lenses button {
-    min-height: 34px;
+    min-height: 44px;
     padding: 0 6px;
     font-size: 0;
     line-height: 0;
@@ -1046,7 +1041,7 @@
   }
   .legend > span {
     padding: 2px 6px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .stat {
     gap: 9px;
@@ -1062,11 +1057,11 @@
     white-space: normal;
   }
   .body b small {
-    font-size: 11px;
+    font-size: 12px;
   }
   .body > small {
     overflow: visible;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.25;
     text-overflow: clip;
     white-space: normal;

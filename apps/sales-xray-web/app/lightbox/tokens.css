@@ -19,6 +19,7 @@
  * - Dark --lx-closing-ink is #BFD0FF (the light value is unreadable on dark surfaces).
  * - Dark values added for --lx-info, --lx-info-soft, --lx-warning, --lx-warning-soft and
  *   --lx-hypothesis so status and inference text keep 4.5:1 in dark.
+ * - --lx-info is slate in both themes (11 Oct 2026, owner: one teal accent), not blue.
  * - Added the [data-script="deva"] rule: Devanagari source quotes carry an unknown-language
  *   script tag, so :lang(hi|mr) alone cannot keep them upright.
  * - Added operational density tokens (AUT-1451 / study section 2.4 card 2):
@@ -96,8 +97,10 @@
 
   /* ---------- Status ---------- */
   --lx-success: var(--lx-teal);
-  --lx-info: #2459e0;
-  --lx-info-soft: #e6eeff;
+  /* Slate, not blue: one teal accent (owner); "in progress" reads neutral.
+     5.6:1 on paper, 5.3:1 on its soft tint. */
+  --lx-info: #56637a;
+  --lx-info-soft: #eceff4;
   --lx-warning: #b45309;
   --lx-warning-soft: #fff5e8;
   --lx-danger: #c0261b;
@@ -255,8 +258,8 @@
   --lx-closing-soft: rgba(122, 167, 255, 0.15);
   --lx-closing-ink: #bfd0ff;
   --lx-hypothesis: #93a0b5;
-  --lx-info: #7aa7ff;
-  --lx-info-soft: rgba(122, 167, 255, 0.15);
+  --lx-info: #b7c2d3;
+  --lx-info-soft: rgba(183, 194, 211, 0.12);
   --lx-warning: #f59e0b;
   --lx-warning-soft: rgba(245, 158, 11, 0.12);
   --lx-danger: #f97066;
@@ -314,8 +317,10 @@
   --lx-closing-ink: #1d4cc4;
   --lx-hypothesis: #56637a;
   --lx-success: var(--lx-teal);
-  --lx-info: #2459e0;
-  --lx-info-soft: #e6eeff;
+  /* Slate, not blue: one teal accent (owner); "in progress" reads neutral.
+     5.6:1 on paper, 5.3:1 on its soft tint. */
+  --lx-info: #56637a;
+  --lx-info-soft: #eceff4;
   --lx-warning: #b45309;
   --lx-warning-soft: #fff5e8;
   --lx-danger: #c0261b;
@@ -337,6 +342,15 @@
   [data-lx-surface="light"]:not([data-lx-surface="light"] *) {
   padding: var(--lx-space-6);
   border-radius: var(--lx-radius-lg);
+}
+
+/* On a phone the frame stays thin, so the paper fills the width as in light. */
+@media (max-width: 720px) {
+  :root[data-theme="dark"]
+    [data-lx-surface="light"]:not([data-lx-surface="light"] *) {
+    padding: var(--lx-space-2);
+    border-radius: var(--lx-radius-md);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

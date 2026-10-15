@@ -32,6 +32,27 @@ describe("private Coaching contract", () => {
     data.mastery.relevant_count = 2;
     expect(() => parseCoaching(data)).toThrow();
   });
+  it("keeps a quoted strength and drops a malformed one without failing", () => {
+    const moment = fictionalCoaching.evidence[0];
+    const strength = {
+      title: "Asked a follow-up",
+      explanation: "It made the problem specific.",
+      evidence: [moment],
+    };
+    expect(parseCoaching({ ...fictionalCoaching, strength }).strength).toEqual(
+      strength,
+    );
+    for (const bad of [
+      { ...strength, evidence: [{ ...moment, end_ms: 1 }] },
+      { ...strength, title: "" },
+      { ...strength, evidence: [] },
+      null,
+    ]) {
+      const parsed = parseCoaching({ ...fictionalCoaching, strength: bad });
+      expect(parsed.focus?.label).toBe(fictionalCoaching.focus?.label);
+      expect(parsed.strength).toBeNull();
+    }
+  });
   it("uses the same-origin account with no cache or caller identity selectors", async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(fictionalCoaching), {
@@ -60,7 +81,7 @@ describe("private Coaching contract", () => {
         ),
     );
     await expect(fetchCoaching(new AbortController().signal)).rejects.toThrow(
-      "Coaching could not be loaded. Try again.",
+      "Coaching didn’t load. Try again.",
     );
   });
 });

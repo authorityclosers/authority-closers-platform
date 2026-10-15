@@ -7,10 +7,10 @@
  */
 import Link from "next/link";
 import { Play } from "lucide-react";
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { Badge } from "../ui/kit";
-import { DEVANAGARI } from "./transcript-pane";
+import { DEVANAGARI } from "../lib/script";
 import {
   clock,
   languageLabel,
@@ -21,13 +21,10 @@ import {
   type Finding,
   type Report,
 } from "./call-data";
-import {
-  reportPillars,
-  REPORT_SKILLS,
-  skillState,
-  type ReportPillar,
-} from "./report-pillars";
-import { compareReports } from "./review-logic";
+import { REPORT_SKILLS, skillState, type ReportPillar } from "./report-pillars";
+import { reportPillars } from "./report-story";
+import { FailedSteps } from "./failed-steps";
+import { compareReports, wordDiff, type DiffPart } from "./review-logic";
 import styles from "./review.module.css";
 
 type OnEvidence = (evidence: Evidence) => void;
@@ -225,6 +222,19 @@ function PillarView({
         <span>{index + 1}</span>
         {pillar.label}
       </h3>
+      {pillar.metrics?.length ? (
+        <dl className={styles.pillarMetrics} aria-label="Call measures">
+          {pillar.metrics.map((metric) => (
+            <div key={metric.label}>
+              <dt>{metric.label}</dt>
+              <dd>
+                {metric.value}
+                {metric.note ? <small>{metric.note}</small> : null}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
       {pillar.timeline?.length && durationMs ? (
         <div
           className={styles.timeline}
@@ -250,11 +260,15 @@ function PillarView({
           >
             <span className={styles.entryLabel}>
               {entry.label}
-              {entry.hypothesis ? (
-                <Badge tone="warn">Working hypothesis</Badge>
+              {entry.hypothesis ? <Badge tone="warn">Possibility</Badge> : null}
+              {entry.secondary ? (
+                <Badge tone="neutral">Under View all</Badge>
               ) : null}
             </span>
-            <p>{entry.text}</p>
+            {entry.text ? <p>{entry.text}</p> : null}
+            {entry.note ? (
+              <p className={styles.entryNote}>{entry.note}</p>
+            ) : null}
             <Quotes items={entry.evidence} onEvidence={onEvidence} />
           </li>
         ))}
@@ -263,17 +277,29 @@ function PillarView({
   );
 }
 
-/** The same report in the spec's six pillars, as the rep's Story view shows it. */
+/**
+ * The same report in the spec's six pillars, built by the rep's own story
+ * model (report-story.ts), so a verdict on a pillar is a verdict on what the
+ * rep reads there.
+ */
 export function Pillars({
-  report,
+  bundle,
   durationMs,
   onEvidence,
 }: {
-  report: Report;
+  bundle: Bundle;
   durationMs: number | null;
   onEvidence: OnEvidence;
 }) {
-  const pillars = reportPillars(report, durationMs);
+  const pillars = useMemo(
+    () =>
+      reportPillars(bundle.report, {
+        segments: bundle.transcript.segments,
+        metrics: bundle.metrics,
+        durationMs,
+      }),
+    [bundle, durationMs],
+  );
   return (
     <div className={styles.reading}>
       <nav className={styles.pillarNav} aria-label="Pillars">
@@ -320,6 +346,10 @@ export function Coaching({
   );
   return (
     <div className={styles.reading}>
+      <p className={styles.gap}>
+        Read from this call&rsquo;s saved report. The rep&rsquo;s private
+        Coaching (missions, history, what they share) isn&rsquo;t read here.
+      </p>
       <Block title="1. What to work on now">
         {overview.nextCallFocus ? (
           <>
@@ -430,43 +460,103 @@ export function Metrics({
     );
   const percent = (value: number | null) =>
     value === null ? "–" : `${Math.round(value * 100)}%`;
+  const speakers = Object.entries(metrics.speakers);
+  const shared = speakers.filter(([, row]) => row.talkShare !== null);
   return (
     <div className={styles.reading}>
       <p className={styles.muted}>
         Measured from the transcript (call-metrics/2). Metrics are evidence, not
         judgement.
       </p>
-      <table className={styles.metrics}>
+      {shared.length ? (
+        <div className={styles.share}>
+          <div
+            className={styles.shareBar}
+            role="img"
+            aria-label={`Talk share: ${shared
+              .map(
+                ([id, row]) => `${names[id] ?? id} ${percent(row.talkShare)}`,
+              )
+              .join(", ")}`}
+          >
+            {shared.map(([id, row], index) => (
+              <i
+                key={id}
+                data-index={index}
+                style={{ width: `${(row.talkShare ?? 0) * 100}%` }}
+              />
+            ))}
+          </div>
+          <div className={styles.shareLegend} aria-hidden="true">
+            {shared.map(([id, row], index) => (
+              <span key={id} data-index={index}>
+                {names[id] ?? id} {percent(row.talkShare)}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {/* Scrolls sideways on phones, so it takes keyboard focus. */}
+      <table className={styles.metrics} tabIndex={0} aria-label="Call metrics">
         <thead>
           <tr>
             <th scope="col">Speaker</th>
-            <th scope="col">Talk share</th>
-            <th scope="col">Talk time</th>
-            <th scope="col">Questions</th>
-            <th scope="col">Per minute</th>
-            <th scope="col">Talk-overs</th>
-            <th scope="col">Longest turn</th>
+            <th scope="col" data-num="">
+              Talk share
+            </th>
+            <th scope="col" data-num="">
+              Talk time
+            </th>
+            <th scope="col" data-num="">
+              Questions
+            </th>
+            <th scope="col" data-num="">
+              Per minute
+            </th>
+            <th scope="col" data-num="">
+              Talk-overs
+            </th>
+            <th scope="col" data-num="">
+              Longest turn
+            </th>
           </tr>
         </thead>
         <tbody>
-          {Object.entries(metrics.speakers).map(([id, row]) => (
+          {speakers.map(([id, row]) => (
             <tr key={id}>
               <th scope="row">{names[id] ?? id}</th>
-              <td>{percent(row.talkShare)}</td>
-              <td>{clock(row.talkMs)}</td>
-              <td>{row.questions}</td>
-              <td>
+              <td data-num="">{percent(row.talkShare)}</td>
+              <td data-num="">{clock(row.talkMs)}</td>
+              <td data-num="">{row.questions}</td>
+              <td data-num="">
                 {row.questionsPerMinute === null
                   ? "–"
                   : row.questionsPerMinute.toFixed(1)}
               </td>
-              <td>{row.cutIns}</td>
-              <td>{clock(row.longestMonologueMs)}</td>
+              <td data-num="">{row.cutIns}</td>
+              <td data-num="">{clock(row.longestMonologueMs)}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** One side of a compared field, with the words the other side lacks marked. */
+function Marked({ parts }: { parts: DiffPart[] }) {
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.changed ? (
+          <mark key={index} className={styles.diff}>
+            {part.text}
+          </mark>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </>
   );
 }
 
@@ -484,11 +574,29 @@ export function Runs({
   compareBundle: Bundle | null;
   baseHref: (query: Record<string, string | null>) => string;
 }) {
-  const rows = compareBundle
-    ? compareReports(current.report, compareBundle.report)
-    : [];
+  const [onlyChanged, setOnlyChanged] = useState(false);
+  // Diffs are computed once per pair of reports, not on every playback tick
+  // (the call screen re-renders about four times a second while playing).
+  const rows = useMemo(
+    () =>
+      compareBundle
+        ? compareReports(current.report, compareBundle.report).map((row) => ({
+            ...row,
+            diff: row.same ? null : wordDiff(row.left, row.right),
+          }))
+        : [],
+    [compareBundle, current.report],
+  );
+  const changed = rows.filter((row) => !row.same).length;
   return (
     <div className={styles.reading}>
+      {call.failedJobs.length ? (
+        <>
+          <h3 className={styles.runsHeading}>Failed steps</h3>
+          <FailedSteps jobs={call.failedJobs} />
+          <h3 className={styles.runsHeading}>Runs</h3>
+        </>
+      ) : null}
       <ul className={styles.runs}>
         {call.runs.map((run) => {
           const isCurrent = run.id === current.runId;
@@ -548,27 +656,55 @@ export function Runs({
         })}
       </ul>
       {compareBundle ? (
-        <table className={styles.compare} aria-label="Run comparison">
-          <thead>
-            <tr>
-              <th scope="col">Field</th>
-              <th scope="col">Open run</th>
-              <th scope="col">Compared run</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.label} data-changed={row.same ? undefined : ""}>
-                <th scope="row">
-                  {row.label}
-                  {row.same ? null : <Badge tone="warn">Changed</Badge>}
-                </th>
-                <td>{row.left}</td>
-                <td>{row.right}</td>
+        <>
+          <div className={styles.compareBar}>
+            <span role="status">
+              {changed} of {rows.length} fields changed
+            </span>
+            <label>
+              <input
+                type="checkbox"
+                checked={onlyChanged}
+                onChange={(event) => setOnlyChanged(event.target.checked)}
+              />
+              Only changed fields
+            </label>
+          </div>
+          <table
+            className={styles.compare}
+            tabIndex={0}
+            aria-label="Run comparison"
+          >
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Open run</th>
+                <th scope="col">Compared run</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows
+                .filter((row) => !onlyChanged || !row.same)
+                .map(({ diff, ...row }) => {
+                  return (
+                    <tr
+                      key={row.label}
+                      data-changed={row.same ? undefined : ""}
+                    >
+                      <th scope="row">
+                        {row.label}
+                        {row.same ? null : <Badge tone="warn">Changed</Badge>}
+                      </th>
+                      <td>{diff ? <Marked parts={diff.left} /> : row.left}</td>
+                      <td>
+                        {diff ? <Marked parts={diff.right} /> : row.right}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </>
       ) : compare ? (
         <p className={styles.gap}>
           The compared run&rsquo;s report couldn&rsquo;t be loaded.

@@ -6,10 +6,15 @@ import {
   AudioLines,
   BookOpen,
   ChartNoAxesColumnIncreasing,
+  Ellipsis,
   FileText,
+  Flag,
   Lightbulb,
   PanelsTopLeft,
+  Route,
+  Scale,
   TableProperties,
+  Telescope,
   Undo2,
   UserRound,
   X,
@@ -25,6 +30,11 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { DEAL, NAV, VIEWS as VIEWS_COPY, backTo } from "./report-copy";
+import {
+  CallOutcomeProvider,
+  FixtureCallOutcomeProvider,
+} from "./report-outcome-context";
 import { ReportReadingProvider } from "./report-reading-context";
 import styles from "./report-modes.module.css";
 
@@ -86,6 +96,8 @@ const TABBED_DEFAULT_QUERY = "(min-width: 1100px)";
 /** Wide screens host the report navigation in the shell's top bar. */
 const TOOLBAR_QUERY = "(min-width: 1280px)";
 const CHANGE = "ac:report-mode-change";
+/** A pillar asks for another view (event, so render never reads refs). */
+const OPEN_VIEW = "ac:report-open-view";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sectionIcons: Record<string, LucideIcon> = {
@@ -100,8 +112,18 @@ const sectionIcons: Record<string, LucideIcon> = {
   "call-coaching": Lightbulb,
 };
 
-function SectionIcon({ id }: { id: string }) {
-  const Icon = sectionIcons[id] ?? FileText;
+/** The six Report pillars share ids with Word bookmarks, not old sections. */
+const pillarIcons: Record<string, LucideIcon> = {
+  overview: Telescope,
+  coaching: Route,
+  moments: Scale,
+  missed: AudioLines,
+  skills: ChartNoAxesColumnIncreasing,
+  facts: Flag,
+};
+
+function SectionIcon({ id, pillar = false }: { id: string; pillar?: boolean }) {
+  const Icon = (pillar ? pillarIcons[id] : sectionIcons[id]) ?? FileText;
   return <Icon className={styles.sectionIcon} aria-hidden="true" />;
 }
 
@@ -455,7 +477,28 @@ function renderReportPanels(
           hidden={view === "tabs" && selected !== panel.id}
           tabIndex={view === "tabs" ? 0 : -1}
         >
-          {view === "story" || view === "coaching" ? (
+          {view === "story" ? (
+            <>
+              <header className={styles.pillarHead}>
+                <span className={styles.pillarNumber} aria-hidden="true">
+                  {index + 1}
+                </span>
+                <div>
+                  <h2
+                    id={`${id}-heading-${panel.id}`}
+                    tabIndex={-1}
+                    className={styles.pillarTitle}
+                  >
+                    {panel.label}
+                  </h2>
+                  {panel.summary ? (
+                    <p className={styles.pillarSubtitle}>{panel.summary}</p>
+                  ) : null}
+                </div>
+              </header>
+              {panel.content}
+            </>
+          ) : view === "coaching" ? (
             <OperationalPanel
               title={
                 <span id={`${id}-heading-${panel.id}`} tabIndex={-1}>
@@ -463,6 +506,10 @@ function renderReportPanels(
                 </span>
               }
               headingLevel="h2"
+              // Phones: Coaching's own pillar cards are the frame.
+              className={styles.coachingPanel}
+              headClassName={styles.coachingPanelHead}
+              bodyClassName={styles.coachingPanelBody}
             >
               {panel.content}
             </OperationalPanel>
@@ -525,6 +572,7 @@ export function ReportModes({
   onSelectContextualPlayback,
   prospectControls,
   structure = "custom",
+  fixture = false,
 }: {
   label?: string;
   initialView?: View;
@@ -542,14 +590,30 @@ export function ReportModes({
   ) => void;
   structure?: "custom" | "pillars";
   prospectControls?: ReactNode;
+  /** A fictional fixture: the Report shows its data but reads nothing live. */
+  fixture?: boolean;
 }) {
   const storyPanels =
-    documentData?.report && !documentData.report.preview
+    // A guest preview gets the Report too when the caller asks for pillars;
+    // its locked items show as "more after you sign in".
+    documentData?.report &&
+    (!documentData.report.preview || structure === "pillars")
       ? reportScreenPanels(
           documentData,
           onSelectEvidence,
           onSelectContextualPlayback,
           prospectControls,
+          {
+            callId: boundCallId ?? null,
+            liveReads: !fixture,
+            // Guests have no Coaching view, so no button that does nothing.
+            onOpenCoaching: documentData.report.preview
+              ? undefined
+              : () =>
+                  window.dispatchEvent(
+                    new CustomEvent(OPEN_VIEW, { detail: "coaching" }),
+                  ),
+          },
         )
       : [];
   const coachingPanels: ReportPanel[] =
@@ -557,7 +621,7 @@ export function ReportModes({
       ? [
           {
             id: "call-coaching",
-            label: "Coaching for this call",
+            label: DEAL.coachingForCall,
             content: (
               <ReportCallCoaching
                 data={documentData}
@@ -569,34 +633,9 @@ export function ReportModes({
           },
         ]
       : [];
-  // Keep the owner's existing report; new call-level detail expands within it.
-  const enrichedPanels = suppliedPanels.map((panel) => {
-    const additions =
-      panel.id === "overview"
-        ? [0, 1]
-        : panel.id === "skills"
-          ? [4]
-          : panel.id === "next-call-plan"
-            ? [5]
-            : [];
-    return {
-      ...panel,
-      content: (
-        <>
-          {panel.content}
-          {additions.map((index) => {
-            const extra = storyPanels[index];
-            return extra ? (
-              <details key={extra.id} className={styles.supplement}>
-                <summary>{extra.label}</summary>
-                {extra.content}
-              </details>
-            ) : null;
-          })}
-        </>
-      ),
-    };
-  });
+  // The six-pillar Report replaces the old supplements; Details keeps the
+  // original sections (transcript, raw data) unchanged.
+  const enrichedPanels = suppliedPanels;
   const id = useId();
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const navRowRef = useRef<HTMLDivElement | null>(null);
@@ -617,17 +656,8 @@ export function ReportModes({
     savedTextSizeSnapshot,
     serverTextSizeSnapshot,
   );
-  const [localTextSize, setLocalTextSize] = useState<TextSize | null>(null);
-  const textSize = localTextSize ?? savedTextSize;
-  const changeTextSize = (nextSize: TextSize) => {
-    setLocalTextSize(nextSize);
-    try {
-      localStorage.setItem(TEXT_SIZE_KEY, nextSize);
-      window.dispatchEvent(new Event(TEXT_SIZE_CHANGE));
-    } catch {
-      // Private browsing can deny storage; sizing still works in this view.
-    }
-  };
+  // A size chosen earlier still applies; browser zoom replaces the old control.
+  const textSize = savedTextSize;
 
   // Server render and hydration read "reading"; a desktop viewport then
   // prefers Tabbed unless the URL or the reader already chose a view.
@@ -639,7 +669,7 @@ export function ReportModes({
   const access = useWorkspaceAccess();
   const preferenceKey =
     access?.authenticated && access.context
-      ? `ac:report-view:${access.context.tenantId}:${access.context.personId}`
+      ? `ac:report-view2:${access.context.tenantId}:${access.context.personId}`
       : null;
   const savedView = useSyncExternalStore(
     subscribe,
@@ -656,7 +686,9 @@ export function ReportModes({
     () => null,
   );
   const preferredView: View =
-    initialView ?? savedView ?? (desktop ? "tabs" : "reading");
+    initialView ??
+    savedView ??
+    (storyPanels.length ? "story" : desktop ? "tabs" : "reading");
   const slot = useSyncExternalStore(
     subscribeToolbar,
     toolbarSlot,
@@ -812,6 +844,28 @@ export function ReportModes({
           current = panel.id;
       }
       if (!foundHeading) return;
+      // At the very end the last chapters cannot reach the reading line:
+      // the last one whose heading is on screen is the one being read.
+      const atEnd = scroller
+        ? scroller.scrollTop + scroller.clientHeight >=
+          scroller.scrollHeight - 4
+        : false;
+      if (atEnd && scroller && scroller.scrollTop > 0) {
+        const bottom =
+          scroller === document.scrollingElement ||
+          scroller === document.documentElement
+            ? window.innerHeight
+            : scroller.getBoundingClientRect().bottom;
+        const visible = activePanels.filter((panel) => {
+          const top = document
+            .getElementById(`${id}-heading-${panel.id}`)
+            ?.getBoundingClientRect().top;
+          return top !== undefined && top >= scrollportTop && top < bottom - 48;
+        });
+        // A chapter the reader jumped to stays lit while it is on screen.
+        if (visible.some((panel) => panel.id === selected)) current = selected;
+        else if (visible.length) current = visible[visible.length - 1].id;
+      }
       setReadingSection((previous) =>
         previous === current ? previous : current,
       );
@@ -850,6 +904,12 @@ export function ReportModes({
     );
     if (!list) return;
     const place = () => {
+      // A row that scrolls sideways fades at its edge, so a name at the edge
+      // reads as "more this way", never as a cut word.
+      list.toggleAttribute(
+        "data-overflow",
+        list.scrollWidth > list.clientWidth + 1,
+      );
       const current = list.querySelector<HTMLElement>(
         '[aria-selected="true"], [aria-current="location"]',
       );
@@ -859,6 +919,21 @@ export function ReportModes({
       }
       list.style.setProperty("--pill-x", `${current.offsetLeft}px`);
       list.style.setProperty("--pill-w", `${current.offsetWidth}px`);
+      // On narrow screens the row scrolls sideways: keep the current one in view.
+      if (list.scrollWidth > list.clientWidth + 1) {
+        const left =
+          current.offsetParent === list
+            ? current.offsetLeft
+            : current.offsetLeft - list.offsetLeft;
+        if (
+          left < list.scrollLeft ||
+          left + current.offsetWidth > list.scrollLeft + list.clientWidth
+        )
+          list.scrollTo?.({
+            left: Math.max(0, left - 16),
+            behavior: scrollBehavior(),
+          });
+      }
     };
     place();
     if (typeof ResizeObserver === "undefined") return;
@@ -867,8 +942,6 @@ export function ReportModes({
     for (const child of Array.from(list.children)) observer.observe(child);
     return () => observer.disconnect();
   }, [currentSection, view, slot]);
-
-  if (!activePanels.length) return null;
 
   /** Moves to a destination with motion (unless reduced) and a brief arrival cue. */
   function arriveAt(destination: HTMLElement | null | undefined) {
@@ -1045,6 +1118,78 @@ export function ReportModes({
     }
   }
 
+  // A pillar's "Coaching for this call" asks for the Coaching view.
+  useEffect(() => {
+    const open = (event: Event) => {
+      const next = (event as CustomEvent<unknown>).detail;
+      if (VIEWS.includes(next as View)) changeView(next as View);
+    };
+    window.addEventListener(OPEN_VIEW, open);
+    return () => window.removeEventListener(OPEN_VIEW, open);
+  });
+
+  if (!activePanels.length) return null;
+
+  // The Report and its Coaching are the two views people use; Document and
+  // Details wait behind "More views" (the current one stays in the row).
+  type ViewChoice = readonly [View, string, string, LucideIcon];
+  const primaryViews: ViewChoice[] = storyPanels.length
+    ? [
+        ["story", VIEWS_COPY.report.text, VIEWS_COPY.report.hint, FileText],
+        ...(coachingPanels.length
+          ? [
+              [
+                "coaching",
+                VIEWS_COPY.coaching.text,
+                VIEWS_COPY.coaching.hint,
+                Lightbulb,
+              ] as const,
+            ]
+          : []),
+        ...(view === "tabs"
+          ? [
+              [
+                "tabs",
+                VIEWS_COPY.details.text,
+                VIEWS_COPY.details.hint,
+                PanelsTopLeft,
+              ] as const,
+            ]
+          : view === "document"
+            ? [
+                [
+                  "document",
+                  VIEWS_COPY.document.text,
+                  VIEWS_COPY.document.hint,
+                  BookOpen,
+                ] as const,
+              ]
+            : []),
+      ]
+    : [
+        ["reading", "Reading view", "Reading view", BookOpen],
+        ["tabs", "Tabbed view", "Tabbed view", PanelsTopLeft],
+        ["document", "Document view", "Document view", FileText],
+      ];
+  const moreViews: ViewChoice[] = storyPanels.length
+    ? (
+        [
+          [
+            "document",
+            VIEWS_COPY.document.menu,
+            VIEWS_COPY.document.hint,
+            BookOpen,
+          ],
+          [
+            "tabs",
+            VIEWS_COPY.details.menu,
+            VIEWS_COPY.details.hint,
+            PanelsTopLeft,
+          ],
+        ] as const
+      ).filter(([value]) => value !== view)
+    : [];
+
   // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),
   // with the view choice at its trailing edge. Wide screens host it in the
   // shell's top bar; otherwise it sticks to the top of the report.
@@ -1135,7 +1280,7 @@ export function ReportModes({
                 navigate(panel.id, view, true);
               }}
             >
-              <SectionIcon id={panel.id} />
+              <SectionIcon id={panel.id} pillar={view === "story"} />
               <span className={styles.fullLabel}>{panel.label}</span>
               <span className={styles.compactLabel}>
                 {panel.compactLabel ?? panel.label}
@@ -1144,90 +1289,65 @@ export function ReportModes({
           ))}
         </nav>
       )}
-      <div className={styles.toolbar} role="group" aria-label={`${label} view`}>
-        <button
-          type="button"
-          title="Reading view"
-          aria-pressed={view === "reading"}
-          onClick={() => changeView("reading")}
-        >
-          <BookOpen aria-hidden="true" />
-          <span className={styles.toolbarLabel}>Reading view</span>
-        </button>
-        <button
-          type="button"
-          title="Tabbed view"
-          aria-pressed={view === "tabs"}
-          onClick={() => changeView("tabs")}
-        >
-          <PanelsTopLeft aria-hidden="true" />
-          <span className={styles.toolbarLabel}>Tabbed view</span>
-        </button>
-        <button
-          type="button"
-          title="Document view"
-          aria-pressed={view === "document"}
-          onClick={() => changeView("document")}
-        >
-          <FileText aria-hidden="true" />
-          <span className={styles.toolbarLabel}>Document view</span>
-        </button>
-        {storyPanels.length > 0 && (
+      <div
+        className={styles.toolbar}
+        role="group"
+        aria-label={`${label} view`}
+        data-labelled={storyPanels.length ? "" : undefined}
+      >
+        {primaryViews.map(([value, text, hint, Icon]) => (
           <button
+            key={value}
             type="button"
-            title="Story view"
-            aria-pressed={view === "story"}
-            onClick={() => changeView("story")}
+            title={hint}
+            aria-label={hint}
+            aria-pressed={view === value}
+            onClick={() => changeView(value)}
           >
-            <BookOpen aria-hidden="true" />
-            <span className={styles.toolbarLabel}>Story</span>
+            <Icon aria-hidden="true" />
+            <span className={styles.toolbarLabel}>{text}</span>
           </button>
-        )}
-        {coachingPanels.length > 0 && (
-          <button
-            type="button"
-            title="Coaching view"
-            aria-pressed={view === "coaching"}
-            onClick={() => changeView("coaching")}
+        ))}
+        {moreViews.length ? (
+          <details
+            className={styles.moreViews}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape" || !event.currentTarget.open) return;
+              event.preventDefault();
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }}
           >
-            <Lightbulb aria-hidden="true" />
-            <span className={styles.toolbarLabel}>Coaching</span>
-          </button>
-        )}
-      </div>
-      <div className={styles.textSizeGroup} role="group" aria-label="Text size">
-        <button
-          type="button"
-          title="Default text size (100%)"
-          aria-label="Text size 100%"
-          aria-pressed={textSize === "100"}
-          onClick={() => changeTextSize("100")}
-        >
-          A−
-        </button>
-        <button
-          type="button"
-          title="Medium text size (112.5%)"
-          aria-label="Text size 112.5%"
-          aria-pressed={textSize === "112.5"}
-          onClick={() => changeTextSize("112.5")}
-        >
-          A
-        </button>
-        <button
-          type="button"
-          title="Large text size (125%)"
-          aria-label="Text size 125%"
-          aria-pressed={textSize === "125"}
-          onClick={() => changeTextSize("125")}
-        >
-          A+
-        </button>
+            <summary aria-label={VIEWS_COPY.more} title={VIEWS_COPY.more}>
+              <Ellipsis aria-hidden="true" />
+            </summary>
+            <div className={styles.moreViewsMenu}>
+              {moreViews.map(([value, text, hint, Icon]) => (
+                <button
+                  key={value}
+                  type="button"
+                  title={hint}
+                  aria-label={hint}
+                  aria-pressed={false}
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
+                    changeView(value);
+                  }}
+                >
+                  <Icon aria-hidden="true" />
+                  <span>{text}</span>
+                </button>
+              ))}
+            </div>
+          </details>
+        ) : null}
       </div>
     </div>
   );
 
-  return (
+  const report = (
     <div
       ref={workspaceRef}
       className={styles.workspace}
@@ -1248,6 +1368,8 @@ export function ReportModes({
           inline
           navigate={navigateToReport}
         >
+          {/* Coaching is one focused page: the header's call map waits here, hidden. */}
+          {view === "coaching" ? <div data-report-map-slot hidden /> : null}
           <div data-reading-panels hidden={view === "document"}>
             {renderReportPanels(
               view === "document" ? `${id}-source` : id,
@@ -1262,6 +1384,8 @@ export function ReportModes({
               id={id}
               textSize={textSize}
               section={selected}
+              callId={boundCallId ?? null}
+              onSelect={onSelectEvidence}
             />
           )}
         </ReportReadingProvider>
@@ -1274,12 +1398,12 @@ export function ReportModes({
             onClick={returnToOrigin}
           >
             <Undo2 aria-hidden="true" />
-            Back to {returnPoint.label}
+            {backTo(returnPoint.label)}
           </button>
           <button
             type="button"
             className={styles.returnDismiss}
-            aria-label="Dismiss return shortcut"
+            aria-label={NAV.hideBack}
             onClick={() => setReturnPoint(null)}
           >
             <X aria-hidden="true" />
@@ -1287,5 +1411,19 @@ export function ReportModes({
         </div>
       )}
     </div>
+  );
+  // Fixtures keep the outcome in memory; a guest preview reads none.
+  return fixture && !documentData?.report?.preview ? (
+    <FixtureCallOutcomeProvider>{report}</FixtureCallOutcomeProvider>
+  ) : (
+    <CallOutcomeProvider
+      callId={
+        documentData?.report && !documentData.report.preview && !fixture
+          ? boundCallId
+          : null
+      }
+    >
+      {report}
+    </CallOutcomeProvider>
   );
 }

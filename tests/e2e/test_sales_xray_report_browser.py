@@ -492,7 +492,7 @@ def _exercise_browser(backend: BrowserBackend, evidence: Path) -> None:
             checks.append(
                 "Refreshing and reopening a saved report requires no upload or provider rerun."
             )
-            page.get_by_role("button", name="Analyze another call").click()
+            page.get_by_role("button", name="Analyse another call").click()
             page.get_by_label("Choose sales call audio").set_input_files(
                 {
                     "name": "Synthetic browser call.wav",

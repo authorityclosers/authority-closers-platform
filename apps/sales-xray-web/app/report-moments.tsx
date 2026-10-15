@@ -11,7 +11,13 @@ import {
   ThumbsUp,
   type LucideIcon,
 } from "lucide-react";
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 import { formatClipRange, formatClock } from "./lightbox/time";
 import type {
@@ -306,6 +312,37 @@ export function timelineMoments(report: SalesReport): TimelineMoment[] {
   );
 }
 
+/** Keep the time position; put overlapping hit areas on separate rows. */
+export function momentMapPositions(
+  moments: TimelineMoment[],
+  duration: number,
+  width: number,
+  controlSize: number,
+) {
+  const rowEnds: number[] = [];
+  const positions = moments.map((moment) => ({
+    id: moment.id,
+    x: Math.max(
+      0,
+      Math.min(
+        1,
+        (moment.listenEvidence ?? moment.evidence[0]).start_ms /
+          Math.max(duration, 1),
+      ),
+    ),
+    row: 0,
+  }));
+  // Rewatch evidence may differ from the finding's first evidence.
+  for (const position of [...positions].sort((a, b) => a.x - b.x)) {
+    const left = position.x * Math.max(0, width - controlSize);
+    let row = rowEnds.findIndex((end) => left >= end + 4);
+    if (row === -1) row = rowEnds.length;
+    position.row = row;
+    rowEnds[row] = left + controlSize;
+  }
+  return { positions, rows: Math.max(1, rowEnds.length) };
+}
+
 // Row titles stay calm: brand logos only. The summary line adds money and places.
 const TITLE_KINDS = ["brand"] as const;
 const SUMMARY_KINDS = ["brand", "money", "place"] as const;
@@ -352,11 +389,45 @@ export function ReportMoments({
     () => new Set(moments[0] ? [moments[0].id] : []),
   );
   const list = useRef<HTMLOListElement>(null);
+  const map = useRef<HTMLDivElement>(null);
+  const [mapSize, setMapSize] = useState({ width: 0, controlSize: 44 });
   const duration = Math.max(
     transcript.duration_ms,
     ...moments.flatMap((moment) => moment.evidence.map((e) => e.end_ms)),
     1,
   );
+  const mapLayout = useMemo(
+    () =>
+      momentMapPositions(moments, duration, mapSize.width, mapSize.controlSize),
+    [moments, duration, mapSize],
+  );
+  useLayoutEffect(() => {
+    const element = map.current;
+    if (!element) return;
+    const measure = () => {
+      const width = element.getBoundingClientRect().width;
+      const controlSize =
+        parseFloat(
+          getComputedStyle(element).getPropertyValue("--sx-control-h"),
+        ) || 44;
+      setMapSize((current) =>
+        current.width === width && current.controlSize === controlSize
+          ? current
+          : { width, controlSize },
+      );
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
+    observer?.observe(element);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [moments.length]);
   const kinds = (Object.keys(KINDS) as Kind[]).filter((kind) =>
     moments.some((moment) => moment.kind === kind),
   );
@@ -447,8 +518,10 @@ export function ReportMoments({
       data-document={documentView || undefined}
     >
       <div
+        ref={map}
         className={styles.map}
         aria-label="Where the moments are in the call"
+        style={{ "--rows": mapLayout.rows } as CSSProperties}
       >
         <span className={styles.track} aria-hidden="true" />
         {moments.map((moment, index) => (
@@ -456,11 +529,13 @@ export function ReportMoments({
             key={moment.id}
             type="button"
             className={styles.pin}
+            data-map-moment={moment.id}
             data-tone={KINDS[moment.kind].tone}
             data-must={moment.listen === "must_watch" ? "" : undefined}
             style={
               {
-                "--x": `${((moment.listenEvidence ?? moment.evidence[0]).start_ms / duration) * 100}%`,
+                "--x": mapLayout.positions[index].x,
+                "--row": mapLayout.positions[index].row,
                 "--i": index,
               } as CSSProperties
             }
@@ -524,9 +599,11 @@ export function ReportMoments({
                 >
                   <span className={styles.kind}>
                     <i aria-hidden="true" />
+                    {/* The kind names the moment; a listen flag on another
+                        kind is its chip, said once. */}
                     {moment.golden
                       ? "Best moment"
-                      : moment.listen
+                      : moment.kind === "listen" && moment.listen
                         ? LISTEN_LABEL[moment.listen]
                         : kind.label}
                     {moment.listen && moment.kind !== "listen" ? (

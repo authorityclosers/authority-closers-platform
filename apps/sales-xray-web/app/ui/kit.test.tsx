@@ -115,6 +115,10 @@ it("gives people stable initials and an empty state one action", () => {
   expect(initials("समीर जोशी")).toBe("सज");
   expect(initials("  ")).toBe("?");
   expect(renderToStaticMarkup(<Avatar name="Asha Menon" />)).toContain("AM");
+  // A small avatar keeps its initial at 12 px: one letter.
+  expect(renderToStaticMarkup(<Avatar name="Asha Menon" size={18} />)).toMatch(
+    />A<\/span>/,
+  );
   const empty = renderToStaticMarkup(
     <Empty
       icon={Inbox}

@@ -1,1 +1,7 @@
-export { default } from "../../loading";
+"use client";
+
+import { NewAnalysisSkeleton } from "./new-analysis-skeleton";
+
+export default function NewAnalysisLoading() {
+  return <NewAnalysisSkeleton />;
+}

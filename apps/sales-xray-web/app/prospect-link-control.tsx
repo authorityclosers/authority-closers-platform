@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { ACQUISITION, record } from "./acquisition-client";
 import { Clip } from "./report-kit";
@@ -212,6 +219,14 @@ async function statedName(
   return { name: row.display_name.trim(), evidence };
 }
 
+/**
+ * Tells the Report which prospect this call belongs to, so its closing
+ * "View Prospect Information" opens that prospect, not the whole list.
+ */
+export const LinkedProspectContext = createContext<
+  ((prospectId: string | null) => void) | null
+>(null);
+
 function Control({
   submissionId,
   transcript,
@@ -220,6 +235,11 @@ function Control({
   autoDetect = true,
 }: Props) {
   const [page, setPage] = useState<Page | null>(null);
+  const reportLinked = useContext(LinkedProspectContext);
+  const linkedId = page?.membership?.prospect_id ?? null;
+  useEffect(() => {
+    reportLinked?.(linkedId);
+  }, [reportLinked, linkedId]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editedName, setName] = useState<string | null>(null);

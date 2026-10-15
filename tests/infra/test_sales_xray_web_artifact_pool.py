@@ -346,6 +346,31 @@ def test_concurrent_unseen_uploads_cannot_pass_admission_ceiling(harness: _Harne
 
 
 @pytest.mark.parametrize("step", [ADMIT, RECLAIM])
+def test_known_expiry_recovers_the_workflow_inventory(harness: _Harness, step: str) -> None:
+    older = [_artifact(i, f"retained-{i}", 5_000_000) for i in range(201, 0, -1)]
+    older[0]["expires_at"] = "2026-10-01T00:00:00Z"
+    if step == RECLAIM:
+        next(item for item in older if item["id"] == 99)["name"] = CURRENT_NAME
+    # An expiry shifts one live row behind the already-fetched first page.
+    shifted = [
+        {"total_count": 201, "artifacts": older[:100]},
+        {"total_count": 200, "artifacts": older[101:]},
+    ]
+    live = older[1:]
+    harness.set_state(live, list_results=[{"stdout": json.dumps(shifted)}])
+    result = harness.run(step)
+    assert result.returncode == 0, result.stderr
+    assert "attempt=1/3 rejected: incomplete inventory" in result.stderr
+    assert "attempt=2/3 complete pages=2 artifacts=200 bytes=1000000000" in result.stderr
+    assert harness.state()["artifacts"] == live
+    assert not any("DELETE" in call for call in harness.state()["calls"])
+    if step == ADMIT:
+        assert "projected repository pool is 1400000000" in result.stdout
+    else:
+        assert "final repository pool is 1000000000" in result.stdout
+
+
+@pytest.mark.parametrize("step", [ADMIT, RECLAIM])
 @pytest.mark.parametrize(
     "defect", ["gh_partial", "empty", "truncated", "missing_page", "schema", "identity", "size"]
 )

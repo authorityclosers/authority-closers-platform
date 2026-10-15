@@ -11,10 +11,14 @@ import {
 } from "lucide-react";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
+import { AnalysisWave, CALL_WAVE_TRANSITION } from "./analysis-wave";
+import { useFileWave } from "./analysis-wave-file";
+import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-file-stage.module.css";
 
 const PAGE_SIZE = 2;
-const SUPPORTED_AUDIO = /\.(mp3|mpeg|wav|m4a|ogg|flac)$/i;
+const SUPPORTED_AUDIO =
+  /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i;
 
 export type AcquisitionFileStageProps = Readonly<{
   files: readonly File[];
@@ -54,11 +58,13 @@ export function AcquisitionFileStage({
     (currentPage + 1) * PAGE_SIZE,
   );
   const activeFile = files.find((file) => file === selectedFile) ?? null;
+  // The chosen call's own wave, measured here before anything is sent.
+  const wave = useFileWave(activeFile);
   const hasFiles = files.length > 0;
   const limits = [
-    "MP3, MPEG, WAV, M4A, OGG or FLAC",
+    "Audio or video recordings",
     maxBytes !== undefined && maxBytes > 0
-      ? `up to ${Math.floor(maxBytes / 1048576)} MB`
+      ? `up to ${Math.floor(maxBytes / 1_000_000)} MB`
       : null,
     maxMinutes !== undefined && maxMinutes > 0
       ? `${maxMinutes} min per call`
@@ -103,66 +109,27 @@ export function AcquisitionFileStage({
         }}
         onDrop={drop}
       >
-        <span className={styles.cloud} aria-hidden="true">
-          {hasFiles ? (
+        {hasFiles ? (
+          <span className={styles.cloud} aria-hidden="true">
             <Plus size={21} />
-          ) : (
-            <svg
-              className={styles.uploadMark}
-              viewBox="0 0 64 64"
-              fill="none"
-              focusable="false"
-            >
-              <circle
-                className={styles.uploadOrbit}
-                cx="32"
-                cy="32"
-                r="29"
-                stroke="currentColor"
-                strokeOpacity=".25"
-                strokeDasharray="2 7"
-              />
-              <path
-                className={styles.uploadCloud}
-                d="M18 44h27a10 10 0 0 0 2-19.8A16 16 0 0 0 16 28a8 8 0 0 0 2 16Z"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <g
-                className={styles.uploadArrow}
-                stroke="currentColor"
-                strokeWidth="2.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M32 48V28" />
-                <path d="m25 35 7-7 7 7" />
-              </g>
-              <circle
-                cx="11"
-                cy="16"
-                r="1.4"
-                fill="currentColor"
-                fillOpacity=".5"
-              />
-              <circle
-                cx="53"
-                cy="49"
-                r="1.4"
-                fill="currentColor"
-                fillOpacity=".5"
-              />
-            </svg>
-          )}
-        </span>
+          </span>
+        ) : (
+          // The call's wave from the first frame (owner's motif): quiet until
+          // a file is dragged over, then it listens; analysis carries it on.
+          <span className={styles.idleWave} aria-hidden="true">
+            <AnalysisWave
+              envelope={null}
+              played={0}
+              state={dragActive ? "arriving" : "idle"}
+            />
+          </span>
+        )}
         <div className={styles.dropCopy}>
           <strong>
             {dragActive
-              ? "Drop your audio files here"
+              ? "Drop your recordings here"
               : hasFiles
-                ? "Add another audio file"
+                ? "Add another recording"
                 : "Drop your call recording here"}
           </strong>
           {hasFiles ? null : (
@@ -186,7 +153,7 @@ export function AcquisitionFileStage({
           ref={input}
           className={styles.fileInput}
           type="file"
-          accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
+          accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc,.wma,.asf,.wmv,.caf"
           multiple
           tabIndex={-1}
           aria-hidden="true"
@@ -200,12 +167,12 @@ export function AcquisitionFileStage({
           >
             <span>
               <FileAudio size={16} aria-hidden="true" />
-              MP3 · MPEG · WAV · M4A · OGG · FLAC
+              Audio or video recordings
             </span>
             {maxBytes !== undefined && maxBytes > 0 ? (
               <span>
                 <HardDrive size={16} aria-hidden="true" />
-                Up to {Math.floor(maxBytes / 1048576)} MB
+                Up to {Math.floor(maxBytes / 1_000_000)} MB
               </span>
             ) : null}
             {maxMinutes !== undefined && maxMinutes > 0 ? (
@@ -246,6 +213,16 @@ export function AcquisitionFileStage({
               const unsupported = !SUPPORTED_AUDIO.test(file.name);
               const selectable = !oversized && !unsupported;
               const selected = file === activeFile;
+              const length =
+                selected && wave
+                  ? formatClock(wave.duration_ms).replace(/^0(?=\d:)/, "")
+                  : null;
+              const overLength =
+                selected &&
+                wave !== null &&
+                maxMinutes !== undefined &&
+                maxMinutes > 0 &&
+                wave.duration_ms > maxMinutes * 60_000;
               return (
                 <li
                   className={styles.fileCard}
@@ -259,11 +236,14 @@ export function AcquisitionFileStage({
                     <strong title={file.name}>{file.name}</strong>
                     <small>
                       {fileSize(file.size)}
+                      {length ? ` · ${length}` : ""}
                       {oversized
                         ? " · Over size limit"
                         : unsupported
                           ? " · Unsupported format"
-                          : " · Audio file"}
+                          : overLength
+                            ? ` · Longer than ${maxMinutes} min`
+                            : " · Recording"}
                     </small>
                   </span>
                   {selected ? (
@@ -290,6 +270,19 @@ export function AcquisitionFileStage({
                   >
                     <X size={19} aria-hidden="true" />
                   </button>
+                  {selected && selectable ? (
+                    // Room kept from the start: the quiet motif reshapes
+                    // into this call's wave once it is measured.
+                    <span className={styles.fileWave}>
+                      <AnalysisWave
+                        envelope={wave}
+                        played={0}
+                        state={wave ? "still" : "idle"}
+                        compact
+                        transitionName={CALL_WAVE_TRANSITION}
+                      />
+                    </span>
+                  ) : null}
                 </li>
               );
             })}

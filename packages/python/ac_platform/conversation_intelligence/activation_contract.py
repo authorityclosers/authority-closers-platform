@@ -14,7 +14,7 @@ import json
 import re
 from collections.abc import Mapping
 from typing import Any, Literal, NoReturn, Self
-from uuid import UUID, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import (
     BaseModel,
@@ -860,12 +860,25 @@ class HostedApprovalBundle(_StrictFrozenModel):
                 raise ValueError("acquisition_c5_benchmark_stage_scope_invalid")
         return self
 
-    def acquisition_policy_for(self, tenant_id: UUID) -> AcquisitionProviderPolicy | None:
-        """Resolve only an explicitly approved tenant's processing policy."""
+    def acquisition_policy_for(
+        self,
+        tenant_id: UUID,
+        *,
+        registered_organisation: bool = False,
+        processing_person_id: UUID | None = None,
+    ) -> AcquisitionProviderPolicy | None:
+        """Resolve provider limits; this lookup never grants workspace access.
+
+        Registered organisations use the existing organisation processing pattern
+        by default. The database-backed admission still requires an active registry,
+        membership and processing lease before using any derived policy. A
+        canonical existing non-login principal may be retained; an exact sealed
+        policy's principal can never be overridden by this argument.
+        """
 
         if self.acquisition_policy is not None and self.acquisition_policy.tenant_id == tenant_id:
             return self.acquisition_policy
-        return next(
+        explicit = next(
             (
                 item
                 for item in self.organisation_acquisition_policies
@@ -873,6 +886,33 @@ class HostedApprovalBundle(_StrictFrozenModel):
             ),
             None,
         )
+        if explicit is not None:
+            return explicit
+        if not registered_organisation or tenant_id == self.provider_control_tenant_id:
+            return None
+        if processing_person_id is not None and type(processing_person_id) is not UUID:
+            raise ActivationContractError("organisation_processing_principal_invalid")
+        if processing_person_id is not None and any(
+            policy is not None and policy.processing_person_id == processing_person_id
+            for policy in (self.acquisition_policy, *self.organisation_acquisition_policies)
+        ):
+            # An existing sealed principal cannot be borrowed by another tenant.
+            return None
+        template = next(iter(self.organisation_acquisition_policies), self.acquisition_policy)
+        if template is None:
+            return None
+        payload = template.model_dump()
+        payload.update(
+            id=uuid5(template.id, f"organisation-acquisition:{tenant_id}"),
+            tenant_id=tenant_id,
+            processing_person_id=processing_person_id
+            or uuid5(
+                NAMESPACE_URL,
+                f"https://authorityclosers.com/sales-xray/organisation-processing/1/{tenant_id}",
+            ),
+            max_recordings=2000,
+        )
+        return AcquisitionProviderPolicy.model_validate(payload)
 
     def acquisition_tenant_ids(self) -> tuple[UUID, ...]:
         """Return public and organisation tenants in release order."""

@@ -301,25 +301,27 @@
   white-space: nowrap;
 }
 
-.spark {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  width: 92px;
-  height: 26px;
+/* The tile's sparkline (kit Spark) or share bar (kit Meter), at the row's end. */
+.kpiAccessory {
+  display: inline-flex;
+  flex: none;
+  margin-bottom: 4px;
 }
 
-.spark i {
-  flex: 1;
-  min-width: 0;
-  border-radius: 1px;
-  background: var(--lx-teal);
-  opacity: 0.85;
+.kpiShare {
+  display: block;
+  width: 72px;
+  margin-bottom: 5px;
 }
 
-.spark i[data-empty] {
-  background: var(--lx-line-strong);
-  opacity: 1;
+@media (max-width: 720px) {
+  .kpiAccessory :global(span[role="img"]) {
+    width: 48px;
+  }
+
+  .kpiShare {
+    width: 48px;
+  }
 }
 
 /* ---------- Calls table ---------- */
@@ -653,6 +655,53 @@
 
 /* ---------- People with calls ---------- */
 
+.peopleSearch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--lx-line-soft);
+}
+
+.peopleSearchField {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+.peopleSearchField input {
+  min-width: 0;
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.peopleSearchField input::placeholder {
+  color: var(--lx-muted-2);
+}
+
+.peopleSearchField input:focus-visible {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.peopleCount {
+  grid-column: 1 / -1;
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .people {
   display: grid;
   margin: 0;
@@ -660,13 +709,28 @@
   list-style: none;
 }
 
-.people li {
+/* Each row opens the person's profile. */
+.personRow {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) 48px 104px;
   align-items: center;
   gap: 10px;
   min-height: 48px;
   padding: 6px 14px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.personRow:hover {
+  background: var(--lx-paper-2);
+}
+
+.personRow:focus-visible {
+  position: relative;
+  z-index: 1;
+  border-radius: var(--lx-radius-xs);
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
 }
 
 .people li + li {
@@ -695,11 +759,16 @@
   font-size: 12px;
 }
 
+/* A name takes two lines rather than being cut ("Neha Kulka…" at 1440). */
 .nameText {
+  display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .personBar {
@@ -922,6 +991,42 @@
 
 .memberRow:hover {
   background: var(--lx-paper-2);
+}
+
+/* The name opens the person's profile and stretches over the whole row;
+   the row's own controls stay above it. */
+.memberRow {
+  position: relative;
+}
+
+.memberLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.memberLink::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.memberLink:focus-visible {
+  outline: none;
+}
+
+.memberLink:focus-visible::after {
+  border-radius: var(--lx-radius-xs);
+  box-shadow: var(--lx-ring-focus);
+}
+
+.memberRow:hover .memberLink {
+  color: var(--lx-teal);
+}
+
+.memberRow .roleSelect,
+.memberRow .rowActions > * {
+  position: relative;
+  z-index: 1;
 }
 
 .memberRow[data-invited] .avatar {
@@ -1797,6 +1902,10 @@
 
 @media (max-width: 720px) {
   /* Phone touch targets are at least 44 px tall. */
+  .peopleSearchField input {
+    height: 44px;
+  }
+
   .tab,
   .more {
     height: 44px;
@@ -1886,7 +1995,7 @@
     display: none;
   }
 
-  .people li {
+  .personRow {
     grid-template-columns: 24px minmax(0, 1fr) 40px auto;
   }
 

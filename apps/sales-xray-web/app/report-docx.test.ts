@@ -1,19 +1,15 @@
 // @vitest-environment node
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import type { CallRecord } from "./call-record-contract";
-import type { Transcript } from "./report-contract";
-import {
-  blockLabel,
-  clock,
-  createReportDocx,
-  missedChances,
-  moments,
-  reportDocxFilename,
-  talkSlices,
-  voices,
-} from "./report-docx";
+import type { SalesReport, Transcript } from "./report-contract";
+import { clock, createReportDocx, reportDocxFilename } from "./report-docx";
 import { REPORT_PILLARS } from "./report-pillars";
+import {
+  AMIT_SPEAKERS,
+  amitReport,
+  amitTranscript,
+} from "./review-fixture/report/story/amit-call";
+import callB from "./review-fixture/report/story/fictional-call-b.json";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 
 // Validate ZIP checksums and parse every OOXML part, rather than checking only a magic header.
@@ -52,226 +48,118 @@ print(json.dumps({
     ),
   );
 
-const segment = (
-  id: string,
-  speaker: string,
-  start: number,
-  end: number,
-  text: string,
-) => ({
-  id,
-  speaker_id: speaker,
-  start_ms: start,
-  end_ms: end,
-  text,
-});
+const bytes = async (blob: Blob) => Buffer.from(await blob.arrayBuffer());
 
-const transcript: Transcript = {
-  source_sha256: syntheticReport.source_sha256,
-  revision: syntheticReport.transcript_revision,
-  timebase_id: "fictional",
-  duration_ms: 180000,
-  segments: [
-    segment("a1", "voice-b", 0, 30000, "Fictional buyer opens the call."),
-    segment(
-      "a2",
-      "voice-a",
-      31000,
-      120000,
-      "Fictional seller explains the plan?",
-    ),
-    segment("a3", "voice-b", 121000, 179000, "Fictional buyer declines."),
-  ],
-};
-
-const callRecord: CallRecord = {
-  version: "call-record/1",
-  numbers: {
-    duration_ms: 180000,
-    overlaps: 2,
-    speakers: [
-      {
-        speaker_id: "voice-a",
-        talk_ms: 89000,
-        talk_share: 0.6,
-        questions: 4,
-        longest_monologue_ms: 89000,
-      },
-      {
-        speaker_id: "voice-b",
-        talk_ms: 88000,
-        talk_share: 0.4,
-        questions: 1,
-        longest_monologue_ms: 58000,
-      },
-    ],
-  },
-  facts: [
+const amit = () =>
+  createReportDocx(
     {
-      statement: "Fictional promise to send a brochure",
-      evidence: [],
-      tag: "promise",
+      title: "Amit Sharma · discovery call",
+      report: amitReport as SalesReport,
+      transcript: amitTranscript as Transcript,
     },
     {
-      statement: "Fictional monthly budget mentioned",
-      evidence: [],
-      tag: "money",
+      roles: AMIT_SPEAKERS,
+      speakerName: (id) =>
+        id === AMIT_SPEAKERS.prospect ? "Amit Sharma" : "Arjun",
     },
-  ],
-  tags: null,
-  call_type: "first_meeting",
-};
+  );
 
-describe("report DOCX", () => {
-  it("produces valid A4 OOXML in six-pillar order with stable bookmarks", async () => {
-    const blob = await createReportDocx({
-      title: "Fictional call <&> report",
-      report: syntheticReport,
-      transcript,
-      callRecord,
-      speakerNames: { "voice-a": "Fictional seller" },
-      repName: "Fictional seller",
-    });
-    const xml = inspect(Buffer.from(await blob.arrayBuffer()));
-    expect(xml.page).toEqual({ w: "11906", h: "16838" });
-    expect(xml.margin).toEqual({
-      top: "850",
-      bottom: "850",
-      left: "850",
-      right: "850",
-    });
-    expect(xml.bookmarks).toEqual([
-      "overview",
-      "coaching",
-      "moments",
-      "missed",
-      "skills",
-      "facts",
-    ]);
-    expect(xml.pageBreaks).toBe(0);
-    expect(xml.fixedTables).toBe(xml.tables);
-    expect(xml.text).toContain("Fictional call <&> report");
-    expect(xml.text).toContain(syntheticReport.summary);
-    let previous = -1;
-    for (const [index, pillar] of REPORT_PILLARS.entries()) {
-      const position = xml.text.indexOf(`${index + 1}. ${pillar.label}`);
-      expect(position).toBeGreaterThan(previous);
-      previous = position;
-    }
-    expect(xml.text).toContain("Fictional seller");
-    expect(xml.text).not.toContain("Fictional promise to send a brochure");
-    expect(xml.text).toContain("Draft call analysis");
-    expect(xml.text).not.toContain("Practice before the next call");
-    expect(xml.text).not.toContain(
-      syntheticReport.overview!.practice!.instructions,
+describe("report Word file", () => {
+  it("is valid A4 OOXML with Dipak's six headings in order and stable bookmarks", async () => {
+    const doc = inspect(await bytes(await amit()));
+    expect(doc.page).toEqual({ w: "11906", h: "16838" });
+    expect(doc.bookmarks).toEqual(REPORT_PILLARS.map((pillar) => pillar.id));
+    const order = [
+      "1. The Big Picture",
+      "1.1 Call Outcome",
+      "1.4 Strongest Part",
+      "2. How the Call Played Out",
+      "2.1 Call Metrics",
+      "3. What Worked — & What Didn't",
+      "4. Moments That Mattered",
+      "5. Your Skills on This Call",
+      "6. Where the Deal Stands",
+      "6.1 Current Status",
+    ].map((heading) => doc.text.indexOf(heading));
+    expect(order.every((at: number) => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(doc.text).toContain("Amit Sharma agreed to:");
+    expect(doc.text).toContain("Call Outcome");
+    expect(doc.tables).toBeGreaterThanOrEqual(2);
+    expect(doc.fixedTables).toBe(doc.tables);
+    expect(doc.cs).toContain("Nirmala UI");
+    expect(doc.footer).toContain("Times are from the recording");
+    expect(doc.text).not.toMatch(/undefined|null|NaN|\[object Object\]/);
+  });
+
+  it("still makes a complete document for an older report", async () => {
+    const doc = inspect(
+      await bytes(
+        await createReportDocx({ report: syntheticReport as SalesReport }),
+      ),
     );
-    expect(xml.text).not.toContain("Facts heard on the call");
-    expect(xml.footer).toContain("Times are recording times");
-    expect(xml.cs).toEqual(["Nirmala UI"]);
+    expect(doc.bookmarks).toEqual(REPORT_PILLARS.map((pillar) => pillar.id));
+    expect(doc.text).toContain("Sales call");
+    expect(doc.text).toContain("This report doesn't cover:");
+    expect(doc.text).toContain(
+      "The buyer declined a next step and asked the seller not to follow up.",
+    );
+    expect(doc.text).toContain("Respect the buyer's request not to follow up.");
+    expect(doc.text).not.toContain("The closer clarified a follow-up time.");
+    expect(doc.text).not.toContain("Sure, which time works for you?");
   });
 
-  it("lists evidence statuses without an observed coverage score", async () => {
-    const blob = await createReportDocx({
-      title: "Fictional evidence statuses",
-      report: syntheticReport,
-    });
-    const xml = inspect(Buffer.from(await blob.arrayBuffer()));
-    for (const status of [
-      "Observed",
-      "Not Enough Evidence",
-      "State not established",
-    ])
-      expect(xml.text).toContain(status);
-    expect(xml.text).toContain(syntheticReport.dimensions[1].observation);
-    expect(xml.text).not.toMatch(/\bof\s+\d+\s+observed\b/i);
+  it("an observed skill without a note keeps its row: state and times", async () => {
+    const report = structuredClone(amitReport) as SalesReport;
+    for (const d of report.dimensions) d.observation = "";
+    const doc = inspect(
+      await bytes(
+        await createReportDocx(
+          { report, transcript: amitTranscript as Transcript },
+          { roles: AMIT_SPEAKERS },
+        ),
+      ),
+    );
+    expect(doc.text).toContain("Human Connection & TrustStrongly Demonstrated");
+    expect(doc.text).not.toContain("This report doesn't cover this skill.");
+    // The Report rows' short names, never the long write-up titles.
+    expect(doc.text).toContain("Problem / Impact / Desire");
+    expect(doc.text).not.toContain("Problem, Impact & Desire Clarity");
   });
 
-  it("still makes a complete document for an older report with no overview or numbers", async () => {
-    const { overview: _overview, ...older } = syntheticReport;
-    void _overview;
-    const blob = await createReportDocx({
-      title: "Older fictional call",
-      report: { ...older, dimensions: [] },
-    });
-    const xml = inspect(Buffer.from(await blob.arrayBuffer()));
-    expect(xml.bookmarks).toEqual([
-      "overview",
-      "coaching",
-      "moments",
-      "missed",
-      "skills",
-      "facts",
-    ]);
-    expect(xml.text).toContain("Call outcome");
-    expect(xml.text).toContain("No assessment was supplied for this skill.");
-    expect(xml.text).toContain("Not established in this report.");
-    expect(xml.text).not.toContain("Who spoke, and when");
+  it("quotes someone's own words in Before / After with who said them", async () => {
+    const doc = inspect(
+      await bytes(
+        await createReportDocx(
+          {
+            report: callB.report as unknown as SalesReport,
+            transcript: callB.transcript as unknown as Transcript,
+          },
+          {
+            roles: { seller: "speaker_0", prospect: "speaker_1" },
+            speakerName: (id) => (id === "speaker_0" ? "Sela" : "Daryl Pell"),
+          },
+        ),
+      ),
+    );
+    expect(doc.text).toContain(
+      "Before“We can start with a scheduled export and map the account key.",
+    );
+    expect(doc.text).toMatch(/before any live import\.”Sela/u);
   });
 
   it("refuses to build without a report", async () => {
-    await expect(createReportDocx({})).rejects.toThrow(
+    await expect(createReportDocx({ title: "No report" })).rejects.toThrow(
       "document_report_missing",
     );
   });
 });
 
-describe("report DOCX data", () => {
+describe("report Word file helpers", () => {
   it("formats recording times", () => {
     expect(clock(0)).toBe("0:00");
-    expect(clock(61499)).toBe("1:01");
-    expect(clock(3723000)).toBe("1:02:03");
-  });
-
-  it("names voices like the app and orders them by talk time", () => {
-    const list = voices({
-      title: "x",
-      report: syntheticReport,
-      transcript,
-      callRecord,
-    });
-    expect(list.map((voice) => [voice.id, voice.name])).toEqual([
-      ["voice-a", "Speaker 2"],
-      ["voice-b", "Speaker 1"],
-    ]);
-    const fromTranscript = voices({
-      title: "x",
-      report: syntheticReport,
-      transcript,
-    });
-    expect(fromTranscript[0]).toMatchObject({
-      id: "voice-a",
-      questions: 1,
-      longestMs: 89000,
-    });
-  });
-
-  it("splits the call into at most thirty blocks of a nameable length", () => {
-    const { count, size, rows } = talkSlices(transcript, 180000, [
-      "voice-a",
-      "voice-b",
-    ]);
-    expect([count, blockLabel(size)]).toEqual([12, "15 s"]);
-    expect(rows[0][5]).toBeCloseTo(1, 2);
-    expect(rows[1][0]).toBeCloseTo(1, 2);
-    const long = talkSlices(transcript, 2 * 3600000, ["voice-a"]);
-    expect([long.count, blockLabel(long.size)]).toEqual([24, "5 min"]);
-    const short = talkSlices(
-      { ...transcript, segments: [segment("s", "voice-a", 30000, 35000, "x")] },
-      35000,
-      ["voice-a"],
-    );
-    // The last block is five seconds long and fully spoken.
-    expect(short.count).toBe(3);
-    expect(short.rows[0][2]).toBeCloseTo(1, 2);
-  });
-
-  it("numbers moments by time and keeps missed chances to three", () => {
-    const list = moments(syntheticReport);
-    expect(list.map((moment) => moment.number)).toEqual(
-      list.map((_, i) => i + 1),
-    );
-    expect([...list].sort((a, b) => a.startMs - b.startMs)).toEqual(list);
-    expect(missedChances(syntheticReport).length).toBeLessThanOrEqual(3);
+    expect(clock(65_400)).toBe("1:05");
+    expect(clock(3_725_000)).toBe("1:02:05");
   });
 
   it("makes a safe file name", () => {

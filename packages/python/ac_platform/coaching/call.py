@@ -16,12 +16,22 @@ from ac_platform.coaching.contracts import (
     Moment,
     Practice,
     RootCause,
+    Strength,
     TextLesson,
 )
 from ac_platform.coaching.lessons import lesson_for
-from ac_platform.coaching.report_adapter import _moments, _refs, _text, from_report
+from ac_platform.coaching.report_adapter import (
+    _moments,
+    _refs,
+    _text,
+    from_report,
+    quoted_strength,
+)
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.sensitive_segments import WITHHELD_MARKER
+
+# Dropped by the HTTP layer when a Dipak clip is attached.
+NO_CLIP = "When no Dipak lesson fits this focus, the written lesson stands in."
 
 
 class CallCoachingView(Model):
@@ -50,6 +60,14 @@ class CallCoachingView(Model):
     mission: Mission | None
     media_clips: tuple[ClipSuggestion, ...] = Field(default=(), max_length=3)
     recommended_media: None = None
+    strength: Strength | None = None
+    # Other retained report suggestions; Coaching keeps one focus (spec 12.1).
+    other_suggestions: int = Field(default=0, ge=0, le=20)
+    # Fictional AC Sandbox data, read only by the person who imported it.
+    sandbox: bool = False
+    # The fictional rep whose call this is (sandbox only); the viewer is person_id.
+    rep_person_id: UUID | None = None
+    rep_name: str | None = Field(default=None, max_length=120)
     limitations: tuple[str, ...]
 
     @model_validator(mode="after")
@@ -57,6 +75,7 @@ class CallCoachingView(Model):
         moments = (
             *self.evidence,
             *([self.lesson.own_call] if self.lesson and self.lesson.own_call else []),
+            *(self.strength.evidence if self.strength else ()),
         )
         if any(
             moment.submission_id != self.submission_id
@@ -84,9 +103,24 @@ class CallCoachingView(Model):
             or self.practice
             or self.mission
             or self.media_clips
+            or self.strength
         ):
             raise ValueError("Unavailable coaching must not retain private evidence.")
         return self
+
+
+def _other_suggestions(report: dict[str, Any], label: str, explanation: str) -> int:
+    """Count the report's other titled suggestions; never their content."""
+    count = 0
+    for section in ("improvements", "missed_opportunities"):
+        findings = report.get(section)
+        for finding in findings if isinstance(findings, list) else ():
+            if not isinstance(finding, dict) or WITHHELD_MARKER in str(finding):
+                continue
+            title = _text(finding.get("title"), 240)
+            if title and title != label and finding.get("explanation") != explanation:
+                count += 1
+    return min(count, 20)
 
 
 def build_call_coaching(
@@ -173,35 +207,30 @@ def build_call_coaching(
             lesson=None,
             practice=None,
             mission=None,
-            limitations=(
-                "This call's coaching evidence is withheld. "
-                "Open the call for available information.",
-            ),
+            limitations=("This call's coaching isn't available. Open the call to see what is.",),
         )
     if not label:
         label = "Make the next step clear"
         explanation = (
-            "This report has no retained coaching recommendation. "
+            "This report has no coaching suggestion. "
             "Start with one small practice for your next call."
         )
-        why = "A clear, agreed next step helps both people understand what happens after the call."
+        why = "A clear next step means you both know what happens after the call."
     if mission is None:
         mission = Mission(
             skill_id=skill_id,
             behavior=(
-                "Practise one alternative response to the report's observation in your own words, "
-                "then try it in one comparable moment on your next call."
+                "Practise one better response in your own words, "
+                "then use it the next time the same moment comes up."
                 if basis != "general_practice"
                 else "Before ending your next call, confirm the agreed next step "
                 "and who will do what."
             ),
-            context=f"When a comparable situation relates to: {label}"
+            context=f"When the same kind of moment comes up: {label}"
             if basis != "general_practice"
-            else "When the conversation is ending and a next step is relevant.",
-            done_when=(
-                "Retain one moment where you tried the behavior so you can review what happened."
-            ),
-            cue="One useful change. Check the situation. Keep your own words.",
+            else "When the call is ending and a next step makes sense.",
+            done_when="You try it once on a real call, so the report can show the moment.",
+            cue="One change. Your own words.",
             active_since=created_at,
             origin_submission_id=submission_id,
         )
@@ -215,11 +244,9 @@ def build_call_coaching(
             explanation=explanation,
             why_it_matters=why,
             selected_reason=(
-                "Selected from this call's retained report. "
-                "Your across-call mission stays unchanged."
+                "This call's report suggested it. Your mission across calls doesn't change."
                 if basis != "general_practice"
-                else "General practice from approved guidance; "
-                "no assessed weakness is inferred from this call."
+                else "General practice. It doesn't mean this call showed a weakness."
             ),
             selected_at=created_at,
             status="provisional",
@@ -229,16 +256,16 @@ def build_call_coaching(
         lesson=lesson_for(skill_id, evidence[0] if evidence else None, mission),
         practice=practice
         or Practice(
-            exercise="Review the call in context. Say one useful response aloud in your own words.",
+            exercise="Replay the moment. Say one better response out loud, in your own words.",
             success_condition=mission.done_when,
         ),
         mission=mission,
+        strength=quoted_strength(report, envelope, submission_id, created_at, exclude=label),
+        other_suggestions=_other_suggestions(report, label, explanation),
         limitations=(
-            "This coaching is specific to one call; "
-            "it does not establish a recurring pattern or mastery.",
-            "The call suggestion stays linked to this report. "
-            "It does not replace your across-call mission.",
-            "A relevant reviewed Dipak clip is not available yet; use the structured text lesson.",
+            "This coaching is about one call. It doesn't show a pattern or mastery.",
+            "It stays with this report and doesn't replace your mission across calls.",
+            NO_CLIP,
         ),
     )
 

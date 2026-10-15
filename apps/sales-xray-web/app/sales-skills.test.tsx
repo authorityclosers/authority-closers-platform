@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import fixture from "../tests/fixtures/dipak-overview.json";
 import type { ReportDimension, ReportEvidence } from "./report-contract";
+import { SKILL_NAMES } from "./report-copy";
 import { SalesSkills } from "./sales-skills";
 import { ReportReadingProvider } from "./report-reading-context";
 
@@ -46,14 +47,19 @@ const tabs = () => [
   ...container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
 ];
 const panel = () => container.querySelector<HTMLElement>('[role="tabpanel"]')!;
+/** The Report rows' short name (Dipak's), as every view shows it. */
+const short = (d: ReportDimension) =>
+  SKILL_NAMES[d.dimension_id as keyof typeof SKILL_NAMES]?.short ?? d.label;
 
 it("lists every skill, shows one at a time, and counts what the call showed", async () => {
   await render(dimensions);
-  expect(tabs().map((tab) => tab.textContent)).toEqual(
-    dimensions.map((d) => d.label),
-  );
+  expect(tabs().map((tab) => tab.textContent)).toEqual(dimensions.map(short));
+  expect(tabs().map((tab) => tab.textContent)).toContain("Discovery");
   expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
-  expect(panel().querySelector("h3")?.textContent).toBe(dimensions[0].label);
+  expect(panel().querySelector("h3")?.textContent).toBe(short(dimensions[0]));
+  expect(panel().querySelector("h3")?.getAttribute("title")).toBe(
+    dimensions[0].label,
+  );
   const text = container.textContent ?? "";
   expect(text).not.toMatch(/\d+\s+of\s+\d+\s+skills/);
   expect(container.querySelector('[role="img"]')).toBeNull();
@@ -86,12 +92,10 @@ it("moves between skills by click, arrow keys and next/previous, and plays exact
   await render(items, onSelectEvidence);
   expect(container.textContent).not.toMatch(/\d+\s+of\s+\d+\s+skills/);
   expect(container.querySelector('[role="img"]')).toBeNull();
-  expect(container.textContent).toContain("Evidence found 1");
+  expect(container.textContent).toContain("Observed 1");
   await act(async () => tabs()[1].click());
-  expect(panel().querySelector("h3")?.textContent).toBe(items[1].label);
-  expect(panel().textContent).toContain(
-    "Evidence found · 2 clips from the call",
-  );
+  expect(panel().querySelector("h3")?.textContent).toBe(short(items[1]));
+  expect(panel().textContent).toContain("Observed · 2 clips from the call");
   expect(panel().textContent).toContain(excerpt.quote);
   const play = panel().querySelector<HTMLButtonElement>(
     'button[aria-label^="Play source moment"]',
@@ -105,7 +109,7 @@ it("moves between skills by click, arrow keys and next/previous, and plays exact
     ),
   );
   expect(tabs()[2].getAttribute("aria-selected")).toBe("true");
-  expect(panel().textContent).toContain("Mixed evidence");
+  expect(panel().textContent).toContain("Mixed signals");
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>('button[aria-label="Previous skill"]')!
@@ -114,11 +118,28 @@ it("moves between skills by click, arrow keys and next/previous, and plays exact
   expect(tabs()[1].getAttribute("aria-selected")).toBe("true");
 });
 
+it("shows the Report's own skill states when the call has them", async () => {
+  const items = dimensions.map((d, index) =>
+    index === 0
+      ? { ...d, status: "observed", call_state: "strongly_demonstrated" }
+      : index === 1
+        ? { ...d, status: "observed", call_state: "needs_attention" }
+        : d,
+  ) as ReportDimension[];
+  await render(items);
+  const legend = container.querySelector("header ul")!.textContent;
+  expect(legend).toContain("Strongly Demonstrated 1");
+  expect(legend).toContain("Needs Attention 1");
+  expect(panel().textContent).toContain("Strongly Demonstrated");
+  await act(async () => tabs()[1].click());
+  expect(
+    panel().querySelector("[data-status]")?.getAttribute("data-status"),
+  ).toBe("needs_attention");
+});
+
 it("says so when no skill was observed", async () => {
   await render([]);
-  expect(container.textContent).toContain(
-    "No skill observations were supplied for this call.",
-  );
+  expect(container.textContent).toContain("This report has no skill notes.");
 });
 
 it("includes every supplied skill in the accessible Document representation", async () => {

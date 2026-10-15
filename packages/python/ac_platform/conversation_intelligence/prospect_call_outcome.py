@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from ac_platform.conversation_intelligence.prospect_fact_contract import NumericFactValue
 
@@ -19,6 +20,7 @@ SCHEMA = "ac.sales-xray.call-outcome/1"
 OUTCOMES = frozenset({"won", "lost", "follow_up", "no_decision"})
 _AMOUNT = re.compile(r"(?:0|[1-9][0-9]{0,15})(?:\.[0-9]{1,4})?\Z")
 _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}\Z")
+MAX_SAFE_REVISION = 2**53 - 1
 
 
 class OutcomeValidationError(ValueError):
@@ -110,4 +112,76 @@ class HumanOutcome:
             "lost_reason": self.lost_reason,
             "follow_up_on": self.follow_up_on.isoformat() if self.follow_up_on else None,
             "deal_value": self.deal_value.json() if self.deal_value else None,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class HumanOutcomeCommand:
+    """Prepared optimistic intent, never proof of call, person or manager authority.
+
+    The future store must re-admit the active actor and lock/check these three
+    current revisions in the same transaction as append-only outcome/stage audit.
+    An unlinked call explicitly pins null membership AND null stage revision.
+    """
+
+    value: HumanOutcome
+    expected_revision: int
+    expected_membership_id: UUID | None
+    expected_prospect_stage_revision: int | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, HumanOutcome):
+            raise OutcomeValidationError("invalid_outcome_command_value")
+        if (
+            type(self.expected_revision) is not int
+            or not 0 <= self.expected_revision < MAX_SAFE_REVISION
+        ):
+            raise OutcomeValidationError("invalid_expected_outcome_revision")
+        if self.expected_membership_id is None:
+            if self.expected_prospect_stage_revision is not None:
+                raise OutcomeValidationError("invalid_expected_prospect_binding")
+        elif (
+            not isinstance(self.expected_membership_id, UUID)
+            or type(self.expected_prospect_stage_revision) is not int
+            or not 0 <= self.expected_prospect_stage_revision <= MAX_SAFE_REVISION
+        ):
+            raise OutcomeValidationError("invalid_expected_prospect_binding")
+
+    @classmethod
+    def parse(cls, payload: object) -> "HumanOutcomeCommand":
+        if not isinstance(payload, dict) or set(payload) != {
+            "value",
+            "expected_revision",
+            "expected_membership_id",
+            "expected_prospect_stage_revision",
+        }:
+            raise OutcomeValidationError("invalid_outcome_command_fields")
+        membership = payload["expected_membership_id"]
+        if membership is not None:
+            if not isinstance(membership, str):
+                raise OutcomeValidationError("invalid_expected_prospect_binding")
+            try:
+                parsed_membership = UUID(membership)
+            except ValueError:
+                raise OutcomeValidationError("invalid_expected_prospect_binding") from None
+            if str(parsed_membership) != membership:
+                raise OutcomeValidationError("invalid_expected_prospect_binding")
+            membership = parsed_membership
+        return cls(
+            HumanOutcome.parse(payload["value"]),
+            payload["expected_revision"],
+            membership,
+            payload["expected_prospect_stage_revision"],
+        )
+
+    def json(self) -> dict[str, Any]:
+        return {
+            "value": self.value.json(),
+            "expected_revision": self.expected_revision,
+            "expected_membership_id": (
+                str(self.expected_membership_id)
+                if self.expected_membership_id is not None
+                else None
+            ),
+            "expected_prospect_stage_revision": self.expected_prospect_stage_revision,
         }

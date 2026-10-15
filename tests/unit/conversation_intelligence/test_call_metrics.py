@@ -202,3 +202,95 @@ def test_stored_summary_caps_cut_ins_at_fifty() -> None:
     assert len(metrics["cut_ins"]) == 51
     assert summary["cut_ins"] == metrics["cut_ins"][:50]
     assert len(summary["cut_ins"]) == 50
+
+
+@pytest.mark.parametrize(
+    "price_text",
+    [
+        "The program investment is two lakh rupees.",
+        "The program INVESTMENT is ₹2 lakh.",
+        "इस program की investment दो लाख रुपये है।",
+    ],
+)
+def test_investment_line_keeps_its_exact_timing_and_next_different_speaker(
+    price_text: str,
+) -> None:
+    segments: list[TranscriptSegment] = [
+        {
+            "id": "investment-line",
+            "speaker_id": "speaker-1",
+            "start_ms": 1232000,
+            "end_ms": 1237000,
+            "text": price_text,
+        },
+        {
+            "id": "same-speaker",
+            "speaker_id": "speaker-1",
+            "start_ms": 1237200,
+            "end_ms": 1237800,
+            "text": "That covers the twelve weeks.",
+        },
+        {
+            "id": "response-line",
+            "speaker_id": "speaker-2",
+            "start_ms": 1239000,
+            "end_ms": 1244000,
+            "text": "I need to discuss it with my partner.",
+        },
+    ]
+
+    metrics = compute_call_metrics(segments, 1508000)
+    assert metrics["price_moments"] == [
+        {
+            "segment_id": "investment-line",
+            "speaker_id": "speaker-1",
+            "at_ms": 1232000,
+            "silence_ms": 2000,
+            "next_speaker_id": "speaker-2",
+            "next_segment_id": "response-line",
+        }
+    ]
+    summary = stored_summary(segments, 1508000)
+    assert summary["rules"] == "call-metrics/3"
+    assert summary["price_moments"] == metrics["price_moments"]
+    assert set(_string_values(summary)) == {
+        "call-metrics/3",
+        "speaker-1",
+        "speaker-2",
+        "investment-line",
+        "response-line",
+    }
+
+
+@pytest.mark.parametrize("speaker_id,start_ms,end_ms", [(None, 0, 5000), ("s1", 0, 0)])
+def test_investment_without_an_attributed_positive_length_turn_is_not_measured(
+    speaker_id: str | None, start_ms: int, end_ms: int
+) -> None:
+    segment: TranscriptSegment = {
+        "id": "unusable-line",
+        "speaker_id": speaker_id,
+        "start_ms": start_ms,
+        "end_ms": end_ms,
+        "text": "The program investment is two lakh rupees.",
+    }
+    assert compute_call_metrics([segment], 5000)["price_moments"] == []
+
+
+def test_investment_at_the_end_does_not_invent_a_response() -> None:
+    segment: TranscriptSegment = {
+        "id": "final-line",
+        "speaker_id": "speaker-1",
+        "start_ms": 1000,
+        "end_ms": 5000,
+        "text": "The program investment is two lakh rupees.",
+    }
+    assert compute_call_metrics([segment], 5000)["price_moments"] == [
+        {
+            "segment_id": "final-line",
+            "speaker_id": "speaker-1",
+            "at_ms": 1000,
+            "silence_ms": None,
+            "next_speaker_id": None,
+            "next_segment_id": None,
+        }
+    ]

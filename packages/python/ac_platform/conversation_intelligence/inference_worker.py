@@ -834,7 +834,7 @@ class ConversationInferenceWorker:
 
     async def _dispatch(self, work: Work) -> None:
         # Both media erasure and inference hold this fence BEFORE locking DB rows.
-        async with _FencedExecutor(self.storage.root) as fenced:
+        async with _FencedExecutor(self.storage.root, exclusive=False) as fenced:
             async with self.sessions() as db, db.begin():
                 job = await self._locked_job(db, work)
                 if job.provider_receipt is not None:
@@ -1028,6 +1028,10 @@ class ConversationInferenceWorker:
                 )
                 save_accounts(minutes, budget, transition)
 
+                from ac_platform.conversation_intelligence.stage_handoff import make_plans_due
+
+                await make_plans_due(db, scope.recording)
+
             # A crash here only loses acknowledgement, never the saved provider result.
             async with self.sessions() as db, db.begin():
                 await JobRepository(db).complete(work.job_id, work.lease_token)
@@ -1095,6 +1099,10 @@ class ConversationInferenceWorker:
                                 f"provider-not-dispatched:{task.run_id}",
                             )
                             save_accounts(minutes, budget, transition)
+                if recording is not None:
+                    from ac_platform.conversation_intelligence.stage_handoff import make_plans_due
+
+                    await make_plans_due(db, recording)
             failed = await JobRepository(db).fail(
                 job,
                 work.lease_token,

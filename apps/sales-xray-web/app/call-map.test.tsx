@@ -1,5 +1,6 @@
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import fixture from "../tests/fixtures/dipak-overview.json";
@@ -121,6 +122,43 @@ function chips() {
     ),
   );
 }
+
+it("uses a confirmed seller's colour even when the prospect speaks first", async () => {
+  const voices = [
+    ...new Set(transcript.segments.map((segment) => segment.speaker_id)),
+  ];
+  await act(async () =>
+    saveSpeakerProfiles(CALL_ID, {
+      [voices[0]!]: { name: "Fictional Buyer", role: "prospect", icon: null },
+      [voices[1]!]: {
+        name: "Fictional Seller",
+        role: "salesperson",
+        icon: null,
+      },
+    }),
+  );
+  await renderMap();
+  expect(chips()[0].style.getPropertyValue("--voice")).toBe("var(--lx-muted)");
+  expect(chips()[1].style.getPropertyValue("--voice")).toBe("var(--lx-teal)");
+  expect(
+    host
+      .querySelector<SVGElement>('svg[data-voice="0"]')
+      ?.style.getPropertyValue("--voice"),
+  ).toBe("var(--lx-muted)");
+  expect(
+    host
+      .querySelector<SVGElement>('svg[data-voice="1"]')
+      ?.style.getPropertyValue("--voice"),
+  ).toBe("var(--lx-teal)");
+});
+
+it("keeps unnamed roles neutral rather than making the first voice the seller", () => {
+  expect(
+    chips().every(
+      (chip) => chip.style.getPropertyValue("--voice") === "var(--lx-muted)",
+    ),
+  ).toBe(true);
+});
 
 function type(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(
@@ -519,6 +557,66 @@ it("keeps all three lenses and asks for a role before showing talk share", async
   expect(host.textContent).toContain(
     "Assign a speaker role to view talk share.",
   );
+});
+
+it.each([
+  ["stages", "Call stages"],
+  ["talk-share", "Talk share by minute"],
+  ["interest", "Talk share by minute"],
+])(
+  "hydrates the remembered %s map view without a mismatch",
+  async (saved, label) => {
+    localStorage.setItem("ac.xray.map-lens", saved);
+    const element = (
+      <CallMap
+        callId={CALL_ID}
+        transcript={transcript}
+        report={report}
+        durationMs={transcript.duration_ms}
+        onSelectEvidence={onSelectEvidence}
+        onSeek={onSeek}
+      />
+    );
+    const html = renderToString(element);
+    await act(async () => root.unmount());
+    host.innerHTML = html;
+    const controls = host.querySelector('[aria-label="What the map shows"]')!;
+    expect(controls.querySelector('[aria-pressed="true"]')?.textContent).toBe(
+      "Who talked",
+    );
+    const recoverableError = vi.fn();
+    await act(async () => {
+      root = hydrateRoot(host, element, {
+        onRecoverableError: recoverableError,
+      });
+    });
+    expect(recoverableError).not.toHaveBeenCalled();
+    expect(controls.querySelector('[aria-pressed="true"]')?.textContent).toBe(
+      label,
+    );
+    expect(controls.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1);
+    if (saved !== "stages") {
+      expect(host.textContent).toContain(
+        "Assign a speaker role to view talk share.",
+      );
+    }
+  },
+);
+
+it("keeps view selection working when browser preference storage is refused", async () => {
+  const denied = () => {
+    throw new Error("Fictional storage refusal");
+  };
+  vi.spyOn(Storage.prototype, "getItem").mockImplementation(denied);
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(denied);
+  await renderMap();
+  const controls = host.querySelector('[aria-label="What the map shows"]')!;
+  const stages = controls.querySelector<HTMLButtonElement>(
+    '[aria-label="Call stages"]',
+  )!;
+  await act(async () => stages.click());
+  expect(stages.getAttribute("aria-pressed")).toBe("true");
+  expect(controls.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1);
 });
 
 it("shows factual talk share only after the call has a confirmed role", async () => {

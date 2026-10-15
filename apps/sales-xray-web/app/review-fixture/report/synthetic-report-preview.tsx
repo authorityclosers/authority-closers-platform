@@ -42,6 +42,9 @@ export function SyntheticReportPreview() {
           accessibility. It does not show a validated coaching result.
         </aside>
         <ReportModes
+          fixture
+          // This fixture shows the classic production sections.
+          initialView="reading"
           label="Synthetic report sections"
           documentData={{
             report: syntheticReport,

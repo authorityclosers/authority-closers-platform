@@ -17,6 +17,16 @@
   white-space: nowrap;
 }
 
+/* The title's line while the page loads: same line box, no words. */
+.placeholder {
+  display: inline-block;
+  width: min(220px, 70%);
+  height: 0.8em;
+  border-radius: var(--lx-radius-xs);
+  background: var(--lx-sunken);
+  vertical-align: -0.05em;
+}
+
 .subtitle {
   margin: 0;
   color: var(--lx-muted);

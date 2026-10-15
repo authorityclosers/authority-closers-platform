@@ -8,6 +8,14 @@ import type { Progress } from "./acquisition-client";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
+// The measured waveform has its own tests (analysis-wave.test.tsx); here it
+// stays out of the fetch sequence the plan polls use.
+const wave = vi.hoisted(() => ({ measured: null as unknown }));
+vi.mock("./analysis-wave", async (original) => ({
+  ...(await original<typeof import("./analysis-wave")>()),
+  useMeasuredWave: () => wave.measured,
+}));
+
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -100,7 +108,7 @@ it("says one true thing and moves the steps with the plan's live stage", async (
     `/v1/conversation/acquisition/submissions/${callId}/plan`,
   );
   expect(host.querySelector("h2")?.textContent).toBe("Analysing your call");
-  expect(host.textContent).toContain("Usually about 2–4 minutes");
+  expect(host.textContent).toContain("Usually 2–3 minutes");
   expect([stepState("C2"), stepState("C4"), stepState("C5")]).toEqual([
     "active",
     "waiting",
@@ -154,6 +162,58 @@ it("uses the server's own stage and clock when the progress read has them", asyn
   expect(stepStatus("C4")).toBe("In progress");
   // Elapsed from the server's first recorded start, not from this page.
   expect(host.textContent).toContain("2:51 so far");
+});
+
+it("says it is trying again while the server reruns the analysis", async () => {
+  await mount({
+    progress: {
+      ...running,
+      run_state: "retrying",
+      minute_state: "reserved",
+      retry_available: false,
+    },
+  });
+  expect(host.querySelector("h2")?.textContent).toBe("Trying again");
+  expect(host.textContent).toContain(
+    "Your recording is saved. The analysis is running again.",
+  );
+  expect(host.textContent).not.toContain("Usually 2–3 minutes");
+});
+
+it("says only 'Done' for a step the server finished in under a second", async () => {
+  vi.setSystemTime(new Date("2026-10-10T12:03:00Z"));
+  await mount({
+    progress: {
+      ...running,
+      current_stage: "C5",
+      terminal_state: null,
+      stage_progress: [
+        {
+          stage: "C2",
+          state: "completed",
+          started_at: "2026-10-10T12:00:10Z",
+          finished_at: "2026-10-10T12:01:15Z",
+        },
+        {
+          stage: "C4",
+          state: "completed",
+          started_at: "2026-10-10T12:01:20Z",
+          finished_at: "2026-10-10T12:01:20.400Z",
+        },
+        {
+          stage: "C5",
+          state: "running",
+          started_at: "2026-10-10T12:01:21Z",
+          finished_at: null,
+        },
+      ],
+    },
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000);
+  });
+  expect(stepStatus("C2")).toBe("Done · 1:05");
+  expect(stepStatus("C4")).toBe("Done");
 });
 
 it("marks each step done with the time it took once it is seen to finish", async () => {
@@ -261,13 +321,33 @@ it("pauses calmly: saved work, the reason and the recovery actions in view", asy
   );
   expect(stepState("C4")).toBe("attention");
   expect(stepStatus("C4")).toBe("Paused · needs attention");
-  expect(host.textContent).toContain("The completed transcript stays attached");
+  expect(host.textContent).toContain("The transcript is saved with this call");
   expect(host.querySelector("details")).toBeNull();
   expect(
     host.querySelector('[role="group"][aria-label="Call actions"]')
       ?.textContent,
   ).toContain("Delete this call…");
   expect(host.textContent).not.toContain("You can leave this page");
+});
+
+it("names a failed run as failed: the step didn't finish, only saved work is listed", async () => {
+  await mount({
+    stageRows: [{ stage: "C2", state: "not_started" }],
+    progress: {
+      ...running,
+      local_state: "failed",
+      run_state: "failed",
+      minute_state: "released",
+      retry_available: false,
+      stages: [{ stage: "C2", state: "not_started" }],
+    },
+  });
+  expect(host.textContent).toContain("Analysis failed");
+  expect(stepStatus("C2")).toBe("Didn’t finish");
+  expect(host.textContent).not.toContain("Paused");
+  expect(
+    host.querySelector('[aria-label="Saved work"]')?.textContent,
+  ).not.toContain("isn’t confirmed yet");
 });
 
 it("falls back to the task rows on a server without a plan for the call", async () => {
@@ -306,4 +386,34 @@ it("renders a static example with no live claim, read or action", () => {
   expect(markup).not.toContain("Delete this call");
   expect(markup).not.toContain("You can leave this page");
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("adds the call's measured length to its file line once the server has it", async () => {
+  wave.measured = {
+    schema: "ac.sales-xray.waveform/1",
+    kind: "rms_envelope",
+    duration_ms: 1_520_000,
+    points: [{ start_ms: 0, level: 0.5 }],
+  };
+  await mount();
+  expect(host.textContent).toContain("12.4 MB · 25:20");
+  wave.measured = null;
+});
+
+it("draws the chosen file's own wave while it is sent, until the server measures it", async () => {
+  const local = {
+    schema: "ac.sales-xray.waveform/1" as const,
+    kind: "rms_envelope" as const,
+    duration_ms: 185_000,
+    points: [{ start_ms: 0, level: 0.3 }],
+  };
+  await mount({ upload: { fraction: null }, localEnvelope: local });
+  const strip = () => host.querySelector('[role="img"]')!;
+  expect(strip().hasAttribute("data-measured")).toBe(true);
+  expect(host.textContent).toContain("12.4 MB · 3:05");
+  // The server's measurement wins once it exists.
+  wave.measured = { ...local, duration_ms: 186_000 };
+  await mount({ localEnvelope: local });
+  expect(host.textContent).toContain("12.4 MB · 3:06");
+  wave.measured = null;
 });

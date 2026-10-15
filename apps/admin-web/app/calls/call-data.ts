@@ -3,7 +3,9 @@
  * (GET /v1/admin/conversation/calls, /calls/{id}, /runs/{id}/review) that give
  * every missing field a default, and the labels screens show. Pure.
  */
+import { normalizeFailedJob, type FailedJob } from "../health/health-data";
 import { read } from "../lib/read";
+import { asReviewState, REVIEW_STATES, type ReviewState } from "./labels-data";
 
 export const CALL_STATUSES = [
   "ready",
@@ -63,17 +65,20 @@ export type QueueItem = {
   promptRevision: string | null;
   runs: number;
   reportRunId: string | null;
+  review: ReviewState;
 };
 export type Facet = { value: string; label: string; count: number };
 export type Queue = {
   items: QueueItem[];
   total: number;
   counts: Record<CallStatus, number>;
+  reviewCounts: Record<ReviewState, number>;
   facets: {
     organisations: Facet[];
     reps: Facet[];
     languages: Facet[];
     providers: Facet[];
+    prompts: Facet[];
   };
   nextCursor: string | null;
   truncated: boolean;
@@ -125,17 +130,25 @@ export function normalizeQueue(raw: unknown): Queue {
         promptRevision: read.optionalString(row.prompt_revision),
         runs: read.number(row.runs),
         reportRunId: read.optionalString(row.report_run_id),
+        review: asReviewState(row.review),
       };
     }),
     total: read.number(body.total),
     counts: Object.fromEntries(
       CALL_STATUSES.map((status) => [status, read.number(counts[status])]),
     ) as Record<CallStatus, number>,
+    reviewCounts: Object.fromEntries(
+      REVIEW_STATES.map((state) => [
+        state,
+        read.number(read.object(body.review_counts)[state]),
+      ]),
+    ) as Record<ReviewState, number>,
     facets: {
       organisations: facets(facetBody.organisations),
       reps: facets(facetBody.reps),
       languages: facets(facetBody.languages),
       providers: facets(facetBody.providers),
+      prompts: facets(facetBody.prompts),
     },
     nextCursor: read.optionalString(body.next_cursor),
     truncated: read.boolean(window.truncated),
@@ -168,6 +181,8 @@ export type Call = {
   rep: Person;
   status: CallStatus;
   runs: Run[];
+  /** Dead-lettered steps, newest first; the admin job retry may run the retryable ones. */
+  failedJobs: FailedJob[];
 };
 
 export function normalizeCall(raw: unknown): Call {
@@ -201,6 +216,7 @@ export function normalizeCall(raw: unknown): Call {
         retryOf: read.optionalString(row.retry_of),
       };
     }),
+    failedJobs: read.array(body.failed_jobs).map(normalizeFailedJob),
   };
 }
 
@@ -248,13 +264,27 @@ export type Overview = {
     whyEffective: string;
   }[];
   rewatch: (Note & { purpose: string })[];
+  missedDetails: {
+    findingIndex: number;
+    prospectSignal: Note;
+    closerResponse: Note;
+    followUp: string;
+    potentialImpact: string;
+  }[];
+  prospectInterpretations: { source: Note; possibleConcern: string }[];
+  /** What the report says it would need to judge business impact. */
+  missingInputs: string[];
   conversationChange: {
     before: Note;
     change: Note;
     after: Note;
     possibleEffect: string;
   } | null;
-  nextCallFocus: { behavior: string; target: string } | null;
+  nextCallFocus: {
+    behavior: string;
+    target: string;
+    improvementIndex: number;
+  } | null;
   practiceDrill: { instructions: string; successCondition: string } | null;
   finalAssessment: {
     repeat: string;
@@ -314,6 +344,10 @@ export type SpeakerMetric = {
 export type Metrics = {
   timeUsedMs: number;
   speakers: Record<string, SpeakerMetric>;
+  /** Talk-overs across the whole call. */
+  cutIns: number;
+  /** Lines where price or money came up (segment ids only). */
+  priceMoments: { segmentId: string; atMs: number }[];
 };
 export type Bundle = {
   runId: string;
@@ -353,6 +387,18 @@ const notes = (raw: unknown): Note[] =>
     const value = note(item);
     return value ? [value] : [];
   });
+/** The inputs a report lists as missing for business impact, once each. */
+function missingInputs(...impacts: unknown[]): string[] {
+  const items: string[] = [];
+  for (const impact of impacts) {
+    const row = read.object(impact);
+    if (row.status !== "insufficient_data") continue;
+    for (const input of read.strings(row.missing_inputs))
+      if (input.trim()) items.push(input.trim());
+  }
+  return [...new Set(items)].slice(0, 6);
+}
+
 const findings = (raw: unknown): Finding[] =>
   read.array(raw).map((item) => {
     const row = read.object(item);
@@ -416,6 +462,30 @@ function overview(raw: unknown): Overview | null {
           ]
         : [];
     }),
+    missedDetails: read.array(body.missed_details).map((item) => {
+      const row = read.object(item);
+      return {
+        findingIndex: read.number(row.finding_index, -1),
+        prospectSignal: note(row.prospect_signal) ?? { text: "", evidence: [] },
+        closerResponse: note(row.closer_response) ?? { text: "", evidence: [] },
+        followUp: read.string(row.follow_up),
+        potentialImpact: read.string(row.potential_impact),
+      };
+    }),
+    prospectInterpretations: read
+      .array(body.prospect_interpretations)
+      .flatMap((item) => {
+        const row = read.object(item);
+        const source = note(row.source);
+        const possibleConcern = read.string(row.possible_concern);
+        return source && possibleConcern ? [{ source, possibleConcern }] : [];
+      }),
+    missingInputs: missingInputs(
+      body.business_impact,
+      ...read
+        .array(body.improvement_details)
+        .map((item) => read.object(item).business_impact),
+    ),
     conversationChange: change
       ? {
           before: note(change.before) ?? { text: "", evidence: [] },
@@ -428,6 +498,7 @@ function overview(raw: unknown): Overview | null {
       ? {
           behavior: read.string(focus.behavior),
           target: read.string(focus.target),
+          improvementIndex: read.number(focus.improvement_index, 0),
         }
       : null,
     practiceDrill: drill
@@ -592,6 +663,16 @@ export function normalizeBundle(raw: unknown): Bundle {
               },
             ),
           ),
+          cutIns: read.array(metricsBody.cut_ins).length,
+          priceMoments: read
+            .array(metricsBody.price_moments)
+            .flatMap((item) => {
+              const row = read.object(item);
+              const segmentId = read.string(row.segment_id);
+              return segmentId
+                ? [{ segmentId, atMs: read.number(row.at_ms) }]
+                : [];
+            }),
         }
       : null,
     // Only the admin route for this run; never a URL from the payload.

@@ -245,6 +245,7 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
     )
     database = _Database(
         [
+            [],  # Active registered organisations; this fixture serves Personal only.
             [public_recording, operations_recording, unrelated_recording],
             *public_page_responses,
         ]
@@ -362,7 +363,8 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
     }
     assert body["next_cursor"]
 
-    compiled = database.statements[0].compile(dialect=postgresql.dialect())
+    assert "organisations.tenant_id" in str(database.statements[0])
+    compiled = database.statements[1].compile(dialect=postgresql.dialect())
     tenant_lists = [value for value in compiled.params.values() if isinstance(value, list)]
     assert any(set(values) == {PUBLIC_TENANT} for values in tenant_lists)
     assert UNRELATED_TENANT not in set(

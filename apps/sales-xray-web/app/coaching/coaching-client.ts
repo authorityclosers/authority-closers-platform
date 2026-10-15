@@ -62,6 +62,8 @@ export type CallSummary = {
   created_at: string;
   state: "ready" | "pending" | "unavailable";
   focus_label: string | null;
+  /** This call's focus skill also came up in another comparable call; null = can't say. */
+  recurring?: boolean | null;
 };
 /** What one comparable call's report said about the focus skill. */
 export type ProgressPoint = {
@@ -97,7 +99,13 @@ export type Coaching = {
     attention_call_count: number;
     summary: string;
   };
-  root_cause: { hypothesis: string; gap_type: string; confidence: string };
+  root_cause: {
+    hypothesis: string;
+    gap_type: string;
+    confidence: string;
+    /** The learner's own newest note about this focus ("Add context"). */
+    learner_context?: string | null;
+  };
   evidence: Evidence[];
   practice: null | {
     exercise: string;
@@ -119,6 +127,8 @@ export type Coaching = {
   regression: { state: string; action: string };
   lesson: TextLesson | null;
   media_clips?: CoachingClip[];
+  /** The newest own call's quoted "What worked" finding (spec 3.6). */
+  strength?: Strength | null;
   calls?: CallSummary[];
   progress?: ProgressPoint[];
   development_path: {
@@ -130,11 +140,24 @@ export type Coaching = {
   };
   reflection_question: string | null;
   feedback_available: false;
+  /** Fictional AC Sandbox data, read only by the person who imported it. */
+  sandbox?: boolean;
+  /** Whose coaching this is, when it is not the viewer's own. */
+  person_name?: string | null;
+  /** Fictional AC Sandbox reps this viewer imported; their coaching is on Team. */
+  sandbox_reps?: number;
   limitations: string[];
 };
 
+/** A quoted "What worked" finding from one of the learner's own calls. */
+export type Strength = {
+  title: string;
+  explanation: string;
+  evidence: Evidence[];
+};
+
 function invalid(): never {
-  throw new CoachingReadError("Coaching could not be read. Try again.");
+  throw new CoachingReadError("Coaching didn’t load. Try again.");
 }
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -298,9 +321,39 @@ export function parseCoaching(value: unknown): Coaching {
   return {
     ...item,
     media_clips: parseClips(item.media_clips),
+    strength: item.state === "ready" ? parseStrength(item.strength) : null,
     calls: parseCallSummaries(item.calls),
     progress: parseProgress(item.progress),
+    sandbox: item.sandbox === true,
+    sandbox_reps:
+      Number.isSafeInteger(item.sandbox_reps) &&
+      (item.sandbox_reps as number) > 0
+        ? (item.sandbox_reps as number)
+        : 0,
+    person_name:
+      typeof item.person_name === "string" && item.person_name.trim()
+        ? item.person_name.slice(0, 120)
+        : null,
   } as Coaching;
+}
+
+/** Optional: a malformed or foreign strength is dropped, never the page. */
+export function parseStrength(
+  value: unknown,
+  own: (moment: Evidence) => boolean = () => true,
+): Strength | null {
+  try {
+    const item = record(value);
+    const title = string(item.title),
+      explanation = string(item.explanation);
+    if (!Array.isArray(item.evidence)) return null;
+    const evidence = item.evidence.slice(0, 2).map(parseEvidence);
+    return evidence.length && evidence.every(own)
+      ? { title, explanation, evidence }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Optional strip: a malformed point is dropped, never fatal to the page. */
@@ -360,6 +413,7 @@ export function parseCallSummaries(value: unknown): CallSummary[] {
         typeof row.focus_label === "string" && row.focus_label.trim()
           ? row.focus_label
           : null,
+      recurring: typeof row.recurring === "boolean" ? row.recurring : null,
     });
   }
   return rows;
@@ -369,6 +423,7 @@ export async function fetchCoaching(signal: AbortSignal): Promise<Coaching> {
   const response = await fetch(COACHING_API, {
     credentials: "same-origin",
     cache: "no-store",
+    redirect: "error",
     signal,
     headers: { Accept: "application/json" },
   });
@@ -378,7 +433,7 @@ export async function fetchCoaching(signal: AbortSignal): Promise<Coaching> {
         ? "Sign in to see your Coaching."
         : response.status === 403
           ? "Coaching is unavailable in this workspace."
-          : "Coaching could not be loaded. Try again.",
+          : "Coaching didn’t load. Try again.",
     );
   }
   if (!response.headers.get("content-type")?.includes("application/json"))

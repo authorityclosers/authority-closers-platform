@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit --module preserve --moduleResolution bundler --target es2022 --strict --skipLibCheck src/index.ts",
+    "typecheck": "tsc --noEmit --module preserve --moduleResolution bundler --target es2022 --strict --skipLibCheck src/index.ts --incremental --tsBuildInfoFile node_modules/.cache/tsc/tsconfig.tsbuildinfo",
     "test": "vitest run"
   },
   "devDependencies": {

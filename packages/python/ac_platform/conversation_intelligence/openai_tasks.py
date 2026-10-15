@@ -18,6 +18,7 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V5_MARKER,
     COACHING_PROMPT_V6_MARKER,
     COACHING_PROMPT_V7_MARKER,
+    COACHING_PROMPT_V8_MARKER,
 )
 
 OPENAI_TASK_MODELS = frozenset({"gpt-6-luna", "gpt-6-sol", "gpt-6-astra"})
@@ -49,8 +50,32 @@ def _schema_for_prompt(system: str) -> tuple[str, dict[str, Any]]:
         COACHING_PROMPT_V6_MARKER in system or COACHING_PROMPT_V5_MARKER in system
     ):
         _fail("openai_c5_revision_marker_invalid")
+    if COACHING_PROMPT_V8_MARKER in system and any(
+        marker in system
+        for marker in (
+            COACHING_PROMPT_V5_MARKER,
+            COACHING_PROMPT_V6_MARKER,
+            COACHING_PROMPT_V7_MARKER,
+        )
+    ):
+        _fail("openai_c5_revision_marker_invalid")
+    report_marker = "REPORT_CONTENT: report-content/1"
+    if report_marker in system and any(
+        marker in system
+        for marker in (
+            COACHING_PROMPT_V5_MARKER,
+            COACHING_PROMPT_V6_MARKER,
+            COACHING_PROMPT_V7_MARKER,
+            COACHING_PROMPT_V8_MARKER,
+        )
+    ):
+        _fail("openai_c5_revision_marker_invalid")
     revision = (
-        "coaching-v7"
+        "report-c5-v1"
+        if report_marker in system
+        else "coaching-v8"
+        if COACHING_PROMPT_V8_MARKER in system
+        else "coaching-v7"
         if COACHING_PROMPT_V7_MARKER in system
         else "coaching-v6"
         if COACHING_PROMPT_V6_MARKER in system

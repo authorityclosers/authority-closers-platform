@@ -1,0 +1,2748 @@
+{
+  "overview": {
+    "source": "synthetic",
+    "synthetic": true,
+    "generated_at": "2026-10-11T09:00:00+00:00",
+    "window": {
+      "from": "2026-07-13T09:00:00+00:00",
+      "to": "2026-10-11T09:00:00+00:00",
+      "unit": "week"
+    },
+    "totals": {
+      "calls": 9973,
+      "minutes": 51562,
+      "people": 60,
+      "won": 1405,
+      "next_step": 7548,
+      "next_step_share": 0.7568,
+      "win_share": 0.1409,
+      "talk_share": 54,
+      "talk_calls": 36,
+      "needs_attention_share": 0.0254,
+      "won_value": 168309200,
+      "first_at": "2026-07-13T09:00:00+00:00",
+      "last_at": "2026-09-15T10:15:00+00:00"
+    },
+    "previous": {
+      "calls": 15977,
+      "minutes": 82966,
+      "people": 60,
+      "won": 2123,
+      "next_step": 12363,
+      "next_step_share": 0.7738,
+      "win_share": 0.1329,
+      "talk_share": 55,
+      "talk_calls": 10,
+      "needs_attention_share": 0.0253,
+      "won_value": 261793500,
+      "first_at": "2026-04-14T09:00:00+00:00",
+      "last_at": "2026-07-13T08:58:00+00:00"
+    },
+    "trend": [
+      {
+        "at": "2026-07-13",
+        "calls": 845,
+        "won": 116,
+        "next_step": 604,
+        "needs_attention_share": 0.0255,
+        "talk_share": null
+      },
+      {
+        "at": "2026-07-20",
+        "calls": 1122,
+        "won": 161,
+        "next_step": 874,
+        "needs_attention_share": 0.0275,
+        "talk_share": 50
+      },
+      {
+        "at": "2026-07-27",
+        "calls": 1151,
+        "won": 162,
+        "next_step": 899,
+        "needs_attention_share": 0.0296,
+        "talk_share": 50
+      },
+      {
+        "at": "2026-08-03",
+        "calls": 1152,
+        "won": 146,
+        "next_step": 873,
+        "needs_attention_share": 0.0272,
+        "talk_share": 54
+      },
+      {
+        "at": "2026-08-10",
+        "calls": 1144,
+        "won": 146,
+        "next_step": 884,
+        "needs_attention_share": 0.0242,
+        "talk_share": 53
+      },
+      {
+        "at": "2026-08-17",
+        "calls": 1151,
+        "won": 153,
+        "next_step": 882,
+        "needs_attention_share": 0.0276,
+        "talk_share": 55
+      },
+      {
+        "at": "2026-08-24",
+        "calls": 1172,
+        "won": 147,
+        "next_step": 886,
+        "needs_attention_share": 0.027,
+        "talk_share": 57
+      },
+      {
+        "at": "2026-08-31",
+        "calls": 1141,
+        "won": 159,
+        "next_step": 892,
+        "needs_attention_share": 0.0236,
+        "talk_share": 58
+      },
+      {
+        "at": "2026-09-07",
+        "calls": 936,
+        "won": 145,
+        "next_step": 684,
+        "needs_attention_share": 0.0182,
+        "talk_share": 58
+      },
+      {
+        "at": "2026-09-14",
+        "calls": 159,
+        "won": 70,
+        "next_step": 70,
+        "needs_attention_share": 0.0,
+        "talk_share": null
+      }
+    ],
+    "outcomes": [
+      { "outcome": "won", "calls": 1405 },
+      { "outcome": "booked", "calls": 2875 },
+      { "outcome": "follow_up", "calls": 3268 },
+      { "outcome": "deferred", "calls": 355 },
+      { "outcome": "lost", "calls": 1547 },
+      { "outcome": "disqualified", "calls": 229 },
+      { "outcome": "unclear", "calls": 294 }
+    ],
+    "skills": [
+      {
+        "id": "human_connection_trust",
+        "label": "Human connection & trust",
+        "strong": 0,
+        "observed": 9973,
+        "needs_attention": 0,
+        "unknown": 0
+      },
+      {
+        "id": "discovery_deep_understanding",
+        "label": "Discovery & deep understanding",
+        "strong": 0,
+        "observed": 9413,
+        "needs_attention": 557,
+        "unknown": 3
+      },
+      {
+        "id": "qualification",
+        "label": "Qualification",
+        "strong": 75,
+        "observed": 9319,
+        "needs_attention": 577,
+        "unknown": 2
+      },
+      {
+        "id": "problem_impact_desire",
+        "label": "Problem, impact & desire",
+        "strong": 0,
+        "observed": 9931,
+        "needs_attention": 0,
+        "unknown": 42
+      },
+      {
+        "id": "solution_relevance_presentation",
+        "label": "Solution relevance & presentation",
+        "strong": 0,
+        "observed": 9858,
+        "needs_attention": 106,
+        "unknown": 6
+      },
+      {
+        "id": "certainty_objection_intelligence",
+        "label": "Certainty & objection intelligence",
+        "strong": 0,
+        "observed": 9860,
+        "needs_attention": 107,
+        "unknown": 3
+      },
+      {
+        "id": "closing_decision_management",
+        "label": "Closing & decision management",
+        "strong": 491,
+        "observed": 8838,
+        "needs_attention": 555,
+        "unknown": 89
+      },
+      {
+        "id": "communication_tonality",
+        "label": "Communication & tonality",
+        "strong": 0,
+        "observed": 9854,
+        "needs_attention": 118,
+        "unknown": 1
+      }
+    ],
+    "people": [
+      {
+        "key": "syn-insurance-R5",
+        "calls": 184,
+        "minutes": 935,
+        "won": 33,
+        "next_step": 151,
+        "talk_share": null,
+        "last_at": "2026-09-15T05:31:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 184,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 184,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 184, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 184,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 171,
+            "needs_attention": 13
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 184,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 184,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 184,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.012,
+        "name": "Revati Ambarsekar",
+        "team": "Kavach Setu Benefits"
+      },
+      {
+        "key": "syn-healthcare-R1",
+        "calls": 183,
+        "minutes": 923,
+        "won": 34,
+        "next_step": 153,
+        "talk_share": null,
+        "last_at": "2026-09-15T08:01:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 183,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 183,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 183, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 183,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 183,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 183,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 183,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 175,
+            "needs_attention": 8
+          }
+        ],
+        "needs_attention_change": -0.0071,
+        "name": "Mira Ransurekar",
+        "team": "Swasthya Bridge Clinics"
+      },
+      {
+        "key": "syn-insurance-R4",
+        "calls": 181,
+        "minutes": 937,
+        "won": 25,
+        "next_step": 109,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:07:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 181,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 181,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 181, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 181,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 181,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 181,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 114,
+            "needs_attention": 67
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 181,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0087,
+        "name": "Nikhil Ambarsekar",
+        "team": "Kavach Setu Benefits"
+      },
+      {
+        "key": "syn-estate-R2",
+        "calls": 177,
+        "minutes": 908,
+        "won": 16,
+        "next_step": 130,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:05:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 177,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 105,
+            "needs_attention": 72
+          },
+          { "id": "qualification", "observed": 177, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 177,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 177,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 176,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 177,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0089,
+        "name": "Rohan Velankarkar",
+        "team": "Estate Autopilots"
+      },
+      {
+        "key": "syn-insurance-R2",
+        "calls": 177,
+        "minutes": 911,
+        "won": 23,
+        "next_step": 138,
+        "talk_share": null,
+        "last_at": "2026-09-15T05:39:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 177,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 122,
+            "needs_attention": 55
+          },
+          { "id": "qualification", "observed": 177, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 175,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 177,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 177,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 177,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0057,
+        "name": "Rohan Ambarsekar",
+        "team": "Kavach Setu Benefits"
+      },
+      {
+        "key": "syn-saas-R3",
+        "calls": 176,
+        "minutes": 896,
+        "won": 28,
+        "next_step": 142,
+        "talk_share": null,
+        "last_at": "2026-09-15T06:19:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 176,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 176,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 176, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 176,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 176,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 170,
+            "needs_attention": 6
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 176,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": 0.0096,
+        "name": "Sana Savdekar",
+        "team": "DarpanDesk Cloud"
+      },
+      {
+        "key": "syn-brokerage-R3",
+        "calls": 176,
+        "minutes": 940,
+        "won": 28,
+        "next_step": 142,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:09:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 176,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 176,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 176, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 176,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 176,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 164,
+            "needs_attention": 12
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 176,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0038,
+        "name": "Sana Joglekar",
+        "team": "Aangan Square Realty"
+      },
+      {
+        "key": "syn-insurance-R3",
+        "calls": 175,
+        "minutes": 892,
+        "won": 30,
+        "next_step": 143,
+        "talk_share": null,
+        "last_at": "2026-09-15T07:53:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 175,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 175, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 175,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 175,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 163,
+            "needs_attention": 12
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 175,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0117,
+        "name": "Sana Ambarsekar",
+        "team": "Kavach Setu Benefits"
+      },
+      {
+        "key": "syn-naya-R6",
+        "calls": 175,
+        "minutes": 914,
+        "won": 17,
+        "next_step": 130,
+        "talk_share": null,
+        "last_at": "2026-09-15T08:03:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 175,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 175,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 107, "needs_attention": 68 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 175,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 175,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 175,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 175,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0096,
+        "name": "Omkar Talvanekar",
+        "team": "Naya Growth / Kriya"
+      },
+      {
+        "key": "syn-brokerage-R1",
+        "calls": 174,
+        "minutes": 916,
+        "won": 31,
+        "next_step": 143,
+        "talk_share": null,
+        "last_at": "2026-09-15T07:55:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 174, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 164,
+            "needs_attention": 10
+          }
+        ],
+        "needs_attention_change": 0.0133,
+        "name": "Mira Joglekar",
+        "team": "Aangan Square Realty"
+      },
+      {
+        "key": "syn-advisory-R4",
+        "calls": 174,
+        "minutes": 914,
+        "won": 20,
+        "next_step": 102,
+        "talk_share": 53,
+        "last_at": "2026-09-15T06:42:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 174, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 116,
+            "needs_attention": 56
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 174,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0239,
+        "name": "Nikhil Nivsekar",
+        "team": "ArthaPath Advisory Studio"
+      },
+      {
+        "key": "syn-estate-R5",
+        "calls": 174,
+        "minutes": 899,
+        "won": 22,
+        "next_step": 134,
+        "talk_share": null,
+        "last_at": "2026-09-15T06:36:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 174, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 158,
+            "needs_attention": 16
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 174,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 174,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": 0.0134,
+        "name": "Revati Velankarkar",
+        "team": "Estate Autopilots"
+      },
+      {
+        "key": "syn-naya-R3",
+        "calls": 173,
+        "minutes": 876,
+        "won": 33,
+        "next_step": 146,
+        "talk_share": null,
+        "last_at": "2026-09-15T09:35:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 173, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 158,
+            "needs_attention": 15
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 173,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0034,
+        "name": "Sana Talvanekar",
+        "team": "Naya Growth / Kriya"
+      },
+      {
+        "key": "syn-manufacturing-R6",
+        "calls": 173,
+        "minutes": 886,
+        "won": 20,
+        "next_step": 131,
+        "talk_share": null,
+        "last_at": "2026-09-15T04:48:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 114, "needs_attention": 59 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 173,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 173,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0147,
+        "name": "Omkar Kovekar",
+        "team": "ForgeLane Industrial Supply"
+      },
+      {
+        "key": "syn-authority-R2",
+        "calls": 172,
+        "minutes": 869,
+        "won": 17,
+        "next_step": 128,
+        "talk_share": null,
+        "last_at": "2026-09-15T06:54:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 103,
+            "needs_attention": 69
+          },
+          { "id": "qualification", "observed": 172, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 172,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0068,
+        "name": "Rohan Dhotrekar",
+        "team": "Authority Closers"
+      },
+      {
+        "key": "syn-edtech-R6",
+        "calls": 172,
+        "minutes": 885,
+        "won": 22,
+        "next_step": 133,
+        "talk_share": null,
+        "last_at": "2026-09-15T05:04:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 117, "needs_attention": 55 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 172,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0041,
+        "name": "Omkar Kendrekar",
+        "team": "SkillHarbour Learning"
+      },
+      {
+        "key": "syn-naya-R4",
+        "calls": 172,
+        "minutes": 903,
+        "won": 19,
+        "next_step": 98,
+        "talk_share": null,
+        "last_at": "2026-09-15T04:42:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 172, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 172,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 110,
+            "needs_attention": 62
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 172,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0241,
+        "name": "Nikhil Talvanekar",
+        "team": "Naya Growth / Kriya"
+      },
+      {
+        "key": "syn-brokerage-R4",
+        "calls": 171,
+        "minutes": 883,
+        "won": 16,
+        "next_step": 92,
+        "talk_share": null,
+        "last_at": "2026-09-15T05:16:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 171,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 171,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 171, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 171,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 171,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 171,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 104,
+            "needs_attention": 64
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 171,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0167,
+        "name": "Nikhil Joglekar",
+        "team": "Aangan Square Realty"
+      },
+      {
+        "key": "syn-saas-R2",
+        "calls": 171,
+        "minutes": 848,
+        "won": 27,
+        "next_step": 138,
+        "talk_share": null,
+        "last_at": "2026-09-15T05:12:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 171,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 127,
+            "needs_attention": 44
+          },
+          { "id": "qualification", "observed": 171, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 171,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 171,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 166,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 171,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": 0.0061,
+        "name": "Rohan Savdekar",
+        "team": "DarpanDesk Cloud"
+      },
+      {
+        "key": "syn-healthcare-R2",
+        "calls": 169,
+        "minutes": 839,
+        "won": 20,
+        "next_step": 129,
+        "talk_share": null,
+        "last_at": "2026-09-15T09:08:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 169,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 107,
+            "needs_attention": 62
+          },
+          { "id": "qualification", "observed": 169, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 165,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 169,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 169,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 169,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.017,
+        "name": "Rohan Ransurekar",
+        "team": "Swasthya Bridge Clinics"
+      },
+      {
+        "key": "syn-healthcare-R4",
+        "calls": 169,
+        "minutes": 891,
+        "won": 18,
+        "next_step": 100,
+        "talk_share": null,
+        "last_at": "2026-09-15T05:39:00+00:00",
+        "coaching_done": 0,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 169,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 169,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 169, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 169,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 169,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 169,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 115,
+            "needs_attention": 53
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 169,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0177,
+        "name": "Nikhil Ransurekar",
+        "team": "Swasthya Bridge Clinics"
+      },
+      {
+        "key": "syn-authority-R3",
+        "calls": 168,
+        "minutes": 876,
+        "won": 27,
+        "next_step": 135,
+        "talk_share": null,
+        "last_at": "2026-09-15T08:01:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 168,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 168,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 168, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 168,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 168,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 157,
+            "needs_attention": 11
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 166,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 168,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0032,
+        "name": "Sana Dhotrekar",
+        "team": "Authority Closers"
+      },
+      {
+        "key": "syn-advisory-R1",
+        "calls": 167,
+        "minutes": 874,
+        "won": 25,
+        "next_step": 131,
+        "talk_share": 63,
+        "last_at": "2026-09-15T09:04:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 167, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 164,
+            "needs_attention": 0
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 163,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 146,
+            "needs_attention": 21
+          }
+        ],
+        "needs_attention_change": -0.0022,
+        "name": "Mira Nivsekar",
+        "team": "ArthaPath Advisory Studio"
+      },
+      {
+        "key": "syn-saas-R5",
+        "calls": 167,
+        "minutes": 873,
+        "won": 23,
+        "next_step": 130,
+        "talk_share": null,
+        "last_at": "2026-09-15T07:43:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          { "id": "qualification", "observed": 167, "needs_attention": 0 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 157,
+            "needs_attention": 10
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 167,
+            "needs_attention": 0
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 165,
+            "needs_attention": 0
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 167,
+            "needs_attention": 0
+          }
+        ],
+        "needs_attention_change": -0.0098,
+        "name": "Revati Savdekar",
+        "team": "DarpanDesk Cloud"
+      }
+    ],
+    "teams": [
+      {
+        "key": "syn-insurance-TEAM",
+        "calls": 1040,
+        "minutes": 5352,
+        "won": 154,
+        "next_step": 792,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:15:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 1040,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 984,
+            "needs_attention": 55
+          },
+          { "id": "qualification", "observed": 976, "needs_attention": 64 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 1036,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 1026,
+            "needs_attention": 13
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 1028,
+            "needs_attention": 12
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 963,
+            "needs_attention": 67
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 1023,
+            "needs_attention": 17
+          }
+        ],
+        "needs_attention_change": -0.0122,
+        "name": "Kavach Setu Benefits"
+      },
+      {
+        "key": "syn-brokerage-TEAM",
+        "calls": 1008,
+        "minutes": 5300,
+        "won": 139,
+        "next_step": 755,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:09:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 1008,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 955,
+            "needs_attention": 51
+          },
+          { "id": "qualification", "observed": 959, "needs_attention": 49 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 1000,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 999,
+            "needs_attention": 8
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 995,
+            "needs_attention": 12
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 938,
+            "needs_attention": 64
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 998,
+            "needs_attention": 10
+          }
+        ],
+        "needs_attention_change": -0.0024,
+        "name": "Aangan Square Realty"
+      },
+      {
+        "key": "syn-healthcare-TEAM",
+        "calls": 1007,
+        "minutes": 5225,
+        "won": 142,
+        "next_step": 764,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:15:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 1007,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 945,
+            "needs_attention": 62
+          },
+          { "id": "qualification", "observed": 958, "needs_attention": 49 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 1003,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 997,
+            "needs_attention": 10
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 999,
+            "needs_attention": 8
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 951,
+            "needs_attention": 53
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 999,
+            "needs_attention": 8
+          }
+        ],
+        "needs_attention_change": -0.0094,
+        "name": "Swasthya Bridge Clinics"
+      },
+      {
+        "key": "syn-saas-TEAM",
+        "calls": 1005,
+        "minutes": 5194,
+        "won": 150,
+        "next_step": 767,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:05:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 1005,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 961,
+            "needs_attention": 44
+          },
+          { "id": "qualification", "observed": 935, "needs_attention": 70 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 1001,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 995,
+            "needs_attention": 10
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 999,
+            "needs_attention": 6
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 924,
+            "needs_attention": 64
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 995,
+            "needs_attention": 10
+          }
+        ],
+        "needs_attention_change": -0.0032,
+        "name": "DarpanDesk Cloud"
+      },
+      {
+        "key": "syn-naya-TEAM",
+        "calls": 999,
+        "minutes": 5120,
+        "won": 139,
+        "next_step": 752,
+        "talk_share": null,
+        "last_at": "2026-09-15T09:35:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 999,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 943,
+            "needs_attention": 56
+          },
+          { "id": "qualification", "observed": 930, "needs_attention": 68 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 990,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 986,
+            "needs_attention": 12
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 983,
+            "needs_attention": 15
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 931,
+            "needs_attention": 62
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 988,
+            "needs_attention": 11
+          }
+        ],
+        "needs_attention_change": -0.0128,
+        "name": "Naya Growth / Kriya"
+      },
+      {
+        "key": "syn-estate-TEAM",
+        "calls": 991,
+        "minutes": 5070,
+        "won": 128,
+        "next_step": 739,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:05:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 991,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 919,
+            "needs_attention": 72
+          },
+          { "id": "qualification", "observed": 939, "needs_attention": 52 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 987,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 975,
+            "needs_attention": 16
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 974,
+            "needs_attention": 16
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 926,
+            "needs_attention": 53
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 978,
+            "needs_attention": 13
+          }
+        ],
+        "needs_attention_change": -0.0016,
+        "name": "Estate Autopilots"
+      },
+      {
+        "key": "syn-edtech-TEAM",
+        "calls": 989,
+        "minutes": 5101,
+        "won": 140,
+        "next_step": 756,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:05:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 989,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 938,
+            "needs_attention": 51
+          },
+          { "id": "qualification", "observed": 934, "needs_attention": 55 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 984,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 982,
+            "needs_attention": 6
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 978,
+            "needs_attention": 10
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 942,
+            "needs_attention": 41
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 981,
+            "needs_attention": 8
+          }
+        ],
+        "needs_attention_change": -0.0029,
+        "name": "SkillHarbour Learning"
+      },
+      {
+        "key": "syn-advisory-TEAM",
+        "calls": 984,
+        "minutes": 5046,
+        "won": 139,
+        "next_step": 740,
+        "talk_share": 54,
+        "last_at": "2026-09-15T10:11:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 984,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 939,
+            "needs_attention": 45
+          },
+          { "id": "qualification", "observed": 922, "needs_attention": 61 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 980,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 962,
+            "needs_attention": 17
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 969,
+            "needs_attention": 13
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 913,
+            "needs_attention": 56
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 962,
+            "needs_attention": 21
+          }
+        ],
+        "needs_attention_change": -0.0135,
+        "name": "ArthaPath Advisory Studio"
+      },
+      {
+        "key": "syn-authority-TEAM",
+        "calls": 977,
+        "minutes": 5056,
+        "won": 133,
+        "next_step": 742,
+        "talk_share": null,
+        "last_at": "2026-09-15T10:15:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 977,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 908,
+            "needs_attention": 69
+          },
+          { "id": "qualification", "observed": 927, "needs_attention": 50 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 977,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 973,
+            "needs_attention": 4
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 966,
+            "needs_attention": 11
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 933,
+            "needs_attention": 40
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 961,
+            "needs_attention": 16
+          }
+        ],
+        "needs_attention_change": -0.0048,
+        "name": "Authority Closers"
+      },
+      {
+        "key": "syn-manufacturing-TEAM",
+        "calls": 973,
+        "minutes": 5099,
+        "won": 141,
+        "next_step": 741,
+        "talk_share": null,
+        "last_at": "2026-09-15T09:49:00+00:00",
+        "coaching_done": 11,
+        "skills": [
+          {
+            "id": "human_connection_trust",
+            "observed": 973,
+            "needs_attention": 0
+          },
+          {
+            "id": "discovery_deep_understanding",
+            "observed": 921,
+            "needs_attention": 52
+          },
+          { "id": "qualification", "observed": 914, "needs_attention": 59 },
+          {
+            "id": "problem_impact_desire",
+            "observed": 973,
+            "needs_attention": 0
+          },
+          {
+            "id": "solution_relevance_presentation",
+            "observed": 963,
+            "needs_attention": 10
+          },
+          {
+            "id": "certainty_objection_intelligence",
+            "observed": 969,
+            "needs_attention": 4
+          },
+          {
+            "id": "closing_decision_management",
+            "observed": 908,
+            "needs_attention": 55
+          },
+          {
+            "id": "communication_tonality",
+            "observed": 969,
+            "needs_attention": 4
+          }
+        ],
+        "needs_attention_change": -0.007,
+        "name": "ForgeLane Industrial Supply"
+      }
+    ],
+    "objections": [
+      { "kind": "scope_fit", "label": "Scope fit", "calls": 2896, "won": 395 },
+      { "kind": "price", "label": "Price", "calls": 2260, "won": 287 },
+      {
+        "kind": "implementation_readiness",
+        "label": "Implementation readiness",
+        "calls": 1845,
+        "won": 278
+      },
+      {
+        "kind": "decision_authority",
+        "label": "Decision authority",
+        "calls": 1096,
+        "won": 189
+      },
+      { "kind": "competitor", "label": "Competitor", "calls": 987, "won": 141 },
+      { "kind": "timing", "label": "Timing", "calls": 853, "won": 112 }
+    ],
+    "mistakes": [
+      {
+        "kind": "missing_decision_maker",
+        "label": "Missed the decision-maker",
+        "calls": 576
+      },
+      { "kind": "no_discovery", "label": "Skipped discovery", "calls": 556 },
+      { "kind": "no_next_step", "label": "No clear next step", "calls": 550 },
+      { "kind": "talking_too_much", "label": "Talked too much", "calls": 111 },
+      {
+        "kind": "weak_objection_handling",
+        "label": "Weak objection handling",
+        "calls": 106
+      },
+      {
+        "kind": "discounting_early",
+        "label": "Discounted too early",
+        "calls": 97
+      }
+    ],
+    "talk": [
+      { "band": "under_40", "label": "Under 40%", "calls": 1 },
+      { "band": "40_50", "label": "40–50%", "calls": 3 },
+      { "band": "50_60", "label": "50–60%", "calls": 25 },
+      { "band": "60_70", "label": "60–70%", "calls": 7 },
+      { "band": "70_plus", "label": "70% or more", "calls": 0 }
+    ],
+    "calls": {
+      "strongest": [
+        {
+          "key": "syn-advisory-J09-C-04",
+          "person_key": "syn-advisory-R6",
+          "person": "Omkar Nivsekar",
+          "team": "ArthaPath Advisory Studio",
+          "at": "2026-08-29T07:30:00+00:00",
+          "outcome": "won",
+          "duration_ms": 327140,
+          "skills": "OOSOOOSO",
+          "observed": 8,
+          "needs_attention": 0
+        },
+        {
+          "key": "syn-advisory-J06-C-04",
+          "person_key": "syn-advisory-R3",
+          "person": "Sana Nivsekar",
+          "team": "ArthaPath Advisory Studio",
+          "at": "2026-08-23T04:30:00+00:00",
+          "outcome": "won",
+          "duration_ms": 337476,
+          "skills": "OOSOOOSO",
+          "observed": 8,
+          "needs_attention": 0
+        },
+        {
+          "key": "syn-advisory-J01-C-03",
+          "person_key": "syn-advisory-R4",
+          "person": "Nikhil Nivsekar",
+          "team": "ArthaPath Advisory Studio",
+          "at": "2026-07-31T04:30:00+00:00",
+          "outcome": "won",
+          "duration_ms": 270272,
+          "skills": "OOSOOOSO",
+          "observed": 8,
+          "needs_attention": 0
+        },
+        {
+          "key": "syn-insurance-SIM-J005158-C-03",
+          "person_key": "syn-insurance-R6",
+          "person": "Omkar Ambarsekar",
+          "team": "Kavach Setu Benefits",
+          "at": "2026-07-27T08:36:00+00:00",
+          "outcome": "won",
+          "duration_ms": 111332,
+          "skills": "OOSUOOSO",
+          "observed": 7,
+          "needs_attention": 0
+        },
+        {
+          "key": "syn-brokerage-SIM-J006213-C-03",
+          "person_key": "syn-brokerage-R6",
+          "person": "Omkar Joglekar",
+          "team": "Aangan Square Realty",
+          "at": "2026-09-11T08:11:00+00:00",
+          "outcome": "won",
+          "duration_ms": 109955,
+          "skills": "OUSUOOSO",
+          "observed": 6,
+          "needs_attention": 0
+        }
+      ],
+      "weakest": [
+        {
+          "key": "syn-advisory-J10-C-05",
+          "person_key": "syn-advisory-R1",
+          "person": "Mira Nivsekar",
+          "team": "ArthaPath Advisory Studio",
+          "at": "2026-09-07T08:30:00+00:00",
+          "outcome": "lost",
+          "duration_ms": 330271,
+          "skills": "OOOOOOUN",
+          "observed": 6,
+          "needs_attention": 1
+        },
+        {
+          "key": "syn-advisory-J08-C-06",
+          "person_key": "syn-advisory-R5",
+          "person": "Revati Nivsekar",
+          "team": "ArthaPath Advisory Studio",
+          "at": "2026-09-07T06:30:00+00:00",
+          "outcome": "unclear",
+          "duration_ms": 262283,
+          "skills": "OOOONOUO",
+          "observed": 6,
+          "needs_attention": 1
+        },
+        {
+          "key": "syn-insurance-SIM-J005322-C-02",
+          "person_key": "syn-insurance-R3",
+          "person": "Sana Ambarsekar",
+          "team": "Kavach Setu Benefits",
+          "at": "2026-08-24T04:34:00+00:00",
+          "outcome": "follow_up",
+          "duration_ms": 125172,
+          "skills": "OUOOONOO",
+          "observed": 6,
+          "needs_attention": 1
+        },
+        {
+          "key": "syn-advisory-J04-C-02",
+          "person_key": "syn-advisory-R1",
+          "person": "Mira Nivsekar",
+          "team": "ArthaPath Advisory Studio",
+          "at": "2026-08-08T07:30:00+00:00",
+          "outcome": "deferred",
+          "duration_ms": 343890,
+          "skills": "OOOOOOUN",
+          "observed": 6,
+          "needs_attention": 1
+        },
+        {
+          "key": "syn-advisory-J02-C-03",
+          "person_key": "syn-advisory-R5",
+          "person": "Revati Nivsekar",
+          "team": "ArthaPath Advisory Studio",
+          "at": "2026-08-05T05:30:00+00:00",
+          "outcome": "lost",
+          "duration_ms": 238257,
+          "skills": "OOOONOUO",
+          "observed": 6,
+          "needs_attention": 1
+        }
+      ]
+    },
+    "facets": {
+      "people": [
+        {
+          "key": "syn-insurance-R1",
+          "name": "Mira Ambarsekar",
+          "team": "Kavach Setu Benefits"
+        },
+        {
+          "key": "syn-authority-R1",
+          "name": "Mira Dhotrekar",
+          "team": "Authority Closers"
+        },
+        {
+          "key": "syn-brokerage-R1",
+          "name": "Mira Joglekar",
+          "team": "Aangan Square Realty"
+        },
+        {
+          "key": "syn-edtech-R1",
+          "name": "Mira Kendrekar",
+          "team": "SkillHarbour Learning"
+        },
+        {
+          "key": "syn-manufacturing-R1",
+          "name": "Mira Kovekar",
+          "team": "ForgeLane Industrial Supply"
+        },
+        {
+          "key": "syn-advisory-R1",
+          "name": "Mira Nivsekar",
+          "team": "ArthaPath Advisory Studio"
+        },
+        {
+          "key": "syn-healthcare-R1",
+          "name": "Mira Ransurekar",
+          "team": "Swasthya Bridge Clinics"
+        },
+        {
+          "key": "syn-saas-R1",
+          "name": "Mira Savdekar",
+          "team": "DarpanDesk Cloud"
+        },
+        {
+          "key": "syn-naya-R1",
+          "name": "Mira Talvanekar",
+          "team": "Naya Growth / Kriya"
+        },
+        {
+          "key": "syn-estate-R1",
+          "name": "Mira Velankarkar",
+          "team": "Estate Autopilots"
+        },
+        {
+          "key": "syn-insurance-R4",
+          "name": "Nikhil Ambarsekar",
+          "team": "Kavach Setu Benefits"
+        },
+        {
+          "key": "syn-authority-R4",
+          "name": "Nikhil Dhotrekar",
+          "team": "Authority Closers"
+        },
+        {
+          "key": "syn-brokerage-R4",
+          "name": "Nikhil Joglekar",
+          "team": "Aangan Square Realty"
+        },
+        {
+          "key": "syn-edtech-R4",
+          "name": "Nikhil Kendrekar",
+          "team": "SkillHarbour Learning"
+        },
+        {
+          "key": "syn-manufacturing-R4",
+          "name": "Nikhil Kovekar",
+          "team": "ForgeLane Industrial Supply"
+        },
+        {
+          "key": "syn-advisory-R4",
+          "name": "Nikhil Nivsekar",
+          "team": "ArthaPath Advisory Studio"
+        },
+        {
+          "key": "syn-healthcare-R4",
+          "name": "Nikhil Ransurekar",
+          "team": "Swasthya Bridge Clinics"
+        },
+        {
+          "key": "syn-saas-R4",
+          "name": "Nikhil Savdekar",
+          "team": "DarpanDesk Cloud"
+        },
+        {
+          "key": "syn-naya-R4",
+          "name": "Nikhil Talvanekar",
+          "team": "Naya Growth / Kriya"
+        },
+        {
+          "key": "syn-estate-R4",
+          "name": "Nikhil Velankarkar",
+          "team": "Estate Autopilots"
+        },
+        {
+          "key": "syn-insurance-R6",
+          "name": "Omkar Ambarsekar",
+          "team": "Kavach Setu Benefits"
+        },
+        {
+          "key": "syn-authority-R6",
+          "name": "Omkar Dhotrekar",
+          "team": "Authority Closers"
+        },
+        {
+          "key": "syn-brokerage-R6",
+          "name": "Omkar Joglekar",
+          "team": "Aangan Square Realty"
+        },
+        {
+          "key": "syn-edtech-R6",
+          "name": "Omkar Kendrekar",
+          "team": "SkillHarbour Learning"
+        },
+        {
+          "key": "syn-manufacturing-R6",
+          "name": "Omkar Kovekar",
+          "team": "ForgeLane Industrial Supply"
+        },
+        {
+          "key": "syn-advisory-R6",
+          "name": "Omkar Nivsekar",
+          "team": "ArthaPath Advisory Studio"
+        },
+        {
+          "key": "syn-healthcare-R6",
+          "name": "Omkar Ransurekar",
+          "team": "Swasthya Bridge Clinics"
+        },
+        {
+          "key": "syn-saas-R6",
+          "name": "Omkar Savdekar",
+          "team": "DarpanDesk Cloud"
+        },
+        {
+          "key": "syn-naya-R6",
+          "name": "Omkar Talvanekar",
+          "team": "Naya Growth / Kriya"
+        },
+        {
+          "key": "syn-estate-R6",
+          "name": "Omkar Velankarkar",
+          "team": "Estate Autopilots"
+        },
+        {
+          "key": "syn-insurance-R5",
+          "name": "Revati Ambarsekar",
+          "team": "Kavach Setu Benefits"
+        },
+        {
+          "key": "syn-authority-R5",
+          "name": "Revati Dhotrekar",
+          "team": "Authority Closers"
+        },
+        {
+          "key": "syn-brokerage-R5",
+          "name": "Revati Joglekar",
+          "team": "Aangan Square Realty"
+        },
+        {
+          "key": "syn-edtech-R5",
+          "name": "Revati Kendrekar",
+          "team": "SkillHarbour Learning"
+        },
+        {
+          "key": "syn-manufacturing-R5",
+          "name": "Revati Kovekar",
+          "team": "ForgeLane Industrial Supply"
+        },
+        {
+          "key": "syn-advisory-R5",
+          "name": "Revati Nivsekar",
+          "team": "ArthaPath Advisory Studio"
+        },
+        {
+          "key": "syn-healthcare-R5",
+          "name": "Revati Ransurekar",
+          "team": "Swasthya Bridge Clinics"
+        },
+        {
+          "key": "syn-saas-R5",
+          "name": "Revati Savdekar",
+          "team": "DarpanDesk Cloud"
+        },
+        {
+          "key": "syn-naya-R5",
+          "name": "Revati Talvanekar",
+          "team": "Naya Growth / Kriya"
+        },
+        {
+          "key": "syn-estate-R5",
+          "name": "Revati Velankarkar",
+          "team": "Estate Autopilots"
+        }
+      ],
+      "teams": [
+        { "key": "syn-brokerage-TEAM", "name": "Aangan Square Realty" },
+        { "key": "syn-advisory-TEAM", "name": "ArthaPath Advisory Studio" },
+        { "key": "syn-authority-TEAM", "name": "Authority Closers" },
+        { "key": "syn-saas-TEAM", "name": "DarpanDesk Cloud" },
+        { "key": "syn-estate-TEAM", "name": "Estate Autopilots" },
+        {
+          "key": "syn-manufacturing-TEAM",
+          "name": "ForgeLane Industrial Supply"
+        },
+        { "key": "syn-insurance-TEAM", "name": "Kavach Setu Benefits" },
+        { "key": "syn-naya-TEAM", "name": "Naya Growth / Kriya" },
+        { "key": "syn-edtech-TEAM", "name": "SkillHarbour Learning" },
+        { "key": "syn-healthcare-TEAM", "name": "Swasthya Bridge Clinics" }
+      ],
+      "languages": [
+        { "key": "bn-en", "label": "Bengali + English" },
+        { "key": "en-IN", "label": "English" },
+        { "key": "gu-en", "label": "Gujarati + English" },
+        { "key": "hi-en", "label": "Hindi + English" },
+        { "key": "kn-en", "label": "Kannada + English" },
+        { "key": "ml-en", "label": "Malayalam + English" },
+        { "key": "mr-en", "label": "Marathi + English" },
+        { "key": "pa-en", "label": "Punjabi + English" },
+        { "key": "ta-en", "label": "Tamil + English" },
+        { "key": "te-en", "label": "Telugu + English" }
+      ],
+      "outcomes": [
+        "won",
+        "booked",
+        "follow_up",
+        "deferred",
+        "lost",
+        "disqualified",
+        "unclear"
+      ]
+    },
+    "pending": 0
+  },
+  "calls": {
+    "source": "synthetic",
+    "synthetic": true,
+    "total": 9973,
+    "offset": 0,
+    "next_offset": 50,
+    "items": [
+      {
+        "key": "syn-authority-SIM-J006035-C-03",
+        "person_key": "syn-authority-R5",
+        "person": "Revati Dhotrekar",
+        "team": "Authority Closers",
+        "at": "2026-09-15T10:15:00+00:00",
+        "outcome": "deferred",
+        "duration_ms": 384000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["decision_authority"],
+        "deal_value": 360000
+      },
+      {
+        "key": "syn-healthcare-SIM-J005885-C-03",
+        "person_key": "syn-healthcare-R3",
+        "person": "Sana Ransurekar",
+        "team": "Swasthya Bridge Clinics",
+        "at": "2026-09-15T10:15:00+00:00",
+        "outcome": "won",
+        "duration_ms": 369000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["decision_authority"],
+        "deal_value": 42000
+      },
+      {
+        "key": "syn-insurance-SIM-J005435-C-03",
+        "person_key": "syn-insurance-R1",
+        "person": "Mira Ambarsekar",
+        "team": "Kavach Setu Benefits",
+        "at": "2026-09-15T10:15:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 341000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "ta-en",
+        "talk_share": null,
+        "objections": ["scope_fit"],
+        "deal_value": 24000
+      },
+      {
+        "key": "syn-advisory-SIM-J006113-C-03",
+        "person_key": "syn-advisory-R2",
+        "person": "Rohan Nivsekar",
+        "team": "ArthaPath Advisory Studio",
+        "at": "2026-09-15T10:11:00+00:00",
+        "outcome": "won",
+        "duration_ms": 238000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["decision_authority"],
+        "deal_value": 36000
+      },
+      {
+        "key": "syn-brokerage-SIM-J006227-C-03",
+        "person_key": "syn-brokerage-R3",
+        "person": "Sana Joglekar",
+        "team": "Aangan Square Realty",
+        "at": "2026-09-15T10:09:00+00:00",
+        "outcome": "won",
+        "duration_ms": 260000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "gu-en",
+        "talk_share": null,
+        "objections": ["scope_fit"],
+        "deal_value": 90000
+      },
+      {
+        "key": "syn-insurance-SIM-J005441-C-03",
+        "person_key": "syn-insurance-R4",
+        "person": "Nikhil Ambarsekar",
+        "team": "Kavach Setu Benefits",
+        "at": "2026-09-15T10:07:00+00:00",
+        "outcome": "disqualified",
+        "duration_ms": 450000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "hi-en",
+        "talk_share": null,
+        "objections": ["scope_fit"],
+        "deal_value": 60000
+      },
+      {
+        "key": "syn-edtech-SIM-J006005-C-03",
+        "person_key": "syn-edtech-R1",
+        "person": "Mira Kendrekar",
+        "team": "SkillHarbour Learning",
+        "at": "2026-09-15T10:05:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 302000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["implementation_readiness"],
+        "deal_value": 72000
+      },
+      {
+        "key": "syn-estate-SIM-J006155-C-03",
+        "person_key": "syn-estate-R2",
+        "person": "Rohan Velankarkar",
+        "team": "Estate Autopilots",
+        "at": "2026-09-15T10:05:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 445000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["price"],
+        "deal_value": 45000
+      },
+      {
+        "key": "syn-saas-SIM-J005405-C-03",
+        "person_key": "syn-saas-R1",
+        "person": "Mira Savdekar",
+        "team": "DarpanDesk Cloud",
+        "at": "2026-09-15T10:05:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 435000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "te-en",
+        "talk_share": null,
+        "objections": ["implementation_readiness"],
+        "deal_value": 108000
+      },
+      {
+        "key": "syn-advisory-SIM-J006119-C-03",
+        "person_key": "syn-advisory-R6",
+        "person": "Omkar Nivsekar",
+        "team": "ArthaPath Advisory Studio",
+        "at": "2026-09-15T10:03:00+00:00",
+        "outcome": "won",
+        "duration_ms": 390000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["price"],
+        "deal_value": 36000
+      },
+      {
+        "key": "syn-edtech-SIM-J006011-C-03",
+        "person_key": "syn-edtech-R5",
+        "person": "Revati Kendrekar",
+        "team": "SkillHarbour Learning",
+        "at": "2026-09-15T09:57:00+00:00",
+        "outcome": "deferred",
+        "duration_ms": 187000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["implementation_readiness"],
+        "deal_value": 60000
+      },
+      {
+        "key": "syn-manufacturing-SIM-J005417-C-03",
+        "person_key": "syn-manufacturing-R2",
+        "person": "Rohan Kovekar",
+        "team": "ForgeLane Industrial Supply",
+        "at": "2026-09-15T09:49:00+00:00",
+        "outcome": "won",
+        "duration_ms": 344000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "mr-en",
+        "talk_share": null,
+        "objections": ["scope_fit"],
+        "deal_value": 194400
+      },
+      {
+        "key": "syn-manufacturing-SIM-J005423-C-03",
+        "person_key": "syn-manufacturing-R5",
+        "person": "Revati Kovekar",
+        "team": "ForgeLane Industrial Supply",
+        "at": "2026-09-15T09:41:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 261000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["competitor"],
+        "deal_value": 72000
+      },
+      {
+        "key": "syn-naya-SIM-J005465-C-03",
+        "person_key": "syn-naya-R3",
+        "person": "Sana Talvanekar",
+        "team": "Naya Growth / Kriya",
+        "at": "2026-09-15T09:35:00+00:00",
+        "outcome": "won",
+        "duration_ms": 387000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "bn-en",
+        "talk_share": null,
+        "objections": ["scope_fit"],
+        "deal_value": 320000
+      },
+      {
+        "key": "syn-authority-SIM-J006029-C-03",
+        "person_key": "syn-authority-R1",
+        "person": "Mira Dhotrekar",
+        "team": "Authority Closers",
+        "at": "2026-09-15T09:33:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 269748,
+        "skills": "OOOOOOSO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["price"],
+        "deal_value": 360000
+      },
+      {
+        "key": "syn-naya-SIM-J005464-C-03",
+        "person_key": "syn-naya-R3",
+        "person": "Sana Talvanekar",
+        "team": "Naya Growth / Kriya",
+        "at": "2026-09-15T09:18:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 155000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["scope_fit"],
+        "deal_value": 320000
+      },
+      {
+        "key": "syn-authority-SIM-J006034-C-03",
+        "person_key": "syn-authority-R4",
+        "person": "Nikhil Dhotrekar",
+        "team": "Authority Closers",
+        "at": "2026-09-15T09:08:00+00:00",
+        "outcome": "won",
+        "duration_ms": 271000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "mr-en",
+        "talk_share": null,
+        "objections": ["implementation_readiness"],
+        "deal_value": 200000
+      },
+      {
+        "key": "syn-healthcare-SIM-J005884-C-03",
+        "person_key": "syn-healthcare-R2",
+        "person": "Rohan Ransurekar",
+        "team": "Swasthya Bridge Clinics",
+        "at": "2026-09-15T09:08:00+00:00",
+        "outcome": "won",
+        "duration_ms": 334000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["scope_fit"],
+        "deal_value": 54000
+      },
+      {
+        "key": "syn-advisory-SIM-J006112-C-03",
+        "person_key": "syn-advisory-R1",
+        "person": "Mira Nivsekar",
+        "team": "ArthaPath Advisory Studio",
+        "at": "2026-09-15T09:04:00+00:00",
+        "outcome": "won",
+        "duration_ms": 348000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "hi-en",
+        "talk_share": null,
+        "objections": ["implementation_readiness"],
+        "deal_value": 21600
+      },
+      {
+        "key": "syn-brokerage-SIM-J006226-C-03",
+        "person_key": "syn-brokerage-R2",
+        "person": "Rohan Joglekar",
+        "team": "Aangan Square Realty",
+        "at": "2026-09-15T09:02:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 252300,
+        "skills": "OOOOOOSO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "te-en",
+        "talk_share": null,
+        "objections": ["implementation_readiness"],
+        "deal_value": 120000
+      },
+      {
+        "key": "syn-insurance-SIM-J005440-C-03",
+        "person_key": "syn-insurance-R4",
+        "person": "Nikhil Ambarsekar",
+        "team": "Kavach Setu Benefits",
+        "at": "2026-09-15T09:00:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 298000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "mr-en",
+        "talk_share": null,
+        "objections": ["decision_authority"],
+        "deal_value": 24000
+      },
+      {
+        "key": "syn-estate-SIM-J006154-C-03",
+        "person_key": "syn-estate-R2",
+        "person": "Rohan Velankarkar",
+        "team": "Estate Autopilots",
+        "at": "2026-09-15T08:58:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 362000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["timing"],
+        "deal_value": 45000
+      },
+      {
+        "key": "syn-advisory-SIM-J006118-C-03",
+        "person_key": "syn-advisory-R6",
+        "person": "Omkar Nivsekar",
+        "team": "ArthaPath Advisory Studio",
+        "at": "2026-09-15T08:56:00+00:00",
+        "outcome": "deferred",
+        "duration_ms": 275000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "te-en",
+        "talk_share": null,
+        "objections": ["competitor"],
+        "deal_value": 24000
+      },
+      {
+        "key": "syn-edtech-SIM-J006010-C-03",
+        "person_key": "syn-edtech-R4",
+        "person": "Nikhil Kendrekar",
+        "team": "SkillHarbour Learning",
+        "at": "2026-09-15T08:50:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 407000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "en-IN",
+        "talk_share": null,
+        "objections": ["implementation_readiness"],
+        "deal_value": 96000
+      },
+      {
+        "key": "syn-saas-SIM-J005410-C-03",
+        "person_key": "syn-saas-R6",
+        "person": "Omkar Savdekar",
+        "team": "DarpanDesk Cloud",
+        "at": "2026-09-15T08:50:00+00:00",
+        "outcome": "lost",
+        "duration_ms": 296000,
+        "skills": "OOOOOOOO",
+        "observed": 8,
+        "needs_attention": 0,
+        "language": "ta-en",
+        "talk_share": null,
+        "objections": ["competitor"],
+        "deal_value": 108000
+      }
+    ]
+  }
+}

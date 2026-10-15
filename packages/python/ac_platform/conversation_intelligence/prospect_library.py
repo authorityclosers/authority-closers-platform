@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, false, func, or_, select, true
+from sqlalchemy import and_, func, or_, select, true
 
 from ac_platform.conversation_intelligence.acquisition_library import _report_columns
 from ac_platform.conversation_intelligence.acquisition_models import ConversationAcquisitionUsage
@@ -23,6 +23,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationRecording,
 )
+from ac_platform.conversation_intelligence.prospect_call_outcome_store import effective_stage
 from ac_platform.conversation_intelligence.prospect_fields import FIELD_REGISTRY, field_registry
 from ac_platform.conversation_intelligence.prospect_models import (
     ConversationProspect,
@@ -161,6 +162,15 @@ def profile(
     }
 
 
+def _latest_stage() -> Any:
+    """The prospect row's deal stage: its most recent linked call's latest outcome."""
+    return (
+        effective_stage(ConversationProspect.tenant_id, ConversationProspect.id)
+        .correlate(ConversationProspect)
+        .scalar_subquery()
+    )
+
+
 class ProspectLibrary:
     def __init__(self, store: ProspectStore) -> None:
         self.store, self.database = store, store.database
@@ -216,30 +226,37 @@ class ProspectLibrary:
                 query = query.where(
                     ConversationProspect.display_name.icontains(search.strip(), autoescape=True)
                 )
-            # There is currently no stored stage column. This selector means
-            # missing stage; all named stage filters truthfully match no rows.
-            if stage is not None and stage != "__missing__":
-                query = query.where(false())
+            # The deal stage comes from person-entered call outcomes;
+            # "__missing__" means no linked call has an outcome yet.
+            if stage == "__missing__":
+                query = query.where(_latest_stage().is_(None))
+            elif stage is not None:
+                query = query.where(_latest_stage() == stage)
         total = await self.database.scalar(select(func.count()).select_from(query.subquery()))
         selected = (
             await self.database.execute(
                 query.outerjoin(totals, totals.c.prospect_id == ConversationProspect.id)
-                .add_columns(func.coalesce(totals.c.call_count, 0), totals.c.last_call)
+                .add_columns(
+                    func.coalesce(totals.c.call_count, 0), totals.c.last_call, _latest_stage()
+                )
                 .order_by(func.lower(ConversationProspect.display_name), ConversationProspect.id)
                 .offset(0 if prospect_id is not None else offset)
                 .limit(1 if prospect_id is not None else PAGE_SIZE)
             )
         ).all()
-        field_rows = await self.store.field_rows(actor, [row.id for row, _, _ in selected], scope)
+        field_rows = await self.store.field_rows(
+            actor, [row.id for row, _, _, _ in selected], scope
+        )
         entries = [
             {
                 **profile(row, [r for r in field_rows if r.entity_id == row.id]),
+                "stage": stage,
                 "can_edit": row.owner_person_id == actor.person_id,
                 "can_confirm": row.owner_person_id == actor.person_id and count > 0,
                 "call_count": count,
                 "last_call": None if last is None else last.isoformat(),
             }
-            for row, count, last in selected
+            for row, count, last, stage in selected
         ]
         if prospect_id is None:
             return {
@@ -247,7 +264,15 @@ class ProspectLibrary:
                 "field_registry": field_registry(),
                 "prospects": entries,
                 "total": total,
-                "stage_filters": [],
+                "stage_filters": sorted(
+                    value
+                    for value in (
+                        await self.database.scalars(
+                            scope.prospects.with_only_columns(_latest_stage()).distinct()
+                        )
+                    ).all()
+                    if value is not None
+                ),
                 "next_offset": offset + PAGE_SIZE if offset + PAGE_SIZE < (total or 0) else None,
             }
         if not entries:

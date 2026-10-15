@@ -1,0 +1,1589 @@
+{
+  "team": {
+    "schema": "ac.sales-xray.team-coaching/1",
+    "person_id": "00000000-0000-4000-8000-00000000aa02",
+    "tenant_id": "00000000-0000-4000-8000-00000000aa01",
+    "session_id": "00000000-0000-4000-8000-00000000aa03",
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "scope": "sandbox",
+    "named_rep_details": true,
+    "sandbox": true,
+    "analysed_calls": 3360,
+    "rep_count": 60,
+    "pending_calls": 0,
+    "unavailable_calls": 0,
+    "history_limited": false,
+    "latest_call_at": "2026-09-15T15:03:00+05:30",
+    "suggestions": [
+      {
+        "skill_id": "closing_decision_management",
+        "label": "Closing & Decision Management",
+        "suggestion_calls": 674
+      },
+      {
+        "skill_id": "discovery_deep_understanding",
+        "label": "Discovery & Deep Understanding",
+        "suggestion_calls": 630
+      },
+      {
+        "skill_id": "communication_tonality",
+        "label": "Communication & Tonality",
+        "suggestion_calls": 610
+      },
+      {
+        "skill_id": "certainty_objection_intelligence",
+        "label": "Certainty & Objection Intelligence",
+        "suggestion_calls": 584
+      },
+      {
+        "skill_id": "solution_relevance_presentation",
+        "label": "Solution Relevance & Presentation",
+        "suggestion_calls": 555
+      },
+      {
+        "skill_id": "qualification",
+        "label": "Qualification",
+        "suggestion_calls": 307
+      }
+    ],
+    "objections": [],
+    "objection_calls": 0,
+    "reps": [
+      {
+        "person_id": "9fca2977-d418-5b08-aec3-1b129d6aa98c",
+        "name": "Mira Dhotrekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Make room for the buyer",
+        "calls": 57,
+        "latest_call_at": "2026-09-15T15:03:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "b689afce-dece-59c5-82f3-61d09e995538",
+        "name": "Rohan Joglekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 77,
+        "latest_call_at": "2026-09-15T14:32:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "aee4ffad-4464-5c6c-891d-3bc70064e960",
+        "name": "Mira Velankarkar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Make room for the buyer",
+        "calls": 43,
+        "latest_call_at": "2026-09-15T13:21:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "38ccff7d-afb2-514e-ac20-97e613eeaedc",
+        "name": "Nikhil Kovekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 83,
+        "latest_call_at": "2026-09-15T12:40:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "c86e3a7d-817e-5265-9df2-b9675bd85c03",
+        "name": "Omkar Talvanekar",
+        "skill_id": "qualification",
+        "focus_label": "Map approval authority",
+        "calls": 40,
+        "latest_call_at": "2026-09-15T12:26:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "9c285816-02fa-591b-98ef-0967da6b7084",
+        "name": "Sana Savdekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 77,
+        "latest_call_at": "2026-09-15T11:49:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "fa14e1f6-8546-5c2c-8dd4-120a2fc4f1dd",
+        "name": "Rohan Ambarsekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 72,
+        "latest_call_at": "2026-09-15T11:09:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "b7c01346-e6a0-507c-9803-3030e1635c06",
+        "name": "Rohan Kovekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 62,
+        "latest_call_at": "2026-09-14T14:20:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "d446bc31-dc16-5de4-8bae-584c29c085ac",
+        "name": "Rohan Savdekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 48,
+        "latest_call_at": "2026-09-14T13:29:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "35353cc7-04ad-52d1-bdad-8d04ba610783",
+        "name": "Revati Dhotrekar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 56,
+        "latest_call_at": "2026-09-14T12:32:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "4528470d-50b2-5e00-b11d-d978ee59b6d8",
+        "name": "Mira Ambarsekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Make room for the buyer",
+        "calls": 73,
+        "latest_call_at": "2026-09-14T11:25:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "5279f716-bc98-50c8-a75a-cf17b73afa8d",
+        "name": "Sana Nivsekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 55,
+        "latest_call_at": "2026-09-14T10:06:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "f0b46b81-8358-5155-8336-678ac3102b03",
+        "name": "Sana Joglekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 52,
+        "latest_call_at": "2026-09-11T15:13:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "0d4d9c7a-a426-5e0e-96c5-818d6a025ad9",
+        "name": "Revati Ambarsekar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 51,
+        "latest_call_at": "2026-09-11T14:04:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "e8c868b7-bcd8-5b67-8237-38e296866498",
+        "name": "Omkar Joglekar",
+        "skill_id": "qualification",
+        "focus_label": "Separate an operations inspection from authorised commercial approval",
+        "calls": 23,
+        "latest_call_at": "2026-09-11T13:41:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "589d35e5-1089-50ad-84d8-ec0784aa10df",
+        "name": "Nikhil Joglekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 60,
+        "latest_call_at": "2026-09-10T15:21:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "e7aafe87-46cb-5537-b07d-d417d1944fea",
+        "name": "Omkar Nivsekar",
+        "skill_id": "qualification",
+        "focus_label": "Map approval authority",
+        "calls": 20,
+        "latest_call_at": "2026-09-10T15:15:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "077a6cd6-389e-5ee2-8f9a-25c4373b131b",
+        "name": "Revati Kovekar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 58,
+        "latest_call_at": "2026-09-10T14:36:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "33abe97b-40f5-56fd-91b7-f8aff3472607",
+        "name": "Revati Ransurekar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 50,
+        "latest_call_at": "2026-09-10T13:05:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "21fe9519-ad96-5e1d-adba-5d3820956be0",
+        "name": "Nikhil Nivsekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 65,
+        "latest_call_at": "2026-09-10T12:44:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "ea84a25c-16de-598a-b0d3-d12458ed55cf",
+        "name": "Revati Kendrekar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 56,
+        "latest_call_at": "2026-09-10T12:38:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "b0d1a9d9-3b72-5525-8f38-8c264c1067e9",
+        "name": "Nikhil Velankarkar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 74,
+        "latest_call_at": "2026-09-10T11:31:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "adbb9227-dd4c-5c42-a279-dfe915fca751",
+        "name": "Rohan Ransurekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 58,
+        "latest_call_at": "2026-09-10T10:34:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "22870334-909b-56ab-a4c9-12011e306440",
+        "name": "Sana Ambarsekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 61,
+        "latest_call_at": "2026-09-09T14:28:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "abc70771-f5d9-5862-94e6-5fb3f274d55d",
+        "name": "Omkar Ransurekar",
+        "skill_id": "qualification",
+        "focus_label": "Map approval authority",
+        "calls": 34,
+        "latest_call_at": "2026-09-09T14:20:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "44a14eda-96d0-5482-8b1c-0ea4b3047a4e",
+        "name": "Mira Kendrekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Make room for the buyer",
+        "calls": 68,
+        "latest_call_at": "2026-09-09T13:11:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "c6615a36-4879-5201-a04a-a0a80b633f61",
+        "name": "Nikhil Ransurekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 75,
+        "latest_call_at": "2026-09-09T11:49:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "77c32da2-3052-5182-9f48-6959a14ceb7f",
+        "name": "Mira Talvanekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Pause for the buyer’s comparison question",
+        "calls": 65,
+        "latest_call_at": "2026-09-09T10:02:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "77b2545e-3ec7-5690-9bdd-7642e3ef2e7b",
+        "name": "Sana Kovekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 57,
+        "latest_call_at": "2026-09-08T14:10:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "5ae8bac6-a40d-5c12-a29e-0dddc31977a2",
+        "name": "Mira Ransurekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Make room for the buyer",
+        "calls": 66,
+        "latest_call_at": "2026-09-08T12:22:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "1d5faf6a-cdae-573d-acce-d9bcc827a493",
+        "name": "Nikhil Dhotrekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 81,
+        "latest_call_at": "2026-09-08T10:08:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "a81b2b62-af8e-5c62-b3fa-88dc5b4f1e2a",
+        "name": "Mira Nivsekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Make room for the buyer",
+        "calls": 64,
+        "latest_call_at": "2026-09-07T14:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "506a4117-f4b5-584f-8647-cdec042f8ea1",
+        "name": "Revati Nivsekar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 63,
+        "latest_call_at": "2026-09-07T12:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "98412a95-093c-5279-8eab-1c9718b7f808",
+        "name": "Mira Joglekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Make room for the buyer",
+        "calls": 78,
+        "latest_call_at": "2026-09-07T10:18:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "53e8c32f-87ef-525b-a566-4bb329ce49f6",
+        "name": "Sana Kendrekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 63,
+        "latest_call_at": "2026-09-04T12:28:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "808b5003-8087-5116-829c-6b508f123e4b",
+        "name": "Rohan Velankarkar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 65,
+        "latest_call_at": "2026-09-03T12:44:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "b4985078-0f0f-58b1-8c5e-a6a44ad3c659",
+        "name": "Omkar Velankarkar",
+        "skill_id": "qualification",
+        "focus_label": "Map approval authority",
+        "calls": 42,
+        "latest_call_at": "2026-09-03T11:29:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "84b54903-32b2-5c19-a1b9-b2dd02dc0aad",
+        "name": "Rohan Dhotrekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 49,
+        "latest_call_at": "2026-09-03T10:40:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "44a1b5c6-c07f-5731-9c54-b7d0f86c50db",
+        "name": "Sana Talvanekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 47,
+        "latest_call_at": "2026-09-02T15:43:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "31103b6d-7625-5a32-8b1d-b68568f8c6b3",
+        "name": "Sana Ransurekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 53,
+        "latest_call_at": "2026-09-01T15:41:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "b1b08b3e-b04c-55cf-acb1-53d22943ab73",
+        "name": "Nikhil Savdekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 70,
+        "latest_call_at": "2026-09-01T14:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "da3a9301-d466-52cb-ba33-285415d81dd6",
+        "name": "Omkar Ambarsekar",
+        "skill_id": "qualification",
+        "focus_label": "Map approval authority",
+        "calls": 35,
+        "latest_call_at": "2026-09-01T13:27:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "7a885030-b03f-5d40-9e87-e5c6fcd47e7c",
+        "name": "Rohan Kendrekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 79,
+        "latest_call_at": "2026-08-28T14:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "c83a5e2e-8b95-51d5-952b-cf05981a3f37",
+        "name": "Omkar Kendrekar",
+        "skill_id": "qualification",
+        "focus_label": "Map approval authority",
+        "calls": 18,
+        "latest_call_at": "2026-08-28T12:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "dc2b4106-7592-505f-af77-d43e8e0ea53e",
+        "name": "Revati Velankarkar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 61,
+        "latest_call_at": "2026-08-28T11:27:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "37a754a5-c892-5857-9740-7ef7e9350fe7",
+        "name": "Nikhil Talvanekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 70,
+        "latest_call_at": "2026-08-27T14:26:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "29657265-381a-5312-b512-b1660d155abd",
+        "name": "Sana Velankarkar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 51,
+        "latest_call_at": "2026-08-24T15:03:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "26982dd8-fe9d-50b6-9f9a-093cc369667c",
+        "name": "Omkar Dhotrekar",
+        "skill_id": "qualification",
+        "focus_label": "Map approval authority",
+        "calls": 25,
+        "latest_call_at": "2026-08-24T14:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "53bdfac3-548b-5263-a6ad-1a8453076b36",
+        "name": "Mira Savdekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Make room for the buyer",
+        "calls": 53,
+        "latest_call_at": "2026-08-23T11:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "4a3041e5-2f28-54f2-8a01-72b30368f8ae",
+        "name": "Sana Dhotrekar",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Understand the objection",
+        "calls": 68,
+        "latest_call_at": "2026-08-21T14:06:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "c83bb2d4-cdb0-5768-97eb-b511d957ccbd",
+        "name": "Revati Talvanekar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 63,
+        "latest_call_at": "2026-08-21T13:09:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "1858cce4-553d-58fe-809e-5546e10a6fe2",
+        "name": "Nikhil Ambarsekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 44,
+        "latest_call_at": "2026-08-21T13:07:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "8face590-3de8-5d74-863f-0b40345321d8",
+        "name": "Omkar Savdekar",
+        "skill_id": "qualification",
+        "focus_label": "Map approval authority",
+        "calls": 37,
+        "latest_call_at": "2026-08-20T14:46:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "7f616655-7322-5353-b137-7975350b3bc0",
+        "name": "Rohan Talvanekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 51,
+        "latest_call_at": "2026-08-20T12:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "0a9bf6c8-7fb2-5e47-bf60-d972c52f4ec6",
+        "name": "Revati Savdekar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 51,
+        "latest_call_at": "2026-08-19T11:33:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "4e1ebc74-b6d1-5090-863c-532db3d4250a",
+        "name": "Mira Kovekar",
+        "skill_id": "communication_tonality",
+        "focus_label": "Make room for the buyer",
+        "calls": 43,
+        "latest_call_at": "2026-08-19T10:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "79fa12d1-9dd0-5f85-8486-255232d35329",
+        "name": "Rohan Nivsekar",
+        "skill_id": "discovery_deep_understanding",
+        "focus_label": "Diagnose before prescribing",
+        "calls": 69,
+        "latest_call_at": "2026-08-18T15:33:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "0c69fc6b-7065-50b9-9466-b730f7f8ea63",
+        "name": "Revati Joglekar",
+        "skill_id": "solution_relevance_presentation",
+        "focus_label": "Explain value before trading price",
+        "calls": 46,
+        "latest_call_at": "2026-08-15T10:00:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "b90c5f33-5c5d-5205-bd2f-610770beee26",
+        "name": "Nikhil Kendrekar",
+        "skill_id": "closing_decision_management",
+        "focus_label": "Agree a clear next step",
+        "calls": 52,
+        "latest_call_at": "2026-08-14T12:38:00+05:30",
+        "shared_at": null
+      },
+      {
+        "person_id": "1923ce0d-0f52-5ec0-af25-06181072d641",
+        "name": "Omkar Kovekar",
+        "skill_id": "qualification",
+        "focus_label": "Map approval authority",
+        "calls": 33,
+        "latest_call_at": "2026-08-08T14:00:00+05:30",
+        "shared_at": null
+      }
+    ],
+    "reps_basis": "fictional",
+    "limitations": [
+      "Fictional AC Sandbox call. Its coaching was written with it, not from an analysis.",
+      "Only the person who imported these sandbox calls sees their coaching.",
+      "The counts are each fictional call’s one written focus, not real mistakes."
+    ]
+  },
+  "rep": {
+    "schema": "ac.sales-xray.coaching/1",
+    "person_id": "7a885030-b03f-5d40-9e87-e5c6fcd47e7c",
+    "tenant_id": "00000000-0000-4000-8000-00000000aa01",
+    "session_id": "00000000-0000-4000-8000-00000000aa03",
+    "authority": "provisional",
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "state": "ready",
+    "analysed_calls": 79,
+    "pending_calls": 0,
+    "unavailable_calls": 0,
+    "history_limited": true,
+    "focus": {
+      "skill_id": "discovery_deep_understanding",
+      "label": "Diagnose before prescribing",
+      "explanation": "It needed work in 6 of the last 6 calls on this skill.",
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
+      "selected_reason": "It needed work on their newest call.",
+      "selected_at": "2026-07-23T13:00:00+05:30",
+      "status": "active",
+      "verdict": "Before describing the offer, ask for one recent example and one consequence of the problem."
+    },
+    "pattern": {
+      "relevant_call_count": 6,
+      "attention_call_count": 6,
+      "summary": "It needed work on 6 different calls. Replay the moments below and see what they did each time.",
+      "relevant_opportunities": 6,
+      "occurrence_count": 6,
+      "contexts": [],
+      "exceptions": []
+    },
+    "root_cause": {
+      "hypothesis": "Hearing a familiar problem and jumping to the familiar product.",
+      "gap_type": "judgment",
+      "confidence": "medium",
+      "alternatives": [
+        "Time pressure or missing context could also explain it."
+      ],
+      "learner_context": null
+    },
+    "evidence": [
+      {
+        "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+        "recording_id": "4ab017ee-2cb6-560a-ad92-c73490e852d6",
+        "source_sha256": "5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "transcript_revision": "synthetic:5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "created_at": "2026-08-28T14:00:00+05:30",
+        "call_label": "Edtech · Viren Nivantakar · call 5",
+        "segment_id": "L005",
+        "quote": "That is exactly what Manager Communication Cohort solves. Let me go straight into our offer: live practice, feedback and manager check-ins. It is a proven format; most companies have the same problem, so we do not need to spend time digging into examples.",
+        "start_ms": 40624,
+        "end_ms": 58922,
+        "observation": "Said by Rohan Kendrekar, the seller.",
+        "playable": false
+      },
+      {
+        "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+        "recording_id": "4ab017ee-2cb6-560a-ad92-c73490e852d6",
+        "source_sha256": "5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "transcript_revision": "synthetic:5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "created_at": "2026-08-28T14:00:00+05:30",
+        "call_label": "Edtech · Viren Nivantakar · call 5",
+        "segment_id": "L006",
+        "quote": "But you have not asked what actually went wrong. One case is enough to show why the standard explanation might miss our situation.",
+        "start_ms": 59322,
+        "end_ms": 69109,
+        "observation": "Said by Viren Nivantakar, the buyer.",
+        "playable": false
+      },
+      {
+        "submission_id": "0adb514a-b084-545f-a2e6-0e39b4f01034",
+        "recording_id": "454f3cef-cd6d-593d-be82-94da25ca4b39",
+        "source_sha256": "cd3efe14191061a6db12e6e2e52ed6985280088069eb2b7d664637bd7eebe462",
+        "transcript_revision": "synthetic:cd3efe14191061a6db12e6e2e52ed6985280088069eb2b7d664637bd7eebe462",
+        "created_at": "2026-08-25T14:00:00+05:30",
+        "call_label": "Edtech · Viren Nivantakar · call 4",
+        "segment_id": "L005",
+        "quote": "That is exactly what Manager Communication Cohort solves. Let me go straight into our offer: live practice, feedback and manager check-ins. It is a proven format; most companies have the same problem, so we do not need to spend time digging into examples.",
+        "start_ms": 40624,
+        "end_ms": 58922,
+        "observation": "Said by Rohan Kendrekar, the seller.",
+        "playable": false
+      },
+      {
+        "submission_id": "ecd73b45-7e68-522c-bd86-5b03b9fcb150",
+        "recording_id": "51fd3c17-4dfc-5a3e-8391-4154b6906178",
+        "source_sha256": "aa1da5a2c531297ba6a43debc9741234478f8361a969cfa30b4255e663c2cc56",
+        "transcript_revision": "synthetic:aa1da5a2c531297ba6a43debc9741234478f8361a969cfa30b4255e663c2cc56",
+        "created_at": "2026-08-19T14:00:00+05:30",
+        "call_label": "Edtech · Viren Nivantakar · call 3",
+        "segment_id": "L005",
+        "quote": "That is exactly what Manager Communication Cohort solves. Let me go straight into our offer: live practice, feedback and manager check-ins. It is a proven format; most companies have the same problem, so we do not need to spend time digging into examples.",
+        "start_ms": 40624,
+        "end_ms": 58922,
+        "observation": "Said by Rohan Kendrekar, the seller.",
+        "playable": false
+      }
+    ],
+    "practice": {
+      "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
+      "success_condition": "One real example and what it cost them, before any talk about the product.",
+      "gap_type": "judgment",
+      "estimated_minutes": 3
+    },
+    "mission": {
+      "skill_id": "discovery_deep_understanding",
+      "behavior": "Before describing the offer, ask for one recent example and one consequence of the problem.",
+      "context": "The next time a buyer gives this opening.",
+      "done_when": "One real example and what it cost them, before any talk about the product.",
+      "cue": "Diagnose before prescribing",
+      "active_since": "2026-07-23T13:00:00+05:30",
+      "origin_submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+      "status": "active"
+    },
+    "mastery": {
+      "state": "emerging",
+      "trend": "not_enough_evidence",
+      "relevant_count": 6,
+      "correct_count": 0,
+      "baseline": "0 of 1 before the mission",
+      "confidence": "medium",
+      "historical_achievement": null,
+      "explanation": "Counted in call order, only where the skill applied. One good call doesn’t mean it’s mastered."
+    },
+    "regression": {
+      "state": "unknown",
+      "action": "We need more calls on this skill to tell whether it is slipping.",
+      "evidence": []
+    },
+    "lesson": {
+      "title": "Diagnose before prescribing",
+      "quick_idea": "Before describing the offer, ask for one recent example and one consequence of the problem.",
+      "framework": ["Problem", "Example", "Impact", "Relevant solution"],
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
+      "good_looks_like": "Before describing the offer, ask for one recent example and one consequence of the problem.",
+      "better_direction": "Before describing the offer, ask for one recent example and one consequence of the problem.",
+      "example_wording": [],
+      "when_to_use": "The next time a buyer gives this opening.",
+      "when_not": "Do not repeat settled discovery during a short confirmation or invoice call.",
+      "checklist": [
+        "A specific example and its impact are established before the first product explanation."
+      ],
+      "source": "Fictional AC Sandbox lesson, written with the calls",
+      "own_call": {
+        "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+        "recording_id": "4ab017ee-2cb6-560a-ad92-c73490e852d6",
+        "source_sha256": "5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "transcript_revision": "synthetic:5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "created_at": "2026-08-28T14:00:00+05:30",
+        "call_label": "Edtech · Viren Nivantakar · call 5",
+        "segment_id": "L005",
+        "quote": "That is exactly what Manager Communication Cohort solves. Let me go straight into our offer: live practice, feedback and manager check-ins. It is a proven format; most companies have the same problem, so we do not need to spend time digging into examples.",
+        "start_ms": 40624,
+        "end_ms": 58922,
+        "observation": "“That is exactly what Manager Communication Cohort solves. Let me go straight into our offer: live practice, feedback and manager check-ins. It is a proven format; most companies have the same problem, so we do not need to spend time digging into examples.”",
+        "playable": false
+      },
+      "next_call_connection": "Before describing the offer, ask for one recent example and one consequence of the problem."
+    },
+    "media_clips": [
+      {
+        "topic_id": "syn-coach-video-001",
+        "revision": "00d43fab555256308a4dcffbd4b027e152d2061cbeef532390b4776fb8cc56b8",
+        "review_id": "94b4cd5d-e94f-581a-996c-eaf78b94fd46",
+        "title": "Discovery: Surface Answer se Real Problem tak kaise jaayein",
+        "kind": "video",
+        "placeholder": true,
+        "voice": "neutral",
+        "access": "full",
+        "entitlement_policy": "AUT-1678-open-access",
+        "start_ms": 0,
+        "end_ms": 33046,
+        "reason": "Dipak’s lesson on Discovery & Deep Understanding, the skill they’re working on. It helps with spotting the moment live, the likely reason here.",
+        "takeaways": [
+          "Ask for the last concrete example.",
+          "Reflect the answer before going deeper."
+        ],
+        "transcript_excerpt": "Ab “Sales nahi aa rahi” example use karo. Prospect: “Sir sales nahi aa rahi.” “Main is point par ye decide nahi karunga ki problem kya hai. Main pehle statement ko specific banaunga.” “Jab aap bol rahe ho sales nahi aa rahi, pehle better thi aur recently decline hui hai, ya conversion hamesha se low raha hai?” Prospect: “Pehle achhi thi, last 4 months se gir gayi.” Ab aapke paas new context hai. “Okay. Aur leads bhi kam hui hain ya leads roughly same aa rahi hain?”",
+        "slides": [
+          {
+            "segment_id": "syn-coach-video-001-S01",
+            "title": "Unpack a vague problem",
+            "bullets": [
+              "Ask for the last concrete example.",
+              "Reflect the answer before going deeper."
+            ]
+          }
+        ],
+        "offer": null,
+        "preview_end_ms": null
+      },
+      {
+        "topic_id": "syn-coach-audio-001",
+        "revision": "2a89bc8f1c58fb191fbfae84152267e7f89fda5ce31c15abae4617aebf590f04",
+        "review_id": "bc642753-2bb5-5588-95d2-0e35c6d7a5c9",
+        "title": "Sales Is Diagnosis, Not Persuasion",
+        "kind": "audio",
+        "placeholder": true,
+        "voice": "neutral",
+        "access": "preview",
+        "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
+        "start_ms": 0,
+        "end_ms": 35763,
+        "reason": "Another lesson on Discovery & Deep Understanding, from Dipak’s full coaching. The first 15 seconds are free. It helps with spotting the moment live, the likely reason here.",
+        "takeaways": [
+          "One objection can describe several realities.",
+          "Clarify the meaning before choosing a response."
+        ],
+        "transcript_excerpt": "“Price high है” का मतलब हो सकता है: budget नहीं है, expected price कम था, value clear नहीं हुई, competitor cheaper है, या prospect खुद implementation को लेकर…",
+        "slides": [],
+        "offer": {
+          "full_coaching_href": "/plans",
+          "academy": {
+            "href": "https://learner.authorityclosers.com/",
+            "label": "Dipak's courses on the Learner's Academy"
+          }
+        },
+        "preview_end_ms": 15000
+      }
+    ],
+    "recommended_media": null,
+    "other_format": null,
+    "strength": null,
+    "calls": [
+      {
+        "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+        "call_label": "Edtech · Viren Nivantakar · call 5",
+        "created_at": "2026-08-28T14:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "0adb514a-b084-545f-a2e6-0e39b4f01034",
+        "call_label": "Edtech · Viren Nivantakar · call 4",
+        "created_at": "2026-08-25T14:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "ecd73b45-7e68-522c-bd86-5b03b9fcb150",
+        "call_label": "Edtech · Viren Nivantakar · call 3",
+        "created_at": "2026-08-19T14:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "6c68759e-8c1a-5294-9b5c-05c478733977",
+        "call_label": "Edtech · Viren Nivantakar · call 2",
+        "created_at": "2026-08-14T14:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "adfbc4d2-eb79-5a70-89ea-69658447af50",
+        "call_label": "Edtech · Viren Nivantakar · call 1",
+        "created_at": "2026-08-10T14:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "4f9b61cf-6da8-5bb2-9fea-bcc40d2c9530",
+        "call_label": "Edtech · Mihir Mathew · call 3",
+        "created_at": "2026-08-03T14:48:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "623e2a0c-b47e-5dcb-bd48-06a00792869e",
+        "call_label": "Edtech · Mihir Mathew · call 2",
+        "created_at": "2026-07-30T14:48:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "08e6d13e-afe6-50b3-a45a-c649d2d6b913",
+        "call_label": "Edtech · Darshan Nivantakar · call 2",
+        "created_at": "2026-07-29T13:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "6781d179-5586-58fc-be54-f73083d362e2",
+        "call_label": "Edtech · Mihir Mathew · call 1",
+        "created_at": "2026-07-27T14:48:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "182482d6-98bd-544b-8928-9d9aefedd9c7",
+        "call_label": "Edtech · Darshan Nivantakar · call 1",
+        "created_at": "2026-07-23T13:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "10140de3-8c9d-53d1-b918-266b8409d3b8",
+        "call_label": "Edtech · Debashish Soman · call 3",
+        "created_at": "2026-06-22T14:36:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "7d64d171-2b16-5584-9129-01824c56c641",
+        "call_label": "Edtech · Debashish Soman · call 2",
+        "created_at": "2026-06-18T14:36:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "45fe0a59-c4cf-5c7f-9a40-52a1fd959499",
+        "call_label": "Edtech · Debashish Soman · call 1",
+        "created_at": "2026-06-15T14:36:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "8dfe2f81-bd17-56ce-82d0-6c739ac40eea",
+        "call_label": "Edtech · Srinivas Khanna · call 3",
+        "created_at": "2026-04-29T14:34:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "680c01d4-a52d-54d8-872b-47513c5e8eb5",
+        "call_label": "Edtech · Srinivas Khanna · call 2",
+        "created_at": "2026-04-27T14:34:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "b8bc0e13-512b-5655-a29b-cc06622c5a95",
+        "call_label": "Edtech · Srinivas Khanna · call 1",
+        "created_at": "2026-04-22T14:34:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "a20b3be7-d1c1-5ba2-8639-785548cf5016",
+        "call_label": "Edtech · Ira Ananth · call 3",
+        "created_at": "2026-04-20T10:36:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "bbc60bc2-62b6-5d1f-b66a-48023496ad0d",
+        "call_label": "Edtech · Ira Ananth · call 2",
+        "created_at": "2026-04-16T10:36:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "4b778c94-a003-5f07-bbbc-c77912362f21",
+        "call_label": "Edtech · Anjali Narayanan · call 3",
+        "created_at": "2026-04-15T11:33:00+05:30",
+        "state": "ready",
+        "focus_label": "Ask about the manager’s real work and practice time before presenting",
+        "recurring": true
+      },
+      {
+        "submission_id": "03d436a9-4440-518e-beeb-a0a809c4dd50",
+        "call_label": "Edtech · Anjali Narayanan · call 2",
+        "created_at": "2026-04-13T11:33:00+05:30",
+        "state": "ready",
+        "focus_label": "Ask about the manager’s real work and practice time before presenting",
+        "recurring": true
+      },
+      {
+        "submission_id": "47f88c90-0cbf-5d5d-b24b-9b4b33957b31",
+        "call_label": "Edtech · Ira Ananth · call 1",
+        "created_at": "2026-04-13T10:36:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "e93404af-6ff5-5810-83ad-8c8974fda61e",
+        "call_label": "Edtech · Anjali Narayanan · call 1",
+        "created_at": "2026-04-08T11:33:00+05:30",
+        "state": "ready",
+        "focus_label": "Ask about the manager’s real work and practice time before presenting",
+        "recurring": true
+      },
+      {
+        "submission_id": "ce2141cb-a213-5060-8e66-424ebc3cd05d",
+        "call_label": "Edtech · Kabir Bapat · call 3",
+        "created_at": "2026-03-30T11:19:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "e2069953-73d1-51cf-96c1-fddbc16c9e5c",
+        "call_label": "Edtech · Kabir Bapat · call 2",
+        "created_at": "2026-03-26T11:19:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "57e795fd-cd0f-5bdb-8059-4bd50d3d3b1c",
+        "call_label": "Edtech · Deepa Kale · call 3",
+        "created_at": "2026-03-24T14:38:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "c420ff7e-964e-5e76-8ca9-cd752ec1b88a",
+        "call_label": "Edtech · Kabir Bapat · call 1",
+        "created_at": "2026-03-23T11:19:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "063f3c38-8393-5c13-b402-611a7ba9fa32",
+        "call_label": "Edtech · Deepa Kale · call 2",
+        "created_at": "2026-03-20T14:38:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "751ce4ae-6bd5-51ad-be34-e8b19fde9306",
+        "call_label": "Edtech · Soumitra Bhatt · call 3",
+        "created_at": "2026-03-18T10:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "4cfdf745-3b39-5d21-a20a-1b5e4013ee44",
+        "call_label": "Edtech · Deepa Kale · call 1",
+        "created_at": "2026-03-17T14:38:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "b8590397-275b-5807-ab1b-15050ff824e2",
+        "call_label": "Edtech · Parth Hebbar · call 3",
+        "created_at": "2026-03-16T12:38:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "efb89e43-1ed4-5849-8297-940724d54012",
+        "call_label": "Edtech · Soumitra Bhatt · call 2",
+        "created_at": "2026-03-16T10:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "52e0c94b-a7e4-5ed3-a758-cd4984c0d484",
+        "call_label": "Edtech · Parth Hebbar · call 2",
+        "created_at": "2026-03-12T12:38:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "2f16b8ef-473f-5a63-bcf8-6383ea9f1ff5",
+        "call_label": "Edtech · Soumitra Bhatt · call 1",
+        "created_at": "2026-03-11T10:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "d54208b2-8dda-5b08-8e73-db3c624905e1",
+        "call_label": "Edtech · Prakash Bedi · call 3",
+        "created_at": "2026-03-10T14:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "78fca8f2-a8d2-56a6-a1cc-bf0c987be09f",
+        "call_label": "Edtech · Parth Hebbar · call 1",
+        "created_at": "2026-03-09T12:38:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "b1f49132-6cb2-5dbf-a58f-07f33236f303",
+        "call_label": "Edtech · Prakash Bedi · call 2",
+        "created_at": "2026-03-06T14:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "3364a65f-065c-54f5-9f69-763ef31bb3ae",
+        "call_label": "Edtech · Prakash Bedi · call 1",
+        "created_at": "2026-03-03T14:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "e6558a3e-3154-5dca-8709-ed0b43d4a434",
+        "call_label": "Edtech · Ritvik Ganguly · call 3",
+        "created_at": "2026-03-02T12:42:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "25a903b5-0015-5563-9f10-2c00bdb37fd2",
+        "call_label": "Edtech · Ritvik Ganguly · call 2",
+        "created_at": "2026-02-26T12:42:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      },
+      {
+        "submission_id": "a56acfd8-99db-5fc7-8b03-68583369fb38",
+        "call_label": "Edtech · Ritvik Ganguly · call 1",
+        "created_at": "2026-02-23T12:42:00+05:30",
+        "state": "ready",
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
+      }
+    ],
+    "progress": [
+      {
+        "submission_id": "a56acfd8-99db-5fc7-8b03-68583369fb38",
+        "created_at": "2026-02-23T12:42:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "25a903b5-0015-5563-9f10-2c00bdb37fd2",
+        "created_at": "2026-02-26T12:42:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "e6558a3e-3154-5dca-8709-ed0b43d4a434",
+        "created_at": "2026-03-02T12:42:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "3364a65f-065c-54f5-9f69-763ef31bb3ae",
+        "created_at": "2026-03-03T14:00:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "b1f49132-6cb2-5dbf-a58f-07f33236f303",
+        "created_at": "2026-03-06T14:00:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "78fca8f2-a8d2-56a6-a1cc-bf0c987be09f",
+        "created_at": "2026-03-09T12:38:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "d54208b2-8dda-5b08-8e73-db3c624905e1",
+        "created_at": "2026-03-10T14:00:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "2f16b8ef-473f-5a63-bcf8-6383ea9f1ff5",
+        "created_at": "2026-03-11T10:00:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "52e0c94b-a7e4-5ed3-a758-cd4984c0d484",
+        "created_at": "2026-03-12T12:38:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "efb89e43-1ed4-5849-8297-940724d54012",
+        "created_at": "2026-03-16T10:00:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "b8590397-275b-5807-ab1b-15050ff824e2",
+        "created_at": "2026-03-16T12:38:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "4cfdf745-3b39-5d21-a20a-1b5e4013ee44",
+        "created_at": "2026-03-17T14:38:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "751ce4ae-6bd5-51ad-be34-e8b19fde9306",
+        "created_at": "2026-03-18T10:00:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "063f3c38-8393-5c13-b402-611a7ba9fa32",
+        "created_at": "2026-03-20T14:38:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "c420ff7e-964e-5e76-8ca9-cd752ec1b88a",
+        "created_at": "2026-03-23T11:19:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "57e795fd-cd0f-5bdb-8059-4bd50d3d3b1c",
+        "created_at": "2026-03-24T14:38:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "e2069953-73d1-51cf-96c1-fddbc16c9e5c",
+        "created_at": "2026-03-26T11:19:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "ce2141cb-a213-5060-8e66-424ebc3cd05d",
+        "created_at": "2026-03-30T11:19:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "e93404af-6ff5-5810-83ad-8c8974fda61e",
+        "created_at": "2026-04-08T11:33:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "47f88c90-0cbf-5d5d-b24b-9b4b33957b31",
+        "created_at": "2026-04-13T10:36:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "03d436a9-4440-518e-beeb-a0a809c4dd50",
+        "created_at": "2026-04-13T11:33:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "4b778c94-a003-5f07-bbbc-c77912362f21",
+        "created_at": "2026-04-15T11:33:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "bbc60bc2-62b6-5d1f-b66a-48023496ad0d",
+        "created_at": "2026-04-16T10:36:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "a20b3be7-d1c1-5ba2-8639-785548cf5016",
+        "created_at": "2026-04-20T10:36:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "b8bc0e13-512b-5655-a29b-cc06622c5a95",
+        "created_at": "2026-04-22T14:34:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "680c01d4-a52d-54d8-872b-47513c5e8eb5",
+        "created_at": "2026-04-27T14:34:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "8dfe2f81-bd17-56ce-82d0-6c739ac40eea",
+        "created_at": "2026-04-29T14:34:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "45fe0a59-c4cf-5c7f-9a40-52a1fd959499",
+        "created_at": "2026-06-15T14:36:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "7d64d171-2b16-5584-9129-01824c56c641",
+        "created_at": "2026-06-18T14:36:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "10140de3-8c9d-53d1-b918-266b8409d3b8",
+        "created_at": "2026-06-22T14:36:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "182482d6-98bd-544b-8928-9d9aefedd9c7",
+        "created_at": "2026-07-23T13:00:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "6781d179-5586-58fc-be54-f73083d362e2",
+        "created_at": "2026-07-27T14:48:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "08e6d13e-afe6-50b3-a45a-c649d2d6b913",
+        "created_at": "2026-07-29T13:00:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "623e2a0c-b47e-5dcb-bd48-06a00792869e",
+        "created_at": "2026-07-30T14:48:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "4f9b61cf-6da8-5bb2-9fea-bcc40d2c9530",
+        "created_at": "2026-08-03T14:48:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "adfbc4d2-eb79-5a70-89ea-69658447af50",
+        "created_at": "2026-08-10T14:00:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "6c68759e-8c1a-5294-9b5c-05c478733977",
+        "created_at": "2026-08-14T14:00:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "ecd73b45-7e68-522c-bd86-5b03b9fcb150",
+        "created_at": "2026-08-19T14:00:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "0adb514a-b084-545f-a2e6-0e39b4f01034",
+        "created_at": "2026-08-25T14:00:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+        "created_at": "2026-08-28T14:00:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      }
+    ],
+    "development_path": {
+      "current": "Diagnose before prescribing",
+      "likely_next": null,
+      "maintain": null,
+      "later": null,
+      "explanation": "The next focus depends on later calls. The current mission stays active."
+    },
+    "reflection_question": "What influenced the response in this moment?",
+    "feedback_available": false,
+    "sandbox": true,
+    "person_name": "Rohan Kendrekar",
+    "sandbox_reps": 0,
+    "limitations": [
+      "Fictional AC Sandbox call. Its coaching was written with it, not from an analysis.",
+      "Only the person who imported these sandbox calls sees their coaching."
+    ]
+  },
+  "call": {
+    "schema": "ac.sales-xray.call-coaching/1",
+    "person_id": "00000000-0000-4000-8000-00000000aa02",
+    "tenant_id": "00000000-0000-4000-8000-00000000aa01",
+    "session_id": "00000000-0000-4000-8000-00000000aa03",
+    "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+    "recording_id": "4ab017ee-2cb6-560a-ad92-c73490e852d6",
+    "source_sha256": "5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+    "transcript_revision": "synthetic:5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+    "report_revision": "5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+    "call_label": "Edtech · Viren Nivantakar · call 5",
+    "authority": "provisional",
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "state": "ready",
+    "basis": "skill_evidence",
+    "focus": {
+      "skill_id": "discovery_deep_understanding",
+      "label": "Diagnose before prescribing",
+      "explanation": "It needed work in 6 of the last 6 calls on this skill.",
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
+      "selected_reason": "It needed work on this call.",
+      "selected_at": "2026-08-28T14:00:00+05:30",
+      "status": "provisional",
+      "verdict": "Before describing the offer, ask for one recent example and one consequence of the problem."
+    },
+    "evidence": [
+      {
+        "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+        "recording_id": "4ab017ee-2cb6-560a-ad92-c73490e852d6",
+        "source_sha256": "5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "transcript_revision": "synthetic:5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "created_at": "2026-08-28T14:00:00+05:30",
+        "call_label": "Edtech · Viren Nivantakar · call 5",
+        "segment_id": "L005",
+        "quote": "That is exactly what Manager Communication Cohort solves. Let me go straight into our offer: live practice, feedback and manager check-ins. It is a proven format; most companies have the same problem, so we do not need to spend time digging into examples.",
+        "start_ms": 40624,
+        "end_ms": 58922,
+        "observation": "Said by Rohan Kendrekar, the seller.",
+        "playable": false
+      },
+      {
+        "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+        "recording_id": "4ab017ee-2cb6-560a-ad92-c73490e852d6",
+        "source_sha256": "5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "transcript_revision": "synthetic:5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "created_at": "2026-08-28T14:00:00+05:30",
+        "call_label": "Edtech · Viren Nivantakar · call 5",
+        "segment_id": "L006",
+        "quote": "But you have not asked what actually went wrong. One case is enough to show why the standard explanation might miss our situation.",
+        "start_ms": 59322,
+        "end_ms": 69109,
+        "observation": "Said by Viren Nivantakar, the buyer.",
+        "playable": false
+      }
+    ],
+    "root_cause": {
+      "hypothesis": "Hearing a familiar problem and jumping to the familiar product.",
+      "gap_type": "judgment",
+      "confidence": "medium",
+      "alternatives": [
+        "Time pressure or missing context could also explain it."
+      ],
+      "learner_context": null
+    },
+    "lesson": {
+      "title": "Diagnose before prescribing",
+      "quick_idea": "Before describing the offer, ask for one recent example and one consequence of the problem.",
+      "framework": ["Problem", "Example", "Impact", "Relevant solution"],
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
+      "good_looks_like": "Before describing the offer, ask for one recent example and one consequence of the problem.",
+      "better_direction": "Before describing the offer, ask for one recent example and one consequence of the problem.",
+      "example_wording": [],
+      "when_to_use": "The next time a buyer gives this opening.",
+      "when_not": "Do not repeat settled discovery during a short confirmation or invoice call.",
+      "checklist": [
+        "A specific example and its impact are established before the first product explanation."
+      ],
+      "source": "Fictional AC Sandbox lesson, written with the calls",
+      "own_call": {
+        "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+        "recording_id": "4ab017ee-2cb6-560a-ad92-c73490e852d6",
+        "source_sha256": "5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "transcript_revision": "synthetic:5db3d4dfd1a590a6ce57eec0ae20c2b61ec726bc86321288ee7eb0dfd68e9121",
+        "created_at": "2026-08-28T14:00:00+05:30",
+        "call_label": "Edtech · Viren Nivantakar · call 5",
+        "segment_id": "L005",
+        "quote": "That is exactly what Manager Communication Cohort solves. Let me go straight into our offer: live practice, feedback and manager check-ins. It is a proven format; most companies have the same problem, so we do not need to spend time digging into examples.",
+        "start_ms": 40624,
+        "end_ms": 58922,
+        "observation": "“That is exactly what Manager Communication Cohort solves. Let me go straight into our offer: live practice, feedback and manager check-ins. It is a proven format; most companies have the same problem, so we do not need to spend time digging into examples.”",
+        "playable": false
+      },
+      "next_call_connection": "Before describing the offer, ask for one recent example and one consequence of the problem."
+    },
+    "practice": {
+      "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
+      "success_condition": "One real example and what it cost them, before any talk about the product.",
+      "gap_type": "judgment",
+      "estimated_minutes": 3
+    },
+    "mission": {
+      "skill_id": "discovery_deep_understanding",
+      "behavior": "Before describing the offer, ask for one recent example and one consequence of the problem.",
+      "context": "The next time a buyer gives this opening.",
+      "done_when": "One real example and what it cost them, before any talk about the product.",
+      "cue": "Diagnose before prescribing",
+      "active_since": "2026-07-23T13:00:00+05:30",
+      "origin_submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
+      "status": "active"
+    },
+    "media_clips": [
+      {
+        "topic_id": "syn-coach-video-001",
+        "revision": "00d43fab555256308a4dcffbd4b027e152d2061cbeef532390b4776fb8cc56b8",
+        "review_id": "94b4cd5d-e94f-581a-996c-eaf78b94fd46",
+        "title": "Discovery: Surface Answer se Real Problem tak kaise jaayein",
+        "kind": "video",
+        "placeholder": true,
+        "voice": "neutral",
+        "access": "full",
+        "entitlement_policy": "AUT-1678-open-access",
+        "start_ms": 0,
+        "end_ms": 33046,
+        "reason": "Dipak’s lesson on Discovery & Deep Understanding, the skill they’re working on. It helps with spotting the moment live, the likely reason here.",
+        "takeaways": [
+          "Ask for the last concrete example.",
+          "Reflect the answer before going deeper."
+        ],
+        "transcript_excerpt": "Ab “Sales nahi aa rahi” example use karo. Prospect: “Sir sales nahi aa rahi.” “Main is point par ye decide nahi karunga ki problem kya hai. Main pehle statement ko specific banaunga.” “Jab aap bol rahe ho sales nahi aa rahi, pehle better thi aur recently decline hui hai, ya conversion hamesha se low raha hai?” Prospect: “Pehle achhi thi, last 4 months se gir gayi.” Ab aapke paas new context hai. “Okay. Aur leads bhi kam hui hain ya leads roughly same aa rahi hain?”",
+        "slides": [
+          {
+            "segment_id": "syn-coach-video-001-S01",
+            "title": "Unpack a vague problem",
+            "bullets": [
+              "Ask for the last concrete example.",
+              "Reflect the answer before going deeper."
+            ]
+          }
+        ],
+        "offer": null,
+        "preview_end_ms": null
+      },
+      {
+        "topic_id": "syn-coach-audio-001",
+        "revision": "2a89bc8f1c58fb191fbfae84152267e7f89fda5ce31c15abae4617aebf590f04",
+        "review_id": "bc642753-2bb5-5588-95d2-0e35c6d7a5c9",
+        "title": "Sales Is Diagnosis, Not Persuasion",
+        "kind": "audio",
+        "placeholder": true,
+        "voice": "neutral",
+        "access": "preview",
+        "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
+        "start_ms": 0,
+        "end_ms": 35763,
+        "reason": "Another lesson on Discovery & Deep Understanding, from Dipak’s full coaching. The first 15 seconds are free. It helps with spotting the moment live, the likely reason here.",
+        "takeaways": [
+          "One objection can describe several realities.",
+          "Clarify the meaning before choosing a response."
+        ],
+        "transcript_excerpt": "“Price high है” का मतलब हो सकता है: budget नहीं है, expected price कम था, value clear नहीं हुई, competitor cheaper है, या prospect खुद implementation को लेकर…",
+        "slides": [],
+        "offer": {
+          "full_coaching_href": "/plans",
+          "academy": {
+            "href": "https://learner.authorityclosers.com/",
+            "label": "Dipak's courses on the Learner's Academy"
+          }
+        },
+        "preview_end_ms": 15000
+      }
+    ],
+    "recommended_media": null,
+    "strength": null,
+    "other_suggestions": 0,
+    "sandbox": true,
+    "rep_person_id": "7a885030-b03f-5d40-9e87-e5c6fcd47e7c",
+    "rep_name": "Rohan Kendrekar",
+    "limitations": [
+      "Fictional AC Sandbox call. Its coaching was written with it, not from an analysis.",
+      "Only the person who imported these sandbox calls sees their coaching."
+    ]
+  }
+}

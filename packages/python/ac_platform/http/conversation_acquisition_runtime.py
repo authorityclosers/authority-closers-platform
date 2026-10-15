@@ -32,7 +32,7 @@ from ac_platform.conversation_intelligence.internal_tester import InternalTester
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.sales_xray_tenants import (
     WORKSPACE_UNAVAILABLE_MESSAGE,
-    sales_xray_served_tenant_ids,
+    sales_xray_workspace_served,
 )
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_acquisition import install_acquisition_http
@@ -138,7 +138,6 @@ def install_acquisition_runtime(
         settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
     )
     public = settings.public_learner_tenant_id
-    served = sales_xray_served_tenant_ids(settings, None if runtime is None else runtime.intake)
 
     def surface(request: Request) -> str | None:
         if request.url.hostname == sales_host:
@@ -156,7 +155,9 @@ def install_acquisition_runtime(
         try:
             dependency = read_require_actor if read_only else require_actor
             async with asynccontextmanager(dependency)(request) as auth:
-                if auth.resolved.actor.tenant_id not in served:
+                if not await sales_xray_workspace_served(
+                    auth.database, settings, auth.resolved.actor.tenant_id
+                ):
                     raise HTTPException(403, WORKSPACE_UNAVAILABLE_MESSAGE)
                 yield auth
         except DomainError:
@@ -217,8 +218,8 @@ def install_acquisition_runtime(
         return
 
     def factory(database: AsyncSession, tenant_id: UUID) -> AcquisitionSessions:
-        if public is None or tenant_id not in served:
-            raise RuntimeError("Acquisition serves Personal and approved organisations only.")
+        if public is None or tenant_id == settings.operations_tenant_id:
+            raise RuntimeError("Acquisition excludes the operations workspace.")
         authority = runtime.intake.authority
         operations_tenant_id = (
             authority.operations_tenant_id

@@ -600,6 +600,8 @@ it("keeps the status, sort and search in the address across a reload", async () 
     "",
     "/analysis/calls?status=attention&sort=longest",
   );
+  // The router's view of the address (the server sees the same).
+  address.search = new URLSearchParams("status=attention&sort=longest");
   try {
     const held = { ...row(thirdId), state: "held" };
     fetchMock.mockResolvedValueOnce(
@@ -1474,6 +1476,26 @@ it("keeps the home preview hidden when there are no saved calls", async () => {
   expect(host.querySelector("h1")).toBeNull();
 });
 
+it("holds the home preview's three rows while a signed-in read is pending", async () => {
+  let answer: (response: Response) => void = () => {};
+  fetchMock.mockReturnValueOnce(
+    new Promise<Response>((resolve) => (answer = resolve)),
+  );
+  await act(async () => renderLibrary({ preview: true }));
+  await flush();
+  const card = host.querySelector(".calls-library-preview");
+  expect(card?.textContent).toContain("Recent calls");
+  expect(
+    card?.querySelectorAll('[aria-label="Loading recent calls"] li'),
+  ).toHaveLength(3);
+  // No saved calls: the card goes, as before.
+  await act(async () =>
+    answer(new Response(JSON.stringify(page([])), { status: 200 })),
+  );
+  await flush();
+  expect(host.querySelector(".calls-library-preview")).toBeNull();
+});
+
 it("keeps a home preview hidden before authentication and after a failed first read", async () => {
   await act(async () => renderLibrary({ authenticated: false, preview: true }));
   await flush();
@@ -1500,7 +1522,9 @@ it("shows at most three live rows in the home preview with a Calls link", async 
   await flush();
 
   expect(host.querySelector("h2")?.textContent).toBe("Recent calls");
-  expect(host.querySelectorAll(".calls-library-item")).toHaveLength(3);
+  expect(
+    host.querySelectorAll('.calls-library-preview a[href^="/analysis/calls/"]'),
+  ).toHaveLength(3);
   expect(host.querySelector('a[href="/analysis/calls"]')?.textContent).toBe(
     "View all calls",
   );

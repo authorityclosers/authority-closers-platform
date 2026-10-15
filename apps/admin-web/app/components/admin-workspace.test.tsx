@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import * as api from "@ac/operations-web/api";
 import { AdminShell } from "./admin-shell";
-import { AdminDashboard } from "./admin-dashboard";
+import { CourseActivity } from "./admin-dashboard";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 (
@@ -78,17 +78,16 @@ async function render() {
         title="Overview"
         description="Your workspace"
       >
-        <AdminDashboard />
+        <CourseActivity />
       </AdminShell>,
     ),
   );
 }
-it("keeps controls available while independent course analytics are loading", async () => {
+it("says course analytics are loading instead of inventing counts", async () => {
   vi.mocked(api.loadStudioPrograms).mockReturnValue(new Promise(() => {}));
   await render();
   expect(host.textContent).toContain("Loading your academy");
-  expect(host.querySelector('a[href="/people"]')).not.toBeNull();
-  expect(host.querySelector('a[href="/sales-xray/review"]')).not.toBeNull();
+  expect(host.querySelector("dl")).toBeNull();
 });
 it("counts only academy-owned courses and their actual draft versions", async () => {
   await render();

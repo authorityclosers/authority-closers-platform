@@ -42,12 +42,15 @@ export function RecentCallsList({
   calls,
   onHiddenChange,
   viewerId = null,
+  onOpen,
 }: {
   calls: LibrarySubmission[];
   /** How many calls did not fit, for the card header. */
   onHiddenChange?: (count: number) => void;
   /** The signed-in person, so their own calls read "You". */
   viewerId?: string | null;
+  /** Opens a call in place (New analysis) instead of following its link. */
+  onOpen?: (call: LibrarySubmission) => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
   const [fit, setFit] = useState<number | null>(null);
@@ -104,6 +107,23 @@ export function RecentCallsList({
                 href={callHref(call.id)}
                 className={styles.row}
                 data-tone={callTone(call)}
+                onClick={
+                  onOpen
+                    ? (event) => {
+                        // A new tab or window still follows the link.
+                        if (
+                          event.button !== 0 ||
+                          event.metaKey ||
+                          event.ctrlKey ||
+                          event.shiftKey ||
+                          event.altKey
+                        )
+                          return;
+                        event.preventDefault();
+                        onOpen(call);
+                      }
+                    : undefined
+                }
               >
                 <span className={styles.icon} aria-hidden="true">
                   <AudioLines size={15} />
@@ -111,6 +131,7 @@ export function RecentCallsList({
                 <span
                   className={styles.name}
                   data-untitled={name ? undefined : ""}
+                  title={name ?? undefined}
                 >
                   {name ?? unnamedCallName(call.createdAt)}
                 </span>
@@ -118,6 +139,7 @@ export function RecentCallsList({
                   <span
                     className={styles.owner}
                     data-mine={owner === "You" ? "" : undefined}
+                    title={owner}
                   >
                     <i aria-hidden="true">
                       {owner === "You" ? "Y" : initials(owner)}
@@ -150,8 +172,8 @@ export function RecentCallsList({
   );
 }
 
-/** Recent calls while the list loads: three rows with the final shape. */
-export function RecentCallsSkeleton() {
+/** Recent calls while the list loads: the list's five rows, final shape. */
+export function RecentCallsSkeleton({ rows = 5 }: { rows?: number } = {}) {
   return (
     <div
       className={styles.root}
@@ -160,7 +182,7 @@ export function RecentCallsSkeleton() {
       aria-label="Loading recent calls"
     >
       <ul className={styles.list} aria-hidden="true">
-        {[46, 30, 58].map((width, index) => (
+        {[46, 30, 58, 38, 52].slice(0, rows).map((width, index) => (
           <li
             key={width}
             className={styles.skeletonRow}

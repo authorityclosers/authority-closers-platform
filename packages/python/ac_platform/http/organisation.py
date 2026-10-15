@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
@@ -19,6 +19,7 @@ from ac_platform.identity.services import TenantScopeDeniedError, normalize_emai
 from ac_platform.kernel.errors import AuthorizationDenied, DomainError, ResourceNotFound
 from ac_platform.organisations.activity import organisation_activity
 from ac_platform.organisations.invitations import invitation_policies
+from ac_platform.organisations.person_activity import person_activity
 from ac_platform.organisations.seats import seat_exempt
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.organisations.usage import member_rows, organisation_pool, organisation_seats
@@ -39,6 +40,25 @@ class OrganisationResponse(BaseModel):
     verified_domains: list[str]
     auto_join: bool
     member_count: int
+
+
+class OrganisationSandboxResponse(BaseModel):
+    """What the selected organisation holds when it is the fictional AC Sandbox."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    sandbox: bool
+    businesses: int
+    representatives: int
+    calls: int
+    reports: int
+    outcomes: int
+    history_summaries: int
+    approved_at: datetime | None
+
+
+# The synthetic loader's usage policy; its calls are the sandbox's calls.
+SANDBOX_USAGE_POLICY = "synthetic-dev-authored/1"
 
 
 class OrganisationProfileResponse(BaseModel):
@@ -159,6 +179,18 @@ class ActivityResponse(BaseModel):
     calls: list[ActivityCallResponse]
     per_day: list[DailyActivityResponse]
     per_rep: list[RepActivityResponse]
+
+
+class WeekActivityResponse(ActivityCountsResponse):
+    start: datetime
+
+
+class PersonActivityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    person_id: UUID
+    weeks: list[WeekActivityResponse]
+    totals: ActivityCountsResponse
+    calls: list[ActivityCallResponse]
 
 
 class AddMemberRequest(BaseModel):
@@ -387,6 +419,92 @@ def install_organisation_http(
             member_count=count or 0,
         )
 
+    @router.get("/sandbox", response_model=OrganisationSandboxResponse)
+    async def sandbox(
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> OrganisationSandboxResponse:
+        """The fictional AC Sandbox explains itself; any other organisation answers zeros."""
+
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionUsage,
+        )
+        from ac_platform.conversation_intelligence.models import ConversationReportDraft
+        from ac_platform.conversation_intelligence.prospect_call_outcome_models import (
+            ConversationCallOutcomeRevision,
+        )
+        from ac_platform.conversation_intelligence.synthetic_import_models import (
+            ConversationSandboxOrganisation,
+            ConversationSyntheticRecord,
+        )
+
+        tenant_id = auth.resolved.actor.tenant_id
+        marker = await auth.database.get(ConversationSandboxOrganisation, tenant_id)
+        if marker is None:
+            return OrganisationSandboxResponse(
+                sandbox=False,
+                businesses=0,
+                representatives=0,
+                calls=0,
+                reports=0,
+                outcomes=0,
+                history_summaries=0,
+                approved_at=None,
+            )
+
+        async def count(statement: Select[tuple[int]]) -> int:
+            return int(await auth.database.scalar(statement) or 0)
+
+        def records(kind: str) -> Select[tuple[int]]:
+            return (
+                select(func.count())
+                .select_from(ConversationSyntheticRecord)
+                .where(
+                    ConversationSyntheticRecord.tenant_id == tenant_id,
+                    ConversationSyntheticRecord.kind == kind,
+                )
+            )
+
+        return OrganisationSandboxResponse(
+            sandbox=True,
+            businesses=await count(records("world")),
+            representatives=await count(
+                select(func.count())
+                .select_from(Membership)
+                .where(
+                    Membership.tenant_id == tenant_id,
+                    Membership.role == "member",
+                    Membership.status == "active",
+                    Membership.ended_at.is_(None),
+                )
+            ),
+            calls=await count(
+                select(func.count())
+                .select_from(ConversationAcquisitionUsage)
+                .where(
+                    ConversationAcquisitionUsage.tenant_id == tenant_id,
+                    ConversationAcquisitionUsage.policy_revision == SANDBOX_USAGE_POLICY,
+                )
+            ),
+            reports=await count(
+                select(func.count())
+                .select_from(ConversationReportDraft)
+                .where(
+                    ConversationReportDraft.tenant_id == tenant_id,
+                    ConversationReportDraft.erased_at.is_(None),
+                )
+            ),
+            outcomes=await count(
+                select(func.count())
+                .select_from(ConversationCallOutcomeRevision)
+                .where(
+                    ConversationCallOutcomeRevision.tenant_id == tenant_id,
+                    ConversationCallOutcomeRevision.revision == 1,
+                )
+            ),
+            history_summaries=await count(records("call_summary")),
+            approved_at=marker.created_at,
+        )
+
     @router.get("/members", response_model=MembersResponse)
     async def members(auth: AuthenticatedTransaction = selected_dependency) -> MembersResponse:
         actor = auth.resolved.actor
@@ -412,6 +530,24 @@ def install_organisation_http(
             every_member=auth.resolved.membership_role != "member",
         )
         return ActivityResponse.model_validate_json(json.dumps(rows))
+
+    @router.get("/members/{person_id}/activity", response_model=PersonActivityResponse)
+    async def member_activity(
+        person_id: UUID,
+        weeks: Annotated[int, Query(ge=1, le=13)] = 12,
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> PersonActivityResponse:
+        """One person's calls, week by week (the people pages)."""
+        body = await person_activity(
+            auth.database,
+            auth.resolved.actor,
+            person_id=person_id,
+            weeks=weeks,
+            every_member=auth.resolved.membership_role != "member",
+        )
+        if body is None:
+            raise ResourceNotFound("Person not found.")
+        return PersonActivityResponse.model_validate_json(json.dumps(body))
 
     @router.get("/usage", response_model=OrganisationUsageResponse)
     async def usage(
