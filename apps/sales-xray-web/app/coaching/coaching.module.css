@@ -555,6 +555,10 @@
   gap: 8px;
 }
 
+.contextForm > .status {
+  min-height: 1lh;
+}
+
 /* "Not completely": the moments the focus rests on, before the question. */
 .basis {
   display: grid;
