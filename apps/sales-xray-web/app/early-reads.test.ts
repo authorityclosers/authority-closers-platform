@@ -45,7 +45,7 @@ it("names each page's first reads, exactly as the page asks for them", () => {
     `${A}/submissions/summary`,
     `${A}/activity`,
     `${A}/session`,
-    `${A}/submissions?include_owners=true`,
+    `${A}/submissions?include_owners=true&order=reports_first`,
   ]);
   expect(earlyReadsFor("/analysis/calls/")).toContain(
     `${A}/submissions?include_owners=true&order=reports_first`,
