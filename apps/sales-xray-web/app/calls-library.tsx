@@ -25,7 +25,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { useChipsOwnRow } from "./calls-chip-row";
 
@@ -54,6 +60,9 @@ import {
   renameCall,
   type CallLabelChange,
 } from "./call-label-client";
+import { analyseAllHost, noHostChanges } from "./analyse-all";
+import { AnalyseAllControl } from "./analyse-all-control";
+import analyseAllStyles from "./analyse-all.module.css";
 import { ownsCall, requestWorkspace } from "./call-ownership";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import styles from "./calls-library.module.css";
@@ -387,6 +396,12 @@ function CallsLibraryContent({
   // A rep from the address stays only if the loaded calls include them.
   const [selectedRep, setSelectedRep] = useState(addressView.rep);
   const [sort, setSort] = useState<CallSort>(addressView.sort);
+  // Server render and first paint agree (false); the browser then reads its host.
+  const analyseAllHere = useSyncExternalStore(
+    noHostChanges,
+    analyseAllHost,
+    () => false,
+  );
   useEffect(() => {
     const { pathname, search, hash } = window.location;
     const next = callsViewSearch(search, {
@@ -1367,6 +1382,15 @@ function CallsLibraryContent({
       ? `${counts.attention} ${counts.attention === 1 ? "needs" : "need"} attention`
       : "",
   ].filter(Boolean);
+  // Only the person who saved a call can start its analysis.
+  const canAnalyseAll =
+    analyseAllHere &&
+    workspace &&
+    sort === "reports" &&
+    submissions.some(
+      (submission) =>
+        notAnalysed(submission) && ownsCall(submission.owner, viewerId),
+    );
   const renderRows = () => {
     if (!grouped) return visibleSubmissions.map(callRow);
     const out: ReactNode[] = [];
@@ -1384,7 +1408,17 @@ function CallsLibraryContent({
             key={`group-${group}`}
             role="presentation"
           >
-            {group}
+            {group === "Not analysed yet" && canAnalyseAll ? (
+              <span className={analyseAllStyles.heading}>
+                <span data-group-label="">{group}</span>
+                <AnalyseAllControl
+                  viewerId={viewerId}
+                  onFinished={() => refreshHandler.current(identityKey, true)}
+                />
+              </span>
+            ) : (
+              group
+            )}
           </div>,
         );
       }

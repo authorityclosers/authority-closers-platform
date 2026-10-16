@@ -1666,10 +1666,17 @@ it("lists calls with Reports first and names never-analysed calls honestly", asy
   const list = host.querySelector("section#calls-library-list")!;
   expect(list.textContent).not.toContain("Ready to analyse");
   const headings = [...list.querySelectorAll("[role=presentation]")];
-  expect(headings.map((node) => node.textContent)).toEqual([
-    "Earlier",
-    "Not analysed yet",
-  ]);
+  expect(
+    headings.map(
+      (node) =>
+        node.querySelector("[data-group-label]")?.textContent ??
+        node.textContent,
+    ),
+  ).toEqual(["Earlier", "Not analysed yet"]);
+  // The person's own never-analysed calls can all be started from here.
+  expect(
+    [...headings[1].querySelectorAll("button")].map((b) => b.textContent),
+  ).toEqual(["Analyse all"]);
   const report = [...list.querySelectorAll("*")].find(
     (node) => node.textContent === "Second report",
   )!;
