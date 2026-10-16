@@ -62,6 +62,11 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument(
+        "--unscored-only",
+        action="store_true",
+        help="workspace mode: the newest reports that have no saved review yet",
+    )
+    parser.add_argument(
         "--daily-cap",
         type=int,
         default=200,
@@ -90,6 +95,8 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         parser.error("--recent-hours needs --not-before: automatic mode never backfills")
     if arguments.not_before is not None and arguments.not_before.tzinfo is None:
         parser.error("--not-before needs a time zone, e.g. 2026-10-16T00:00:00+00:00")
+    if arguments.unscored_only and arguments.tenant is None:
+        parser.error("--unscored-only is for one workspace (--tenant)")
     if arguments.recent_hours is not None and arguments.force:
         parser.error("--force is for one workspace's reports, never automatic mode")
     if not 1 <= arguments.daily_cap <= 500:
@@ -141,7 +148,9 @@ def _reexec_inside_infisical(argv: list[str], arguments: argparse.Namespace) -> 
     os.execvpe(command[0], command, environment)  # noqa: S606 - fixed argv, no shell
 
 
-def _latest_reports(connection: Any, tenant: UUID, limit: int) -> list[dict[str, Any]]:
+def _latest_reports(
+    connection: Any, tenant: UUID, limit: int, *, unscored_only: bool = False
+) -> list[dict[str, Any]]:
     from sqlalchemy import text
 
     rows = connection.execute(
@@ -156,11 +165,20 @@ def _latest_reports(connection: Any, tenant: UUID, limit: int) -> list[dict[str,
                 ORDER BY d.created_at DESC LIMIT 1
             ) d ON TRUE
             WHERE s.tenant_id = :tenant
+              -- Scored: any unerased review of this exact run, source and revision.
+              AND (
+                NOT :unscored_only OR NOT EXISTS (
+                  SELECT 1 FROM conversation_pointer_reviews r
+                  WHERE r.run_id = d.run_id AND r.source_sha256 = d.source_sha256
+                    AND r.transcript_revision = d.payload ->> 'transcript_revision'
+                    AND r.erased_at IS NULL
+                )
+              )
             ORDER BY s.created_at DESC
             LIMIT :limit
             """
         ),
-        {"tenant": tenant, "limit": limit},
+        {"tenant": tenant, "limit": limit, "unscored_only": unscored_only},
     ).mappings()
     return [dict(row) for row in rows]
 
@@ -441,7 +459,10 @@ async def _inner_async(arguments: argparse.Namespace, call_provider: Any = None)
                     else:
                         reports = await session.run_sync(
                             lambda sync: _latest_reports(
-                                sync.connection(), arguments.tenant, arguments.limit
+                                sync.connection(),
+                                arguments.tenant,
+                                arguments.limit,
+                                unscored_only=arguments.unscored_only,
                             )
                         )
                 print(json.dumps({"reports": len(reports), "apply": arguments.apply}))
