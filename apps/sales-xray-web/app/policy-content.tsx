@@ -29,9 +29,9 @@ const UPDATED: Record<PolicySlug, [string, string]> = {
   pricing: ["2026-10-03", "3 October 2026"],
   terms: ["2026-10-03", "3 October 2026"],
   privacy: ["2026-10-16", "16 October 2026"],
-  refunds: ["2026-10-03", "3 October 2026"],
+  refunds: ["2026-10-16", "16 October 2026"],
   delivery: ["2026-10-03", "3 October 2026"],
-  contact: ["2026-10-03", "3 October 2026"],
+  contact: ["2026-10-16", "16 October 2026"],
   "data-deletion": ["2026-10-16", "16 October 2026"],
 };
 
@@ -77,7 +77,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "When",
       paragraphs: [
-        "We reply to confirm that we received your request, and again when the deletion is done.",
+        "We confirm that we received your request as soon as it arrives, and complete the deletion within 2 days.",
       ],
     },
     {
@@ -127,7 +127,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "Failed, duplicate, or incorrect charges",
       paragraphs: [
-        "Failed, duplicate or wrongly charged payments are refunded in full. To report a problem, email marketing@estateautopilots.com from your account email and include the order number.",
+        "Failed, duplicate or wrongly charged payments are refunded in full. To report a problem, email admin@authorityclosers.com from your account email and include the order number.",
       ],
     },
     {
@@ -139,7 +139,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "How to ask",
       paragraphs: [
-        "Email marketing@estateautopilots.com from your account email and include your order number.",
+        "Email admin@authorityclosers.com from your account email and include your order number.",
       ],
     },
     {
@@ -235,7 +235,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "Who is responsible",
       paragraphs: [
-        "Sales Xray is a product of Authority Closers. Subscriptions are sold and invoiced by Vikriya Solutions LLP, trading as Estate Autopilots, Pune. Contact: marketing@estateautopilots.com.",
+        "Sales Xray is a product of Authority Closers. Subscriptions are sold and invoiced by Vikriya Solutions LLP, trading as Estate Autopilots, Pune. Contact: admin@authorityclosers.com.",
       ],
     },
     {
@@ -274,7 +274,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "Your rights",
       paragraphs: [
-        "You may contact us about access, correction, or deletion of your personal data, or to raise a grievance. Email marketing@estateautopilots.com. We handle requests under applicable law.",
+        "You may contact us about access, correction, or deletion of your personal data, or to raise a grievance. Email admin@authorityclosers.com. We handle requests under applicable law.",
         "To ask for deletion, including leads from Facebook or Instagram lead forms, see /data-deletion.",
       ],
     },
@@ -357,8 +357,8 @@ function ContactDetails() {
           <div>
             <dt>Email</dt>
             <dd>
-              <a href="mailto:marketing@estateautopilots.com">
-                marketing@estateautopilots.com
+              <a href="mailto:admin@authorityclosers.com">
+                admin@authorityclosers.com
               </a>
             </dd>
           </div>

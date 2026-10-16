@@ -232,3 +232,27 @@ it("explains how to delete data, including leads from Meta lead forms", () => {
   expect(privacy).toContain('see <a href="/data-deletion">/data-deletion</a>');
   expect(page).toContain('<a href="/privacy">/privacy</a>');
 });
+
+// Owner, 16 Oct 2026: "2 days deadline for this to be completed" (deletion
+// requests only; this supersedes the 3 Oct no-deadline rule for them alone) and
+// "admin@ is the one ... no need for EA, I mean we need it for AC".
+it("promises a deadline only for deletion, and gives AC's address everywhere", () => {
+  const pages = Object.fromEntries(
+    policyRoutes.map((slug) => [
+      slug,
+      renderToStaticMarkup(
+        <PolicyPage slug={slug} pricingPlans={samplePlans} />,
+      ),
+    ]),
+  );
+  expect(pages["data-deletion"]).toContain(
+    "complete the deletion within 2 days",
+  );
+  for (const [slug, markup] of Object.entries(pages)) {
+    if (slug !== "data-deletion") expect(markup).not.toContain("within 2 days");
+    expect(markup).not.toContain("estateautopilots.com");
+  }
+  expect(pages.contact).toContain('href="mailto:admin@authorityclosers.com"');
+  expect(pages.privacy).toContain("admin@authorityclosers.com");
+  expect(pages.refunds).toContain("admin@authorityclosers.com");
+});
