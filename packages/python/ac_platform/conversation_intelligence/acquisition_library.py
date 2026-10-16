@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from sqlalchemy import Select, and_, func, or_, select, tuple_
+from sqlalchemy import Select, and_, case, func, or_, select, tuple_
 
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
@@ -175,8 +175,14 @@ async def account_library(
     before: UUID | None = None,
     shared_identity_locks: bool = False,
     include_owners: bool = False,
+    order: Literal["newest", "reports_first"] = "newest",
 ) -> dict[str, Any]:
     """Read retained direct/claimed uploads without renewing or assigning ownership.
+
+    ``order="reports_first"`` lists calls whose analysis started (a Report, in
+    progress or paused) before calls never analysed, each newest first. A call
+    only moves when its analysis starts, and then only ahead of the cursor, so
+    a page never repeats an earlier page's call.
 
     The cursor is a selector into the permitted immutable receipts, never an
     owner assertion. It remains usable after deletion of a previous page's last
@@ -194,23 +200,33 @@ async def account_library(
     every_owner = await ownership.organisation_call_reader(actor)
     usage = ConversationAcquisitionUsage
     query = _account_library_query(actor, now, every_owner=every_owner)
+    started = _analysis_started() if order == "reports_first" else None
     if before is not None:
-        cursor = await ownership.database.scalar(
-            _account_library_query(actor, every_owner=every_owner).where(
-                usage.submission_id == before
+        lookup = _account_library_query(actor, every_owner=every_owner).where(
+            usage.submission_id == before
+        )
+        found = (
+            await ownership.database.execute(
+                lookup if started is None else lookup.add_columns(started)
             )
-        )
-        if cursor is None:
+        ).first()
+        if found is None:
             raise ConversationNotFound("This saved-call page is unavailable.")
-        query = query.where(
-            tuple_(usage.created_at, usage.submission_id)
-            < (cursor.created_at, cursor.submission_id)
-        )
-    rows = (
-        await ownership.database.scalars(
-            query.order_by(usage.created_at.desc(), usage.submission_id.desc()).limit(PAGE_SIZE + 1)
-        )
-    ).all()
+        cursor = found[0]
+        if started is None:
+            query = query.where(
+                tuple_(usage.created_at, usage.submission_id)
+                < (cursor.created_at, cursor.submission_id)
+            )
+        else:
+            query = query.where(
+                tuple_(started, usage.created_at, usage.submission_id)
+                < (found[1], cursor.created_at, cursor.submission_id)
+            )
+    ordering: tuple[Any, ...] = (usage.created_at.desc(), usage.submission_id.desc())
+    if started is not None:
+        ordering = (started.desc(), *ordering)
+    rows = (await ownership.database.scalars(query.order_by(*ordering).limit(PAGE_SIZE + 1))).all()
     owners = {}
     if include_owners and every_owner:
         from ac_platform.organisations.activity import _mask_email
@@ -264,6 +280,12 @@ async def account_library(
         "submissions": entries,
         "next_cursor": str(rows[PAGE_SIZE - 1].submission_id) if len(rows) > PAGE_SIZE else None,
     }
+
+
+def _analysis_started() -> Any:
+    """1 when the call has a Report or a processing plan (analysis started), else 0."""
+    has_report, latest_plan = _report_columns()
+    return case((or_(has_report, latest_plan.is_not(None)), 1), else_=0)
 
 
 def _report_columns() -> tuple[Any, Any]:

@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID
 
 import anyio
@@ -238,7 +238,7 @@ def install_submission_http(
         if queries and not (
             library
             and len({key for key, _ in queries}) == len(queries)
-            and all(key in {"before", "include_owners"} for key, _ in queries)
+            and all(key in {"before", "include_owners", "order"} for key, _ in queries)
         ):
             raise fail(422, "Upload access comes from your current session.")
         if write:
@@ -521,6 +521,7 @@ def install_submission_http(
         response: Response,
         before: UUID | None = None,
         include_owners: bool = False,
+        order: Literal["newest", "reports_first"] = "newest",
     ) -> dict[str, Any]:
         host = guard(request, response, library=True)
         try:
@@ -536,6 +537,7 @@ def install_submission_http(
                     before=before,
                     shared_identity_locks=True,
                     include_owners=include_owners,
+                    order=order,
                 )
         except ConversationError as error:
             raise fail(error.status, str(error)) from None
