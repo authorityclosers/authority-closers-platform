@@ -486,7 +486,18 @@ LEAD_DESK_PARITY_TABLES = POINTER_REVIEWS_PARITY_TABLES + (
     "lead_desk_sources",
     "lead_desk_settings",
 )
+GOLD_REVIEWS_PARITY_MIGRATION_HEAD = "20261016_0094"
+GOLD_REVIEWS_PARITY_CONTRACT = "ac-postgres-parity-v61"
+GOLD_REVIEWS_PARITY_TABLES = LEAD_DESK_PARITY_TABLES + (
+    "conversation_gold_reviewers",
+    "conversation_gold_assignments",
+    "conversation_gold_rows",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    GOLD_REVIEWS_PARITY_MIGRATION_HEAD: (
+        GOLD_REVIEWS_PARITY_CONTRACT,
+        GOLD_REVIEWS_PARITY_TABLES,
+    ),
     LEAD_DESK_PARITY_MIGRATION_HEAD: (
         LEAD_DESK_PARITY_CONTRACT,
         LEAD_DESK_PARITY_TABLES,

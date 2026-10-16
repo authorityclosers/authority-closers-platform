@@ -366,6 +366,11 @@ def install_conversation_review_http(
             headers=headers,
         )
 
+    from ac_platform.http.gold_reviews import install_gold_routes
+
+    install_gold_routes(
+        admin, reviewer, review_service, admin_scope, review_scope, require_actor, require_reviewer
+    )
     app.include_router(admin)
     if require_reviewer is not None:
         app.include_router(reviewer)

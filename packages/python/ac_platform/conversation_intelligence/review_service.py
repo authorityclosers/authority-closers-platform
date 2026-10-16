@@ -524,6 +524,11 @@ class ConversationReviewService:
             return assignment.model_copy(update={"state": "revoked"})
         if utc(row.expires_at) <= now:
             return assignment.model_copy(update={"state": "expired"})
+        from .gold_reviews import gold_assignment_state
+
+        gold_state = await gold_assignment_state(self.database, row.id)
+        if gold_state is not None:
+            return assignment.model_copy(update={"state": gold_state})
         submitted = await self.database.scalar(
             select(ConversationReviewFeedback.id)
             .where(ConversationReviewFeedback.assignment_id == row.id)

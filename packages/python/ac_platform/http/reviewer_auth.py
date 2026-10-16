@@ -133,6 +133,15 @@ async def _invitation(
 
 
 async def _has_assignment(database: AsyncSession, person_id: UUID, now: datetime) -> bool:
+    from ac_platform.conversation_intelligence.gold_review_models import GoldReviewer
+
+    standing = await database.scalar(
+        select(GoldReviewer.person_id).where(
+            GoldReviewer.person_id == person_id, GoldReviewer.revoked_at.is_(None)
+        )
+    )
+    if standing is not None:
+        return True
     return (
         await database.scalar(
             select(ConversationReviewAssignment.id)
