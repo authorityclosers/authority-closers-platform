@@ -30,7 +30,9 @@ export function ListView({
   const initialStage = params.get("stage");
   const [scope, setScope] = useState<Scope>(canManage ? "team" : "mine");
   const [stage, setStage] = useState<string>(
-    STAGE_FILTERS.some((item) => item.key === initialStage) ? (initialStage as string) : "open",
+    STAGE_FILTERS.some((item) => item.key === initialStage)
+      ? (initialStage as string)
+      : "open",
   );
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -55,7 +57,9 @@ export function ListView({
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
-        setError(reason instanceof LeadsError ? reason.message : "Leads didn't load.");
+        setError(
+          reason instanceof LeadsError ? reason.message : "Leads didn't load.",
+        );
       });
     return () => controller.abort();
   }, [scope, stage, query, version]);
@@ -64,11 +68,20 @@ export function ListView({
     if (!page?.next_offset || loadingMore) return;
     setLoadingMore(true);
     try {
-      const next = await readLeads({ scope, stage, search: query, offset: page.next_offset });
+      const next = await readLeads({
+        scope,
+        stage,
+        search: query,
+        offset: page.next_offset,
+      });
       setRows((current) => [...current, ...next.leads]);
       setPage(next);
     } catch (reason) {
-      setError(reason instanceof LeadsError ? reason.message : "More leads didn't load.");
+      setError(
+        reason instanceof LeadsError
+          ? reason.message
+          : "More leads didn't load.",
+      );
     } finally {
       setLoadingMore(false);
     }
@@ -124,7 +137,11 @@ export function ListView({
           {error}
         </p>
       ) : page === null ? (
-        <div className={styles.listSkeleton} aria-busy="true" aria-label="Loading leads">
+        <div
+          className={styles.listSkeleton}
+          aria-busy="true"
+          aria-label="Loading leads"
+        >
           {[0, 1, 2, 3, 4].map((key) => (
             <Skeleton key={key} height={52} />
           ))}
@@ -133,13 +150,22 @@ export function ListView({
         <Empty
           icon={Users}
           title={query ? "No leads match" : "No leads here"}
-          text={query ? "Try another name, city or the last digits of a phone number." : "Leads in this stage show here."}
+          text={
+            query
+              ? "Try another name, city or the last digits of a phone number."
+              : "Leads in this stage show here."
+          }
         />
       ) : (
         <>
           <ul className={styles.leadList} aria-label="Leads">
             {rows.map((row) => (
-              <LeadLine key={row.lead_id} row={row} onOpen={onOpen} showOwner={scope !== "mine"} />
+              <LeadLine
+                key={row.lead_id}
+                row={row}
+                onOpen={onOpen}
+                showOwner={scope !== "mine"}
+              />
             ))}
           </ul>
           {page.next_offset !== null ? (

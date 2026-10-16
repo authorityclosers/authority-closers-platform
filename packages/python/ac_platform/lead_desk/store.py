@@ -296,7 +296,7 @@ class LeadDesk:
             return "waiting", "Waiting for an owner"
         due = lead.next_action_at
         if lead.stage == "new" and due is None:
-            return "new", f"New lead · {source}"
+            return "new", "New lead"
         if due is not None and due <= self.now:
             if lead.repeats and lead.last_result is None:
                 return "due", f"Asked again · {source}"

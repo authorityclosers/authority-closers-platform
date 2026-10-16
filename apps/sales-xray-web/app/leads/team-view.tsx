@@ -33,7 +33,14 @@ import {
 } from "./leads-client";
 import styles from "./leads.module.css";
 
-const STAGE_ORDER = ["new", "not_connected", "follow_up", "interested", "won", "lost"];
+const STAGE_ORDER = [
+  "new",
+  "not_connected",
+  "follow_up",
+  "interested",
+  "won",
+  "lost",
+];
 const STAGE_NAMES: Record<string, string> = {
   new: "New",
   not_connected: "Not connected",
@@ -99,7 +106,9 @@ function RulesDialog({
         }),
       );
     } catch (reason) {
-      setError(reason instanceof LeadsError ? reason.message : "Not saved. Try again.");
+      setError(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -136,14 +145,26 @@ function RulesDialog({
             onChange={(event) => setCap(event.target.value)}
           />
         </Field>
-        <Field label="Languages" hint="Comma separated, e.g. Hindi, Marathi, English">
-          <input value={languages} onChange={(event) => setLanguages(event.target.value)} />
+        <Field
+          label="Languages"
+          hint="Comma separated, e.g. Hindi, Marathi, English"
+        >
+          <input
+            value={languages}
+            onChange={(event) => setLanguages(event.target.value)}
+          />
         </Field>
         <Field label="Areas" hint="Cities or regions this seller covers">
-          <input value={areas} onChange={(event) => setAreas(event.target.value)} />
+          <input
+            value={areas}
+            onChange={(event) => setAreas(event.target.value)}
+          />
         </Field>
         <Field label="Products" hint="What this seller sells, as leads name it">
-          <input value={interests} onChange={(event) => setInterests(event.target.value)} />
+          <input
+            value={interests}
+            onChange={(event) => setInterests(event.target.value)}
+          />
         </Field>
         {error ? (
           <p className={styles.error} role="alert">
@@ -176,7 +197,11 @@ export function TeamView({
       })
       .catch((reason: unknown) => {
         if (signal?.aborted) return;
-        setError(reason instanceof LeadsError ? reason.message : "The team didn't load.");
+        setError(
+          reason instanceof LeadsError
+            ? reason.message
+            : "The team didn't load.",
+        );
       });
 
   useEffect(() => {
@@ -185,16 +210,24 @@ export function TeamView({
     return () => controller.abort();
   }, []);
 
-  if (error) return <Empty icon={Users} title="The team didn't load" text={error} />;
+  if (error)
+    return <Empty icon={Users} title="The team didn't load" text={error} />;
   if (!team)
     return (
-      <div className={styles.listSkeleton} aria-busy="true" aria-label="Loading the team">
+      <div
+        className={styles.listSkeleton}
+        aria-busy="true"
+        aria-label="Loading the team"
+      >
         <Skeleton height={86} />
         <Skeleton height={240} />
       </div>
     );
 
-  const total = Object.values(team.by_stage).reduce((sum, value) => sum + value, 0);
+  const total = Object.values(team.by_stage).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
   const saveAuto = async (auto: boolean) => {
     const value = Number(minutes);
     if (!Number.isInteger(value) || value < 5 || value > 1440) {
@@ -209,9 +242,15 @@ export function TeamView({
         reassign_minutes: value,
       });
       setTeam(next);
-      setNote(auto ? `On: new leads move after ${value} minutes without a call.` : "Off.");
+      setNote(
+        auto
+          ? `On: new leads move after ${value} minutes without a call.`
+          : "Off.",
+      );
     } catch (reason) {
-      setNote(reason instanceof LeadsError ? reason.message : "Not saved. Try again.");
+      setNote(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -220,11 +259,19 @@ export function TeamView({
     setBusy(true);
     try {
       const { moved } = await runSweep();
-      setNote(moved ? `Moved ${moved} lead${moved === 1 ? "" : "s"} nobody called in time.` : "Nothing to move.");
+      setNote(
+        moved
+          ? `Moved ${moved} lead${moved === 1 ? "" : "s"} nobody called in time.`
+          : "Nothing to move.",
+      );
       await load();
       onChanged();
     } catch (reason) {
-      setNote(reason instanceof LeadsError ? reason.message : "Didn't run. Try again.");
+      setNote(
+        reason instanceof LeadsError
+          ? reason.message
+          : "Didn't run. Try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -233,8 +280,17 @@ export function TeamView({
   return (
     <div className={styles.teamGrid}>
       <Tiles label="Team leads">
-        <Kpi label="All leads" value={total} note={`${team.waiting_first_call} waiting for a first call`} />
-        <Kpi label="No owner" tone={team.unassigned ? "bad" : undefined} value={team.unassigned} note="Nobody fit the rules" />
+        <Kpi
+          label="All leads"
+          value={total}
+          note={`${team.waiting_first_call} waiting for a first call`}
+        />
+        <Kpi
+          label="No owner"
+          tone={team.unassigned ? "bad" : undefined}
+          value={team.unassigned}
+          note="Nobody fit the rules"
+        />
         <Kpi label="Won" tone="good" value={team.by_stage.won ?? 0} />
         <Kpi label="Lost" value={team.by_stage.lost ?? 0} />
       </Tiles>
@@ -250,21 +306,31 @@ export function TeamView({
                 <th data-num>Due now</th>
                 <th data-num>Calls today</th>
                 <th data-num>Connected</th>
-                <th>Rules</th>
-                <th aria-label="Edit" />
+                <th>Rules (click a name to change)</th>
               </tr>
             </thead>
             <tbody>
               {team.reps.map((rep) => (
                 <tr key={rep.person_id}>
                   <th scope="row">
-                    <span className={styles.repName}>
+                    <button
+                      type="button"
+                      className={styles.repName}
+                      onClick={() => setEditing(rep)}
+                      aria-label={`Edit ${rep.name}'s lead rules`}
+                    >
                       <Avatar name={rep.name} size={24} />
                       {rep.name}
                       {rep.role !== "member" ? <Badge>{rep.role}</Badge> : null}
-                    </span>
+                    </button>
                   </th>
-                  <td>{rep.available ? <Badge tone="good">Yes</Badge> : <Badge>Away</Badge>}</td>
+                  <td>
+                    {rep.available ? (
+                      <Badge tone="good">Yes</Badge>
+                    ) : (
+                      <Badge>Away</Badge>
+                    )}
+                  </td>
                   <td data-num>
                     {rep.open_leads}
                     <small>/{rep.max_open}</small>
@@ -274,15 +340,14 @@ export function TeamView({
                   <td data-num>{rep.connected_today}</td>
                   <td className={styles.rules}>
                     {[...rep.languages, ...rep.areas, ...rep.interests].length
-                      ? [rep.languages.join(", "), rep.areas.join(", "), rep.interests.slice(0, 3).join(", ")]
+                      ? [
+                          rep.languages.join(", "),
+                          rep.areas.join(", "),
+                          rep.interests.slice(0, 3).join(", "),
+                        ]
                           .filter(Boolean)
                           .join(" · ")
                       : "No limits"}
-                  </td>
-                  <td>
-                    <Button variant="ghost" onClick={() => setEditing(rep)}>
-                      Edit
-                    </Button>
                   </td>
                 </tr>
               ))}
@@ -292,16 +357,28 @@ export function TeamView({
       </Panel>
 
       <div className={styles.teamPair}>
-        <Panel title="Auto-reassign" sub={team.settings.auto_reassign ? "on" : "off"}>
+        <Panel
+          title="Auto-reassign"
+          sub={team.settings.auto_reassign ? "on" : "off"}
+        >
           <div className={styles.form}>
             <p className={styles.hint}>
-              When a new lead isn't called within the time below, it moves to the next best seller. Test leads never move.
+              When a new lead isn't called within the time below, it moves to
+              the next best seller. Test leads never move.
             </p>
             <Field label="Minutes before it moves">
-              <input inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value)} />
+              <input
+                inputMode="numeric"
+                value={minutes}
+                onChange={(event) => setMinutes(event.target.value)}
+              />
             </Field>
             <div className={styles.row}>
-              <Button variant={team.settings.auto_reassign ? "secondary" : "primary"} disabled={busy} onClick={() => saveAuto(!team.settings.auto_reassign)}>
+              <Button
+                variant={team.settings.auto_reassign ? "secondary" : "primary"}
+                disabled={busy}
+                onClick={() => saveAuto(!team.settings.auto_reassign)}
+              >
                 {team.settings.auto_reassign ? "Turn off" : "Turn on"}
               </Button>
               {team.settings.auto_reassign ? (
@@ -311,7 +388,11 @@ export function TeamView({
                 </Button>
               ) : null}
             </div>
-            {note ? <p className={styles.hint} role="status">{note}</p> : null}
+            {note ? (
+              <p className={styles.hint} role="status">
+                {note}
+              </p>
+            ) : null}
           </div>
         </Panel>
         <Panel title="Where leads stand">
@@ -321,7 +402,11 @@ export function TeamView({
                 <dt>{STAGE_NAMES[stage]}</dt>
                 <dd>
                   <span className={styles.bar}>
-                    <i style={{ width: `${total ? ((team.by_stage[stage] ?? 0) / total) * 100 : 0}%` }} />
+                    <i
+                      style={{
+                        width: `${total ? ((team.by_stage[stage] ?? 0) / total) * 100 : 0}%`,
+                      }}
+                    />
                   </span>
                   <span>{team.by_stage[stage] ?? 0}</span>
                 </dd>
@@ -334,7 +419,9 @@ export function TeamView({
                 <dt>{SOURCE_NAMES[source] ?? source}</dt>
                 <dd>
                   <span className={styles.bar}>
-                    <i style={{ width: `${total ? (count / total) * 100 : 0}%` }} />
+                    <i
+                      style={{ width: `${total ? (count / total) * 100 : 0}%` }}
+                    />
                   </span>
                   <span>{count}</span>
                 </dd>

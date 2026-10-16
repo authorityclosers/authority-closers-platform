@@ -836,10 +836,26 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.repName:hover {
+  color: var(--lx-strength-ink);
+  text-decoration: underline;
+}
+
+.padded {
+  padding: 12px 14px;
 }
 
 .rules {
-  max-width: 280px;
+  max-width: 320px;
   overflow: hidden;
   color: var(--sx-muted);
   text-overflow: ellipsis;

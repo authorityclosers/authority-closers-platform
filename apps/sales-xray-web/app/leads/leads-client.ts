@@ -208,13 +208,16 @@ export const NOT_CONNECTED_REASONS: { key: string; label: string }[] = [
   { key: "not_in_use", label: "Number not in use" },
 ];
 
-export const CONNECTED_STAGES: { key: Stage; label: string; closes: boolean }[] =
-  [
-    { key: "follow_up", label: "Follow-up", closes: false },
-    { key: "interested", label: "Interested", closes: false },
-    { key: "won", label: "Won", closes: true },
-    { key: "lost", label: "Lost", closes: true },
-  ];
+export const CONNECTED_STAGES: {
+  key: Stage;
+  label: string;
+  closes: boolean;
+}[] = [
+  { key: "follow_up", label: "Follow-up", closes: false },
+  { key: "interested", label: "Interested", closes: false },
+  { key: "won", label: "Won", closes: true },
+  { key: "lost", label: "Lost", closes: true },
+];
 
 export const STAGE_FILTERS: { key: string; label: string }[] = [
   { key: "open", label: "Open" },
@@ -279,9 +282,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       /* no body */
     }
     throw new LeadsError(
-      detail ??
-        FALLBACK[response.status] ??
-        "Something went wrong. Try again.",
+      detail ?? FALLBACK[response.status] ?? "Something went wrong. Try again.",
       response.status,
     );
   }

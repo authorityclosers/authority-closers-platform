@@ -48,7 +48,9 @@ export function AddLeadDialog({
 }) {
   const [form, setForm] = useState(EMPTY);
   const [source, setSource] = useState<"manual" | "referral">("manual");
-  const [assign, setAssign] = useState<"rules" | "me">(canManage ? "rules" : "me");
+  const [assign, setAssign] = useState<"rules" | "me">(
+    canManage ? "rules" : "me",
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const command = useRef(commandId());
@@ -62,8 +64,9 @@ export function AddLeadDialog({
     command.current = commandId();
   }, [open, canManage]);
 
-  const set = (key: keyof typeof EMPTY) => (event: { target: { value: string } }) =>
-    setForm((current) => ({ ...current, [key]: event.target.value }));
+  const set =
+    (key: keyof typeof EMPTY) => (event: { target: { value: string } }) =>
+      setForm((current) => ({ ...current, [key]: event.target.value }));
 
   const save = async () => {
     if (!form.name.trim() && !form.phone.trim()) {
@@ -83,7 +86,9 @@ export function AddLeadDialog({
       const detail = await addLead(lead, command.current);
       onAdded(detail.lead.lead_id);
     } catch (reason) {
-      setError(reason instanceof LeadsError ? reason.message : "Not added. Try again.");
+      setError(
+        reason instanceof LeadsError ? reason.message : "Not added. Try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -116,29 +121,62 @@ export function AddLeadDialog({
         />
         <div className={styles.formGrid}>
           <Field label="Name">
-            <input value={form.name} maxLength={200} onChange={set("name")} autoComplete="off" />
+            <input
+              value={form.name}
+              maxLength={200}
+              onChange={set("name")}
+              autoComplete="off"
+            />
           </Field>
           <Field label="Phone">
-            <input value={form.phone} maxLength={40} inputMode="tel" onChange={set("phone")} autoComplete="off" />
+            <input
+              value={form.phone}
+              maxLength={40}
+              inputMode="tel"
+              onChange={set("phone")}
+              autoComplete="off"
+            />
           </Field>
           <Field label="Company">
-            <input value={form.company} maxLength={200} onChange={set("company")} />
+            <input
+              value={form.company}
+              maxLength={200}
+              onChange={set("company")}
+            />
           </Field>
           <Field label="City">
             <input value={form.city} maxLength={120} onChange={set("city")} />
           </Field>
           <Field label="Language">
-            <input value={form.language} maxLength={40} placeholder="Hindi" onChange={set("language")} />
+            <input
+              value={form.language}
+              maxLength={40}
+              placeholder="Hindi"
+              onChange={set("language")}
+            />
           </Field>
           <Field label="Interested in">
-            <input value={form.interest} maxLength={200} onChange={set("interest")} />
+            <input
+              value={form.interest}
+              maxLength={200}
+              onChange={set("interest")}
+            />
           </Field>
           <Field label="Email">
-            <input value={form.email} maxLength={320} inputMode="email" onChange={set("email")} />
+            <input
+              value={form.email}
+              maxLength={320}
+              inputMode="email"
+              onChange={set("email")}
+            />
           </Field>
           {source === "referral" ? (
             <Field label="Referred by">
-              <input value={form.referred_by} maxLength={200} onChange={set("referred_by")} />
+              <input
+                value={form.referred_by}
+                maxLength={200}
+                onChange={set("referred_by")}
+              />
             </Field>
           ) : null}
         </div>
@@ -168,7 +206,15 @@ export function AddLeadDialog({
   );
 }
 
-const MAPPABLE = ["name", "phone", "email", "company", "city", "language", "interest"];
+const MAPPABLE = [
+  "name",
+  "phone",
+  "email",
+  "company",
+  "city",
+  "language",
+  "interest",
+];
 
 export function ImportDialog({
   open,
@@ -183,7 +229,9 @@ export function ImportDialog({
 }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [assign, setAssign] = useState<"rules" | "me">(canManage ? "rules" : "me");
+  const [assign, setAssign] = useState<"rules" | "me">(
+    canManage ? "rules" : "me",
+  );
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -208,7 +256,11 @@ export function ImportDialog({
       setPreview(next);
       setMapping(next.mapping);
     } catch (reason) {
-      setError(reason instanceof LeadsError ? reason.message : "That file couldn't be read.");
+      setError(
+        reason instanceof LeadsError
+          ? reason.message
+          : "That file couldn't be read.",
+      );
     } finally {
       setBusy(false);
     }
@@ -226,7 +278,11 @@ export function ImportDialog({
       setResult(await commitImport(preview, mapping, assign, command.current));
       onDone();
     } catch (reason) {
-      setError(reason instanceof LeadsError ? reason.message : "The import didn't finish. Try again.");
+      setError(
+        reason instanceof LeadsError
+          ? reason.message
+          : "The import didn't finish. Try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -248,7 +304,9 @@ export function ImportDialog({
             <Button onClick={onClose}>Cancel</Button>
             {preview ? (
               <Button variant="primary" onClick={run} disabled={busy}>
-                {busy ? "Importing…" : `Import ${preview.total_rows} lead${preview.total_rows === 1 ? "" : "s"}`}
+                {busy
+                  ? "Importing…"
+                  : `Import ${preview.total_rows} lead${preview.total_rows === 1 ? "" : "s"}`}
               </Button>
             ) : null}
           </>
@@ -284,7 +342,9 @@ export function ImportDialog({
         ) : !preview ? (
           <label className={styles.drop}>
             <FileSpreadsheet size={20} aria-hidden="true" />
-            <span>{busy ? "Reading the file…" : "Choose a .csv or .xlsx file"}</span>
+            <span>
+              {busy ? "Reading the file…" : "Choose a .csv or .xlsx file"}
+            </span>
             <input
               type="file"
               accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -296,8 +356,12 @@ export function ImportDialog({
           <>
             <p className={styles.hint}>
               {preview.file_name}: {preview.total_rows} rows
-              {preview.truncated ? " (only the first 2,000)" : ""}, {preview.with_phone} with a phone
-              {preview.repeats_in_file ? `, ${preview.repeats_in_file} repeated in the file` : ""}.
+              {preview.truncated ? " (only the first 2,000)" : ""},{" "}
+              {preview.with_phone} with a phone
+              {preview.repeats_in_file
+                ? `, ${preview.repeats_in_file} repeated in the file`
+                : ""}
+              .
             </p>
             <div className={styles.formGrid}>
               {MAPPABLE.map((field) => (
@@ -307,7 +371,8 @@ export function ImportDialog({
                     onChange={(event) =>
                       setMapping((current) => {
                         const next = { ...current };
-                        if (event.target.value) next[field] = event.target.value;
+                        if (event.target.value)
+                          next[field] = event.target.value;
                         else delete next[field];
                         return next;
                       })

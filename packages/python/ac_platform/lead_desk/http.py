@@ -75,7 +75,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
             settings.sales_xray_app_url is None
             or request.url.hostname != settings.sales_xray_app_url.host
         ):
-            raise HTTPException(404, "The Lead Desk is unavailable.", headers=PRIVATE)
+            raise HTTPException(404, "Leads are unavailable here.", headers=PRIVATE)
 
     @asynccontextmanager
     async def desk_for(
@@ -102,7 +102,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                     or tenant_id == settings.public_learner_tenant_id
                 ):
                     raise HTTPException(
-                        403, "The Lead Desk works inside an organisation.", headers=PRIVATE
+                        403, "Leads work inside an organisation workspace.", headers=PRIVATE
                     )
                 row = (
                     await auth.database.execute(
@@ -122,7 +122,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 )
                 if row is None or organisation is None:
                     raise HTTPException(
-                        403, "The Lead Desk works inside an organisation.", headers=PRIVATE
+                        403, "Leads work inside an organisation workspace.", headers=PRIVATE
                     )
                 sandbox = (
                     await auth.database.scalar(
@@ -147,7 +147,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         except DeskError as error:
             raise HTTPException(error.status, str(error), headers=PRIVATE) from None
         except DomainError:
-            raise HTTPException(401, "Sign in to open your Lead Desk.", headers=PRIVATE) from None
+            raise HTTPException(401, "Sign in to see your leads.", headers=PRIVATE) from None
 
     def no_query(request: Request, allowed: frozenset[str] = frozenset()) -> None:
         if any(name not in allowed for name in request.query_params):

@@ -13,7 +13,14 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
-import { Badge, Button, Empty, PageHeader, QueryTabs, Skeleton } from "../ui/kit";
+import {
+  Badge,
+  Button,
+  Empty,
+  PageHeader,
+  QueryTabs,
+  Skeleton,
+} from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { AddLeadDialog, ImportDialog } from "./capture-dialogs";
 import { DeskView } from "./desk-view";
@@ -93,7 +100,10 @@ export function LeadsRoute() {
     return loading ? (
       <LeadsSkeleton />
     ) : (
-      <AcquisitionShell authenticated={access?.authenticated === true} active="leads">
+      <AcquisitionShell
+        authenticated={access?.authenticated === true}
+        active="leads"
+      >
         <div className={styles.root}>
           <PageHeader title="Leads" />
           <Empty
@@ -161,15 +171,15 @@ export function LeadsRoute() {
         <PageHeader
           title="Leads"
           context={[
-            desk.me.can_manage ? "Your desk and your team's leads" : "Your desk for today",
+            desk.me.can_manage
+              ? "Your desk and your team's leads"
+              : "Your desk for today",
             desk.call_mode === "simulated" ? (
               <Badge tone="warn" key="sim">
                 Calls are simulated
               </Badge>
             ) : null,
-            desk.sandbox ? (
-              <Badge key="sandbox">Test data</Badge>
-            ) : null,
+            desk.sandbox ? <Badge key="sandbox">Test data</Badge> : null,
           ]}
           actions={
             <>
@@ -202,13 +212,23 @@ export function LeadsRoute() {
           </div>
         ) : null}
         {tab === "desk" ? (
-          <DeskView desk={desk} onOpen={setOpenLead} onStart={() => setCalling(true)} onAdd={() => setAdding(true)} onImport={() => setImporting(true)} />
+          <DeskView
+            desk={desk}
+            onOpen={setOpenLead}
+            onStart={() => setCalling(true)}
+            onAdd={() => setAdding(true)}
+            onImport={() => setImporting(true)}
+          />
         ) : tab === "all" ? (
           <ListView canManage={can} onOpen={setOpenLead} version={version} />
         ) : tab === "team" ? (
           <TeamView onChanged={refresh} onOpen={setOpenLead} />
         ) : (
-          <SourcesView sandbox={desk.sandbox} onChanged={refresh} onImport={() => setImporting(true)} />
+          <SourcesView
+            sandbox={desk.sandbox}
+            onChanged={refresh}
+            onImport={() => setImporting(true)}
+          />
         )}
       </div>
       <LeadSheet

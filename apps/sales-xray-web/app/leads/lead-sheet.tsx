@@ -31,7 +31,11 @@ import {
 import { whyLine } from "./desk-view";
 import styles from "./leads.module.css";
 
-const NO_RETRY = new Set(["invalid_number", "incoming_not_available", "not_in_use"]);
+const NO_RETRY = new Set([
+  "invalid_number",
+  "incoming_not_available",
+  "not_in_use",
+]);
 
 /* ---------- Sheet ---------- */
 
@@ -124,7 +128,8 @@ export function DisposeForm({
       ? reason !== null
       : connected === true &&
         stage !== null &&
-        (!needsFollow || (followAt !== null && !Number.isNaN(followAt.getTime())));
+        (!needsFollow ||
+          (followAt !== null && !Number.isNaN(followAt.getTime())));
   const retryNote =
     connected === false && reason
       ? NO_RETRY.has(reason)
@@ -235,28 +240,46 @@ export function DisposeForm({
                 item.label,
                 stage === item.key,
                 () => setStage(item.key),
-                item.key === "won" ? "good" : item.key === "lost" ? "bad" : undefined,
+                item.key === "won"
+                  ? "good"
+                  : item.key === "lost"
+                    ? "bad"
+                    : undefined,
               ),
             )}
           </div>
           {stage === "won" || stage === "lost" ? (
             <p className={styles.hint}>
-              {stage === "won" ? "Won" : "Lost"} closes the lead. It reopens if they get in touch again.
+              {stage === "won" ? "Won" : "Lost"} closes the lead. It reopens if
+              they get in touch again.
             </p>
           ) : null}
         </div>
       ) : null}
 
-      {connected !== null && (connected === false ? reason : stage && !closes) ? (
+      {connected !== null &&
+      (connected === false ? reason : stage && !closes) ? (
         <div className={styles.disposeBlock}>
           <span className={styles.blockLabel}>
             {connected ? "Next follow-up" : "Try again (optional)"}
           </span>
-          <div className={styles.chips} role="group" aria-label="Follow-up time">
-            {chip("hour", "One hour", follow === "hour", () => setFollow("hour"))}
-            {chip("tomorrow", "Tomorrow", follow === "tomorrow", () => setFollow("tomorrow"))}
-            {chip("week", "Next week", follow === "week", () => setFollow("week"))}
-            {chip("custom", "Pick a time", follow === "custom", () => setFollow("custom"))}
+          <div
+            className={styles.chips}
+            role="group"
+            aria-label="Follow-up time"
+          >
+            {chip("hour", "One hour", follow === "hour", () =>
+              setFollow("hour"),
+            )}
+            {chip("tomorrow", "Tomorrow", follow === "tomorrow", () =>
+              setFollow("tomorrow"),
+            )}
+            {chip("week", "Next week", follow === "week", () =>
+              setFollow("week"),
+            )}
+            {chip("custom", "Pick a time", follow === "custom", () =>
+              setFollow("custom"),
+            )}
           </div>
           {follow === "custom" ? (
             <Field label="Follow-up date and time">
@@ -268,7 +291,9 @@ export function DisposeForm({
               />
             </Field>
           ) : followAt ? (
-            <p className={styles.hint}>Follow up {when(followAt.toISOString())}.</p>
+            <p className={styles.hint}>
+              Follow up {when(followAt.toISOString())}.
+            </p>
           ) : null}
         </div>
       ) : null}
@@ -329,23 +354,39 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
       };
     case "assigned":
       return event.owner_name
-        ? { title: `Given to ${event.owner_name}`, detail: event.allocation_reason ?? undefined }
-        : { title: "Waiting for an owner", detail: event.allocation_reason ?? undefined };
+        ? {
+            title: `Given to ${event.owner_name}`,
+            detail: event.allocation_reason ?? undefined,
+          }
+        : {
+            title: "Waiting for an owner",
+            detail: event.allocation_reason ?? undefined,
+          };
     case "reassigned":
       return {
         title: `Moved from ${event.previous_owner_name ?? "nobody"} to ${event.owner_name ?? "nobody"}`,
         detail: event.allocation_reason ?? undefined,
       };
     case "result": {
-      const next = event.next_action_at ? ` · next ${when(event.next_action_at)}` : "";
+      const next = event.next_action_at
+        ? ` · next ${when(event.next_action_at)}`
+        : "";
       return event.connected
-        ? { title: `${who} talked to them: ${event.stage_label ?? ""}${next}`, detail: event.note ?? undefined }
-        : { title: `${who}: not connected, ${(event.reason_label ?? "").toLowerCase()}${next}`, detail: event.note ?? undefined };
+        ? {
+            title: `${who} talked to them: ${event.stage_label ?? ""}${next}`,
+            detail: event.note ?? undefined,
+          }
+        : {
+            title: `${who}: not connected, ${(event.reason_label ?? "").toLowerCase()}${next}`,
+            detail: event.note ?? undefined,
+          };
     }
     case "call":
       return {
         title: `${who} ${event.simulated ? "made a simulated call" : "called"}${
-          event.duration_seconds ? ` · ${minutesLabel(event.duration_seconds)}` : ""
+          event.duration_seconds
+            ? ` · ${minutesLabel(event.duration_seconds)}`
+            : ""
         }`,
       };
     default:
@@ -361,9 +402,14 @@ function History({ events }: { events: LeadEvent[] }) {
         return (
           <li key={`${event.at}-${index}`} data-kind={event.kind}>
             <span className={styles.historyTitle}>{text.title}</span>
-            {text.detail ? <span className={styles.historyDetail}>{text.detail}</span> : null}
+            {text.detail ? (
+              <span className={styles.historyDetail}>{text.detail}</span>
+            ) : null}
             {event.kind === "call" && event.submission_id ? (
-              <Link className={styles.historyLink} href={callHref(event.submission_id)}>
+              <Link
+                className={styles.historyLink}
+                href={callHref(event.submission_id)}
+              >
                 Open the call's Report
               </Link>
             ) : null}
@@ -391,7 +437,9 @@ function LeadCard({
   const { lead } = detail;
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
-  const sub = [lead.company, lead.city, lead.language].filter(Boolean).join(" · ");
+  const sub = [lead.company, lead.city, lead.language]
+    .filter(Boolean)
+    .join(" · ");
 
   const move = async (personId: string | null) => {
     setMoving(true);
@@ -399,7 +447,9 @@ function LeadCard({
     try {
       onChanged(await reassign(lead, personId));
     } catch (reason) {
-      setMoveError(reason instanceof LeadsError ? reason.message : "Not moved. Try again.");
+      setMoveError(
+        reason instanceof LeadsError ? reason.message : "Not moved. Try again.",
+      );
     } finally {
       setMoving(false);
     }
@@ -413,7 +463,15 @@ function LeadCard({
           <h2>{lead.name}</h2>
           {sub ? <p>{sub}</p> : null}
           <div className={styles.cardBadges}>
-            <Badge tone={lead.stage === "won" ? "good" : lead.stage === "lost" ? "bad" : "accent"}>
+            <Badge
+              tone={
+                lead.stage === "won"
+                  ? "good"
+                  : lead.stage === "lost"
+                    ? "bad"
+                    : "accent"
+              }
+            >
               {lead.stage_label}
             </Badge>
             <Badge>{lead.source_label}</Badge>
@@ -436,7 +494,9 @@ function LeadCard({
         ) : (
           <span className={styles.hint}>No phone number on this lead.</span>
         )}
-        {detail.email ? <span className={styles.contactLine}>{detail.email}</span> : null}
+        {detail.email ? (
+          <span className={styles.contactLine}>{detail.email}</span>
+        ) : null}
       </div>
 
       <p className={styles.why}>{whyLine(lead)}</p>
@@ -466,7 +526,8 @@ function LeadCard({
                 .filter((rep) => rep.person_id !== lead.owner_person_id)
                 .map((rep) => (
                   <option key={rep.person_id} value={rep.person_id}>
-                    {rep.name} · {rep.open_leads} open{rep.available ? "" : " · away"}
+                    {rep.name} · {rep.open_leads} open
+                    {rep.available ? "" : " · away"}
                   </option>
                 ))}
             </select>
@@ -493,7 +554,9 @@ function LeadCard({
       ) : null}
       {detail.source_fields.length ? (
         <details className={styles.sourceFields}>
-          <summary>Everything the source sent ({detail.source_fields.length})</summary>
+          <summary>
+            Everything the source sent ({detail.source_fields.length})
+          </summary>
           <dl className={styles.fields}>
             {detail.source_fields.map((field, index) => (
               <div key={`${field.label}-${index}`}>
@@ -537,7 +600,11 @@ export function LeadSheet({
       .then(setDetail)
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
-        setError(reason instanceof LeadsError ? reason.message : "This lead didn't load.");
+        setError(
+          reason instanceof LeadsError
+            ? reason.message
+            : "This lead didn't load.",
+        );
       });
     return () => controller.abort();
   }, [leadId]);
@@ -549,7 +616,11 @@ export function LeadSheet({
   };
 
   return (
-    <Sheet open={leadId !== null} label={detail?.lead.name ?? "Lead"} onClose={onClose}>
+    <Sheet
+      open={leadId !== null}
+      label={detail?.lead.name ?? "Lead"}
+      onClose={onClose}
+    >
       {error ? (
         <Empty icon={PhoneOff} title="This lead didn't open" text={error} />
       ) : detail ? (
@@ -557,7 +628,12 @@ export function LeadSheet({
           detail={detail}
           onChanged={update}
           dispose={
-            <DisposeForm key={formKey} detail={detail} submitLabel="Save" onSaved={update} />
+            <DisposeForm
+              key={formKey}
+              detail={detail}
+              submitLabel="Save"
+              onSaved={update}
+            />
           }
         />
       ) : (
@@ -581,7 +657,9 @@ export function CallingLoop({
   onChanged: () => void;
 }) {
   const [detail, setDetail] = useState<LeadDetail | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "done" | "error">("loading");
+  const [state, setState] = useState<"loading" | "ready" | "done" | "error">(
+    "loading",
+  );
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(0);
 
@@ -594,7 +672,11 @@ export function CallingLoop({
       })
       .catch((reason: unknown) => {
         if (signal?.aborted) return;
-        setError(reason instanceof LeadsError ? reason.message : "The next lead didn't load.");
+        setError(
+          reason instanceof LeadsError
+            ? reason.message
+            : "The next lead didn't load.",
+        );
         setState("error");
       });
   };
@@ -612,7 +694,8 @@ export function CallingLoop({
       <div className={styles.loopHead}>
         <span className={styles.loopTitle}>Calling</span>
         <span className={styles.hint}>
-          {done ? `${done} done this round · ` : ""}One lead at a time. Save what happened to get the next one.
+          {done ? `${done} done this round · ` : ""}One lead at a time. Save
+          what happened to get the next one.
         </span>
       </div>
       {state === "loading" ? (
@@ -622,7 +705,9 @@ export function CallingLoop({
       ) : state === "done" ? (
         <Empty
           icon={CheckCircle2}
-          title={done ? "That's everyone due right now" : "Nobody to call right now"}
+          title={
+            done ? "That's everyone due right now" : "Nobody to call right now"
+          }
           text="New leads and follow-ups appear here as soon as they're due."
           action={{ onClick: onClose, label: "Back to my desk" }}
         />
