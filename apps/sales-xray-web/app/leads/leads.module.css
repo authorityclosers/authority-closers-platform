@@ -1277,3 +1277,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.noteBox {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 6px;
+}

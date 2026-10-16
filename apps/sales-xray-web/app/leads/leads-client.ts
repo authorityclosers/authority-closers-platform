@@ -101,6 +101,7 @@ export type LeadEvent = {
   submission_id: string | null;
   simulated: boolean | null;
   duration_seconds: number | null;
+  changed?: string[] | null;
 };
 
 export type LeadDetail = {
@@ -376,6 +377,39 @@ export function addLead(lead: NewLead, command = commandId()) {
   return request<LeadDetail>(
     "/leads",
     json("POST", { command_id: command, ...body }),
+  );
+}
+
+export type LeadFields = {
+  name?: string;
+  phone?: string;
+  email?: string;
+  company?: string;
+  city?: string;
+  language?: string;
+  interest?: string;
+};
+
+/** Correct a lead's details: only the fields sent change; "" clears one. */
+export function editLead(
+  lead: Pick<LeadRow, "lead_id" | "revision">,
+  fields: LeadFields,
+  command = commandId(),
+) {
+  return request<LeadDetail>(
+    `/leads/${encodeURIComponent(lead.lead_id)}`,
+    json("PATCH", {
+      command_id: command,
+      expected_revision: lead.revision,
+      ...fields,
+    }),
+  );
+}
+
+export function addNote(leadId: string, note: string, command = commandId()) {
+  return request<LeadDetail>(
+    `/leads/${encodeURIComponent(leadId)}/notes`,
+    json("POST", { command_id: command, note }),
   );
 }
 

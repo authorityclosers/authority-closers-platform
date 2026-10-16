@@ -38,9 +38,11 @@ from ac_platform.lead_desk.contracts import (
     ImportPreview,
     ImportResult,
     LeadDetail,
+    LeadEdit,
     LeadPage,
     NewLead,
     NewSource,
+    NoteCommand,
     Reassign,
     RepRules,
     SeedCommand,
@@ -209,6 +211,22 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.dispose(lead_id, command)
+
+    @router.patch("/leads/{lead_id}", response_model=LeadDetail, response_model_by_alias=True)
+    async def edit_lead(
+        lead_id: UUID, command: LeadEdit, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.edit(lead_id, command)
+
+    @router.post("/leads/{lead_id}/notes", response_model=LeadDetail, response_model_by_alias=True)
+    async def add_note(
+        lead_id: UUID, command: NoteCommand, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.note(lead_id, command)
 
     @router.post("/leads/{lead_id}/assign", response_model=LeadDetail, response_model_by_alias=True)
     async def assign(

@@ -34,12 +34,14 @@ from ac_platform.lead_desk.contracts import (
     Desk,
     Disposition,
     FieldValue,
+    LeadEdit,
     LeadDetail,
     LeadEventView,
     LeadPage,
     LeadRow,
     Me,
     NewLead,
+    NoteCommand,
     Numbers,
     Reassign,
     RepOption,
@@ -657,6 +659,9 @@ class LeadDesk:
             allocation_reason=data.get("reason_text"),
             source_label=data.get("source_label"),
             submission_id=self._uuid(data.get("submission_id")),
+            changed=tuple(str(name) for name in data["changed"])
+            if isinstance(data.get("changed"), list)
+            else None,
             simulated=data.get("simulated") if isinstance(data.get("simulated"), bool) else None,
             duration_seconds=int(data["duration_seconds"])
             if isinstance(data.get("duration_seconds"), (int, float))
@@ -1021,6 +1026,79 @@ class LeadDesk:
                 "deal_value": command.deal_value,
                 "was_due": was_due,
             },
+            actor=self.viewer.person_id,
+            command_id=command.command_id,
+        )
+        await self.db.flush()
+        return await self.detail(lead.id)
+
+    async def edit(self, lead_id: UUID, command: LeadEdit) -> LeadDetail:
+        seen = await self._command_seen(command.command_id)
+        if seen is not None:
+            return await self.detail(seen.lead_id)
+        lead = await self._lead(lead_id, lock=True)
+        if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
+            raise DeskError(403, "Only the lead's owner or a manager can change it.")
+        if lead.revision != command.expected_revision:
+            raise DeskError(409, "This lead changed. Check it and try again.")
+        updates = command.model_dump(
+            exclude={"command_id", "expected_revision"}, exclude_none=True
+        )
+        if "name" in updates and not updates["name"].strip():
+            raise DeskError(422, "A lead needs a name.")
+        if "phone" in updates:
+            raw = updates["phone"].strip()
+            if raw:
+                _, config = await self.settings()
+                phone = extract({"phone": raw}, default_country=config["default_country"]).phone
+                if phone is None:
+                    raise DeskError(
+                        422, "Enter a phone number with 10 digits, or with its country code."
+                    )
+                other = await self.db.scalar(
+                    select(Lead.name).where(
+                        Lead.tenant_id == self.tenant_id, Lead.phone == phone, Lead.id != lead.id
+                    )
+                )
+                if other is not None:
+                    raise DeskError(409, f"That number is already on another lead ({other}).")
+                updates["phone"] = phone
+            else:
+                updates["phone"] = None
+        changed: list[str] = []
+        for name, value in updates.items():
+            value = value.strip() or None if isinstance(value, str) else value
+            if name == "email" and value:
+                value = value.lower()
+            if getattr(lead, name) != value:
+                setattr(lead, name, value)
+                changed.append(name)
+        if not changed:
+            return await self.detail(lead.id)
+        lead.revision += 1
+        lead.updated_at = self.now
+        self._event(
+            lead,
+            "edited",
+            {"changed": changed},
+            actor=self.viewer.person_id,
+            command_id=command.command_id,
+        )
+        await self.db.flush()
+        return await self.detail(lead.id)
+
+    async def note(self, lead_id: UUID, command: NoteCommand) -> LeadDetail:
+        seen = await self._command_seen(command.command_id)
+        if seen is not None:
+            return await self.detail(seen.lead_id)
+        lead = await self._lead(lead_id, lock=True)
+        if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
+            raise DeskError(403, "Only the lead's owner or a manager can add notes.")
+        lead.updated_at = self.now
+        self._event(
+            lead,
+            "note",
+            {"note": command.note},
             actor=self.viewer.person_id,
             command_id=command.command_id,
         )

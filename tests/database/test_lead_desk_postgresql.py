@@ -326,3 +326,71 @@ def test_personal_workspace_has_no_desk(postgres_harness: Any, tmp_path: Path) -
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_edit_details_and_notes_keep_history(postgres_harness: Any, tmp_path: Path) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+
+                async def add(name: str, phone: str) -> dict[str, Any]:
+                    made = await client.post(
+                        f"{BASE}/leads",
+                        json={"command_id": str(uuid4()), "name": name, "phone": phone, "assign": "me"},
+                        headers=WRITE,
+                    )
+                    assert made.status_code == 201, made.text
+                    return made.json()
+
+                first = await add("Asha", "9800000011")
+                await add("Ravi", "9800000012")
+                lead_id, revision = first["lead"]["lead_id"], first["lead"]["revision"]
+                clash = await client.patch(
+                    f"{BASE}/leads/{lead_id}",
+                    json={"command_id": str(uuid4()), "expected_revision": revision, "phone": "98000 00012"},
+                    headers=WRITE,
+                )
+                assert clash.status_code == 409 and "Ravi" in clash.json()["detail"]
+                no_name = await client.patch(
+                    f"{BASE}/leads/{lead_id}",
+                    json={"command_id": str(uuid4()), "expected_revision": revision, "name": " "},
+                    headers=WRITE,
+                )
+                assert no_name.status_code == 422
+                edited = await client.patch(
+                    f"{BASE}/leads/{lead_id}",
+                    json={
+                        "command_id": str(uuid4()),
+                        "expected_revision": revision,
+                        "city": "Pune",
+                        "email": "Asha@Example.com",
+                        "phone": "",
+                    },
+                    headers=WRITE,
+                )
+                assert edited.status_code == 200, edited.text
+                detail = edited.json()
+                assert detail["lead"]["city"] == "Pune" and detail["email"] == "asha@example.com"
+                assert detail["phone"] is None
+                assert detail["events"][0]["kind"] == "edited"
+                assert set(detail["events"][0]["changed"]) == {"city", "email", "phone"}
+                noted = await client.post(
+                    f"{BASE}/leads/{lead_id}/notes",
+                    json={"command_id": str(uuid4()), "note": "Prefers WhatsApp after 6 pm"},
+                    headers=WRITE,
+                )
+                assert noted.status_code == 200
+                assert noted.json()["events"][0] == {
+                    **noted.json()["events"][0],
+                    "kind": "note",
+                    "note": "Prefers WhatsApp after 6 pm",
+                }
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

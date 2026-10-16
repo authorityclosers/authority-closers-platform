@@ -118,6 +118,7 @@ class LeadEventView(Model):
     submission_id: UUID | None = None
     simulated: bool | None = None
     duration_seconds: int | None = None
+    changed: tuple[str, ...] | None = None
 
 
 class RepOption(Model):
@@ -256,6 +257,25 @@ class Disposition(Command):
         if not digits.replace(".", "", 1).isdigit():
             raise ValueError("Enter the deal value as a number, like 60,000.")
         return digits
+
+
+class LeadEdit(Command):
+    """Correct a lead's details. A field left out stays; an empty one is cleared (never the name)."""
+
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+    name: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=40)
+    email: str | None = Field(default=None, max_length=320)
+    company: str | None = _Short
+    city: str | None = Field(default=None, max_length=120)
+    language: str | None = Field(default=None, max_length=40)
+    interest: str | None = _Short
+
+
+class NoteCommand(Command):
+    command_id: UUID
+    note: str = Field(min_length=1, max_length=1000)
 
 
 class Reassign(Command):

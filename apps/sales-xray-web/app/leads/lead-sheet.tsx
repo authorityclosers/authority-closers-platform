@@ -13,9 +13,12 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
 import {
+  addNote,
   ago,
   CONNECTED_STAGES,
   dispose,
+  editLead,
+  FIELD_LABELS,
   LeadsError,
   localInputValue,
   minutesLabel,
@@ -398,6 +401,14 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
             : ""
         }`,
       };
+    case "edited":
+      return {
+        title: `${who} changed ${(event.changed ?? [])
+          .map((name) => (FIELD_LABELS[name] ?? name).toLowerCase())
+          .join(", ")}`,
+      };
+    case "note":
+      return { title: `${who} added a note`, detail: event.note ?? undefined };
     default:
       return { title: event.note ?? "Updated" };
   }
@@ -609,6 +620,148 @@ function SimulatedCall({
   );
 }
 
+/* ---------- Edit details and notes ---------- */
+
+const EDITABLE = [
+  "name",
+  "phone",
+  "email",
+  "company",
+  "city",
+  "language",
+  "interest",
+] as const;
+
+function EditDetails({
+  detail,
+  onSaved,
+  onCancel,
+}: {
+  detail: LeadDetail;
+  onSaved: (next: LeadDetail) => void;
+  onCancel: () => void;
+}) {
+  const start: Record<(typeof EDITABLE)[number], string> = {
+    name: detail.lead.name,
+    phone: detail.phone ?? "",
+    email: detail.email ?? "",
+    company: detail.lead.company ?? "",
+    city: detail.lead.city ?? "",
+    language: detail.lead.language ?? "",
+    interest: detail.lead.interest ?? "",
+  };
+  const [form, setForm] = useState(start);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    const changed = Object.fromEntries(
+      EDITABLE.filter((key) => form[key].trim() !== start[key].trim()).map(
+        (key) => [key, form[key].trim()],
+      ),
+    );
+    if (!Object.keys(changed).length) {
+      onCancel();
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(await editLead(detail.lead, changed));
+    } catch (reason) {
+      setError(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className={styles.dispose} aria-label="Edit details">
+      <div className={styles.formGrid}>
+        {EDITABLE.map((key) => (
+          <Field key={key} label={FIELD_LABELS[key]}>
+            <input
+              value={form[key]}
+              maxLength={key === "email" ? 320 : key === "phone" ? 40 : 200}
+              inputMode={
+                key === "phone" ? "tel" : key === "email" ? "email" : undefined
+              }
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+            />
+          </Field>
+        ))}
+      </div>
+      {error ? (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className={styles.row}>
+        <Button onClick={onCancel}>Cancel</Button>
+        <Button variant="primary" onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save details"}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function NoteBox({
+  leadId,
+  onSaved,
+}: {
+  leadId: string;
+  onSaved: (next: LeadDetail) => void;
+}) {
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    if (!note.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(await addNote(leadId, note.trim()));
+      setNote("");
+    } catch (reason) {
+      setError(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className={styles.noteBox}>
+      <Field label="Add a note">
+        <textarea
+          value={note}
+          maxLength={1000}
+          placeholder="Anything the next caller should know"
+          onChange={(event) => setNote(event.target.value)}
+        />
+      </Field>
+      {error ? (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className={styles.row}>
+        <Button onClick={save} disabled={saving || !note.trim()}>
+          {saving ? "Saving…" : "Add note"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Lead card ---------- */
 
 function LeadCard({
@@ -623,6 +776,7 @@ function LeadCard({
   const { lead } = detail;
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const sub = [lead.company, lead.city, lead.language]
     .filter(Boolean)
     .join(" · ");
@@ -662,9 +816,24 @@ function LeadCard({
             </Badge>
             <Badge>{lead.source_label}</Badge>
             {lead.test_data ? <Badge tone="warn">Test data</Badge> : null}
+            {detail.can_edit && !editing ? (
+              <Button variant="ghost" onClick={() => setEditing(true)}>
+                Edit details
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>
+      {editing ? (
+        <EditDetails
+          detail={detail}
+          onCancel={() => setEditing(false)}
+          onSaved={(next) => {
+            setEditing(false);
+            onChanged(next);
+          }}
+        />
+      ) : null}
 
       <div className={styles.contact}>
         {detail.phone ? (
@@ -764,6 +933,9 @@ function LeadCard({
 
       <section className={styles.historyBlock} aria-label="History">
         <h3 className={styles.blockLabel}>History</h3>
+        {detail.can_edit ? (
+          <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
+        ) : null}
         <History events={detail.events} />
       </section>
     </div>
