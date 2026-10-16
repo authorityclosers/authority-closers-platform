@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Sources: where leads come from. One capture path for all of them; each lead
- * keeps exactly what its source sent. Meta lead forms need AC's Meta app first.
+ * Sources: where leads come from. Every source ends in the same capture path,
+ * and each lead keeps exactly what its source sent. Meta lead forms first,
+ * Google Ads lead forms second (owner, 16 Oct), then websites, sheets and files.
  */
 
 import {
@@ -10,9 +11,11 @@ import {
   FileSpreadsheet,
   FlaskConical,
   Globe,
+  Megaphone,
   RefreshCw,
   Sheet as SheetIcon,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge, Button, Field, Panel, Skeleton } from "../ui/kit";
@@ -28,7 +31,14 @@ import {
   type Sources,
   type SourceView,
 } from "./leads-client";
+import { MetaCard } from "./meta-card";
 import styles from "./leads.module.css";
+
+const GOOGLE_ADS = "Google Ads lead form";
+type Kind = "webhook" | "google_ads" | "sheet";
+
+const isGoogleAds = (source: SourceView) =>
+  source.kind === "webhook" && source.label.startsWith("Google Ads");
 
 function CopyText({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -55,6 +65,38 @@ function CopyText({ value, label }: { value: string; label: string }) {
   );
 }
 
+function Steps({ source }: { source: SourceView }) {
+  if (isGoogleAds(source))
+    return (
+      <ol className={styles.howTo}>
+        <li>
+          In Google Ads, open the campaign&apos;s lead form, then Export leads,
+          then Webhook integration.
+        </li>
+        <li>
+          Paste the address above as the Webhook URL and the key as the Key.
+        </li>
+        <li>Press Send test data. The test lead appears on the desk here.</li>
+      </ol>
+    );
+  return (
+    <ol className={styles.howTo}>
+      <li>
+        Your website or tool sends each enquiry to the address above as JSON or
+        a normal form post.
+      </li>
+      <li>
+        Send the key in an <code>X-Lead-Desk-Key</code> header, or add{" "}
+        <code>?key=</code> to the address for a plain HTML form.
+      </li>
+      <li>
+        Any field names work: name, phone, email, city and what they want are
+        picked out, and everything else is kept on the lead.
+      </li>
+    </ol>
+  );
+}
+
 function SourceRow({
   source,
   onChanged,
@@ -63,6 +105,7 @@ function SourceRow({
   onChanged: (next: SourceView | null, note?: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const google = isGoogleAds(source);
   const act = async (work: () => Promise<void>) => {
     setBusy(true);
     try {
@@ -78,11 +121,18 @@ function SourceRow({
       setBusy(false);
     }
   };
+  const endpoint = source.endpoint
+    ? google
+      ? `${source.endpoint}/google-ads`
+      : source.endpoint
+    : null;
   return (
     <li className={styles.source}>
       <span className={styles.sourceIcon} aria-hidden="true">
         {source.kind === "sheet" ? (
           <SheetIcon size={16} />
+        ) : google ? (
+          <Megaphone size={16} />
         ) : (
           <Globe size={16} />
         )}
@@ -92,15 +142,17 @@ function SourceRow({
           {source.label} {source.active ? null : <Badge>Paused</Badge>}
         </strong>
         <small>
-          {source.kind === "sheet" ? "Google Sheet" : "Website form"} ·{" "}
-          {source.received} received
+          {source.kind === "sheet"
+            ? "Google Sheet"
+            : google
+              ? "Google Ads lead form"
+              : "Website form"}{" "}
+          · {source.received} received
           {source.last_received_at
             ? ` · last ${when(source.last_received_at)}`
             : ""}
         </small>
-        {source.endpoint ? (
-          <CopyText value={source.endpoint} label="address" />
-        ) : null}
+        {endpoint ? <CopyText value={endpoint} label="address" /> : null}
         {source.token ? (
           <span className={styles.secretOnce}>
             Key (shown once, keep it safe):{" "}
@@ -109,6 +161,12 @@ function SourceRow({
         ) : null}
         {source.sheet_url ? (
           <small className={styles.ellipsis}>{source.sheet_url}</small>
+        ) : null}
+        {source.kind === "webhook" ? (
+          <details className={styles.terms} open={!!source.token}>
+            <summary>How to connect it</summary>
+            <Steps source={source} />
+          </details>
         ) : null}
       </span>
       <span className={styles.sourceActions}>
@@ -157,6 +215,32 @@ function SourceRow({
   );
 }
 
+const CHOICES: {
+  kind: Kind;
+  title: string;
+  text: string;
+  icon: typeof Globe;
+}[] = [
+  {
+    kind: "google_ads",
+    title: "Google Ads lead form",
+    text: "Leads from your Google Ads lead forms land here within seconds. Two values to paste.",
+    icon: Megaphone,
+  },
+  {
+    kind: "webhook",
+    title: "Website form",
+    text: "Your site or another tool posts each enquiry. You get an address and a key.",
+    icon: Globe,
+  },
+  {
+    kind: "sheet",
+    title: "Google Sheet",
+    text: 'Share the sheet as "Anyone with the link can view", paste the link, then sync.',
+    icon: SheetIcon,
+  },
+];
+
 export function SourcesView({
   sandbox,
   onChanged,
@@ -166,10 +250,11 @@ export function SourcesView({
   onChanged: () => void;
   onImport: () => void;
 }) {
+  const params = useSearchParams();
   const [data, setData] = useState<Sources | null>(null);
   const [fresh, setFresh] = useState<Record<string, SourceView>>({});
   const [note, setNote] = useState<string | null>(null);
-  const [kind, setKind] = useState<"webhook" | "sheet" | null>(null);
+  const [kind, setKind] = useState<Kind | null>(null);
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -188,6 +273,12 @@ export function SourcesView({
     void load();
   }, []);
 
+  const choose = (next: Kind) => {
+    setKind(next);
+    setNote(null);
+    setLabel(next === "google_ads" ? GOOGLE_ADS : "");
+  };
+
   const create = async () => {
     if (!kind || !label.trim()) {
       setNote("Give the source a name.");
@@ -197,8 +288,11 @@ export function SourcesView({
     setNote(null);
     try {
       const made = await addSource({
-        kind,
-        label: label.trim(),
+        kind: kind === "sheet" ? "sheet" : "webhook",
+        label:
+          kind === "google_ads" && !label.trim().startsWith("Google Ads")
+            ? `${GOOGLE_ADS}: ${label.trim()}`.slice(0, 120)
+            : label.trim(),
         sheet_url: kind === "sheet" ? url.trim() : undefined,
       });
       setFresh((current) => ({ ...current, [made.source_id]: made }));
@@ -235,17 +329,44 @@ export function SourcesView({
     }
   };
 
+  const listed = (data?.sources ?? []).filter(
+    (source) => source.kind !== "meta",
+  );
+
   return (
     <div className={styles.sourcesGrid}>
+      <Panel title="Ad platforms">
+        <div className={styles.adGrid}>
+          <MetaCard returned={params.get("meta")} />
+          <div className={styles.metaCard}>
+            <div className={styles.metaHead}>
+              <strong>Google Ads lead forms</strong>
+              <Badge tone="good">Ready</Badge>
+            </div>
+            <p className={styles.hint}>
+              Add a Google Ads source below: you get a webhook address and a key
+              to paste into the lead form, then press Send test data in Google
+              Ads.
+            </p>
+            <div className={styles.row}>
+              <Button variant="primary" onClick={() => choose("google_ads")}>
+                <Megaphone size={14} aria-hidden="true" />
+                Connect Google Ads
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Panel>
+
       <Panel
         title="Connected sources"
-        sub={data ? `${data.sources.length}` : undefined}
+        sub={data ? `${listed.length}` : undefined}
       >
         {data === null ? (
           <Skeleton height={120} />
-        ) : data.sources.length ? (
+        ) : listed.length ? (
           <ul className={styles.sourceList}>
-            {data.sources.map((source) => (
+            {listed.map((source) => (
               <SourceRow
                 key={source.source_id}
                 source={fresh[source.source_id] ?? source}
@@ -264,7 +385,8 @@ export function SourcesView({
           </ul>
         ) : (
           <p className={`${styles.hint} ${styles.padded}`}>
-            No sources yet. Add a website form or a Google Sheet below.
+            No sources yet. Connect Google Ads, a website form or a Google Sheet
+            below.
           </p>
         )}
         {note ? (
@@ -276,32 +398,19 @@ export function SourcesView({
 
       <Panel title="Add a source">
         <div className={styles.sourceChoices}>
-          <button
-            type="button"
-            className={styles.sourceChoice}
-            aria-pressed={kind === "webhook"}
-            onClick={() => setKind("webhook")}
-          >
-            <Globe size={18} aria-hidden="true" />
-            <strong>Website form</strong>
-            <small>
-              Your site or another tool posts each enquiry. You get an address
-              and a key.
-            </small>
-          </button>
-          <button
-            type="button"
-            className={styles.sourceChoice}
-            aria-pressed={kind === "sheet"}
-            onClick={() => setKind("sheet")}
-          >
-            <SheetIcon size={18} aria-hidden="true" />
-            <strong>Google Sheet</strong>
-            <small>
-              Share the sheet as "Anyone with the link can view", paste the
-              link, then sync.
-            </small>
-          </button>
+          {CHOICES.map((choice) => (
+            <button
+              key={choice.kind}
+              type="button"
+              className={styles.sourceChoice}
+              aria-pressed={kind === choice.kind}
+              onClick={() => choose(choice.kind)}
+            >
+              <choice.icon size={18} aria-hidden="true" />
+              <strong>{choice.title}</strong>
+              <small>{choice.text}</small>
+            </button>
+          ))}
           <button
             type="button"
             className={styles.sourceChoice}
@@ -311,16 +420,6 @@ export function SourcesView({
             <strong>CSV or Excel file</strong>
             <small>Upload once, match the columns, done.</small>
           </button>
-          <div className={styles.sourceChoice} data-disabled="">
-            <Globe size={18} aria-hidden="true" />
-            <strong>
-              Meta lead forms <Badge tone="warn">Soon</Badge>
-            </strong>
-            <small>
-              Continue with Meta, pick your Page and Instant Forms. Needs AC's
-              Meta app first.
-            </small>
-          </div>
         </div>
         {kind ? (
           <div className={styles.form}>
@@ -329,7 +428,11 @@ export function SourcesView({
                 value={label}
                 maxLength={120}
                 placeholder={
-                  kind === "sheet" ? "Expo leads sheet" : "Website contact form"
+                  kind === "sheet"
+                    ? "Expo leads sheet"
+                    : kind === "google_ads"
+                      ? GOOGLE_ADS
+                      : "Website contact form"
                 }
                 onChange={(event) => setLabel(event.target.value)}
               />

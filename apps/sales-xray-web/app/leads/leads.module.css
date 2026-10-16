@@ -1188,3 +1188,91 @@
 .steps li[data-state="later"] {
   color: var(--sx-muted);
 }
+
+/* ---------- Ad platforms ---------- */
+
+.adGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.metaCard {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.metaHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.metaButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--sx-control-h);
+  padding: 0 14px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--lx-closing);
+  color: var(--lx-on-teal);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.metaButton:hover {
+  background: var(--lx-closing-ink);
+}
+
+.metaButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.metaPage {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.metaPage + .metaPage {
+  border-top: 1px solid var(--sx-line);
+}
+
+.formPicker {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+}
+
+.howTo {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: var(--sx-text-xs);
+}
+
+.howTo code {
+  padding: 0 4px;
+  border-radius: var(--lx-radius-xs);
+  background: var(--sx-sunken);
+}
+
+@container (max-width: 700px) {
+  .adGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
