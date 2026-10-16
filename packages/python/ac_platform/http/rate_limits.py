@@ -115,6 +115,13 @@ DEFAULT_RATE_LIMIT_RULES = (
         refill_seconds=600,
     ),
     RateLimitRule(
+        name="oauth-app-exchange",
+        method="POST",
+        path=re.compile(r"^/v1/auth/google/app-exchange$"),
+        capacity=20,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
         name="public-program-catalog",
         method="GET",
         path=re.compile(r"^/v1/programs(?:/[^/]+)?$"),

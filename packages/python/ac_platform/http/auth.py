@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import html
 import json
 import logging
 import re
@@ -12,11 +13,11 @@ from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Annotated, Literal, cast
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -32,8 +33,10 @@ from ac_platform.http.auth_transactions import (
     AuthTransaction,
     AuthTransactionCodec,
     InvalidAuthTransaction,
+    SalesXrayAppHandoffCodec,
     SalesXrayCompletionReceiptCodec,
     normalize_return_path,
+    sales_xray_app_verifier_matches,
     sales_xray_completion_flow_id,
 )
 from ac_platform.http.identity_provider import (
@@ -1412,15 +1415,63 @@ def _oauth_callback_unavailable_response(
     return response
 
 
+# Private-use URI scheme of the Sales Xray Android app (RFC 8252 section 7.1).
+SALES_XRAY_APP_RETURN_URI = "com.authorityclosers.salesxray:/auth/return"
+# Every request from the Sales Xray app carries this user-agent token.
+SALES_XRAY_APP_USER_AGENT = re.compile(r"\bSalesXrayApp/\d")
+_SALES_XRAY_APP_EXCHANGE_MAX_BYTES = 4096
+
+
+def _sales_xray_app_return_page(
+    fragment: Mapping[str, str],
+    settings: Settings,
+    *,
+    transaction_cookie_names: tuple[str, ...],
+) -> HTMLResponse:
+    """Hand a Custom Tab Google sign-in back to the Sales Xray app.
+
+    The result travels in the page body, never in a Location header, so the
+    one-time code stays out of edge access logs. The /v1 policy allows no script
+    or style: a meta refresh opens the app and the link is the manual fallback.
+    """
+
+    target = html.escape(f"{SALES_XRAY_APP_RETURN_URI}#{urlencode(fragment)}", quote=True)
+    response = HTMLResponse(
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f'<meta http-equiv="refresh" content="0;url={target}">'
+        "<title>Back to Sales Xray</title></head><body>"
+        f'<p><a href="{target}">Back to the Sales Xray app</a></p>'
+        "</body></html>"
+    )
+    _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
+    _delete_sales_xray_completion_cookie(response)
+    response.headers["cache-control"] = "no-store"
+    response.headers["pragma"] = "no-cache"
+    response.headers["referrer-policy"] = "no-referrer"
+    return response
+
+
 def _sales_xray_auth_result_response(
     settings: Settings,
     *,
     result: Literal["success", "failed", "review_terms", "unavailable"],
     transaction_cookie_names: tuple[str, ...],
     flow_id: UUID | None = None,
-) -> RedirectResponse:
+    app_handoff: bool = False,
+) -> Response:
     """Return only a bounded outcome on the configured Sales Xray host."""
 
+    if app_handoff and result != "success":
+        # The sign-in ran in the app's Custom Tab: tell the app, not the browser.
+        fragment: dict[str, str] = {"result": result}
+        if flow_id is not None:
+            fragment["flow"] = str(flow_id)
+        return _sales_xray_app_return_page(
+            fragment,
+            settings,
+            transaction_cookie_names=transaction_cookie_names,
+        )
     parameters: dict[str, str] = {"auth_result": result}
     if flow_id is not None:
         parameters = {"flow": str(flow_id), **parameters}
@@ -1584,6 +1635,9 @@ def install_identity_http(
     identity_provider = provider or DisabledIdentityProvider()
     codec = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value())
     completion_receipt_codec = SalesXrayCompletionReceiptCodec(
+        settings.oauth_transaction_secret.get_secret_value()
+    )
+    app_handoff_codec = SalesXrayAppHandoffCodec(
         settings.oauth_transaction_secret.get_secret_value()
     )
     token_pepper = settings.session_token_pepper.get_secret_value()
@@ -2496,9 +2550,14 @@ def install_identity_http(
         client_consent_version: Annotated[
             str | None, Query(alias="consent_version", min_length=1, max_length=64)
         ] = None,
+        app_challenge: Annotated[
+            str | None, Query(min_length=43, max_length=43, pattern=r"^[A-Za-z0-9_-]{43}$")
+        ] = None,
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
+        if app_challenge is not None and surface != "sales_xray":
+            raise InvalidAuthTransaction("Only the Sales Xray app can take a sign-in back.")
         if age_attested and (surface != "sales_xray" or not consent):
             raise LearnerConsentRequired(
                 "The current learner acknowledgement must be accepted before continuing."
@@ -2579,6 +2638,7 @@ def install_identity_http(
             return_path=safe_return_path,
             consent_version=consent_version,
             age_attested=(surface == "sales_xray" and age_attested),
+            app_challenge=app_challenge,
         )
         redirect_uri = _surface_callback_uri(settings, surface)
         authorization_url = identity_provider.authorization_url(
@@ -2704,6 +2764,7 @@ def install_identity_http(
                 error,
                 transaction_cookie_names=transaction_cookie_names,
             )
+        app_handoff = transaction.app_challenge is not None
         if provider_error is not None:
             if transaction.surface == "learner":
                 return _learner_oauth_recovery_response(
@@ -2718,6 +2779,7 @@ def install_identity_http(
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -2732,6 +2794,7 @@ def install_identity_http(
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return _invalid_oauth_callback_response(
                 request,
@@ -2748,6 +2811,7 @@ def install_identity_http(
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -2774,6 +2838,7 @@ def install_identity_http(
                         result="review_terms",
                         transaction_cookie_names=transaction_cookie_names,
                         flow_id=completion_flow_id,
+                        app_handoff=app_handoff,
                     )
                 return _oauth_terminal_problem_response(
                     request,
@@ -2794,6 +2859,7 @@ def install_identity_http(
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -2823,6 +2889,7 @@ def install_identity_http(
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -2844,6 +2911,7 @@ def install_identity_http(
                     result="unavailable",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -3013,6 +3081,7 @@ def install_identity_http(
                     result=result,
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             if transaction.surface != "learner":
                 return _oauth_terminal_problem_response(
@@ -3048,6 +3117,7 @@ def install_identity_http(
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             if (
                 transaction.surface == "learner"
@@ -3082,6 +3152,7 @@ def install_identity_http(
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return await _oauth_identity_problem_response(
                 request,
@@ -3096,6 +3167,7 @@ def install_identity_http(
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return await _oauth_identity_problem_response(
                 request,
@@ -3110,6 +3182,7 @@ def install_identity_http(
                     result="unavailable",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return _oauth_callback_unavailable_response(
                 request,
@@ -3121,6 +3194,28 @@ def install_identity_http(
             and issued_session_id is not None
             and session_token is not None
         )
+        if sales_xray_success and transaction.app_challenge is not None:
+            assert completion_flow_id is not None
+            assert issued_session_id is not None
+            assert session_token is not None
+            # No browser ever holds this session: the app redeems it once.
+            handoff_page = _sales_xray_app_return_page(
+                {
+                    "code": app_handoff_codec.encode(
+                        session_token=session_token,
+                        session_id=issued_session_id,
+                        flow_id=completion_flow_id,
+                        app_challenge=transaction.app_challenge,
+                    )
+                },
+                settings,
+                transaction_cookie_names=transaction_cookie_names,
+            )
+            if photo_refresh is not None:
+                handoff_page.background = BackgroundTask(
+                    _refresh_google_profile_photo, *photo_refresh
+                )
+            return handoff_page
         if transaction.surface == "sales_xray" and not sales_xray_success:
             # A successful identity operation without a session/flow binding
             # must never be accepted by the browser as completed sign-in.
@@ -3129,6 +3224,7 @@ def install_identity_http(
                 result="unavailable",
                 transaction_cookie_names=transaction_cookie_names,
                 flow_id=completion_flow_id,
+                app_handoff=app_handoff,
             )
         elif transaction.surface == "sales_xray":
             response = _sales_xray_auth_result_response(
@@ -3136,6 +3232,7 @@ def install_identity_http(
                 result="success",
                 transaction_cookie_names=transaction_cookie_names,
                 flow_id=completion_flow_id,
+                app_handoff=app_handoff,
             )
         else:
             base_url = _surface_origin(settings, transaction.surface)
@@ -3167,6 +3264,84 @@ def install_identity_http(
             response.background = BackgroundTask(_refresh_google_profile_photo, *photo_refresh)
         response.headers["cache-control"] = "no-store"
         response.headers["pragma"] = "no-cache"
+        return response
+
+    @router.post("/auth/google/app-exchange", name="google_auth_app_exchange")
+    async def google_auth_app_exchange(request: Request) -> Response:
+        """Redeem a Custom Tab Google sign-in inside the Sales Xray app's web view.
+
+        The app posts its one-time code and verifier as a top-level navigation.
+        The session sealed in the code is revoked and a fresh one is set on the web
+        view, with the normal completion receipt, so a code works only once.
+        """
+
+        _require_surface_host(request, settings, "sales_xray")
+        flow_id: UUID | None = None
+
+        def outcome(result: Literal["failed", "unavailable"]) -> Response:
+            return _sales_xray_auth_result_response(
+                settings,
+                result=result,
+                transaction_cookie_names=(),
+                flow_id=flow_id,
+            )
+
+        user_agent = request.headers.get("user-agent") or ""
+        # Only the app's own navigation: never a cross-site form in a browser.
+        if (
+            request.headers.get("sec-fetch-site") not in {None, "none", "same-origin"}
+            or SALES_XRAY_APP_USER_AGENT.search(user_agent) is None
+        ):
+            return outcome("failed")
+        raw = await request.body()
+        if len(raw) > _SALES_XRAY_APP_EXCHANGE_MAX_BYTES:
+            return outcome("failed")
+        try:
+            fields = parse_qs(raw.decode("ascii"), strict_parsing=True, max_num_fields=2)
+        except (UnicodeDecodeError, ValueError):
+            return outcome("failed")
+        if set(fields) != {"code", "verifier"} or any(len(value) != 1 for value in fields.values()):
+            return outcome("failed")
+        try:
+            handoff = app_handoff_codec.decode(fields["code"][0])
+        except InvalidAuthTransaction:
+            return outcome("failed")
+        flow_id = handoff.flow_id
+        if not sales_xray_app_verifier_matches(handoff.app_challenge, fields["verifier"][0]):
+            return outcome("failed")
+        try:
+            async with sessions() as database, database.begin():
+                identity = _identity(database)
+                resolved = await identity.resolve_actor(handoff.session_token)
+                if resolved.actor.session_id != handoff.session_id:
+                    return outcome("failed")
+                await identity.revoke_self(
+                    handoff.session_token,
+                    handoff.session_id,
+                    reason="Handed to the Sales Xray app",
+                )
+                issued = await identity.issue_authenticated_session(
+                    resolved.actor.person_id,
+                    user_agent=user_agent,
+                    ip_address=request.client.host if request.client else None,
+                )
+                if resolved.actor.tenant_id is not None:
+                    await identity.select_tenant(issued.token, resolved.actor.tenant_id)
+        except IdentityServiceError:
+            return outcome("failed")
+        except (SQLAlchemyError, OSError, TimeoutError):
+            return outcome("unavailable")
+        response = _sales_xray_auth_result_response(
+            settings,
+            result="success",
+            transaction_cookie_names=(),
+            flow_id=flow_id,
+        )
+        _set_session_cookie(response, issued.token, settings)
+        _set_sales_xray_completion_cookie(
+            response,
+            completion_receipt_codec.encode(flow_id=flow_id, session_id=issued.metadata.id),
+        )
         return response
 
     @router.post(

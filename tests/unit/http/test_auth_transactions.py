@@ -11,12 +11,15 @@ import pytest
 
 from ac_platform.http.auth_transactions import (
     AUTH_TRANSACTION_MAX_AGE_SECONDS,
+    SALES_XRAY_APP_HANDOFF_TTL_SECONDS,
     SALES_XRAY_COMPLETION_RECEIPT_TTL_SECONDS,
     AuthTransaction,
     AuthTransactionCodec,
     InvalidAuthTransaction,
+    SalesXrayAppHandoffCodec,
     SalesXrayCompletionReceiptCodec,
     normalize_return_path,
+    sales_xray_app_verifier_matches,
     sales_xray_completion_flow_id,
 )
 from ac_platform.identity.services import ProviderAuthorizationType
@@ -266,3 +269,115 @@ def test_sales_xray_completion_flow_accepts_only_a_canonical_uuid(return_path: s
 )
 def test_sales_xray_completion_flow_rejects_missing_or_ambiguous_flow(return_path: str) -> None:
     assert sales_xray_completion_flow_id(return_path) is None
+
+
+APP_VERIFIER = "app-verifier-held-only-by-the-sales-xray-app-0123456789"
+APP_CHALLENGE = (
+    base64.urlsafe_b64encode(hashlib.sha256(APP_VERIFIER.encode("ascii")).digest())
+    .rstrip(b"=")
+    .decode("ascii")
+)
+FLOW_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+SESSION_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+SESSION_TOKEN = "s" * 43  # noqa: S105
+
+
+def _app_transaction() -> AuthTransaction:
+    return AuthTransaction.issue(
+        ProviderAuthorizationType.AUTHENTICATE,
+        surface="sales_xray",
+        return_path=f"/auth/complete?flow={FLOW_ID}",
+        app_challenge=APP_CHALLENGE,
+        now=NOW,
+    )
+
+
+def _payload_fields(encoded: str) -> set[str]:
+    payload = encoded.split(".")[0]
+    return set(json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))))
+
+
+def test_app_challenge_round_trips_and_ordinary_transactions_keep_their_shape() -> None:
+    codec = AuthTransactionCodec(KEY)
+    app_encoded = codec.encode(_app_transaction())
+    ordinary_encoded = codec.encode(_transaction())
+
+    assert codec.decode(app_encoded, now=NOW).app_challenge == APP_CHALLENGE
+    assert codec.decode(ordinary_encoded, now=NOW).app_challenge is None
+    assert "app_challenge" in _payload_fields(app_encoded)
+    assert "app_challenge" not in _payload_fields(ordinary_encoded)
+
+
+@pytest.mark.parametrize(
+    ("surface", "challenge"),
+    [
+        ("learner", APP_CHALLENGE),
+        ("sales_xray", APP_CHALLENGE[:-1]),
+        ("sales_xray", APP_CHALLENGE[:-1] + "="),
+    ],
+)
+def test_app_challenge_is_only_for_a_well_formed_sales_xray_sign_in(
+    surface: str, challenge: str
+) -> None:
+    with pytest.raises(InvalidAuthTransaction):
+        AuthTransaction.issue(
+            ProviderAuthorizationType.AUTHENTICATE,
+            surface=surface,
+            return_path="/auth/complete",
+            app_challenge=challenge,
+            now=NOW,
+        )
+
+
+def test_app_handoff_round_trips_sealed_session_flow_and_challenge() -> None:
+    codec = SalesXrayAppHandoffCodec(KEY)
+
+    encoded = codec.encode(
+        session_token=SESSION_TOKEN,
+        session_id=SESSION_ID,
+        flow_id=FLOW_ID,
+        app_challenge=APP_CHALLENGE,
+        now=NOW,
+    )
+    handoff = codec.decode(encoded, now=NOW + 1)
+
+    assert handoff.session_token == SESSION_TOKEN
+    assert handoff.session_id == SESSION_ID
+    assert handoff.flow_id == FLOW_ID
+    assert handoff.app_challenge == APP_CHALLENGE
+    assert handoff.expires_at == NOW + SALES_XRAY_APP_HANDOFF_TTL_SECONDS
+    # Sealed, not just signed: the session never shows in the code itself.
+    raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+    assert SESSION_TOKEN.encode() not in raw
+    assert str(SESSION_ID).encode() not in raw
+    assert len(encoded) <= 1024
+
+
+def test_app_handoff_rejects_tampering_expiry_wrong_key_and_oversize() -> None:
+    codec = SalesXrayAppHandoffCodec(KEY)
+    encoded = codec.encode(
+        session_token=SESSION_TOKEN,
+        session_id=SESSION_ID,
+        flow_id=FLOW_ID,
+        app_challenge=APP_CHALLENGE,
+        now=NOW,
+    )
+    flipped = encoded[:-2] + ("A" if encoded[-2] != "A" else "B") + encoded[-1]
+
+    with pytest.raises(InvalidAuthTransaction, match="invalid"):
+        codec.decode(flipped, now=NOW)
+    with pytest.raises(InvalidAuthTransaction, match="expired"):
+        codec.decode(encoded, now=NOW + SALES_XRAY_APP_HANDOFF_TTL_SECONDS)
+    with pytest.raises(InvalidAuthTransaction, match="invalid"):
+        SalesXrayAppHandoffCodec(SECRET).decode(encoded, now=NOW)
+    with pytest.raises(InvalidAuthTransaction, match="malformed"):
+        codec.decode("A" * 1025, now=NOW)
+    with pytest.raises(InvalidAuthTransaction):
+        codec.decode("not base64!", now=NOW)
+
+
+def test_app_verifier_must_hash_to_the_challenge_the_app_started_with() -> None:
+    assert sales_xray_app_verifier_matches(APP_CHALLENGE, APP_VERIFIER)
+    assert not sales_xray_app_verifier_matches(APP_CHALLENGE, APP_VERIFIER + "x")
+    assert not sales_xray_app_verifier_matches(APP_CHALLENGE, "short")
+    assert not sales_xray_app_verifier_matches(APP_CHALLENGE, APP_VERIFIER + " ")
