@@ -1041,9 +1041,7 @@ class LeadDesk:
             raise DeskError(403, "Only the lead's owner or a manager can change it.")
         if lead.revision != command.expected_revision:
             raise DeskError(409, "This lead changed. Check it and try again.")
-        updates = command.model_dump(
-            exclude={"command_id", "expected_revision"}, exclude_none=True
-        )
+        updates = command.model_dump(exclude={"command_id", "expected_revision"}, exclude_none=True)
         if "name" in updates and not updates["name"].strip():
             raise DeskError(422, "A lead needs a name.")
         if "phone" in updates:

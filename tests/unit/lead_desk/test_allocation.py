@@ -37,7 +37,9 @@ def test_ties_go_to_whoever_waited_longest() -> None:
 def test_language_area_and_product_rules_filter_first() -> None:
     hindi = rep("Asha", 9, languages=("Hindi", "English"), areas=("Pune",), interests=("Solar",))
     tamil = rep("Kumar", 0, languages=("ta",), areas=("Chennai",))
-    decision = allocate(LeadFacts(language="Hindi", city="Pune", interest="solar rooftop"), [hindi, tamil])
+    decision = allocate(
+        LeadFacts(language="Hindi", city="Pune", interest="solar rooftop"), [hindi, tamil]
+    )
     assert decision.person_id == hindi.person_id
     assert decision.reason.startswith("Speaks Hindi, covers Pune, sells solar rooftop")
 

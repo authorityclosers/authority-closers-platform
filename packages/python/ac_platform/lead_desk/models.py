@@ -55,9 +55,7 @@ class Lead(Base):
         CheckConstraint(
             "(owner_person_id IS NULL) = (assigned_at IS NULL)", name="lead_desk_lead_assignment"
         ),
-        Index(
-            "ix_lead_desk_lead_owner", "tenant_id", "owner_person_id", "stage", "next_action_at"
-        ),
+        Index("ix_lead_desk_lead_owner", "tenant_id", "owner_person_id", "stage", "next_action_at"),
         Index("ix_lead_desk_lead_recent", "tenant_id", "created_at"),
         Index(
             "uq_lead_desk_lead_phone",
@@ -100,9 +98,7 @@ class Lead(Base):
     first_contact_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    last_contact_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_contact_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     attempts: Mapped[int] = mapped_column(Integer)
     calls: Mapped[int] = mapped_column(Integer)
     repeats: Mapped[int] = mapped_column(Integer)

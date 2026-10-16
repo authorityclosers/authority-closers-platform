@@ -243,9 +243,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         samples = simulation.catalogue(settings.lead_desk_simulation_root)
         if not samples:
-            raise HTTPException(
-                503, "Simulated calls aren't set up here yet.", headers=PRIVATE
-            )
+            raise HTTPException(503, "Simulated calls aren't set up here yet.", headers=PRIVATE)
         async with desk_for(request, response, write=True) as lead_desk:
             lead, business, owner_name = await lead_desk.simulation_target(lead_id)
             sample = simulation.pick(
@@ -310,9 +308,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
             return await lead_desk.save_rep(person_id, command)
 
     @router.put("/settings", response_model=Team, response_model_by_alias=True)
-    async def save_settings(
-        command: SettingsCommand, request: Request, response: Response
-    ) -> Team:
+    async def save_settings(command: SettingsCommand, request: Request, response: Response) -> Team:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.save_settings(command)

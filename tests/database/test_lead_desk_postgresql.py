@@ -225,7 +225,14 @@ def test_a_sellers_day_on_the_desk(postgres_harness: Any, tmp_path: Path) -> Non
                             .order_by(LeadEvent.created_at)
                         )
                     ).all()
-                assert history == ["captured", "assigned", "repeat", "result", "result", "reassigned"]
+                assert history == [
+                    "captured",
+                    "assigned",
+                    "repeat",
+                    "result",
+                    "result",
+                    "reassigned",
+                ]
         finally:
             await setup.engine.dispose()
 
@@ -267,7 +274,9 @@ def test_website_form_and_file_capture(postgres_harness: Any, tmp_path: Path) ->
                 assert form.json()["outcome"] == "created"
 
                 client.cookies.set(setup.settings.session_cookie_name, setup.token)
-                csv = b"Customer,Mobile No,City\nAsha,98000 00003,Pune\nRavi again,9800000001,\n,,\n"
+                csv = (
+                    b"Customer,Mobile No,City\nAsha,98000 00003,Pune\nRavi again,9800000001,\n,,\n"
+                )
                 preview = await client.post(
                     f"{BASE}/imports/preview",
                     content=csv,
@@ -341,7 +350,12 @@ def test_edit_details_and_notes_keep_history(postgres_harness: Any, tmp_path: Pa
                 async def add(name: str, phone: str) -> dict[str, Any]:
                     made = await client.post(
                         f"{BASE}/leads",
-                        json={"command_id": str(uuid4()), "name": name, "phone": phone, "assign": "me"},
+                        json={
+                            "command_id": str(uuid4()),
+                            "name": name,
+                            "phone": phone,
+                            "assign": "me",
+                        },
                         headers=WRITE,
                     )
                     assert made.status_code == 201, made.text
@@ -352,7 +366,11 @@ def test_edit_details_and_notes_keep_history(postgres_harness: Any, tmp_path: Pa
                 lead_id, revision = first["lead"]["lead_id"], first["lead"]["revision"]
                 clash = await client.patch(
                     f"{BASE}/leads/{lead_id}",
-                    json={"command_id": str(uuid4()), "expected_revision": revision, "phone": "98000 00012"},
+                    json={
+                        "command_id": str(uuid4()),
+                        "expected_revision": revision,
+                        "phone": "98000 00012",
+                    },
                     headers=WRITE,
                 )
                 assert clash.status_code == 409 and "Ravi" in clash.json()["detail"]

@@ -80,7 +80,9 @@ class Intake:
         if not data:
             raise DeskError(422, "The file is empty.")
         if len(data) > MAX_FILE_BYTES:
-            raise DeskError(413, "Files can be up to 900 KB (about 5,000 leads). Split bigger files.")
+            raise DeskError(
+                413, "Files can be up to 900 KB (about 5,000 leads). Split bigger files."
+            )
         try:
             sheet = read_file(file_name, data)
         except CaptureError as error:
@@ -399,9 +401,7 @@ class Intake:
                 .limit(command.count + len(taken))
             )
         ).all()
-        fresh = [record for record in records if record.synthetic_key not in taken][
-            : command.count
-        ]
+        fresh = [record for record in records if record.synthetic_key not in taken][: command.count]
         related = await self._related(fresh)
         reps = await self.desk._reps()
         outcomes: list[str] = []

@@ -114,7 +114,9 @@ def allocate(lead: LeadFacts, reps: Sequence[RepState]) -> Allocation:
     ]
     if not candidates:
         if not any(rep.available for rep in reps if rep.person_id not in lead.exclude):
-            return Allocation(None, "Nobody is available right now; it waits for a manager.", "none")
+            return Allocation(
+                None, "Nobody is available right now; it waits for a manager.", "none"
+            )
         return Allocation(
             None, "Everyone available is at their open-lead limit; it waits for a manager.", "none"
         )

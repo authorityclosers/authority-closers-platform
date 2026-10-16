@@ -322,11 +322,7 @@ def _rows_to_sheet(raw_rows: Iterable[list[str]]) -> Sheet:
             truncated = True
             break
         rows.append(
-            {
-                unique[i]: cell.strip()
-                for i, cell in enumerate(row[: len(unique)])
-                if cell.strip()
-            }
+            {unique[i]: cell.strip() for i, cell in enumerate(row[: len(unique)]) if cell.strip()}
         )
     if not rows:
         raise CaptureError("The file has a header row but no leads under it.")
