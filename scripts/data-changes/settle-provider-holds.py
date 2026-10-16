@@ -11,6 +11,7 @@ import asyncio
 import json
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -20,7 +21,8 @@ from ac_platform.conversation_intelligence.provider_hold_settlement import settl
 
 
 async def execute(
-    settings: Settings,
+    environment: str,
+    database_url: str,
     *,
     apply: bool,
     approver: str,
@@ -29,11 +31,11 @@ async def execute(
 ) -> dict[str, Any]:
     if (
         apply
-        and settings.environment == "production"
+        and environment == "production"
         and (snapshot_sha256 is None or re.fullmatch(r"[a-f0-9]{64}", snapshot_sha256) is None)
     ):
         raise ValueError("production_snapshot_required")
-    engine = create_async_engine(settings.database_url, echo=False, hide_parameters=True)
+    engine = create_async_engine(database_url, echo=False, hide_parameters=True)
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db, db.begin():
             result = await settle_provider_holds(
@@ -41,7 +43,7 @@ async def execute(
             )
             return {
                 **result,
-                "environment": settings.environment,
+                "environment": environment,
                 "production_snapshot_sha256": snapshot_sha256,
             }
     finally:
@@ -54,12 +56,23 @@ def main() -> None:
     parser.add_argument("--issue", required=True, help="tracking reference")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--production-snapshot-sha256")
+    # Inside a release container the worker's URL file replaces runtime injection.
+    parser.add_argument("--database-url-file", type=Path)
+    parser.add_argument("--environment", choices=("development", "staging", "production"))
     args = parser.parse_args()
+    if (args.database_url_file is None) != (args.environment is None):
+        parser.error("--database-url-file and --environment go together")
     try:
-        # Runtime injection only (AC_ENVIRONMENT, AC_DATABASE_URL); no provider access.
+        if args.database_url_file is not None:
+            environment, url = args.environment, args.database_url_file.read_text().strip()
+        else:
+            # Runtime injection (AC_ENVIRONMENT, AC_DATABASE_URL); no provider access.
+            settings = Settings()
+            environment, url = settings.environment, settings.database_url
         result = asyncio.run(
             execute(
-                Settings(),
+                environment,
+                url,
                 apply=args.apply,
                 approver=args.approver[:200],
                 issue=args.issue[:100],

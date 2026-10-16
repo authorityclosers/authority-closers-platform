@@ -19,8 +19,11 @@ The owner said "fix this" (17 Oct, laptop cost session): settle the holds at lis
 - **Dry run by default:** it reads without row locks, writes nothing and prints the before/after for every scope.
 
 ## Run
-1. Dry run through the environment's injected application runtime (`AC_ENVIRONMENT`, `AC_DATABASE_URL`):
-   `uv run python scripts/data-changes/settle-provider-holds.py --approver "<who, where>" --issue "<ref>"`
+1. **Dry run.** Two ways to run it:
+   - **Staging or production**, after a release has shipped `provider_hold_settlement`. Pipe the script into the worker container, which reads the worker's own URL file:
+     `sudo docker exec -i ac-application-<env>-sales-xray-worker-1 python - --database-url-file /run/ac-sales-xray/database-url --environment <env> --approver "<who, where>" --issue "<ref>" < scripts/data-changes/settle-provider-holds.py`
+   - **Dev**, through the injected runtime (`AC_ENVIRONMENT`, `AC_DATABASE_URL`):
+     `uv run python scripts/data-changes/settle-provider-holds.py --approver "<who, where>" --issue "<ref>"`
 2. Show the owner the dry run.
 3. **Production only:** take a snapshot first (`/usr/local/sbin/ac-db-snapshot production`). Pass its SHA-256 as `--production-snapshot-sha256` together with `--apply`.
 4. Read back by running the dry run again. It must plan 0 settlements and show the new committed totals.
