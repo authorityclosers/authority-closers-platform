@@ -1979,3 +1979,28 @@ Screens/receipts: `/home/acdev/strikes/1694/shots/2026-10-16-report-api/`.
 Only affected readability/supplied-reason checks should resume after the
 builder's committed return and normal interval. Owner-side real-call handoff
 `07ace258` and the existing reader-unit request remain unchanged.
+
+### Report readability and supplied-reason repair — 2026-10-16 06:19 UTC
+
+Existing runner `3f3854a1`, `WB_REPORT_API_REPAIR_ONLY=1`, product
+`b6947a25747e7613e6671aff67f41880bfa051c8` at workbench `878a49dc`:
+**4/4 PASS**, 43.56s, launcher exit0. Shared3026 `?example=api` at1440/390,
+light/dark. Only the requested repair criteria ran; completed projection
+checks and original failed images remain retained.
+
+Outcome origin meets12px. All five stage names measure14px and states12.5px;
+no stage-label collisions. Phone stages form a readable vertical list in
+both themes. Pointer2 Purpose & Agenda Setting retains Not observed/No score;
+native Enter opens the exact supplied fictional reason. Pointer targets
+982x53.6875 desktop /356x123.6875 phone, centres reachable.
+
+All16 screenshots inspected: closed row, expanded reason, outcome origin and
+stage spacing at each viewport/theme. No remaining defect in this scope.
+Runtime/server errors, undersized/clipped text, overflow, live refreshes,
+media requests and API mutations0; eight intercepted fictional GETs per pair.
+Source-before/after hashes match for the runner, helper, CSS and fictional
+inputs. No product code changed. Saved-call acceptance remains owner-side;
+this pass establishes fictional rendering only.
+
+Log, four receipts, source pins and screenshots:
+`/home/acdev/strikes/1694/shots/2026-10-16-report-api-repair/`.
