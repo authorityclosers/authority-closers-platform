@@ -17,6 +17,7 @@ from urllib.parse import parse_qsl
 from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from starlette.requests import ClientDisconnect
@@ -30,6 +31,7 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk.contracts import (
+    CallRecord,
     Desk,
     Disposition,
     ImportCommand,
@@ -43,10 +45,12 @@ from ac_platform.lead_desk.contracts import (
     RepRules,
     SeedCommand,
     SettingsCommand,
+    SimulationPick,
     Sources,
     SourceView,
     Team,
 )
+from ac_platform.lead_desk import simulation
 from ac_platform.lead_desk.intake import MAX_FILE_BYTES, Intake
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.lead_desk.vocabulary import STAGES
@@ -213,6 +217,65 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.reassign(lead_id, command)
+
+    @router.post("/leads/{lead_id}/simulation", response_model=SimulationPick)
+    async def simulation_pick(
+        lead_id: UUID, request: Request, response: Response
+    ) -> SimulationPick:
+        no_query(request)
+        samples = simulation.catalogue(settings.lead_desk_simulation_root)
+        if not samples:
+            raise HTTPException(
+                503, "Simulated calls aren't set up here yet.", headers=PRIVATE
+            )
+        async with desk_for(request, response, write=True) as lead_desk:
+            lead, business, owner_name = await lead_desk.simulation_target(lead_id)
+            sample = simulation.pick(
+                samples,
+                language=lead.language,
+                business=business,
+                seed=f"{lead.id}:{lead.calls}",
+            )
+            if sample is None or lead.owner_person_id is None:
+                raise HTTPException(503, "No test recording fits this lead.", headers=PRIVATE)
+            return SimulationPick(
+                sample_id=sample.sample_id,
+                duration_seconds=round(sample.duration_ms / 1000),
+                language_mix=sample.language_mix,
+                business_name=sample.business_name,
+                owner_person_id=lead.owner_person_id,
+                owner_name=owner_name,
+            )
+
+    @router.get("/simulation/{sample_id}/audio")
+    async def simulation_audio(sample_id: str, request: Request, response: Response) -> Any:
+        no_query(request)
+        path = simulation.audio_path(settings.lead_desk_simulation_root, sample_id)
+        if path is None:
+            raise HTTPException(404, "That test recording isn't here.", headers=PRIVATE)
+        async with desk_for(request, response):
+            pass  # Any signed-in desk may fetch the fictional recordings.
+        return FileResponse(
+            path,
+            media_type="audio/mpeg",
+            filename=f"{sample_id}.mp3",
+            headers=PRIVATE,
+        )
+
+    @router.post("/leads/{lead_id}/calls", response_model=LeadDetail, response_model_by_alias=True)
+    async def record_call(
+        lead_id: UUID, command: CallRecord, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.record_call(
+                lead_id,
+                command_id=command.command_id,
+                submission_id=command.submission_id,
+                simulated=command.simulated,
+                duration_seconds=command.duration_seconds,
+                sample=command.sample,
+            )
 
     @router.get("/team", response_model=Team, response_model_by_alias=True)
     async def team(request: Request, response: Response) -> Team:

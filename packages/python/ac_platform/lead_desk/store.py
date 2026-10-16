@@ -1043,6 +1043,20 @@ class LeadDesk:
         await self.db.flush()
         return await self.detail(lead.id)
 
+    async def simulation_target(self, lead_id: UUID) -> tuple[Lead, str | None, str]:
+        """The lead, its test-data business (if any) and its owner's name, for a simulated call."""
+        lead = await self._lead(lead_id)
+        if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
+            raise DeskError(403, "Only the lead's owner or a manager can call this lead.")
+        if lead.owner_person_id is None:
+            raise DeskError(409, "Give this lead an owner first: the call becomes theirs.")
+        business = lead.payload.get("business") if isinstance(lead.payload, dict) else None
+        return (
+            lead,
+            business if isinstance(business, str) else None,
+            await self._name(lead.owner_person_id),
+        )
+
     async def record_call(
         self,
         lead_id: UUID,

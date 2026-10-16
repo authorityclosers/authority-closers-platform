@@ -300,6 +300,27 @@ class NewSource(Command):
     sheet_url: str | None = Field(default=None, max_length=500)
 
 
+class SimulationPick(Model):
+    """The test recording a simulated call will use, and whose call it becomes."""
+
+    sample_id: str
+    duration_seconds: int
+    language_mix: str
+    business_name: str
+    owner_person_id: UUID
+    owner_name: str
+
+
+class CallRecord(Command):
+    """A call made from the desk. Only simulated calls exist until real calling passes its gates."""
+
+    command_id: UUID
+    submission_id: UUID
+    simulated: Literal[True]
+    duration_seconds: int = Field(ge=0, le=7200)
+    sample: str = Field(min_length=1, max_length=160, pattern=r"^syn-[A-Za-z0-9._-]+$")
+
+
 class SeedCommand(Command):
     command_id: UUID
     count: int = Field(ge=1, le=200)
