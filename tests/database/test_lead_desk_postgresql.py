@@ -420,6 +420,18 @@ def test_edit_details_and_notes_keep_history(postgres_harness: Any, tmp_path: Pa
                 assert call["kind"] == "call" and call["simulated"] is False
                 assert call["duration_seconds"] == 95
                 assert called.json()["lead"]["revision"] > noted.json()["lead"]["revision"]
+                # Its recording, uploaded afterwards, joins the lead without a second call.
+                recording = str(uuid4())
+                attached = await client.post(
+                    f"{BASE}/leads/{lead_id}/recordings",
+                    json={"command_id": str(uuid4()), "submission_id": recording},
+                    headers=WRITE,
+                )
+                assert attached.status_code == 200, attached.text
+                event = attached.json()["events"][0]
+                assert event["kind"] == "call" and event["recording"] is True
+                assert event["submission_id"] == recording
+                assert attached.json()["lead"]["calls"] == called.json()["lead"]["calls"]
         finally:
             await setup.engine.dispose()
 

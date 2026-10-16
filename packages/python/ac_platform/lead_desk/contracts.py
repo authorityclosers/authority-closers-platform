@@ -117,6 +117,7 @@ class LeadEventView(Model):
     source_label: str | None = None
     submission_id: UUID | None = None
     simulated: bool | None = None
+    recording: bool | None = None
     duration_seconds: int | None = None
     changed: tuple[str, ...] | None = None
 
@@ -353,6 +354,13 @@ class PhoneCall(Command):
 
     command_id: UUID
     duration_seconds: int | None = Field(default=None, ge=0, le=7200)
+
+
+class RecordingCommand(Command):
+    """The recording of a call on this lead, uploaded as a Sales Xray call (its own consent)."""
+
+    command_id: UUID
+    submission_id: UUID
 
 
 class SeedCommand(Command):

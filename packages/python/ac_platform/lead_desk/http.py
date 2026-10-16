@@ -46,6 +46,7 @@ from ac_platform.lead_desk.contracts import (
     NoteCommand,
     PhoneCall,
     Reassign,
+    RecordingCommand,
     RepRules,
     SeedCommand,
     SettingsCommand,
@@ -309,6 +310,18 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 submission_id=None,
                 simulated=False,
                 duration_seconds=command.duration_seconds,
+            )
+
+    @router.post(
+        "/leads/{lead_id}/recordings", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def attach_recording(
+        lead_id: UUID, command: RecordingCommand, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.attach_recording(
+                lead_id, command_id=command.command_id, submission_id=command.submission_id
             )
 
     @router.get("/team", response_model=Team, response_model_by_alias=True)
