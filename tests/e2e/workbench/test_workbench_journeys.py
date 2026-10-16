@@ -16,7 +16,7 @@ from html import unescape
 from http.cookiejar import HTTPONLY_ATTR, LoadError, MozillaCookieJar
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 from zipfile import ZipFile
 
 import pytest
@@ -143,10 +143,29 @@ def _document_download(page: Page) -> Locator:
 
 
 def _switch_report_view(page: Page, label: str) -> None:
-    action = page.get_by_role("button", name=label, exact=True)
-    if not action.count():
-        page.locator('summary[aria-label="More views"]').click()
-    action.click()
+    if label in {"Document view", "Details view"}:
+        parts = urlsplit(page.url)
+        query = [
+            (key, value)
+            for key, value in parse_qsl(parts.query, keep_blank_values=True)
+            if key != "view"
+        ]
+        # A fictional route has no call id in its pathname. Reuse its own
+        # section link's binding; real call URLs already identify their call.
+        if parts.path.startswith("/review-fixture/") and not any(key == "call" for key, _ in query):
+            link = page.locator('[data-report-sections] a[href*="call="]').first
+            binding = parse_qs(urlsplit(link.get_attribute("href") or "").query)
+            assert len(binding.get("call", [])) == 1, "Missing fixture call link"
+            query.append(("call", binding["call"][0]))
+        view = "document" if label == "Document view" else "tabs"
+        response = page.goto(
+            urlunsplit(parts._replace(query=urlencode([*query, ("view", view)]))),
+            wait_until="domcontentloaded",
+        )
+        assert response is not None and response.status < 400, "Explicit report link failed"
+        expect(page.locator("[data-report-modes]")).to_have_attribute("data-view", view)
+        return
+    page.get_by_role("button", name=label, exact=True).click()
 
 
 def _cookie_jar_path() -> Path | None:
@@ -6314,6 +6333,90 @@ def test_fixture_coaching_feedback_save(
             "command_identity": "builder unit coverage only",
             "authenticated_or_canonical_feedback_acceptance": False,
         }
+
+
+def test_fixture_report_explicit_views(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Linked Document/Details still open, and Report returns to the new structure."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Explicit-view navigation uses the existing fictional Report")
+    with _journey(browser, viewport, "report-explicit-views") as journey:
+        page = journey.page
+        reads: list[str] = []
+        mutations: list[str] = []
+        media: list[str] = []
+        replies: dict[tuple[str, str, str], dict[str, object]] = {}
+        journey.observations.append(
+            {
+                "step": "fictional-network-guard",
+                "reads": reads,
+                "mutations": mutations,
+                "media": media,
+            }
+        )
+
+        def read_only(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif request.resource_type == "media" or re.search(
+                r"\.(?:mp3|mp4|m4a|wav|ogg|webm|aac)$", url.path, re.I
+            ):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            elif url.path.startswith("/v1/"):
+                reads.append(url.path)
+                key = (request.method, url.path, url.query)
+                if key not in replies:
+                    replies[key] = _fictional_api_reply(*key)
+                reply = replies[key]
+                route.fulfill(
+                    status=reply["status"],
+                    content_type="application/json",
+                    body=json.dumps(reply["body"]),
+                )
+            else:
+                route.continue_()
+
+        page.route("**/*", read_only)
+        journey.open("/review-fixture/report/story?example=api")
+        mode = page.locator("[data-report-modes]")
+        expect(mode).to_have_attribute("data-view", "story")
+        # Fixture call binding comes from its own section link, without an
+        # assumed fixture id or interaction with its retained demo menu.
+        _switch_report_view(page, "Document view")
+        expect(_document_preview(page).locator("section[data-document-section]")).to_have_count(6)
+        expect(_document_download(page)).to_be_visible()
+        page.evaluate("() => document.fonts.ready")
+        journey.snapshot("document-link")
+        journey.document_controls()
+        linked_query = parse_qs(urlsplit(page.url).query, keep_blank_values=True)
+        assert linked_query["example"] == ["api"]
+        assert len(linked_query["call"]) == 1
+
+        _switch_report_view(page, "Details view")
+        expect(page.locator('[data-report-sections][role="tablist"]')).to_be_visible()
+        expect(page.get_by_role("tab", name="Overview", exact=True)).to_be_visible()
+        page.evaluate("() => document.fonts.ready")
+        journey.snapshot("details-link")
+
+        report = page.get_by_role("button", name="Report view", exact=True)
+        journey.control_target(report, "return-report")
+        report.focus()
+        page.keyboard.press("Enter")
+        expect(mode).to_have_attribute("data-view", "story")
+        expect(page.locator("[data-xray-part]")).to_have_count(3)
+        expect(page.locator('[data-xray-part="analysis"] li[data-pointer]')).to_have_count(27)
+        page.evaluate("() => document.fonts.ready")
+        journey.snapshot("report-return")
+        current_query = parse_qs(urlsplit(page.url).query, keep_blank_values=True)
+        for key, values in linked_query.items():
+            if key != "view":
+                assert current_query[key] == values, "View navigation lost its source query"
+        assert current_query["view"] == ["story"]
+        assert not mutations and not media, "Read-only navigation requested writes or media"
+        assert journey.live_refreshes == 0, "Live source changed during the focused wave"
 
 
 def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, str]) -> None:
