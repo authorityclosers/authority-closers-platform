@@ -6,7 +6,9 @@ form"; Google's ``google_key`` is that source's key, so no session is needed and
 the source key stays the only authority, exactly as for website forms.
 
 Meta Lead Ads live under ``/meta``: a manager connects with Meta, picks Pages and
-forms, and Meta's signed webhook brings each new lead (see ``connectors.meta``).
+forms, and Meta's signed webhook brings each new lead (see ``connectors.meta``). A
+pull every few minutes reads the same leads, because Meta holds webhooks while an
+app is in development mode (see ``connectors.meta_pull``).
 """
 
 from __future__ import annotations
@@ -17,6 +19,8 @@ import logging
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -34,7 +38,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.connectors import google_ads, meta
+from ac_platform.lead_desk.connectors import google_ads, meta, meta_pull
 from ac_platform.lead_desk.intake import Intake
 from ac_platform.lead_desk.models import LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
@@ -56,6 +60,7 @@ class MetaPage(BaseModel):
     forms: Literal["all"] | list[str]
     received: int
     last_received_at: str | None = Field(default=None, alias="lastReceivedAt")
+    last_pulled_at: str | None = Field(default=None, alias="lastPulledAt")
 
 
 class MetaStatus(BaseModel):
@@ -79,6 +84,16 @@ class Connected(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     page: MetaPage
     imported: int
+
+
+class PullResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    page: MetaPage
+    fetched: int
+    created: int
+    repeat: int
+    known: int
+    skipped: int
 
 
 def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -233,6 +248,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             last_received_at=source.last_received_at.isoformat()
             if source.last_received_at
             else None,
+            last_pulled_at=_epoch_iso(config.get("last_pulled_at")),
         )
 
     async def page_source(desk: LeadDesk, page_id: str) -> LeadSource:
@@ -401,6 +417,25 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             await desk.db.flush()
             return page_view(source)
 
+    @router.post(
+        "/meta/pages/{page_id}/pull", response_model=PullResult, response_model_by_alias=True
+    )
+    async def meta_pull_page(page_id: str, request: Request, response: Response) -> PullResult:
+        """Fetch this Page's new leads now, without waiting for the scheduled pull."""
+        cfg = meta_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            source = await page_source(desk, page_id)
+            if not source.active:
+                raise DeskError(409, "Switch this Page on first: pick its forms and connect it.")
+            await desk.db.refresh(source, with_for_update=True)
+            counts = await meta_pull.pull_source(
+                desk, source, meta.Graph(cfg), cfg, now=int(time.time())
+            )
+            source.updated_at = desk.now
+            await desk.db.flush()
+            return PullResult(page=page_view(source), **asdict(counts))
+
     @router.get("/meta/webhook", response_class=PlainTextResponse)
     async def meta_verify(request: Request) -> PlainTextResponse:
         """Meta checks the callback address once when the webhook is set up."""
@@ -471,6 +506,13 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         return {"received": len(events), "filed": filed}
 
     application.include_router(router)
+    meta_pull.attach(application, ctx.sessions, settings.environment)
+
+
+def _epoch_iso(value: object) -> str | None:
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return datetime.fromtimestamp(value, UTC).isoformat()
+    return None
 
 
 async def _body(request: Request, limit: int) -> bytes:
