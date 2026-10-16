@@ -10,7 +10,7 @@
 
 import { Building2, PhoneCall, Plus, Smartphone } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import {
@@ -48,6 +48,12 @@ import styles from "./leads.module.css";
 
 type Tab = "desk" | "all" | "team" | "sources";
 
+const readHash = () => window.location.hash;
+const onHashChange = (change: () => void) => {
+  window.addEventListener("hashchange", change);
+  return () => window.removeEventListener("hashchange", change);
+};
+
 export function LeadsSkeleton() {
   return (
     <AcquisitionShell authenticated={false} loading active="leads">
@@ -72,8 +78,10 @@ export function LeadsRoute() {
   const router = useRouter();
   const params = useSearchParams();
   const requested = params.get("tab");
-  // A lead handed over by the Chrome extension opens Add lead, filled in.
-  const shared = sharedLead(params);
+  // A lead handed over by the Chrome extension opens Add lead, filled in. It
+  // travels after "#", so the lead's details never reach a server or its logs.
+  const hash = useSyncExternalStore(onHashChange, readHash, () => "");
+  const shared = sharedLead(new URLSearchParams(hash.replace(/^#/, "")));
   const authenticated =
     access?.authenticated === true &&
     access.status === "ready" &&
@@ -293,7 +301,7 @@ export function LeadsRoute() {
       />
       {shared ? (
         <AddLeadDialog
-          key={`shared-${params.toString()}`}
+          key={`shared-${hash}`}
           open={!sharedDone}
           canManage={can}
           initial={shared}

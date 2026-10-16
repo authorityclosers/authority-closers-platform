@@ -682,8 +682,9 @@ export type SharedLead = {
 
 /**
  * A lead handed over in the link, as the Sales Xray Chrome extension opens
- * /leads?add=lead&name=…&phone=…&email=…&note=…. It only fills the Add lead
- * form; nothing is saved until the person taps Add lead.
+ * /leads#add=lead&name=…&phone=…&email=…&note=…. The details sit after "#",
+ * so browsers never send them to a server. They only fill the Add lead form;
+ * nothing is saved until the person taps Add lead.
  */
 export function sharedLead(params: {
   get: (name: string) => string | null;
