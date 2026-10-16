@@ -78,3 +78,33 @@ requested through the coordinator's existing operator route. This is not a
 production account-change receipt. Production apply belongs to the owner's
 laptop operator after ship, snapshot and shown dry-run. Exact commands and URL
 contract: `/home/acdev/strikes/1801/REVIEWER-LINK.md`.
+
+## Final dev receipt
+
+Backend `645c5c7e`, UI `da4fdabb`. Automatic dev pickup served exact
+`da4fdabbbdbee545cb756fc4ef6a9b484960ddaa` at 06:50:15 UTC; all four checked
+runtime/migration Git blobs matched. The deploy log records migration, login
+and upload smoke, healthy promotion and worker restart at 06:49:30–51 UTC.
+Anonymous reads of both new Admin routes and the new reviewer route return 401.
+
+Final changed-source PostgreSQL module: **8 passed / 45.41s**. Final frontend:
+**2 passed**, incremental typecheck and touched ESLint exit 0. Focused mypy:
+**5 source files, no issues**. The earlier combined **36 passed** includes the
+schema/registry/parity and existing worker/guest-source regressions; the eight
+are a rerun, not eight additional distinct cases.
+
+Four populated captures on shared Admin dev were visually inspected:
+`gold-review-{1440,390}-{light,dark}.png` under
+`/home/acdev/strikes/1801/shots/2026-10-16/`. All four check a first save and a
+re-save with the exact predecessor id, with no page errors or horizontal
+overflow. Every browser API mutation is intercepted fictional data. Initial
+browser-library setup failure and scrolled screenshot artifacts are retained;
+final captures reset scroll before capture and use the existing local browser
+libraries. No new server, build or package installation was used.
+
+The production commands and assignment URL are published in REVIEWER-LINK.md.
+The approved **dev** Person inspection/apply is still pending the existing Root
+Operator route: no Docker permission and no Root-seat execution context in this
+builder session. Exact source/hash and dev-only execution instructions were sent
+to Root1872 and the coordinator. No actual Dipak account change or production
+change is claimed.
