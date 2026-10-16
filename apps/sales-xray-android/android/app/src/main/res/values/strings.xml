@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sales Xray</string>
+    <string name="title_activity_main">Sales Xray</string>
+    <string name="package_name">com.authorityclosers.salesxray</string>
+    <string name="custom_url_scheme">com.authorityclosers.salesxray</string>
+</resources>
