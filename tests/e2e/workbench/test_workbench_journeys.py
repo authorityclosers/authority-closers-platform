@@ -6780,6 +6780,70 @@ def test_fixture_report_api_structure(
             journey.snapshot(label)
             journey.unclipped_text(target)
 
+        if os.environ.get("WB_REPORT_API_REPAIR_ONLY") == "1":
+            # Coordinator00:38: retain the completed projection wave; only retest
+            # the owner's committed font/spacing/fictional reason repair.
+            nulls = [pointer for pointer in pointers if pointer["score"] is None]
+            supplied = next((pointer for pointer in nulls if pointer["what_happened"]), None)
+            unscored = supplied or nulls[0]
+            analysis = page.locator('[data-xray-part="analysis"]')
+            control = analysis.locator(f'li[data-pointer="{unscored["id"]}"] > button')
+            capture(control, "repair-unscored-row")
+            journey.control_target(control, "repair-unscored-pointer")
+            expect(control.get_by_text("No score", exact=True)).to_have_count(1)
+            expect(control.get_by_text(status_words[unscored["status"]], exact=True)).to_have_count(
+                1
+            )
+            control.focus()
+            page.keyboard.press("Enter")
+            detail = page.locator("#" + str(control.get_attribute("aria-controls")))
+            capture(detail, "repair-supplied-reason")
+            if supplied:
+                expect(detail.get_by_text(supplied["what_happened"], exact=True)).to_have_count(1)
+
+            outcome = page.locator('[data-xray-part="outcome"]')
+            origin = outcome.get_by_text("As heard on the call", exact=True)
+            capture(origin.locator("xpath=ancestor::div[2]"), "repair-outcome-origin")
+            assert origin.evaluate("el => parseFloat(getComputedStyle(el).fontSize)") >= 12
+            stages = outcome.get_by_role("region", name="Sales process stage", exact=True)
+            capture(stages, "repair-stage-spacing")
+            layout = stages.locator("ol > li").evaluate_all(
+                """els => els.map(el => {
+                  const name = el.children[1], state = el.children[2];
+                  const range = document.createRange();
+                  range.selectNodeContents(name);
+                  return {nameSize: parseFloat(getComputedStyle(name).fontSize),
+                    stateSize: parseFloat(getComputedStyle(state).fontSize),
+                    lines: [...range.getClientRects()].map(r => ({
+                      left: r.left, right: r.right, top: r.top, bottom: r.bottom}))};
+                })"""
+            )
+            collisions = [
+                [left, right]
+                for left in range(len(layout))
+                for right in range(left + 1, len(layout))
+                if any(
+                    min(a["right"], b["right"]) - max(a["left"], b["left"]) > 0.5
+                    and min(a["bottom"], b["bottom"]) - max(a["top"], b["top"]) > 0.5
+                    for a in layout[left]["lines"]
+                    for b in layout[right]["lines"]
+                )
+            ]
+            journey.observations[-1]["repair_readback"] = {
+                "stage_layout": layout,
+                "colliding_stage_indices": collisions,
+                "supplied_unscored_reason": supplied is not None,
+                "api_mutations": len(mutations),
+                "media_requests": len(media),
+                "completed_projection_wave_repeated": False,
+            }
+            assert all(item["nameSize"] >= 12 and item["stateSize"] >= 12 for item in layout)
+            assert not collisions, "Neighbouring sales-stage labels overlap"
+            assert supplied is not None, "The fictional source still has no null-score reason"
+            assert not mutations and not media
+            assert journey.live_refreshes == 0, "A live edit interrupted the repair readback"
+            return
+
         overview = page.locator('[data-xray-part="overview"]')
         score = overview.get_by_role("region", name="Overall score", exact=True)
         expect(score).to_contain_text(re.compile(r"AI draft\s*[·-]\s*not reviewed by Dipak"))

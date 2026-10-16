@@ -522,3 +522,11 @@ that source gap while checking the honest fallback. The initial `bae78551`
 source has11 null-score pointers and no supplied reason on any of them.
 This proves fictional reader/rendering only. It does not prove saved-call
 persistence, person-recorded precedence without a supplied record, or AI quality.
+
+After the owner's committed readability/reason repair, use the same selector
+with `WB_REPORT_API_REPAIR_ONLY=1` and a new `WB_SHOTS_DIR`. This bounded four-pair
+continuation checks only origin/stage text sizes, non-overlapping stage text,
+and a supplied null-score reason with the original status/No score and native
+disclosure. It retains the completed projection wave and fails if the fixture
+still lacks a supplied reason. Keep the normal15-minute interval and the same
+read-only guards; no completed score/quote/outcome matrix replay.
