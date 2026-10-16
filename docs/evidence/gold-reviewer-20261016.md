@@ -30,13 +30,23 @@ gold row; another save supersedes the earlier row. The AI review is unchanged.
 ## Retention and history
 
 Migration `20261016_0094`, after the existing `0093`, adds the three gold tables.
-It rejects UPDATE/DELETE of gold history except the canonical call erasure:
-all content is nulled, `erased_at` is set, and provenance stays unchanged.
-An `AFTER UPDATE OF erased_at` trigger on `conversation_pointer_reviews` erases
-every gold version for that call in the same canonical application transaction.
-No scoring or `pointer_review*` source file is modified. This exact hook was
-announced to the Report session through its INBOX; an optional application helper
-is also available. Backup/restore parity v61 includes all three tables.
+The gold service inserts a new row for every changed judgement; it has no
+update/delete route. The earlier save is retained and referenced by
+`supersedes_id`. Canonical application call erasure nulls every gold payload,
+sets `erased_at`, and preserves provenance in the same transaction as the call
+and its pointer reviews. The Report owner installed this application hook in
+`2a7eff86`; H does not edit scoring or `pointer_review*` source files.
+Backup/restore parity v61 includes all three tables.
+
+The latest Report-owner handoff explicitly requests removal of the original
+0094 trigger/function creation before release: the migration-safety gate refuses
+`op.execute` in upgrades. The corrected upgrade uses only literal table/index
+operations and keeps its constraints, revision and parent. Empty-table rollback
+uses `IF EXISTS` for the old trigger objects, and refuses any retained gold
+history, including already-erased rows. The earlier trigger-bearing 0094 ran on
+dev before this correction; changing source does not remove those existing dev
+objects. No live downgrade, revision replay or manual schema cleanup is performed.
+The release operator must retain that dev/fresh-schema distinction.
 
 All reviewer and Admin dataset reads reapply current privacy marks; dataset
 reads also recheck source access. Browser retries reuse their save key. A stale
@@ -108,3 +118,30 @@ Operator route: no Docker permission and no Root-seat execution context in this
 builder session. Exact source/hash and dev-only execution instructions were sent
 to Root1872 and the coordinator. No actual Dipak account change or production
 change is claimed.
+
+## Migration and erasure repair — 16 October
+
+The revised PostgreSQL journey requests deletion through
+`ConversationApplication.request_deletion`, then runs the real local erasure
+worker. It verifies deleted call state, cleared AI and gold payloads, retained
+ids and unchanged provenance, including superseded saves. Three successive
+judgements preserve every earlier row. Authenticated PUT/PATCH/DELETE attempts
+on the save URL return 405 without changing history. These are service/API
+guarantees; arbitrary privileged SQL is not guarded by a trigger on fresh schemas.
+
+The direct migration classifier and `migration_schema_gate.check_operations`
+accept 0094 as additive and lock-safe. The full command
+`uv run python scripts/ci/migration_schema_gate.py --base-ref origin/main`
+was attempted and refused with **governed staging schema evidence is missing**.
+That is an incomplete release check, not a passing rehearsal. The existing
+coordinator/operator retains the hosted governed-artifact/Docker rehearsal
+before shipping. No new ship or account-change executor is started here.
+
+Final focused repair checks: **13 passed / 21.60s** (10 PostgreSQL, 2 gold
+contract unit tests, 1 backup-parity test). Empty downgrade/re-upgrade matches
+the registered schema; retained, erased gold history refuses downgrade.
+Ruff, migration mypy and the required HTTP import pass. The initial additional
+rollback test used an Alembic context without the repository's naming convention
+and failed its schema comparison; the final test supplies `target_metadata`,
+matching `db/migrations/env.py`. Both logs are retained under
+`/home/acdev/strikes/1801/gold-migration-repair-*20261016*.log`.

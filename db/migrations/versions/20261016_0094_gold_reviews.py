@@ -1,9 +1,9 @@
 """Gold reviewer assignments and append-only erasable judgements (ecff5661).
 
 AI text and quotes stay in the canonical pointer review. Gold rows reference
-that immutable version and its digest. Call erasure removes every judgement's
-payload; a database trigger joins even direct pointer-review erasure to this
-lifecycle. Ordinary updates/deletes of gold history are refused.
+that immutable version and its digest. The insert-only gold service supersedes
+earlier judgements. Canonical application erasure clears every gold payload in
+the same transaction as the call and its pointer reviews.
 """
 
 import sqlalchemy as sa
@@ -74,33 +74,6 @@ def upgrade() -> None:
         sa.CheckConstraint("(erased_at IS NULL) = (payload IS NOT NULL)", name="gold_erasure"),
     )
     op.create_index("ix_gold_row_call", "conversation_gold_rows", ["recording_id", "created_at"])
-    op.execute("""
-      CREATE FUNCTION ac_gold_history_guard() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN
-        IF TG_OP = 'UPDATE' AND OLD.erased_at IS NULL AND NEW.erased_at IS NOT NULL
-           AND NEW.payload IS NULL
-           AND (to_jsonb(OLD) - 'payload' - 'erased_at') =
-               (to_jsonb(NEW) - 'payload' - 'erased_at')
-           AND EXISTS (SELECT 1 FROM conversation_recordings c WHERE c.id = OLD.recording_id
-                       AND c.state IN ('deleting', 'deleted')) THEN
-          RETURN NEW;
-        END IF;
-        RAISE EXCEPTION 'Gold history is append-only; supersede or erase with the call';
-      END $$;
-      CREATE TRIGGER ac_gold_history_guard BEFORE UPDATE OR DELETE ON conversation_gold_rows
-        FOR EACH ROW EXECUTE FUNCTION ac_gold_history_guard();
-      CREATE FUNCTION ac_gold_pointer_erasure() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN
-        IF NEW.erased_at IS NOT NULL THEN
-          UPDATE conversation_gold_rows SET payload = NULL, erased_at = NEW.erased_at
-            WHERE recording_id = NEW.recording_id AND erased_at IS NULL;
-        END IF;
-        RETURN NEW;
-      END $$;
-      CREATE TRIGGER ac_gold_pointer_erasure
-        AFTER UPDATE OF erased_at ON conversation_pointer_reviews
-        FOR EACH ROW EXECUTE FUNCTION ac_gold_pointer_erasure();
-    """)
 
 
 def downgrade() -> None:
@@ -116,9 +89,11 @@ def downgrade() -> None:
         if op.get_bind().scalar(sa.select(sa.exists().select_from(sa.table(name)))):
             raise RuntimeError("Gold reviewer history requires forward recovery.")
     op.execute(
-        "DROP TRIGGER ac_gold_pointer_erasure ON conversation_pointer_reviews; "
-        "DROP FUNCTION ac_gold_pointer_erasure(); "
-        "DROP FUNCTION ac_gold_history_guard() CASCADE"
+        # The first dev-only 0094 installed these objects. Keep empty-table
+        # rollback compatible with that schema and with fresh trigger-free ones.
+        "DROP TRIGGER IF EXISTS ac_gold_pointer_erasure ON conversation_pointer_reviews; "
+        "DROP FUNCTION IF EXISTS ac_gold_pointer_erasure(); "
+        "DROP FUNCTION IF EXISTS ac_gold_history_guard() CASCADE"
     )
     op.drop_table("conversation_gold_rows")
     op.drop_table("conversation_gold_assignments")

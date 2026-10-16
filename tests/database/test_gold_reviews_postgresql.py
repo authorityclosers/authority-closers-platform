@@ -1,12 +1,17 @@
 """Fictional full saved-call journey, append/supersede, isolation and erasure."""
 
+import importlib.util
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import func, select, text, update
-from sqlalchemy.exc import DBAPIError
+from alembic.autogenerate import compare_metadata
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from sqlalchemy import func, inspect, select
 
 from ac_platform.conversation_intelligence.application import (
+    ConversationApplication,
     ConversationConflict,
     ConversationDenied,
     ConversationNotFound,
@@ -21,6 +26,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
 )
 from ac_platform.conversation_intelligence.pointer_review_models import ConversationPointerReview
+from ac_platform.db.models import model_metadata
 from ac_platform.tenancy.models import Membership
 from tests.database.test_conversation_reviews_postgresql import (
     ReviewCase,
@@ -33,6 +39,41 @@ from tests.database.test_conversation_reviews_postgresql import (
 from tests.database.test_conversation_reviews_postgresql import (
     review_case as review_case,
 )
+
+
+def gold_migration():
+    path = (
+        Path(__file__).resolve().parents[2] / "db/migrations/versions/20261016_0094_gold_reviews.py"
+    )
+    spec = importlib.util.spec_from_file_location("gold_migration_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_empty_gold_migration_downgrade_and_reupgrade(postgres_harness) -> None:
+    from scripts.ci.migration_schema_gate import check_operations
+    from scripts.ops.migration_safety import classify_source
+
+    module = gold_migration()
+    path = Path(module.__file__)
+    item = classify_source(path.read_text(), str(path))
+    check_operations([item], set())
+    assert item.verdict == "additive"
+    tables = {
+        "conversation_gold_reviewers",
+        "conversation_gold_assignments",
+        "conversation_gold_rows",
+    }
+    with postgres_harness.begin() as connection:
+        assert tables <= set(inspect(connection).get_table_names())
+        # Match env.py so Alembic applies the repository's constraint names.
+        context = MigrationContext.configure(connection, opts={"target_metadata": model_metadata()})
+        with Operations.context(context):
+            module.downgrade()
+            assert not tables & set(inspect(connection).get_table_names())
+            module.upgrade()
+        assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
 
 
 async def prepare(case: ReviewCase):
@@ -192,17 +233,47 @@ def test_reviewer_and_account_sessions_cannot_cross_assignments(gold_case) -> No
     run(exercise())
 
 
-def test_history_refuses_rewrite_and_delete(gold_case) -> None:
-    case, _, _ = gold_case
+def test_superseding_appends_without_changing_any_previous_judgement(gold_case) -> None:
+    case, assignment, review = gold_case
 
     async def exercise():
-        for sql in (
-            "UPDATE conversation_gold_rows SET payload = '{}'::json",
-            "DELETE FROM conversation_gold_rows",
-        ):
-            with pytest.raises(DBAPIError):
-                async with case.sessions() as db, db.begin():
-                    await db.execute(text(sql))
+        snapshots = {}
+        predecessor = None
+        for index in range(3):
+            async with case.sessions() as db, db.begin():
+                saved = await GoldReviews(_service(db, case)).save(
+                    case.reviewer_actor,
+                    assignment,
+                    GoldSave(
+                        review_id=review,
+                        target="pointer-3",
+                        score=index * 25,
+                        opinion=f"Fictional judgement {index}.",
+                        supersedes_id=predecessor,
+                    ),
+                    f"history-save-{index}",
+                )
+                predecessor = UUID(saved["id"])
+                row = await db.get(GoldRow, predecessor)
+                snapshots[row.id] = {
+                    column.name: getattr(row, column.name) for column in GoldRow.__table__.columns
+                }
+        async with case.sessions() as db:
+            rows = (
+                await db.scalars(
+                    select(GoldRow).where(
+                        GoldRow.assignment_id == assignment, GoldRow.target == "pointer-3"
+                    )
+                )
+            ).all()
+            assert len(rows) == 3
+            for row in rows:
+                assert {
+                    column.name: getattr(row, column.name) for column in GoldRow.__table__.columns
+                } == snapshots[row.id]
+            view = await GoldReviews(_service(db, case)).get(case.reviewer_actor, assignment)
+            latest = [row for row in view["saved"] if row["target"] == "pointer-3"]
+            assert len(latest) == 1 and latest[0]["id"] == str(predecessor)
 
     run(exercise())
 
@@ -335,6 +406,11 @@ def test_gold_http_mailbox_login_and_same_origin_save(gold_case) -> None:
             )
             assert saved.status_code == 201, saved.text
             assert saved.json()["review_id"] == str(review)
+            for method in ("PUT", "PATCH", "DELETE"):
+                assert (await client.request(method, path, json=body)).status_code == 405
+            assert (await client.get(path)).json()["history_count"] == loaded.json()[
+                "history_count"
+            ] + 1
             assert (await client.get("/v1/admin/conversation/gold-rows")).status_code in (401, 403)
         token = await account_token(case, settings, case.admin_actor.person_id)
         async with httpx.AsyncClient(
@@ -397,28 +473,72 @@ def test_owner_data_change_is_dry_run_idempotent_and_adds_no_learner_access(gold
     run(exercise())
 
 
-def test_canonical_pointer_erasure_removes_every_gold_save(gold_case) -> None:
-    case, assignment, review = gold_case
+def test_application_call_deletion_erases_every_gold_save_and_preserves_history(gold_case) -> None:
+    case, assignment, _ = gold_case
 
     async def exercise():
         async with case.sessions() as db, db.begin():
-            await db.execute(
-                update(ConversationRecording)
-                .where(ConversationRecording.id == case.prepared.recording_id)
-                .values(state="deleting")
+            rows = (
+                await db.scalars(
+                    select(GoldRow).where(GoldRow.recording_id == case.prepared.recording_id)
+                )
+            ).all()
+            assert len(rows) >= 8 and any(row.supersedes_id for row in rows)
+            provenance = {
+                row.id: {
+                    column.name: getattr(row, column.name)
+                    for column in GoldRow.__table__.columns
+                    if column.name not in {"payload", "erased_at"}
+                }
+                for row in rows
+            }
+            deletion = await ConversationApplication(
+                db, clock=lambda: case.prepared.state.now
+            ).request_deletion(
+                case.source_actor, case.prepared.recording_id, key="gold-call-erasure"
             )
-            await db.execute(
-                update(ConversationPointerReview)
-                .where(ConversationPointerReview.id == review)
-                .values(payload=None, erased_at=case.prepared.state.now)
-            )
+            assert deletion["state"] == "deleting"
+        assert await case.prepared.worker.run_once()
         async with case.sessions() as db, db.begin():
-            rows = (await db.scalars(select(GoldRow))).all()
-            assert len(rows) >= 4 and all(
-                r.payload is None and r.erased_at is not None for r in rows
+            recording = await db.get(ConversationRecording, case.prepared.recording_id)
+            assert recording.state == "deleted" and recording.deleted_at is not None
+            rows = (
+                await db.scalars(
+                    select(GoldRow).where(GoldRow.recording_id == case.prepared.recording_id)
+                )
+            ).all()
+            assert {row.id for row in rows} == set(provenance)
+            assert all(row.payload is None and row.erased_at is not None for row in rows)
+            for row in rows:
+                assert {
+                    column.name: getattr(row, column.name)
+                    for column in GoldRow.__table__.columns
+                    if column.name not in {"payload", "erased_at"}
+                } == provenance[row.id]
+            reviews = (
+                await db.scalars(
+                    select(ConversationPointerReview).where(
+                        ConversationPointerReview.recording_id == case.prepared.recording_id
+                    )
+                )
+            ).all()
+            assert reviews and all(
+                row.payload is None and row.erased_at is not None for row in reviews
             )
-            assert await db.scalar(select(func.count()).select_from(GoldRow)) == len(rows)
             with pytest.raises(ConversationConflict):
                 await GoldReviews(_service(db, case)).get(case.reviewer_actor, assignment)
 
     run(exercise())
+
+
+def test_gold_history_requires_forward_recovery_even_after_erasure(gold_case, postgres_harness):
+    module = gold_migration()
+    with postgres_harness.begin() as connection:
+        before = connection.scalar(select(func.count()).select_from(GoldRow))
+        assert before > 0
+        with (
+            Operations.context(MigrationContext.configure(connection)),
+            pytest.raises(RuntimeError, match="forward recovery"),
+        ):
+            module.downgrade()
+        assert connection.scalar(select(func.count()).select_from(GoldRow)) == before
