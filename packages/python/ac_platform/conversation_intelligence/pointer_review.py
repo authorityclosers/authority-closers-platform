@@ -535,6 +535,13 @@ async def erase_pointer_reviews_for_recording(
     ).all()
     for row in rows:
         row.payload, row.erased_at = None, now
+    # Gold reviewer saves judge these reviews: every version goes in the same
+    # erasure transaction (ecff5661), even when no review is left to empty.
+    from ac_platform.conversation_intelligence.gold_reviews import (
+        erase_gold_reviews_for_recording,
+    )
+
+    await erase_gold_reviews_for_recording(database, recording_id, now)
     return len(rows)
 
 
