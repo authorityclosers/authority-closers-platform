@@ -13,6 +13,7 @@ import {
 import { istStamp } from "../../lib/time";
 import { registerReviewerNavigationGuard } from "./reviewer-navigation";
 import styles from "./reviewer-workspace.module.css";
+import { GoldReviewEntry } from "./gold-review-workspace";
 
 const LENS_LABEL = {
   sales: "Sales expert",
@@ -91,7 +92,12 @@ export function ReviewerAssignmentAdapter({
   assignmentId: string;
 }) {
   return (
-    <ReviewerAssignmentSession key={assignmentId} assignmentId={assignmentId} />
+    <GoldReviewEntry key={assignmentId} assignmentId={assignmentId}>
+      <ReviewerAssignmentSession
+        key={assignmentId}
+        assignmentId={assignmentId}
+      />
+    </GoldReviewEntry>
   );
 }
 
