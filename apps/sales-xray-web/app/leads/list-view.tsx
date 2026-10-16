@@ -36,10 +36,21 @@ export function ListView({
   );
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState<LeadPage | null>(null);
-  const [rows, setRows] = useState<LeadRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    page: LeadPage;
+    rows: LeadRow[];
+  } | null>(null);
+  const [failed, setFailed] = useState<{ key: string; message: string } | null>(
+    null,
+  );
   const [loadingMore, setLoadingMore] = useState(false);
+  // Results remember the question they answer; until the current one is
+  // answered the list shows its skeleton.
+  const key = JSON.stringify([scope, stage, query, version]);
+  const page = loaded?.key === key ? loaded.page : null;
+  const rows = loaded?.key === key ? loaded.rows : [];
+  const error = failed?.key === key ? failed.message : null;
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(search), 300);
@@ -48,21 +59,20 @@ export function ListView({
 
   useEffect(() => {
     const controller = new AbortController();
-    setPage(null);
-    setError(null);
     readLeads({ scope, stage, search: query }, controller.signal)
-      .then((next) => {
-        setPage(next);
-        setRows(next.leads);
-      })
+      .then((next) => setLoaded({ key, page: next, rows: next.leads }))
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
-        setError(
-          reason instanceof LeadsError ? reason.message : "Leads didn't load.",
-        );
+        setFailed({
+          key,
+          message:
+            reason instanceof LeadsError
+              ? reason.message
+              : "Leads didn't load.",
+        });
       });
     return () => controller.abort();
-  }, [scope, stage, query, version]);
+  }, [key, scope, stage, query]);
 
   const more = async () => {
     if (!page?.next_offset || loadingMore) return;
@@ -74,14 +84,19 @@ export function ListView({
         search: query,
         offset: page.next_offset,
       });
-      setRows((current) => [...current, ...next.leads]);
-      setPage(next);
-    } catch (reason) {
-      setError(
-        reason instanceof LeadsError
-          ? reason.message
-          : "More leads didn't load.",
+      setLoaded((current) =>
+        current?.key === key
+          ? { key, page: next, rows: [...current.rows, ...next.leads] }
+          : current,
       );
+    } catch (reason) {
+      setFailed({
+        key,
+        message:
+          reason instanceof LeadsError
+            ? reason.message
+            : "More leads didn't load.",
+      });
     } finally {
       setLoadingMore(false);
     }

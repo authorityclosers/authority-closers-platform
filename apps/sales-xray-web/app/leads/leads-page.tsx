@@ -70,6 +70,15 @@ export function LeadsRoute() {
   const [calling, setCalling] = useState(false);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  // Each opening mounts a fresh dialog, so nothing is reset in an effect.
+  const [rounds, setRounds] = useState({ calling: 0, adding: 0, importing: 0 });
+  const begin = (
+    which: keyof typeof rounds,
+    show: (value: boolean) => void,
+  ) => {
+    setRounds((current) => ({ ...current, [which]: current[which] + 1 }));
+    show(true);
+  };
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
 
@@ -183,19 +192,19 @@ export function LeadsRoute() {
           actions={
             <>
               {can ? (
-                <Button onClick={() => setImporting(true)}>
+                <Button onClick={() => begin("importing", setImporting)}>
                   <Upload size={14} aria-hidden="true" />
                   Import
                 </Button>
               ) : null}
-              <Button onClick={() => setAdding(true)}>
+              <Button onClick={() => begin("adding", setAdding)}>
                 <Plus size={14} aria-hidden="true" />
                 Add lead
               </Button>
               {tab !== "desk" ? (
                 <Button
                   variant="primary"
-                  onClick={() => setCalling(true)}
+                  onClick={() => begin("calling", setCalling)}
                   disabled={desk.counts.open === 0}
                 >
                   <PhoneCall size={14} aria-hidden="true" />
@@ -218,8 +227,8 @@ export function LeadsRoute() {
           <DeskView
             desk={desk}
             onOpen={setOpenLead}
-            onStart={() => setCalling(true)}
-            onAdd={() => setAdding(true)}
+            onStart={() => begin("calling", setCalling)}
+            onAdd={() => begin("adding", setAdding)}
           />
         ) : tab === "all" ? (
           <ListView canManage={can} onOpen={setOpenLead} version={version} />
@@ -229,7 +238,7 @@ export function LeadsRoute() {
           <SourcesView
             sandbox={desk.sandbox}
             onChanged={refresh}
-            onImport={() => setImporting(true)}
+            onImport={() => begin("importing", setImporting)}
           />
         )}
       </div>
@@ -239,6 +248,7 @@ export function LeadsRoute() {
         onChanged={refresh}
       />
       <CallingLoop
+        key={rounds.calling}
         open={calling}
         onClose={() => {
           setCalling(false);
@@ -247,6 +257,7 @@ export function LeadsRoute() {
         onChanged={refresh}
       />
       <AddLeadDialog
+        key={rounds.adding}
         open={adding}
         canManage={can}
         onClose={() => setAdding(false)}
@@ -257,6 +268,7 @@ export function LeadsRoute() {
         }}
       />
       <ImportDialog
+        key={rounds.importing}
         open={importing}
         canManage={can}
         onClose={() => setImporting(false)}

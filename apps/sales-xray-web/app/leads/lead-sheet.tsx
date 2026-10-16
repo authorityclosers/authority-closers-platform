@@ -230,7 +230,7 @@ export function DisposeForm({
 
       {connected === false ? (
         <div className={styles.disposeBlock}>
-          <span className={styles.blockLabel}>Why didn't it connect?</span>
+          <span className={styles.blockLabel}>Why didn&apos;t it connect?</span>
           <div className={styles.chips} role="group" aria-label="Reason">
             {NOT_CONNECTED_REASONS.map((item) =>
               chip(item.key, item.label, reason === item.key, () =>
@@ -430,7 +430,7 @@ function History({ events }: { events: LeadEvent[] }) {
                 className={styles.historyLink}
                 href={callHref(event.submission_id)}
               >
-                Open the call's Report
+                Open the call&apos;s Report
               </Link>
             ) : null}
             <time className={styles.historyTime} dateTime={event.at}>
@@ -946,30 +946,40 @@ export function LeadSheet({
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const [detail, setDetail] = useState<LeadDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<LeadDetail | null>(null);
+  const [failed, setFailed] = useState<{
+    leadId: string;
+    message: string;
+  } | null>(null);
   const [formKey, setFormKey] = useState(0);
+  // Only the open lead's own detail (or error) shows; anything else is stale.
+  const detail = loaded?.lead.lead_id === leadId ? loaded : null;
+  const error = failed?.leadId === leadId ? failed.message : null;
 
   useEffect(() => {
     if (!leadId) return;
     const controller = new AbortController();
-    setDetail(null);
-    setError(null);
     readLead(leadId, controller.signal)
-      .then(setDetail)
+      .then((next) => {
+        setFailed(null);
+        setLoaded(next);
+        setFormKey((value) => value + 1);
+      })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
-        setError(
-          reason instanceof LeadsError
-            ? reason.message
-            : "This lead didn't load.",
-        );
+        setFailed({
+          leadId,
+          message:
+            reason instanceof LeadsError
+              ? reason.message
+              : "This lead didn't load.",
+        });
       });
     return () => controller.abort();
   }, [leadId]);
 
   const update = (next: LeadDetail) => {
-    setDetail(next);
+    setLoaded(next);
     setFormKey((value) => value + 1);
     onChanged();
   };
@@ -1022,8 +1032,8 @@ export function CallingLoop({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(0);
 
+  // The page gives each opening a new key, so a round starts at zero, loading.
   const load = (signal?: AbortSignal) => {
-    setState("loading");
     readNext(undefined, signal)
       .then((next) => {
         setDetail(next);
@@ -1040,9 +1050,13 @@ export function CallingLoop({
       });
   };
 
+  const loadNext = () => {
+    setState("loading");
+    load();
+  };
+
   useEffect(() => {
     if (!open) return;
-    setDone(0);
     const controller = new AbortController();
     load(controller.signal);
     return () => controller.abort();
@@ -1075,7 +1089,7 @@ export function CallingLoop({
           icon={PhoneOff}
           title="The next lead didn't load"
           text={error ?? undefined}
-          action={{ onClick: () => load(), label: "Try again" }}
+          action={{ onClick: loadNext, label: "Try again" }}
         />
       ) : (
         <LeadCard
@@ -1093,7 +1107,7 @@ export function CallingLoop({
               onSaved={() => {
                 setDone((value) => value + 1);
                 onChanged();
-                load();
+                loadNext();
               }}
             />
           }

@@ -68,23 +68,14 @@ function RulesDialog({
   onClose: () => void;
   onSaved: (team: Team) => void;
 }) {
-  const [available, setAvailable] = useState(true);
-  const [cap, setCap] = useState("50");
-  const [languages, setLanguages] = useState("");
-  const [areas, setAreas] = useState("");
-  const [interests, setInterests] = useState("");
+  // TeamView gives each opening a new key, so these start from this seller.
+  const [available, setAvailable] = useState(rep?.available ?? true);
+  const [cap, setCap] = useState(String(rep?.max_open ?? 50));
+  const [languages, setLanguages] = useState(rep?.languages.join(", ") ?? "");
+  const [areas, setAreas] = useState(rep?.areas.join(", ") ?? "");
+  const [interests, setInterests] = useState(rep?.interests.join(", ") ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!rep) return;
-    setAvailable(rep.available);
-    setCap(String(rep.max_open));
-    setLanguages(rep.languages.join(", "));
-    setAreas(rep.areas.join(", "));
-    setInterests(rep.interests.join(", "));
-    setError(null);
-  }, [rep]);
 
   const save = async () => {
     if (!rep) return;
@@ -185,6 +176,7 @@ export function TeamView({
   const [team, setTeam] = useState<Team | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<RepView | null>(null);
+  const [editRound, setEditRound] = useState(0);
   const [minutes, setMinutes] = useState("10");
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -322,7 +314,10 @@ export function TeamView({
                     <button
                       type="button"
                       className={styles.repName}
-                      onClick={() => setEditing(rep)}
+                      onClick={() => {
+                        setEditRound((value) => value + 1);
+                        setEditing(rep);
+                      }}
                       aria-label={`Edit ${rep.name}'s lead rules`}
                     >
                       <Avatar name={rep.name} size={24} />
@@ -374,8 +369,8 @@ export function TeamView({
         >
           <div className={styles.form}>
             <p className={styles.hint}>
-              When a new lead isn't called within the time below, it moves to
-              the next best seller. Test leads never move.
+              When a new lead isn&apos;t called within the time below, it moves
+              to the next best seller. Test leads never move.
             </p>
             <Field label="Minutes before it moves">
               <input
@@ -443,6 +438,7 @@ export function TeamView({
       </div>
 
       <RulesDialog
+        key={editRound}
         rep={editing}
         onClose={() => setEditing(null)}
         onSaved={(next) => {

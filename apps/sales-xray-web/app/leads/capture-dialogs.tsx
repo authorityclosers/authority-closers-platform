@@ -4,10 +4,12 @@
  * Add one lead by hand (NeoDove's "Walk-In Lead"), or import a CSV/Excel
  * file: preview, match columns, then import. Repeat phone numbers join their
  * existing lead instead of making a second one.
+ *
+ * The page gives each opening a new key, so every dialog starts empty.
  */
 
 import { FileSpreadsheet } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button, Dialog, Field, Segmented } from "../ui/kit";
 import {
@@ -54,15 +56,6 @@ export function AddLeadDialog({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const command = useRef(commandId());
-
-  useEffect(() => {
-    if (!open) return;
-    setForm(EMPTY);
-    setSource("manual");
-    setAssign(canManage ? "rules" : "me");
-    setError(null);
-    command.current = commandId();
-  }, [open, canManage]);
 
   const set =
     (key: keyof typeof EMPTY) => (event: { target: { value: string } }) =>
@@ -236,16 +229,6 @@ export function ImportDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const command = useRef(commandId());
-
-  useEffect(() => {
-    if (!open) return;
-    setPreview(null);
-    setMapping({});
-    setResult(null);
-    setError(null);
-    setAssign(canManage ? "rules" : "me");
-    command.current = commandId();
-  }, [open, canManage]);
 
   const pick = async (file: File | undefined) => {
     if (!file) return;
