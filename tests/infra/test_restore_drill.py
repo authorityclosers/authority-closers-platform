@@ -1229,7 +1229,12 @@ def test_checked_in_migrations_preserve_forward_only_recovery_policy() -> None:
         assert spec is not None and spec.loader is not None
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
-        if migration.revision in {"20261012_0088", "20261013_0089", "20261013_0090"}:
+        if migration.revision in {
+            "20261012_0088",
+            "20261013_0089",
+            "20261013_0090",
+            "20261016_0091",
+        }:
             # These constraint-only migrations permit compatible rollback, but
             # unsupported retained history must force forward recovery.
             migration.op = SimpleNamespace(

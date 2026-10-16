@@ -35,6 +35,9 @@ import { WorkspaceAccessProvider } from "../../../workspace-access";
 import { SpeakerProfilesContext } from "../../../speaker-profiles";
 import { AMIT_SPEAKERS, amitReport, amitTranscript } from "./amit-call";
 import { AMIT_PILLARS } from "./amit-pillars";
+import { exampleView } from "../../../xray-report/example";
+import { AMIT_STRUCTURE } from "./amit-structure";
+import type { OutcomeKind } from "../../../xray-report/model";
 import acquisitionStyles from "../../../acquisition-studio.module.css";
 import styles from "../../shell/full-shell-preview.module.css";
 
@@ -122,10 +125,19 @@ function speakerProfiles(speakers: StoryFixture["speakers"]) {
  */
 export function StoryShellPreview({
   fixture = AMIT_FIXTURE,
+  example = null,
+  apiStructure = false,
 }: {
   fixture?: StoryFixture;
+  /** The call as the API sends it once an AI pointer review is saved. */
+  apiStructure?: boolean;
+  /** The 15 Oct doc's illustrative example and its outcome scenario. */
+  example?: OutcomeKind | null;
 }) {
-  const amitReport = fixture.report;
+  const title = example ? "Siddhant Pawar · discovery call" : fixture.title;
+  const amitReport = apiStructure
+    ? { ...fixture.report, structure: AMIT_STRUCTURE }
+    : fixture.report;
   const FIXTURE_DURATION_MS = fixture.transcript.duration_ms;
   const audio = useRef<HTMLAudioElement>(null);
   // Like the live studio: a light report sheet unless the app is dark.
@@ -189,7 +201,7 @@ export function StoryShellPreview({
                       languageLabel={fixture.language}
                       sourceLabel="Fictional fixture transcript"
                       label={{
-                        displayName: fixture.title,
+                        displayName: title,
                         revision: 1,
                       }}
                       claimed
@@ -230,10 +242,11 @@ export function StoryShellPreview({
                     />
                     <ReportModes
                       fixture
+                      illustration={example ? exampleView(example) : null}
                       documentData={{
                         report: amitReport,
                         transcript,
-                        title: fixture.title,
+                        title,
                       }}
                       label="Explore your sales report"
                       lightSurface={resolvedTheme !== "dark"}
@@ -376,7 +389,7 @@ export function StoryShellPreview({
                       transcript={transcript}
                       report={amitReport}
                       callId={FIXTURE_CALL_ID}
-                      callTitle={fixture.title}
+                      callTitle={title}
                       onSeek={playFrom}
                       audioAvailable
                     />

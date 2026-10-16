@@ -28,6 +28,71 @@ afterEach(async () => {
 });
 
 describe("Sharing my coaching", () => {
+  it("retries a failed read in place before offering the current sharing action", async () => {
+    let finish!: (response: Response) => void;
+    const fetch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockImplementationOnce(
+        () => new Promise<Response>((resolve) => (finish = resolve)),
+      );
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<SharePanel />));
+    await flush();
+    expect(host.textContent).toContain("could not be reached");
+    expect(button("Share with your admins")).toBeUndefined();
+    expect(button("Stop sharing")).toBeUndefined();
+    await act(async () => button("Try again").click());
+    expect(host.textContent).toContain("Checking sharing…");
+    expect(button("Try again").disabled).toBe(true);
+    await act(async () => button("Try again").click());
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await act(async () =>
+      finish(
+        json({
+          available: true,
+          shared: true,
+          revision: 7,
+          reaches: [{ name: "Asha Rao", why: "admin" }],
+        }),
+      ),
+    );
+    await flush();
+    expect(button("Stop sharing").disabled).toBe(false);
+    expect(host.textContent).toContain("Asha Rao");
+    expect(host.textContent).not.toContain("could not be reached");
+    expect(fetch.mock.calls.every((call) => !call[1].method)).toBe(true);
+  });
+  it("can recover after both a conflicting change and its refresh fail", async () => {
+    const view = { available: true, shared: false, revision: 0, reaches: [] };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(view))
+      .mockResolvedValueOnce(json({}, 409))
+      .mockResolvedValueOnce(json({}, 503))
+      .mockResolvedValueOnce(json({ ...view, shared: true, revision: 4 }))
+      .mockResolvedValueOnce(json({ ...view, revision: 5 }));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<SharePanel />));
+    await flush();
+    await act(async () => button("Share with your admins").click());
+    await flush();
+    expect(button("Share with your admins")).toBeUndefined();
+    expect(button("Stop sharing")).toBeUndefined();
+    expect(host.textContent).not.toContain(
+      "Your sharing is shown as it is now.",
+    );
+    await act(async () => button("Try again").click());
+    await flush();
+    expect(button("Stop sharing")).toBeDefined();
+    await act(async () => button("Stop sharing").click());
+    await flush();
+    expect(JSON.parse(fetch.mock.calls[4][1].body)).toEqual({
+      shared: false,
+      expected_revision: 4,
+    });
+    expect(host.textContent).toContain("Private");
+  });
   it("is private by default and one tap shares with the named admins", async () => {
     const fetch = vi
       .fn()
@@ -97,6 +162,60 @@ describe("Sharing my coaching", () => {
 });
 
 describe("Focus feedback", () => {
+  it.each(["Agree", "Not completely"])(
+    "announces a pending %s, keeps its keyboard place and retries the same command",
+    async (choice) => {
+      let finish!: (response: Response) => void;
+      const fetch = vi
+        .fn()
+        .mockImplementationOnce(
+          () => new Promise<Response>((resolve) => (finish = resolve)),
+        )
+        .mockResolvedValue(new Response(null, { status: 204 }));
+      vi.stubGlobal("fetch", fetch);
+      await act(async () =>
+        root.render(
+          <FocusFeedback
+            focusSkillId="problem_impact_desire"
+            originSubmissionId={fictionalCoaching.mission!.origin_submission_id}
+            evidence={fictionalCoaching.evidence}
+          />,
+        ),
+      );
+      const selected = button(choice);
+      selected.focus();
+      await act(async () => selected.click());
+      expect(host.textContent).toContain("Saving…");
+      expect(selected.disabled).toBe(false);
+      expect(selected.getAttribute("aria-disabled")).toBe("true");
+      expect(document.activeElement).toBe(selected);
+      expect(host.querySelector("textarea")).toBeNull();
+      // Neither repeated activation nor switching choices sends while pending.
+      await act(async () => {
+        selected.click();
+        button(choice === "Agree" ? "Not completely" : "Agree").click();
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      await act(async () => finish(new Response(null, { status: 500 })));
+      await flush();
+      expect(host.textContent).toContain("Not saved. Try again.");
+      expect(document.activeElement).toBe(selected);
+      expect(selected.getAttribute("aria-disabled")).toBeNull();
+      await act(async () => selected.click());
+      await flush();
+      const [first, retry] = fetch.mock.calls.map((call) =>
+        JSON.parse(call[1].body),
+      );
+      expect(retry).toEqual(first);
+      expect(selected.disabled).toBe(true);
+      expect(selected.getAttribute("aria-pressed")).toBe("true");
+      expect(host.textContent).not.toContain("Saving…");
+      expect(host.textContent).not.toContain("Not saved.");
+      expect(Boolean(host.querySelector("textarea"))).toBe(
+        choice === "Not completely",
+      );
+    },
+  );
   it("records agreement once with the visible focus and mission", async () => {
     const fetch = vi
       .fn()

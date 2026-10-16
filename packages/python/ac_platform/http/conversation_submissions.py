@@ -70,6 +70,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
 )
 from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
+from ac_platform.conversation_intelligence.report_structure_service import enrich_report_structure
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
 from ac_platform.conversation_intelligence.sales_xray_tenants import (
     WORKSPACE_UNAVAILABLE_MESSAGE,
@@ -806,6 +807,13 @@ def install_submission_http(
         guard(request, response)
         result = await AcquisitionReports(owner.ownership).report(
             submission_id, **owner.arguments, allow_organisation_read=True
+        )
+        result = await enrich_report_structure(
+            result,
+            owner.ownership,
+            submission_id,
+            actor=owner.actor,
+            shared_identity_locks=owner.shared_identity_locks,
         )
         label = await read_submission_label(
             owner.ownership, submission_id, **owner.arguments, allow_organisation_read=True

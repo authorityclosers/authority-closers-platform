@@ -1414,7 +1414,7 @@ it("keeps the same mounted panel state across all three report views", async () 
   }
 });
 
-it("opens on the six-pillar Report and keeps every original section under Details", async () => {
+it("opens on the three-part Report and keeps every original section under Details", async () => {
   window.history.replaceState(null, "", `/?call=${call}`);
   await act(async () =>
     root.render(
@@ -1430,20 +1430,17 @@ it("opens on the six-pillar Report and keeps every original section under Detail
     [...container.querySelectorAll("[data-report-mode-section]")].map((e) =>
       e.getAttribute("data-report-mode-section"),
     ),
-  ).toEqual(["overview", "coaching", "moments", "missed", "skills", "facts"]);
+  ).toEqual(["overview", "analysis", "outcome"]);
   expect(
     [...container.querySelectorAll("h2")].map((h) => h.textContent),
   ).toEqual([
-    "The Big Picture",
-    "How the Call Played Out",
-    "What Worked — & What Didn't",
-    "Moments That Mattered",
-    "Your Skills on This Call",
-    "Where the Deal Stands",
+    "1. Overview & Score",
+    "2. Detailed Call Analysis",
+    "3. Final Call Outcome",
   ]);
-  expect(
-    container.querySelectorAll('a[href^="/coaching?focus="]'),
-  ).toHaveLength(8);
+  // No score is made up in the browser: the 27 pointers wait for the analysis.
+  expect(container.textContent).toContain("Not scored yet");
+  expect(container.querySelectorAll("[data-pointer]")).toHaveLength(27);
   expect(container.textContent).not.toContain("Summary point");
   expect(
     [
@@ -1478,25 +1475,6 @@ it("opens on the six-pillar Report and keeps every original section under Detail
     "Transcript",
   ]);
   expect(container.textContent).toContain("Summary point");
-});
-
-it("opens Coaching from the deal pillar's button", async () => {
-  window.history.replaceState(null, "", `/?call=${call}`);
-  await act(async () =>
-    root.render(
-      <ReportModes
-        panels={panels()}
-        boundCallId={call}
-        documentData={{ report: syntheticReport }}
-      />,
-    ),
-  );
-  const open = [...container.querySelectorAll("button")].find(
-    (b) => b.textContent === "View Personalized Coaching",
-  )!;
-  await act(async () => open.click());
-  expect(mode().dataset.view).toBe("coaching");
-  expect(window.location.search).toContain("view=coaching");
 });
 
 it("remembers the chosen view per person and workspace, with explicit URLs taking priority", async () => {

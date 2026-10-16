@@ -4,7 +4,7 @@ import {
   contentReport,
   contentTranscript,
 } from "./review-fixture/report/pillars/content-fixture";
-import { act, useContext, useEffect } from "react";
+import { act, useContext, useEffect, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
@@ -14,7 +14,8 @@ vi.mock("next/navigation", () => ({
 }));
 import { LinkedProspectContext } from "./prospect-link-control";
 import { BIG_PICTURE, SKILLS, WORKED_DIDNT } from "./report-copy";
-import { ReportModes } from "./report-modes";
+import { CallOutcomeProvider } from "./report-outcome-context";
+import { reportScreenPanels } from "./report-pillar-screen";
 import { REPORT_PILLARS } from "./report-pillars";
 import { WorkedDidnt } from "./report-sections/worked-didnt";
 import { reportStoryModel } from "./report-story-model";
@@ -27,6 +28,44 @@ import { syntheticReport } from "./review-fixture/report/synthetic-report";
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
+/**
+ * The Report view now shows the 15 Oct structure (xray-report). The six
+ * pillars stay in the code and keep their own tests, rendered directly.
+ */
+function SixPillars({
+  documentData,
+  onSelectEvidence,
+  prospectControls,
+}: {
+  documentData: {
+    report: typeof amitReport;
+    transcript?: typeof amitTranscript;
+  };
+  onSelectEvidence?: Parameters<typeof reportScreenPanels>[1];
+  prospectControls?: ReactNode;
+}) {
+  const panels = reportScreenPanels(
+    documentData,
+    onSelectEvidence,
+    undefined,
+    prospectControls,
+    {
+      callId: null,
+      onOpenCoaching: documentData.report.preview ? undefined : () => {},
+    },
+  );
+  return (
+    <CallOutcomeProvider callId={null}>
+      {panels.map((panel) => (
+        <section key={panel.id} data-report-mode-section={panel.id}>
+          <h2>{panel.label}</h2>
+          {panel.content}
+        </section>
+      ))}
+    </CallOutcomeProvider>
+  );
+}
 
 let cleanup: (() => void) | null = null;
 afterEach(() => {
@@ -44,16 +83,7 @@ async function mount(
   const select = vi.fn();
   await act(async () =>
     root.render(
-      <ReportModes
-        structure="pillars"
-        initialView="story"
-        panels={[
-          {
-            id: "prospect",
-            label: "Old buyer profile",
-            content: "full profile content",
-          },
-        ]}
+      <SixPillars
         documentData={{ report, transcript }}
         onSelectEvidence={select}
       />,
@@ -482,10 +512,7 @@ it("opens this call's own prospect from the end of the Report", async () => {
   const root = createRoot(host);
   await act(async () =>
     root.render(
-      <ReportModes
-        structure="pillars"
-        initialView="story"
-        panels={[]}
+      <SixPillars
         prospectControls={<LinkedTo id="prospect-7" />}
         documentData={{ report: amitReport, transcript: amitTranscript }}
       />,
@@ -530,9 +557,7 @@ it("gives a guest the same six pillars, with locked items counted and a sign-in 
   };
   await act(async () =>
     root.render(
-      <ReportModes
-        structure="pillars"
-        panels={[]}
+      <SixPillars
         documentData={{
           report: { ...amitReport, preview },
           transcript: amitTranscript,
@@ -540,9 +565,6 @@ it("gives a guest the same six pillars, with locked items counted and a sign-in 
       />,
     ),
   );
-  expect(
-    host.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("story");
   const worked = pillar(host, "moments").textContent;
   expect(worked).toContain("2 more strengths are saved for your account.");
   expect(worked).toContain("1 more issue is saved for your account.");

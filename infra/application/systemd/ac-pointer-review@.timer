@@ -1,0 +1,10 @@
+[Unit]
+Description=Every 5 minutes: AI pointer reviews for new Sales Xray reports (%i)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

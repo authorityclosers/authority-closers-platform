@@ -1,5 +1,112 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+15 October,23:20 UTC — saved scored-call preparation, NOT browser acceptance.
+Runner0ef247b0/07ace258 requires an explicit approved saved-call path and existing
+session, blocks mutations/media, checks three parts/all27 titles, score range,
+AI-draft labels and native expanded feedback. With WB_EXPECTED_OVERALL_SCORE,
+it checks the exact owner-supplied overall and requires quoted scored feedback.
+Ruff/format/API import/diffPASS; no-server4skip/228deselected. The Report owner
+supplied five call routes/scores and explicitly retained session access. QA did
+not access the session or run the calls; owner-side readback is pending.
+CorrectHost dev API read23:16:18Z was200/ready/release843dbee2, including AI-review
+81e0bafc; initial wrongHost400 was a QA request error, not a dev regression.
+UI7689d838 supplied unscored reasons remain a new populated-data branch, not
+covered by the closed fixture wave. No provider/reanalysis/deploy action by QA.
+
+15 October,22:48 UTC — rebuilt three-part Report (owner b4727ffd,
+36bd8a09/bc0bd174, reader tests1f75c11d; QA source d4406900).
+Only `-k fixture_report_15oct_structure`: **4/4 PASS**,68.80s/launcher0,
+shared3026 at1440/390 light/dark, source unchanged throughout. Three parts in
+order, all27 exact owner names/order with independent native Enter/Space
+View more controls, Good13/All27 filter, all four authored fictional outcomes,
+and legacy Amit's27 No score/overall Not scored yet/progress0 pass. About these
+numbers32x32 desktop/44x44 phone, centres reachable; illustrative labels and
+Lost reason badges meet12px. Good filter94x36/44, pointer rows at least50px
+at1440/123.6875px at390. No runtime/server/overflow/clipping/small-text errors,
+API mutations, media requests or live refreshes. The38/40 intercepted shell
+GETs per pair receive the approved fictional bootstrap, never the live API.
+All72 final PNGs inspected; content and four outcomes readable in both themes,
+no new defect. Receipts/screens:
+`/home/acdev/strikes/1694/shots/2026-10-15-report-15oct/`.
+Original harness outcome-label/bootstrap/readiness/copy failures and one live
+refresh interruption remain in named subfolders. Product floor defects were
+reported to the Report UI owner/coordinator and are now independently closed.
+The AGENTS693645b0 Report-only AI-score approval is recorded in QA's contract;
+this fixture run does not prove actual API structure mapping or AI-draft labels
+on saved calls. Those await the owner's existing approved read-only dev
+context/routes. No Document/Word/Coaching replay, provider/reanalysis or ship.
+
+15 October,21:36 UTC — v0.46.0 original-Host readback, after both canaries.
+Staging canary21:28:16Z, production canary/toolDONE21:33:22Z; both systemd units
+Result=success/ExecMainStatus0. Four foundation:8080 GETs, original staging and
+production web/API Hosts, no redirects/authentication/writes: all HTTP200 on
+b6cbab3019db1780e0e2301b7218c132907146e9. Read times 2026-10-15T21:36:49.961598+00:00 to 2026-10-15T21:36:49.982000+00:00.
+Receipts:`/home/acdev/strikes/1694/shots/2026-10-15-v0.46.0-health/`. Availability/served source only; populated hosted
+Report/Team acceptance remains unclaimed. Earlier dev context/sharing/feedback
+passes stand; the latter two product sources are outside this release.
+Owner's latest Report-only rebuild order/corrected27-pointer list consumed;
+new acceptance contract pinned, awaiting actual Report source before its QA.
+
+15 October,21:16 UTC — Feedback pending/keyboard retry (D2d6dbc78).
+New `fixture_coaching_feedback_save` **8/8 PASS**,29.69s/launcher0 at6ab51270,
+shared3026, Agree/Not completely at1440/390 light/dark. Saving… through2999ms,
+first error at3000ms; both native controls remain enabled/focusable with
+aria-disabled while pending. Repeated Enter and native activation of the other
+choice stay inert. Failure retains initiating focus; same-choice Enter retry
+succeeds at3000ms and respects focus moved to I noticed it later. Original choice
+selected; Agree confirms unchanged mission, Not completely opens existing source
+evidence and empty What did we miss? context. Mission/query retained. Reserved
+status37.1875px through pending/error, targets65/122/104x32 desktop,x44 phone,
+centres reachable. Errors/undersized/clipping/overflow/API/media/refresh0.
+All24 saving/error/success PNGs inspected; no defect, no own harness failure.
+Screens/receipts:`/home/acdev/strikes/1694/shots/2026-10-15-feedback-save/`.
+Ruff/format/API import/diffPASS; no-server8skip/216deselected (224 total).
+Fictional in-page feedback only, no canonical/authenticated/Academy acceptance;
+command identity remains builder unit coverage. Earlier context4/sharing4 stand.
+v0.46 images still building at21:18Z; health readback remains conditional on
+both actual staging/production canaries. Later sharing/feedback UI is outside it.
+
+15 October, 21:01 UTC — Sharing-setting read recovery (D265372c0).
+New `fixture_coaching_sharing_retry` **4/4 PASS**,16.73s/launcher0 at9bcc8cb9
+on shared3026,1440/390 light/dark. Initial failed read offers only Try again;
+pointer(light)/Enter(dark) starts Checking sharing… with disabled retry and no
+sharing action through2999ms. At3000ms current Private setting names Priya Shah
+and offers the original Share with your admins action. Retry82x32/44 and
+share191x32/44, centres reachable. Original Document object/mission/query
+retained; errors/undersized/clipping/overflow/API/media/refresh0. No sharing
+action invoked. All12 final PNGs inspected; no product defect. All8 original
+harness captures byte-equal to the three inspected desktop/light states.
+Screens/receipts:`/home/acdev/strikes/1694/shots/2026-10-15-sharing-retry/`.
+Two stopped harness failures retained:1FAIL3.22s counted a history event as
+reload (`harness-navigation-events/`),1FAIL7.37s sampled timeOrigin before the
+virtual clock replaced it (`harness-virtual-clock-origin/`). Guard now compares
+native Document identity, without changing the fixture/product. Preparation
+ad065505/corrections6ad129b8/9bcc8cb9; Ruff/format/API import/diffPASS.
+Fictional in-page reader only; conflict/revision/write acceptance remains builder
+unit coverage. v0.46 CI green20:58:02Z, mainb6cbab3019db1780e0e2301b7218c132907146e9;
+images building, no canary/readback due. This later source is outside v0.46.
+
+15 October, 20:44 UTC — Context pending/error/retry (D cba15b3e).
+New `fixture_coaching_context_save` **4/4 PASS**, 13.28s/launcher0 at
+671cc8ab on shared dev :3026, 1440/390 light/dark. Native selection retains
+all 74 Hindi/English characters; pending typing cannot replace the submitted
+note, textarea stays focusable/enabled/read-only, Save/Cancel disabled. Each
+attempt remains pending at2999ms and resolves at3000ms. Failure retains the
+exact note and permits editing; Enter retry succeeds and displays that exact
+note with its original explanatory sentence. Status height18.594px and Save
+document position unchanged; targets57/71x32 desktop, x44 phone, reachable.
+Mission/query retained, errors/undersized/clipping/overflow/API/media/refresh0.
+All12 final PNGs inspected, no product defect. Screens/receipts:
+`/home/acdev/strikes/1694/shots/2026-10-15-context-save/`.
+First run1FAIL11.63s stopped at my saved-status assertion, which omitted the
+existing explanatory sentence; retained original receipt and all3 inspected
+PNGs in `harness-saved-status-suffix/`. Corrected671cc8ab; preparation203382ad,
+Ruff/format/API import/diffPASS, no-server4skip/208deselected. Fictional in-page
+writer only; canonical persistence/authenticated access and command identity
+are not browser-proven (command reuse is builder unit coverage).
+v0.46 PR478 typefix retry stopped20:39:54Z on validate-python-tests(1);
+Python gates also FAILURE. No staging/production canaries, no health readback.
+
 15 October, 20:28 UTC — Team rep order (D e1d7c08b). New
 `fixture_team_rep_order` **4/4 PASS**, 24.74s/launcher0 at workbench 5c6d0e31,
 shared dev :3026, 1440/390 light/dark. Existing Sandbox60 and Design review2:
@@ -1808,3 +1915,30 @@ multi-element idle check, sticky-header scroll, over-broad pressed guard, late
 shell read) are retained in the shot folder's sub-directories. Receipts and PNGs:
 `/home/acdev/strikes/1694/shots/2026-10-15-report-clip-pause-room/`.
 Fixture-only; the live Pause state during playback is not browser-tested.
+
+
+### Report title scroll and null-href training — 2026-10-15 23:57 UTC
+
+`fixture_report_scroll_training`: **4/4 PASS**, 17.68s, launcher exit0 at
+`88058b6e`, product `77717316` plus retained later fixture source `bae78551`.
+Only `/review-fixture/report/story?example=follow_up`, shared3026,1440/390,
+light/dark. Title position static and bottom -812.59/-1633px above scrollports
+72/48px; analysis heading centre reachable at88.05/158.14px. Navigation33x32 /
+96x44; pointer disclosure982x53.69 /356x123.69; training247x44 on both widths;
+all centres reachable. Enter on authored opening training.href=null opens
+Coaching for call00000000-0000-4000-8000-000000000077, preserving example query,
+document marker/timeOrigin and tab. Document requests during switch0; media,
+writes, runtime/server errors, undersized/clipped text, overflow and refreshes0.
+Ten intercepted fictional GETs per case, including two same-id Coaching reads;
+no live API access. All8 changed-state PNGs inspected and readable.
+
+Screens/receipts: `/home/acdev/strikes/1694/shots/2026-10-16-report-scroll-training/`.
+Two initial harness failures are retained separately: detached navigation during
+portal mount (4.58s), then locator name changing from View more to Hide details
+(9.86s). Their two captures inspected; fixed06983a7c/88058b6e without weakening
+acceptance. Initial preparation80b20476; Ruff/format/API import/diffPASS.
+No completed all27/outcome/legacy suite replay or build. Fixture navigation only:
+the illustrative Siddhant Report overlays the existing fictional Amit source,
+so Coaching still shows that underlying authored focus; this does not establish
+saved-call feedback/lesson mapping or real saved outcome acceptance. Those
+remain the owner's existing signed-in readback, already requested07ace258.

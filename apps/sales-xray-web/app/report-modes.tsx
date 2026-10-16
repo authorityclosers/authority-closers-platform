@@ -10,11 +10,11 @@ import {
   FileText,
   Flag,
   Lightbulb,
+  ListChecks,
   PanelsTopLeft,
   Route,
   Scale,
   TableProperties,
-  Telescope,
   Undo2,
   UserRound,
   X,
@@ -37,6 +37,9 @@ import {
 } from "./report-outcome-context";
 import { ReportReadingProvider } from "./report-reading-context";
 import styles from "./report-modes.module.css";
+import { TargetArrow } from "./xray-report/icons";
+import type { XrayView } from "./xray-report/model";
+import { PartHead, xrayReportPanels } from "./xray-report/panels";
 
 export type ReportPanel = {
   id: string;
@@ -44,6 +47,9 @@ export type ReportPanel = {
   compactLabel?: string;
   content: ReactNode;
   summary?: string;
+  /** A Report part head (15 Oct structure): icon square and an optional aside. */
+  icon?: ReactNode;
+  aside?: ReactNode;
 };
 
 export type { DocumentReportData } from "./report-document-data";
@@ -52,7 +58,6 @@ import {
   type DocumentReportData,
 } from "./report-document-data";
 import { ReportDocument } from "./report-document";
-import { reportScreenPanels } from "./report-pillar-screen";
 import { ReportCallCoaching } from "./report-call-coaching";
 import type { ReportEvidence } from "./report-contract";
 import type { ContextualSourcePlayback } from "./source-playback-context";
@@ -112,9 +117,11 @@ const sectionIcons: Record<string, LucideIcon> = {
   "call-coaching": Lightbulb,
 };
 
-/** The six Report pillars share ids with Word bookmarks, not old sections. */
+/** The Report's parts (15 Oct structure); the six pillars kept their old ids. */
 const pillarIcons: Record<string, LucideIcon> = {
-  overview: Telescope,
+  analysis: ListChecks,
+  outcome: TargetArrow as LucideIcon,
+  overview: ChartNoAxesColumnIncreasing,
   coaching: Route,
   moments: Scale,
   missed: AudioLines,
@@ -477,7 +484,19 @@ function renderReportPanels(
           hidden={view === "tabs" && selected !== panel.id}
           tabIndex={view === "tabs" ? 0 : -1}
         >
-          {view === "story" ? (
+          {view === "story" && panel.icon ? (
+            <>
+              <PartHead
+                number={index + 1}
+                icon={panel.icon}
+                title={panel.label}
+                summary={panel.summary ?? ""}
+                aside={panel.aside}
+                headingId={`${id}-heading-${panel.id}`}
+              />
+              {panel.content}
+            </>
+          ) : view === "story" ? (
             <>
               <header className={styles.pillarHead}>
                 <span className={styles.pillarNumber} aria-hidden="true">
@@ -570,9 +589,9 @@ export function ReportModes({
   initialView,
   onSelectEvidence,
   onSelectContextualPlayback,
-  prospectControls,
   structure = "custom",
   fixture = false,
+  illustration = null,
 }: {
   label?: string;
   initialView?: View;
@@ -589,32 +608,22 @@ export function ReportModes({
     title: string,
   ) => void;
   structure?: "custom" | "pillars";
+  /** Kept for callers; the 15 Oct Report has no prospect panel yet. */
   prospectControls?: ReactNode;
   /** A fictional fixture: the Report shows its data but reads nothing live. */
   fixture?: boolean;
+  /** The doc's illustrative example (review fixture only): every number fictional. */
+  illustration?: XrayView | null;
 }) {
   const storyPanels =
     // A guest preview gets the Report too when the caller asks for pillars;
     // its locked items show as "more after you sign in".
     documentData?.report &&
     (!documentData.report.preview || structure === "pillars")
-      ? reportScreenPanels(
-          documentData,
-          onSelectEvidence,
-          onSelectContextualPlayback,
-          prospectControls,
-          {
-            callId: boundCallId ?? null,
-            liveReads: !fixture,
-            // Guests have no Coaching view, so no button that does nothing.
-            onOpenCoaching: documentData.report.preview
-              ? undefined
-              : () =>
-                  window.dispatchEvent(
-                    new CustomEvent(OPEN_VIEW, { detail: "coaching" }),
-                  ),
-          },
-        )
+      ? xrayReportPanels(documentData, onSelectEvidence, {
+          callId: boundCallId ?? null,
+          illustration: fixture ? illustration : null,
+        })
       : [];
   const coachingPanels: ReportPanel[] =
     documentData?.report && !documentData.report.preview
@@ -1368,8 +1377,11 @@ export function ReportModes({
           inline
           navigate={navigateToReport}
         >
-          {/* Coaching is one focused page: the header's call map waits here, hidden. */}
-          {view === "coaching" ? <div data-report-map-slot hidden /> : null}
+          {/* Coaching is one focused page, and the Report is only its three
+              parts (15 Oct doc): the header's call map waits here, hidden. */}
+          {view === "coaching" || (view === "story" && storyPanels.length) ? (
+            <div data-report-map-slot hidden />
+          ) : null}
           <div data-reading-panels hidden={view === "document"}>
             {renderReportPanels(
               view === "document" ? `${id}-source` : id,

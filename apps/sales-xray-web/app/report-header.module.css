@@ -53,3 +53,11 @@ small.fileType.fileType.fileType.fileType.fileType {
   top: 0;
   z-index: 30;
 }
+
+/* The 15 Oct Report (three parts) lets its title row scroll away with the
+   page: nothing covers the cards, and the part navigation stays in the top
+   bar. Classic views keep the pinned row. */
+:global(body:has([data-report-modes][data-view="story"]))
+  .pinned.pinned.pinned.pinned.pinned:not(:has(details[open])) {
+  position: static;
+}

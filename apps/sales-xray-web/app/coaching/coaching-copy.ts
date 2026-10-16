@@ -385,6 +385,8 @@ export const SHARING = {
   share: "Share with your admins",
   note: "Your admins can already open your calls. Sharing also shows them this page. You can stop any time.",
   unchanged: "Your sharing is shown as it is now.",
+  checking: "Checking sharing…",
+  retry: "Try again",
 } as const;
 
 /** Spec pillar 6: agree, disagree or add context. */

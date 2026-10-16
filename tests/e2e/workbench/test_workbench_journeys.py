@@ -5953,3 +5953,875 @@ def test_fixture_coaching_latest_call_shortcut(
             "api_mutations": len(mutations),
             "authenticated_or_real_data_acceptance": False,
         }
+
+
+def test_fixture_coaching_context_save(browser: Browser, viewport: tuple[int, str]) -> None:
+    """A pending context save protects the submitted words and permits a safe retry."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Context pending/retry uses the fictional in-page writer, never the API")
+    with _journey(browser, viewport, "context-save") as journey:
+        page = journey.page
+        api_requests: list[str] = []
+        media_requests: list[str] = []
+
+        def read_only(route: Route) -> None:
+            api_requests.append(route.request.method)
+            if route.request.method not in {"GET", "HEAD"}:
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", read_only)
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append(request.resource_type)
+                if request.resource_type == "media"
+                else None
+            ),
+        )
+        path = "/review-fixture/coaching?data=review&view=me&example=context-save"
+        journey.open(path)
+        expect(page.get_by_role("button", name="My coaching", exact=True)).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        page.evaluate("() => document.fonts.ready")
+        mission = page.locator("[data-active-mission]").inner_text()
+        page.clock.install()
+        page.clock.pause_at(datetime.now(UTC) + timedelta(seconds=1))
+        section = page.locator("#coaching-path")
+        section.get_by_role("button", name="Add context", exact=True).click()
+        area = section.get_by_role(
+            "textbox", name=re.compile("What should we know about this focus")
+        )
+        note = "ग्राहक had already confirmed the budget, and asked to keep the call short."
+        area.fill(note)
+        form = area.locator("../..")
+        status = form.get_by_role("status")
+        save = form.get_by_role("button", name="Save", exact=True)
+        cancel = form.get_by_role("button", name="Cancel", exact=True)
+
+        def geometry() -> dict[str, float]:
+            return {
+                "status_height": status.evaluate("el => el.getBoundingClientRect().height"),
+                "save_document_y": save.evaluate("el => el.getBoundingClientRect().y + scrollY"),
+            }
+
+        def capture(state: str) -> None:
+            area.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(state)
+            journey.unclipped_text(form)
+
+        idle_geometry = geometry()
+        save.click()
+        expect(status).to_have_text("Saving…")
+        expect(area).to_have_js_property("readOnly", True)
+        expect(area).to_be_enabled()
+        expect(save).to_be_disabled()
+        expect(cancel).to_be_disabled()
+        # Native selection and focus still work, but a keystroke cannot replace
+        # the submitted words while success would clear the draft.
+        area.select_text()
+        assert area.evaluate("el => el.selectionEnd - el.selectionStart") == len(note)
+        page.keyboard.type("This must not replace the submitted note.")
+        expect(area).to_have_value(note)
+        expect(area).to_be_focused()
+        assert geometry() == idle_geometry, "Saving shifted the reserved status or Save control"
+        capture("saving")
+        page.clock.fast_forward(2999)
+        expect(status).to_have_text("Saving…")
+        expect(area).to_have_js_property("readOnly", True)
+        page.clock.fast_forward(1)
+        expect(status).to_have_text("Not saved. Try again.")
+        expect(area).to_have_value(note)
+        expect(area).to_be_editable()
+        expect(save).to_be_enabled()
+        expect(cancel).to_be_enabled()
+        assert geometry() == idle_geometry, "Failure shifted the reserved status or Save control"
+        page.keyboard.press("Control+End")
+        page.keyboard.type(" Retry can edit.")
+        expect(area).to_have_value(note + " Retry can edit.")
+        area.fill(note)
+        capture("retry")
+        journey.control_target(save, "retry-save")
+        journey.control_target(cancel, "retry-cancel")
+        save.focus()
+        page.keyboard.press("Enter")
+        expect(status).to_have_text("Saving…")
+        expect(area).to_have_js_property("readOnly", True)
+        page.clock.fast_forward(2999)
+        expect(area).to_have_value(note)
+        expect(status).to_have_text("Saving…")
+        page.clock.fast_forward(1)
+        expect(area).to_have_count(0)
+        saved = section.get_by_role("status").filter(has_text=f"Saved: “{note}”")
+        expect(saved).to_have_text(f"Saved: “{note}”. It shows with the likely reason.")
+        saved.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("saved")
+        journey.unclipped_text(section)
+        expect(page.locator("[data-active-mission]")).to_have_text(mission)
+        expect(page).to_have_url(os.environ["WB_BASE_URL"].rstrip("/") + path)
+        expect(page.locator("audio,video")).to_have_count(0)
+        assert not api_requests, "The fictional context writer attempted a live API request"
+        assert not media_requests, "Context saving requested media"
+        assert journey.live_refreshes == 0, "Live source changed during context saving"
+        journey.observations[-1]["fictional_context_save"] = {
+            "source": "D cba15b3e; signed-out Design review pending/error/retry writer",
+            "native_selection_length": len(note),
+            "pending_ms_each_attempt": 3000,
+            "pending_geometry": idle_geometry,
+            "native_pending_typing_blocked": True,
+            "failure_retains_editable_note": True,
+            "keyboard_retry_saves_exact_note": True,
+            "mission_and_query_retained": True,
+            "api_requests": len(api_requests),
+            "media_requests": len(media_requests),
+            "command_identity": "unit-covered; not exposed by the fictional browser writer",
+            "authenticated_or_canonical_persistence_acceptance": False,
+        }
+
+
+def test_fixture_coaching_sharing_retry(browser: Browser, viewport: tuple[int, str]) -> None:
+    """A failed sharing-setting read recovers in place before offering a sharing action."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Sharing read recovery uses the fictional in-page reader, never an account")
+    with _journey(browser, viewport, "sharing-retry") as journey:
+        page = journey.page
+        api_requests: list[str] = []
+        media_requests: list[str] = []
+
+        def no_api(route: Route) -> None:
+            api_requests.append(route.request.method)
+            route.abort("blockedbyclient")
+
+        page.route("**/v1/**", no_api)
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append(request.resource_type)
+                if request.resource_type == "media"
+                else None
+            ),
+        )
+        path = "/review-fixture/coaching?data=review&view=me&example=sharing-retry"
+        journey.open(path)
+        expect(page.get_by_role("button", name="My coaching", exact=True)).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        page.evaluate("() => document.fonts.ready")
+        panel = page.get_by_role("region", name="Who sees your coaching", exact=True)
+        retry = panel.get_by_role("button", name="Try again", exact=True)
+        status = panel.get_by_role("status")
+        setting_actions = panel.get_by_role(
+            "button", name=re.compile("Share with your admins|Stop sharing")
+        )
+        expect(status).to_have_text("Sharing setting couldn’t be loaded. Try again.")
+        expect(retry).to_be_enabled()
+        expect(setting_actions).to_have_count(0)
+        mission = page.locator("[data-active-mission]").inner_text()
+        original_document = page.evaluate_handle("document")
+
+        def capture(state: str) -> None:
+            panel.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(state)
+            journey.unclipped_text(panel)
+
+        capture("failed")
+        journey.control_target(retry, "read-retry")
+        page.clock.install()
+        page.clock.pause_at(datetime.now(UTC) + timedelta(seconds=1))
+        keyboard = journey.theme == "dark"
+        if keyboard:
+            retry.focus()
+            page.keyboard.press("Enter")
+        else:
+            retry.click()
+        expect(status).to_have_text("Checking sharing…")
+        expect(retry).to_be_disabled()
+        expect(setting_actions).to_have_count(0)
+        capture("checking")
+        page.clock.fast_forward(2999)
+        expect(status).to_have_text("Checking sharing…")
+        expect(retry).to_be_disabled()
+        expect(setting_actions).to_have_count(0)
+        page.clock.fast_forward(1)
+        share = panel.get_by_role("button", name="Share with your admins", exact=True)
+        expect(share).to_be_enabled()
+        expect(setting_actions).to_have_count(1)
+        expect(retry).to_have_count(0)
+        expect(panel).to_contain_text("Private")
+        expect(panel).to_contain_text("Only you can see it.")
+        expect(panel).to_contain_text("Priya Shah")
+        expect(panel).not_to_contain_text(re.compile("couldn’t be loaded|Checking sharing"))
+        capture("loaded")
+        journey.control_target(share, "loaded-share")
+        # Read-only QA stops before this action: recipients and revision-bound
+        # mutations remain the builder's separate unit/API acceptance.
+        expect(page.locator("[data-active-mission]")).to_have_text(mission)
+        expect(page).to_have_url(os.environ["WB_BASE_URL"].rstrip("/") + path)
+        expect(page.locator("audio,video")).to_have_count(0)
+        assert page.evaluate("original => original === document", original_document), (
+            "Sharing read recovery reloaded the document"
+        )
+        original_document.dispose()
+        assert not api_requests, "The fictional sharing reader attempted an API request"
+        assert not media_requests, "Sharing read recovery requested media"
+        assert journey.live_refreshes == 0, "Live source changed during sharing read recovery"
+        journey.observations[-1]["fictional_sharing_read_retry"] = {
+            "source": "D 265372c0; signed-out Design review in-page sharing reader",
+            "activation": "Enter" if keyboard else "pointer",
+            "pending_ms": 3000,
+            "no_action_before_current_setting": True,
+            "loaded_state": "Private",
+            "loaded_recipient": "Priya Shah",
+            "sharing_action_invoked": False,
+            "mission_and_query_retained": True,
+            "same_document_identity": True,
+            "api_requests": len(api_requests),
+            "media_requests": len(media_requests),
+            "conflict_revision_or_mutation_acceptance": "builder unit coverage only",
+            "authenticated_or_canonical_state_acceptance": False,
+        }
+
+
+@pytest.mark.parametrize("choice", ["Agree", "Not completely"])
+def test_fixture_coaching_feedback_save(
+    browser: Browser, viewport: tuple[int, str], choice: str
+) -> None:
+    """Feedback announces pending/failure and preserves keyboard focus through a retry."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Feedback pending/retry uses the fictional in-page writer, never an account")
+    name = "agree" if choice == "Agree" else "disagree"
+    with _journey(browser, viewport, f"feedback-save-{name}") as journey:
+        page = journey.page
+        api_requests: list[str] = []
+        media_requests: list[str] = []
+
+        def no_api(route: Route) -> None:
+            api_requests.append(route.request.method)
+            route.abort("blockedbyclient")
+
+        page.route("**/v1/**", no_api)
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append(request.resource_type)
+                if request.resource_type == "media"
+                else None
+            ),
+        )
+        path = "/review-fixture/coaching?data=review&view=me&example=feedback-save"
+        journey.open(path)
+        expect(page.get_by_role("button", name="My coaching", exact=True)).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        page.evaluate("() => document.fonts.ready")
+        page.clock.install()
+        page.clock.pause_at(datetime.now(UTC) + timedelta(seconds=1))
+        mission = page.locator("[data-active-mission]").inner_text()
+        section = page.locator("#coaching-path")
+        group = section.get_by_role("group", name="Your view", exact=True)
+        status = group.locator('xpath=following-sibling::p[@role="status"][1]')
+        selected = group.get_by_role("button", name=choice, exact=True)
+        other = group.get_by_role(
+            "button", name="Not completely" if choice == "Agree" else "Agree", exact=True
+        )
+        add_context = group.get_by_role("button", name="Add context", exact=True)
+        reserved_height = status.evaluate("el => el.getBoundingClientRect().height")
+        assert reserved_height > 0, "Feedback has no reserved live-status line"
+
+        def capture(state: str) -> None:
+            group.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(state)
+            journey.unclipped_text(group)
+            journey.unclipped_text(status)
+
+        selected.focus()
+        page.keyboard.press("Enter")
+        expect(status).to_have_text("Saving…")
+        for control in (selected, other):
+            expect(control).to_have_attribute("aria-disabled", "true")
+            expect(control).to_have_js_property("disabled", False)
+        expect(selected).to_be_focused()
+        assert status.evaluate("el => el.getBoundingClientRect().height") == reserved_height
+        # Use native keys on both pending choices. A second write would resolve
+        # the fictional writer successfully instead of producing the first error.
+        page.keyboard.press("Enter")
+        page.keyboard.press("Enter")
+        other.focus()
+        page.keyboard.press("Enter")
+        selected.focus()
+        capture("saving")
+        page.clock.fast_forward(2999)
+        expect(status).to_have_text("Saving…")
+        expect(section.get_by_role("textbox")).to_have_count(0)
+        page.clock.fast_forward(1)
+        expect(status).to_have_text("Not saved. Try again.")
+        expect(selected).not_to_have_attribute("aria-disabled", "true")
+        expect(other).not_to_have_attribute("aria-disabled", "true")
+        expect(selected).to_be_focused()
+        assert status.evaluate("el => el.getBoundingClientRect().height") == reserved_height
+        capture("retry")
+        for control, label in ((selected, "selected"), (other, "other"), (add_context, "context")):
+            journey.control_target(control, label)
+        expect(selected).to_be_focused()
+        page.keyboard.press("Enter")
+        expect(status).to_have_text("Saving…")
+        elsewhere = section.get_by_role("button", name="I noticed it later", exact=True)
+        elsewhere.focus()
+        page.clock.fast_forward(2999)
+        expect(status).to_have_text("Saving…")
+        expect(elsewhere).to_be_focused()
+        page.clock.fast_forward(1)
+        expect(selected).to_be_disabled()
+        expect(other).to_be_disabled()
+        expect(selected).to_have_attribute("aria-pressed", "true")
+        expect(other).to_have_attribute("aria-pressed", "false")
+        expect(elsewhere).to_be_focused()
+        if choice == "Agree":
+            expect(status).to_have_text("Noted. Your mission stays the same.")
+            expect(section.get_by_role("textbox")).to_have_count(0)
+        else:
+            expect(status).to_have_text(
+                "Noted. Here’s what this focus is based on. Tell us what we missed."
+            )
+            missed = section.get_by_role("textbox", name=re.compile(r"^What did we miss\?"))
+            expect(missed).to_be_visible()
+            expect(missed).to_have_value("")
+            evidence = section.get_by_role("list", name="This focus is based on", exact=True)
+            expect(evidence).to_be_visible()
+            assert evidence.get_by_role("listitem").count() > 0
+        capture("saved")
+        expect(page.locator("[data-active-mission]")).to_have_text(mission)
+        expect(page).to_have_url(os.environ["WB_BASE_URL"].rstrip("/") + path)
+        expect(page.locator("audio,video")).to_have_count(0)
+        assert not api_requests, "Fictional feedback attempted an API request"
+        assert not media_requests, "Feedback requested media"
+        assert journey.live_refreshes == 0, "Live source changed during feedback saving"
+        journey.observations[-1]["fictional_feedback_save"] = {
+            "source": "D 2d6dbc78; signed-out Design review in-page feedback writer",
+            "choice": choice,
+            "pending_ms_each_attempt": 3000,
+            "status_reserved_height": reserved_height,
+            "native_pending_controls_enabled_with_aria_disabled": True,
+            "repeated_enter_and_other_choice_guarded": True,
+            "failure_retains_initiating_focus": True,
+            "same_choice_enter_retry": True,
+            "success_preserves_deliberately_moved_focus": True,
+            "mission_and_query_retained": True,
+            "api_requests": len(api_requests),
+            "media_requests": len(media_requests),
+            "command_identity": "builder unit coverage only",
+            "authenticated_or_canonical_feedback_acceptance": False,
+        }
+
+
+def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, str]) -> None:
+    """The rebuilt Report has three readable parts and all27 owner-named pointers."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("The rebuilt Report journey uses signed-out fictional examples only")
+    contract = json.loads(Path(__file__).with_name("report-15oct-acceptance.json").read_text())
+    titles = contract["pointer_titles"]
+    assert len(titles) == 27
+    sections = (
+        ("overview", "Overview & Score"),
+        ("analysis", "Detailed Call Analysis"),
+        ("outcome", "Final Call Outcome"),
+    )
+    with _journey(browser, viewport, "report-15oct") as journey:
+        page = journey.page
+        bootstrap_reads: list[str] = []
+        api_mutations: list[str] = []
+        read_replies: dict[tuple[str, str, str], dict[str, object]] = {}
+        media_requests: list[str] = []
+        journey.observations.append(
+            {
+                "step": "fictional-report-network-guard",
+                "bootstrap_reads": bootstrap_reads,
+                "api_mutations": api_mutations,
+                "media_requests": media_requests,
+            }
+        )
+
+        def fictional_read(route: Route) -> None:
+            request = route.request
+            if request.method not in {"GET", "HEAD"}:
+                api_mutations.append(request.method)
+                route.abort("blockedbyclient")
+                return
+            url = urlsplit(request.url)
+            bootstrap_reads.append(url.path)
+            key = (request.method, url.path, url.query)
+            if key not in read_replies:
+                read_replies[key] = _fictional_api_reply(*key)
+            reply = read_replies[key]
+            route.fulfill(
+                status=reply["status"],
+                content_type="application/json",
+                body=json.dumps(reply["body"]),
+            )
+
+        page.route("**/v1/**", fictional_read)
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append(request.resource_type)
+                if request.resource_type == "media"
+                else None
+            ),
+        )
+
+        def center(target: Locator) -> None:
+            target.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+
+        def capture(target: Locator, label: str) -> None:
+            center(target)
+            journey.snapshot(label)
+            journey.unclipped_text(target)
+
+        def open_example(kind: str) -> None:
+            journey.open(f"/review-fixture/report/story?example={kind}")
+            page.wait_for_load_state("load")
+            expect(page.locator('[data-xray-part="overview"]')).to_be_visible()
+            page.evaluate("() => document.fonts.ready")
+            assert parse_qs(urlsplit(page.url).query).get("example") == [kind]
+            if kind != "none":
+                expect(page.locator('[data-xray-part="outcome"]')).to_have_attribute(
+                    "data-outcome", kind, timeout=10_000
+                )
+            nav = page.locator("[data-report-sections]:visible")
+            expect(nav).to_have_count(1)
+            expect(nav.get_by_role("link")).to_have_count(3)
+            assert nav.get_by_role("link").evaluate_all(
+                "els => els.map(el => el.getAttribute('aria-label'))"
+            ) == [label for _, label in sections]
+            assert page.locator("[data-xray-part]").evaluate_all(
+                "els => els.map(el => el.getAttribute('data-xray-part'))"
+            ) == [key for key, _ in sections]
+            for index, (key, label) in enumerate(sections, start=1):
+                part = page.locator(f'[data-report-mode-section="{key}"]:visible')
+                expect(
+                    part.get_by_role("heading", name=f"{index}. {label}", exact=True)
+                ).to_be_visible()
+                expect(part).not_to_contain_text("This part of the report couldn’t be shown")
+
+        def navigate(key: str, label: str) -> Locator:
+            page.locator("[data-report-sections]:visible").get_by_role(
+                "link", name=label, exact=True
+            ).click()
+            return page.locator(f'[data-xray-part="{key}"]')
+
+        open_example("follow_up")
+        overview = navigate("overview", "Overview & Score")
+        summary = overview.get_by_role("region", name="Call summary", exact=True)
+        score = overview.get_by_role("region", name="Overall score", exact=True)
+        expect(summary.get_by_role("heading", name="Call Summary", exact=True)).to_be_visible()
+        expect(score.get_by_text("Illustrative example", exact=True)).to_be_visible()
+        assert re.search(r"\b\d{1,3}\s*/100", score.inner_text()), "Illustrative score is absent"
+        capture(summary, "overview-summary")
+        capture(score.locator(":scope > div").first, "overview-score")
+        stats = score.get_by_role("heading", name="Call Statistics", exact=True)
+        capture(stats.locator(".."), "overview-statistics")
+        for words in ("Call Duration", "Talk Share", "Questions Asked", "Longest Turn"):
+            expect(score).to_contain_text(words)
+        about = score.get_by_role("button", name="About these numbers", exact=True)
+        center(about)
+        journey.control_target(about, "about-statistics")
+
+        analysis = navigate("analysis", "Detailed Call Analysis")
+        rows = analysis.locator("li[data-pointer]")
+        expect(rows).to_have_count(27)
+        original_ids = rows.evaluate_all("els => els.map(el => el.dataset.pointer)")
+        assert len(set(original_ids)) == 27, "Report pointer ids are duplicated"
+        capture(analysis.get_by_role("group", name="Show pointers", exact=True), "analysis-filters")
+        for index, title in enumerate(titles, start=1):
+            row = rows.nth(index - 1)
+            control = row.get_by_role("button", name=re.compile(rf"^{index}\. {re.escape(title)}:"))
+            expect(control).to_have_count(1)
+            expect(row.get_by_text(title, exact=True)).to_be_visible()
+            expect(control).to_have_attribute("aria-expanded", "false")
+            assert (control.get_attribute("aria-label") or "").endswith("View more")
+            center(control)
+            journey.control_target(control, f"pointer-{index}")
+            journey.unclipped_text(control)
+            if index in (1, 27):
+                journey.snapshot(f"analysis-row-{index}")
+        first = rows.first.get_by_role("button").first
+        second = rows.nth(1).get_by_role("button").first
+        first.focus()
+        page.keyboard.press("Enter")
+        expect(first).to_have_attribute("aria-expanded", "true")
+        detail = page.locator("#" + str(first.get_attribute("aria-controls")))
+        for heading in (
+            "What Happened?",
+            "Why It Matters?",
+            "Evidence from the Call",
+            "How to Improve?",
+        ):
+            expect(detail.get_by_role("heading", name=heading, exact=True)).to_be_visible()
+        capture(detail, "analysis-scored-details")
+        center(second)
+        second.click()
+        expect(second).to_have_attribute("aria-expanded", "true")
+        second_detail = page.locator("#" + str(second.get_attribute("aria-controls")))
+        expect(second_detail).to_contain_text("No score is given for this pointer.")
+        capture(second_detail, "analysis-unscored-details")
+        first.focus()
+        page.keyboard.press("Space")
+        expect(first).to_have_attribute("aria-expanded", "false")
+        expect(first).to_be_focused()
+        expect(second).to_have_attribute("aria-expanded", "true")
+        second.focus()
+        page.keyboard.press("Enter")
+        expect(second).to_have_attribute("aria-expanded", "false")
+        filters = analysis.get_by_role("group", name="Show pointers", exact=True)
+        good = filters.get_by_role("button", name=re.compile(r"^Good(?:\s|\d|$)"))
+        good_count = int(good.locator("span").inner_text())
+        center(good)
+        journey.control_target(good, "good-filter")
+        good.click()
+        expect(rows).to_have_count(good_count)
+        assert good_count > 0
+        assert all(
+            ": Good" in str(label)
+            for label in rows.get_by_role("button").evaluate_all(
+                "els => els.map(el => el.getAttribute('aria-label'))"
+            )
+        )
+        filters.get_by_role("button", name=re.compile(r"^All(?:\s|\d|$)")).click()
+        expect(rows).to_have_count(27)
+        assert rows.evaluate_all("els => els.map(el => el.dataset.pointer)") == original_ids
+
+        outcome_cases = (
+            ("follow_up", "Follow-up Set"),
+            ("won", "Won"),
+            ("lost", "Lost"),
+            ("decision_pending", "Decision Pending"),
+        )
+        for kind, label in outcome_cases:
+            if kind != "follow_up":
+                open_example(kind)
+            outcome = navigate("outcome", "Final Call Outcome")
+            expect(outcome).to_have_attribute("data-outcome", kind)
+            headline = outcome.get_by_text("Deal Outcome", exact=True).locator("..")
+            expect(headline.get_by_text(label, exact=True)).to_be_visible()
+            capture(outcome.get_by_text("Deal Outcome", exact=True), f"outcome-{kind}")
+            notes = outcome.get_by_role("heading", name="Additional Notes", exact=True)
+            expect(notes).to_be_visible()
+            capture(notes.locator(".."), f"outcome-{kind}-notes")
+
+        open_example("none")
+        overview = navigate("overview", "Overview & Score")
+        score = overview.get_by_role("region", name="Overall score", exact=True)
+        expect(score).to_contain_text("Not scored yet")
+        expect(overview.get_by_text("Illustrative example", exact=True)).to_have_count(0)
+        capture(score.locator(":scope > div").first, "mapped-not-scored")
+        analysis = navigate("analysis", "Detailed Call Analysis")
+        rows = analysis.locator("li[data-pointer]")
+        expect(rows).to_have_count(27)
+        expect(analysis.get_by_text("No score", exact=True)).to_have_count(27)
+        capture(rows.first, "mapped-pointer-no-score")
+        progress = page.get_by_role("progressbar", name="Pointers evaluated", exact=True)
+        expect(progress).to_have_attribute("aria-valuenow", "0")
+        assert not api_mutations, "The fictional Report attempted an API mutation"
+        assert not media_requests, "Reading the Report requested media"
+        assert journey.live_refreshes == 0, "Live source changed during rebuilt Report QA"
+        journey.observations[-1]["report_15oct"] = {
+            "source": "Owner b4727ffd/36bd8a09/bc0bd174; controlled27-pointer contract",
+            "parts": [label for _, label in sections],
+            "pointer_titles": titles,
+            "pointer_ids": original_ids,
+            "native_independent_disclosures_and_filter": True,
+            "illustrative_outcomes": [label for _, label in outcome_cases],
+            "missing_scores_remain_unscored": True,
+            "fictional_bootstrap_reads": bootstrap_reads,
+            "api_mutations": len(api_mutations),
+            "media_requests": len(media_requests),
+            "ai_score_label_browser_coverage": False,
+            "authenticated_call_acceptance": False,
+            "api_structure_fixture_mapping": "not covered by the legacy Amit fixture",
+        }
+
+
+def test_fixture_report_scroll_training(browser: Browser, viewport: tuple[int, str]) -> None:
+    """The title clears analysis; a missing video URL opens this call's Coaching."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("This bounded check uses the existing fictional Report only")
+    with _journey(browser, viewport, "report-scroll-training") as journey:
+        page = journey.page
+        reads: list[str] = []
+        mutations: list[str] = []
+        media: list[str] = []
+        documents: list[str] = []
+        replies: dict[tuple[str, str, str], dict[str, object]] = {}
+        journey.observations.append(
+            {"step": "network-guard", "reads": reads, "mutations": mutations, "media": media}
+        )
+
+        def read_only(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif request.resource_type == "media" or re.search(
+                r"\.(?:mp3|mp4|m4a|wav|ogg|webm|aac)$", url.path, re.I
+            ):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            elif url.path.startswith("/v1/"):
+                reads.append(url.path)
+                key = (request.method, url.path, url.query)
+                if key not in replies:
+                    replies[key] = _fictional_api_reply(*key)
+                reply = replies[key]
+                route.fulfill(
+                    status=reply["status"],
+                    content_type="application/json",
+                    body=json.dumps(reply["body"]),
+                )
+            else:
+                if request.resource_type == "document":
+                    documents.append(url.path)
+                route.continue_()
+
+        page.route("**/*", read_only)
+        journey.open("/review-fixture/report/story?example=follow_up")
+        page.wait_for_load_state("load")
+        page.wait_for_load_state("networkidle")
+        page.evaluate("() => document.fonts.ready")
+        modes = page.locator("[data-report-modes]")
+        expect(modes).to_have_attribute("data-view", "story")
+        header = page.locator("[data-report-sticky]")
+        expect(header.get_by_role("heading", level=1)).to_have_text(
+            "Siddhant Pawar · discovery call"
+        )
+        analysis_nav = page.locator("[data-report-sections]:visible").get_by_role(
+            "link", name="Detailed Call Analysis", exact=True
+        )
+        journey.control_target(analysis_nav, "analysis-navigation")
+        analysis_nav.click()
+        part = page.locator('[data-report-mode-section="analysis"]:visible')
+        heading = part.get_by_role("heading", name="2. Detailed Call Analysis", exact=True)
+        expect(heading).to_be_in_viewport()
+        # Let the existing measured section jump finish before taking geometry.
+        page.evaluate(
+            """() => new Promise(resolve => requestAnimationFrame(() =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve))))"""
+        )
+        scroll = header.evaluate(
+            """el => {
+              let port = el.parentElement;
+              while (port && !(port.scrollHeight > port.clientHeight &&
+                /auto|scroll/.test(getComputedStyle(port).overflowY))) port = port.parentElement;
+              const r = el.getBoundingClientRect();
+              return {position: getComputedStyle(el).position, bottom: r.bottom,
+                scrollportTop: port?.getBoundingClientRect().top ?? 0,
+                scrollTop: port?.scrollTop ?? window.scrollY};
+            }"""
+        )
+        journey.observations[-1]["title_after_analysis_jump"] = scroll
+        assert scroll["position"] == "static", "Report title still pins over the cards"
+        assert scroll["scrollTop"] > 0
+        assert scroll["bottom"] <= scroll["scrollportTop"] + 1, "Title did not scroll away"
+        heading_hit = heading.evaluate(
+            """el => {
+              const r = el.getBoundingClientRect();
+              const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+              return {top: r.top, bottom: r.bottom, reachable: hit === el || el.contains(hit)};
+            }"""
+        )
+        journey.observations[-1]["analysis_heading"] = heading_hit
+        assert heading_hit["reachable"], "Analysis heading is covered"
+        row = part.locator('li[data-pointer="call_opening"]')
+        disclosure = row.locator('button[aria-controls="xray-pointer-call_opening"]')
+        journey.control_target(disclosure, "pointer-disclosure")
+        disclosure.focus()
+        page.keyboard.press("Enter")
+        expect(disclosure).to_have_attribute("aria-expanded", "true")
+        training = row.get_by_role("button", name="Watch Training Video", exact=True)
+        training.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.control_target(training, "training")
+        journey.snapshot("analysis-training")
+        journey.unclipped_text(row)
+        training.focus()
+        expect(training).to_be_focused()
+        original = urlsplit(page.url)
+        original_query = parse_qs(original.query)
+        document_count = len(documents)
+        time_origin = page.evaluate(
+            "() => { window.__wbReportTrainingDocument = true; return performance.timeOrigin; }"
+        )
+        page.keyboard.press("Enter")
+        expect(modes).to_have_attribute("data-view", "coaching")
+        expect(modes).to_have_attribute("data-report-section", "call-coaching")
+        coaching = page.locator("[data-call-coaching]:visible")
+        expect(coaching).to_be_visible()
+        expect(coaching).to_have_attribute("data-state", "report-focus")
+        current = urlsplit(page.url)
+        query = parse_qs(current.query)
+        assert current.path == original.path
+        assert query.get("call") == ["00000000-0000-4000-8000-000000000077"]
+        assert query.get("view") == ["coaching"]
+        assert query.get("section") == ["call-coaching"]
+        for key, value in original_query.items():
+            if key not in {"view", "section", "call"}:
+                assert query.get(key) == value, "Training navigation lost the fixture query"
+        assert page.evaluate("() => window.__wbReportTrainingDocument === true")
+        assert page.evaluate("() => performance.timeOrigin") == time_origin
+        assert len(documents) == document_count, "Training caused a full document request"
+        assert len(page.context.pages) == 1, "Missing-href training opened another tab"
+        coaching.get_by_role("heading").first.scroll_into_view_if_needed()
+        journey.snapshot("coaching")
+        journey.unclipped_text(coaching)
+        assert not mutations, "Report navigation attempted a write"
+        assert not media, "Training navigation started media automatically"
+        assert journey.live_refreshes == 0, "Live source changed during this bounded check"
+        journey.observations[-1]["report_scroll_training"] = {
+            "source": "77717316; current fixture source bae78551",
+            "pointer": "call_opening; authored training.href=null",
+            "call_id": query["call"][0],
+            "keyboard_training_opens_same_call_coaching": True,
+            "document_requests_during_training": len(documents) - document_count,
+            "query_retained": True,
+            "api_mutations": len(mutations),
+            "media_requests": len(media),
+            "authenticated_or_saved_outcome_acceptance": False,
+        }
+
+
+def test_live_report_15oct_structure(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Read one explicitly supplied saved call using an existing approved session."""
+    if os.environ.get("WB_MODE") != "live":
+        pytest.skip("Saved Report smoke requires live mode and an approved existing session")
+    if not os.environ.get("WB_REPORT_PATH") or not os.environ.get("WB_STORAGE_STATE"):
+        pytest.skip("Supply the approved existing session reference and exact saved-call route")
+    path = _path("WB_REPORT_PATH", "/")
+    assert re.fullmatch(r"/analysis/calls/[0-9a-f-]{36}", path, re.IGNORECASE), (
+        "Supply the exact approved saved-call route without example overrides"
+    )
+    expected_overall = os.environ.get("WB_EXPECTED_OVERALL_SCORE")
+    if expected_overall is not None:
+        assert expected_overall.isdigit() and 0 <= int(expected_overall) <= 100, (
+            "WB_EXPECTED_OVERALL_SCORE must be the owner's supplied0–100 score"
+        )
+    contract = json.loads(Path(__file__).with_name("report-15oct-acceptance.json").read_text())
+    sections = (
+        ("overview", "Overview & Score"),
+        ("analysis", "Detailed Call Analysis"),
+        ("outcome", "Final Call Outcome"),
+    )
+    draft = re.compile(r"^AI draft\s*[·–—-]\s*not reviewed by Dipak$")
+    with _journey(browser, viewport, "saved-report-15oct") as journey:
+        page = journey.page
+        media_requests: list[str] = []
+
+        def read_only(route: Route) -> None:
+            request = route.request
+            if request.method not in {"GET", "HEAD", "OPTIONS"}:
+                journey.blocked_mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif request.resource_type == "media":
+                media_requests.append(request.resource_type)
+                route.abort("blockedbyclient")
+            else:
+                route.fallback()
+
+        page.route("**/*", read_only)
+        journey.open(path)
+        page.wait_for_load_state("load")
+        expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
+        expect(page.locator('[data-xray-part="overview"]')).to_be_visible()
+        page.evaluate("() => document.fonts.ready")
+        assert urlsplit(page.url).path == path
+        nav = page.locator("[data-report-sections]:visible")
+        expect(nav.get_by_role("link")).to_have_count(3)
+        assert nav.get_by_role("link").evaluate_all(
+            "els => els.map(el => el.getAttribute('aria-label'))"
+        ) == [label for _, label in sections]
+        score = page.get_by_role("region", name="Overall score", exact=True)
+        overall = re.search(r"(?<![\w.])(-?\d+(?:\.\d+)?)\s*/100", score.inner_text())
+        if overall:
+            assert 0 <= float(overall[1]) <= 100, "Saved overall score is outside0–100"
+            expect(score.get_by_text(draft)).to_be_visible()
+        else:
+            expect(score).to_contain_text("Not scored yet")
+        if expected_overall is not None:
+            assert overall is not None and float(overall[1]) == int(expected_overall), (
+                "Displayed overall score differs from the owner's saved-call handoff"
+            )
+        analysis = page.locator('[data-xray-part="analysis"]')
+        rows = analysis.locator("li[data-pointer]")
+        expect(rows).to_have_count(27)
+        scored = 0
+        scored_indices: list[int] = []
+        for index, title in enumerate(contract["pointer_titles"], start=1):
+            row = rows.nth(index - 1)
+            control = row.get_by_role("button", name=re.compile(rf"^{index}\. {re.escape(title)}:"))
+            expect(control).to_have_attribute("aria-expanded", "false")
+            value = re.search(
+                r", (-?\d+(?:\.\d+)?) out of 100\.", control.get_attribute("aria-label") or ""
+            )
+            if value:
+                assert 0 <= float(value[1]) <= 100, "Saved pointer score is outside0–100"
+                scored += 1
+                scored_indices.append(index - 1)
+            else:
+                expect(row.get_by_text("No score", exact=True)).to_be_visible()
+            control.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            if index == 1:
+                journey.snapshot("pointer-first")
+            journey.control_target(control, f"pointer-{index}")
+            journey.unclipped_text(control)
+        if scored:
+            expect(analysis.get_by_text(draft)).to_be_visible()
+        if expected_overall is not None:
+            assert scored_indices, "The scored-call handoff has no scored pointer rows"
+        # A score-pinned handoff also requires quoted feedback somewhere in the
+        # scored rows; do not assume the opening itself has saved evidence.
+        for index in scored_indices if expected_overall is not None else [0]:
+            control = rows.nth(index).get_by_role("button").first
+            control.focus()
+            page.keyboard.press("Enter")
+            expect(control).to_have_attribute("aria-expanded", "true")
+            details = page.locator("#" + str(control.get_attribute("aria-controls")))
+            if expected_overall is None or details.locator("blockquote").count():
+                break
+            page.keyboard.press("Space")
+            expect(control).to_have_attribute("aria-expanded", "false")
+        if expected_overall is not None:
+            for label in (
+                "What Happened?",
+                "Why It Matters?",
+                "Evidence from the Call",
+                "How to Improve?",
+            ):
+                expect(details.get_by_role("heading", name=label, exact=True)).to_be_visible()
+            assert details.locator("blockquote").count() > 0, "No scored feedback has a saved quote"
+        expect(details).to_be_visible()
+        details.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        journey.snapshot("pointer-details")
+        journey.unclipped_text(details)
+        for index, (key, label) in enumerate(sections, start=1):
+            nav.get_by_role("link", name=label, exact=True).click()
+            part = page.locator(f'[data-report-mode-section="{key}"]:visible')
+            heading = part.get_by_role("heading", name=f"{index}. {label}", exact=True)
+            expect(heading).to_be_visible()
+            expect(part).not_to_contain_text("This part of the report couldn’t be shown")
+            expect(part.get_by_text("Illustrative example", exact=True)).to_have_count(0)
+            heading.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(key)
+            journey.unclipped_text(part)
+        assert not media_requests, "Reading the saved Report eagerly requested media"
+        assert journey.live_refreshes == 0, "Live source changed during saved Report smoke"
+        journey.observations[-1]["saved_report_15oct"] = {
+            "parts": len(sections),
+            "pointer_titles_checked": len(contract["pointer_titles"]),
+            "pointer_scores_displayed": scored,
+            "overall_score_displayed": overall is not None,
+            "matches_owner_supplied_score_and_has_quoted_feedback": expected_overall is not None,
+            "ai_draft_label_required_when_scored": True,
+            "session_issued_or_persisted": False,
+            "media_requests": len(media_requests),
+            "api_payload_equality_or_scoring_quality_acceptance": False,
+        }

@@ -2,6 +2,20 @@ These opt-in Playwright journeys use an already running shared server. They do
 not start a server, create accounts, seed a database, call providers, deploy,
 send learner feedback or change sharing/billing. Run under the shared heavy slot.
 
+For the rebuilt 15 Oct Report, select `fixture_report_15oct_structure` on dev.
+Select `live_report_15oct_structure` for a saved-call smoke only after supplying
+`WB_MODE=live`, `WB_REPORT_PATH=/analysis/calls/<approved-id>` and
+`WB_STORAGE_STATE=<approved-existing-session-reference>`. It blocks mutations
+and media, checks three parts/all27 names, native disclosure, score range and
+AI-draft labels when saved scores exist. It never issues or saves a session.
+For the owner's five scored-call handoff, also set `WB_EXPECTED_OVERALL_SCORE`
+to that call's supplied score. That requires the exact score, at least one
+scored pointer and expanded feedback with a saved quote. It does not assess
+scoring quality or certify that quote against the source API payload.
+The older six-part Report journeys below retain historical acceptance; they
+are not the rebuilt Report's current smoke. Independent Document checks remain
+separate. No real-call/AI-label browser pass is claimed until that smoke runs.
+
 ```sh
 WB_BASE_URL=http://127.0.0.1:3026 \
 WB_SHOTS_DIR=/home/acdev/strikes/1694/shots/2026-10-11-workbench \
@@ -424,3 +438,73 @@ unchanged. Targets meet 32/44 px and screenshots cover both folded orders.
 No product destination or API mutation is invoked. Missing/tied dates and a
 single-rep/anonymous Team are not supplied by these fixtures; those edges remain
 unit coverage, not browser acceptance.
+
+For context saving, select only `-k fixture_coaching_context_save`. Four cases
+open the existing Design review `?data=review&view=me&example=context-save`:
+Add context, type a fictional Hindi/English note and Save. A virtual clock
+checks each three-second wait. While saving, the textarea remains selectable
+and focusable but native typing cannot replace the submitted note; Save and
+Cancel are disabled and the reserved Saving… status and Save position stay
+steady. The first failure retains the exact note and permits editing; Enter
+on Save retries successfully and shows the exact saved note. Screenshots cover
+saving, failure and success at 1440/390 light/dark. Retry targets meet 32/44 px;
+mission/query, readability, overflow and absence of API/media requests or live
+refreshes are checked. The fixture uses an in-page writer: canonical persistence,
+authenticated access and command identity are outside this browser evidence
+(same-note command reuse remains covered by the builder's unit tests).
+
+For a failed sharing-setting read, select only `-k fixture_coaching_sharing_retry`.
+Four viewport/theme cases open the existing Design review `example=sharing-retry`.
+The failed read shows its honest message and reachable Try again, with no sharing
+action. Pointer (light) or Enter (dark) starts the three-second fictional retry;
+Checking sharing… is a live status, retry stays disabled and no sharing action
+appears at2999ms. At3000ms the current Private setting names Priya Shah and offers
+the original Share with your admins action. Targets meet32/44px and failed,
+checking and loaded screenshots are audited for readability/overflow. Mission,
+query and the original document stay intact; no API/media request or sharing
+action is invoked. Conflict recovery/revision-bound mutation remains builder
+unit coverage, outside this read-only fictional browser evidence.
+
+For Agree/Not completely saving, select only `-k fixture_coaching_feedback_save`.
+Eight cases (both choices,1440/390 light/dark) open the existing Design review
+`example=feedback-save`. Enter announces Saving… for three seconds; native
+focusable controls use aria-disabled and repeated Enter/other-choice activation
+cannot submit again. The first error retains initiating focus and permits a
+same-choice Enter retry. Completion respects focus deliberately moved to the
+reflection answer, selects the original choice and keeps the mission/query.
+Agree retains its original confirmation; Not completely opens the existing
+evidence and empty What did we miss? context. The reserved status height stays
+steady through pending/error, retry targets meet32/44px, and saving/error/success
+screenshots cover each choice. API/media requests are blocked/counted; no account
+or canonical feedback is written. Command identity remains builder unit coverage.
+
+The owner's live Report rebuild follows the15Oct document and the later
+16Oct04:00IST correction, pinned in `report-15oct-acceptance.json`: three parts,
+27 named pointers (replacing the export's23), their View more actions, and final
+Won/Lost/Follow-up Set/Decision Pending. The later owner decision recorded in
+AGENTS.md at `693645b0` approves Report AI scores, labelled "AI draft - not
+reviewed by Dipak". Saved scores must be within 0–100; missing scores stay
+unscored. QA does not generate scores or run reanalysis/provider calls.
+The legacy six-section fixtures and completed evidence remain retained. New
+Report journeys will use the concrete rebuild source as it lands; no new
+Coaching QA is queued under the owner's current Report-only order.
+
+Select only `-k fixture_report_15oct_structure` for the rebuilt Report. Four
+viewport/theme journeys check its three parts, all27 exact owner titles/order,
+reachable View more row controls, independent native Enter/Space disclosure and
+the Good/All filter. Screens cover overview, pointer rows/details and each of
+the four authored fictional final-outcome scenarios. `?example=none` checks the
+legacy Amit input honestly leaves the new overall/pointer scores unscored; it
+does not prove mapping of the API's new structure payload. The source example's
+numbers remain explicitly illustrative. No outcome write, source playback or
+provider action is invoked. Shell reads use the existing approved fictional
+bootstrap; API mutations, media requests and live refreshes must be zero.
+Existing six-part Document/Word evidence remains separate and is not replayed.
+
+Select only `-k fixture_report_scroll_training` for the `77717316` delta: four
+viewport/theme pairs on `?example=follow_up`, checking the title scrolls above
+the analysis, heading/control centre hits and 32/44px controls. Enter on the
+existing opening pointer's null-href training button must open the same fictional
+call's Coaching, preserve the example query and document, and request no media or
+writes. Two changed-state screenshots per pair cover training and Coaching. This
+does not repeat the all27/outcome matrix or certify saved outcome API mapping.
