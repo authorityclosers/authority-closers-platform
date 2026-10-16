@@ -5,10 +5,12 @@ import { phoneTabFor, shellActiveFor } from "./phone-nav";
 it("lights the phone tab from the address before the page settles", () => {
   // The old root loader said "analyse" on every route while loading.
   expect(phoneTabFor("/dashboard", "analyse")).toBe("dashboard");
-  expect(phoneTabFor("/prospects", "analyse")).toBe("prospects");
-  expect(phoneTabFor("/prospects/8f3c", "analyse")).toBe("prospects");
-  expect(phoneTabFor("/coaching", "analyse")).toBe("coaching");
-  expect(phoneTabFor(null, "coaching")).toBe("coaching");
+  expect(phoneTabFor("/leads", "analyse")).toBe("leads");
+  // Five tabs only: Prospects and Coaching open from More.
+  expect(phoneTabFor("/prospects", "analyse")).toBe("more");
+  expect(phoneTabFor("/prospects/8f3c", "analyse")).toBe("more");
+  expect(phoneTabFor("/coaching", "analyse")).toBe("more");
+  expect(phoneTabFor(null, "coaching")).toBe("more");
   expect(phoneTabFor("/organisation", "analyse")).toBe("more");
   expect(phoneTabFor("/account", undefined)).toBe("more");
   expect(phoneTabFor("/plans", undefined)).toBe("more");

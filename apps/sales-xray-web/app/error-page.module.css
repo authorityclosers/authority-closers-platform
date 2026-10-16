@@ -9,6 +9,7 @@
   display: grid;
   justify-items: center;
   gap: 10px;
+  box-sizing: border-box;
   width: min(420px, 100%);
   padding: 28px 24px 22px;
   border: 1px solid var(--lx-line);

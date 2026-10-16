@@ -11,6 +11,7 @@ import { UploadIndicator } from "./shell/upload-indicator";
 import { themeControlEnabled, themeInitScript } from "./lightbox/theme";
 import { earlyReadsScript } from "./early-reads";
 import { sidebarInitScript } from "./shell/shell-store";
+import { inAppInitScript } from "./in-app";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
 import { AppSession } from "./app-session";
@@ -68,6 +69,12 @@ export default async function Layout({
         <script
           id="sales-xray-sidebar-init"
           dangerouslySetInnerHTML={{ __html: sidebarInitScript() }}
+        />
+        {/* Inside the phone app, website-only chrome is hidden from the
+            first paint (html[data-sx-app], styles.css). */}
+        <script
+          id="sales-xray-app-init"
+          dangerouslySetInnerHTML={{ __html: inAppInitScript() }}
         />
         {/* Starts this page's reads while the HTML is still arriving, so the
             app finds its data ready instead of asking after it starts. */}

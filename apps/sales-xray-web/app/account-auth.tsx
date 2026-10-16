@@ -92,7 +92,7 @@ function xrayMoment(index: number) {
 
 function XrayScene() {
   return (
-    <div className={styles.xray} aria-hidden="true">
+    <div className={`${styles.xray} sx-web-only`} aria-hidden="true">
       {XRAY_MOMENTS.map((moment) => (
         <span
           key={moment.kind}
@@ -764,7 +764,9 @@ export function AccountAuth({
             {brandContent}
           </Link>
         )}
-        <div className={styles.storyCopy}>
+        {/* The marketing story is website chrome: the phone app shows
+            only the brand above the form (in-app.ts). */}
+        <div className={`${styles.storyCopy} sx-web-only`}>
           <h2>
             Hear the <span className={styles.accent}>opportunity</span>
             <br />
@@ -773,7 +775,7 @@ export function AccountAuth({
           <p>Bring your conversation. Leave with a clearer next step.</p>
         </div>
         <XrayScene />
-        <ul className={styles.features}>
+        <ul className={`${styles.features} sx-web-only`}>
           {XRAY_FEATURES.map(({ Icon, label }) => (
             <li key={label}>
               <Icon size={16} aria-hidden="true" />
@@ -781,7 +783,7 @@ export function AccountAuth({
             </li>
           ))}
         </ul>
-        <p className={styles.shared}>
+        <p className={`${styles.shared} sx-web-only`}>
           <ShieldCheck size={15} aria-hidden="true" />
           One AC account. Your learning, calls and reports.
         </p>
@@ -797,7 +799,7 @@ export function AccountAuth({
               <ArrowLeft size={16} aria-hidden="true" /> Back to your call
             </button>
           ) : !selectedFile ? (
-            <Link className={styles.returnLink} href="/">
+            <Link className={`${styles.returnLink} sx-web-only`} href="/">
               <ArrowLeft size={16} aria-hidden="true" /> Return to app
             </Link>
           ) : (

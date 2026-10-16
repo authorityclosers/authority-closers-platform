@@ -124,7 +124,7 @@ it("makes the sidebar search open Calls with the typed text", () => {
   expect(form?.querySelector("kbd")?.textContent).toBe("Ctrl K");
 });
 
-it("reaches every section from the phone tab bar, plus a dev settings control", () => {
+it("keeps the phone tab bar to five tabs, plus a dev settings control", () => {
   for (const liveData of [false, true]) {
     const shell = (
       <AcquisitionShell authenticated active="dashboard">
@@ -142,29 +142,12 @@ it("reaches every section from the phone tab bar, plus a dev settings control", 
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? [
-            "Dashboard",
-            "Leads",
-            "Calls",
-            "New",
-            "Prospects",
-            "Coaching",
-            "More",
-            "Settings",
-          ]
-        : [
-            "Dashboard",
-            "Leads",
-            "Calls",
-            "New",
-            "Prospects",
-            "Coaching",
-            "More",
-          ],
+        ? ["Home", "Leads", "New", "Calls", "More", "Settings"]
+        : ["Home", "Leads", "New", "Calls", "More"],
     );
-    expect(nav.querySelector('a[href="/prospects"]')?.textContent?.trim()).toBe(
-      "Prospects",
-    );
+    // Owner, 17 Oct: Prospects and Coaching open from the More sheet.
+    expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
+    expect(nav.querySelector('a[href="/coaching"]')).toBeNull();
     const more = Array.from(nav.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "More",
     );

@@ -1076,20 +1076,7 @@
   }
 }
 
-/* Narrow phones: six labels don't fit six equal columns ("Prospects" met
-   "Coaching" at 360 px). Each tab takes its label plus an equal share of
-   the spare width, never under the 44 px target. */
-@media (max-width: 419.98px) {
-  .bottomNav {
-    display: flex;
-    padding-inline: var(--lx-space-1);
-  }
-
-  .bottomLink {
-    flex: 1 0 auto;
-    min-width: 44px;
-  }
-}
+/* Five tabs (owner, 17 Oct) fit five equal columns down to 320 px. */
 
 /* Short viewports and 200% zoom: chrome joins the document flow, so it can
    never cover essential actions, and the whole page scrolls. */
@@ -1652,4 +1639,59 @@
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Phone header, signed in: your own avatar opens the account sheet (owner,
+   17 Oct: "no logout option easy"). Same 44 px box as the lens it replaces,
+   so nothing moves when the session settles. */
+.mobileAvatar {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  margin-left: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mobileAvatar > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lx-gradient-primary, var(--lx-teal));
+  color: var(--lx-on-teal);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 0 0 2px var(--lx-surface),
+    0 0 0 3px var(--lx-teal-edge);
+  transition: transform 140ms var(--lx-ease-quick, ease);
+}
+
+.mobileAvatar > span :global(.account-avatar-image) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mobileAvatar[data-pending] > span {
+  background: var(--lx-sunken);
+  box-shadow: none;
+}
+
+.mobileAvatar:active > span {
+  transform: scale(0.94);
+}
+
+.mobileAvatar:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
 }
