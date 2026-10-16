@@ -6,11 +6,11 @@
  * one appears only after this one is disposed.
  */
 
-import { CheckCircle2, Phone, PhoneOff, X } from "lucide-react";
+import { CheckCircle2, Phone, PhoneOff, Radio, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
-import { callHref } from "../acquisition-client";
+import { callHref, type UploadPolicy } from "../acquisition-client";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
 import {
   CONNECTED_STAGES,
@@ -29,6 +29,14 @@ import {
   type Stage,
 } from "./leads-client";
 import { whyLine } from "./desk-view";
+import {
+  pickSimulation,
+  readUploadPolicy,
+  runSimulatedCall,
+  STEP_LABELS,
+  type SimulationPick,
+  type SimulationStep,
+} from "./simulated-call";
 import styles from "./leads.module.css";
 
 const NO_RETRY = new Set([
@@ -423,6 +431,183 @@ function History({ events }: { events: LeadEvent[] }) {
   );
 }
 
+/* ---------- Simulated call ---------- */
+
+const STEPS: SimulationStep[] = [
+  "recording",
+  "saving",
+  "linking",
+  "checking",
+  "starting",
+];
+
+function SimulatedCall({
+  detail,
+  onDone,
+}: {
+  detail: LeadDetail;
+  onDone: (next: LeadDetail) => void;
+}) {
+  const [state, setState] = useState<
+    "idle" | "loading" | "ready" | "running" | "done" | "error"
+  >("idle");
+  const [pick, setPick] = useState<SimulationPick | null>(null);
+  const [policy, setPolicy] = useState<UploadPolicy | null>(null);
+  const [agreed, setAgreed] = useState(false);
+  const [step, setStep] = useState<SimulationStep>("recording");
+  const [error, setError] = useState<string | null>(null);
+  const [submission, setSubmission] = useState<string | null>(null);
+  const task = useRef<AbortController | null>(null);
+
+  useEffect(() => () => task.current?.abort(), []);
+
+  if (!detail.can_assign)
+    return (
+      <p className={styles.hint}>
+        Simulated calls are started by an owner or admin for now. Real calling
+        comes once the calling provider is approved.
+      </p>
+    );
+
+  const prepare = async () => {
+    setState("loading");
+    setError(null);
+    try {
+      const [nextPick, nextPolicy] = await Promise.all([
+        pickSimulation(detail.lead.lead_id),
+        readUploadPolicy(),
+      ]);
+      setPick(nextPick);
+      setPolicy(nextPolicy);
+      setState("ready");
+    } catch (reason) {
+      setError(
+        reason instanceof LeadsError
+          ? reason.message
+          : "The simulated call couldn't start.",
+      );
+      setState("error");
+    }
+  };
+
+  const run = async () => {
+    if (!pick || !policy || !agreed) return;
+    const controller = new AbortController();
+    task.current = controller;
+    setState("running");
+    setError(null);
+    try {
+      const next = await runSimulatedCall({
+        lead: detail,
+        pick,
+        policy,
+        onStep: setStep,
+        signal: controller.signal,
+      });
+      const call = next.events.find((event) => event.kind === "call");
+      setSubmission(call?.submission_id ?? null);
+      setState("done");
+      onDone(next);
+    } catch (reason) {
+      if (controller.signal.aborted) return;
+      setError(
+        reason instanceof LeadsError
+          ? reason.message
+          : "The simulated call stopped. Try again.",
+      );
+      setState("error");
+    }
+  };
+
+  if (state === "idle")
+    return (
+      <Button onClick={prepare}>
+        <Radio size={14} aria-hidden="true" />
+        Simulated call
+      </Button>
+    );
+
+  return (
+    <div className={styles.simulation} aria-live="polite">
+      <strong className={styles.simulationTitle}>Simulated call</strong>
+      {state === "loading" ? (
+        <p className={styles.hint}>Finding a test recording for this lead…</p>
+      ) : null}
+      {pick && (state === "ready" || state === "running") ? (
+        <p>
+          A {Math.max(1, Math.round(pick.duration_seconds / 60))}-minute test
+          call ({pick.language_mix}, {pick.business_name}) becomes{" "}
+          {pick.owner_name}&apos;s call and goes through the normal analysis.
+          Nobody is dialled. It uses about{" "}
+          {Math.max(1, Math.round(pick.duration_seconds / 60))} analysis
+          minutes.
+        </p>
+      ) : null}
+      {state === "ready" && policy ? (
+        <>
+          <details className={styles.terms}>
+            <summary>{policy.title}</summary>
+            <p>{policy.description}</p>
+          </details>
+          <label className={styles.toggle}>
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(event) => setAgreed(event.target.checked)}
+            />
+            I agree to these upload terms for this test recording
+          </label>
+          <div className={styles.row}>
+            <Button onClick={() => setState("idle")}>Cancel</Button>
+            <Button variant="primary" onClick={run} disabled={!agreed}>
+              Make the simulated call
+            </Button>
+          </div>
+        </>
+      ) : null}
+      {state === "running" ? (
+        <ol className={styles.steps}>
+          {STEPS.map((item) => (
+            <li
+              key={item}
+              data-state={
+                STEPS.indexOf(item) < STEPS.indexOf(step)
+                  ? "done"
+                  : item === step
+                    ? "now"
+                    : "later"
+              }
+            >
+              {STEP_LABELS[item]}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {state === "done" ? (
+        <p>
+          Analysis started. The call&apos;s Report appears in a few minutes;
+          record what happened below in the meantime.{" "}
+          {submission ? (
+            <Link className={styles.historyLink} href={callHref(submission)}>
+              Open the call
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
+      {state === "error" ? (
+        <>
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+          <div className={styles.row}>
+            <Button onClick={prepare}>Try again</Button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 /* ---------- Lead card ---------- */
 
 function LeadCard({
@@ -496,6 +681,9 @@ function LeadCard({
         )}
         {detail.email ? (
           <span className={styles.contactLine}>{detail.email}</span>
+        ) : null}
+        {detail.call_mode === "simulated" && detail.can_edit ? (
+          <SimulatedCall detail={detail} onDone={onChanged} />
         ) : null}
       </div>
 

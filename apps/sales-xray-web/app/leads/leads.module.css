@@ -1136,3 +1136,55 @@
     min-height: 44px;
   }
 }
+
+/* ---------- Simulated call ---------- */
+
+.simulation {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--lx-focus-edge);
+  border-radius: var(--sx-radius-sm);
+  background: var(--lx-focus-soft);
+  color: var(--sx-ink-2);
+}
+
+.simulationTitle {
+  color: var(--lx-focus-ink);
+  font-size: var(--sx-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.terms summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.terms p {
+  margin-top: 6px;
+  font-size: var(--sx-text-xs);
+}
+
+.steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--sx-text-xs);
+}
+
+.steps li[data-state="done"] {
+  color: var(--sx-muted);
+  text-decoration: line-through;
+}
+
+.steps li[data-state="now"] {
+  color: var(--lx-focus-ink);
+  font-weight: 700;
+}
+
+.steps li[data-state="later"] {
+  color: var(--sx-muted);
+}
