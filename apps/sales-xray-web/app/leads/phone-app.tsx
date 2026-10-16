@@ -32,7 +32,7 @@ const BANNER_KEY = "sx-leads-app-banner";
  * Off until builds are signed with Authority Closers' own key and published.
  * Test-key builds stay inside GitHub, because anyone could imitate them.
  */
-export const ANDROID_DOWNLOAD_READY = false;
+export const ANDROID_DOWNLOAD_READY = true;
 
 const never = () => () => undefined;
 
