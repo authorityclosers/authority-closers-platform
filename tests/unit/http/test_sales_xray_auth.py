@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import html
+import re
 from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -17,13 +21,18 @@ from pydantic import ValidationError
 import ac_platform.http.auth as auth_module
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import RequestOriginDenied
-from ac_platform.http.auth_transactions import AuthTransaction, AuthTransactionCodec
+from ac_platform.http.auth_transactions import (
+    AuthTransaction,
+    AuthTransactionCodec,
+    SalesXrayAppHandoffCodec,
+)
 from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.identity.services import (
     ProviderAuthorizationType,
     ProviderConsentVersionConflictError,
+    SessionRevokedError,
 )
 from ac_platform.kernel.authz import ActorContext
 from tests.unit.application.test_settings import _deployment_values
@@ -1171,3 +1180,306 @@ def test_same_surface_origin_helper_accepts_sales_xray_and_rejects_learner_bridg
             ),
             settings,
         )
+
+
+# --- Sales Xray Android app: Google sign-in in a Custom Tab, handed back once ---------
+
+APP_VERIFIER = "app-verifier-held-only-by-the-sales-xray-app-0123456789"
+APP_CHALLENGE = (
+    base64.urlsafe_b64encode(hashlib.sha256(APP_VERIFIER.encode("ascii")).digest())
+    .rstrip(b"=")
+    .decode("ascii")
+)
+APP_USER_AGENT = "Mozilla/5.0 (Linux; Android 13; wv) Chrome/141 Mobile SalesXrayApp/0.2.9"
+APP_PERSON_ID = UUID("11111111-1111-4111-8111-111111111111")
+APP_HANDOFF_SESSION_ID = UUID("22222222-2222-4222-8222-222222222222")
+APP_NEW_SESSION_ID = UUID("44444444-4444-4444-8444-444444444444")
+APP_TENANT_ID = UUID("55555555-5555-4555-8555-555555555555")
+
+
+class _AppExchangeIdentityApplication(_CallbackIdentityApplication):
+    revoked: list[tuple[str, UUID, str | None]] = []
+    issued: list[dict[str, object]] = []
+    selected: list[tuple[str, UUID]] = []
+
+    @classmethod
+    def reset(cls) -> None:
+        cls.revoked, cls.issued, cls.selected = [], [], []
+
+    async def resolve_actor(self, token: str) -> ResolvedActorContext:
+        if any(token == revoked_token for revoked_token, _, _ in type(self).revoked):
+            raise SessionRevokedError("session was revoked")
+        return ResolvedActorContext(
+            actor=ActorContext(
+                person_id=APP_PERSON_ID,
+                session_id=APP_HANDOFF_SESSION_ID,
+                tenant_id=APP_TENANT_ID,
+            ),
+            membership_role=None,
+            person_revision=1,
+            session_revision=1,
+        )
+
+    async def revoke_self(
+        self, token: str, session_id: UUID, *, reason: str | None = None
+    ) -> object:
+        type(self).revoked.append((token, session_id, reason))
+        return object()
+
+    async def issue_authenticated_session(
+        self,
+        person_id: UUID,
+        *,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+    ) -> SimpleNamespace:
+        type(self).issued.append({"person_id": person_id, "user_agent": user_agent})
+        return SimpleNamespace(
+            token=SECOND_VALID_SESSION_TOKEN,
+            metadata=SimpleNamespace(id=APP_NEW_SESSION_ID),
+        )
+
+    async def select_tenant(self, token: str, tenant_id: UUID) -> object:
+        type(self).selected.append((token, tenant_id))
+        return object()
+
+
+def _app_start(client: TestClient, *, challenge: str = APP_CHALLENGE) -> tuple[Any, Any]:
+    response = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "authenticate",
+            "surface": "sales_xray",
+            "return_path": f"/auth/complete?flow={uuid4()}",
+            "app_challenge": challenge,
+        },
+        headers={"host": SALES_STAGING_HOST},
+        follow_redirects=False,
+    )
+    settings = _sales_staging_settings()
+    transaction = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value()).decode(
+        response.cookies[DEPLOYMENT_OAUTH_COOKIE]
+    )
+    return response, transaction
+
+
+def _app_return_target(body: str) -> str:
+    match = re.search(r'content="0;url=([^"]+)"', body)
+    assert match is not None
+    target = html.unescape(match.group(1))
+    assert f'href="{match.group(1)}"' in body
+    return target
+
+
+def _app_code(client: TestClient) -> tuple[str, AuthTransaction]:
+    started, transaction = _app_start(client)
+    callback = _complete_google_callback(
+        client, transaction, started.cookies[DEPLOYMENT_OAUTH_COOKIE]
+    )
+    fragment = parse_qs(urlsplit(_app_return_target(callback.text)).fragment)
+    return fragment["code"][0], transaction
+
+
+def _exchange(
+    client: TestClient,
+    body: str,
+    *,
+    user_agent: str = APP_USER_AGENT,
+    fetch_site: str | None = "none",
+) -> Any:
+    headers = {
+        "host": SALES_STAGING_HOST,
+        "content-type": "application/x-www-form-urlencoded",
+        "user-agent": user_agent,
+    }
+    if fetch_site is not None:
+        headers["sec-fetch-site"] = fetch_site
+    return client.post(
+        "/v1/auth/google/app-exchange",
+        content=body,
+        headers=headers,
+        follow_redirects=False,
+    )
+
+
+def _session_cookies(response: Any) -> list[str]:
+    return [
+        value
+        for value in response.headers.get_list("set-cookie")
+        if value.startswith(f"{DEPLOYMENT_SESSION_COOKIE}=")
+    ]
+
+
+def test_sales_xray_app_start_binds_its_challenge_and_other_surfaces_refuse_it() -> None:
+    client = _client(settings=_sales_staging_settings(), provider=_SuccessfulProvider())
+
+    started, transaction = _app_start(client)
+    learner = client.get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "app_challenge": APP_CHALLENGE},
+        headers={"host": "staging.authorityclosers.com"},
+        follow_redirects=False,
+    )
+    malformed = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "authenticate",
+            "surface": "sales_xray",
+            "return_path": f"/auth/complete?flow={uuid4()}",
+            "app_challenge": APP_CHALLENGE[:-1] + "+",
+        },
+        headers={"host": SALES_STAGING_HOST},
+        follow_redirects=False,
+    )
+
+    assert started.status_code == 303
+    assert transaction.app_challenge == APP_CHALLENGE
+    assert learner.status_code == 400
+    assert learner.json()["code"] == "invalid_auth_transaction"
+    assert DEPLOYMENT_OAUTH_COOKIE not in learner.cookies
+    assert malformed.status_code == 422
+
+
+def test_sales_xray_app_callback_hands_a_sealed_code_to_the_app_not_the_browser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
+    settings = _sales_staging_settings()
+    client = _client(settings=settings, provider=_SuccessfulProvider())
+    started, transaction = _app_start(client)
+
+    callback = _complete_google_callback(
+        client, transaction, started.cookies[DEPLOYMENT_OAUTH_COOKIE]
+    )
+
+    assert callback.status_code == 200
+    assert "location" not in callback.headers
+    assert callback.headers["cache-control"] == "no-store"
+    assert callback.headers["referrer-policy"] == "no-referrer"
+    assert _session_cookies(callback) == []
+    assert VALID_SESSION_TOKEN not in callback.text
+    target = urlsplit(_app_return_target(callback.text))
+    assert f"{target.scheme}:{target.path}" == auth_module.SALES_XRAY_APP_RETURN_URI
+    fragment = parse_qs(target.fragment)
+    assert set(fragment) == {"code"}
+    handoff = SalesXrayAppHandoffCodec(settings.oauth_transaction_secret.get_secret_value()).decode(
+        fragment["code"][0]
+    )
+    assert handoff.session_token == VALID_SESSION_TOKEN
+    assert handoff.session_id == APP_HANDOFF_SESSION_ID
+    assert handoff.flow_id == _completion_flow_id(transaction)
+    assert handoff.app_challenge == APP_CHALLENGE
+
+
+def test_sales_xray_app_callback_reports_a_cancelled_google_sign_in_to_the_app() -> None:
+    client = _client(settings=_sales_staging_settings(), provider=_SuccessfulProvider())
+    started, transaction = _app_start(client)
+
+    callback = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "error": "access_denied"},
+        headers={
+            "host": SALES_STAGING_HOST,
+            "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={started.cookies[DEPLOYMENT_OAUTH_COOKIE]}",
+        },
+        follow_redirects=False,
+    )
+
+    assert callback.status_code == 200
+    fragment = parse_qs(urlsplit(_app_return_target(callback.text)).fragment)
+    assert fragment == {
+        "result": ["failed"],
+        "flow": [str(_completion_flow_id(transaction))],
+    }
+
+
+def test_sales_xray_app_exchange_sets_a_fresh_session_and_revokes_the_sealed_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _AppExchangeIdentityApplication)
+    _AppExchangeIdentityApplication.reset()
+    client = _client(settings=_sales_staging_settings(), provider=_SuccessfulProvider())
+    code, transaction = _app_code(client)
+    flow_id = _completion_flow_id(transaction)
+
+    exchanged = _exchange(client, f"code={code}&verifier={APP_VERIFIER}")
+    replayed = _exchange(client, f"code={code}&verifier={APP_VERIFIER}")
+
+    assert exchanged.status_code == 303
+    assert exchanged.headers["location"] == (
+        f"{SALES_STAGING_ORIGIN}/auth/complete?flow={flow_id}&auth_result=success"
+    )
+    session_cookie = _session_cookies(exchanged)
+    assert len(session_cookie) == 1
+    assert session_cookie[0].startswith(
+        f"{DEPLOYMENT_SESSION_COOKIE}={SECOND_VALID_SESSION_TOKEN};"
+    )
+    receipt = exchanged.cookies[auth_module.SALES_XRAY_COMPLETION_COOKIE_NAME]
+    assert receipt
+    assert _AppExchangeIdentityApplication.revoked == [
+        (VALID_SESSION_TOKEN, APP_HANDOFF_SESSION_ID, "Handed to the Sales Xray app")
+    ]
+    assert _AppExchangeIdentityApplication.issued == [
+        {"person_id": APP_PERSON_ID, "user_agent": APP_USER_AGENT}
+    ]
+    assert _AppExchangeIdentityApplication.selected == [(SECOND_VALID_SESSION_TOKEN, APP_TENANT_ID)]
+    # The same code a second time finds its session revoked: it works only once.
+    assert replayed.status_code == 303
+    assert replayed.headers["location"].endswith(f"flow={flow_id}&auth_result=failed")
+    assert _session_cookies(replayed) == []
+
+
+@pytest.mark.parametrize(
+    ("body", "user_agent", "fetch_site"),
+    [
+        ("code={code}&verifier=" + APP_VERIFIER + "x", APP_USER_AGENT, "none"),
+        ("code={code}&verifier=" + APP_VERIFIER, APP_USER_AGENT, "cross-site"),
+        ("code={code}&verifier=" + APP_VERIFIER, APP_USER_AGENT, "same-site"),
+        ("code={code}&verifier=" + APP_VERIFIER, "Mozilla/5.0 Chrome/141", "none"),
+        (
+            "code={code}&verifier=" + APP_VERIFIER + "&verifier=" + APP_VERIFIER,
+            APP_USER_AGENT,
+            None,
+        ),
+        ("code=not-a-code&verifier=" + APP_VERIFIER, APP_USER_AGENT, "none"),
+        ("verifier=" + APP_VERIFIER, APP_USER_AGENT, "none"),
+    ],
+)
+def test_sales_xray_app_exchange_refuses_anything_but_the_app_with_its_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+    body: str,
+    user_agent: str,
+    fetch_site: str | None,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _AppExchangeIdentityApplication)
+    _AppExchangeIdentityApplication.reset()
+    client = _client(settings=_sales_staging_settings(), provider=_SuccessfulProvider())
+    code, _transaction = _app_code(client)
+
+    refused = _exchange(
+        client, body.format(code=code), user_agent=user_agent, fetch_site=fetch_site
+    )
+
+    assert refused.status_code == 303
+    assert refused.headers["location"].endswith("auth_result=failed")
+    assert _session_cookies(refused) == []
+    assert _AppExchangeIdentityApplication.revoked == []
+    assert _AppExchangeIdentityApplication.issued == []
+
+
+def test_sales_xray_app_exchange_is_only_on_the_sales_xray_host() -> None:
+    client = _client(settings=_sales_staging_settings(), provider=_SuccessfulProvider())
+
+    response = client.post(
+        "/v1/auth/google/app-exchange",
+        content=f"code=x&verifier={APP_VERIFIER}",
+        headers={
+            "host": "staging.authorityclosers.com",
+            "content-type": "application/x-www-form-urlencoded",
+            "user-agent": APP_USER_AGENT,
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code >= 400
+    assert _session_cookies(response) == []

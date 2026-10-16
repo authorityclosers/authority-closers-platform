@@ -166,6 +166,8 @@ export function SpeakerServerProfiles({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [retry, setRetry] = useState(0);
+  // "Not now" on the detected-speakers card, for this call in this visit.
+  const [laterFor, setLaterFor] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   const inFlight = useRef(false);
   const validCall = enabled && callId !== null && UUID.test(callId);
@@ -315,8 +317,14 @@ export function SpeakerServerProfiles({
           </ActionButton>
         </div>
       )}
-      {needsConfirmation && completeSuggestion && (
-        <div className={styles.mapNotice} aria-label="Detected speakers">
+      {/* A floating card (owner, 17 Oct): it arrives after the report and
+          must never push the report down or keep a band of the screen. */}
+      {needsConfirmation && completeSuggestion && laterFor !== callId && (
+        <div
+          className={`${styles.mapNotice} ${styles.detected}`}
+          role="region"
+          aria-label="Detected speakers"
+        >
           <span>
             Detected:{" "}
             {predicted
@@ -333,6 +341,14 @@ export function SpeakerServerProfiles({
           >
             {saving ? "Saving…" : "Confirm speakers"}
           </ActionButton>
+          <button
+            type="button"
+            className={styles.later}
+            disabled={saving}
+            onClick={() => setLaterFor(callId)}
+          >
+            Not now
+          </button>
         </div>
       )}
       {children}

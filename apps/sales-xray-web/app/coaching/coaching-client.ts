@@ -1,6 +1,17 @@
+import { unnamedCallName } from "../call-label";
 import { parseClips, type CoachingClip } from "./media-contract";
 
 export const COACHING_API = "/v1/me/coaching";
+
+// Some calls reach Coaching named after their transcript revision
+// ("Scribe transcript revision 1310ab5e… · source-bound"). An internal id is
+// never a call's name: show the same fallback as Calls (owner, 17 Oct).
+const INTERNAL_LABEL = /\b[0-9a-f]{32,}\b|^scribe transcript revision\b/i;
+
+export function shownCallLabel(label: string, createdAt?: string): string {
+  if (!INTERNAL_LABEL.test(label)) return label;
+  return createdAt ? unnamedCallName(createdAt) : "Sales call";
+}
 export class CoachingReadError extends Error {}
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -406,7 +417,7 @@ export function parseCallSummaries(value: unknown): CallSummary[] {
     seen.add(id);
     rows.push({
       submission_id: id,
-      call_label: row.call_label,
+      call_label: shownCallLabel(row.call_label, row.created_at),
       created_at: row.created_at,
       state: row.state as CallSummary["state"],
       focus_label:

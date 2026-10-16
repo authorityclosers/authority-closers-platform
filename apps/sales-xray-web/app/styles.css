@@ -3387,3 +3387,9 @@ nextjs-portal {
     animation: none !important;
   }
 }
+
+/* Inside the Sales Xray phone app (in-app.ts sets html[data-sx-app] before
+   the first paint): website links, marketing and the Sign in tab are noise. */
+html[data-sx-app] .sx-web-only {
+  display: none !important;
+}

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchCoaching, parseCoaching } from "./coaching-client";
+import {
+  fetchCoaching,
+  parseCoaching,
+  shownCallLabel,
+} from "./coaching-client";
 import { fictionalCoaching } from "./coaching.fixture";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -82,6 +86,20 @@ describe("private Coaching contract", () => {
     );
     await expect(fetchCoaching(new AbortController().signal)).rejects.toThrow(
       "Coaching didn’t load. Try again.",
+    );
+  });
+});
+
+describe("call names in Coaching", () => {
+  it("never shows an internal transcript id as a call's name", () => {
+    const internal =
+      "Scribe transcript revision 1310ab5efc17fc169bf932e617705f9dd0c5d0f427963728c275a8cfa269bc43 · source-bound";
+    expect(shownCallLabel(internal, "2026-09-30T10:00:00Z")).toMatch(
+      /^Sales call · /,
+    );
+    expect(shownCallLabel(internal)).toBe("Sales call");
+    expect(shownCallLabel("Ankita · discovery call")).toBe(
+      "Ankita · discovery call",
     );
   });
 });

@@ -400,3 +400,79 @@ it("offers phones the invitations and Create, even with one workspace", async ()
   expect(onClose).toHaveBeenCalled();
   expect(onCreateOrganisation).toHaveBeenCalledTimes(1);
 });
+
+it("offers Log out next to who is signed in, without focusing it", async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValue(new Response(null, { status: 503 }));
+  vi.stubGlobal("fetch", fetchMock);
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <SettingsMenu
+        open
+        anchorRef={{ current: document.createElement("button") }}
+        onClose={() => {}}
+        name="Fictional User"
+        email="fictional@example.test"
+        allowance={null}
+      />,
+    ),
+  );
+  const menu = document.querySelector(
+    '[role="dialog"][aria-label="Account menu"]',
+  )!;
+  const logOut = [...menu.querySelectorAll("button")].find(
+    (button) => button.textContent === "Log out",
+  )!;
+  // Owner, 17 Oct: in the first block of the menu, beside the name.
+  expect(logOut.parentElement?.textContent).toContain("Fictional User");
+  expect(document.activeElement).not.toBe(logOut);
+  await act(async () => logOut.click());
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/v1/auth/logout",
+    expect.objectContaining({ method: "POST" }),
+  );
+  // An unconfirmed sign out leaves the button ready to try again.
+  expect(logOut.disabled).toBe(false);
+});
+
+it("lists the pages that are not phone tabs, organisation pages only in one", async () => {
+  const render = async (organisation: boolean) => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () =>
+      root.render(
+        <SettingsMenu
+          open
+          anchorRef={{ current: document.createElement("button") }}
+          onClose={() => {}}
+          name="Fictional User"
+          email="fictional@example.test"
+          allowance={null}
+          organisation={organisation}
+          insights={organisation}
+        />,
+      ),
+    );
+    return [
+      ...document.querySelectorAll<HTMLAnchorElement>(
+        'nav[aria-label="More pages"] a',
+      ),
+    ].map((link) => link.getAttribute("href"));
+  };
+  expect(await render(false)).toEqual(["/prospects", "/coaching"]);
+  await act(async () => root.unmount());
+  host.remove();
+  expect(await render(true)).toEqual([
+    "/prospects",
+    "/coaching",
+    "/organisation",
+    "/organisation/insights",
+  ]);
+  // The website has no phone calls to offer.
+  expect(document.body.textContent).not.toContain("Calls on this phone");
+});

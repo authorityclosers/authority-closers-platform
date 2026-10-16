@@ -26,11 +26,10 @@ import styles from "./leads.module.css";
 const RELEASE =
   "https://github.com/authorityclosers/authority-closers-platform/releases/download/sales-xray-android-latest";
 export const ANDROID_APP = `${RELEASE}/sales-xray-android.apk`;
-export const ANDROID_DEV_APP = `${RELEASE}/sales-xray-dev-android.apk`;
 const BANNER_KEY = "sx-leads-app-banner";
 /**
- * Off until builds are signed with Authority Closers' own key and published.
- * Test-key builds stay inside GitHub, because anyone could imitate them.
+ * Off (17 Oct release decision): the published build is a debuggable test
+ * build, so nobody is offered it until a release build is published.
  */
 export const ANDROID_DOWNLOAD_READY = false;
 
@@ -44,17 +43,7 @@ function useDevice() {
     () => false,
   );
   const app = useSyncExternalStore(never, inPhoneApp, () => false);
-  const dev = useSyncExternalStore(
-    never,
-    () => /^salesxray-dev\.|^localhost$|^127\./.test(location.hostname),
-    () => false,
-  );
-  return { android, app, dev };
-}
-
-/** The app that matches this site: dev opens "Sales Xray Dev", everywhere else the real one. */
-export function appLink(dev: boolean): string {
-  return dev ? ANDROID_DEV_APP : ANDROID_APP;
+  return { android, app };
 }
 
 function CopyLink({ link }: { link: string }) {
@@ -85,8 +74,9 @@ export function PhoneAppDialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const { android, app, dev } = useDevice();
-  const link = appLink(dev);
+  const { android, app } = useDevice();
+  // Only the real app is ever offered; the Dev build is never a download.
+  const link = ANDROID_APP;
   return (
     <Dialog
       open={open}
@@ -101,7 +91,7 @@ export function PhoneAppDialog({
               <Smartphone size={22} aria-hidden="true" />
             </span>
             <span>
-              <strong>{dev ? "Sales Xray Dev for Android" : "Android"}</strong>
+              <strong>Android</strong>
               <small>Test build, updated with every release</small>
             </span>
             <Badge tone="accent">

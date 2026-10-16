@@ -206,10 +206,28 @@
   .card[data-waiting="true"] .content h2 {
     margin-top: 0;
   }
+  /* Owner, 17 Oct: the guide covered half the phone. On phones it is a
+     slim card above the tab bar: no picture, words and buttons only. */
   .card {
-    right: 16px;
-    bottom: max(76px, calc(64px + env(safe-area-inset-bottom)));
-    max-height: min(430px, calc(100dvh - 160px));
+    right: 12px;
+    left: 12px;
+    width: auto;
+    bottom: max(68px, calc(60px + env(safe-area-inset-bottom)));
+    max-height: min(300px, calc(100dvh - 160px));
+    border-radius: 16px;
+  }
+  .card .visual {
+    display: none;
+  }
+  .card .content h2 {
+    margin-top: 0;
+  }
+  .header,
+  .footer {
+    padding: 6px 12px;
+  }
+  .content {
+    padding: 0 16px 4px;
   }
   .card[data-position="top"] {
     top: max(72px, calc(60px + env(safe-area-inset-top)));

@@ -13,7 +13,8 @@ const POLICY_LINKS = [
 
 export function PolicyFooter() {
   return (
-    <footer className={styles.footer}>
+    // Website chrome: the phone app hides it (in-app.ts).
+    <footer className={`${styles.footer} sx-web-only`}>
       <nav aria-label="Sales Xray policy pages">
         <ul className={styles.footerLinks}>
           {POLICY_LINKS.map(([label, href]) => (

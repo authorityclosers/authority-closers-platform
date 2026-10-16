@@ -22,6 +22,7 @@ import {
   Skeleton,
 } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
+import { requestWorkspace } from "../call-ownership";
 import {
   AddLeadDialog,
   AddLeadsMenu,
@@ -168,7 +169,7 @@ export function LeadsRoute() {
         active="leads"
       >
         <div className={styles.root}>
-          <PageHeader title="Leads" />
+          <PageHeader title="Leads" titleInBar />
           <Empty
             icon={PhoneCall}
             title="Sign in to see your leads"
@@ -187,16 +188,36 @@ export function LeadsRoute() {
       ? (requested as Tab)
       : "desk";
 
+  const organisation = access?.workspaces?.find(
+    (workspace) =>
+      workspace.kind === "organisation" && workspace.sales_xray_enabled,
+  );
+
   if (current && error && !desk) {
     return (
       <AcquisitionShell authenticated active="leads">
         <div className={styles.root}>
-          <PageHeader title="Leads" />
+          <PageHeader title="Leads" titleInBar />
           {error.status === 403 ? (
+            // A personal workspace: one tap into the organisation, or to
+            // the page that creates one (phones have no sidebar switcher).
             <Empty
               icon={Building2}
               title="Leads work inside an organisation"
-              text="Switch to your organisation workspace from the account menu, or create one, to get a lead desk for your team."
+              text={
+                organisation
+                  ? `Your team's lead desk is in ${organisation.name}.`
+                  : "Set up an organisation to get a lead desk for your team."
+              }
+              action={
+                organisation
+                  ? {
+                      onClick: () =>
+                        requestWorkspace(organisation.tenant_id, LEADS_PATH),
+                      label: `Switch to ${organisation.name}`,
+                    }
+                  : { href: "/organisation", label: "Set up an organisation" }
+              }
             />
           ) : (
             <Empty
@@ -233,6 +254,7 @@ export function LeadsRoute() {
       <div className={styles.root}>
         <PageHeader
           title="Leads"
+          titleInBar
           context={[
             desk.me.can_manage
               ? "Your calls and your team's leads"

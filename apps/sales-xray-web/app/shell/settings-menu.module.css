@@ -556,18 +556,196 @@
   color: var(--lx-muted);
 }
 
-/* Phones: the card is the More sheet, full width above the tab bar. */
-@media (max-width: 720px) {
+/* ---------- Log out (owner, 17 Oct: never buried) ---------- */
+.logOut {
+  display: inline-flex;
+  min-height: 32px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--lx-line);
+  border-radius: 999px;
+  background: var(--lx-surface);
+  color: var(--lx-danger);
+  font: 650 12.5px/1 var(--lx-font-ui, inherit);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.logOut:hover,
+.logOut:focus-visible {
+  border-color: var(--lx-danger);
+  background: var(--lx-danger-soft);
+  outline: none;
+}
+
+.logOut:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/* The pages that are not phone tabs; desktop has them in the rail. */
+.goTo,
+.grip,
+.scrim {
+  display: none;
+}
+
+.tile {
+  display: grid;
+  min-height: 72px;
+  box-sizing: border-box;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border: 1px solid var(--lx-line);
+  border-radius: 14px;
+  background: var(--lx-paper-2);
+  color: var(--lx-ink);
+  font: 600 12.5px/1.2 var(--lx-font-ui, inherit);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    transform 120ms var(--lx-ease-quick, ease);
+}
+
+.tile > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.tile:active {
+  transform: scale(0.97);
+}
+
+.tile:focus-visible {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.tile[aria-current="page"] {
+  border-color: var(--lx-teal);
+  background: var(--lx-teal-soft);
+}
+
+/* Phones and tablets (the tab bar layout): the menu is a bottom sheet over
+   a dimmed screen, the way an app's menu opens. */
+@media (max-width: 899.98px) {
   .card {
-    right: 8px;
-    left: 8px;
+    right: 0;
+    bottom: 0;
+    left: 0;
     width: auto;
-    transform-origin: bottom right;
+    max-width: 560px;
+    max-height: min(88dvh, 720px);
+    margin-inline: auto;
+    padding: 6px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-width: 1px 0 0;
+    border-radius: 20px 20px 0 0;
+    box-shadow: var(--lx-shadow-2);
+    transform-origin: bottom center;
+    animation-name: sheet-in;
+  }
+
+  .scrim {
+    position: fixed;
+    z-index: 359;
+    inset: 0;
+    display: block;
+    background: color-mix(in srgb, var(--lx-film) 45%, transparent);
+    animation: scrim-in 200ms ease both;
+  }
+
+  .grip {
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 2px auto 8px;
+    border-radius: 99px;
+    background: var(--lx-line-strong, var(--lx-line));
+  }
+
+  .view {
+    gap: 8px;
+  }
+
+  .who {
+    gap: 12px;
+    padding: 4px 4px 6px;
+  }
+
+  .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 14px;
+  }
+
+  .whoText b {
+    font-size: 15px;
+  }
+
+  .whoText small {
+    font-size: 12.5px;
+  }
+
+  .logOut {
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 13.5px;
+  }
+
+  .goTo {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+    padding: 2px 0 6px;
+    border-bottom: 1px solid var(--lx-line);
+  }
+
+  .row {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 899.98px) and (prefers-reduced-motion: reduce) {
+  .card,
+  .scrim {
+    animation: none;
+  }
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
   }
 }
 
 @media (pointer: coarse) {
   .row {
+    min-height: 44px;
+  }
+
+  .logOut {
     min-height: 44px;
   }
 }

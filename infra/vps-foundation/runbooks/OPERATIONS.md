@@ -120,7 +120,7 @@ sudo systemctl start ac-restic-restore-check.service
 systemctl list-timers --all | grep -E 'ac-(r2|restic|foundation)'
 ```
 
-The canary timers are installed but disabled. After the reviewed foundation release is installed, enable the staging and production checks once with `sudo systemctl enable --now ac-canary@staging.timer ac-canary@production.timer`; each run appends one non-secret result to `/var/lib/authority-closers/canary/<environment>.jsonl`.
+The canary timers are installed but disabled, and they stay disabled (owner decision, 17 Oct 2026, cost step 1): every canary run pays for a real transcription and analysis, so the canary runs only when `ac-ship` releases to staging and production, through `ac-canary@<environment>.service`. Do not enable the daily timers without the owner's approval; the enable command is `sudo systemctl enable --now ac-canary@staging.timer ac-canary@production.timer`. Each run appends one non-secret result to `/var/lib/authority-closers/canary/<environment>.jsonl`.
 
 The logical PostgreSQL writer is a separate disabled-by-default gate. It uses only `/srv/authority-closers/application/current-staging` and, when present and healthy, `/srv/authority-closers/application/current-production`; it never accepts a free-standing database URL. The runtime Infisical wrapper supplies `AC_DB_BACKUP_PASSWORD` to the exact compose `postgres` service, and the backup Infisical identity supplies only the Restic/R2 environment. A failed upload does not remove the verified local dump.
 

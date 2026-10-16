@@ -48,15 +48,19 @@ export function PageHeader({
   context,
   actions,
   back,
+  titleInBar = false,
 }: {
   title: string;
   context?: ReactNode[];
   actions?: ReactNode;
   back?: { href: string; label: string };
+  /** The phone top bar already shows this title: phones keep it for screen
+   *  readers only, so the page doesn't say its name twice. */
+  titleInBar?: boolean;
 }) {
   const items = (context ?? []).filter(Boolean);
   return (
-    <header className={styles.header}>
+    <header className={cx(styles.header, titleInBar && styles.titleInBar)}>
       <div className={styles.headerText}>
         {back ? (
           <Link href={back.href} className={styles.back}>

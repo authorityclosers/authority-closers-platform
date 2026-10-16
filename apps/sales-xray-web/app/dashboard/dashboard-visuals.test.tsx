@@ -78,6 +78,20 @@ it("reads the day under a finger anywhere across the plot", async () => {
   expect(readout()).toBe("13 Sept2 calls · 15 min");
   await press("pointermove", "touch", 299);
   expect(readout()).toBe("Today0 calls · 0 min");
+  // Lifting the finger keeps the day on screen; a mouse leaving clears it.
+  const leave = (pointerType: string) =>
+    act(async () => {
+      const event = new MouseEvent("pointerout", { bubbles: true });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      plot.dispatchEvent(event);
+      const exit = new MouseEvent("pointerleave", { bubbles: false });
+      Object.defineProperty(exit, "pointerType", { value: pointerType });
+      host.querySelector("figure")!.dispatchEvent(exit);
+    });
+  await leave("touch");
+  expect(readout()).toBe("Today0 calls · 0 min");
+  await leave("mouse");
+  expect(readout()).toContain("calls analysed");
 });
 
 it("lists each main status in full with its count, zeros too; Other only when used", async () => {

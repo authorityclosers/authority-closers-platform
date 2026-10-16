@@ -47,7 +47,6 @@ import {
   SELECT_WORKSPACE_EVENT,
 } from "../call-ownership";
 import { RecentCallItem } from "./recent-call-item";
-import { LocalSettingsButton } from "../live-data-banner";
 import { newCallHref } from "../new-call-navigation";
 import { ProfileMenu } from "../profile-menu";
 import { SettingsDialogHost } from "../settings-dialog";
@@ -86,7 +85,9 @@ import {
   OrgApiError,
   type PendingInvite,
 } from "../organisation/organisation-api";
-import { SettingsMenu } from "./settings-menu";
+import { accountInitials, SettingsMenu } from "./settings-menu";
+import { LocalSettingsButton } from "../live-data-banner";
+import { AccountAvatarImage } from "../speaker-avatar";
 import { useShellUpdates } from "./updates-store";
 import { UpdatesBell } from "./updates-bell";
 import { UpdateNotices } from "./update-notices";
@@ -645,6 +646,14 @@ function LightboxShellFrame({
   }
   const [createOpen, setCreateOpen] = useState(false);
 
+  // Phones: the avatar in the top bar and More in the tab bar open one sheet.
+  function toggleAccountSheet(event: MouseEvent<HTMLElement>) {
+    if (!authenticated) return;
+    accountAnchorRef.current = event.currentTarget;
+    setAccountView("main");
+    setAccountCardOpen((open) => !open);
+  }
+
   function openAccount(event: MouseEvent<HTMLAnchorElement>) {
     if (!authenticated && access?.requestAccountSignIn) {
       event.preventDefault();
@@ -1131,7 +1140,32 @@ function LightboxShellFrame({
           {/* r17: the lens, then where you are: workspace over page title. */}
           {workspaceLabel || pageTitle ? (
             <div className={styles.mobileWorkspace}>
-              <BrandLockup href={homeHref} markOnly />
+              {/* Signed in, your own face opens the account menu (Log out)
+                  from every screen; signed out, the brand mark goes home. */}
+              {guest ? (
+                <BrandLockup href={homeHref} markOnly />
+              ) : (
+                <button
+                  type="button"
+                  className={styles.mobileAvatar}
+                  onClick={toggleAccountSheet}
+                  aria-label="Account and log out"
+                  aria-haspopup="dialog"
+                  aria-expanded={accountCardOpen && authenticated}
+                  data-pending={chromePending ? "" : undefined}
+                >
+                  <span aria-hidden="true">
+                    {chromePending ? null : (
+                      <AccountAvatarImage
+                        key={profile?.email ?? ""}
+                        photoUrl={profile?.photo_url}
+                      >
+                        {accountInitials(profileName, profile?.email ?? null)}
+                      </AccountAvatarImage>
+                    )}
+                  </span>
+                </button>
+              )}
               <span
                 title={
                   workspaceLabel ? `Workspace: ${workspaceLabel}` : undefined
@@ -1218,6 +1252,8 @@ function LightboxShellFrame({
           </SectionBoundary>
         </main>
       </div>
+      {/* Owner, 17 Oct: five clear tabs on phones, nothing else. Prospects,
+          Coaching and the organisation pages live in the More sheet. */}
       <nav
         className={styles.bottomNav}
         aria-label="Mobile Sales Xray navigation"
@@ -1228,7 +1264,7 @@ function LightboxShellFrame({
           aria-current={phoneTab === "dashboard" ? "page" : undefined}
         >
           <LayoutGrid size={20} aria-hidden="true" />
-          <span>Dashboard</span>
+          <span>Home</span>
         </Link>
         <Link
           className={styles.bottomLink}
@@ -1238,14 +1274,6 @@ function LightboxShellFrame({
         >
           <PhoneCall size={20} aria-hidden="true" />
           <span>Leads</span>
-        </Link>
-        <Link
-          className={styles.bottomLink}
-          href="/analysis/calls"
-          aria-current={phoneTab === "calls" ? "page" : undefined}
-        >
-          <FolderOpen size={20} aria-hidden="true" />
-          <span>Calls</span>
         </Link>
         <Link
           className={`${styles.bottomLink} ${styles.bottomNew}`}
@@ -1260,25 +1288,17 @@ function LightboxShellFrame({
         </Link>
         <Link
           className={styles.bottomLink}
-          href="/prospects"
-          aria-current={phoneTab === "prospects" ? "page" : undefined}
+          href="/analysis/calls"
+          aria-current={phoneTab === "calls" ? "page" : undefined}
         >
-          <Users size={20} aria-hidden="true" />
-          <span>Prospects</span>
+          <FolderOpen size={20} aria-hidden="true" />
+          <span>Calls</span>
         </Link>
-        <Link
-          className={styles.bottomLink}
-          href="/coaching"
-          prefetch={false}
-          aria-current={phoneTab === "coaching" ? "page" : undefined}
-        >
-          <GraduationCap size={20} aria-hidden="true" />
-          <span>Coaching</span>
-        </Link>
-        {/* Signed out shows Sign in; an unconfirmed session keeps More. */}
+        {/* Signed out shows Sign in (the phone app has its own sign-in
+            screen, so it hides this); an unconfirmed session keeps More. */}
         {guest ? (
           <Link
-            className={styles.bottomLink}
+            className={`${styles.bottomLink} sx-web-only`}
             href={accountHref}
             onClick={openAccount}
           >
@@ -1289,12 +1309,7 @@ function LightboxShellFrame({
           <button
             type="button"
             className={styles.bottomLink}
-            onClick={(event) => {
-              if (!authenticated) return;
-              accountAnchorRef.current = event.currentTarget;
-              setAccountView("main");
-              setAccountCardOpen((open) => !open);
-            }}
+            onClick={toggleAccountSheet}
             aria-haspopup="dialog"
             aria-expanded={accountCardOpen && authenticated}
             aria-current={phoneTab === "more" ? "page" : undefined}
@@ -1303,6 +1318,7 @@ function LightboxShellFrame({
             <span>More</span>
           </button>
         )}
+        {/* Local live-data development only; never on a served site. */}
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>
       <SettingsDialogHost />

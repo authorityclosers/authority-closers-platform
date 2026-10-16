@@ -3,17 +3,18 @@ import { describe, expect, it } from "vitest";
 
 import {
   ANDROID_APP,
-  ANDROID_DEV_APP,
   ANDROID_DOWNLOAD_READY,
-  appLink,
   PhoneAppBanner,
   PhoneAppDialog,
 } from "./phone-app";
 
 describe("getting the phone app", () => {
-  it("links each site to its own app", () => {
-    expect(appLink(false)).toBe(ANDROID_APP);
-    expect(appLink(true)).toBe(ANDROID_DEV_APP);
+  it("offers only the real app, never the Dev build", () => {
+    const html = renderToStaticMarkup(
+      <PhoneAppDialog open onClose={() => undefined} />,
+    );
+    expect(html).not.toContain("sales-xray-dev-android");
+    expect(html).not.toContain("Sales Xray Dev");
     expect(ANDROID_APP).toMatch(
       /^https:\/\/github\.com\/.+\/releases\/download\/sales-xray-android-latest\/sales-xray-android\.apk$/,
     );

@@ -1800,3 +1800,34 @@
   height: 36px;
   background: var(--lx-teal-edge, rgba(13, 148, 136, 0.25));
 }
+
+/* Phones (owner, 17 Oct sweep): every control in the plans header and the
+   plan switches is a full 44 px target, and the chosen plan's card is only
+   as tall as its content, so no empty band sits above its button. */
+@media (max-width: 768px) {
+  .shellBackBtn {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+
+  .shellReceiptLink {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .shellCloseBtn,
+  .closeDrawerBtn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .seg button,
+  .mobilePlanTabBtn {
+    min-height: 44px;
+  }
+
+  .planCard[data-mobile-active="true"] {
+    flex: 0 0 auto;
+  }
+}

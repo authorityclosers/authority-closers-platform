@@ -71,7 +71,14 @@ export function DayBars({ days }: { days: ActivityDay[] }) {
     setFocus(Math.min(last, Math.max(0, at)));
   };
   return (
-    <figure className={styles.chart} onMouseLeave={() => setFocus(null)}>
+    // A mouse leaving clears the readout. A finger lifting fires a "leave"
+    // too on phones, which must not wipe the day just tapped.
+    <figure
+      className={styles.chart}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse") setFocus(null);
+      }}
+    >
       <figcaption className={styles.readout} aria-live="polite">
         {shown ? (
           <>

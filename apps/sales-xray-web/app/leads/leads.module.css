@@ -2336,3 +2336,11 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
 }
+
+/* Phones: the shell already gives the 16 px side margin (owner, 17 Oct:
+   pages jumped sideways between tabs). */
+@media (max-width: 899.98px) {
+  .root {
+    padding-inline: 0;
+  }
+}

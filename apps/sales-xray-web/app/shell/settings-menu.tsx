@@ -12,11 +12,15 @@ import {
   CreditCard,
   Gem,
   Globe,
+  GraduationCap,
   LifeBuoy,
+  LogOut,
   MailOpen,
   Plus,
   Settings2,
+  Smartphone,
   Sparkles,
+  Users,
 } from "lucide-react";
 import {
   useEffect,
@@ -30,10 +34,14 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import type { Allowance } from "../acquisition-client";
+import { useSalesXraySignOut } from "../account-navigation";
 import { formatAnalysisTime } from "../analysis-time";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
+import { phoneCallsOpener, useInApp } from "../in-app-client";
+import { notify } from "../notice-center";
 import { openSettings } from "../settings-open";
 import { AccountAvatarImage } from "../speaker-avatar";
 import { useShellUpdates } from "./updates-store";
@@ -53,7 +61,7 @@ const DAY = new Intl.DateTimeFormat("en-IN", {
   timeZone: "UTC",
 });
 
-function initials(name: string | null, email: string | null) {
+export function accountInitials(name: string | null, email: string | null) {
   const source = name?.trim() || email?.split("@")[0] || "";
   const parts = source.split(/\s+/).filter(Boolean);
   const letters =
@@ -177,6 +185,23 @@ export function SettingsMenu({
   );
   const minutes = minutesLine(allowance);
   const guide = useFirstCallGuideSwitch();
+  const pathname = usePathname();
+  const inApp = useInApp();
+  const { signOut, signingOut, error: signOutError } = useSalesXraySignOut();
+
+  // A sign out that could not be confirmed says so in the corner.
+  useEffect(() => {
+    if (!signOutError) return;
+    notify({
+      id: "sign-out",
+      tone: "error",
+      title: "Couldn’t log out",
+      message: signOutError,
+      action: { label: "Try again", run: () => void signOut() },
+    });
+    // signOut is recreated each render; the message is what changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signOutError]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -246,7 +271,10 @@ export function SettingsMenu({
     };
     document.addEventListener("pointerdown", outside);
     document.addEventListener("keydown", escape);
-    card.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
+    // Focus starts on the first visible item, never on Log out.
+    [...(card.current?.querySelectorAll<HTMLElement>("button, a[href]") ?? [])]
+      .find((item) => !item.hasAttribute("data-log-out") && item.offsetParent)
+      ?.focus();
     return () => {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
@@ -266,306 +294,355 @@ export function SettingsMenu({
     openSettings(section);
   };
 
+  // Phones: the pages that are not tabs, as one tap each. Desktop has them
+  // in the rail, so the sheet's CSS shows this block on phones only.
+  const openPhoneCalls = inApp ? phoneCallsOpener() : null;
+  const goTo = [
+    { href: "/prospects", label: "Prospects", icon: <Users size={20} /> },
+    { href: "/coaching", label: "Coaching", icon: <GraduationCap size={20} /> },
+    ...(organisation
+      ? [
+          {
+            href: "/organisation",
+            label: "Organisation",
+            icon: <Building2 size={20} />,
+          },
+        ]
+      : []),
+    ...(organisation && insights
+      ? [
+          {
+            href: "/organisation/insights",
+            label: "Insights",
+            icon: <BarChart3 size={20} />,
+          },
+        ]
+      : []),
+  ];
+  const here = (href: string) =>
+    pathname === href ||
+    (href !== "/organisation" && Boolean(pathname?.startsWith(`${href}/`)));
+
   return createPortal(
-    <div
-      ref={card}
-      className={styles.card}
-      role="dialog"
-      aria-label="Account menu"
-      // Variables, not left/bottom: the phone sheet's own CSS then wins
-      // without !important (r17 S8).
-      style={
-        place
-          ? ({
-              "--card-left": `${place.left}px`,
-              "--card-bottom": `${place.bottom}px`,
-            } as CSSProperties)
-          : undefined
-      }
-    >
-      <div key={view} className={styles.view}>
-        {view === "main" && (
-          <>
-            <div className={styles.who}>
-              <span className={styles.avatar} aria-hidden="true">
-                <AccountAvatarImage key={email} photoUrl={photoUrl}>
-                  {initials(name, email)}
-                </AccountAvatarImage>
-              </span>
-              <span className={styles.whoText}>
-                <b>{name || "Your account"}</b>
-                {email ? <small>{email}</small> : null}
-              </span>
-            </div>
-            {minutes ? (
-              <button
-                type="button"
-                className={styles.usage}
-                onClick={() => settings("usage")}
-              >
-                <span className={styles.usageTop}>
-                  <span>Analysis time</span>
-                  <b>{minutes.text}</b>
+    <>
+      {/* Phones: the sheet dims the screen; a tap on it closes the sheet
+          without reaching the page underneath. */}
+      <div className={styles.scrim} aria-hidden="true" />
+      <div
+        ref={card}
+        className={styles.card}
+        role="dialog"
+        aria-label="Account menu"
+        // Variables, not left/bottom: the phone sheet's own CSS then wins
+        // without !important (r17 S8).
+        style={
+          place
+            ? ({
+                "--card-left": `${place.left}px`,
+                "--card-bottom": `${place.bottom}px`,
+              } as CSSProperties)
+            : undefined
+        }
+      >
+        {/* Empty, so nothing to announce: the sheet handle is drawn only. */}
+        <span className={styles.grip} />
+        <div key={view} className={styles.view}>
+          {view === "main" && (
+            <>
+              <div className={styles.who}>
+                <span className={styles.avatar} aria-hidden="true">
+                  <AccountAvatarImage key={email} photoUrl={photoUrl}>
+                    {accountInitials(name, email)}
+                  </AccountAvatarImage>
                 </span>
-                {minutes.share !== null ? (
-                  <span className={styles.meter} aria-hidden="true">
-                    <i style={{ width: `${minutes.share * 100}%` }} />
-                  </span>
+                <span className={styles.whoText}>
+                  <b>{name || "Your account"}</b>
+                  {email ? <small>{email}</small> : null}
+                </span>
+                {/* Owner, 17 Oct: logging out is never more than one tap
+                  away once this menu is open. */}
+                <button
+                  type="button"
+                  className={styles.logOut}
+                  data-log-out=""
+                  onClick={() => void signOut()}
+                  disabled={signingOut}
+                >
+                  <LogOut size={15} aria-hidden="true" />
+                  {signingOut ? "Logging out…" : "Log out"}
+                </button>
+              </div>
+              <nav className={styles.goTo} aria-label="More pages">
+                {goTo.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={styles.tile}
+                    aria-current={here(item.href) ? "page" : undefined}
+                    onClick={onClose}
+                  >
+                    <span aria-hidden="true">{item.icon}</span>
+                    {item.label}
+                  </Link>
+                ))}
+                {openPhoneCalls ? (
+                  <button
+                    type="button"
+                    className={styles.tile}
+                    onClick={() => {
+                      onClose();
+                      openPhoneCalls();
+                    }}
+                  >
+                    <span aria-hidden="true">
+                      <Smartphone size={20} />
+                    </span>
+                    Calls on this phone
+                  </button>
                 ) : null}
-              </button>
-            ) : null}
-            {(workspaces.length > 1 && onSelectWorkspace) ||
-            invitesWaiting > 0 ||
-            onCreateOrganisation ? (
-              <div className={styles.list} role="group" aria-label="Workspace">
-                <p className={styles.note}>Workspace</p>
-                {(onSelectWorkspace && workspaces.length > 1
-                  ? workspaces
-                  : []
-                ).map((workspace) => {
-                  const current = workspace.tenant_id === currentWorkspaceId;
-                  const name =
-                    workspace.kind === "personal" ? "Personal" : workspace.name;
-                  return (
+              </nav>
+              {minutes ? (
+                <button
+                  type="button"
+                  className={styles.usage}
+                  onClick={() => settings("usage")}
+                >
+                  <span className={styles.usageTop}>
+                    <span>Analysis time</span>
+                    <b>{minutes.text}</b>
+                  </span>
+                  {minutes.share !== null ? (
+                    <span className={styles.meter} aria-hidden="true">
+                      <i style={{ width: `${minutes.share * 100}%` }} />
+                    </span>
+                  ) : null}
+                </button>
+              ) : null}
+              {(workspaces.length > 1 && onSelectWorkspace) ||
+              invitesWaiting > 0 ||
+              onCreateOrganisation ? (
+                <div
+                  className={styles.list}
+                  role="group"
+                  aria-label="Workspace"
+                >
+                  <p className={styles.note}>Workspace</p>
+                  {(onSelectWorkspace && workspaces.length > 1
+                    ? workspaces
+                    : []
+                  ).map((workspace) => {
+                    const current = workspace.tenant_id === currentWorkspaceId;
+                    const name =
+                      workspace.kind === "personal"
+                        ? "Personal"
+                        : workspace.name;
+                    return (
+                      <button
+                        key={workspace.tenant_id}
+                        type="button"
+                        className={styles.row}
+                        aria-current={current ? "true" : undefined}
+                        onClick={() => {
+                          if (current) return;
+                          onClose();
+                          onSelectWorkspace?.(workspace.tenant_id);
+                        }}
+                      >
+                        <span className={styles.rowIcon} aria-hidden="true">
+                          {workspace.kind === "organisation" ? (
+                            <Building2 size={16} />
+                          ) : (
+                            <CircleUserRound size={16} />
+                          )}
+                        </span>
+                        <span className={styles.rowLabel}>{name}</span>
+                        {current ? (
+                          <Check
+                            size={15}
+                            className={styles.chev}
+                            aria-label="Current"
+                          />
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                  {invitesWaiting > 0 ? (
+                    <Link
+                      href="/organisation/invites"
+                      className={styles.row}
+                      onClick={onClose}
+                    >
+                      <span className={styles.rowIcon} aria-hidden="true">
+                        <MailOpen size={16} />
+                      </span>
+                      <span className={styles.rowLabel}>Invitations</span>
+                      <span className={styles.badge}>{invitesWaiting}</span>
+                    </Link>
+                  ) : null}
+                  {onCreateOrganisation ? (
                     <button
-                      key={workspace.tenant_id}
                       type="button"
                       className={styles.row}
-                      aria-current={current ? "true" : undefined}
                       onClick={() => {
-                        if (current) return;
                         onClose();
-                        onSelectWorkspace?.(workspace.tenant_id);
+                        onCreateOrganisation();
                       }}
                     >
                       <span className={styles.rowIcon} aria-hidden="true">
-                        {workspace.kind === "organisation" ? (
-                          <Building2 size={16} />
-                        ) : (
-                          <CircleUserRound size={16} />
-                        )}
+                        <Plus size={16} />
                       </span>
-                      <span className={styles.rowLabel}>{name}</span>
-                      {current ? (
-                        <Check
-                          size={15}
-                          className={styles.chev}
-                          aria-label="Current"
-                        />
-                      ) : null}
+                      <span className={styles.rowLabel}>
+                        Create an organisation
+                      </span>
                     </button>
-                  );
-                })}
-                {invitesWaiting > 0 ? (
-                  <Link
-                    href="/organisation/invites"
-                    className={styles.row}
-                    onClick={onClose}
-                  >
-                    <span className={styles.rowIcon} aria-hidden="true">
-                      <MailOpen size={16} />
-                    </span>
-                    <span className={styles.rowLabel}>Invitations</span>
-                    <span className={styles.badge}>{invitesWaiting}</span>
-                  </Link>
-                ) : null}
-                {onCreateOrganisation ? (
-                  <button
-                    type="button"
-                    className={styles.row}
-                    onClick={() => {
-                      onClose();
-                      onCreateOrganisation();
-                    }}
-                  >
-                    <span className={styles.rowIcon} aria-hidden="true">
-                      <Plus size={16} />
-                    </span>
-                    <span className={styles.rowLabel}>
-                      Create an organisation
-                    </span>
-                  </button>
-                ) : null}
-                <span className={styles.divider} />
-              </div>
-            ) : null}
-            <div className={styles.list}>
-              {organisation ? (
-                <Link
-                  href="/organisation"
-                  className={styles.row}
-                  onClick={onClose}
-                >
-                  <span className={styles.rowIcon} aria-hidden="true">
-                    <Building2 size={16} />
-                  </span>
-                  <span className={styles.rowLabel}>Organisation</span>
-                  <ChevronRight
-                    size={15}
-                    className={styles.chev}
-                    aria-hidden="true"
-                  />
-                </Link>
+                  ) : null}
+                  <span className={styles.divider} />
+                </div>
               ) : null}
-              {organisation && insights ? (
-                <Link
-                  href="/organisation/insights"
-                  className={styles.row}
-                  onClick={onClose}
-                >
-                  <span className={styles.rowIcon} aria-hidden="true">
-                    <BarChart3 size={16} />
-                  </span>
-                  <span className={styles.rowLabel}>Insights</span>
-                  <ChevronRight
-                    size={15}
-                    className={styles.chev}
-                    aria-hidden="true"
-                  />
-                </Link>
-              ) : null}
-              <Row
-                icon={<Settings2 size={16} />}
-                label="Settings"
-                onClick={() => settings("general")}
-              />
-              <Row
-                icon={<CircleUserRound size={16} />}
-                label="Profile"
-                onClick={() => settings("profile")}
-              />
-              <Row
-                icon={<Globe size={16} />}
-                label="Language"
-                value="English"
-                next
-                onClick={() => setView("language")}
-              />
-              <Row
-                icon={<Clock3 size={16} />}
-                label="Usage"
-                value={
-                  minutes && minutes.share !== null
-                    ? `${Math.round(minutes.share * 100)}% left`
-                    : undefined
-                }
-                onClick={() => settings("usage")}
-              />
-              <Link href="/plans" className={styles.row} onClick={onClose}>
-                <span className={styles.rowIcon} aria-hidden="true">
-                  <Gem size={16} />
-                </span>
-                <span className={styles.rowLabel}>Plans</span>
-                <ChevronRight
-                  size={15}
-                  className={styles.chev}
-                  aria-hidden="true"
-                />
-              </Link>
-              <Row
-                icon={<CreditCard size={16} />}
-                label="Plan & billing"
-                onClick={() => settings("billing")}
-              />
-              <Row
-                icon={<Sparkles size={16} />}
-                label="What's new"
-                badge={unseen > 0 ? `${unseen} new` : undefined}
-                next
-                onClick={() => setView("news")}
-              />
-              <span className={styles.divider} />
-              <Row
-                icon={<LifeBuoy size={16} />}
-                label="Help & support"
-                onClick={() => settings("help")}
-              />
-              {guide ? (
+              <div className={styles.list}>
                 <Row
-                  icon={<Compass size={16} />}
-                  label="First call guide"
-                  value={guide.on ? "On" : "Off"}
-                  checked={guide.on}
-                  onClick={() => {
-                    guide.set(!guide.on);
-                    // Turning it on closes the menu so the guide is in view.
-                    if (!guide.on) onClose();
-                  }}
+                  icon={<Settings2 size={16} />}
+                  label="Settings"
+                  onClick={() => settings("general")}
                 />
-              ) : null}
-            </div>
-          </>
-        )}
+                <Row
+                  icon={<CircleUserRound size={16} />}
+                  label="Profile"
+                  onClick={() => settings("profile")}
+                />
+                <Row
+                  icon={<Globe size={16} />}
+                  label="Language"
+                  value="English"
+                  next
+                  onClick={() => setView("language")}
+                />
+                <Row
+                  icon={<Clock3 size={16} />}
+                  label="Usage"
+                  value={
+                    minutes && minutes.share !== null
+                      ? `${Math.round(minutes.share * 100)}% left`
+                      : undefined
+                  }
+                  onClick={() => settings("usage")}
+                />
+                <Link href="/plans" className={styles.row} onClick={onClose}>
+                  <span className={styles.rowIcon} aria-hidden="true">
+                    <Gem size={16} />
+                  </span>
+                  <span className={styles.rowLabel}>Plans</span>
+                  <ChevronRight
+                    size={15}
+                    className={styles.chev}
+                    aria-hidden="true"
+                  />
+                </Link>
+                <Row
+                  icon={<CreditCard size={16} />}
+                  label="Plan & billing"
+                  onClick={() => settings("billing")}
+                />
+                <Row
+                  icon={<Sparkles size={16} />}
+                  label="What's new"
+                  badge={unseen > 0 ? `${unseen} new` : undefined}
+                  next
+                  onClick={() => setView("news")}
+                />
+                <span className={styles.divider} />
+                <Row
+                  icon={<LifeBuoy size={16} />}
+                  label="Help & support"
+                  onClick={() => settings("help")}
+                />
+                {guide ? (
+                  <Row
+                    icon={<Compass size={16} />}
+                    label="First call guide"
+                    value={guide.on ? "On" : "Off"}
+                    checked={guide.on}
+                    onClick={() => {
+                      guide.set(!guide.on);
+                      // Turning it on closes the menu so the guide is in view.
+                      if (!guide.on) onClose();
+                    }}
+                  />
+                ) : null}
+              </div>
+            </>
+          )}
 
-        {view === "language" && (
-          <>
-            <Back label="Language" onBack={() => setView("main")} />
-            <p className={styles.note}>App language</p>
-            <div className={styles.choices}>
-              <span className={styles.choice} data-on="">
-                <i aria-hidden="true" />
-                English
-              </span>
-              <span className={styles.choice} aria-disabled="true">
-                <i aria-hidden="true" />
-                हिन्दी
-                <small>Coming soon</small>
-              </span>
-              <span className={styles.choice} aria-disabled="true">
-                <i aria-hidden="true" />
-                मराठी
-                <small>Coming soon</small>
-              </span>
-            </div>
-            <p className={styles.note}>
-              Reports: pick English, Hindi + English or Marathi + English when
-              you start an analysis.
-            </p>
-          </>
-        )}
-
-        {view === "news" && (
-          <>
-            <Back label="What's new" onBack={() => setView("main")} />
-            {!updates.notes.length ? (
+          {view === "language" && (
+            <>
+              <Back label="Language" onBack={() => setView("main")} />
+              <p className={styles.note}>App language</p>
+              <div className={styles.choices}>
+                <span className={styles.choice} data-on="">
+                  <i aria-hidden="true" />
+                  English
+                </span>
+                <span className={styles.choice} aria-disabled="true">
+                  <i aria-hidden="true" />
+                  हिन्दी
+                  <small>Coming soon</small>
+                </span>
+                <span className={styles.choice} aria-disabled="true">
+                  <i aria-hidden="true" />
+                  मराठी
+                  <small>Coming soon</small>
+                </span>
+              </div>
               <p className={styles.note}>
-                {updates.status === "error"
-                  ? "Updates could not load. Try again when you return."
-                  : updates.status === "loading"
-                    ? "Loading updates…"
-                    : "You're up to date."}
+                Reports: pick English, Hindi + English or Marathi + English when
+                you start an analysis.
               </p>
-            ) : null}
-            <ol className={styles.news}>
-              {updates.notes.map((entry, index) => (
-                <li
-                  key={entry.key}
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <time dateTime={entry.date}>
-                    {DAY.format(new Date(`${entry.date}T00:00:00Z`))}
-                  </time>
-                  <b>
-                    {entry.title}
-                    {entry.draft ? (
-                      <span className={styles.draft}>Draft</span>
-                    ) : null}
-                    {!entry.seen ? (
-                      <span className={styles.dot} aria-label="New" />
-                    ) : null}
-                  </b>
-                  <ul>
-                    {entry.items.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ol>
-          </>
-        )}
+            </>
+          )}
+
+          {view === "news" && (
+            <>
+              <Back label="What's new" onBack={() => setView("main")} />
+              {!updates.notes.length ? (
+                <p className={styles.note}>
+                  {updates.status === "error"
+                    ? "Updates could not load. Try again when you return."
+                    : updates.status === "loading"
+                      ? "Loading updates…"
+                      : "You're up to date."}
+                </p>
+              ) : null}
+              <ol className={styles.news}>
+                {updates.notes.map((entry, index) => (
+                  <li
+                    key={entry.key}
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <time dateTime={entry.date}>
+                      {DAY.format(new Date(`${entry.date}T00:00:00Z`))}
+                    </time>
+                    <b>
+                      {entry.title}
+                      {entry.draft ? (
+                        <span className={styles.draft}>Draft</span>
+                      ) : null}
+                      {!entry.seen ? (
+                        <span className={styles.dot} aria-label="New" />
+                      ) : null}
+                    </b>
+                    <ul>
+                      {entry.items.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </div>
       </div>
-    </div>,
+    </>,
     document.body,
   );
 }

@@ -242,3 +242,11 @@
 .editor > .link {
   font-family: var(--lx-font-ui);
 }
+
+/* Touch screens: the rename pencil is a full 44 px target. */
+@media (pointer: coarse) {
+  .trigger {
+    width: 44px;
+    height: 44px;
+  }
+}

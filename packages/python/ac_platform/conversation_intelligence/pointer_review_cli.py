@@ -10,6 +10,10 @@ before the call and again before saving, and each attempt recorded in the
 workspace's append-only audit chain, so timeouts, unreadable answers and
 crashes count against the daily cap and the two-attempt limit.
 
+Our own test calls are never scored (owner, 17 Oct cost step 1): the canary
+and the QA smoke accounts upload the bundled canary fixture, and paying
+Gemini to score that same 44-second file cost more than any customer call.
+
 The outer process reads the worker's service config, then re-runs itself
 inside ``infisical run`` so the Gemini key exists only in the child's
 environment. Nothing here prints transcript text, prompts or credentials.
@@ -214,6 +218,28 @@ def _recent_unreviewed(
         {"hours": hours, "not_before": not_before, "limit": limit},
     ).mappings()
     return [dict(row) for row in rows]
+
+
+def _test_source_shas(connection: Any) -> set[str]:
+    """Sources that are our own test calls: every bundled canary fixture and any
+    fixture a canary ever submitted. Matching the source covers the canary and
+    the QA smoke accounts, which upload the same file."""
+    import hashlib
+    from importlib import resources
+
+    from sqlalchemy import text
+
+    shas = {
+        str(sha)
+        for sha in connection.execute(
+            text("SELECT DISTINCT fixture_sha256 FROM conversation_canary_submissions")
+        ).scalars()
+    }
+    fixtures = resources.files("ac_platform.conversation_intelligence") / "canary_fixture"
+    for item in fixtures.iterdir():
+        if item.name.endswith(".wav"):
+            shas.add(hashlib.sha256(item.read_bytes()).hexdigest())
+    return shas
 
 
 def _segments(connection: Any, draft_id: UUID) -> list[dict[str, Any]]:
@@ -465,7 +491,14 @@ async def _inner_async(arguments: argparse.Namespace, call_provider: Any = None)
                                 unscored_only=arguments.unscored_only,
                             )
                         )
+                    test_sources = await session.run_sync(
+                        lambda sync: _test_source_shas(sync.connection())
+                    )
+                found = len(reports)
+                reports = [r for r in reports if r["source_sha256"] not in test_sources]
                 print(json.dumps({"reports": len(reports), "apply": arguments.apply}))
+                if found > len(reports):
+                    print(json.dumps({"test_reports_skipped": found - len(reports)}))
                 dispatched = 0
                 for report in reports:
                     if dispatched >= arguments.limit:
