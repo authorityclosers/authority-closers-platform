@@ -17,6 +17,7 @@ import hashlib
 import json
 import re
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 
 from ac_platform.conversation_intelligence.report_structure import POINTERS as STRUCTURE_POINTERS
@@ -458,6 +459,23 @@ def merge_into_structure(structure: dict[str, Any], review: dict[str, Any]) -> d
     return merged
 
 
+def project_structure(structure: dict[str, Any], plan: Any) -> dict[str, Any]:
+    """Apply the canonical privacy projection after every enrichment (AUT-2010).
+
+    Runs at read time with the recording's current marks, so a mark made after
+    a review was saved still hides that review's quotes and narratives. The
+    person-recorded final outcome is the person's own record and keeps
+    precedence: it is never rewritten by the projection.
+    """
+    from ac_platform.conversation_intelligence.sensitive_segments import withhold
+
+    person = structure.get("final_call_outcome")
+    projected = withhold({k: v for k, v in structure.items() if k != "final_call_outcome"}, plan)
+    if "final_call_outcome" in structure:
+        projected["final_call_outcome"] = person
+    return projected
+
+
 async def latest_review(database: Any, envelope: dict[str, Any]) -> dict[str, Any] | None:
     """Newest saved review for exactly this run, source and transcript revision."""
     from uuid import UUID
@@ -483,10 +501,202 @@ async def latest_review(database: Any, envelope: dict[str, Any]) -> dict[str, An
             ConversationPointerReview.source_sha256 == source,
             ConversationPointerReview.transcript_revision == revision,
             ConversationPointerReview.version == VERSION,
+            ConversationPointerReview.erased_at.is_(None),
         )
         .order_by(ConversationPointerReview.created_at.desc())
         .limit(1)
     )
-    if row is None or payload_sha256(row.payload) != row.payload_sha256:
+    if row is None or row.payload is None or payload_sha256(row.payload) != row.payload_sha256:
         return None
     return dict(row.payload)
+
+
+async def erase_pointer_reviews_for_recording(
+    database: Any, recording_id: Any, now: datetime
+) -> int:
+    """Canonical erasure: empty every saved review version of one call.
+
+    The row keeps its minimal provenance (ids, digests, model, tokens, times).
+    Repeating it is a no-op.
+    """
+    from sqlalchemy import select
+
+    from ac_platform.conversation_intelligence.pointer_review_models import (
+        ConversationPointerReview,
+    )
+
+    rows = (
+        await database.scalars(
+            select(ConversationPointerReview).where(
+                ConversationPointerReview.recording_id == recording_id,
+                ConversationPointerReview.erased_at.is_(None),
+            )
+        )
+    ).all()
+    for row in rows:
+        row.payload, row.erased_at = None, now
+    # Gold reviewer saves judge these reviews: every version goes in the same
+    # erasure transaction (ecff5661), even when no review is left to empty.
+    from ac_platform.conversation_intelligence.gold_reviews import (
+        erase_gold_reviews_for_recording,
+    )
+
+    await erase_gold_reviews_for_recording(database, recording_id, now)
+    return len(rows)
+
+
+_ERASED_CALL_COUNT = """
+    SELECT count(*)
+    FROM conversation_pointer_reviews r
+    JOIN conversation_recordings c ON c.id = r.recording_id
+    LEFT JOIN conversation_report_drafts d ON d.id = r.report_draft_id
+    WHERE r.erased_at IS NULL
+      AND (c.state IN ('deleting', 'deleted') OR d.erased_at IS NOT NULL OR d.id IS NULL)
+"""
+_ERASED_CALL_ERASE = """
+    UPDATE conversation_pointer_reviews SET payload = NULL, erased_at = now()
+    WHERE id IN (
+      SELECT r.id
+      FROM conversation_pointer_reviews r
+      JOIN conversation_recordings c ON c.id = r.recording_id
+      LEFT JOIN conversation_report_drafts d ON d.id = r.report_draft_id
+      WHERE r.erased_at IS NULL
+        AND (c.state IN ('deleting', 'deleted') OR d.erased_at IS NOT NULL OR d.id IS NULL)
+    )
+"""
+
+
+def erase_reviews_of_erased_calls(connection: Any, *, apply: bool) -> dict[str, int]:
+    """One-off cleanup (AUT-2010): reviews whose call or report was already erased.
+
+    Dry run by default; with apply it empties them in the caller's transaction.
+    """
+    from sqlalchemy import text
+
+    count = int(connection.execute(text(_ERASED_CALL_COUNT)).scalar_one())
+    erased = connection.execute(text(_ERASED_CALL_ERASE)).rowcount if apply and count else 0
+    return {"found": count, "erased": int(erased or 0)}
+
+
+_ADMISSION = """
+    SELECT d.erased_at IS NULL AS draft_live, d.run_id AS draft_run,
+           d.source_sha256 AS draft_source,
+           d.payload ->> 'transcript_revision' AS draft_revision,
+           c.source_sha256 AS call_source,
+           (SELECT n.id FROM conversation_report_drafts n
+            WHERE n.recording_id = c.id AND n.erased_at IS NULL
+            ORDER BY n.created_at DESC LIMIT 1) AS latest_draft,
+           p.revoked_at IS NULL AND p.provider = 'local' AND p.source_sha256 = c.source_sha256
+             AND p.expires_at > :now AND p.retention_until > :now
+             AND length(p.permission_reference) > 0 AND length(p.retention_reference) > 0
+             AS permitted,
+           t.status = 'active' AND person.status = 'active'
+             AND coalesce(m.status = 'active' AND m.ended_at IS NULL, false) AS active
+    FROM conversation_recordings c
+    JOIN conversation_report_drafts d ON d.id = :draft AND d.recording_id = c.id
+    JOIN conversation_permissions p ON p.id = c.permission_id
+    JOIN tenants t ON t.id = c.tenant_id
+    JOIN persons person ON person.id = c.person_id
+    LEFT JOIN memberships m ON m.tenant_id = c.tenant_id AND m.person_id = c.person_id
+    WHERE c.id = :recording
+    FOR SHARE OF d, p
+"""
+
+
+def admission_refusal(connection: Any, report: dict[str, Any], now: datetime) -> str | None:
+    """Why this call may not be reviewed or saved now, or None when it may (AUT-2010).
+
+    The same execution-time checks as the canonical worker: the call is ready
+    and not being erased; its recording permission is current (not revoked or
+    expired, retention not passed, same source); its workspace, person and
+    membership are active; and the report is still the call's newest, from
+    the same run, source and transcript revision. The recording, report and
+    permission rows stay locked FOR SHARE until the caller's transaction ends,
+    so erasure or revocation waits for (and is then fenced by) this check.
+    """
+    from sqlalchemy import text
+
+    call = connection.execute(
+        text(
+            "SELECT state, deleted_at IS NULL AS live FROM conversation_recordings"
+            " WHERE id = :id AND tenant_id = :tenant FOR SHARE"
+        ),
+        {"id": report["recording_id"], "tenant": report["tenant_id"]},
+    ).first()
+    if call is None:
+        return "call_missing"
+    if call.state in {"deleting", "deleted"} or not call.live:
+        return "call_erased"
+    row = connection.execute(
+        text(_ADMISSION),
+        {"recording": report["recording_id"], "draft": report["draft_id"], "now": now},
+    ).first()
+    if row is None:
+        return "call_missing"
+    if not row.draft_live:
+        return "call_erased"
+    if call.state != "ready":
+        return "call_not_ready"
+    if (
+        str(row.latest_draft) != str(report["draft_id"])
+        or str(row.draft_run) != str(report["run_id"])
+        or row.draft_source != report["source_sha256"]
+        or row.call_source != report["source_sha256"]
+        or row.draft_revision != report["transcript_revision"]
+    ):
+        return "stale_source"
+    if not row.permitted:
+        return "permission_inactive"
+    if not row.active:
+        return "account_inactive"
+    return None
+
+
+def save_review(
+    connection: Any,
+    *,
+    report: dict[str, Any],
+    review: dict[str, Any],
+    prompt_digest: str,
+    usage: dict[str, Any],
+    created_by: str,
+    now: datetime,
+) -> Any:
+    """Save one review if the call still passes admission; returns its id, else None.
+
+    ``admission_refusal`` runs in the same transaction, so a late provider
+    answer never restores content after erasure began, after the permission
+    was revoked, or once a newer report replaced this one.
+    """
+    from uuid import uuid4
+
+    from sqlalchemy import insert
+
+    from ac_platform.conversation_intelligence.pointer_review_models import (
+        ConversationPointerReview,
+    )
+
+    if admission_refusal(connection, report, now) is not None:
+        return None
+    review_id = uuid4()
+    connection.execute(
+        insert(ConversationPointerReview).values(
+            id=review_id,
+            tenant_id=report["tenant_id"],
+            recording_id=report["recording_id"],
+            run_id=report["run_id"],
+            report_draft_id=report["draft_id"],
+            source_sha256=report["source_sha256"],
+            transcript_revision=report["transcript_revision"],
+            version=VERSION,
+            model_id=MODEL_ID,
+            prompt_sha256=prompt_digest,
+            payload=review,
+            payload_sha256=payload_sha256(review),
+            input_tokens=usage.get("promptTokenCount"),
+            output_tokens=usage.get("candidatesTokenCount"),
+            created_by=created_by,
+            created_at=now,
+        )
+    )
+    return review_id

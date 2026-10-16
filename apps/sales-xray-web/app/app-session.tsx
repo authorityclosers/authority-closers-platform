@@ -31,6 +31,8 @@ const SHELL_ROUTES = new Set([
   // Coaching keeps the signed-in session across navigation, so it opens
   // without re-checking the account (AUT-1678).
   "/coaching",
+  // Sales Xray CRM: the seller's lead desk (owner order 16 Oct 2026).
+  "/leads",
 ]);
 
 function isShellRoute(pathname: string | null) {

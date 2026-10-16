@@ -73,6 +73,15 @@ def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
 
+def _with_view(url: str, view: str) -> str:
+    """The same report address opened on one explicit view (16 Oct: links only)."""
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    query = [(key, value) for key, value in parse_qsl(parts.query) if key != "view"]
+    return urlunsplit(parts._replace(query=urlencode([*query, ("view", view)])))
+
+
 def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletion(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -793,13 +802,11 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
                     report_view = page.get_by_role("button", name="Report view", exact=True)
                     details_view = page.get_by_role("button", name="Details view", exact=True)
-                    more_views = page.locator('summary[aria-label="More views"]')
                     # Intended default: a bound report URL without view= opens
                     # on the three-part Report (15 Oct), whatever the viewport width.
-                    # Details and Document wait behind "More views".
+                    # 16 Oct owner: the old Details and Document views are not offered.
                     await expect(report_view).to_have_attribute("aria-pressed", "true")
-                    await more_views.click()
-                    await expect(details_view).to_have_attribute("aria-pressed", "false")
+                    await expect(details_view).to_have_count(0)
                     report_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
                     )
@@ -807,9 +814,8 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         report_nav.get_by_role("link", name="Overview & Score", exact=True)
                     ).to_have_count(1)
-                    # Details keeps every original section, transcript and raw data.
-                    await details_view.click()
-                    await expect(details_view).to_have_attribute("aria-pressed", "true")
+                    # An explicit Details link still opens every original section.
+                    await page.goto(_with_view(page.url, "tabs"), wait_until="domcontentloaded")
                     assert "view=tabs" in page.url
                     await expect(
                         page.get_by_role("tab", name="Raw data", exact=True)
@@ -899,12 +905,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         library_page.get_by_role("region", name="Sales call report")
                     ).to_be_visible(timeout=20000)
-                    details_view = library_page.get_by_role(
-                        "button", name="Details view", exact=True
+                    await library_page.goto(
+                        _with_view(library_page.url, "tabs"), wait_until="domcontentloaded"
                     )
-                    await library_page.locator('summary[aria-label="More views"]').click()
-                    await details_view.click()
-                    await expect(details_view).to_have_attribute("aria-pressed", "true")
                     await library_page.get_by_role("tab", name="Moments", exact=True).click()
                     player = library_page.locator("audio")
                     await expect(player).to_have_count(1)
@@ -974,10 +977,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         picture.get_by_role("button", name="Lost", exact=True)
                     ).to_have_attribute("aria-pressed", "true")
-                    await library_page.locator('summary[aria-label="More views"]').click()
-                    await library_page.get_by_role(
-                        "button", name="Document view", exact=True
-                    ).click()
+                    await library_page.goto(
+                        _with_view(library_page.url, "document"), wait_until="domcontentloaded"
+                    )
                     document_region = library_page.get_by_role("region", name="Report document")
                     await expect(document_region).to_contain_text(
                         "Chose another program.", timeout=20000

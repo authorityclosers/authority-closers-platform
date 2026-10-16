@@ -11,8 +11,10 @@ from uuid import uuid4
 
 import pytest
 from alembic.autogenerate import compare_metadata
+from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from alembic.script import ScriptDirectory
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -215,7 +217,10 @@ def test_0090_preserves_history_bounds_each_table_and_refuses_unsafe_rollback(
             )
             == 1
         )
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261016_0091"
-        )
+        # The rehearsal ends at the repository's current head, whichever later
+        # migration that is (a pinned revision broke on every new migration).
+        head = ScriptDirectory.from_config(
+            Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+        ).get_current_head()
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == head
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []

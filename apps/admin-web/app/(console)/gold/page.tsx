@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Star } from "lucide-react";
+import { GoldReviewRows } from "./gold-review-rows";
 
 import { when } from "@/app/calls/call-data";
 import {
@@ -54,6 +55,7 @@ export default async function GoldPage() {
         context={["What the right report would say, and how the AI compares"]}
         actions={<Badge tone="warn">Internal · not an official score</Badge>}
       />
+      {await GoldReviewRows()}
       {!result.ok ? (
         <Unavailable title="The gold set" reason={result.error} />
       ) : null}

@@ -14,6 +14,7 @@ import re
 import signal
 import sys
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -149,11 +150,25 @@ async def run_service(
             environment=config.environment,
             native_runtime=native,
         )
-        async with committed_work_listener(database_url) as wakeups:
-            runner = PipelinedConversationWorkerRunner(
-                reporting.retention, offline, reporting.plans, reporting.inference, wakeups=wakeups
-            )
-            return await runner.run(stop)
+        from ac_platform.conversation_intelligence.gold_review_job import run_gold_reader
+
+        gold_reader = asyncio.create_task(
+            run_gold_reader(sessions, config.operations_tenant_id, stop), name="gold-review-reader"
+        )
+        try:
+            async with committed_work_listener(database_url) as wakeups:
+                runner = PipelinedConversationWorkerRunner(
+                    reporting.retention,
+                    offline,
+                    reporting.plans,
+                    reporting.inference,
+                    wakeups=wakeups,
+                )
+                return await runner.run(stop)
+        finally:
+            gold_reader.cancel()
+            with suppress(asyncio.CancelledError):
+                await gold_reader
     finally:
         await engine.dispose()
 

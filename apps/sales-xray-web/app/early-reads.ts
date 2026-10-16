@@ -58,11 +58,11 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
     `${ACQUISITION}/submissions/summary`,
     `${ACQUISITION}/activity`,
     `${ACQUISITION}/session`,
-    `${ACQUISITION}/submissions?include_owners=true`,
+    `${ACQUISITION}/submissions?include_owners=true&order=reports_first`,
   ],
   "/analysis/calls": [
     ...SESSION,
-    `${ACQUISITION}/submissions?include_owners=true`,
+    `${ACQUISITION}/submissions?include_owners=true&order=reports_first`,
   ],
   "/analysis/new": [...SESSION, ...STUDIO],
   "/organisation": [
@@ -73,6 +73,7 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
   ],
   "/account": [...SESSION],
   "/prospects": [...SESSION],
+  "/leads": [...SESSION],
 };
 
 /** A saved call: the session, the studio's entry and allowance, the call. */

@@ -1135,6 +1135,12 @@ class ConversationApplication:
             )
         ).all():
             metrics.summary, metrics.outcome_kind, metrics.erased_at = None, None, now
+        from ac_platform.conversation_intelligence.pointer_review import (
+            erase_pointer_reviews_for_recording,
+        )
+
+        # Every saved AI pointer review version goes with its call (AUT-2010).
+        await erase_pointer_reviews_for_recording(self.database, recording.id, now)
         recording.state, recording.deleted_at = "deleted", now
         # Flush all retention clears before acknowledging the deletion job so
         # the durable erasure is visible before the worker lease is completed.

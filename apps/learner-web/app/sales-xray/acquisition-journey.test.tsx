@@ -201,7 +201,9 @@ beforeEach(() => {
       }
       if (
         path.endsWith("/submissions") ||
-        path.endsWith("/submissions?include_owners=true")
+        path.endsWith("/submissions?include_owners=true") ||
+        path.endsWith("/submissions?order=reports_first") ||
+        path.endsWith("/submissions?include_owners=true&order=reports_first")
       )
         return json({
           submissions: [
@@ -276,14 +278,12 @@ it("runs the actual learner upload and report journey under one Academy main and
   expect(host.querySelector("audio")?.getAttribute("src")).toBe(
     `/v1/conversation/acquisition/submissions/${submissionId}/source`,
   );
-  // A finished call opens on the six-part Report; Details keeps every section.
+  // A finished call opens on the three-part Report; the old Details view is
+  // gone (owner, 16 Oct).
   const view = (title: string) =>
-    host.querySelector<HTMLButtonElement>(`button[title="${title}"]`)!;
-  expect(view("Report view").getAttribute("aria-pressed")).toBe("true");
-  await act(async () => view("Details view").click());
-  await flush();
-  await click("Moments");
-  expect(host.textContent).toContain("कल timing discuss करूया.");
+    host.querySelector<HTMLButtonElement>(`button[title="${title}"]`);
+  expect(view("Report view")?.getAttribute("aria-pressed")).toBe("true");
+  expect(view("Details view")).toBeNull();
   expect(requests.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
   const sourceUploadIndex = requests.findIndex(
     ({ init }) => init.method === "PUT",

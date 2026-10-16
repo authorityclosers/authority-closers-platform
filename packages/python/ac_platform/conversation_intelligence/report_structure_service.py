@@ -13,6 +13,7 @@ from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.pointer_review import (
     latest_review,
     merge_into_structure,
+    project_structure,
 )
 from ac_platform.conversation_intelligence.prospect_call_outcome_store import CallOutcomeStore
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore
@@ -20,6 +21,7 @@ from ac_platform.conversation_intelligence.report_structure import (
     project_final_outcome,
     report_statistics,
 )
+from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
 from ac_platform.conversation_intelligence.speaker_map_service import read_speaker_map
 from ac_platform.kernel.authz import ActorContext
 
@@ -79,7 +81,22 @@ async def enrich_report_structure(
     # Owner decision 16 Oct (rulebook 693645b0): a saved AI pointer review for
     # exactly this run, source and transcript overlays its scores as an AI draft.
     database = getattr(ownership, "database", None)
-    review = await latest_review(database, envelope) if database is not None else None
-    if review is not None:
-        result["report"]["content"]["structure"] = merge_into_structure(structure, review)
+    if database is None:
+        return result
+    review = await latest_review(database, envelope)
+    if review is None:
+        return result
+    # The envelope arrived privacy-projected; the AI review overlay adds call
+    # words after that, so the canonical projection runs again at read time with
+    # current marks, later and other-revision marks included (AUT-2010).
+    try:
+        recording_id = UUID(str(envelope["recording_id"]))
+        revision = str(envelope["transcript_revision"])
+    except (KeyError, ValueError):
+        return result
+    plan = await withheld_plan_for(
+        database, recording_id=recording_id, served_revisions=(revision,)
+    )
+    merged = merge_into_structure(structure, review)
+    result["report"]["content"]["structure"] = project_structure(merged, plan)
     return result

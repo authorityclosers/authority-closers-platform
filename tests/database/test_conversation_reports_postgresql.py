@@ -548,3 +548,143 @@ def test_worker_deletion_erases_report_content_and_preserves_audit(
             await engine.dispose()
 
     run(exercise())
+
+
+def test_erasure_empties_every_pointer_review_version_and_refuses_late_saves(
+    postgres_harness: Any, report_fixture: ReportFixture
+) -> None:
+    """AUT-2010: AI pointer reviews go with their call, whatever their version."""
+    from sqlalchemy import insert
+
+    from ac_platform.conversation_intelligence.pointer_review import (
+        erase_pointer_reviews_for_recording,
+        erase_reviews_of_erased_calls,
+        latest_review,
+        payload_sha256,
+        save_review,
+    )
+    from ac_platform.conversation_intelligence.pointer_review_models import (
+        ConversationPointerReview,
+    )
+
+    fictional = {"version": "pointer-review/1", "overall": {"score": 70}, "pointers": []}
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            await _import_valid(report_fixture, sessions)
+            async with sessions() as database:
+                draft = await database.scalar(
+                    select(ConversationReportDraft).where(
+                        ConversationReportDraft.run_id == report_fixture.prepared.run_id
+                    )
+                )
+                assert draft is not None and draft.payload is not None
+                report = {
+                    "tenant_id": draft.tenant_id,
+                    "recording_id": draft.recording_id,
+                    "run_id": draft.run_id,
+                    "draft_id": draft.id,
+                    "source_sha256": draft.source_sha256,
+                    "transcript_revision": draft.payload["transcript_revision"],
+                }
+            when = report_fixture.prepared.state.now
+
+            def save(connection: Any, version: int) -> bool:
+                return save_review(
+                    connection,
+                    report=report,
+                    review={**fictional, "overall": {"score": 70 + version}},
+                    prompt_digest="a" * 64,
+                    usage={"promptTokenCount": 10, "candidatesTokenCount": 20},
+                    created_by="test",
+                    now=when + timedelta(seconds=version),
+                )
+
+            async with engine.begin() as connection:
+                assert await connection.run_sync(save, 1)
+                assert await connection.run_sync(save, 2)
+            envelope = {
+                "recording_id": str(report["recording_id"]),
+                "run_id": str(report["run_id"]),
+                "source_sha256": report["source_sha256"],
+                "transcript_revision": report["transcript_revision"],
+            }
+            async with sessions() as database:
+                newest = await latest_review(database, envelope)
+                assert newest is not None and newest["overall"]["score"] == 72
+            async with sessions() as database, database.begin():
+                deleted = await ConversationApplication(
+                    database, clock=lambda: report_fixture.prepared.state.now
+                ).request_deletion(
+                    report_fixture.actor,
+                    report_fixture.prepared.recording_id,
+                    key="pointer-review-delete",
+                )
+                assert deleted["state"] == "deleting"
+            # A provider answer that lands after deletion began is refused.
+            async with engine.begin() as connection:
+                assert not await connection.run_sync(save, 3)
+            assert await report_fixture.prepared.worker.run_once()
+            async with sessions() as database:
+                rows = (
+                    await database.scalars(
+                        select(ConversationPointerReview).where(
+                            ConversationPointerReview.recording_id == report["recording_id"]
+                        )
+                    )
+                ).all()
+                assert len(rows) == 2
+                assert all(row.payload is None and row.erased_at is not None for row in rows)
+                # Minimal provenance stays: ids, digests, model and token counts.
+                assert all(
+                    len(row.payload_sha256) == 64 and row.output_tokens == 20 for row in rows
+                )
+                assert await latest_review(database, envelope) is None
+            async with sessions() as database, database.begin():
+                assert (
+                    await erase_pointer_reviews_for_recording(
+                        database, report["recording_id"], when
+                    )
+                    == 0
+                )
+            # A review saved before this repair, for a call that is now erased.
+            leftover = {**fictional, "overall": {"score": 50}}
+            async with engine.begin() as connection:
+                await connection.execute(
+                    insert(ConversationPointerReview).values(
+                        id=uuid4(),
+                        tenant_id=report["tenant_id"],
+                        recording_id=report["recording_id"],
+                        run_id=report["run_id"],
+                        report_draft_id=report["draft_id"],
+                        source_sha256=report["source_sha256"],
+                        transcript_revision=report["transcript_revision"],
+                        version="pointer-review/1",
+                        model_id="fictional",
+                        prompt_sha256="b" * 64,
+                        payload=leftover,
+                        payload_sha256=payload_sha256(leftover),
+                        created_by="test",
+                        created_at=when,
+                    )
+                )
+            async with engine.begin() as connection:
+                dry = await connection.run_sync(
+                    lambda c: erase_reviews_of_erased_calls(c, apply=False)
+                )
+                assert dry == {"found": 1, "erased": 0}
+                applied = await connection.run_sync(
+                    lambda c: erase_reviews_of_erased_calls(c, apply=True)
+                )
+                assert applied == {"found": 1, "erased": 1}
+            async with engine.begin() as connection:
+                again = await connection.run_sync(
+                    lambda c: erase_reviews_of_erased_calls(c, apply=True)
+                )
+                assert again == {"found": 0, "erased": 0}
+        finally:
+            await engine.dispose()
+
+    run(exercise())

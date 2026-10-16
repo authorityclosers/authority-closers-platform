@@ -154,13 +154,14 @@ it("opens call Coaching from the retained report without loading another route",
     syntheticReport.improvements[0].evidence[0],
     "Coaching for this call",
   );
+  // 16 Oct owner: the old Details view is gone; Report is the way back.
+  expect(container.querySelector('button[title="Details view"]')).toBeNull();
   await act(async () =>
     container
-      .querySelector<HTMLButtonElement>('button[title="Details view"]')!
+      .querySelector<HTMLButtonElement>('button[title="Report view"]')!
       .click(),
   );
-  expect(mode().dataset.view).toBe("tabs");
-  expect(sections()).toHaveLength(6);
+  expect(mode().dataset.view).toBe("story");
 });
 
 it("renders an initially chosen Coaching view without a processing screen", () => {
@@ -1414,7 +1415,7 @@ it("keeps the same mounted panel state across all three report views", async () 
   }
 });
 
-it("opens on the three-part Report and keeps every original section under Details", async () => {
+it("opens on the three-part Report with only Report and Coaching (the old views are gone)", async () => {
   window.history.replaceState(null, "", `/?call=${call}`);
   await act(async () =>
     root.render(
@@ -1446,38 +1447,16 @@ it("opens on the three-part Report and keeps every original section under Detail
     [
       ...container.querySelectorAll("[data-report-nav] [role=group] button"),
     ].map((b) => b.textContent),
-  ).toEqual([
-    "Report",
-    "Coaching",
-    // Behind "More views":
-    "Document · print or Word",
-    "All analysis details",
-  ]);
+  ).toEqual(["Report", "Coaching"]);
   // No text-size control: browser zoom does that job.
   expect(container.querySelector('[aria-label^="Text size"]')).toBeNull();
-  await act(async () =>
-    container
-      .querySelector<HTMLButtonElement>('button[title="Details view"]')!
-      .click(),
-  );
-  expect(mode().dataset.view).toBe("tabs");
-  expect(window.location.search).toContain("view=tabs");
-  expect(
-    [...container.querySelectorAll('[role="tab"]')].map(
-      (tab) => tab.textContent,
-    ),
-  ).toEqual([
-    "Overview",
-    "Prospect",
-    "Moments",
-    "Sales skills",
-    "Next-call plan",
-    "Transcript",
-  ]);
-  expect(container.textContent).toContain("Summary point");
+  // 16 Oct owner: the old Details (tabs) and Document views are not offered.
+  expect(container.querySelector('button[title="Details view"]')).toBeNull();
+  expect(container.querySelector('[role="tab"]')).toBeNull();
+  expect(container.textContent).not.toContain("All analysis details");
 });
 
-it("remembers the chosen view per person and workspace, with explicit URLs taking priority", async () => {
+it("opens the new Report for old saved or linked views and remembers Coaching per person", async () => {
   const person = (id: string): WorkspaceAccessValue => ({
     status: "ready",
     authenticated: true,
@@ -1497,21 +1476,27 @@ it("remembers the chosen view per person and workspace, with explicit URLs takin
         </WorkspaceAccessContext.Provider>,
       ),
     );
+  // A view saved before 16 Oct (Details) opens the new Report now.
+  localStorage.setItem("ac:report-view2:tenant-one:first", "tabs");
   window.history.replaceState(null, "", `/?call=${call}`);
   await show("first", "first");
+  expect(mode().dataset.view).toBe("story");
   await act(async () =>
     container
-      .querySelector<HTMLButtonElement>('button[title="Details view"]')!
+      .querySelector<HTMLButtonElement>('button[title="Coaching view"]')!
       .click(),
   );
-  expect(localStorage.getItem("ac:report-view2:tenant-one:first")).toBe("tabs");
+  expect(localStorage.getItem("ac:report-view2:tenant-one:first")).toBe(
+    "coaching",
+  );
   window.history.replaceState(null, "", `/?call=${call}`);
   await show("first", "reopened");
-  expect(mode().dataset.view).toBe("tabs");
+  expect(mode().dataset.view).toBe("coaching");
   await show("second", "second");
   expect(mode().dataset.view).toBe("story");
-  window.history.replaceState(null, "", `/?call=${call}&view=document`);
-  await show("first", "explicit");
+  // Only an explicit link (print and Word use one) still opens the document.
+  window.history.replaceState(null, "", `/?call=${call}&view=document&print=1`);
+  await show("second", "print");
   expect(mode().dataset.view).toBe("document");
   localStorage.removeItem("ac:report-view2:tenant-one:first");
 });

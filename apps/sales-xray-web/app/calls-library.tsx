@@ -25,7 +25,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { useChipsOwnRow } from "./calls-chip-row";
 
@@ -54,6 +60,9 @@ import {
   renameCall,
   type CallLabelChange,
 } from "./call-label-client";
+import { analyseAllHost, noHostChanges } from "./analyse-all";
+import { AnalyseAllControl } from "./analyse-all-control";
+import analyseAllStyles from "./analyse-all.module.css";
 import { ownsCall, requestWorkspace } from "./call-ownership";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import styles from "./calls-library.module.css";
@@ -114,18 +123,26 @@ function daysAgo(createdAt: string, dates: DisplayDates) {
   return day === null ? null : daysBetween(day, dates.today);
 }
 
-type CallSort = "newest" | "oldest" | "longest";
+// "reports" is the server's order: calls whose analysis started (a Report,
+// in progress or paused) first, then calls never analysed, each newest first.
+type CallSort = "reports" | "newest" | "oldest" | "longest";
 
 const SORTS: { id: CallSort; label: string }[] = [
+  { id: "reports", label: "Reports first" },
   { id: "newest", label: "Newest first" },
   { id: "oldest", label: "Oldest first" },
   { id: "longest", label: "Longest first" },
 ];
 
 function sortCalls(rows: LibrarySubmission[], sort: CallSort) {
-  if (sort === "newest") return rows;
+  if (sort === "reports") return rows;
   const copy = [...rows];
-  if (sort === "oldest")
+  if (sort === "newest")
+    copy.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  else if (sort === "oldest")
     copy.sort(
       (a, b) =>
         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -181,6 +198,7 @@ const STATUS_PARAM: Partial<Record<CallTone, string>> = {
   active: "processing",
   ready: "completed",
   attention: "attention",
+  idle: "not_analysed",
 };
 
 export function readCallsView(search: string) {
@@ -194,7 +212,7 @@ export function readCallsView(search: string) {
     rep: params.get("rep") ?? "",
     sort: (SORTS.some((option) => option.id === sort)
       ? sort
-      : "newest") as CallSort,
+      : "reports") as CallSort,
   };
 }
 
@@ -208,7 +226,7 @@ export function callsViewSearch(
     value ? params.set(key, value) : params.delete(key);
   put("status", view.filter === "all" ? "" : (STATUS_PARAM[view.filter] ?? ""));
   put("rep", view.rep);
-  put("sort", view.sort === "newest" ? "" : view.sort);
+  put("sort", view.sort === "reports" ? "" : view.sort);
   put("q", view.q);
   const next = params.toString();
   return next ? `?${next}` : "";
@@ -219,7 +237,19 @@ const FILTERS: { id: "all" | CallTone; label: string }[] = [
   { id: "ready", label: "Report ready" },
   { id: "active", label: "In progress" },
   { id: "attention", label: "Needs attention" },
+  { id: "idle", label: "Not analysed yet" },
 ];
+
+/** The Calls page reads calls with Reports before never-analysed ones. */
+const LIST_PATH = "/submissions?include_owners=true&order=reports_first";
+
+/** A saved call whose analysis never started (the server orders these last). */
+function notAnalysed(submission: LibrarySubmission) {
+  return (
+    !submission.hasReport &&
+    (submission.state === "ready" || submission.state === "awaiting_upload")
+  );
+}
 
 function openLabel(submission: LibrarySubmission) {
   const tone = callTone(submission);
@@ -366,6 +396,12 @@ function CallsLibraryContent({
   // A rep from the address stays only if the loaded calls include them.
   const [selectedRep, setSelectedRep] = useState(addressView.rep);
   const [sort, setSort] = useState<CallSort>(addressView.sort);
+  // Server render and first paint agree (false); the browser then reads its host.
+  const analyseAllHere = useSyncExternalStore(
+    noHostChanges,
+    analyseAllHost,
+    () => false,
+  );
   useEffect(() => {
     const { pathname, search, hash } = window.location;
     const next = callsViewSearch(search, {
@@ -471,10 +507,9 @@ function CallsLibraryContent({
     activeRequestKind.current = "refresh";
     const generation = ++requestGeneration.current;
     setRefreshing(true);
-    void acquisition(
-      preview ? "/submissions" : "/submissions?include_owners=true",
-      { signal: controller.signal },
-    )
+    void acquisition(preview ? "/submissions" : LIST_PATH, {
+      signal: controller.signal,
+    })
       .then((value) => {
         const page = parseSubmissionLibraryPage(value);
         if (
@@ -588,10 +623,9 @@ function CallsLibraryContent({
     activeRequestKind.current = "initial";
     const generation = ++requestGeneration.current;
     mounted.current = true;
-    void acquisition(
-      preview ? "/submissions" : "/submissions?include_owners=true",
-      { signal: controller.signal },
-    )
+    void acquisition(preview ? "/submissions" : LIST_PATH, {
+      signal: controller.signal,
+    })
       .then((value) => {
         const page = parseSubmissionLibraryPage(value);
         if (
@@ -745,7 +779,7 @@ function CallsLibraryContent({
     try {
       const page = parseSubmissionLibraryPage(
         await acquisition(
-          `/submissions?${preview ? "" : "include_owners=true&"}before=${encodeURIComponent(before)}`,
+          `${preview ? "/submissions?" : `${LIST_PATH}&`}before=${encodeURIComponent(before)}`,
           {
             signal: controller.signal,
           },
@@ -1348,12 +1382,24 @@ function CallsLibraryContent({
       ? `${counts.attention} ${counts.attention === 1 ? "needs" : "need"} attention`
       : "",
   ].filter(Boolean);
+  // Only the person who saved a call can start its analysis.
+  const canAnalyseAll =
+    analyseAllHere &&
+    workspace &&
+    sort === "reports" &&
+    submissions.some(
+      (submission) =>
+        notAnalysed(submission) && ownsCall(submission.owner, viewerId),
+    );
   const renderRows = () => {
     if (!grouped) return visibleSubmissions.map(callRow);
     const out: ReactNode[] = [];
     let current = "";
     for (const submission of visibleSubmissions) {
-      const group = dayGroup(submission.createdAt, dates);
+      const group =
+        sort === "reports" && notAnalysed(submission)
+          ? "Not analysed yet"
+          : dayGroup(submission.createdAt, dates);
       if (group !== current) {
         current = group;
         out.push(
@@ -1362,7 +1408,17 @@ function CallsLibraryContent({
             key={`group-${group}`}
             role="presentation"
           >
-            {group}
+            {group === "Not analysed yet" && canAnalyseAll ? (
+              <span className={analyseAllStyles.heading}>
+                <span data-group-label="">{group}</span>
+                <AnalyseAllControl
+                  viewerId={viewerId}
+                  onFinished={() => refreshHandler.current(identityKey, true)}
+                />
+              </span>
+            ) : (
+              group
+            )}
           </div>,
         );
       }

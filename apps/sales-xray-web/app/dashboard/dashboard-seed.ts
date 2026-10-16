@@ -17,7 +17,8 @@ export const DASHBOARD_PATHS = {
   summary: "/v1/conversation/acquisition/submissions/summary",
   activity: "/v1/conversation/acquisition/activity",
   allowance: "/v1/conversation/acquisition/session",
-  recent: "/v1/conversation/acquisition/submissions?include_owners=true",
+  recent:
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first",
 } as const;
 
 export type ServerAnswer = { status: number; body: unknown } | null;

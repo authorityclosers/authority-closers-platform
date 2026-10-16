@@ -232,3 +232,155 @@ def test_a_review_without_outcome_details_still_parses() -> None:
     assert "call_outcome_details" not in merge_into_structure(
         {"overview": {}, "pointers": []}, review
     )
+
+
+def _merged_structure() -> dict:
+    review = parse_review(
+        answer(
+            call_opening_first_impression={
+                "evidence": ["s2"],
+                "what_happened": "They said our leads are poor quality, so you pivoted.",
+            }
+        ),
+        SEGMENTS,
+    )
+    structure = {
+        "version": "report-structure/1",
+        "overview": {"score": None, "score_status": "not_scored"},
+        "pointers": [
+            {"id": pointer_id, "number": n, "status": "insufficient_evidence", "score": None}
+            for n, pointer_id in enumerate(POINTER_IDS, 1)
+        ],
+        "final_call_outcome": {"outcome": "Lost", "lost_reason": "Leads are poor quality."},
+    }
+    return merge_into_structure(structure, review)
+
+
+def test_projection_hides_a_later_marked_quote_and_matching_narratives() -> None:
+    from ac_platform.conversation_intelligence.pointer_review import project_structure
+    from ac_platform.conversation_intelligence.sensitive_segments import (
+        WITHHELD_MARKER,
+        grams,
+        withheld_plan,
+    )
+
+    merged = _merged_structure()
+    # s2 is marked after the review was saved: rule A hides its quote by id, and
+    # rule C hides any narrative sharing its words.
+    plan = withheld_plan(
+        [(s["id"], s["text"]) for s in SEGMENTS], {"s2"}, grams(SEGMENTS[1]["text"])
+    )
+    projected = project_structure(merged, plan)
+    first = projected["pointers"][0]
+    assert first["evidence"][0]["segment_id"] == "s2"
+    assert first["evidence"][0]["quote"] == WITHHELD_MARKER
+    assert first["what_happened"] == WITHHELD_MARKER
+    # Unrelated words stay readable; the person's own record keeps precedence.
+    assert projected["pointers"][2]["what_happened"] == "You did this well."
+    assert projected["final_call_outcome"] == merged["final_call_outcome"]
+    assert "poor quality" in json.dumps(merged)  # the input is not mutated
+
+
+def test_projection_follows_marks_from_another_revision_by_their_words() -> None:
+    from ac_platform.conversation_intelligence.pointer_review import project_structure
+    from ac_platform.conversation_intelligence.sensitive_segments import (
+        WITHHELD_MARKER,
+        grams,
+        withheld_plan,
+    )
+
+    merged = _merged_structure()
+    # The mark sits on another revision under a different id ("x9"): no id
+    # matches, but its words do, so the served segment s2 is withheld too.
+    plan = withheld_plan(
+        [(s["id"], s["text"]) for s in SEGMENTS], set(), grams(SEGMENTS[1]["text"])
+    )
+    projected = project_structure(merged, plan)
+    assert projected["pointers"][0]["evidence"][0]["quote"] == WITHHELD_MARKER
+    assert projected["pointers"][0]["what_happened"] == WITHHELD_MARKER
+
+
+def test_projection_is_identity_without_marks() -> None:
+    from ac_platform.conversation_intelligence.pointer_review import project_structure
+    from ac_platform.conversation_intelligence.sensitive_segments import EMPTY_PLAN
+
+    merged = _merged_structure()
+    assert project_structure(merged, EMPTY_PLAN) == merged
+
+
+def _attempt(action: str, attempt: str, minutes: int, outcome: str | None = None) -> dict:
+    from datetime import UTC, datetime, timedelta
+
+    from ac_platform.conversation_intelligence import pointer_review_admission as admission
+
+    start = datetime(2026, 10, 16, 6, 0, tzinfo=UTC)
+    return {
+        "action": admission.STARTED if action == "start" else admission.FINISHED,
+        "attempt_id": attempt,
+        "outcome": outcome,
+        "occurred_at": start + timedelta(minutes=minutes),
+    }
+
+
+def test_attempt_history_counts_failures_and_uncertain_attempts() -> None:
+    """AUT-2010: an attempt without an outcome may have been paid."""
+    from datetime import UTC, datetime, timedelta
+
+    from ac_platform.conversation_intelligence.pointer_review_admission import history_refusal
+
+    at = datetime(2026, 10, 16, 6, 0, tzinfo=UTC)
+    assert history_refusal([], at) is None
+    running = [_attempt("start", "a", 0)]
+    assert history_refusal(running, at + timedelta(minutes=5)) == "in_flight"
+    assert history_refusal(running, at + timedelta(minutes=11)) is None
+    failed = [*running, _attempt("finish", "a", 1, "timeout"), _attempt("start", "b", 20)]
+    assert history_refusal(failed, at + timedelta(minutes=31)) == "attempts_exhausted"
+    saved = [*failed, _attempt("finish", "b", 21, "saved"), _attempt("start", "c", 30)]
+    assert history_refusal(saved, at + timedelta(minutes=35)) == "in_flight"
+    later = [*saved, _attempt("finish", "c", 31, "parse_failed")]
+    assert history_refusal(later, at + timedelta(minutes=40)) is None
+    refused = [*later, _attempt("start", "d", 50), _attempt("finish", "d", 51, "refused_x")]
+    assert history_refusal(refused, at + timedelta(minutes=60)) == "attempts_exhausted"
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        (
+            ["--recent-hours", "4", "--not-before", "2026-10-16T00:00:00+00:00", "--force"],
+            "--force",
+        ),
+        (["--recent-hours", "4"], "--not-before"),
+        (["--tenant", "00000000-0000-0000-0000-000000000001", "--daily-cap", "0"], "--daily-cap"),
+    ],
+)
+def test_runner_arguments_refuse_unadmitted_modes(
+    extra: list[str], message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from ac_platform.conversation_intelligence.pointer_review_cli import _arguments
+
+    base = ["--service-config", "s.json", "--database-url-file", "d"]
+    with pytest.raises(SystemExit):
+        _arguments([*base, *extra])
+    assert message in capsys.readouterr().err
+
+
+def test_automatic_mode_no_longer_needs_a_state_file() -> None:
+    from ac_platform.conversation_intelligence.pointer_review_cli import _arguments
+
+    parsed = _arguments(
+        [
+            "--service-config",
+            "s.json",
+            "--database-url-file",
+            "d",
+            "--recent-hours",
+            "48",
+            "--not-before",
+            "2026-10-16T05:18:50+00:00",
+            "--daily-cap",
+            "100",
+            "--apply",
+        ]
+    )
+    assert parsed.state_file is None and parsed.daily_cap == 100 and not parsed.force

@@ -16,7 +16,7 @@ from html import unescape
 from http.cookiejar import HTTPONLY_ATTR, LoadError, MozillaCookieJar
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 from zipfile import ZipFile
 
 import pytest
@@ -143,10 +143,31 @@ def _document_download(page: Page) -> Locator:
 
 
 def _switch_report_view(page: Page, label: str) -> None:
-    action = page.get_by_role("button", name=label, exact=True)
-    if not action.count():
-        page.locator('summary[aria-label="More views"]').click()
-    action.click()
+    if label in {"Document view", "Details view"}:
+        parts = urlsplit(page.url)
+        query = [
+            (key, value)
+            for key, value in parse_qsl(parts.query, keep_blank_values=True)
+            if key != "view"
+        ]
+        # A fictional route has no call id in its pathname. Reuse its own
+        # section link's binding; real call URLs already identify their call.
+        if parts.path.startswith("/review-fixture/") and not any(key == "call" for key, _ in query):
+            link = page.locator('[data-report-sections] a[href*="call="]').first
+            binding = parse_qs(urlsplit(link.get_attribute("href") or "").query)
+            assert len(binding.get("call", [])) == 1, "Missing fixture call link"
+            query.append(("call", binding["call"][0]))
+        view = "document" if label == "Document view" else "tabs"
+        response = page.goto(
+            urlunsplit(parts._replace(query=urlencode([*query, ("view", view)]))),
+            wait_until="domcontentloaded",
+        )
+        assert response is not None and response.status < 400, "Explicit report link failed"
+        expect(page.locator("[data-report-modes]")).to_have_attribute(
+            "data-view", view, timeout=15_000
+        )
+        return
+    page.get_by_role("button", name=label, exact=True).click()
 
 
 def _cookie_jar_path() -> Path | None:
@@ -6316,6 +6337,96 @@ def test_fixture_coaching_feedback_save(
         }
 
 
+def test_fixture_report_explicit_views(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Linked Document/Details still open, and Report returns to the new structure."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Explicit-view navigation uses the existing fictional Report")
+    with _journey(browser, viewport, "report-explicit-views") as journey:
+        page = journey.page
+        reads: list[str] = []
+        mutations: list[str] = []
+        media: list[str] = []
+        replies: dict[tuple[str, str, str], dict[str, object]] = {}
+        journey.observations.append(
+            {
+                "step": "fictional-network-guard",
+                "reads": reads,
+                "mutations": mutations,
+                "media": media,
+            }
+        )
+
+        def read_only(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif request.resource_type == "media" or re.search(
+                r"\.(?:mp3|mp4|m4a|wav|ogg|webm|aac)$", url.path, re.I
+            ):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            elif url.path.startswith("/v1/"):
+                reads.append(url.path)
+                key = (request.method, url.path, url.query)
+                if key not in replies:
+                    replies[key] = _fictional_api_reply(*key)
+                reply = replies[key]
+                route.fulfill(
+                    status=reply["status"],
+                    content_type="application/json",
+                    body=json.dumps(reply["body"]),
+                )
+            else:
+                route.continue_()
+
+        page.route("**/*", read_only)
+        journey.open("/review-fixture/report/story?example=api")
+        mode = page.locator("[data-report-modes]")
+        expect(mode).to_have_attribute("data-view", "story")
+        # Fixture call binding comes from its own section link, without an
+        # assumed fixture id or interaction with its retained demo menu.
+        _switch_report_view(page, "Document view")
+        expect(_document_preview(page).locator("section[data-document-section]")).to_have_count(6)
+        expect(_document_download(page)).to_be_visible()
+        page.evaluate("() => document.fonts.ready")
+        if journey.width == 390:
+            _document_preview(page).locator("header").evaluate(
+                "el => el.scrollIntoView({block: 'center', behavior: 'instant'})"
+            )
+        journey.snapshot("document-link")
+        journey.document_controls()
+        linked_query = parse_qs(urlsplit(page.url).query, keep_blank_values=True)
+        assert linked_query["example"] == ["api"]
+        assert len(linked_query["call"]) == 1
+
+        _switch_report_view(page, "Details view")
+        expect(page.locator('[data-report-sections][role="tablist"]')).to_be_visible()
+        expect(page.get_by_role("tab", name="Overview", exact=True)).to_be_visible()
+        page.evaluate("() => document.fonts.ready")
+        if journey.width == 390:
+            page.get_by_role("tab", name="Overview", exact=True).click()
+        journey.snapshot("details-link")
+
+        report = page.get_by_role("button", name="Report view", exact=True)
+        journey.control_target(report, "return-report")
+        report.focus()
+        page.keyboard.press("Enter")
+        expect(mode).to_have_attribute("data-view", "story")
+        expect(page.locator("[data-xray-part]")).to_have_count(3)
+        expect(page.locator('[data-xray-part="analysis"] li[data-pointer]')).to_have_count(27)
+        page.evaluate("() => document.fonts.ready")
+        journey.snapshot("report-return")
+        current_query = parse_qs(urlsplit(page.url).query, keep_blank_values=True)
+        for key, values in linked_query.items():
+            if key != "view":
+                assert current_query[key] == values, "View navigation lost its source query"
+        assert current_query["view"] == ["story"]
+        assert not mutations and not media, "Read-only navigation requested writes or media"
+        assert journey.live_refreshes == 0, "Live source changed during the focused wave"
+
+
 def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, str]) -> None:
     """The rebuilt Report has three readable parts and all27 owner-named pointers."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":
@@ -6687,6 +6798,312 @@ def test_fixture_report_scroll_training(browser: Browser, viewport: tuple[int, s
             "api_mutations": len(mutations),
             "media_requests": len(media),
             "authenticated_or_saved_outcome_acceptance": False,
+        }
+
+
+@pytest.fixture(scope="session")
+def report_api_source() -> dict[str, object]:
+    """Read raw fictional input, without calling the product's structure reader."""
+    node = shutil.which("node")
+    assert node, "The fictional source reader requires Node"
+    return json.loads(
+        subprocess.check_output(  # noqa: S603 -- fixed local source reader, no shell
+            [node, str(Path(__file__).with_name("report-api-source.cjs"))],
+            text=True,
+            timeout=15,
+        )
+    )
+
+
+def test_fixture_report_api_structure(
+    browser: Browser, viewport: tuple[int, str], report_api_source: dict[str, object]
+) -> None:
+    """The real structure reader renders authored scores/evidence/outcome details."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("API-shaped Report acceptance uses fictional source only")
+    contract = json.loads(Path(__file__).with_name("report-15oct-acceptance.json").read_text())
+    source = report_api_source["structure"]
+    pointers = source["pointers"]
+    assert [pointer["label"] for pointer in pointers] == contract["pointer_titles"]
+    status_words = {
+        "excellent": "Excellent",
+        "good": "Good",
+        "average": "Average",
+        "needs_improvement": "Needs Improvement",
+        "not_observed": "Not observed",
+        "not_applicable": "Not applicable",
+        "insufficient_evidence": "Insufficient evidence",
+    }
+    with _journey(browser, viewport, "report-api") as journey:
+        page = journey.page
+        reads: list[str] = []
+        mutations: list[str] = []
+        media: list[str] = []
+        replies: dict[tuple[str, str, str], dict[str, object]] = {}
+        journey.observations.append(
+            {
+                "step": "raw-fictional-source-and-network-guard",
+                "source_sha256": report_api_source["sources"],
+                "bootstrap_reads": reads,
+                "mutations": mutations,
+                "media": media,
+            }
+        )
+
+        def read_only(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif request.resource_type == "media" or re.search(
+                r"\.(?:mp3|mp4|m4a|wav|ogg|webm|aac)$", url.path, re.I
+            ):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            elif url.path.startswith("/v1/"):
+                reads.append(url.path)
+                key = (request.method, url.path, url.query)
+                if key not in replies:
+                    replies[key] = _fictional_api_reply(*key)
+                reply = replies[key]
+                route.fulfill(
+                    status=reply["status"],
+                    content_type="application/json",
+                    body=json.dumps(reply["body"]),
+                )
+            else:
+                route.continue_()
+
+        page.route("**/*", read_only)
+        journey.open("/review-fixture/report/story?example=api")
+        page.wait_for_load_state("load")
+        page.wait_for_load_state("networkidle")
+        page.evaluate("() => document.fonts.ready")
+        expect(page.locator("[data-report-modes]")).to_have_attribute("data-view", "story")
+        expect(page.get_by_text("Illustrative example", exact=True)).to_have_count(0)
+        assert page.locator("[data-xray-part]").evaluate_all(
+            "els => els.map(el => el.dataset.xrayPart)"
+        ) == ["overview", "analysis", "outcome"]
+
+        def capture(target: Locator, label: str) -> None:
+            target.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(label)
+            journey.unclipped_text(target)
+
+        if os.environ.get("WB_REPORT_API_REPAIR_ONLY") == "1":
+            # Coordinator00:38: retain the completed projection wave; only retest
+            # the owner's committed font/spacing/fictional reason repair.
+            nulls = [pointer for pointer in pointers if pointer["score"] is None]
+            supplied = next((pointer for pointer in nulls if pointer["what_happened"]), None)
+            unscored = supplied or nulls[0]
+            analysis = page.locator('[data-xray-part="analysis"]')
+            control = analysis.locator(f'li[data-pointer="{unscored["id"]}"] > button')
+            capture(control, "repair-unscored-row")
+            journey.control_target(control, "repair-unscored-pointer")
+            expect(control.get_by_text("No score", exact=True)).to_have_count(1)
+            expect(control.get_by_text(status_words[unscored["status"]], exact=True)).to_have_count(
+                1
+            )
+            control.focus()
+            page.keyboard.press("Enter")
+            detail = page.locator("#" + str(control.get_attribute("aria-controls")))
+            capture(detail, "repair-supplied-reason")
+            if supplied:
+                expect(detail.get_by_text(supplied["what_happened"], exact=True)).to_have_count(1)
+
+            outcome = page.locator('[data-xray-part="outcome"]')
+            origin = outcome.get_by_text("As heard on the call", exact=True)
+            capture(origin.locator("xpath=ancestor::div[2]"), "repair-outcome-origin")
+            assert origin.evaluate("el => parseFloat(getComputedStyle(el).fontSize)") >= 12
+            stages = outcome.get_by_role("region", name="Sales process stage", exact=True)
+            capture(stages, "repair-stage-spacing")
+            layout = stages.locator("ol > li").evaluate_all(
+                """els => els.map(el => {
+                  const name = el.children[1], state = el.children[2];
+                  const range = document.createRange();
+                  range.selectNodeContents(name);
+                  return {nameSize: parseFloat(getComputedStyle(name).fontSize),
+                    stateSize: parseFloat(getComputedStyle(state).fontSize),
+                    lines: [...range.getClientRects()].map(r => ({
+                      left: r.left, right: r.right, top: r.top, bottom: r.bottom}))};
+                })"""
+            )
+            collisions = [
+                [left, right]
+                for left in range(len(layout))
+                for right in range(left + 1, len(layout))
+                if any(
+                    min(a["right"], b["right"]) - max(a["left"], b["left"]) > 0.5
+                    and min(a["bottom"], b["bottom"]) - max(a["top"], b["top"]) > 0.5
+                    for a in layout[left]["lines"]
+                    for b in layout[right]["lines"]
+                )
+            ]
+            journey.observations[-1]["repair_readback"] = {
+                "stage_layout": layout,
+                "colliding_stage_indices": collisions,
+                "supplied_unscored_reason": supplied is not None,
+                "api_mutations": len(mutations),
+                "media_requests": len(media),
+                "completed_projection_wave_repeated": False,
+            }
+            assert all(item["nameSize"] >= 12 and item["stateSize"] >= 12 for item in layout)
+            assert not collisions, "Neighbouring sales-stage labels overlap"
+            assert supplied is not None, "The fictional source still has no null-score reason"
+            assert not mutations and not media
+            assert journey.live_refreshes == 0, "A live edit interrupted the repair readback"
+            return
+
+        overview = page.locator('[data-xray-part="overview"]')
+        score = overview.get_by_role("region", name="Overall score", exact=True)
+        expect(score).to_contain_text(re.compile(r"AI draft\s*[·-]\s*not reviewed by Dipak"))
+        expect(score.get_by_text(str(source["overview"]["score"]), exact=True)).to_have_count(1)
+        expect(score).to_contain_text(source["overview"]["score_label"])
+        expect(score).to_contain_text(source["overview"]["score_line"])
+        capture(score.locator(":scope > div").first, "overall-score")
+
+        analysis = page.locator('[data-xray-part="analysis"]')
+        expect(analysis).to_contain_text(re.compile(r"AI draft\s*[·-]\s*not reviewed by Dipak"))
+        rows = analysis.locator("li[data-pointer]")
+        expect(rows).to_have_count(27)
+        assert rows.evaluate_all("els => els.map(el => el.dataset.pointer)") == [
+            pointer["id"] for pointer in pointers
+        ]
+        for index, pointer in enumerate(pointers):
+            control = rows.nth(index).locator(":scope > button")
+            words = status_words[pointer["status"]]
+            expected_name = f"{pointer['number']}. {pointer['label']}: {words}"
+            if pointer["score"] is not None:
+                expected_name += f", {pointer['score']} out of 100"
+                expect(control.locator("strong")).to_have_text(str(pointer["score"]))
+            else:
+                expect(control.get_by_text("No score", exact=True)).to_have_count(1)
+            expect(control).to_have_attribute("aria-label", expected_name + ". View more")
+            expect(control.get_by_text(pointer["label"], exact=True)).to_have_count(1)
+            expect(control.get_by_text(words, exact=True)).to_have_count(1)
+        capture(rows.first, "pointer-rows")
+
+        scored = next(pointer for pointer in pointers if pointer["score"] is not None)
+        control = analysis.locator(f'li[data-pointer="{scored["id"]}"] > button')
+        capture(control, "scored-row")
+        journey.control_target(control, "scored-pointer")
+        control.focus()
+        page.keyboard.press("Enter")
+        expect(control).to_have_attribute("aria-expanded", "true")
+        detail = page.locator("#" + str(control.get_attribute("aria-controls")))
+        expect(detail).to_contain_text(scored["what_happened"])
+        expect(detail).to_contain_text(scored["why_it_matters"])
+        for tip in scored["how_to_improve"]:
+            expect(detail).to_contain_text(tip)
+        capture(detail.get_by_role("heading", name="What Happened?", exact=True), "feedback")
+        figures = detail.locator("figure")
+        expect(figures).to_have_count(len(scored["evidence"]))
+        original = {
+            segment["id"]: segment for segment in report_api_source["transcript"]["segments"]
+        }
+        for index, evidence in enumerate(scored["evidence"]):
+            segment = original[evidence["segment_id"]]
+            assert evidence["quote"] == segment["text"]
+            assert (evidence["start_ms"], evidence["end_ms"]) == (
+                segment["start_ms"],
+                segment["end_ms"],
+            )
+            figure = figures.nth(index)
+            expect(figure.locator("blockquote")).to_have_text(f"“{segment['text']}”")
+            seconds = segment["start_ms"] // 1000
+            expect(figure.locator("figcaption")).to_contain_text(
+                re.compile(rf"\b0?{seconds // 60}:{seconds % 60:02d}\b")
+            )
+            expect(figure.locator("blockquote").locator("a,strong,em,code")).to_have_count(0)
+        capture(figures.first, "original-quotes")
+
+        nulls = [pointer for pointer in pointers if pointer["score"] is None]
+        supplied = next((pointer for pointer in nulls if pointer["what_happened"]), None)
+        unscored = supplied or nulls[0]
+        null_control = analysis.locator(f'li[data-pointer="{unscored["id"]}"] > button')
+        capture(null_control, "unscored-row")
+        journey.control_target(null_control, "unscored-pointer")
+        null_control.focus()
+        page.keyboard.press("Space")
+        expect(null_control).to_have_attribute("aria-expanded", "true")
+        expect(control).to_have_attribute("aria-expanded", "true")
+        null_detail = page.locator("#" + str(null_control.get_attribute("aria-controls")))
+        expect(
+            null_detail.get_by_role("heading", name=status_words[unscored["status"]])
+        ).to_be_visible()
+        if supplied:
+            expect(null_detail.get_by_text(supplied["what_happened"], exact=True)).to_have_count(1)
+        else:
+            expect(null_detail).to_contain_text("No score is given for this pointer.")
+        capture(null_detail, "unscored-detail")
+
+        outcome = page.locator('[data-xray-part="outcome"]')
+        details = source["call_outcome_details"]
+        stages = outcome.get_by_role("region", name="Sales process stage", exact=True)
+        for index, stage in enumerate(details["stages"]):
+            expect(stages.get_by_role("listitem").nth(index)).to_contain_text(stage)
+        capture(stages, "outcome-stages")
+        for reason in details["reasons"]:
+            expect(outcome.get_by_text(reason, exact=True)).to_have_count(1)
+        capture(
+            outcome.get_by_text(details["reasons"][0], exact=True).locator(
+                "xpath=ancestor::section[1]"
+            ),
+            "outcome-reasons",
+        )
+        objection_rows = []
+        for objection in details["objections"]:
+            row = outcome.get_by_text(objection["text"], exact=True).locator(
+                "xpath=ancestor::li[1]"
+            )
+            expect(row.locator('[aria-label="Still open"]')).to_have_count(
+                0 if objection["handled"] else 1
+            )
+            expect(row.locator("svg.lucide-circle-check")).to_have_count(
+                1 if objection["handled"] else 0
+            )
+            objection_rows.append(row)
+        capture(objection_rows[0].locator("xpath=ancestor::section[1]"), "outcome-objections")
+        for step in details["next_steps"]:
+            row = outcome.get_by_text(step["text"], exact=True).locator("xpath=ancestor::li[1]")
+            expect(row.get_by_text(step["when"], exact=True)).to_have_count(1)
+            expect(
+                row.get_by_text("You" if step["owner"] == "you" else "Prospect", exact=True)
+            ).to_have_count(1)
+        capture(
+            outcome.get_by_role("heading", name="Next Steps", exact=True).locator(
+                "xpath=ancestor::section[1]"
+            ),
+            "outcome-next-steps",
+        )
+        for note in details["notes"]:
+            expect(outcome.get_by_text(note, exact=True)).to_have_count(1)
+        expect(outcome.get_by_text(details["suggested_action"], exact=True)).to_have_count(1)
+        capture(
+            outcome.get_by_role("heading", name="Additional Notes", exact=True).locator(
+                "xpath=ancestor::section[1]"
+            ),
+            "outcome-notes-action",
+        )
+        assert not mutations and not media
+        assert journey.live_refreshes == 0, "A live edit interrupted this source-pinned readback"
+        assert parse_qs(urlsplit(page.url).query).get("example") == ["api"]
+        journey.observations[-1]["api_structure_projection"] = {
+            "overall_score": source["overview"]["score"],
+            "exact_pointer_scores_and_statuses": len(pointers),
+            "original_transcript_quotes_and_times": len(scored["evidence"]),
+            "null_score_statuses": len(nulls),
+            "supplied_unscored_reason_checked": supplied is not None,
+            "source_gap": None if supplied else "All11 null-score what_happened values are null",
+            "outcome_details": details,
+            "rendered_outcome_kind": outcome.get_attribute("data-outcome"),
+            "person_recorded_precedence": (
+                "No pre-existing person record in this authored fixture; no writes invoked"
+            ),
+            "api_mutations": len(mutations),
+            "media_requests": len(media),
+            "real_saved_call_or_scoring_quality_acceptance": False,
         }
 
 

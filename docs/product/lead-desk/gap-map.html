@@ -1,0 +1,197 @@
+<title>Sales Xray CRM Gap Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a short reading header, a status legend, one wide comparison table (scrolls on phones), then what goes beyond NeoDove and what's blocked. Same family as the Lead Desk ideation page. */
+:root{
+  --bg:#f3f6f6; --surface:#ffffff; --ink:#132320; --muted:#55665f; --rule:#d5e0dc;
+  --accent:#0b7a6c; --accent-soft:#dcefea;
+  --now:#1f6fb2; --now-bg:#e2eef9; --next:#8a5a00; --next-bg:#fbefd6; --gate:#a3343a; --gate-bg:#fae3e3; --done:#1f7a4a; --done-bg:#e2f3e9;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-label:"IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1716; --surface:#15211f; --ink:#e2ece9; --muted:#9db1aa; --rule:#29403a;
+  --accent:#4cc5b3; --accent-soft:#143a34;
+  --now:#7db7ef; --now-bg:#15304a; --next:#f0bf62; --next-bg:#3c2e12; --gate:#f19297; --gate-bg:#441f20; --done:#73d6a0; --done-bg:#163a28; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1716; --surface:#15211f; --ink:#e2ece9; --muted:#9db1aa; --rule:#29403a;
+  --accent:#4cc5b3; --accent-soft:#143a34;
+  --now:#7db7ef; --now-bg:#15304a; --next:#f0bf62; --next-bg:#3c2e12; --gate:#f19297; --gate-bg:#441f20; --done:#73d6a0; --done-bg:#163a28; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;padding-inline:16px;padding-block:28px 64px}
+.wrap{max-width:1180px;margin-inline:auto;display:flex;flex-direction:column;gap:36px}
+h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
+h1{font-size:clamp(28px,4.2vw,38px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:21px;font-weight:600}
+h3{font-size:15.5px;font-weight:600}
+p{margin:0}
+.eyebrow{font-family:var(--f-label);font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600}
+header,.section{display:flex;flex-direction:column;gap:12px}
+.lead{font-size:16.5px;max-width:72ch}
+.muted{color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13.5px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-label);font-weight:600;font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.c-now{color:var(--now);background:var(--now-bg)} .c-next{color:var(--next);background:var(--next-bg)} .c-gate{color:var(--gate);background:var(--gate-bg)} .c-done{color:var(--done);background:var(--done-bg)}
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--rule);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:980px;font-size:13.8px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--rule)}
+tr:last-child td{border-bottom:0}
+th{font-family:var(--f-label);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--bg);position:sticky;top:0}
+td.area{font-weight:600;width:12%}
+td.slice{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
+td small{display:block;color:var(--muted);font-size:12.5px;margin-top:4px}
+.q{font-family:var(--f-mono);font-size:.9em}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}
+.box{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.box ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.plan{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.step{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.step .k{font-family:var(--f-mono);font-size:12.5px;color:var(--accent);font-weight:500}
+.step p{font-size:13.8px}
+footer{font-size:13px;color:var(--muted);border-top:1px solid var(--rule);padding-top:14px;display:flex;flex-direction:column;gap:6px}
+a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">Gap map · updated 16 Oct 2026, 12:45 IST · for Utkarsh and Suyash</span>
+  <h1>Sales Xray CRM Gap Map</h1>
+  <p class="lead">The CRM lives inside Sales Xray at <a href="https://salesxray-dev.authorityclosers.com/leads">salesxray-dev /leads</a>: same app, same sign-in. Switch to the AC Sandbox organisation to see test leads. NeoDove is the reference, copied freely (15 Oct decision). Each row shows what NeoDove does, what Sales Xray has today, and what the CRM builds, with its slice and status.</p>
+  <div class="legend">
+    <span class="chip c-done">Live on dev</span>
+    <span class="chip c-now">Building now</span>
+    <span class="chip c-next">Next</span>
+    <span class="chip c-gate">Blocked by a gate</span>
+    <span class="chip c-done">Exists in Sales Xray</span>
+    <span class="muted">Slices: a desk · b capture · c allocation · d simulated call · e offers</span>
+  </div>
+</header>
+
+<section class="section" aria-labelledby="s-map">
+  <h2 id="s-map">Area by area</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Area</th><th style="width:25%">NeoDove (public help docs)</th><th style="width:19%">Sales Xray today</th><th style="width:28%">Sales Xray CRM</th><th>Slice</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td class="area">Seller's home</td>
+        <td>"Start" button, then My Leads in three groups: Open, Follow-up, Not Connected. Each has View or Start Calling. Also My Reports, Call Logs and Walk-In Leads.</td>
+        <td>Dashboard of analysed calls. Work starts at "New analysis". There is no lead object.</td>
+        <td>Desk at /leads: Start calling, three tiles (New, Follow-ups due, Not connected), my day in numbers, today's queue with a "why now" line, Add lead.</td>
+        <td class="slice">a</td><td><span class="chip c-done">Live on dev</span></td></tr>
+      <tr><td class="area">Call loop</td>
+        <td>One lead at a time, ordered by follow-ups due and priority. The phone's own dialer places the call, with optional auto-dial. The lead must be disposed before the next one appears.</td>
+        <td>None.</td>
+        <td>Same loop: one lead card, Call, dispose, next lead. Until a calling provider passes its gates, Call makes a simulated call.</td>
+        <td class="slice">a, d</td><td><span class="chip c-done">Live on dev</span></td></tr>
+      <tr><td class="area">After the call</td>
+        <td>"Was the Call Connected?" No: one of 10 reasons (Did not pick, Busy, Switch off…), each with its own retry timing. Yes: stage, tags, follow-up chips (One Hour, Tomorrow, Next Week) and a remark. Only Converted and Lost close a lead.</td>
+        <td>Person-entered call outcome per analysed call (won, lost, follow-up, no decision).</td>
+        <td>NeoDove's screen: the same 10 reasons, retry after 1 hour then 1 day (none for bad numbers). Connected: Follow-up, Interested, Won or Lost. Open stages need a follow-up time; optional deal value.</td>
+        <td class="slice">a</td><td><span class="chip c-done">Live on dev</span></td></tr>
+      <tr><td class="area">Lead record</td>
+        <td>Fixed fields plus custom text, date and number fields, a campaign, and contact history.</td>
+        <td>Prospect pages (person, company) built from calls.</td>
+        <td>A flexible record: every field the source sent is kept as is, and name, phone, email, company, city, language and interest are pulled out. A full history timeline sits on each lead.</td>
+        <td class="slice">a, b</td><td><span class="chip c-done">Live on dev</span></td></tr>
+      <tr><td class="area">Capture sources</td>
+        <td>Facebook and Instagram lead forms, Google Sheets, Forms and Ads, IndiaMART, JustDial, 99acres, Magicbricks, WhatsApp providers, a JSON endpoint, file upload.</td>
+        <td>None.</td>
+        <td>Manual and referral, CSV and Excel upload with column matching, website form or webhook (JSON or form post, per-source key), Google Sheet sync, then Meta lead forms. Portals come later.</td>
+        <td class="slice">b</td><td><span class="chip c-done">Live on dev</span><small>Manual, referral, CSV/Excel, website form, Google Sheet, Google Ads lead form. Meta: waits for AC's Meta app</small></td></tr>
+      <tr><td class="area">Duplicates</td>
+        <td>On upload: Ignore, Merge, Create duplicates, or Merge and reopen closed leads. The match key isn't public.</td>
+        <td>None.</td>
+        <td>Matched by phone (normalised, +91 by default). The same record again changes nothing. A new enquiry from a known phone is marked "Asked again", reopens a closed lead, and goes back to the seller who had it.</td>
+        <td class="slice">b</td><td><span class="chip c-done">Live on dev</span></td></tr>
+      <tr><td class="area">Allocation</td>
+        <td>On-demand (active callers pull), Equal split, or Conditional rules (column = value, assign to user or group, otherwise a fallback). Untouched scheduled leads can move to someone else. Assignment can be disabled per user. No load caps found.</td>
+        <td>Organisations, teams and people exist.</td>
+        <td>Fair by rules and load, never random: language, area and product, available now, under an open-lead cap. The fewest open leads wins. A returning lead goes back to its seller. Every lead stores why it went to that person. Managers reassign; optional auto-reassign when nobody calls within N minutes.</td>
+        <td class="slice">c</td><td><span class="chip c-done">Live on dev</span></td></tr>
+      <tr><td class="area">Recording</td>
+        <td>Reads the Android phone's built-in call-recorder folder (or NeoDialer). Cloud telephony records on the server.</td>
+        <td>Upload in all common phone formats. Android app with dialer pickup (PR #331) not merged (AUT-1552). Provider route A chosen; adapter is fixtures only.</td>
+        <td>Now: a simulated recording, one of the synthetic audio calls matching the lead's language. Later: the Android app on a test phone, then the provider.</td>
+        <td class="slice">d</td><td><span class="chip c-done">Simulated: live on dev</span><small><span class="chip c-gate">Real calls gated</span></small></td></tr>
+      <tr><td class="area">Analysis</td>
+        <td>Paid AI plans with AI minutes.</td>
+        <td><span class="chip c-done">Exists</span> Full pipeline (about ₹0.56 per audio minute) and the new three-part Report with 27 pointers.</td>
+        <td>Every desk call runs the real pipeline. Its Report is attached to the lead and opens from the lead's history.</td>
+        <td class="slice">d</td><td><span class="chip c-next">Waits on the dev AI budget</span></td></tr>
+      <tr><td class="area">Offers and packages</td>
+        <td>A deal amount on disposition only.</td>
+        <td>Sales Xray's plans are its own subscriptions, not AC's offers.</td>
+        <td>Read from AC's Pulse through an API and sent from the lead. Never rebuilt in Sales Xray. A stub until Pulse ships its catalogue API (asked on EST-997).</td>
+        <td class="slice">e</td><td><span class="chip c-next">Waiting on Pulse</span></td></tr>
+      <tr><td class="area">Manager view</td>
+        <td>Dashboard: pinned campaigns, lead source summary, lead analysis, call analysis (attempts, connected %), live agent tracking.</td>
+        <td>Organisation insights and Team Coaching.</td>
+        <td>Team tab: per seller, open leads, due now, calls and connected today. Leads by stage and by source, unassigned, waiting for a first call. Rules editor per seller.</td>
+        <td class="slice">c</td><td><span class="chip c-done">Live on dev</span></td></tr>
+      <tr><td class="area">Messages</td>
+        <td>WhatsApp, SMS and email templates that open the phone's own apps.</td>
+        <td>None.</td>
+        <td>After slice e, together with sending offers.</td>
+        <td class="slice">later</td><td><span class="chip c-next">Next</span></td></tr>
+      <tr><td class="area">Reports</td>
+        <td>User, User Activity, Lead Disposition, Message Activity, User Call, Follow-Up, Login, Campaign, Campaign Lead and Campaign Stage reports, plus Trends.</td>
+        <td>Per-call Report and organisation insights.</td>
+        <td>Disposition and follow-up reports from the lead history (every change is already recorded).</td>
+        <td class="slice">later</td><td><span class="chip c-next">Next</span></td></tr>
+      <tr><td class="area">Campaigns and pipelines</td>
+        <td>Campaigns, each with its own pipeline, custom stages, tags and priority.</td>
+        <td>None.</td>
+        <td>One fixed pipeline for now (New, Not connected, Follow-up, Interested, Won, Lost). Campaigns later.</td>
+        <td class="slice">later</td><td><span class="chip c-next">Next</span></td></tr>
+      <tr><td class="area">Alerts</td>
+        <td>Follow-up reminders, missed-call alerts, a notification bell.</td>
+        <td>Corner-card notices and an updates bell.</td>
+        <td>New lead, follow-up due, and lead waiting too long, on web and phone.</td>
+        <td class="slice">later</td><td><span class="chip c-next">Next</span></td></tr>
+      <tr><td class="area">Phone app</td>
+        <td>Android and iOS apps.</td>
+        <td>The web app works on phones. Android app in PR #331.</td>
+        <td>A phone-first web desk now. The Android app later, through Pulse's build pipeline.</td>
+        <td class="slice">later</td><td><span class="chip c-gate">AUT-1552</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="s-beyond">
+  <h2 id="s-beyond">Where the CRM goes beyond NeoDove</h2>
+  <div class="cols">
+    <div class="box"><h3>Fair load, with a reason</h3><p>NeoDove splits evenly or by column rules. The CRM also counts each seller's open leads and cap, and every lead says why it went to that person.</p></div>
+    <div class="box"><h3>Every call becomes a Report</h3><p>A desk call goes through Sales Xray's analysis, and its Report sits on the lead. NeoDove stores the recording and talk time.</p></div>
+    <div class="box"><h3>Nothing from the source is lost</h3><p>Each lead keeps the exact fields its source sent, so a new Meta question or sheet column needs no schema change.</p></div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="s-plan">
+  <h2 id="s-plan">Order and dates</h2>
+  <div class="plan">
+    <div class="step"><span class="k">16 Oct · 12:00 IST</span><p>This gap map and the NeoDove evidence file.</p></div>
+    <div class="step"><span class="k">17 Oct · 18:00 IST</span><p>Slices a to d live on salesxray-dev /leads: desk, capture (all but Meta), allocation, simulated call to Report.</p></div>
+    <div class="step"><span class="k">17 Oct (Pulse)</span><p>Slice e once Pulse's read-only catalogue API exists.</p></div>
+    <div class="step"><span class="k">18 Oct</span><p>Meta review pack: Continue with Meta, choose a Page, Instant Forms, a real lead arriving. Needs AC's Meta app first.</p></div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="s-gates">
+  <h2 id="s-gates">What needs someone else</h2>
+  <div class="cols">
+    <div class="box"><h3>Meta app (owner)</h3><ul><li>Create AC's "Leads" app under the verified Authority Closers business in Meta's developer console.</li><li>App ID and secret go into Infisical, never chat.</li><li>Then: test login, privacy page on lead data, screen recording.</li></ul></div>
+    <div class="box"><h3>Real calls (gated)</h3><ul><li>Route A provider (AUT-1004) waits on a lawyer's check of the TRAI rule, consent wording and a spend cap.</li><li>Until then, every desk call is simulated and labelled so.</li></ul></div>
+    <div class="box"><h3>Offers (Pulse)</h3><ul><li>A read-only catalogue API with a per-install key, asked of the Pulse CEO on EST-997.</li><li>Sales Xray never copies the catalogue.</li></ul></div>
+  </div>
+</section>
+
+<footer>
+  <span>NeoDove facts come from its public help centre (docs.neodove.com), pricing page and app store listings. Each claim is linked in the evidence file <span class="q">docs/product/lead-desk/neodove-evidence.md</span> in the Sales Xray repo. Review pages and the Play Store body didn't load, so those parts rest on search snippets only.</span>
+  <span>Builds on the <a href="https://claude.ai/artifact/U69wxgKCKCQZuorGGBLZRw">Lead Desk ideation page</a> and the synthetic-data features report (proposals 1, 10, 11 and 13).</span>
+</footer>
+</div>

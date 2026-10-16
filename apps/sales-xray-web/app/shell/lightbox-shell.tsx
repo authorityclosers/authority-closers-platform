@@ -11,6 +11,7 @@ import {
   LogIn,
   PanelLeftClose,
   PanelLeftOpen,
+  PhoneCall,
   Plus,
   Search,
   Settings,
@@ -103,6 +104,7 @@ export type LightboxShellProps = {
   homeHref?: string;
   active?:
     | "dashboard"
+    | "leads"
     | "analyse"
     | "calls"
     | "account"
@@ -163,6 +165,7 @@ function resolvePageTitle(
   if (active === "dashboard") return "Dashboard";
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
+  if (active === "leads") return "Leads";
   if (active === "prospects") return "Prospects";
   if (active === "coaching") return "Coaching";
   if (active === "account") return "Account";
@@ -844,6 +847,17 @@ function LightboxShellFrame({
               <span style={RAIL_NAME_STYLE}>Dashboard</span>
             </Link>
             <Link
+              className={`${styles.stripBtn}${place === "leads" ? ` ${styles.stripBtnActive}` : ""}`}
+              href="/leads"
+              prefetch={false}
+              aria-label="Leads"
+              data-rail-tip="Leads"
+              aria-current={place === "leads" ? "page" : undefined}
+            >
+              <PhoneCall size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span style={RAIL_NAME_STYLE}>Leads</span>
+            </Link>
+            <Link
               className={`${styles.stripBtn}${place === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
               href={newAnalysisHref}
               aria-label="New analysis"
@@ -1215,6 +1229,15 @@ function LightboxShellFrame({
         >
           <LayoutGrid size={20} aria-hidden="true" />
           <span>Dashboard</span>
+        </Link>
+        <Link
+          className={styles.bottomLink}
+          href="/leads"
+          prefetch={false}
+          aria-current={phoneTab === "leads" ? "page" : undefined}
+        >
+          <PhoneCall size={20} aria-hidden="true" />
+          <span>Leads</span>
         </Link>
         <Link
           className={styles.bottomLink}

@@ -1,7 +1,8 @@
 """Saved AI pointer reviews for the 15 Oct Report (owner decision, 16 Oct 2026).
 
 Append-only: a new review for the same report is a new row; the Report reads
-the newest one for its exact run, source and transcript revision.
+the newest one for its exact run, source and transcript revision. Erasing the
+call empties every version's payload and stamps erased_at (AUT-2010).
 """
 
 from datetime import datetime
@@ -27,6 +28,9 @@ class ConversationPointerReview(Base):
     __tablename__ = "conversation_pointer_reviews"
     __table_args__ = (
         CheckConstraint("version = 'pointer-review/1'", name="pointer_review_version"),
+        CheckConstraint(
+            "(erased_at IS NULL) = (payload IS NOT NULL)", name="pointer_review_erasure"
+        ),
         CheckConstraint(
             "length(source_sha256) = 64 AND length(payload_sha256) = 64"
             " AND length(prompt_sha256) = 64",
@@ -55,9 +59,10 @@ class ConversationPointerReview(Base):
     version: Mapped[str] = mapped_column(String(32))
     model_id: Mapped[str] = mapped_column(String(64))
     prompt_sha256: Mapped[str] = mapped_column(String(64))
-    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     payload_sha256: Mapped[str] = mapped_column(String(64))
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

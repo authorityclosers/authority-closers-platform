@@ -63,14 +63,8 @@ it("keeps every owner-approved report section", async () => {
   );
   await act(async () => root.render(<FullShellPreview />));
   await settle();
-  // The six-part Report opens first (owner, 11 Oct); every approved section
-  // stays, one tap away under Details.
-  await act(async () =>
-    host
-      .querySelector<HTMLButtonElement>('button[title="Details view"]')!
-      .click(),
-  );
-  await settle();
+  // 16 Oct owner: "I want this old report UI gone from all reports". The
+  // new three-part Report is the only Report; its parts are the contract.
   const headings = [...host.querySelectorAll("h1, h2, h3")].map((node) =>
     (node.textContent ?? "").replace(/\s+/g, " ").trim(),
   );
@@ -96,7 +90,7 @@ it("keeps the Calls workspace controls", async () => {
     "fetch",
     vi.fn(async (input: RequestInfo) =>
       String(input) ===
-      "/v1/conversation/acquisition/submissions?include_owners=true"
+      "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first"
         ? new Response(
             JSON.stringify({
               submissions: [

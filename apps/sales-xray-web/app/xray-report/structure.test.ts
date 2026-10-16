@@ -174,3 +174,104 @@ it("ignores anything that is not the known structure version", () => {
   ).toBeNull();
   expect(readStructure(null, transcript, null, null)).toBeNull();
 });
+
+it("maps populated outcome details in the call's own words", () => {
+  const view = readStructure(
+    {
+      ...structure(),
+      call_outcome_details: {
+        stages: ["Discovery", "Initial Contact", "Negotiation"],
+        reasons: ["They want a partner's view."],
+        objections: [{ text: "It costs too much.", handled: true }],
+        next_steps: [
+          { text: "Send the proposal.", owner: "you", when: "Friday 4 PM" },
+          { text: "Talk to the partner.", owner: "prospect", when: null },
+        ],
+        notes: ["Team of eight."],
+        suggested_action: "Call after Friday.",
+      },
+    },
+    transcript,
+    null,
+    null,
+  )!;
+  expect(view.outcome).toEqual({
+    stages: ["Initial Contact", "Discovery", "Negotiation"],
+    reasons: [{ text: "They want a partner's view.", sources: [] }],
+    objections: [{ text: "It costs too much.", sources: [], handled: true }],
+    nextSteps: [
+      {
+        text: "Send the proposal.",
+        date: "Friday 4 PM",
+        owner: "you",
+        source: null,
+      },
+      {
+        text: "Talk to the partner.",
+        date: null,
+        owner: "prospect",
+        source: null,
+      },
+    ],
+    notes: [{ text: "Team of eight.", sources: [] }],
+    suggested: "Call after Friday.",
+  });
+});
+
+it("keeps an objection the call left open as open", () => {
+  const view = readStructure(
+    {
+      ...structure(),
+      call_outcome_details: {
+        objections: [
+          { text: "Needs the partner's yes.", handled: false },
+          { text: "Asked about results.", handled: "yes" },
+        ],
+      },
+    },
+    transcript,
+    null,
+    null,
+  )!;
+  expect(view.outcome?.objections).toEqual([
+    { text: "Needs the partner's yes.", sources: [], handled: false },
+    // Only an explicit true counts as handled.
+    { text: "Asked about results.", sources: [], handled: false },
+  ]);
+});
+
+it("drops malformed outcome details instead of failing the report", () => {
+  const malformed = readStructure(
+    {
+      ...structure(),
+      call_outcome_details: {
+        stages: ["Lunch", 4, null],
+        reasons: "not a list",
+        objections: [null, { handled: true }, "text"],
+        next_steps: [
+          { owner: "boss" },
+          { text: "Call back.", owner: "boss", when: 5 },
+        ],
+        notes: [7, ""],
+        suggested_action: 42,
+      },
+    },
+    transcript,
+    null,
+    null,
+  )!;
+  expect(malformed.outcome).toEqual({
+    nextSteps: [{ text: "Call back.", date: null, owner: null, source: null }],
+  });
+  expect(
+    readStructure(
+      { ...structure(), call_outcome_details: "x" },
+      transcript,
+      null,
+      null,
+    )!.outcome,
+  ).toBeNull();
+  expect(
+    readStructure(structure(), transcript, null, null)!.outcome,
+  ).toBeNull();
+});

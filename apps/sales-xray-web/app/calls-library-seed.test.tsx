@@ -93,7 +93,9 @@ const page = (
 
 const listReads = () =>
   fetchMock.mock.calls.filter(([url]) =>
-    String(url).endsWith("/submissions?include_owners=true"),
+    String(url).endsWith(
+      "/submissions?include_owners=true&order=reports_first",
+    ),
   ).length;
 
 it("takes only a successful, well-formed server read as the first page", () => {
@@ -105,7 +107,7 @@ it("takes only a successful, well-formed server read as the first page", () => {
   expect(seededLibraryPage(null)).toBeNull();
   expect(seededLibraryPage(undefined)).toBeNull();
   expect(CALLS_LIST_PATH).toBe(
-    "/v1/conversation/acquisition/submissions?include_owners=true",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first",
   );
 });
 

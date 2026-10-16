@@ -28,8 +28,10 @@ Without `WB_BASE_URL` all browser cases skip, so ordinary test collection does
 not contact a live server. There are four viewport/theme pairs: 1440/light,
 1440/dark, 390/light and 390/dark. Each checks dashboard-to-report, six report
 sections in Dipak's order, reload/Document/valid DOCX/return, independent Document,
-and call/personal/team/sandbox Coaching. The current More views menu is opened
-before selecting Document; older direct view controls also work. A sign-in or
+and call/personal/team/sandbox Coaching. Document and Details open by explicit
+`view=document` / `view=tabs` links; Report uses its visible button. Other query
+values and the fragment are retained. Fictional routes reuse their own section
+link's call binding. A sign-in or
 empty dashboard is a failure.
 The eight skill rows follow Dipak's order. "Explore deeper analysis" starts
 collapsed; the populated example opens all four groups and captures each one.
@@ -508,3 +510,35 @@ existing opening pointer's null-href training button must open the same fictiona
 call's Coaching, preserve the example query and document, and request no media or
 writes. Two changed-state screenshots per pair cover training and Coaching. This
 does not repeat the all27/outcome matrix or certify saved outcome API mapping.
+
+Select only `-k fixture_report_api_structure` for the `bae78551` API-shaped
+fixture. Four viewport/theme pairs read raw `AMIT_STRUCTURE` and `amitTranscript`
+through the local TypeScript source helper (without the product mapper) and
+retain SHA256 source pins. They compare all27 scores/statuses/names/order,
+overall score and AI-draft labels, expanded feedback and original quote/time,
+null-score status, stages/reasons, open and handled objections, owner-tagged
+dated next steps, notes and suggested action. No illustrative badge, live API,
+media or writes are allowed. If the source has a null-score `what_happened`,
+its exact supplied reason is checked; otherwise the receipt explicitly records
+that source gap while checking the honest fallback. The initial `bae78551`
+source has11 null-score pointers and no supplied reason on any of them.
+This proves fictional reader/rendering only. It does not prove saved-call
+persistence, person-recorded precedence without a supplied record, or AI quality.
+
+After the owner's committed readability/reason repair, use the same selector
+with `WB_REPORT_API_REPAIR_ONLY=1` and a new `WB_SHOTS_DIR`. This bounded four-pair
+continuation checks only origin/stage text sizes, non-overlapping stage text,
+and a supplied null-score reason with the original status/No score and native
+disclosure. It retains the completed projection wave and fails if the fixture
+still lacks a supplied reason. Keep the normal15-minute interval and the same
+read-only guards; no completed score/quote/outcome matrix replay.
+
+Select only `-k fixture_report_explicit_views` for the16Oct `2c5e9b75`
+link-only navigation delta. Four viewport/theme pairs open the existing
+API-shaped fictional Report, follow explicit Document and Details URLs, then
+use Enter on Report to return to three parts/27 pointers. They retain the
+example and call binding, check six Document chapters and its Word control,
+and capture Document/Details/Report. API reads use the existing fictional
+bootstrap; writes/media/refreshes must be zero. Review fixtures retain demo
+menus, so these checks do not certify menu removal or saved preferences in a
+signed-in call. The real-call smoke still needs the owner-held session.

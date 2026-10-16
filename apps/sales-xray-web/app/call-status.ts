@@ -18,8 +18,9 @@ export function callTone(submission: LibrarySubmission): CallTone {
 }
 
 const STATE_COPY: Record<string, string> = {
-  awaiting_upload: "Ready to analyse",
-  ready: "Ready to analyse",
+  // A saved call whose analysis never started (16 Oct: imported calls).
+  awaiting_upload: "Not analysed yet",
+  ready: "Not analysed yet",
   uploading: "Preparing call",
   queued: "Queued for analysis",
   processing: "Analysis in progress",

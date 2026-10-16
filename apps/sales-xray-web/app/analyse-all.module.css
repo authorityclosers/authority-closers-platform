@@ -1,0 +1,70 @@
+/* "Analyse all" in the Not analysed yet heading: one fixed-height line in
+   every state, so the list never moves while it checks or runs. */
+.heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.control {
+  display: inline-flex;
+  min-width: 0;
+  height: 28px;
+  align-items: center;
+  gap: 10px;
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.text {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control > span[aria-hidden],
+.control > span[role="img"] {
+  flex: 0 0 72px;
+}
+
+.button {
+  min-height: 28px;
+  flex: none;
+  padding-block: 0;
+  font-size: 12px;
+}
+
+.facts {
+  display: grid;
+  margin: 0 0 4px;
+  padding-left: 18px;
+  gap: 8px;
+  color: var(--lx-ink-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.facts b {
+  color: var(--lx-ink);
+}
+
+@media (pointer: coarse) {
+  .button {
+    min-height: 44px;
+  }
+
+  .control {
+    height: 44px;
+  }
+}
+
+@container calls-page (max-width: 760px) {
+  .control > span[aria-hidden],
+  .control > span[role="img"] {
+    display: none;
+  }
+}

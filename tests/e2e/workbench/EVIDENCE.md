@@ -1942,3 +1942,89 @@ the illustrative Siddhant Report overlays the existing fictional Amit source,
 so Coaching still shows that underlying authored focus; this does not establish
 saved-call feedback/lesson mapping or real saved outcome acceptance. Those
 remain the owner's existing signed-in readback, already requested07ace258.
+
+### API-shaped Report projection — 2026-10-16 00:36 UTC
+
+`fixture_report_api_structure`, QA `7d25e3ad` / product `bae78551`, shared
+3026 `?example=api`, 1440/390 light/dark: **4/4 FAIL visual acceptance**
+(desktop/light 9.97s, remaining three 19.15s; both launchers exit1).
+Every pair completed the functional projection checks: overall74 and AI-draft
+labels, no Illustrative badge, all27 exact owner titles/order/statuses/scores,
+two expanded quotes and times matched directly to the original fictional
+amitTranscript segments (00:04,00:13), independent native Enter/Space disclosure,
+11 null-score statuses/No score, and all authored outcome stages/reasons/both
+objections/owner-tagged dated next steps/note/suggested action. Partner agreement
+stays open; the other objection stays handled. Outcome remains the existing
+call-derived Decision Pending. No person record exists in this fixture, so its
+precedence and real saved-call persistence remain untested; no writes invoked.
+
+Readability defects sent to report-ui/INBOX and coord/INBOX:
+- Desktop `.origin` “As heard on the call” is11.5px, below12px.
+- Phone stage `.stepName`11.5px / `.stepState`10.5px are below12px;
+  Solution Presentation and Negotiation also touch in both themes.
+- Separate source gap: all11 null-score `what_happened` values are null.
+  Fallback is checked, but the supplied-reason criterion is NOT COVERED.
+
+Runtime/server errors, overflow, text clipping, API mutations, media requests
+and live refreshes0. Raw source helper reads AMIT_STRUCTURE/amitTranscript
+without the product mapper and retains SHA256 pins in each receipt. All52 final
+PNG files accounted:38 unique contents inspected and14 byte-equal duplicates
+recorded in `png-equivalence.json`. The earlier score-regex harness failure
+(1FAIL10.53s) is retained/inspected in `harness-score-text-boundary/`, fixed
+`7d25e3ad`; no product assertion failed in that first attempt. Preparation
+`6ca6370f`; Ruff/format/API import/Node syntax/diffPASS, opt-in4skip/236deselected.
+No completed old suite, build, provider, session, real-call or ship action.
+
+Screens/receipts: `/home/acdev/strikes/1694/shots/2026-10-16-report-api/`.
+Only affected readability/supplied-reason checks should resume after the
+builder's committed return and normal interval. Owner-side real-call handoff
+`07ace258` and the existing reader-unit request remain unchanged.
+
+### Report readability and supplied-reason repair — 2026-10-16 06:19 UTC
+
+Existing runner `3f3854a1`, `WB_REPORT_API_REPAIR_ONLY=1`, product
+`b6947a25747e7613e6671aff67f41880bfa051c8` at workbench `878a49dc`:
+**4/4 PASS**, 43.56s, launcher exit0. Shared3026 `?example=api` at1440/390,
+light/dark. Only the requested repair criteria ran; completed projection
+checks and original failed images remain retained.
+
+Outcome origin meets12px. All five stage names measure14px and states12.5px;
+no stage-label collisions. Phone stages form a readable vertical list in
+both themes. Pointer2 Purpose & Agenda Setting retains Not observed/No score;
+native Enter opens the exact supplied fictional reason. Pointer targets
+982x53.6875 desktop /356x123.6875 phone, centres reachable.
+
+All16 screenshots inspected: closed row, expanded reason, outcome origin and
+stage spacing at each viewport/theme. No remaining defect in this scope.
+Runtime/server errors, undersized/clipped text, overflow, live refreshes,
+media requests and API mutations0; eight intercepted fictional GETs per pair.
+Source-before/after hashes match for the runner, helper, CSS and fictional
+inputs. No product code changed. Saved-call acceptance remains owner-side;
+this pass establishes fictional rendering only.
+
+Log, four receipts, source pins and screenshots:
+`/home/acdev/strikes/1694/shots/2026-10-16-report-api-repair/`.
+
+
+### Explicit Report Document/Details links — 2026-10-16 08:33 UTC
+
+Product `2c5e9b75`; QA `73d72cdc`, phone capture `a636f7cb`, readiness
+`d551b3ba`. Shared3026 `fixture_report_explicit_views`: initial **4/4 PASS**
+84.89s/exit0; retained desktop2 plus phone content retake **2/2 PASS**45.01s/exit0.
+Document and Details open by URL; native Enter on Report restores the new three
+parts/27 pointers, preserving example/call binding. Six Document chapters and
+Word control present. Document controls >=32/44px; Report90x32/70x44, reachable.
+No runtime/server/font/overflow errors, media, writes or live refreshes.
+API reads are intercepted fictional replies only; source hashes unchanged.
+All12 final screenshots inspected (desktop6 from original wave, phone6 from
+`phone-content-final/`); original12 and the one failed readiness capture also
+inspected/retained. Initial phone captures showed only the upper shell;
+retake positions show the requested Document/Details content. First retake
+stopped at the helper's default5s view wait; final uses the journey's15s wait.
+No product defect was established. Ruff/format/API import/diff checks pass.
+Review fixtures retain their demo menus: production-menu removal and saved
+preferences are not browser-certified here. Owner-held real-call session is
+still unavailable; no real-call, scoring-quality, provider or ship claim.
+
+Receipts/logs/source pins/screens:
+`/home/acdev/strikes/1694/shots/2026-10-16-report-explicit-views/`.

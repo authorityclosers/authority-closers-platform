@@ -4,6 +4,12 @@ Owner decision 16 Oct 2026 (rulebook 693645b0): test the Report's AI scores by
 reviewing the owner's last 5 dev calls. Dry run by default; ``--apply`` makes
 one Gemini call per report and saves the validated review (append-only).
 
+Every paid call is admitted first (AUT-2010, ``pointer_review_admission``):
+one runner per database, the call's consent, erasure and source checked
+before the call and again before saving, and each attempt recorded in the
+workspace's append-only audit chain, so timeouts, unreadable answers and
+crashes count against the daily cap and the two-attempt limit.
+
 The outer process reads the worker's service config, then re-runs itself
 inside ``infisical run`` so the Gemini key exists only in the child's
 environment. Nothing here prints transcript text, prompts or credentials.
@@ -17,19 +23,20 @@ environment. Nothing here prints transcript text, prompts or credentials.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 INNER = "--inner"
 AUTOMATIC = "automatic:pointer-review"
 OPERATOR = "operator:report-ui-20261016"
 _PROVIDER = "gemini"
+# Automatic mode reads this many newest candidates and admits up to --limit.
+_CANDIDATES = 50
 
 
 def _arguments(argv: list[str]) -> argparse.Namespace:
@@ -38,6 +45,11 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--database-url-file", required=True, type=Path)
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument("--tenant", type=UUID, help="one workspace's latest reports")
+    target.add_argument(
+        "--erase-erased-calls",
+        action="store_true",
+        help="one-off cleanup: empty reviews of already erased calls (dry run without --apply)",
+    )
     target.add_argument(
         "--recent-hours",
         type=int,
@@ -53,15 +65,17 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         "--daily-cap",
         type=int,
         default=200,
-        help="automatic mode stops once this many automatic reviews ran in 24 hours",
+        help="stop once this many paid attempts of this mode ran in 24 hours",
     )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument(
         "--state-file",
         type=Path,
-        help="automatic mode: runs that failed twice are not retried (each try costs a call)",
+        help="accepted for older wrappers; attempts now live in the audit ledger",
     )
-    parser.add_argument("--force", action="store_true", help="review again even if saved")
+    parser.add_argument(
+        "--force", action="store_true", help="operator mode: review again even if saved"
+    )
     # Outside the worker's mount namespace the identity token and Infisical
     # live at their host paths (the worker bind-mounts them read-only).
     parser.add_argument("--token-file", type=Path)
@@ -76,8 +90,10 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         parser.error("--recent-hours needs --not-before: automatic mode never backfills")
     if arguments.not_before is not None and arguments.not_before.tzinfo is None:
         parser.error("--not-before needs a time zone, e.g. 2026-10-16T00:00:00+00:00")
-    if arguments.recent_hours is not None and arguments.state_file is None:
-        parser.error("--recent-hours needs --state-file (a writable path)")
+    if arguments.recent_hours is not None and arguments.force:
+        parser.error("--force is for one workspace's reports, never automatic mode")
+    if not 1 <= arguments.daily_cap <= 500:
+        parser.error("--daily-cap must be 1-500")
     return arguments
 
 
@@ -132,8 +148,7 @@ def _latest_reports(connection: Any, tenant: UUID, limit: int) -> list[dict[str,
         text(
             """
             SELECT s.submission_id, d.id AS draft_id, d.tenant_id, d.recording_id, d.run_id,
-                   d.source_sha256, d.payload ->> 'transcript_revision' AS transcript_revision,
-                   d.transcript -> 'normalized' -> 'segments' AS segments
+                   d.source_sha256, d.payload ->> 'transcript_revision' AS transcript_revision
             FROM conversation_guest_submissions s
             JOIN LATERAL (
                 SELECT * FROM conversation_report_drafts d
@@ -159,8 +174,7 @@ def _recent_unreviewed(
         text(
             """
             SELECT s.submission_id, d.id AS draft_id, d.tenant_id, d.recording_id, d.run_id,
-                   d.source_sha256, d.payload ->> 'transcript_revision' AS transcript_revision,
-                   d.transcript -> 'normalized' -> 'segments' AS segments
+                   d.source_sha256, d.payload ->> 'transcript_revision' AS transcript_revision
             FROM conversation_report_drafts d
             JOIN conversation_guest_submissions s ON s.recording_id = d.recording_id
             WHERE d.erased_at IS NULL
@@ -184,33 +198,17 @@ def _recent_unreviewed(
     return [dict(row) for row in rows]
 
 
-def _automatic_today(connection: Any) -> int:
+def _segments(connection: Any, draft_id: UUID) -> list[dict[str, Any]]:
     from sqlalchemy import text
 
-    return int(
-        connection.execute(
-            text(
-                "SELECT count(*) FROM conversation_pointer_reviews"
-                " WHERE created_by = :who AND created_at > now() - interval '24 hours'"
-            ),
-            {"who": AUTOMATIC},
-        ).scalar_one()
-    )
-
-
-def _failures(path: Path) -> dict[str, int]:
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return {}
-    return {str(k): int(v) for k, v in value.items()} if isinstance(value, dict) else {}
-
-
-def _remember_failure(path: Path, run_id: str) -> None:
-    failures = _failures(path)
-    failures[run_id] = failures.get(run_id, 0) + 1
-    with contextlib.suppress(OSError):
-        path.write_text(json.dumps(failures))
+    value = connection.execute(
+        text(
+            "SELECT transcript -> 'normalized' -> 'segments' FROM conversation_report_drafts"
+            " WHERE id = :id AND erased_at IS NULL"
+        ),
+        {"id": draft_id},
+    ).scalar()
+    return list(value) if isinstance(value, list) else []
 
 
 def _withheld(connection: Any, recording_id: UUID, revision: str) -> set[str]:
@@ -230,22 +228,10 @@ def _withheld(connection: Any, recording_id: UUID, revision: str) -> set[str]:
     return {str(row["segment_id"]) for row in rows if row["action"] == "mark"}
 
 
-def _already_reviewed(connection: Any, report: dict[str, Any]) -> bool:
-    from sqlalchemy import text
-
-    return bool(
-        connection.execute(
-            text(
-                "SELECT 1 FROM conversation_pointer_reviews WHERE run_id = :run"
-                " AND source_sha256 = :source AND transcript_revision = :revision LIMIT 1"
-            ),
-            {
-                "run": report["run_id"],
-                "source": report["source_sha256"],
-                "revision": report["transcript_revision"],
-            },
-        ).first()
-    )
+class _ProviderFailure(RuntimeError):
+    def __init__(self, outcome: str, usage: dict[str, Any] | None = None) -> None:
+        super().__init__(outcome)
+        self.outcome, self.usage = outcome, usage
 
 
 def _call_gemini(body: dict[str, Any]) -> dict[str, Any]:
@@ -256,134 +242,241 @@ def _call_gemini(body: dict[str, Any]) -> dict[str, Any]:
     key = os.environ.get("GEMINI_API_KEY", "")
     if not key:
         raise SystemExit("pointer_review_credential_missing")
-    response = httpx.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_ID}:generateContent",
-        headers={"x-goog-api-key": key, "content-type": "application/json"},
-        json=body,
-        timeout=httpx.Timeout(240.0, connect=20.0),
-    )
+    try:
+        response = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_ID}:generateContent",
+            headers={"x-goog-api-key": key, "content-type": "application/json"},
+            json=body,
+            timeout=httpx.Timeout(240.0, connect=20.0),
+        )
+    except httpx.TimeoutException:
+        raise _ProviderFailure("timeout") from None
+    except httpx.HTTPError:
+        raise _ProviderFailure("transport_error") from None
     if response.status_code != 200:
-        raise RuntimeError(f"provider_http_{response.status_code}")
-    return dict(response.json())
+        raise _ProviderFailure(f"provider_http_{response.status_code}")
+    try:
+        return dict(response.json())
+    except ValueError:
+        raise _ProviderFailure("unreadable_response") from None
 
 
-def _inner(arguments: argparse.Namespace) -> int:
-    from sqlalchemy import create_engine, insert
+def _est_paise(usage: dict[str, Any]) -> int:
+    # Operator log only, never a charge: Gemini 3.8 Flash list price
+    # (admin_pricing) $0.75 in, $3.75 out per M tokens; Rs 100/$.
+    return round(
+        (
+            int(usage.get("promptTokenCount") or 0) * 0.75
+            + int(usage.get("candidatesTokenCount") or 0) * 3.75
+        )
+        * 100
+        * 100
+        / 1_000_000
+    )
 
+
+async def _review_one(
+    sessions: Any,
+    report: dict[str, Any],
+    arguments: argparse.Namespace,
+    *,
+    mode: str,
+    created_by: str,
+    call_provider: Any = None,
+) -> dict[str, Any]:
+    """Admit, call the provider once, then save or record why not (AUT-2010)."""
+    from ac_platform.conversation_intelligence import pointer_review_admission as admission
     from ac_platform.conversation_intelligence.pointer_review import (
-        MODEL_ID,
-        VERSION,
         PointerReviewError,
+        admission_refusal,
         build_prompt,
         decode_gemini,
         gemini_body,
         parse_review,
-        payload_sha256,
         prompt_sha256,
     )
-    from ac_platform.conversation_intelligence.pointer_review_models import (
-        ConversationPointerReview,
+
+    line: dict[str, Any] = {"submission": str(report["submission_id"])}
+    async with sessions() as session:
+        saved = await session.run_sync(
+            lambda sync: _segments(sync.connection(), report["draft_id"])
+        )
+        withheld = await session.run_sync(
+            lambda sync: _withheld(
+                sync.connection(), report["recording_id"], report["transcript_revision"]
+            )
+        )
+    segments = [segment for segment in saved if str(segment.get("id")) not in withheld]
+    line["segments"] = len(segments)
+    try:
+        system, user = build_prompt(segments, {})
+    except PointerReviewError as error:
+        line["error"] = str(error)
+        return line
+    digest = prompt_sha256(system, user)
+    if not arguments.apply:
+        async with sessions() as session, session.begin():
+            refusal = await session.run_sync(
+                lambda sync: admission_refusal(sync.connection(), report, datetime.now(UTC))
+            )
+        line["dry_run"] = True
+        line["prompt_chars"] = len(system) + len(user)
+        if refusal is not None:
+            line["would_refuse"] = refusal
+        return line
+    async with sessions() as session, session.begin():
+        claimed = await admission.claim(
+            session,
+            report,
+            mode=mode,
+            created_by=created_by,
+            forced=arguments.force,
+            prompt_digest=digest,
+            daily_cap=arguments.daily_cap,
+            now=datetime.now(UTC),
+        )
+    if claimed.attempt is None:
+        line["skipped"] = claimed.refused
+        return line
+    # The start is committed: from here on this attempt counts as paid.
+    line["attempt"] = str(claimed.attempt)
+    usage: dict[str, Any] | None = None
+    review: dict[str, Any] | None = None
+    outcome = "runner_error"
+    try:
+        response = (call_provider or _call_gemini)(gemini_body(system, user))
+        usage = dict(response.get("usageMetadata") or {})
+        try:
+            review = parse_review(decode_gemini(response), segments)
+        except PointerReviewError:
+            raise _ProviderFailure("parse_failed", usage) from None
+        async with sessions() as session, session.begin():
+            outcome = await admission.save(
+                session,
+                report,
+                claimed.attempt,
+                mode=mode,
+                review=review,
+                prompt_digest=digest,
+                usage=usage,
+                created_by=created_by,
+                now=datetime.now(UTC),
+            )
+    except _ProviderFailure as failure:
+        outcome, usage = failure.outcome, failure.usage or usage
+    finally:
+        if outcome != "saved" and not outcome.startswith("refused_"):
+            # A provider or runner failure. If this write fails too, the start
+            # without an outcome stays an uncertain attempt, counted as spent.
+            async with sessions() as session, session.begin():
+                await admission.finish(
+                    session,
+                    report,
+                    claimed.attempt,
+                    mode=mode,
+                    outcome=outcome,
+                    usage=usage,
+                    now=datetime.now(UTC),
+                )
+    line["outcome"] = outcome
+    if usage:
+        line["tokens"] = [usage.get("promptTokenCount"), usage.get("candidatesTokenCount")]
+        line["est_paise"] = _est_paise(usage)
+    if outcome == "saved" and review is not None:
+        line["overall"] = review["overall"]["score"]
+        line["scored"] = review["overall"]["scored_pointers"]
+        line["statuses"] = {
+            status: sum(1 for p in review["pointers"] if p["status"] == status)
+            for status in {p["status"] for p in review["pointers"]}
+        }
+    return line
+
+
+async def _inner_async(arguments: argparse.Namespace, call_provider: Any = None) -> int:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from ac_platform.conversation_intelligence import pointer_review_admission as admission
+    from ac_platform.conversation_intelligence.pointer_review import (
+        erase_reviews_of_erased_calls,
     )
 
+    if (
+        arguments.apply
+        and not arguments.erase_erased_calls
+        and call_provider is None
+        and not os.environ.get("GEMINI_API_KEY")
+    ):
+        # Checked before any claim, so a missing key never records an attempt.
+        raise SystemExit("pointer_review_credential_missing")
     url = arguments.database_url_file.read_text().strip()
-    engine = create_engine(url, pool_pre_ping=True)
+    engine = create_async_engine(url, pool_pre_ping=True)
+    sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     failures = 0
-    with engine.connect() as connection:
+    try:
+        if arguments.erase_erased_calls:
+            async with engine.begin() as connection:
+                result = await connection.run_sync(
+                    lambda sync: erase_reviews_of_erased_calls(sync, apply=arguments.apply)
+                )
+            print(json.dumps({"erase_erased_calls": result, "apply": arguments.apply}))
+            return 0
         automatic = arguments.recent_hours is not None
-        if automatic:
-            room = arguments.daily_cap - _automatic_today(connection)
-            if room <= 0:
-                print(json.dumps({"reports": 0, "stopped": "daily_cap"}))
+        mode, created_by = ("automatic", AUTOMATIC) if automatic else ("operator", OPERATOR)
+        async with engine.connect() as lock:
+            # One runner per database, whichever entrypoint started it.
+            if arguments.apply and not await admission.try_run_lock(lock):
+                print(json.dumps({"reports": 0, "stopped": "another_runner"}))
                 return 0
-            reports = _recent_unreviewed(
-                connection,
-                arguments.recent_hours,
-                arguments.not_before,
-                min(arguments.limit, room),
-            )
-        else:
-            reports = _latest_reports(connection, arguments.tenant, arguments.limit)
-        print(json.dumps({"reports": len(reports), "apply": arguments.apply}))
-        for report in reports:
-            line: dict[str, Any] = {"submission": str(report["submission_id"])}
-            if automatic and _failures(arguments.state_file).get(str(report["run_id"]), 0) >= 2:
-                line["skipped"] = "failed_twice"
-                print(json.dumps(line))
-                continue
-            withheld = _withheld(connection, report["recording_id"], report["transcript_revision"])
-            segments = [
-                segment
-                for segment in (report["segments"] or [])
-                if str(segment.get("id")) not in withheld
-            ]
-            line["segments"] = len(segments)
-            if not arguments.force and _already_reviewed(connection, report):
-                line["skipped"] = "already_reviewed"
-                print(json.dumps(line))
-                continue
             try:
-                system, user = build_prompt(segments, {})
-            except PointerReviewError as error:
-                line["error"] = str(error)
-                failures += 1
-                print(json.dumps(line))
-                continue
-            if not arguments.apply:
-                line["dry_run"] = True
-                line["prompt_chars"] = len(system) + len(user)
-                print(json.dumps(line))
-                continue
-            try:
-                response = _call_gemini(gemini_body(system, user))
-                review = parse_review(decode_gemini(response), segments)
-            except (PointerReviewError, RuntimeError) as error:
-                line["error"] = str(error)
-                failures += 1
-                if automatic:
-                    _remember_failure(arguments.state_file, str(report["run_id"]))
-                print(json.dumps(line))
-                continue
-            usage = response.get("usageMetadata") or {}
-            connection.execute(
-                insert(ConversationPointerReview).values(
-                    id=uuid4(),
-                    tenant_id=report["tenant_id"],
-                    recording_id=report["recording_id"],
-                    run_id=report["run_id"],
-                    report_draft_id=report["draft_id"],
-                    source_sha256=report["source_sha256"],
-                    transcript_revision=report["transcript_revision"],
-                    version=VERSION,
-                    model_id=MODEL_ID,
-                    prompt_sha256=prompt_sha256(system, user),
-                    payload=review,
-                    payload_sha256=payload_sha256(review),
-                    input_tokens=usage.get("promptTokenCount"),
-                    output_tokens=usage.get("candidatesTokenCount"),
-                    created_by=AUTOMATIC if automatic else OPERATOR,
-                    created_at=datetime.now(UTC),
-                )
-            )
-            connection.commit()
-            line["overall"] = review["overall"]["score"]
-            line["scored"] = review["overall"]["scored_pointers"]
-            line["statuses"] = {
-                status: sum(1 for p in review["pointers"] if p["status"] == status)
-                for status in {p["status"] for p in review["pointers"]}
-            }
-            line["tokens"] = [usage.get("promptTokenCount"), usage.get("candidatesTokenCount")]
-            # Gemini 3.8 Flash list price (admin_pricing): $0.75 in, $3.75 out per M; Rs 100/$.
-            line["est_paise"] = round(
-                (
-                    int(usage.get("promptTokenCount") or 0) * 0.75
-                    + int(usage.get("candidatesTokenCount") or 0) * 3.75
-                )
-                * 100
-                * 100
-                / 1_000_000
-            )
-            print(json.dumps(line))
+                async with sessions() as session:
+                    if automatic:
+                        reports = await session.run_sync(
+                            lambda sync: _recent_unreviewed(
+                                sync.connection(),
+                                arguments.recent_hours,
+                                arguments.not_before,
+                                _CANDIDATES,
+                            )
+                        )
+                    else:
+                        reports = await session.run_sync(
+                            lambda sync: _latest_reports(
+                                sync.connection(), arguments.tenant, arguments.limit
+                            )
+                        )
+                print(json.dumps({"reports": len(reports), "apply": arguments.apply}))
+                dispatched = 0
+                for report in reports:
+                    if dispatched >= arguments.limit:
+                        break
+                    line = await _review_one(
+                        sessions,
+                        report,
+                        arguments,
+                        mode=mode,
+                        created_by=created_by,
+                        call_provider=call_provider,
+                    )
+                    print(json.dumps(line))
+                    dispatched += "attempt" in line
+                    outcome = str(line.get("outcome") or "saved")
+                    failures += "error" in line or not (
+                        outcome == "saved" or outcome.startswith("refused_")
+                    )
+                    if line.get("skipped") == "daily_cap":
+                        break
+            finally:
+                if arguments.apply:
+                    await admission.release_run_lock(lock)
+    finally:
+        await engine.dispose()
     return 1 if failures else 0
+
+
+def _inner(arguments: argparse.Namespace) -> int:
+    import asyncio
+
+    return asyncio.run(_inner_async(arguments))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -391,8 +484,8 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _arguments(raw)
     if arguments.inner:
         return _inner(arguments)
-    if not arguments.apply:
-        # A dry run needs no provider key: read and report only.
+    if not arguments.apply or arguments.erase_erased_calls:
+        # A dry run and the erasure cleanup need no provider key.
         return _inner(arguments)
     _reexec_inside_infisical([item for item in raw if item != INNER], arguments)
     return 0  # pragma: no cover - execvpe replaces this process

@@ -33,7 +33,8 @@ const repA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const repB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const repC = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const cursor = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-const LIST = "/v1/conversation/acquisition/submissions?include_owners=true";
+const LIST =
+  "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first";
 const context = {
   personId: repA,
   sessionId: "session-one",

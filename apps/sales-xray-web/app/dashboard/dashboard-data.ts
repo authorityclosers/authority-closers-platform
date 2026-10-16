@@ -172,7 +172,10 @@ export async function readAllowance(signal?: AbortSignal): Promise<Allowance> {
   );
 }
 
-/** The newest calls from the Calls list's first page. */
+/**
+ * Recent calls with Reports first (the Calls list's order): calls whose
+ * analysis started, newest first, before never-analysed ones.
+ */
 export async function readRecentCalls(
   signal?: AbortSignal,
   limit = 5,
@@ -181,7 +184,9 @@ export async function readRecentCalls(
 ): Promise<LibrarySubmission[]> {
   const page = parseSubmissionLibraryPage(
     await acquisition(
-      owners ? "/submissions?include_owners=true" : "/submissions",
+      owners
+        ? "/submissions?include_owners=true&order=reports_first"
+        : "/submissions?order=reports_first",
       { signal },
     ),
   );
