@@ -795,7 +795,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     details_view = page.get_by_role("button", name="Details view", exact=True)
                     more_views = page.locator('summary[aria-label="More views"]')
                     # Intended default: a bound report URL without view= opens
-                    # on the six-part Report, whatever the viewport width.
+                    # on the three-part Report (15 Oct), whatever the viewport width.
                     # Details and Document wait behind "More views".
                     await expect(report_view).to_have_attribute("aria-pressed", "true")
                     await more_views.click()
@@ -803,9 +803,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     report_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
                     )
-                    await expect(report_nav.get_by_role("link")).to_have_count(6)
+                    await expect(report_nav.get_by_role("link")).to_have_count(3)
                     await expect(
-                        report_nav.get_by_role("link", name="The Big Picture", exact=True)
+                        report_nav.get_by_role("link", name="Overview & Score", exact=True)
                     ).to_have_count(1)
                     # Details keeps every original section, transcript and raw data.
                     await details_view.click()
@@ -930,7 +930,8 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # API into the disposable database, then read back after a
                     # full reload by the Report, the Document view and Word file.
                     await library_page.get_by_role("button", name="Report view", exact=True).click()
-                    picture = library_page.locator('[data-report-pillar="overview"]')
+                    picture = library_page.locator('[data-xray-part="overview"]')
+                    outcome = library_page.locator('[data-xray-part="outcome"]')
                     lost = picture.get_by_role("button", name="Lost", exact=True)
                     await expect(lost).to_be_visible(timeout=20000)
                     await lost.click()
@@ -940,12 +941,12 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                             response.url.endswith("/outcome") and response.request.method == "PUT"
                         )
                     ) as saved_outcome:
-                        await picture.get_by_role("button", name="Save", exact=True).click()
+                        await picture.get_by_role("button", name="Mark as Lost", exact=True).click()
                     assert (await saved_outcome.value).status == 200
-                    await expect(picture).to_contain_text("Set by your team")
+                    await expect(outcome).to_contain_text("Set by your team")
                     await library_page.reload(wait_until="domcontentloaded")
-                    picture = library_page.locator('[data-report-pillar="overview"]')
-                    await expect(picture).to_contain_text("Chose another program.", timeout=20000)
+                    outcome = library_page.locator('[data-xray-part="outcome"]')
+                    await expect(outcome).to_contain_text("Chose another program.", timeout=20000)
 
                     def outcome_block(text: str, start: str, end: str) -> str:
                         """The words of one numbered part, e.g. 1.1 up to 1.2.
@@ -965,17 +966,14 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         assert stop > begin, end
                         return flat[begin:stop]
 
-                    # 1.1 on screen: the person's status first, then who set it.
-                    report_picture = re.sub(r"\s+", " ", await picture.inner_text())
-                    assert report_picture.startswith("Lost Set by your team"), report_picture[:60]
-                    assert "Chose another program." in report_picture
-                    # 6.1 on screen follows the same record.
-                    deal = re.sub(
-                        r"\s+",
-                        " ",
-                        await library_page.locator('[data-report-pillar="facts"]').inner_text(),
-                    )
-                    assert deal.startswith("Current status Lost Set by your team"), deal[:60]
+                    # Final Call Outcome follows the person's record after a reload.
+                    await expect(outcome).to_have_attribute("data-outcome", "lost")
+                    report_outcome = re.sub(r"\s+", " ", await outcome.inner_text())
+                    assert "Set by your team" in report_outcome, report_outcome[:80]
+                    assert "Lost" in report_outcome and "Chose another program." in report_outcome
+                    await expect(
+                        picture.get_by_role("button", name="Lost", exact=True)
+                    ).to_have_attribute("aria-pressed", "true")
                     await library_page.locator('summary[aria-label="More views"]').click()
                     await library_page.get_by_role(
                         "button", name="Document view", exact=True

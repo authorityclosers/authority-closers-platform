@@ -3,7 +3,11 @@
 The owner approved AI scores for the Report's 27 pointers (rulebook 693645b0):
 an AI draft, not reviewed by Dipak. One row is one saved review of one report
 draft: per-pointer status, score and feedback, with evidence by transcript
-segment. Append-only; a newer review supersedes by being newer.
+segment. Rows are only ever added (the app has no update or delete path); a
+newer review supersedes an older one by being newer.
+
+A new, empty table may be rolled back; once any review exists, its history
+requires forward recovery.
 
 Chain: after 20261013_0090 (recording duration).
 """
@@ -16,12 +20,10 @@ down_revision = "20261013_0090"
 branch_labels = None
 depends_on = None
 
-TABLE = "conversation_pointer_reviews"
-
 
 def upgrade() -> None:
     op.create_table(
-        TABLE,
+        "conversation_pointer_reviews",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("tenant_id", sa.Uuid(), nullable=False),
         sa.Column("recording_id", sa.Uuid(), nullable=False),
@@ -56,22 +58,18 @@ def upgrade() -> None:
             name="pointer_review_digests",
         ),
     )
-    op.create_index("ix_pointer_review_read", TABLE, ["recording_id", "run_id", "created_at"])
-    if op.get_bind().dialect.name == "postgresql":
-        op.execute("""
-            CREATE FUNCTION protect_pointer_review_history() RETURNS trigger
-            LANGUAGE plpgsql AS $$
-            BEGIN
-                RAISE EXCEPTION 'Pointer reviews preserve history';
-            END;
-            $$
-        """)
-        op.execute(f"""
-            CREATE TRIGGER pointer_review_history
-            BEFORE UPDATE OR DELETE ON {TABLE}
-            FOR EACH ROW EXECUTE FUNCTION protect_pointer_review_history()
-        """)
+    op.create_index(
+        "ix_pointer_review_read",
+        "conversation_pointer_reviews",
+        ["recording_id", "run_id", "created_at"],
+    )
 
 
 def downgrade() -> None:
-    raise RuntimeError("Pointer reviews are forward-only: saved AI reviews stay as history.")
+    # Fence inserts before the history check, then remove only an empty table.
+    op.execute(sa.text("LOCK TABLE conversation_pointer_reviews IN ACCESS EXCLUSIVE MODE"))
+    history = sa.table("conversation_pointer_reviews", sa.column("id"))
+    if op.get_bind().scalar(sa.select(sa.exists().where(history.c.id.is_not(None)))):
+        raise RuntimeError("Pointer review history requires forward recovery.")
+    op.drop_index("ix_pointer_review_read", table_name="conversation_pointer_reviews")
+    op.drop_table("conversation_pointer_reviews")
