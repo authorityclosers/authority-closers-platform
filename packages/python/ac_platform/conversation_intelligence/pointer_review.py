@@ -17,6 +17,7 @@ import hashlib
 import json
 import re
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 
 from ac_platform.conversation_intelligence.report_structure import POINTERS as STRUCTURE_POINTERS
@@ -483,10 +484,128 @@ async def latest_review(database: Any, envelope: dict[str, Any]) -> dict[str, An
             ConversationPointerReview.source_sha256 == source,
             ConversationPointerReview.transcript_revision == revision,
             ConversationPointerReview.version == VERSION,
+            ConversationPointerReview.erased_at.is_(None),
         )
         .order_by(ConversationPointerReview.created_at.desc())
         .limit(1)
     )
-    if row is None or payload_sha256(row.payload) != row.payload_sha256:
+    if row is None or row.payload is None or payload_sha256(row.payload) != row.payload_sha256:
         return None
     return dict(row.payload)
+
+
+async def erase_pointer_reviews_for_recording(
+    database: Any, recording_id: Any, now: datetime
+) -> int:
+    """Canonical erasure: empty every saved review version of one call.
+
+    The row keeps its minimal provenance (ids, digests, model, tokens, times).
+    Repeating it is a no-op.
+    """
+    from sqlalchemy import select
+
+    from ac_platform.conversation_intelligence.pointer_review_models import (
+        ConversationPointerReview,
+    )
+
+    rows = (
+        await database.scalars(
+            select(ConversationPointerReview).where(
+                ConversationPointerReview.recording_id == recording_id,
+                ConversationPointerReview.erased_at.is_(None),
+            )
+        )
+    ).all()
+    for row in rows:
+        row.payload, row.erased_at = None, now
+    return len(rows)
+
+
+_ERASED_CALL_COUNT = """
+    SELECT count(*)
+    FROM conversation_pointer_reviews r
+    JOIN conversation_recordings c ON c.id = r.recording_id
+    LEFT JOIN conversation_report_drafts d ON d.id = r.report_draft_id
+    WHERE r.erased_at IS NULL
+      AND (c.state IN ('deleting', 'deleted') OR d.erased_at IS NOT NULL OR d.id IS NULL)
+"""
+_ERASED_CALL_ERASE = """
+    UPDATE conversation_pointer_reviews SET payload = NULL, erased_at = now()
+    WHERE id IN (
+      SELECT r.id
+      FROM conversation_pointer_reviews r
+      JOIN conversation_recordings c ON c.id = r.recording_id
+      LEFT JOIN conversation_report_drafts d ON d.id = r.report_draft_id
+      WHERE r.erased_at IS NULL
+        AND (c.state IN ('deleting', 'deleted') OR d.erased_at IS NOT NULL OR d.id IS NULL)
+    )
+"""
+
+
+def erase_reviews_of_erased_calls(connection: Any, *, apply: bool) -> dict[str, int]:
+    """One-off cleanup (AUT-2010): reviews whose call or report was already erased.
+
+    Dry run by default; with apply it empties them in the caller's transaction.
+    """
+    from sqlalchemy import text
+
+    count = int(connection.execute(text(_ERASED_CALL_COUNT)).scalar_one())
+    erased = connection.execute(text(_ERASED_CALL_ERASE)).rowcount if apply and count else 0
+    return {"found": count, "erased": int(erased or 0)}
+
+
+def save_review(
+    connection: Any,
+    *,
+    report: dict[str, Any],
+    review: dict[str, Any],
+    prompt_digest: str,
+    usage: dict[str, Any],
+    created_by: str,
+    now: datetime,
+) -> bool:
+    """Save one review unless its call or report was erased meanwhile.
+
+    The recording row is locked FOR SHARE, which waits for (and is fenced by)
+    canonical erasure's FOR UPDATE, so a late provider answer never restores
+    content after erasure began. Returns False when it refuses.
+    """
+    from uuid import uuid4
+
+    from sqlalchemy import insert, text
+
+    from ac_platform.conversation_intelligence.pointer_review_models import (
+        ConversationPointerReview,
+    )
+
+    state = connection.execute(
+        text("SELECT state FROM conversation_recordings WHERE id = :id FOR SHARE"),
+        {"id": report["recording_id"]},
+    ).scalar()
+    draft_live = connection.execute(
+        text("SELECT erased_at IS NULL FROM conversation_report_drafts WHERE id = :id FOR SHARE"),
+        {"id": report["draft_id"]},
+    ).scalar()
+    if state is None or state in {"deleting", "deleted"} or draft_live is not True:
+        return False
+    connection.execute(
+        insert(ConversationPointerReview).values(
+            id=uuid4(),
+            tenant_id=report["tenant_id"],
+            recording_id=report["recording_id"],
+            run_id=report["run_id"],
+            report_draft_id=report["draft_id"],
+            source_sha256=report["source_sha256"],
+            transcript_revision=report["transcript_revision"],
+            version=VERSION,
+            model_id=MODEL_ID,
+            prompt_sha256=prompt_digest,
+            payload=review,
+            payload_sha256=payload_sha256(review),
+            input_tokens=usage.get("promptTokenCount"),
+            output_tokens=usage.get("candidatesTokenCount"),
+            created_by=created_by,
+            created_at=now,
+        )
+    )
+    return True

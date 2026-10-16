@@ -12,3 +12,8 @@ def test_pointer_reviews_are_in_all_consumers() -> None:
             *module.parity_tables_for_head("20261013_0090"),
             "conversation_pointer_reviews",
         )
+        # 0092 only adds erasure columns: same counted tables, same contract.
+        assert module.parity_contract_for_head("20261016_0092") == "ac-postgres-parity-v59"
+        assert module.parity_tables_for_head("20261016_0092") == module.parity_tables_for_head(
+            "20261016_0091"
+        )

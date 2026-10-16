@@ -216,6 +216,6 @@ def test_0090_preserves_history_bounds_each_table_and_refuses_unsafe_rollback(
             == 1
         )
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261016_0091"
+            "20261016_0092"
         )
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []

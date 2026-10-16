@@ -24,7 +24,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 INNER = "--inner"
 AUTOMATIC = "automatic:pointer-review"
@@ -38,6 +38,11 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--database-url-file", required=True, type=Path)
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument("--tenant", type=UUID, help="one workspace's latest reports")
+    target.add_argument(
+        "--erase-erased-calls",
+        action="store_true",
+        help="one-off cleanup: empty reviews of already erased calls (dry run without --apply)",
+    )
     target.add_argument(
         "--recent-hours",
         type=int,
@@ -268,27 +273,28 @@ def _call_gemini(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def _inner(arguments: argparse.Namespace) -> int:
-    from sqlalchemy import create_engine, insert
+    from sqlalchemy import create_engine
 
     from ac_platform.conversation_intelligence.pointer_review import (
-        MODEL_ID,
-        VERSION,
         PointerReviewError,
         build_prompt,
         decode_gemini,
+        erase_reviews_of_erased_calls,
         gemini_body,
         parse_review,
-        payload_sha256,
         prompt_sha256,
-    )
-    from ac_platform.conversation_intelligence.pointer_review_models import (
-        ConversationPointerReview,
+        save_review,
     )
 
     url = arguments.database_url_file.read_text().strip()
     engine = create_engine(url, pool_pre_ping=True)
     failures = 0
     with engine.connect() as connection:
+        if arguments.erase_erased_calls:
+            result = erase_reviews_of_erased_calls(connection, apply=arguments.apply)
+            connection.commit()
+            print(json.dumps({"erase_erased_calls": result, "apply": arguments.apply}))
+            return 0
         automatic = arguments.recent_hours is not None
         if automatic:
             room = arguments.daily_cap - _automatic_today(connection)
@@ -344,27 +350,21 @@ def _inner(arguments: argparse.Namespace) -> int:
                 print(json.dumps(line))
                 continue
             usage = response.get("usageMetadata") or {}
-            connection.execute(
-                insert(ConversationPointerReview).values(
-                    id=uuid4(),
-                    tenant_id=report["tenant_id"],
-                    recording_id=report["recording_id"],
-                    run_id=report["run_id"],
-                    report_draft_id=report["draft_id"],
-                    source_sha256=report["source_sha256"],
-                    transcript_revision=report["transcript_revision"],
-                    version=VERSION,
-                    model_id=MODEL_ID,
-                    prompt_sha256=prompt_sha256(system, user),
-                    payload=review,
-                    payload_sha256=payload_sha256(review),
-                    input_tokens=usage.get("promptTokenCount"),
-                    output_tokens=usage.get("candidatesTokenCount"),
-                    created_by=AUTOMATIC if automatic else OPERATOR,
-                    created_at=datetime.now(UTC),
-                )
+            saved = save_review(
+                connection,
+                report=report,
+                review=review,
+                prompt_digest=prompt_sha256(system, user),
+                usage=usage,
+                created_by=AUTOMATIC if automatic else OPERATOR,
+                now=datetime.now(UTC),
             )
             connection.commit()
+            if not saved:
+                # The call or its report was erased while the provider answered.
+                line["refused"] = "call_erased"
+                print(json.dumps(line))
+                continue
             line["overall"] = review["overall"]["score"]
             line["scored"] = review["overall"]["scored_pointers"]
             line["statuses"] = {
@@ -391,8 +391,8 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _arguments(raw)
     if arguments.inner:
         return _inner(arguments)
-    if not arguments.apply:
-        # A dry run needs no provider key: read and report only.
+    if not arguments.apply or arguments.erase_erased_calls:
+        # A dry run and the erasure cleanup need no provider key.
         return _inner(arguments)
     _reexec_inside_infisical([item for item in raw if item != INNER], arguments)
     return 0  # pragma: no cover - execvpe replaces this process
