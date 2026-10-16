@@ -66,7 +66,11 @@ export const AMIT_STRUCTURE = {
     score_status: "ai_draft",
     rating: pointer.score === null ? null : BAND[scoreBand(pointer.score)],
     coverage: "ai_pointer_review",
-    what_happened: pointer.whatHappened,
+    // One authored, fictional null-score reason: the status stays, the score stays null.
+    what_happened:
+      pointer.id === "purpose_agenda"
+        ? "You went straight into questions without saying what the call would cover."
+        : pointer.whatHappened,
     why_it_matters: pointer.whyItMatters,
     evidence:
       pointer.score === null

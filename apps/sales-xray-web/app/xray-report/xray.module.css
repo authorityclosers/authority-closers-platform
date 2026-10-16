@@ -1413,14 +1413,64 @@
   .outcomeBig {
     font-size: 22px;
   }
+  /* Phones: the stage track runs down the card, one stage per row, so no
+     two stage names share a line or shrink below 12px. */
   .track {
-    gap: 4px;
+    grid-auto-columns: unset;
+    grid-auto-flow: row;
+    margin-top: 10px;
+  }
+  .step {
+    column-gap: 12px;
+    grid-template-areas:
+      "dot name"
+      "dot state";
+    grid-template-columns: 44px minmax(0, 1fr);
+    justify-items: start;
+    padding: 6px 0;
+    row-gap: 0;
+    text-align: left;
+  }
+  .step::before,
+  .step:first-child::before,
+  .step:last-child::before {
+    bottom: 0;
+    height: auto;
+    left: 20.5px;
+    right: auto;
+    top: 0;
+    transform: none;
+    width: 3px;
+  }
+  .step:first-child::before {
+    top: 50%;
+  }
+  .step:last-child::before {
+    bottom: 50%;
+  }
+  .stepDashed::before {
+    background: repeating-linear-gradient(
+      180deg,
+      var(--step-tail) 0 8px,
+      transparent 8px 13px
+    );
+  }
+  .stepDot,
+  .stepEnd {
+    grid-area: dot;
+    justify-self: center;
+    margin: 0;
   }
   .stepName {
-    font-size: 11.5px;
+    align-self: end;
+    font-size: 14px;
+    grid-area: name;
   }
   .stepState {
-    font-size: 10.5px;
+    align-self: start;
+    font-size: 12.5px;
+    grid-area: state;
+    margin-top: 0;
   }
   .stepRow {
     grid-template-areas:
@@ -1497,7 +1547,7 @@
   background: var(--xr-card-3);
   border-radius: 999px;
   color: var(--xr-text-2);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   margin-left: 8px;
   padding: 2px 8px;
@@ -1584,7 +1634,7 @@
 }
 .amountPreview {
   color: var(--xr-text-2);
-  font-size: 11.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   padding: 0 6px 2px;
 }
