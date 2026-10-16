@@ -142,7 +142,8 @@ const ok = (body: unknown, status = 200) =>
     status,
     headers: { "content-type": "application/json" },
   });
-const LIST = "GET /v1/conversation/acquisition/submissions?include_owners=true";
+const LIST =
+  "GET /v1/conversation/acquisition/submissions?include_owners=true&order=reports_first";
 const insightPath = (id: string, kind: string) =>
   `GET /v1/conversation/acquisition/submissions/${id}/${kind}`;
 const measuredRecord = {
@@ -574,6 +575,12 @@ it("reads and writes the list's view in the address", () => {
   expect(readCallsView("?status=weird&sort=sideways")).toEqual({
     filter: "all",
     rep: "",
+    sort: "reports",
+  });
+  // Calls with Reports come first by default; never-analysed calls filter too.
+  expect(readCallsView("?status=not_analysed&sort=newest")).toEqual({
+    filter: "idle",
+    rep: "",
     sort: "newest",
   });
   expect(
@@ -583,12 +590,12 @@ it("reads and writes the list's view in the address", () => {
       sort: "newest",
       q: "Pixel ",
     }),
-  ).toBe("?id=abc&q=Pixel+&status=completed");
+  ).toBe("?id=abc&q=Pixel+&status=completed&sort=newest");
   expect(
     callsViewSearch("?status=processing", {
       filter: "all",
       rep: "",
-      sort: "newest",
+      sort: "reports",
       q: "",
     }),
   ).toBe("");
@@ -687,7 +694,7 @@ it("loads every server listed state without auto claiming or processing", async 
   expect(host.textContent).toContain("Report ready");
   expect(fetchMock).toHaveBeenCalledOnce();
   expect(fetchMock.mock.calls[0][0]).toBe(
-    "/v1/conversation/acquisition/submissions?include_owners=true",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first",
   );
   expect(fetchMock.mock.calls[0][1]).toEqual(
     expect.objectContaining({
@@ -723,7 +730,7 @@ it("only remembers and navigates on explicit row activation, then paginates by c
   );
   await flush();
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&before=${cursor}`,
   );
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
   await act(async () =>
@@ -759,7 +766,7 @@ it("keeps pagination available when concurrent erasure empties a page", async ()
     host.querySelector(`[data-submission-id="${secondId}"]`),
   ).not.toBeNull();
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&before=${cursor}`,
   );
 });
 
@@ -833,7 +840,7 @@ it("refreshes the visible library after a background upload and shows its ready 
 
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(fetchMock.mock.calls[1][0]).toBe(
-    "/v1/conversation/acquisition/submissions?include_owners=true",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first",
   );
   expect(
     host.querySelector(`[data-submission-id="${secondId}"]`)?.textContent,
@@ -1255,7 +1262,7 @@ it("keeps the loaded cursor when a status-only refresh leaves page membership un
   await flush();
 
   expect(fetchMock.mock.calls[2][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&before=${cursor}`,
   );
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
 });
@@ -1461,7 +1468,7 @@ it("settles a timed-out next-page read and leaves its cursor retryable", async (
     "Saved calls could not be loaded",
   );
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&before=${cursor}`,
   );
 });
 
@@ -1632,4 +1639,52 @@ it("keeps phone rows readable and the module on tokens only", () => {
   );
   // No raw colours: every colour is a lightbox token.
   expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
+});
+
+it("lists calls with Reports first and names never-analysed calls honestly", async () => {
+  // 16 Oct (dev): imported calls that were never analysed hid every Report.
+  // The server orders started calls first; the page keeps that order.
+  const imported = (id: string) => ({ ...row(id), state: "ready" });
+  routeFetch({
+    [LIST]: () =>
+      ok(
+        page([
+          row(firstId, true),
+          row(secondId, true),
+          imported(thirdId),
+          imported(fourthId),
+        ]),
+      ),
+    [insightPath(firstId, "call-record")]: () => ok({}, 404),
+    [insightPath(secondId, "call-record")]: () => ok({}, 404),
+    [insightPath(firstId, "report")]: () => ok({ verdict: "First report" }),
+    [insightPath(secondId, "report")]: () => ok({ verdict: "Second report" }),
+  });
+  await act(async () => renderLibrary({ insights: true }));
+  await flush();
+
+  const list = host.querySelector("section#calls-library-list")!;
+  expect(list.textContent).not.toContain("Ready to analyse");
+  const headings = [...list.querySelectorAll("[role=presentation]")];
+  expect(headings.map((node) => node.textContent)).toEqual([
+    "Earlier",
+    "Not analysed yet",
+  ]);
+  const report = [...list.querySelectorAll("*")].find(
+    (node) => node.textContent === "Second report",
+  )!;
+  // Both Reports come before the never-analysed calls' heading.
+  expect(
+    report.compareDocumentPosition(headings[1]) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  const chip = [
+    ...host.querySelectorAll<HTMLButtonElement>("[data-chips] button"),
+  ].find((button) => button.dataset.tone === "idle")!;
+  expect(chip.textContent).toBe("Not analysed yet2");
+  const sort = [...host.querySelectorAll("select")].find((select) =>
+    [...select.options].some((option) => option.value === "reports"),
+  )!;
+  expect(sort.value).toBe("reports");
+  expect(sort.options[0].textContent).toBe("Reports first");
 });

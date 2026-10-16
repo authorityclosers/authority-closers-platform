@@ -96,7 +96,7 @@ it("keeps the Calls workspace controls", async () => {
     "fetch",
     vi.fn(async (input: RequestInfo) =>
       String(input) ===
-      "/v1/conversation/acquisition/submissions?include_owners=true"
+      "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first"
         ? new Response(
             JSON.stringify({
               submissions: [

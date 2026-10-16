@@ -62,7 +62,7 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
   ],
   "/analysis/calls": [
     ...SESSION,
-    `${ACQUISITION}/submissions?include_owners=true`,
+    `${ACQUISITION}/submissions?include_owners=true&order=reports_first`,
   ],
   "/analysis/new": [...SESSION, ...STUDIO],
   "/organisation": [
