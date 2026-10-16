@@ -49,6 +49,7 @@ from ac_platform.enrollment import models as enrollment_models
 from ac_platform.identity import google_profile_models, sales_xray_profile_models
 from ac_platform.identity import models as identity_models
 from ac_platform.knowledge import models as knowledge_models
+from ac_platform.lead_desk import models as lead_desk_models
 from ac_platform.learning import models as learning_models
 from ac_platform.learning import planning_models
 from ac_platform.media import models as media_models
@@ -87,6 +88,7 @@ MODEL_MODULES = (
     insight_models,
     pointer_review_models,
     prospect_call_outcome_models,
+    lead_desk_models,
     authorization_models,
     knowledge_models,
     catalog_models,
