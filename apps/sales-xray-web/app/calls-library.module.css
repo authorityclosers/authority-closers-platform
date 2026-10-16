@@ -1257,6 +1257,20 @@
     font-size: 20px;
   }
 
+  /* Call time and Next step agreed can say "Reading reports" or "Not known
+     yet" before their number arrives, which does not fit beside the name.
+     Their value always takes its own line, so the tiles are the same height
+     loading, waiting and loaded (owner: no layout shift; 0.15 measured). */
+  .kpi:nth-child(n + 3) dd:first-of-type {
+    flex-basis: 100%;
+  }
+
+  /* The first two are counts: their loading bar is the width of a short
+     number, so a narrow phone keeps name and number on one line. */
+  .skeleton .kpi:nth-child(-n + 2) i.phValue {
+    width: 24px;
+  }
+
   .spark {
     display: none;
   }

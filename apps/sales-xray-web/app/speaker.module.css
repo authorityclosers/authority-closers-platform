@@ -358,3 +358,64 @@
 .roles {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+
+/* Detected speakers floats in the corner, above the phone tab bar, so it
+   never shifts the report when it arrives (owner: no layout shift). */
+.detected {
+  position: fixed;
+  z-index: 340;
+  right: max(24px, env(safe-area-inset-right, 0px));
+  bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  width: min(380px, calc(100vw - 32px));
+  box-sizing: border-box;
+  margin: 0;
+  box-shadow: var(--lx-shadow-2);
+  animation: detected-in 220ms var(--lx-ease-move, ease) both;
+}
+
+.detected > .later {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lx-muted);
+  font: 600 13px/1 var(--lx-font-ui);
+  cursor: pointer;
+}
+
+.detected > .later:hover,
+.detected > .later:focus-visible {
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+  outline: none;
+}
+
+@media (max-width: 899.98px) {
+  .detected {
+    right: max(12px, env(safe-area-inset-right, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    bottom: calc(
+      var(--lx-bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px) + 12px
+    );
+    width: auto;
+    margin: 0;
+  }
+
+  .detected > .later {
+    min-height: 44px;
+  }
+}
+
+@keyframes detected-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detected {
+    animation: none;
+  }
+}

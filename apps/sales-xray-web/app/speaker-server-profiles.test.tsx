@@ -405,3 +405,21 @@ it("shows source-resolved seller and prospect suggestions with one-tap confirmat
     '"role":"prospect"',
   );
 });
+
+it("lets the detected-speakers card wait without writing anything", async () => {
+  data = {
+    ...initial(),
+    status: "predicted",
+    user_revision: 0,
+    speakers: initial().speakers.map((row, i) => ({
+      ...row,
+      role: i ? "prospect" : "salesperson",
+      role_source: "predicted",
+    })),
+  };
+  await render();
+  expect(host.querySelector('[aria-label="Detected speakers"]')).not.toBeNull();
+  await act(async () => button("Not now").click());
+  expect(host.querySelector('[aria-label="Detected speakers"]')).toBeNull();
+  expect(puts()).toHaveLength(0);
+});
