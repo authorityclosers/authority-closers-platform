@@ -73,6 +73,7 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
   ],
   "/account": [...SESSION],
   "/prospects": [...SESSION],
+  "/leads": [...SESSION],
 };
 
 /** A saved call: the session, the studio's entry and allowance, the call. */
