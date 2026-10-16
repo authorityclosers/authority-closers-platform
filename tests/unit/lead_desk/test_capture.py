@@ -5,7 +5,9 @@ import zipfile
 
 import pytest
 
+from ac_platform.lead_desk import capture
 from ac_platform.lead_desk.capture import (
+    MAX_COLUMNS,
     CaptureError,
     bounded_payload,
     display_name,
@@ -102,23 +104,20 @@ def test_csv_without_rows_is_refused() -> None:
         read_csv(b"Name,Phone\n")
 
 
-def _xlsx(rows: list[list[object]]) -> bytes:
-    shared: list[str] = []
-    xml_rows = []
-    for r, row in enumerate(rows, start=1):
-        cells = []
-        for c, value in enumerate(row):
-            ref = f"{chr(65 + c)}{r}"
-            if isinstance(value, str):
-                shared.append(value)
-                cells.append(f'<c r="{ref}" t="s"><v>{len(shared) - 1}</v></c>')
-            else:
-                cells.append(f'<c r="{ref}"><v>{value}</v></c>')
-        xml_rows.append(f'<row r="{r}">{"".join(cells)}</row>')
+def _column_name(index: int) -> str:
+    name = ""
+    index += 1
+    while index:
+        index, rest = divmod(index - 1, 26)
+        name = chr(65 + rest) + name
+    return name
+
+
+def _workbook(sheet_xml: str, shared: list[str]) -> bytes:
     ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
     rel = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
     buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w") as archive:
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr(
             "xl/workbook.xml",
             f'<workbook {ns} {rel}><sheets><sheet name="Leads" sheetId="1" r:id="rId1"/>'
@@ -135,9 +134,26 @@ def _xlsx(rows: list[list[object]]) -> bytes:
         )
         archive.writestr(
             "xl/worksheets/sheet1.xml",
-            f"<worksheet {ns}><sheetData>{''.join(xml_rows)}</sheetData></worksheet>",
+            f"<worksheet {ns}><sheetData>{sheet_xml}</sheetData></worksheet>",
         )
     return buffer.getvalue()
+
+
+def _xlsx(rows: list[list[object]], refs: dict[tuple[int, int], str] | None = None) -> bytes:
+    """A workbook of rows; refs moves a cell (row, column) to another reference."""
+    shared: list[str] = []
+    xml_rows = []
+    for r, row in enumerate(rows, start=1):
+        cells = []
+        for c, value in enumerate(row):
+            ref = (refs or {}).get((r, c), f"{_column_name(c)}{r}")
+            if isinstance(value, str):
+                shared.append(value)
+                cells.append(f'<c r="{ref}" t="s"><v>{len(shared) - 1}</v></c>')
+            else:
+                cells.append(f'<c r="{ref}"><v>{value}</v></c>')
+        xml_rows.append(f'<row r="{r}">{"".join(cells)}</row>')
+    return _workbook("".join(xml_rows), shared)
 
 
 def test_excel_numbers_keep_every_phone_digit() -> None:
@@ -172,3 +188,50 @@ def test_excel_with_entities_is_refused_not_expanded() -> None:
             archive.writestr(item.filename, data)
     with pytest.raises(CaptureError, match="can't be read"):
         read_xlsx(buffer.getvalue())
+
+
+@pytest.mark.parametrize("reference", ["ZZZZZZ2", "XFD2", "GS2", "AAAA2"])
+def test_excel_far_columns_are_refused_before_any_row_is_built(reference: str) -> None:
+    # AUT-2029: one cell at ZZZZZZ2 in a <1 KB file once meant a 321,272,406-cell row.
+    # The bound is checked first, so a regression fails here and never allocates the row.
+    assert capture._column(reference) >= MAX_COLUMNS
+    data = _xlsx([["Name", "Phone"], ["Asha", 9876543210, "x"]], {(2, 2): reference})
+    assert len(data) < 2048
+    with pytest.raises(CaptureError, match=f"more than {MAX_COLUMNS} columns"):
+        read_xlsx(data)
+
+
+def test_excel_keeps_the_last_allowed_column_and_cells_without_references() -> None:
+    last = _column_name(MAX_COLUMNS - 1)
+    assert last == "GR"
+    data = _xlsx([["Name", "Notes"], ["Asha", "call after 6"]], {(1, 1): "GR1", (2, 1): "GR2"})
+    sheet = read_xlsx(data)
+    assert len(sheet.headers) == MAX_COLUMNS and sheet.headers[-1] == "Notes"
+    assert sheet.rows == ({"Name": "Asha", "Notes": "call after 6"},)
+    inline = '<c t="inlineStr"><is><t>{}</t></is></c>'
+    loose = _workbook(
+        f"<row>{inline.format('Name')}{inline.format('Phone')}</row>"
+        f"<row>{inline.format('Ravi')}<c><v>9876543211</v></c></row>",
+        [],
+    )
+    assert read_xlsx(loose).rows == ({"Name": "Ravi", "Phone": "9876543211"},)
+
+
+def test_excel_stops_reading_once_enough_leads_are_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(capture, "MAX_ROWS", 2)
+    sheet = read_xlsx(_xlsx([["Name"], ["A"], ["B"], ["C"], ["D"], ["E"]]))
+    assert [row["Name"] for row in sheet.rows] == ["A", "B"] and sheet.truncated
+
+
+def test_excel_parsing_work_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = _xlsx([["Name", "Phone"], ["Asha", 9876543210], ["Ravi", 9876543211]])
+    monkeypatch.setattr(capture, "_MAX_SHARED", 2)
+    with pytest.raises(CaptureError, match="too large"):
+        read_xlsx(data)
+    monkeypatch.setattr(capture, "_MAX_SHARED", 500_000)
+    monkeypatch.setattr(capture, "_MAX_SHEET_ELEMENTS", 6)
+    with pytest.raises(CaptureError, match="too large"):
+        read_xlsx(data)
+    monkeypatch.setattr(capture, "_MAX_SHEET_ELEMENTS", 2_000_000)
+    huge = _xlsx([["Name"], ["x" * 10_000]])
+    assert len(read_xlsx(huge).rows[0]["Name"]) == 4096
