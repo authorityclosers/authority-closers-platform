@@ -30,12 +30,7 @@
       "Sort calls",
       "Filter loaded calls by status"
     ],
-    "rowLabels": [
-      "Select ",
-      "Preview "
-    ],
-    "buttons": [
-      "Export"
-    ]
+    "rowLabels": ["Select ", "Preview "],
+    "buttons": ["Export"]
   }
 }

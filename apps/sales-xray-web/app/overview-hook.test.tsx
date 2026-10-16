@@ -214,9 +214,8 @@ it.each(["", "&print=1"])(
     expect(host.querySelector("[data-docx-preview-stub]")?.textContent).toBe(
       fullSummary,
     );
-    const disclosure = host.querySelector<HTMLDetailsElement>(
-      "[class*='inShort']",
-    );
+    const disclosure =
+      host.querySelector<HTMLDetailsElement>("[class*='inShort']");
     expect(disclosure?.open ?? false).toBe(false);
   },
 );
