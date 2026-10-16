@@ -20,7 +20,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any, Final
-from xml.etree import ElementTree
+from xml.parsers import expat
 
 MAX_ROWS: Final[int] = 2000
 MAX_PAYLOAD_BYTES: Final[int] = 16 * 1024
@@ -211,7 +211,8 @@ class Extracted:
     used: dict[str, str] = field(default_factory=dict)
 
     def get(self, name: str) -> str | None:
-        return getattr(self, name)
+        value: str | None = getattr(self, name)
+        return value
 
 
 def suggest_mapping(headers: Iterable[str]) -> dict[str, str]:
@@ -236,16 +237,16 @@ def extract(
     flat = flatten(record)
     keyed = {key(name): value for name, value in flat.items()}
     chosen = dict(mapping or {})
-    for name, header in suggest_mapping(flat.keys()).items():
-        chosen.setdefault(name, header)
+    for name, suggested in suggest_mapping(flat.keys()).items():
+        chosen.setdefault(name, suggested)
     values: dict[str, str | None] = {}
     used: dict[str, str] = {}
     for name in FIELDS:
         header = chosen.get(name)
-        value = clean(flat.get(header) if header is not None else None, _LIMITS[name])
-        if value is not None and header is not None:
+        found = clean(flat.get(header) if header is not None else None, _LIMITS[name])
+        if found is not None and header is not None:
             used[name] = header
-        values[name] = value
+        values[name] = found
     if values["name"] is None:
         first = next((keyed[k] for k in _FIRST if k in keyed and clean(keyed[k])), None)
         last = next((keyed[k] for k in _LAST if k in keyed and clean(keyed[k])), None)
@@ -288,7 +289,8 @@ def bounded_payload(record: Mapping[str, Any]) -> dict[str, Any]:
         raise CaptureError("This lead's fields can't be stored.") from None
     if len(encoded.encode()) > MAX_PAYLOAD_BYTES:
         raise CaptureError("This lead has too much data (16 KB at most).")
-    return json.loads(encoded)
+    stored: dict[str, Any] = json.loads(encoded)
+    return stored
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,9 +348,89 @@ def read_csv(data: bytes) -> Sheet:
     return _rows_to_sheet(csv.reader(io.StringIO(text), dialect))
 
 
-_NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
 _MAX_PART = 20 * 1024 * 1024
+
+
+class _Node:
+    """A tiny element tree for the few spreadsheet parts the importer reads."""
+
+    __slots__ = ("attrib", "children", "tag", "text")
+
+    def __init__(self, tag: str, attrib: dict[str, str]) -> None:
+        self.tag = tag
+        self.attrib = attrib
+        self.children: list[_Node] = []
+        self.text = ""
+
+    def get(self, name: str, default: str | None = None) -> str | None:
+        return self.attrib.get(name, default)
+
+    def kids(self, local: str, namespace: str = _MAIN) -> list[_Node]:
+        tag = f"{{{namespace}}}{local}"
+        return [child for child in self.children if child.tag == tag]
+
+    def first(self, local: str) -> _Node | None:
+        found = self.kids(local)
+        return found[0] if found else None
+
+    def texts(self, local: str) -> str:
+        """All text of the named descendants, in document order."""
+        tag = f"{{{_MAIN}}}{local}"
+        parts: list[str] = []
+        stack = [self]
+        while stack:
+            node = stack.pop()
+            if node.tag == tag:
+                parts.append(node.text)
+            stack.extend(reversed(node.children))
+        return "".join(parts)
+
+
+def _parse_xml(raw: bytes) -> _Node:
+    """Parse untrusted spreadsheet XML safely.
+
+    Any DTD or entity declaration is refused outright (as defusedxml's
+    forbid_dtd does), so entity expansion and external entities can't happen.
+    """
+
+    def refuse(*_: object) -> None:
+        raise CaptureError("The spreadsheet can't be read.")
+
+    parser = expat.ParserCreate(namespace_separator="}")
+    parser.SetParamEntityParsing(expat.XML_PARAM_ENTITY_PARSING_NEVER)
+    parser.StartDoctypeDeclHandler = refuse
+    parser.EntityDeclHandler = refuse
+    parser.UnparsedEntityDeclHandler = refuse
+    parser.ExternalEntityRefHandler = refuse  # type: ignore[assignment]
+    root = _Node("", {})
+    stack = [root]
+
+    def start(name: str, attrib: dict[str, str]) -> None:
+        node = _Node(
+            "{" + name if "}" in name else name,
+            {("{" + key if "}" in key else key): value for key, value in attrib.items()},
+        )
+        stack[-1].children.append(node)
+        stack.append(node)
+
+    def end(_: str) -> None:
+        stack.pop()
+
+    def data(text: str) -> None:
+        stack[-1].text += text
+
+    parser.StartElementHandler = start
+    parser.EndElementHandler = end
+    parser.CharacterDataHandler = data
+    try:
+        parser.Parse(raw, True)
+    except expat.ExpatError:
+        raise CaptureError("The spreadsheet can't be read.") from None
+    if not root.children:
+        raise CaptureError("The spreadsheet can't be read.")
+    return root.children[0]
 
 
 def _part(archive: zipfile.ZipFile, name: str) -> bytes | None:
@@ -388,16 +470,14 @@ def read_xlsx(data: bytes) -> Sheet:
     except zipfile.BadZipFile:
         raise CaptureError("That isn't an Excel .xlsx file. Save it as .xlsx or .csv.") from None
     with archive:
-        try:
-            workbook = ElementTree.fromstring(_part(archive, "xl/workbook.xml") or b"")
-            rels = ElementTree.fromstring(_part(archive, "xl/_rels/workbook.xml.rels") or b"")
-        except ElementTree.ParseError:
-            raise CaptureError("The spreadsheet can't be read.") from None
-        first = workbook.find("m:sheets/m:sheet", _NS)
+        workbook = _parse_xml(_part(archive, "xl/workbook.xml") or b"")
+        rels = _parse_xml(_part(archive, "xl/_rels/workbook.xml.rels") or b"")
+        sheets = workbook.first("sheets")
+        first = sheets.first("sheet") if sheets else None
         if first is None:
             raise CaptureError("The spreadsheet has no sheets.")
         target = None
-        for rel in rels:
+        for rel in rels.children:
             if rel.get("Id") == first.get(_REL):
                 target = rel.get("Target", "")
         if not target:
@@ -406,27 +486,24 @@ def read_xlsx(data: bytes) -> Sheet:
         shared: list[str] = []
         strings = _part(archive, "xl/sharedStrings.xml")
         if strings:
-            for item in ElementTree.fromstring(strings).findall("m:si", _NS):
-                shared.append("".join(node.text or "" for node in item.iter(f"{{{_NS['m']}}}t")))
+            shared = [item.texts("t") for item in _parse_xml(strings).kids("si")]
         sheet_xml = _part(archive, path)
         if sheet_xml is None:
             raise CaptureError("The spreadsheet's first sheet is missing.")
-        try:
-            sheet = ElementTree.fromstring(sheet_xml)
-        except ElementTree.ParseError:
-            raise CaptureError("The spreadsheet can't be read.") from None
+        sheet = _parse_xml(sheet_xml)
     rows: list[list[str]] = []
-    for row in sheet.iterfind("m:sheetData/m:row", _NS):
+    sheet_data = sheet.first("sheetData")
+    for row in sheet_data.kids("row") if sheet_data else []:
         cells: dict[int, str] = {}
-        for cell in row.iterfind("m:c", _NS):
+        for cell in row.kids("c"):
             kind = cell.get("t")
-            value = cell.find("m:v", _NS)
+            value = cell.first("v")
             if kind == "inlineStr":
-                text = "".join(node.text or "" for node in cell.iter(f"{{{_NS['m']}}}t"))
-            elif value is None or value.text is None:
+                text = cell.texts("t")
+            elif value is None or not value.text:
                 continue
             elif kind == "s":
-                index = int(value.text)
+                index = int(value.text) if value.text.isdigit() else -1
                 text = shared[index] if 0 <= index < len(shared) else ""
             elif kind in {"str", "e"}:
                 text = value.text
@@ -434,7 +511,7 @@ def read_xlsx(data: bytes) -> Sheet:
                 text = "TRUE" if value.text == "1" else "FALSE"
             else:
                 text = _number(value.text)
-            column = _column(cell.get("r", ""))
+            column = _column(cell.get("r", "") or "")
             cells[column if column >= 0 else len(cells)] = text
         if cells:
             width = max(cells) + 1

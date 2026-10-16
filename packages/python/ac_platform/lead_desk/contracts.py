@@ -10,7 +10,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 
 from ac_platform.lead_desk.vocabulary import ConnectedStage, Reason
 
-SCHEMA = "lead-desk/1"
+SCHEMA: Literal["lead-desk/1"] = "lead-desk/1"
 _Short = Field(default=None, max_length=200)
 
 
@@ -260,7 +260,7 @@ class Disposition(Command):
 
 
 class LeadEdit(Command):
-    """Correct a lead's details. A field left out stays; an empty one is cleared (never the name)."""
+    """Correct a lead's details: a field left out stays; an empty one is cleared (not the name)."""
 
     command_id: UUID
     expected_revision: int = Field(ge=1)

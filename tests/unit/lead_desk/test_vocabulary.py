@@ -23,7 +23,7 @@ def test_every_word_has_a_plain_label() -> None:
     assert set(STAGE_LABELS) == set(STAGES)
     assert set(REASON_LABELS) == set(REASONS)
     assert len(REASONS) == 10
-    assert OPEN_STAGES | CLOSED_STAGES == set(STAGES)
+    assert set(STAGES) == OPEN_STAGES | CLOSED_STAGES
 
 
 def test_retries_follow_neodoves_default_logic() -> None:

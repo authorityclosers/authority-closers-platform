@@ -88,7 +88,7 @@ def test_payload_is_refused_when_too_large_never_cut() -> None:
 
 
 def test_csv_reads_semicolons_and_skips_blank_rows() -> None:
-    sheet = read_csv("Name;Phone;City\nAsha;98765 43210;Pune\n;;\nRavi;98765 43211;\n".encode())
+    sheet = read_csv(b"Name;Phone;City\nAsha;98765 43210;Pune\n;;\nRavi;98765 43211;\n")
     assert sheet.headers == ("Name", "Phone", "City")
     assert sheet.rows == (
         {"Name": "Asha", "Phone": "98765 43210", "City": "Pune"},
@@ -155,3 +155,20 @@ def test_old_excel_and_broken_files_are_explained() -> None:
         read_file("leads.xls", b"\xd0\xcf\x11\xe0")
     with pytest.raises(CaptureError, match="isn't an Excel"):
         read_xlsx(b"not a zip")
+
+
+def test_excel_with_entities_is_refused_not_expanded() -> None:
+    bomb = (
+        '<?xml version="1.0"?><!DOCTYPE sst [<!ENTITY a "aaaaaaaaaa">'
+        '<!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">]>'
+        '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        "<si><t>&b;</t></si></sst>"
+    )
+    good = zipfile.ZipFile(io.BytesIO(_xlsx([["Name", "Phone"], ["Asha", 9876543210]])))
+    buffer = io.BytesIO()
+    with good, zipfile.ZipFile(buffer, "w") as archive:
+        for item in good.infolist():
+            data = bomb.encode() if item.filename == "xl/sharedStrings.xml" else good.read(item)
+            archive.writestr(item.filename, data)
+    with pytest.raises(CaptureError, match="can't be read"):
+        read_xlsx(buffer.getvalue())

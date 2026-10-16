@@ -30,6 +30,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
+from ac_platform.lead_desk import simulation
 from ac_platform.lead_desk.contracts import (
     CallRecord,
     Desk,
@@ -52,7 +53,6 @@ from ac_platform.lead_desk.contracts import (
     SourceView,
     Team,
 )
-from ac_platform.lead_desk import simulation
 from ac_platform.lead_desk.intake import MAX_FILE_BYTES, Intake
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.lead_desk.vocabulary import STAGES

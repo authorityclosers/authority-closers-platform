@@ -7,6 +7,7 @@ Every change to a lead adds a history event; nothing is deleted.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
@@ -34,8 +35,8 @@ from ac_platform.lead_desk.contracts import (
     Desk,
     Disposition,
     FieldValue,
-    LeadEdit,
     LeadDetail,
+    LeadEdit,
     LeadEventView,
     LeadPage,
     LeadRow,
@@ -66,6 +67,7 @@ from ac_platform.lead_desk.vocabulary import (
 from ac_platform.tenancy.models import Membership
 
 MANAGERS = frozenset({"owner", "admin"})
+WhyKind = Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
 SELLER_ROLES = ("owner", "admin", "member")
 QUEUE_LIMIT = 30
 PAGE_SIZE = 50
@@ -206,7 +208,7 @@ class LeadDesk:
                 await self.db.scalars(select(LeadRep).where(LeadRep.tenant_id == self.tenant_id))
             ).all()
         }
-        loads = dict(
+        loads: dict[UUID | None, int] = dict(
             (
                 await self.db.execute(
                     select(Lead.owner_person_id, func.count())
@@ -217,16 +219,20 @@ class LeadDesk:
                     )
                     .group_by(Lead.owner_person_id)
                 )
-            ).all()
+            )
+            .tuples()
+            .all()
         )
-        latest = dict(
+        latest: dict[UUID | None, datetime | None] = dict(
             (
                 await self.db.execute(
                     select(Lead.owner_person_id, func.max(Lead.assigned_at))
                     .where(Lead.tenant_id == self.tenant_id, Lead.owner_person_id.is_not(None))
                     .group_by(Lead.owner_person_id)
                 )
-            ).all()
+            )
+            .tuples()
+            .all()
         )
         reps: list[_Rep] = []
         for person_id, role, person in members:
@@ -299,15 +305,16 @@ class LeadDesk:
         return lead
 
     async def _command_seen(self, command_id: UUID) -> LeadEvent | None:
-        return await self.db.scalar(
+        seen: LeadEvent | None = await self.db.scalar(
             select(LeadEvent).where(
                 LeadEvent.tenant_id == self.tenant_id, LeadEvent.command_id == command_id
             )
         )
+        return seen
 
     # ----- rows ------------------------------------------------------------------
 
-    def _why(self, lead: Lead, day_end: datetime) -> tuple[str, str]:
+    def _why(self, lead: Lead, day_end: datetime) -> tuple[WhyKind, str]:
         source = lead.source_label or SOURCE_LABELS.get(lead.source, lead.source)
         if lead.stage in CLOSED_STAGES:
             return "closed", STAGE_LABELS[lead.stage]
@@ -353,7 +360,7 @@ class LeadDesk:
             owner_person_id=lead.owner_person_id,
             owner_name=names.get(lead.owner_person_id) if lead.owner_person_id else None,
             why=why,
-            why_kind=kind,  # type: ignore[arg-type]
+            why_kind=kind,
             next_action_at=lead.next_action_at,
             created_at=lead.created_at,
             attempts=lead.attempts,
@@ -570,10 +577,8 @@ class LeadDesk:
             for key in ("to", "from"):
                 value = event.data.get(key)
                 if isinstance(value, str):
-                    try:
+                    with contextlib.suppress(ValueError):
                         people.add(UUID(value))
-                    except ValueError:
-                        pass
         names = await self._names(people)
         day_end = self._day_start() + timedelta(days=1)
         can_edit = self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id
@@ -1197,7 +1202,7 @@ class LeadDesk:
         self._require_manager()
         reps = await self._reps()
         day_start = self._day_start()
-        due = dict(
+        due: dict[UUID | None, int] = dict(
             (
                 await self.db.execute(
                     select(Lead.owner_person_id, func.count())
@@ -1208,7 +1213,9 @@ class LeadDesk:
                     )
                     .group_by(Lead.owner_person_id)
                 )
-            ).all()
+            )
+            .tuples()
+            .all()
         )
         activity = (
             await self.db.execute(
@@ -1229,23 +1236,27 @@ class LeadDesk:
             calls[actor] = calls.get(actor, 0) + 1
             if isinstance(data, dict) and data.get("connected"):
                 connected[actor] = connected.get(actor, 0) + 1
-        by_stage = dict(
+        by_stage: dict[str, int] = dict(
             (
                 await self.db.execute(
                     select(Lead.stage, func.count())
                     .where(Lead.tenant_id == self.tenant_id)
                     .group_by(Lead.stage)
                 )
-            ).all()
+            )
+            .tuples()
+            .all()
         )
-        by_source = dict(
+        by_source: dict[str, int] = dict(
             (
                 await self.db.execute(
                     select(Lead.source, func.count())
                     .where(Lead.tenant_id == self.tenant_id)
                     .group_by(Lead.source)
                 )
-            ).all()
+            )
+            .tuples()
+            .all()
         )
         unassigned = int(
             await self.db.scalar(

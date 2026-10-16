@@ -57,7 +57,8 @@ def token_hash(token: str) -> str:
 
 
 def _result(outcomes: list[str], desk_leads: list[Lead | None]) -> ImportResult:
-    created = [lead for lead, outcome in zip(desk_leads, outcomes) if outcome == "created"]
+    pairs = zip(desk_leads, outcomes, strict=True)
+    created = [lead for lead, outcome in pairs if outcome == "created"]
     return ImportResult(
         created=len(created),
         repeats=outcomes.count("repeat") + outcomes.count("known"),
@@ -146,7 +147,7 @@ class Intake:
     def _view(self, source: LeadSource, token: str | None = None) -> SourceView:
         return SourceView(
             source_id=source.id,
-            kind=source.kind,  # type: ignore[arg-type]
+            kind=source.kind,
             label=source.label,
             active=source.active,
             received=source.received,
@@ -284,33 +285,35 @@ class Intake:
     @staticmethod
     async def _fetch_sheet(url: str) -> bytes:
         try:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-                async with client.stream("GET", url) as response:
-                    host = response.url.host or ""
-                    if not (host == "docs.google.com" or host.endswith(".googleusercontent.com")):
-                        raise DeskError(422, "Google sent the sheet from an unexpected place.")
-                    if response.status_code in {401, 403, 404} or "accounts.google" in str(
-                        response.url
-                    ):
-                        raise DeskError(
-                            422,
-                            "Sales Xray can't open this sheet. In Google Sheets, choose Share → "
-                            "General access → Anyone with the link (Viewer), then sync again.",
-                        )
-                    if response.status_code != 200:
-                        raise DeskError(502, "Google Sheets didn't answer. Try again in a minute.")
-                    body = bytearray()
-                    async for chunk in response.aiter_bytes():
-                        body.extend(chunk)
-                        if len(body) > MAX_FILE_BYTES:
-                            raise DeskError(413, "The sheet is too big to sync (900 KB at most).")
-                    if body.lstrip()[:15].lower().startswith(b"<!doctype html"):
-                        raise DeskError(
-                            422,
-                            "Sales Xray can't open this sheet. Share it as 'Anyone with the "
-                            "link (Viewer)', then sync again.",
-                        )
-                    return bytes(body)
+            async with (
+                httpx.AsyncClient(timeout=15, follow_redirects=True) as client,
+                client.stream("GET", url) as response,
+            ):
+                host = response.url.host or ""
+                if not (host == "docs.google.com" or host.endswith(".googleusercontent.com")):
+                    raise DeskError(422, "Google sent the sheet from an unexpected place.")
+                if response.status_code in {401, 403, 404} or "accounts.google" in str(
+                    response.url
+                ):
+                    raise DeskError(
+                        422,
+                        "Sales Xray can't open this sheet. In Google Sheets, choose Share → "
+                        "General access → Anyone with the link (Viewer), then sync again.",
+                    )
+                if response.status_code != 200:
+                    raise DeskError(502, "Google Sheets didn't answer. Try again in a minute.")
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    body.extend(chunk)
+                    if len(body) > MAX_FILE_BYTES:
+                        raise DeskError(413, "The sheet is too big to sync (900 KB at most).")
+                if body.lstrip()[:15].lower().startswith(b"<!doctype html"):
+                    raise DeskError(
+                        422,
+                        "Sales Xray can't open this sheet. Share it as 'Anyone with the "
+                        "link (Viewer)', then sync again.",
+                    )
+                return bytes(body)
         except httpx.HTTPError:
             raise DeskError(502, "Google Sheets didn't answer. Try again in a minute.") from None
 
@@ -523,7 +526,8 @@ class Intake:
         )
         for record in people:
             payload = record.payload if isinstance(record.payload, dict) else {}
-            fields = payload.get("fields") if isinstance(payload.get("fields"), dict) else {}
+            raw_fields = payload.get("fields")
+            fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
             if "manager" in (payload.get("duties") or []):
                 continue
             person_id = uuid5(SANDBOX_PEOPLE, f"{self.tenant_id}:person:{record.synthetic_key}")
