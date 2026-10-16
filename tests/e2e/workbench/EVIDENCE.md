@@ -2004,3 +2004,27 @@ this pass establishes fictional rendering only.
 
 Log, four receipts, source pins and screenshots:
 `/home/acdev/strikes/1694/shots/2026-10-16-report-api-repair/`.
+
+
+### Explicit Report Document/Details links — 2026-10-16 08:33 UTC
+
+Product `2c5e9b75`; QA `73d72cdc`, phone capture `a636f7cb`, readiness
+`d551b3ba`. Shared3026 `fixture_report_explicit_views`: initial **4/4 PASS**
+84.89s/exit0; retained desktop2 plus phone content retake **2/2 PASS**45.01s/exit0.
+Document and Details open by URL; native Enter on Report restores the new three
+parts/27 pointers, preserving example/call binding. Six Document chapters and
+Word control present. Document controls >=32/44px; Report90x32/70x44, reachable.
+No runtime/server/font/overflow errors, media, writes or live refreshes.
+API reads are intercepted fictional replies only; source hashes unchanged.
+All12 final screenshots inspected (desktop6 from original wave, phone6 from
+`phone-content-final/`); original12 and the one failed readiness capture also
+inspected/retained. Initial phone captures showed only the upper shell;
+retake positions show the requested Document/Details content. First retake
+stopped at the helper's default5s view wait; final uses the journey's15s wait.
+No product defect was established. Ruff/format/API import/diff checks pass.
+Review fixtures retain their demo menus: production-menu removal and saved
+preferences are not browser-certified here. Owner-held real-call session is
+still unavailable; no real-call, scoring-quality, provider or ship claim.
+
+Receipts/logs/source pins/screens:
+`/home/acdev/strikes/1694/shots/2026-10-16-report-explicit-views/`.
