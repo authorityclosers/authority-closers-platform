@@ -125,6 +125,23 @@ def content_ref(record: Mapping[str, Any]) -> str:
     return "h:" + hashlib.sha256(encoded.encode()).hexdigest()[:40]
 
 
+def first_call_minutes(created_at: datetime, first_contact_at: datetime | None) -> int | None:
+    """Speed to lead: whole minutes from the lead arriving to its first call."""
+    if first_contact_at is None:
+        return None
+    return max(0, round((first_contact_at - created_at).total_seconds() / 60))
+
+
+def median(values: Sequence[int]) -> int | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return round((ordered[middle - 1] + ordered[middle]) / 2)
+
+
 def _strings(values: Any) -> tuple[str, ...]:
     if not isinstance(values, list):
         return ()
@@ -594,6 +611,7 @@ class LeadDesk:
             can_assign=self.viewer.can_manage,
             reps=reps,
             call_mode=self.call_mode,
+            first_call_minutes=first_call_minutes(lead.created_at, lead.first_contact_at),
         )
 
     @staticmethod
@@ -1171,6 +1189,26 @@ class LeadDesk:
             )
             or 0
         )
+        speed_rows = (
+            await self.db.execute(
+                select(Lead.owner_person_id, Lead.created_at, Lead.first_contact_at)
+                .where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.first_contact_at.is_not(None),
+                    Lead.created_at >= self.now - timedelta(days=7),
+                )
+                .limit(20000)
+            )
+        ).all()
+        speeds: dict[UUID, list[int]] = {}
+        everyone: list[int] = []
+        for owner, created, first in speed_rows:
+            minutes = first_call_minutes(created, first)
+            if minutes is None:
+                continue
+            everyone.append(minutes)
+            if owner is not None:
+                speeds.setdefault(owner, []).append(minutes)
         revision, config = await self.settings()
         return Team(
             reps=tuple(
@@ -1188,6 +1226,7 @@ class LeadDesk:
                     due_now=int(due.get(rep.state.person_id, 0)),
                     calls_today=calls.get(rep.state.person_id, 0),
                     connected_today=connected.get(rep.state.person_id, 0),
+                    first_call_minutes=median(speeds.get(rep.state.person_id, [])),
                 )
                 for rep in reps
             ),
@@ -1201,6 +1240,7 @@ class LeadDesk:
             by_source={source: int(count) for source, count in by_source.items()},
             unassigned=unassigned,
             waiting_first_call=waiting,
+            first_call_minutes=median(everyone),
         )
 
     async def save_rep(self, person_id: UUID, command: RepRules) -> Team:

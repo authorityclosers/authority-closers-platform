@@ -13,6 +13,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
 import {
+  ago,
   CONNECTED_STAGES,
   dispose,
   LeadsError,
@@ -696,6 +697,11 @@ function LeadCard({
         <span>
           {lead.owner_name ? `With ${lead.owner_name}` : "No owner yet"}
           {detail.owner_reason ? <small>{detail.owner_reason}</small> : null}
+          <small>
+            {detail.first_call_minutes != null
+              ? `First call ${detail.first_call_minutes} min after it came in`
+              : `Not called yet · came in ${ago(lead.created_at)}`}
+          </small>
         </span>
         {detail.can_assign ? (
           <span className={styles.ownerControls}>

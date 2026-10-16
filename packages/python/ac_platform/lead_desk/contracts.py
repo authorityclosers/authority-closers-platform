@@ -141,6 +141,7 @@ class LeadDetail(Model):
     can_assign: bool
     reps: tuple[RepOption, ...]
     call_mode: Literal["simulated", "phone"]
+    first_call_minutes: int | None = None
 
 
 class RepView(Model):
@@ -157,6 +158,7 @@ class RepView(Model):
     due_now: int
     calls_today: int
     connected_today: int
+    first_call_minutes: int | None = None
 
 
 class SettingsView(Model):
@@ -174,6 +176,7 @@ class Team(Model):
     by_source: dict[str, int]
     unassigned: int
     waiting_first_call: int
+    first_call_minutes: int | None = None
 
 
 class ImportPreview(Model):

@@ -121,6 +121,7 @@ export type LeadDetail = {
     available: boolean;
   }[];
   call_mode: "simulated" | "phone";
+  first_call_minutes?: number | null;
 };
 
 export type LeadPage = {
@@ -143,6 +144,7 @@ export type RepView = {
   due_now: number;
   calls_today: number;
   connected_today: number;
+  first_call_minutes?: number | null;
 };
 
 export type Team = {
@@ -157,6 +159,7 @@ export type Team = {
   by_source: Record<string, number>;
   unassigned: number;
   waiting_first_call: number;
+  first_call_minutes?: number | null;
 };
 
 export type ImportPreview = {

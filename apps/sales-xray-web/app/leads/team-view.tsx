@@ -292,7 +292,12 @@ export function TeamView({
           note="Nobody fit the rules"
         />
         <Kpi label="Won" tone="good" value={team.by_stage.won ?? 0} />
-        <Kpi label="Lost" value={team.by_stage.lost ?? 0} />
+        <Kpi
+          label="First call"
+          value={team.first_call_minutes ?? "–"}
+          unit={team.first_call_minutes != null ? "min" : undefined}
+          note="Median time to first call, last 7 days"
+        />
       </Tiles>
 
       <Panel title="Sellers" sub={`${team.reps.length}`}>
@@ -306,6 +311,7 @@ export function TeamView({
                 <th data-num>Due now</th>
                 <th data-num>Calls today</th>
                 <th data-num>Connected</th>
+                <th data-num>First call</th>
                 <th>Rules (click a name to change)</th>
               </tr>
             </thead>
@@ -338,6 +344,11 @@ export function TeamView({
                   <td data-num>{rep.due_now}</td>
                   <td data-num>{rep.calls_today}</td>
                   <td data-num>{rep.connected_today}</td>
+                  <td data-num>
+                    {rep.first_call_minutes != null
+                      ? `${rep.first_call_minutes} min`
+                      : "–"}
+                  </td>
                   <td className={styles.rules}>
                     {[...rep.languages, ...rep.areas, ...rep.interests].length
                       ? [
