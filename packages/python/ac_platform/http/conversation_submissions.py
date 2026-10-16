@@ -26,6 +26,7 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
+from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.acquisition_activity import (
     account_activity,
     organisation_acquisition_activity,
@@ -1050,13 +1051,18 @@ def install_submission_http(
         report_language = await quote_language_preference(request)
         if runtime.authority is None:
             raise fail(409, "Your recording is private. Provider analysis is not enabled yet.")
-        scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        # Organisation owners/admins may start a member's call (owner, 16 Oct).
+        scope = await owner.ownership.require_submission_owner(
+            submission_id, **owner.arguments, allow_organisation_start=True
+        )
         if not scope.claimed_account:
             raise fail(403, "Claim this saved call with the same AC account before processing it.")
         continuation_grant_id = await owner.ownership.ensure_processing_continuation(
-            submission_id, key=key, **owner.arguments
+            submission_id, key=key, **owner.arguments, allow_organisation_start=True
         )
-        actor = await owner.ownership.resolve_processing_actor(submission_id, **owner.arguments)
+        actor = await owner.ownership.resolve_processing_actor(
+            submission_id, **owner.arguments, allow_organisation_start=True
+        )
         return await ConversationProcessingPlans(
             ConversationApplication(owner.ownership.database), runtime.authority, runtime.storage
         ).quote(
@@ -1072,7 +1078,9 @@ def install_submission_http(
         submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
-        scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        scope = await owner.ownership.require_submission_owner(
+            submission_id, **owner.arguments, allow_organisation_read=True
+        )
         try:
             return await ConversationProcessingPlans.latest_submission_view(
                 owner.ownership.database,
@@ -1110,16 +1118,36 @@ def install_submission_http(
             raise fail(408, "The analysis approval was interrupted. Try again.") from None
         if runtime.authority is None:
             raise fail(409, "Provider analysis is not enabled for this upload yet.")
-        scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        scope = await owner.ownership.require_submission_owner(
+            submission_id, **owner.arguments, allow_organisation_start=True
+        )
         if not scope.claimed_account:
             raise fail(403, "Claim this saved call with the same AC account before processing it.")
         await owner.ownership.ensure_processing_continuation(
-            submission_id, key=key, **owner.arguments
+            submission_id, key=key, **owner.arguments, allow_organisation_start=True
         )
-        actor = await owner.ownership.resolve_processing_actor(submission_id, **owner.arguments)
-        return await ConversationProcessingPlans(
+        actor = await owner.ownership.resolve_processing_actor(
+            submission_id, **owner.arguments, allow_organisation_start=True
+        )
+        accepted = await ConversationProcessingPlans(
             ConversationApplication(owner.ownership.database), runtime.authority, runtime.storage
         ).accept(actor, scope.recording_id, payload, key=key)
+        call_owner = await owner.ownership.call_owner_person_id(submission_id)
+        if owner.actor is not None and call_owner != owner.actor.person_id:
+            # Every start on someone else's call names who started it, for whose call.
+            await AuditRepository(owner.ownership.database).append(
+                tenant_id=owner.ownership.tenant_id,
+                actor_person_id=owner.actor.person_id,
+                session_id=owner.actor.session_id,
+                action="conversation.organisation_analysis_started",
+                resource_type="conversation_submission",
+                resource_id=submission_id,
+                payload={
+                    "call_owner_person_id": None if call_owner is None else str(call_owner),
+                    "plan_id": str(accepted.get("id")),
+                },
+            )
+        return accepted
 
     @router.post("/submissions/{submission_id}/c5-benchmark/quote", status_code=201)
     async def quote_acquisition_c5_benchmark(

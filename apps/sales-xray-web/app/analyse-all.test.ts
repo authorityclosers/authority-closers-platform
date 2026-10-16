@@ -64,6 +64,27 @@ const posts = (suffix: string) =>
 const pacing = { pollMs: 1, maxWaitMs: 50 };
 
 describe("Analyse all not-analysed calls", () => {
+  it("lets an organisation owner or admin include members' calls (16 Oct)", async () => {
+    routes = (path) =>
+      path.endsWith("order=reports_first")
+        ? response({
+            submissions: [
+              { submission_id: two, state: "ready", has_report: false },
+              {
+                submission_id: three,
+                state: "ready",
+                has_report: false,
+                owner_person_id: "a-member",
+              },
+            ],
+            next_cursor: null,
+          })
+        : null;
+    const signal = new AbortController().signal;
+    expect(await notAnalysedCalls("me", signal)).toEqual([two]);
+    expect(await notAnalysedCalls("me", signal, true)).toEqual([two, three]);
+  });
+
   it("collects only the viewer's never-analysed calls across every page", async () => {
     routes = (path) =>
       path.endsWith("order=reports_first")

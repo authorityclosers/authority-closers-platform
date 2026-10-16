@@ -38,9 +38,12 @@ const plural = (count: number, one: string, many = `${one}s`) =>
  */
 export function AnalyseAllControl({
   viewerId,
+  everyone = false,
   onFinished,
 }: {
   viewerId: string | null;
+  /** The viewer runs this organisation: members' calls are included. */
+  everyone?: boolean;
   /** Re-read the list once the run ends, so rows show their new status. */
   onFinished: () => void;
 }) {
@@ -55,7 +58,7 @@ export function AnalyseAllControl({
     run.current = controller;
     setStep({ kind: "checking", checked: 0, total: 0 });
     try {
-      const ids = await notAnalysedCalls(viewerId, controller.signal);
+      const ids = await notAnalysedCalls(viewerId, controller.signal, everyone);
       setStep({ kind: "checking", checked: 0, total: ids.length });
       const preparation = await prepareAnalyseAll(
         ids,
