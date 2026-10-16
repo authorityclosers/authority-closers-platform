@@ -6,6 +6,8 @@ Start calling serves it, and NeoDove's dispose screen moves it on. Managers
 alone see the team; a website form posts with its own key; files import.
 """
 
+import io
+import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -50,6 +52,30 @@ async def _organisation(setup: Any) -> None:
         )
     settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
     install_lead_desk_http(setup.app, RouteContext(settings, setup.require_actor, setup.sessions))
+
+
+def _far_column_xlsx() -> bytes:
+    """A <1 KB workbook whose one cell claims column ZZZZZZ (AUT-2029's probe)."""
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    rel = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "xl/workbook.xml",
+            f'<workbook {ns} {rel}><sheets><sheet name="L" sheetId="1" r:id="rId1"/></sheets>'
+            "</workbook>",
+        )
+        archive.writestr(
+            "xl/_rels/workbook.xml.rels",
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+        )
+        archive.writestr(
+            "xl/worksheets/sheet1.xml",
+            f'<worksheet {ns}><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Name</t>'
+            '</is></c></row><row r="2"><c r="ZZZZZZ2"><v>1</v></c></row></sheetData></worksheet>',
+        )
+    return buffer.getvalue()
 
 
 def test_a_sellers_day_on_the_desk(postgres_harness: Any, tmp_path: Path) -> None:
@@ -285,6 +311,14 @@ def test_website_form_and_file_capture(postgres_harness: Any, tmp_path: Path) ->
                 assert preview.status_code == 200, preview.text
                 shown = preview.json()
                 assert shown["total_rows"] == 2 and shown["mapping"]["phone"] == "Mobile No"
+                # AUT-2029: a cell far to the right is refused, never expanded into a row.
+                far = await client.post(
+                    f"{BASE}/imports/preview",
+                    content=_far_column_xlsx(),
+                    headers={"Origin": ORIGIN, "X-File-Name": "far.xlsx"},
+                )
+                assert far.status_code == 422, far.text
+                assert "more than 200 columns" in far.json()["detail"]
                 done = await client.post(
                     f"{BASE}/imports",
                     json={
@@ -408,6 +442,30 @@ def test_edit_details_and_notes_keep_history(postgres_harness: Any, tmp_path: Pa
                     "kind": "note",
                     "note": "Prefers WhatsApp after 6 pm",
                 }
+                # A call from the seller's own phone is logged; nothing is simulated.
+                assert noted.json()["call_mode"] == "phone"
+                called = await client.post(
+                    f"{BASE}/leads/{lead_id}/calls/phone",
+                    json={"command_id": str(uuid4()), "duration_seconds": 95},
+                    headers=WRITE,
+                )
+                assert called.status_code == 200, called.text
+                call = called.json()["events"][0]
+                assert call["kind"] == "call" and call["simulated"] is False
+                assert call["duration_seconds"] == 95
+                assert called.json()["lead"]["revision"] > noted.json()["lead"]["revision"]
+                # Its recording, uploaded afterwards, joins the lead without a second call.
+                recording = str(uuid4())
+                attached = await client.post(
+                    f"{BASE}/leads/{lead_id}/recordings",
+                    json={"command_id": str(uuid4()), "submission_id": recording},
+                    headers=WRITE,
+                )
+                assert attached.status_code == 200, attached.text
+                event = attached.json()["events"][0]
+                assert event["kind"] == "call" and event["recording"] is True
+                assert event["submission_id"] == recording
+                assert attached.json()["lead"]["calls"] == called.json()["lead"]["calls"]
         finally:
             await setup.engine.dispose()
 

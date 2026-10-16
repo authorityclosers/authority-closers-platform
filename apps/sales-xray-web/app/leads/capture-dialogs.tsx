@@ -1,29 +1,117 @@
 "use client";
 
 /**
- * Add one lead by hand (NeoDove's "Walk-In Lead"), or import a CSV/Excel
- * file: preview, match columns, then import. Repeat phone numbers join their
- * existing lead instead of making a second one.
+ * Adding leads: one "Add leads" menu with the ways people actually have
+ * them — type one in (pasting a WhatsApp message fills the form), pick from
+ * the phone's contacts, upload a list, or connect Facebook. Repeat phone
+ * numbers join their existing lead instead of making a second one.
  *
  * The page gives each opening a new key, so every dialog starts empty.
  */
 
-import { FileSpreadsheet } from "lucide-react";
-import { useRef, useState } from "react";
+import {
+  ClipboardPaste,
+  Contact,
+  FileSpreadsheet,
+  Keyboard,
+  Megaphone,
+} from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { Button, Dialog, Field, Segmented } from "../ui/kit";
 import {
   addLead,
   commandId,
   commitImport,
+  contactsSupported,
   FIELD_LABELS,
   LeadsError,
+  parseContactText,
   previewImport,
+  SAMPLE_CSV,
   type ImportPreview,
   type ImportResult,
   type NewLead,
+  type PickedContact,
+  type SharedLead,
 } from "./leads-client";
 import styles from "./leads.module.css";
+
+export type AddWay = "type" | "contacts" | "file" | "sources";
+
+function WayButton({
+  icon,
+  title,
+  text,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  text: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className={styles.wayButton} onClick={onClick}>
+      <span className={styles.wayIcon} aria-hidden="true">
+        {icon}
+      </span>
+      <span>
+        <strong>{title}</strong>
+        <small>{text}</small>
+      </span>
+    </button>
+  );
+}
+
+export function AddLeadsMenu({
+  open,
+  canManage,
+  onClose,
+  onPick,
+}: {
+  open: boolean;
+  canManage: boolean;
+  onClose: () => void;
+  onPick: (way: AddWay) => void;
+}) {
+  const contacts = contactsSupported();
+  return (
+    <Dialog open={open} title="Add leads" onClose={onClose}>
+      <div className={styles.ways}>
+        <WayButton
+          icon={<Keyboard size={22} />}
+          title="Type one in"
+          text="Or paste a WhatsApp message and we fill it in"
+          onClick={() => onPick("type")}
+        />
+        {contacts ? (
+          <WayButton
+            icon={<Contact size={22} />}
+            title="From your phone's contacts"
+            text="Pick one or many people you already have"
+            onClick={() => onPick("contacts")}
+          />
+        ) : null}
+        {canManage ? (
+          <WayButton
+            icon={<FileSpreadsheet size={22} />}
+            title="Upload a list"
+            text="Excel or CSV, up to 2,000 leads at once"
+            onClick={() => onPick("file")}
+          />
+        ) : null}
+        {canManage ? (
+          <WayButton
+            icon={<Megaphone size={22} />}
+            title="From your ads"
+            text="Connect Facebook and Instagram lead forms"
+            onClick={() => onPick("sources")}
+          />
+        ) : null}
+      </div>
+    </Dialog>
+  );
+}
 
 const EMPTY = {
   name: "",
@@ -42,17 +130,25 @@ export function AddLeadDialog({
   canManage,
   onClose,
   onAdded,
+  initial = null,
 }: {
   open: boolean;
   canManage: boolean;
   onClose: () => void;
   onAdded: (leadId: string) => void;
+  /** Details handed over by the Chrome extension; the person still checks and adds. */
+  initial?: SharedLead | null;
 }) {
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState(() =>
+    initial ? { ...EMPTY, ...initial } : EMPTY,
+  );
   const [source, setSource] = useState<"manual" | "referral">("manual");
   const [assign, setAssign] = useState<"rules" | "me">(
     canManage ? "rules" : "me",
   );
+  const [more, setMore] = useState(Boolean(initial?.email || initial?.note));
+  const [paste, setPaste] = useState("");
+  const [pasteNote, setPasteNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const command = useRef(commandId());
@@ -60,6 +156,23 @@ export function AddLeadDialog({
   const set =
     (key: keyof typeof EMPTY) => (event: { target: { value: string } }) =>
       setForm((current) => ({ ...current, [key]: event.target.value }));
+
+  const fillFrom = (text: string) => {
+    const found = parseContactText(text);
+    const filled = Object.entries(found).filter(([, value]) => value);
+    if (!filled.length) {
+      setPasteNote("No name, phone or email found in that text.");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      name: found.name ?? current.name,
+      phone: found.phone ?? current.phone,
+      email: found.email ?? current.email,
+    }));
+    if (found.email) setMore(true);
+    setPasteNote(`Filled in ${filled.map(([key]) => key).join(", ")}.`);
+  };
 
   const save = async () => {
     if (!form.name.trim() && !form.phone.trim()) {
@@ -91,7 +204,6 @@ export function AddLeadDialog({
     <Dialog
       open={open}
       title="Add a lead"
-      description="If this phone number is already a lead, it joins that lead as asked again."
       onClose={onClose}
       actions={
         <>
@@ -103,15 +215,37 @@ export function AddLeadDialog({
       }
     >
       <div className={styles.form}>
-        <Segmented
-          label="Where it came from"
-          value={source}
-          onChange={setSource}
-          items={[
-            { key: "manual", label: "Walk-in or call" },
-            { key: "referral", label: "Referral" },
-          ]}
-        />
+        {initial ? (
+          <p className={styles.hint} role="status">
+            From the Sales Xray extension. Check the details, then add the lead.
+          </p>
+        ) : null}
+        <div className={styles.pasteBox}>
+          <textarea
+            aria-label="Paste a contact or message"
+            rows={2}
+            value={paste}
+            maxLength={2000}
+            placeholder="Paste a WhatsApp message or contact card here"
+            onChange={(event) => {
+              setPaste(event.target.value);
+              setPasteNote(null);
+            }}
+            onPaste={(event) => {
+              const text = event.clipboardData.getData("text");
+              if (text) window.setTimeout(() => fillFrom(text), 0);
+            }}
+          />
+          <Button onClick={() => fillFrom(paste)} disabled={!paste.trim()}>
+            <ClipboardPaste size={14} aria-hidden="true" />
+            Fill in
+          </Button>
+          {pasteNote ? (
+            <p className={styles.hint} role="status">
+              {pasteNote}
+            </p>
+          ) : null}
+        </div>
         <div className={styles.formGrid}>
           <Field label="Name">
             <input
@@ -126,26 +260,9 @@ export function AddLeadDialog({
               value={form.phone}
               maxLength={40}
               inputMode="tel"
+              placeholder="98765 43210"
               onChange={set("phone")}
               autoComplete="off"
-            />
-          </Field>
-          <Field label="Company">
-            <input
-              value={form.company}
-              maxLength={200}
-              onChange={set("company")}
-            />
-          </Field>
-          <Field label="City">
-            <input value={form.city} maxLength={120} onChange={set("city")} />
-          </Field>
-          <Field label="Language">
-            <input
-              value={form.language}
-              maxLength={40}
-              placeholder="Hindi"
-              onChange={set("language")}
             />
           </Field>
           <Field label="Interested in">
@@ -155,27 +272,73 @@ export function AddLeadDialog({
               onChange={set("interest")}
             />
           </Field>
-          <Field label="Email">
-            <input
-              value={form.email}
-              maxLength={320}
-              inputMode="email"
-              onChange={set("email")}
-            />
+          <Field label="City">
+            <input value={form.city} maxLength={120} onChange={set("city")} />
           </Field>
-          {source === "referral" ? (
-            <Field label="Referred by">
+        </div>
+        {more ? (
+          <div className={styles.formGrid}>
+            <Field label="Email">
               <input
-                value={form.referred_by}
-                maxLength={200}
-                onChange={set("referred_by")}
+                value={form.email}
+                maxLength={320}
+                inputMode="email"
+                onChange={set("email")}
               />
             </Field>
-          ) : null}
-        </div>
-        <Field label="Note" wide>
-          <textarea value={form.note} maxLength={1000} onChange={set("note")} />
-        </Field>
+            <Field label="Company">
+              <input
+                value={form.company}
+                maxLength={200}
+                onChange={set("company")}
+              />
+            </Field>
+            <Field label="Language">
+              <input
+                value={form.language}
+                maxLength={40}
+                placeholder="Hindi"
+                onChange={set("language")}
+              />
+            </Field>
+            {source === "referral" ? (
+              <Field label="Referred by">
+                <input
+                  value={form.referred_by}
+                  maxLength={200}
+                  onChange={set("referred_by")}
+                />
+              </Field>
+            ) : null}
+            <Field label="Note" wide>
+              <textarea
+                value={form.note}
+                maxLength={1000}
+                onChange={set("note")}
+              />
+            </Field>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className={styles.linkButton}
+            onClick={() => setMore(true)}
+          >
+            More details (email, company, language, note)
+          </button>
+        )}
+        <Segmented
+          label="Where it came from"
+          value={source}
+          onChange={(value) => {
+            setSource(value);
+            if (value === "referral") setMore(true);
+          }}
+          items={[
+            { key: "manual", label: "Walk-in or call" },
+            { key: "referral", label: "Referral" },
+          ]}
+        />
         {canManage ? (
           <Segmented
             label="Who gets it"
@@ -189,12 +352,144 @@ export function AddLeadDialog({
         ) : (
           <p className={styles.hint}>It goes on your desk.</p>
         )}
+        <p className={styles.hint}>
+          Same phone number as an existing lead? It joins that lead instead of
+          making a second one.
+        </p>
         {error ? (
           <p className={styles.error} role="alert">
             {error}
           </p>
         ) : null}
       </div>
+    </Dialog>
+  );
+}
+
+export function ContactsDialog({
+  open,
+  picked,
+  canManage,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  picked: PickedContact[];
+  canManage: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [chosen, setChosen] = useState(() => picked.map(() => true));
+  const [assign, setAssign] = useState<"rules" | "me">(
+    canManage ? "rules" : "me",
+  );
+  const [busy, setBusy] = useState(false);
+  const [added, setAdded] = useState<number | null>(null);
+  const [failed, setFailed] = useState<string[]>([]);
+  const count = chosen.filter(Boolean).length;
+
+  const run = async () => {
+    setBusy(true);
+    const misses: string[] = [];
+    let made = 0;
+    for (const [index, person] of picked.entries()) {
+      if (!chosen[index]) continue;
+      try {
+        await addLead({
+          ...EMPTY,
+          name: person.name || person.phone,
+          phone: person.phone,
+          email: person.email ?? "",
+          source: "manual",
+          assign,
+        });
+        made += 1;
+      } catch {
+        misses.push(person.name || person.phone);
+      }
+    }
+    setAdded(made);
+    setFailed(misses);
+    setBusy(false);
+    onDone();
+  };
+
+  return (
+    <Dialog
+      open={open}
+      title={added === null ? "Add from your contacts" : "Added"}
+      onClose={onClose}
+      actions={
+        added === null ? (
+          <>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button
+              variant="primary"
+              onClick={run}
+              disabled={busy || count === 0}
+            >
+              {busy ? "Adding…" : `Add ${count} lead${count === 1 ? "" : "s"}`}
+            </Button>
+          </>
+        ) : (
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        )
+      }
+    >
+      {added === null ? (
+        <div className={styles.form}>
+          <ul className={styles.pickList} aria-label="Contacts">
+            {picked.map((person, index) => (
+              <li key={`${person.phone}-${index}`}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={chosen[index]}
+                    onChange={(event) =>
+                      setChosen((current) =>
+                        current.map((value, at) =>
+                          at === index ? event.target.checked : value,
+                        ),
+                      )
+                    }
+                  />
+                  <span>
+                    <strong>{person.name || "No name"}</strong>
+                    <small>{person.phone || "No phone number"}</small>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          {canManage ? (
+            <Segmented
+              label="Who gets them"
+              value={assign}
+              onChange={setAssign}
+              items={[
+                { key: "rules", label: "Best fit by the rules" },
+                { key: "me", label: "Me" },
+              ]}
+            />
+          ) : (
+            <p className={styles.hint}>They go on your desk.</p>
+          )}
+        </div>
+      ) : (
+        <div className={styles.form}>
+          <p>
+            {added} lead{added === 1 ? "" : "s"} added. Anyone already a lead
+            joined their existing lead.
+          </p>
+          {failed.length ? (
+            <p className={styles.error} role="alert">
+              Not added: {failed.join(", ")}.
+            </p>
+          ) : null}
+        </div>
+      )}
     </Dialog>
   );
 }
@@ -275,7 +570,7 @@ export function ImportDialog({
     <Dialog
       open={open}
       title="Import leads"
-      description="A CSV or Excel (.xlsx) file with a header row, up to 2,000 leads. Every column is kept on the lead."
+      description="Excel (.xlsx) or CSV with a header row, up to 2,000 leads. We match the columns for you, and every column is kept on the lead."
       onClose={onClose}
       actions={
         result ? (
@@ -323,18 +618,36 @@ export function ImportDialog({
             ) : null}
           </dl>
         ) : !preview ? (
-          <label className={styles.drop}>
-            <FileSpreadsheet size={20} aria-hidden="true" />
-            <span>
-              {busy ? "Reading the file…" : "Choose a .csv or .xlsx file"}
-            </span>
-            <input
-              type="file"
-              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              disabled={busy}
-              onChange={(event) => void pick(event.target.files?.[0])}
-            />
-          </label>
+          <>
+            <label
+              className={styles.drop}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                void pick(event.dataTransfer.files?.[0]);
+              }}
+            >
+              <FileSpreadsheet size={20} aria-hidden="true" />
+              <span>
+                {busy
+                  ? "Reading the file…"
+                  : "Drop a file here, or tap to choose one"}
+              </span>
+              <input
+                type="file"
+                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                disabled={busy}
+                onChange={(event) => void pick(event.target.files?.[0])}
+              />
+            </label>
+            <a
+              className={styles.linkButton}
+              href={`data:text/csv;charset=utf-8,${encodeURIComponent(SAMPLE_CSV)}`}
+              download="sales-xray-leads-sample.csv"
+            >
+              Download a sample file
+            </a>
+          </>
         ) : (
           <>
             <p className={styles.hint}>

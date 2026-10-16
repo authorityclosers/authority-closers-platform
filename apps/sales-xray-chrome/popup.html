@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sales Xray</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon-48.png" alt="" width="28" height="28" />
+      <h1>Sales Xray</h1>
+      <button type="button" id="desk" class="link">Open my desk</button>
+    </header>
+
+    <form id="add">
+      <label for="paste">Paste a contact or chat message</label>
+      <textarea
+        id="paste"
+        rows="3"
+        maxlength="2000"
+        placeholder="Asha Patil&#10;+91 98765 43210"
+      ></textarea>
+      <div class="row">
+        <label
+          >Name <input id="name" autocomplete="off" maxlength="200"
+        /></label>
+        <label
+          >Phone <input id="phone" autocomplete="off" maxlength="40"
+        /></label>
+      </div>
+      <button type="submit" id="go">Add to Sales Xray</button>
+      <p class="hint">
+        Sales Xray opens with Add lead filled in. Check it, then tap Add lead.
+      </p>
+    </form>
+
+    <section>
+      <label class="switch">
+        <input type="checkbox" id="whatsapp" />
+        <span
+          >Button on WhatsApp Web chats
+          <small>Asks to use web.whatsapp.com, once</small></span
+        >
+      </label>
+      <label class="site"
+        >Sales Xray site
+        <select id="site">
+          <option value="live">Sales Xray</option>
+          <option value="dev">Dev (testing)</option>
+        </select>
+      </label>
+      <p class="hint">
+        Tip: select a name or number on any page, right-click, and choose Add to
+        Sales Xray. Nothing leaves your browser until you add the lead.
+      </p>
+    </section>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

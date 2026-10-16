@@ -44,7 +44,9 @@ from ac_platform.lead_desk.contracts import (
     NewLead,
     NewSource,
     NoteCommand,
+    PhoneCall,
     Reassign,
+    RecordingCommand,
     RepRules,
     SeedCommand,
     SettingsCommand,
@@ -145,9 +147,10 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                         role=row[0],
                         name=person_name(row[1]),
                     ),
-                    # Real calling waits for the provider route's gates (AUT-1004):
-                    # every Call on the desk is a simulated call for now.
-                    call_mode="simulated",
+                    # Sandbox organisations practise with sample recordings. Everyone
+                    # else calls from their own phone: the desk opens the dialer and
+                    # logs the call. Provider-routed calling (AUT-1004) is separate.
+                    call_mode="simulated" if sandbox else "phone",
                     sandbox=sandbox,
                 )
         except DeskError as error:
@@ -291,6 +294,34 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 simulated=command.simulated,
                 duration_seconds=command.duration_seconds,
                 sample=command.sample,
+            )
+
+    @router.post(
+        "/leads/{lead_id}/calls/phone", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def record_phone_call(
+        lead_id: UUID, command: PhoneCall, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.record_call(
+                lead_id,
+                command_id=command.command_id,
+                submission_id=None,
+                simulated=False,
+                duration_seconds=command.duration_seconds,
+            )
+
+    @router.post(
+        "/leads/{lead_id}/recordings", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def attach_recording(
+        lead_id: UUID, command: RecordingCommand, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.attach_recording(
+                lead_id, command_id=command.command_id, submission_id=command.submission_id
             )
 
     @router.get("/team", response_model=Team, response_model_by_alias=True)

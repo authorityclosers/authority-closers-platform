@@ -8,9 +8,9 @@
  * and admins also get All leads, Team (allocation rules) and Sources.
  */
 
-import { Building2, PhoneCall, Plus, Upload } from "lucide-react";
-import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Building2, PhoneCall, Plus, Smartphone } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import {
@@ -22,16 +22,44 @@ import {
   Skeleton,
 } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
-import { AddLeadDialog, ImportDialog } from "./capture-dialogs";
+import {
+  AddLeadDialog,
+  AddLeadsMenu,
+  ContactsDialog,
+  ImportDialog,
+  type AddWay,
+} from "./capture-dialogs";
+import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { DeskView } from "./desk-view";
 import { CallingLoop, LeadSheet } from "./lead-sheet";
-import { readDesk, type Desk, LEADS_PATH, LeadsError } from "./leads-client";
+import {
+  LEADS_PATH,
+  LeadsError,
+  pickContacts,
+  readDesk,
+  sharedLead,
+  type Desk,
+  type PickedContact,
+} from "./leads-client";
 import { ListView } from "./list-view";
 import { SourcesView } from "./sources-view";
 import { TeamView } from "./team-view";
 import styles from "./leads.module.css";
 
 type Tab = "desk" | "all" | "team" | "sources";
+
+// The handed-over lead is read once, then wiped from the address at once, so it
+// never sits in the address bar or the browser's history.
+let handedOver: string | null = null;
+const readHash = () => (handedOver ??= window.location.hash);
+const onHashChange = (change: () => void) => {
+  const listener = () => {
+    handedOver = null;
+    change();
+  };
+  window.addEventListener("hashchange", listener);
+  return () => window.removeEventListener("hashchange", listener);
+};
 
 export function LeadsSkeleton() {
   return (
@@ -54,8 +82,21 @@ export function LeadsSkeleton() {
 
 export function LeadsRoute() {
   const access = useWorkspaceAccess();
+  const router = useRouter();
   const params = useSearchParams();
   const requested = params.get("tab");
+  // A lead handed over by the Chrome extension opens Add lead, filled in. It
+  // travels after "#", so the lead's details never reach a server or its logs.
+  const hash = useSyncExternalStore(onHashChange, readHash, () => "");
+  const shared = sharedLead(new URLSearchParams(hash.replace(/^#/, "")));
+  useEffect(() => {
+    if (window.location.hash.includes("add=lead"))
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname + window.location.search,
+      );
+  }, [hash]);
   const authenticated =
     access?.authenticated === true &&
     access.status === "ready" &&
@@ -70,8 +111,20 @@ export function LeadsRoute() {
   const [calling, setCalling] = useState(false);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [apps, setApps] = useState(false);
+  const [sharedDone, setSharedDone] = useState(false);
+  const [contacts, setContacts] = useState(false);
+  const [picked, setPicked] = useState<PickedContact[]>([]);
   // Each opening mounts a fresh dialog, so nothing is reset in an effect.
-  const [rounds, setRounds] = useState({ calling: 0, adding: 0, importing: 0 });
+  const [rounds, setRounds] = useState({
+    calling: 0,
+    adding: 0,
+    importing: 0,
+    menu: 0,
+    contacts: 0,
+    apps: 0,
+  });
   const begin = (
     which: keyof typeof rounds,
     show: (value: boolean) => void,
@@ -81,6 +134,7 @@ export function LeadsRoute() {
   };
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
+  const closeShared = () => setSharedDone(true);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -186,20 +240,18 @@ export function LeadsRoute() {
             desk.sandbox ? (
               <Badge key="label">Test leads</Badge>
             ) : desk.call_mode === "simulated" ? (
-              <Badge key="label">Practice calls</Badge>
+              <Badge key="label">Sample calls</Badge>
             ) : null,
           ]}
           actions={
             <>
-              {can ? (
-                <Button onClick={() => begin("importing", setImporting)}>
-                  <Upload size={14} aria-hidden="true" />
-                  Import
-                </Button>
-              ) : null}
-              <Button onClick={() => begin("adding", setAdding)}>
+              <Button onClick={() => begin("apps", setApps)}>
+                <Smartphone size={14} aria-hidden="true" />
+                Phone app
+              </Button>
+              <Button onClick={() => begin("menu", setMenu)}>
                 <Plus size={14} aria-hidden="true" />
-                Add lead
+                Add leads
               </Button>
               {tab !== "desk" ? (
                 <Button
@@ -214,6 +266,7 @@ export function LeadsRoute() {
             </>
           }
         />
+        <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
         <QueryTabs base={LEADS_PATH} items={tabs} current={tab} />
         {error ? (
           <div className={styles.notice} role="status">
@@ -228,7 +281,7 @@ export function LeadsRoute() {
             desk={desk}
             onOpen={setOpenLead}
             onStart={() => begin("calling", setCalling)}
-            onAdd={() => begin("adding", setAdding)}
+            onAdd={() => begin("menu", setMenu)}
           />
         ) : tab === "all" ? (
           <ListView canManage={can} onOpen={setOpenLead} version={version} />
@@ -244,18 +297,34 @@ export function LeadsRoute() {
       </div>
       <LeadSheet
         leadId={openLead}
+        me={desk.me}
         onClose={() => setOpenLead(null)}
         onChanged={refresh}
       />
       <CallingLoop
         key={rounds.calling}
         open={calling}
+        me={desk.me}
         onClose={() => {
           setCalling(false);
           refresh();
         }}
         onChanged={refresh}
       />
+      {shared ? (
+        <AddLeadDialog
+          key={`shared-${hash}`}
+          open={!sharedDone}
+          canManage={can}
+          initial={shared}
+          onClose={closeShared}
+          onAdded={(leadId) => {
+            closeShared();
+            refresh();
+            setOpenLead(leadId);
+          }}
+        />
+      ) : null}
       <AddLeadDialog
         key={rounds.adding}
         open={adding}
@@ -266,6 +335,39 @@ export function LeadsRoute() {
           refresh();
           setOpenLead(leadId);
         }}
+      />
+      <PhoneAppDialog
+        key={`apps-${rounds.apps}`}
+        open={apps}
+        onClose={() => setApps(false)}
+      />
+      <AddLeadsMenu
+        key={`menu-${rounds.menu}`}
+        open={menu}
+        canManage={can}
+        onClose={() => setMenu(false)}
+        onPick={(way: AddWay) => {
+          setMenu(false);
+          if (way === "type") begin("adding", setAdding);
+          else if (way === "file") begin("importing", setImporting);
+          else if (way === "sources") router.push(`${LEADS_PATH}?tab=sources`);
+          else
+            pickContacts()
+              .then((people) => {
+                if (!people.length) return;
+                setPicked(people);
+                begin("contacts", setContacts);
+              })
+              .catch(() => undefined);
+        }}
+      />
+      <ContactsDialog
+        key={`contacts-${rounds.contacts}`}
+        open={contacts}
+        picked={picked}
+        canManage={can}
+        onClose={() => setContacts(false)}
+        onDone={refresh}
       />
       <ImportDialog
         key={rounds.importing}

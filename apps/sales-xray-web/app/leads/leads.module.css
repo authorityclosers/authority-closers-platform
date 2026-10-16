@@ -1547,3 +1547,792 @@
     width: 100%;
   }
 }
+
+/* ---------- Lead: made for calling from a phone ---------- */
+
+.leadHead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding-right: 40px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.callButton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  box-shadow: var(--lx-shadow-cta);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.callButton span {
+  display: grid;
+  line-height: 1.25;
+}
+
+.callButton strong {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.callButton small {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.92;
+}
+
+.callButton[data-empty] {
+  border: 1px dashed var(--sx-line-strong);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: none;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.actionButton:hover {
+  background: var(--sx-sunken);
+}
+
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lx-teal);
+  font: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* After the call */
+
+.outcome {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  scroll-margin-top: 12px;
+  transition:
+    border-color var(--lx-dur-move) var(--lx-ease-move),
+    box-shadow var(--lx-dur-move) var(--lx-ease-move);
+}
+
+.outcome[data-attention] {
+  border-color: var(--lx-focus-edge);
+  box-shadow: 0 0 0 4px var(--lx-focus-soft);
+}
+
+.outcomeTitle {
+  font: var(--sx-text-panel);
+}
+
+.choiceRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.choiceTile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  cursor: pointer;
+  transition: background var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.choiceTile:hover {
+  background: var(--sx-sunken);
+}
+
+.choiceTile[data-kind="talked"][aria-pressed="true"] {
+  border-color: var(--lx-strength-edge);
+  background: var(--lx-strength-soft);
+  color: var(--lx-strength-ink);
+}
+
+.choiceTile[data-kind="missed"][aria-pressed="true"] {
+  border-color: var(--lx-missed-edge);
+  background: var(--lx-missed-soft);
+  color: var(--lx-missed-ink);
+}
+
+.outcomeStep {
+  display: grid;
+  gap: 8px;
+  animation: stepIn var(--lx-dur-move) var(--lx-ease-move);
+}
+
+@keyframes stepIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outcomeStep {
+    animation: none;
+  }
+}
+
+.stepLabel {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.reasonGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.reasonTile {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-md);
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reasonTile:hover {
+  background: var(--sx-sunken);
+}
+
+.reasonTile[aria-pressed="true"] {
+  border-color: var(--lx-missed-edge);
+  background: var(--lx-missed-soft);
+  color: var(--lx-missed-ink);
+}
+
+.stageGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stageTile {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-md);
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stageTile:hover {
+  background: var(--sx-sunken);
+}
+
+.stageTile strong {
+  font-size: var(--sx-text-md);
+}
+
+.stageTile small {
+  color: var(--sx-muted);
+}
+
+.stageTile[aria-pressed="true"][data-tone="warm"] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-soft);
+}
+
+.stageTile[aria-pressed="true"][data-tone="later"] {
+  border-color: var(--sx-warn);
+  background: var(--lx-warning-soft);
+}
+
+.stageTile[aria-pressed="true"][data-tone="good"] {
+  border-color: var(--lx-strength-edge);
+  background: var(--lx-strength-soft);
+}
+
+.stageTile[aria-pressed="true"][data-tone="bad"] {
+  border-color: var(--lx-danger-edge);
+  background: var(--lx-danger-soft);
+}
+
+.retryLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--sx-ink-2);
+}
+
+.saveButton {
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: var(--lx-teal-hover);
+}
+
+.saveButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.callButton:focus-visible,
+.actionButton:focus-visible,
+.linkButton:focus-visible,
+.choiceTile:focus-visible,
+.reasonTile:focus-visible,
+.stageTile:focus-visible,
+.saveButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* Details, owner, notes */
+
+.panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panelHead h3 {
+  font: var(--sx-text-panel);
+}
+
+.detailRows {
+  display: grid;
+  margin: 0;
+}
+
+.detailRows > div {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--sx-line);
+}
+
+.detailRows > div:first-child {
+  border-top: 0;
+}
+
+.detailRows dt {
+  color: var(--sx-muted);
+}
+
+.detailRows dd {
+  margin: 0;
+  color: var(--sx-ink);
+  overflow-wrap: anywhere;
+}
+
+.detailRows a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+.formAnswers {
+  display: grid;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.editForm {
+  display: grid;
+  gap: 12px;
+}
+
+.ownerRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.ownerRow > span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ownerRow small {
+  color: var(--sx-muted);
+}
+
+.ownerRow select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font: inherit;
+}
+
+.noteRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.noteRow textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--lx-radius-md);
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font: inherit;
+  resize: vertical;
+}
+
+@media (max-width: 600px) {
+  .actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .callButton,
+  .actions > .hint {
+    grid-column: 1 / -1;
+  }
+
+  .detailRows > div {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+
+  .ownerRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ownerRow select {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- Add leads ---------- */
+
+.ways {
+  display: grid;
+  gap: 8px;
+}
+
+.wayButton {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  min-height: 68px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wayButton:hover {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+}
+
+.wayButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.wayButton > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.wayButton strong {
+  font-size: var(--sx-text-md);
+}
+
+.wayButton small {
+  color: var(--sx-muted);
+}
+
+.wayIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.pasteBox {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--lx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.pasteBox textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.pasteBox > p {
+  grid-column: 1 / -1;
+}
+
+.pickList {
+  display: grid;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.pickList label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 48px;
+  border-bottom: 1px solid var(--sx-line);
+  cursor: pointer;
+}
+
+.pickList span {
+  display: grid;
+}
+
+.pickList small {
+  color: var(--sx-muted);
+}
+
+/* ---------- Call recording ---------- */
+
+.recordPick {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  min-height: 68px;
+  padding: 12px 14px;
+  border: 1.5px dashed var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.recordPick:hover {
+  border-style: solid;
+}
+
+.recordPick:focus-within {
+  box-shadow: var(--sx-focus-ring);
+}
+
+.recordPick > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+}
+
+.recordPick strong {
+  font-size: var(--sx-text-md);
+}
+
+.recordPick small {
+  color: var(--sx-muted);
+}
+
+.recordPick input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.fileLine {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fileLine strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileLine small {
+  color: var(--sx-muted);
+}
+
+/* ---------- Calling from the phone app ---------- */
+
+.heard {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: -4px 0 4px;
+  color: var(--lx-teal);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.recordPick[data-found] {
+  border-style: solid;
+  font: inherit;
+  text-align: left;
+}
+
+.permits {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+}
+
+.permits h3 {
+  font: var(--sx-text-panel);
+}
+
+.permits ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* ---------- Phone app ---------- */
+
+.apps {
+  display: grid;
+  gap: 12px;
+}
+
+.appCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+}
+
+.appHead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.appHead > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+}
+
+.appHead small {
+  color: var(--sx-muted);
+}
+
+.appGet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.appGetText {
+  display: grid;
+  flex: 1 1 200px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.qr {
+  flex: none;
+  border-radius: var(--sx-radius-sm);
+}
+
+.downloadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  box-shadow: var(--lx-shadow-cta);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.downloadButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.soon {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.soon li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink-2);
+}
+
+.appBanner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+}
+
+.bannerClose {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+@media (max-width: 560px) {
+  .appBanner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .bannerAction {
+    grid-row: 2;
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .bannerClose {
+    grid-row: 1;
+    grid-column: 3;
+  }
+}
+
+.connectChecked {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

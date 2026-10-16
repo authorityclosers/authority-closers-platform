@@ -8,7 +8,15 @@ import {
   localInputValue,
   minutesLabel,
   NOT_CONNECTED_REASONS,
+  displayPhone,
+  nextCallTime,
+  parseContactText,
+  sharedLead,
+  peekPendingCall,
   quickFollowUp,
+  rememberCall,
+  takePendingCall,
+  whatsappHref,
   readDesk,
   LeadsError,
   splitList,
@@ -148,5 +156,100 @@ describe("API client", () => {
       connected: false,
       reason: "busy",
     });
+  });
+});
+
+describe("calling from the desk", () => {
+  it("offers human call-back times", () => {
+    const morning = new Date(2026, 9, 16, 11, 20);
+    expect(nextCallTime("hour", morning).getHours()).toBe(12);
+    expect(nextCallTime("evening", morning).getHours()).toBe(18);
+    expect(
+      nextCallTime("evening", new Date(2026, 9, 16, 17, 30)).getHours(),
+    ).toBe(19);
+    const tomorrow = nextCallTime("morning", morning);
+    expect([
+      tomorrow.getDate(),
+      tomorrow.getHours(),
+      tomorrow.getMinutes(),
+    ]).toEqual([17, 10, 0]);
+    const week = nextCallTime("week", morning);
+    expect([week.getDate(), week.getHours()]).toEqual([23, 10]);
+  });
+
+  it("shows Indian mobiles the way people read them", () => {
+    expect(displayPhone("+919876543210")).toBe("+91 98765 43210");
+    expect(displayPhone("+14155550100")).toBe("+14155550100");
+  });
+
+  it("opens WhatsApp with the number's digits", () => {
+    expect(whatsappHref("+91 98765 43210")).toBe("https://wa.me/919876543210");
+  });
+
+  it("remembers the call that was started and forgets it once taken", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    });
+    try {
+      rememberCall("lead-1", 1_000);
+      expect(peekPendingCall(5_000)).toEqual({ leadId: "lead-1", at: 1_000 });
+      expect(takePendingCall(5_000)).toEqual({ leadId: "lead-1", at: 1_000 });
+      expect(peekPendingCall(6_000)).toBeNull();
+      rememberCall("lead-2", 0);
+      expect(peekPendingCall(4 * 60 * 60 * 1000)).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("adding leads", () => {
+  it("fills a lead from a pasted WhatsApp contact or message", () => {
+    expect(parseContactText("Asha Patil\n+91 98765 43210")).toEqual({
+      name: "Asha Patil",
+      phone: "+919876543210",
+      email: undefined,
+    });
+    expect(
+      parseContactText(
+        "Name: Ravi Kumar\nPhone: 91234-56780\nravi@example.com",
+      ),
+    ).toEqual({
+      name: "Ravi Kumar",
+      phone: "9123456780",
+      email: "ravi@example.com",
+    });
+    expect(parseContactText("call me on 98765 43210")).toEqual({
+      name: undefined,
+      phone: "9876543210",
+      email: undefined,
+    });
+    expect(parseContactText("hello")).toEqual({
+      name: "hello",
+      phone: undefined,
+      email: undefined,
+    });
+  });
+});
+
+describe("a lead handed over by the Chrome extension", () => {
+  it("fills Add lead only from an add=lead link, trimmed and bounded", () => {
+    const link = (query: string) => sharedLead(new URLSearchParams(query));
+    expect(link("tab=all")).toBeNull();
+    expect(link("add=lead")).toBeNull();
+    expect(
+      link(
+        "add=lead&name=%20Asha%20Patil%20&phone=%2B91%2098765%2043210&note=From%20LinkedIn",
+      ),
+    ).toEqual({
+      name: "Asha Patil",
+      phone: "+91 98765 43210",
+      email: "",
+      note: "From LinkedIn",
+    });
+    expect(link(`add=lead&name=${"x".repeat(500)}`)?.name).toHaveLength(200);
   });
 });

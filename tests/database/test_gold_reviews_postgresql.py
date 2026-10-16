@@ -425,35 +425,57 @@ def test_gold_http_mailbox_login_and_same_origin_save(gold_case) -> None:
     run(exercise())
 
 
-def test_owner_data_change_is_dry_run_idempotent_and_adds_no_learner_access(gold_case) -> None:
-    import importlib.util
-    from pathlib import Path
-
-    from ac_platform.conversation_intelligence.gold_review_models import GoldReviewer
-    from ac_platform.identity.models import Person
-
-    case, _, _ = gold_case
+def gold_data_change():
     source = Path(__file__).resolve().parents[2] / "scripts/data-changes/designate-gold-reviewer.py"
     spec = importlib.util.spec_from_file_location("gold_change_test", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.REVIEWER = "fictional-gold-reviewer@example.test"
-    module.APPROVER = "admin@authorityclosers.com"
+    return module
+
+
+@pytest.mark.parametrize("role", ["admin", "owner"])
+def test_owner_data_change_is_dry_run_idempotent_and_adds_no_learner_access(
+    gold_case, role
+) -> None:
+    from ac_platform.audit.models import AuditEvent
+    from ac_platform.conversation_intelligence.gold_review_models import GoldReviewer
+    from ac_platform.identity.models import Person
+
+    case, _, _ = gold_case
+    module = gold_data_change()
 
     async def exercise():
         async with case.sessions() as db, db.begin():
+            approver = await db.get(Person, case.admin_actor.person_id)
+            assert approver.email == "admin@authorityclosers.com"
+            member = await db.get(Membership, (case.operations_tenant_id, approver.id))
+            member.role = role
             before = await db.scalar(select(func.count()).select_from(Membership))
+            audit_query = select(AuditEvent).where(
+                AuditEvent.action == "conversation.gold_reviewer_data_change"
+            )
+            assert (await db.scalars(audit_query)).all() == []
             dry = await module.change(
                 db, operations_tenant_id=case.operations_tenant_id, apply=False, create_person=True
             )
             assert not dry["before"]["person_exists"] and not dry["applied"]
+            assert dry["approver"] == "Suyash"
+            assert dry["approver_email"] == approver.email
+            assert dry["issue"] == "ecff5661"
             assert await db.scalar(select(Person).where(Person.email == module.REVIEWER)) is None
+            assert (await db.scalars(audit_query)).all() == []
             applied = await module.change(
                 db, operations_tenant_id=case.operations_tenant_id, apply=True, create_person=True
             )
             assert applied["applied"]
             person = await db.get(Person, UUID(applied["after"]["person_id"]))
             assert person.email_verified_at is None
+            existing_dry = await module.change(
+                db, operations_tenant_id=case.operations_tenant_id, apply=False, create_person=False
+            )
+            assert existing_dry["before"]["person_id"] == str(person.id)
+            assert existing_dry["before"]["gold_reviewer"] and not existing_dry["applied"]
             again = await module.change(
                 db, operations_tenant_id=case.operations_tenant_id, apply=True, create_person=True
             )
@@ -467,7 +489,72 @@ def test_owner_data_change_is_dry_run_idempotent_and_adds_no_learner_access(gold
                 )
                 == 1
             )
+            designation = await db.get(GoldReviewer, person.id)
+            assert designation.designated_by == approver.id
+            audit = (await db.scalars(audit_query)).all()
+            assert len(audit) == 2
+            assert {row.payload["run_id"] for row in audit} == {applied["run_id"], again["run_id"]}
+            assert all(
+                row.actor_person_id == approver.id
+                and row.tenant_id == case.operations_tenant_id
+                and row.payload["approver"] == "Suyash"
+                and row.payload["approver_email"] == approver.email
+                and row.payload["issue"] == "ecff5661"
+                for row in audit
+            )
             assert await db.scalar(select(func.count()).select_from(Membership)) == before
+            await db.rollback()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize("apply", [False, True])
+@pytest.mark.parametrize(
+    "state",
+    ["missing_approver", "unverified", "suspended", "other_workspace", "member", "inactive"],
+)
+def test_owner_data_change_refuses_invalid_approver_without_writes(gold_case, state, apply) -> None:
+    from ac_platform.audit.models import AuditEvent
+    from ac_platform.conversation_intelligence.gold_review_models import GoldReviewer
+    from ac_platform.identity.models import Person
+
+    case, _, _ = gold_case
+    module = gold_data_change()
+
+    async def exercise():
+        async with case.sessions() as db, db.begin():
+            approver = await db.get(Person, case.admin_actor.person_id)
+            member = await db.get(Membership, (case.operations_tenant_id, approver.id))
+            operations_tenant_id = case.operations_tenant_id
+            if state == "missing_approver":
+                approver.email = "other-owner@example.test"
+            elif state == "unverified":
+                approver.email_verified_at = None
+            elif state == "suspended":
+                approver.status = "suspended"
+            elif state == "other_workspace":
+                # An owner in another tenant cannot approve in the configured operations tenant.
+                operations_tenant_id = case.prepared.state.tenant_id
+            elif state == "member":
+                member.role = "member"
+            else:
+                member.status, member.ended_at = "inactive", case.prepared.state.now
+            await db.flush()
+            before = [
+                await db.scalar(select(func.count()).select_from(model))
+                for model in (Person, Membership, GoldReviewer, AuditEvent)
+            ]
+            with pytest.raises(
+                ValueError, match="admin@authorityclosers.com.*operations workspace"
+            ):
+                await module.change(
+                    db, operations_tenant_id=operations_tenant_id, apply=apply, create_person=True
+                )
+            assert await db.scalar(select(Person).where(Person.email == module.REVIEWER)) is None
+            assert [
+                await db.scalar(select(func.count()).select_from(model))
+                for model in (Person, Membership, GoldReviewer, AuditEvent)
+            ] == before
             await db.rollback()
 
     run(exercise())

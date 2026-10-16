@@ -1,10 +1,13 @@
 /**
- * A simulated call from the desk (Sales Xray CRM slice d).
+ * Calls on a lead that become Sales Xray calls, through the existing
+ * recording import (the same consent, file checks, plan and analysis as any
+ * upload):
  *
- * The API picks a fictional sales-call recording that matches the lead; this
- * file then saves it as the lead owner's call through the existing recording
- * import (the same consent, file checks, plan and analysis as any upload) and
- * records the call on the lead. Nobody is dialled.
+ * - a real call's recording, picked by the seller after the call, saved as
+ *   their call and put on the lead;
+ * - in a test workspace, a simulated call: the API picks a fictional
+ *   recording that matches the lead, saved as the lead owner's call. Nobody
+ *   is dialled.
  */
 
 import {
@@ -41,7 +44,7 @@ export type SimulationStep =
 
 export const STEP_LABELS: Record<SimulationStep, string> = {
   recording: "Getting the test recording",
-  saving: "Saving it as the seller's call",
+  saving: "Saving the recording as the seller's call",
   checking: "Checking the file",
   starting: "Starting the analysis",
   linking: "Adding the call to the lead",
@@ -68,7 +71,7 @@ async function json<T>(path: string, init: RequestInit = {}): Promise<T> {
       /* no body */
     }
     throw new LeadsError(
-      detail ?? "The simulated call couldn't start. Try again.",
+      detail ?? "That didn't work. Try again.",
       response.status,
     );
   }
@@ -161,7 +164,90 @@ export async function runSimulatedCall({
   });
   if (confirmed.error !== null) throw new LeadsError(confirmed.error, 0);
 
-  let batch: ImportBatch = confirmed.data;
+  return drive({
+    batch: confirmed.data,
+    selection: selection.data,
+    link: async (submissionId, linkSignal) => {
+      const next = await linkCall(lead, pick, submissionId, linkSignal);
+      await nameCall(
+        submissionId,
+        `${lead.lead.name} · simulated call`,
+        linkSignal,
+      );
+      return next;
+    },
+    onStep,
+    signal,
+  });
+}
+
+/** Saves a real call's recording as the seller's call and puts it on the lead. */
+export async function runRecordingUpload({
+  lead,
+  file,
+  me,
+  policy,
+  onStep,
+  signal,
+  attempt = crypto.randomUUID(),
+}: {
+  lead: LeadDetail;
+  file: File;
+  me: { person_id: string; name: string };
+  policy: UploadPolicy;
+  onStep: (step: SimulationStep) => void;
+  signal: AbortSignal;
+  attempt?: string;
+}): Promise<LeadDetail> {
+  onStep("saving");
+  const selection = await inventoryImportFiles([file], { signal });
+  if (selection.error !== null) throw new LeadsError(selection.error, 0);
+  const preview = await previewImportFolder(selection.data.manifest, signal);
+  if (preview.error !== null) throw new LeadsError(preview.error, 0);
+  if (!preview.data.members.some((member) => member.personId === me.person_id))
+    throw new LeadsError(
+      "Your calls can't be saved in this workspace yet. Ask an owner to add you as a member.",
+      0,
+    );
+  const confirmed = await confirmImport({
+    selection: selection.data,
+    preview: preview.data,
+    folders: Object.fromEntries(
+      preview.data.folders.map((folder) => [folder.folder, me.person_id]),
+    ),
+    policySha: policy.policy_sha256,
+    key: `lead-recording:${lead.lead.lead_id}:${attempt}`,
+    signal,
+  });
+  if (confirmed.error !== null) throw new LeadsError(confirmed.error, 0);
+  return drive({
+    batch: confirmed.data,
+    selection: selection.data,
+    link: async (submissionId, linkSignal) => {
+      const next = await attachRecording(lead, submissionId, linkSignal);
+      await nameCall(submissionId, `${lead.lead.name} · call`, linkSignal);
+      return next;
+    },
+    onStep,
+    signal,
+  });
+}
+
+/** Runs the import until the call is on the lead and its analysis has started. */
+async function drive({
+  batch: first,
+  selection,
+  link,
+  onStep,
+  signal,
+}: {
+  batch: ImportBatch;
+  selection: Parameters<typeof advanceImport>[1];
+  link: (submissionId: string, signal: AbortSignal) => Promise<LeadDetail>;
+  onStep: (step: SimulationStep) => void;
+  signal: AbortSignal;
+}): Promise<LeadDetail> {
+  let batch = first;
   let linked: LeadDetail | null = null;
   for (let step = 0; step < MAX_STEPS; step++) {
     const item = batch.items[0];
@@ -177,8 +263,7 @@ export async function runSimulatedCall({
       if (!linked) {
         // Put the call on the lead first, so closing the page never loses it.
         onStep("linking");
-        linked = await linkCall(lead, pick, item.submissionId, signal);
-        await nameCall(item.submissionId, lead.lead.name, signal);
+        linked = await link(item.submissionId, signal);
       }
       if (
         item.state === "done" ||
@@ -189,7 +274,7 @@ export async function runSimulatedCall({
       }
       onStep("checking");
     }
-    const advanced = await advanceImport(batch, selection.data, signal);
+    const advanced = await advanceImport(batch, selection, signal);
     if (advanced.error !== null)
       throw new LeadsError(
         linked
@@ -233,6 +318,25 @@ async function analysisStarted(
   }
 }
 
+function attachRecording(
+  lead: LeadDetail,
+  submissionId: string,
+  signal: AbortSignal,
+) {
+  return json<LeadDetail>(
+    `${API}/leads/${encodeURIComponent(lead.lead.lead_id)}/recordings`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        command_id: commandId(),
+        submission_id: submissionId,
+      }),
+      signal,
+    },
+  );
+}
+
 function linkCall(
   lead: LeadDetail,
   pick: SimulationPick,
@@ -259,7 +363,7 @@ function linkCall(
 /** Best effort: the call's Report is titled after the lead instead of "Untitled call". */
 async function nameCall(
   submissionId: string,
-  leadName: string,
+  title: string,
   signal: AbortSignal,
 ): Promise<void> {
   try {
@@ -267,7 +371,7 @@ async function nameCall(
     if (label && !label.displayName)
       await renameCall(
         submissionId,
-        `${leadName} · simulated call`.slice(0, 80),
+        title.slice(0, 80),
         label.revision,
         signal,
       );

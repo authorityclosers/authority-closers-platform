@@ -115,6 +115,8 @@ function wait(ms: number, signal: AbortSignal) {
 export async function notAnalysedCalls(
   viewerId: string | null,
   signal: AbortSignal,
+  /** An organisation owner/admin may start members' calls too (16 Oct). */
+  everyone = false,
 ): Promise<string[]> {
   const ids: string[] = [];
   let cursor: string | null = null;
@@ -132,6 +134,7 @@ export async function notAnalysedCalls(
       if (!UUID.test(row.submission_id)) continue;
       // A row carries an owner only where the viewer reads others' calls.
       const mine =
+        everyone ||
         typeof row.owner_person_id !== "string" ||
         (viewerId !== null && row.owner_person_id === viewerId);
       if (

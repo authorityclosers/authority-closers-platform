@@ -100,6 +100,7 @@ export type LeadEvent = {
   source_label: string | null;
   submission_id: string | null;
   simulated: boolean | null;
+  recording?: boolean | null;
   duration_seconds: number | null;
   changed?: string[] | null;
 };
@@ -612,6 +613,201 @@ export function quickFollowUp(
   else at.setDate(at.getDate() + 7);
   at.setSeconds(0, 0);
   return at;
+}
+
+export type CallTime = "hour" | "evening" | "morning" | "week";
+
+/** When to call again, as a human time: this evening, tomorrow at 10, next week at 10. */
+export function nextCallTime(choice: CallTime, now: Date = new Date()): Date {
+  const at = new Date(now);
+  at.setSeconds(0, 0);
+  if (choice === "hour") {
+    at.setHours(at.getHours() + 1);
+    return at;
+  }
+  if (choice === "evening") {
+    const six = new Date(at);
+    six.setHours(18, 0, 0, 0);
+    if (six.getTime() - now.getTime() >= 60 * 60 * 1000) return six;
+    at.setHours(at.getHours() + 2);
+    return at;
+  }
+  at.setDate(at.getDate() + (choice === "morning" ? 1 : 7));
+  at.setHours(10, 0, 0, 0);
+  return at;
+}
+
+export type PickedContact = { name: string; phone: string; email?: string };
+
+type ContactsManager = {
+  select: (
+    properties: string[],
+    options?: { multiple?: boolean },
+  ) => Promise<{ name?: string[]; tel?: string[]; email?: string[] }[]>;
+};
+
+/** The phone's contact picker (Android Chrome and the Sales Xray app). */
+export function contactsSupported(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    "contacts" in navigator &&
+    typeof window !== "undefined" &&
+    "ContactsManager" in window
+  );
+}
+
+export async function pickContacts(): Promise<PickedContact[]> {
+  const manager = (navigator as Navigator & { contacts?: ContactsManager })
+    .contacts;
+  if (!manager) return [];
+  const picked = await manager.select(["name", "tel", "email"], {
+    multiple: true,
+  });
+  return picked
+    .map((person) => ({
+      name: (person.name?.[0] ?? "").trim(),
+      phone: (person.tel?.[0] ?? "").trim(),
+      email: person.email?.[0]?.trim() || undefined,
+    }))
+    .filter((person) => person.name || person.phone);
+}
+
+/** Name, phone and email from pasted text: a WhatsApp message or contact card. */
+export type SharedLead = {
+  name: string;
+  phone: string;
+  email: string;
+  note: string;
+};
+
+/**
+ * A lead handed over in the link, as the Sales Xray Chrome extension opens
+ * /leads#add=lead&name=…&phone=…&email=…&note=…. The details sit after "#",
+ * so browsers never send them to a server. They only fill the Add lead form;
+ * nothing is saved until the person taps Add lead.
+ */
+export function sharedLead(params: {
+  get: (name: string) => string | null;
+}): SharedLead | null {
+  if (params.get("add") !== "lead") return null;
+  const take = (name: string, max: number) =>
+    (params.get(name) ?? "").trim().slice(0, max);
+  const lead = {
+    name: take("name", 200),
+    phone: take("phone", 40),
+    email: take("email", 254),
+    note: take("note", 1000),
+  };
+  return lead.name || lead.phone || lead.email || lead.note ? lead : null;
+}
+
+export function parseContactText(text: string): {
+  name?: string;
+  phone?: string;
+  email?: string;
+} {
+  const email = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.exec(text)?.[0];
+  const rest = email ? text.replace(email, " ") : text;
+  const digits = /\+?\d[\d\s().-]{7,}\d/.exec(rest)?.[0];
+  const phone = digits ? digits.replace(/[^\d+]/g, "") : undefined;
+  const name = text
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/^\s*(name|naam|contact)\s*[:\-]\s*/i, "")
+        .replace(/^[~*\s]+|[*\s]+$/g, ""),
+    )
+    .find(
+      (line) =>
+        line.length > 1 &&
+        line.length <= 80 &&
+        /[A-Za-z\u0900-\u097F]/.test(line) &&
+        !line.includes("@") &&
+        !/\d{5,}/.test(line.replace(/\s/g, "")),
+    );
+  return {
+    name: name || undefined,
+    phone: phone && phone.replace(/\D/g, "").length >= 8 ? phone : undefined,
+    email,
+  };
+}
+
+export const SAMPLE_CSV = [
+  "Name,Phone,Email,City,Interested in",
+  "Asha Patil,98765 43210,asha@example.com,Pune,Solar rooftop",
+  "Ravi Kumar,+91 91234 56780,,Mumbai,Home loan",
+].join("\n");
+
+/** A phone number as people read it: "+91 98765 43210" for Indian mobiles. */
+export function displayPhone(phone: string): string {
+  const india = /^\+91([6-9]\d{4})(\d{5})$/.exec(phone);
+  return india ? `+91 ${india[1]} ${india[2]}` : phone;
+}
+
+/** A WhatsApp chat with this number (digits only, country code included). */
+export function whatsappHref(phone: string): string {
+  return `https://wa.me/${phone.replace(/[^0-9]/g, "")}`;
+}
+
+/** Logs a call the seller placed from their own phone, with the time they were away. */
+export function logPhoneCall(
+  leadId: string,
+  seconds: number | null,
+  command = commandId(),
+) {
+  return request<LeadDetail>(
+    `/leads/${encodeURIComponent(leadId)}/calls/phone`,
+    json("POST", {
+      command_id: command,
+      ...(seconds == null
+        ? {}
+        : {
+            duration_seconds: Math.min(7200, Math.max(0, Math.round(seconds))),
+          }),
+    }),
+  );
+}
+
+// The call the seller just started from the desk, so the result can follow it
+// even if the phone reloads the page while the dialer is open.
+const PENDING_CALL = "sx-leads-pending-call";
+const PENDING_MAX_MS = 3 * 60 * 60 * 1000;
+
+export type PendingCall = { leadId: string; at: number };
+
+export function rememberCall(leadId: string, now: number = Date.now()): void {
+  try {
+    localStorage.setItem(PENDING_CALL, JSON.stringify({ leadId, at: now }));
+  } catch {
+    // Storage blocked: the result is still asked when the lead is open.
+  }
+}
+
+export function peekPendingCall(now: number = Date.now()): PendingCall | null {
+  try {
+    const raw = localStorage.getItem(PENDING_CALL);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PendingCall>;
+    if (typeof value.leadId !== "string" || typeof value.at !== "number")
+      return null;
+    if (now - value.at > PENDING_MAX_MS) {
+      localStorage.removeItem(PENDING_CALL);
+      return null;
+    }
+    return { leadId: value.leadId, at: value.at };
+  } catch {
+    return null;
+  }
+}
+
+export function takePendingCall(now: number = Date.now()): PendingCall | null {
+  const pending = peekPendingCall(now);
+  try {
+    localStorage.removeItem(PENDING_CALL);
+  } catch {
+    // Nothing to clear.
+  }
+  return pending;
 }
 
 /** A value for <input type="datetime-local"> in the viewer's own time. */

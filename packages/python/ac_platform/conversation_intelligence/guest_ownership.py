@@ -72,6 +72,25 @@ class GuestOwnership:
         self.sessions, self.database = sessions, sessions.database
         self.tenant_id, self.clock = sessions.tenant_id, sessions.clock
 
+    async def call_owner_person_id(self, submission_id: UUID) -> UUID | None:
+        """The account that owns a saved call (direct or claimed), or None."""
+        usage = await self.database.scalar(
+            select(ConversationAcquisitionUsage).where(
+                ConversationAcquisitionUsage.tenant_id == self.tenant_id,
+                ConversationAcquisitionUsage.submission_id == submission_id,
+            )
+        )
+        if usage is None:
+            return None
+        if usage.person_id is not None:
+            return usage.person_id
+        claim = (
+            None
+            if usage.visitor_id is None
+            else await self.database.get(ConversationVisitorClaim, usage.visitor_id)
+        )
+        return None if claim is None else claim.person_id
+
     async def organisation_call_reader(self, actor: ActorContext) -> bool:
         """Check current organisation authority after account admission, never cached roles."""
         if (
@@ -197,6 +216,7 @@ class GuestOwnership:
         mutation: bool,
         shared_identity_locks: bool = False,
         allow_organisation_read: bool = False,
+        allow_organisation_start: bool = False,
     ) -> tuple[ConversationAcquisitionUsage, datetime, bool]:
         if actor is not None:
             await ConversationApplication(self.database, clock=self.clock).admit(
@@ -227,9 +247,14 @@ class GuestOwnership:
             claim = await self.database.get(ConversationVisitorClaim, usage.visitor_id)
             owner_matches = claim is not None and claim.person_id == person_id
         if not owner_matches:
+            # Organisation owners/admins may read members' calls, and may start
+            # their analysis (owner, 16 Oct) where a route opts in; no other
+            # change (rename, delete, retry) is ever opened to them.
+            organisation_path = allow_organisation_start or (
+                not mutation and allow_organisation_read
+            )
             if (
-                mutation
-                or not allow_organisation_read
+                not organisation_path
                 or actor is None
                 or not await self.organisation_call_reader(actor)
             ):
@@ -256,11 +281,16 @@ class GuestOwnership:
         token: str | None = None,
         actor: ActorContext | None = None,
         lifetime: timedelta = timedelta(hours=1),
+        allow_organisation_start: bool = False,
     ) -> ProcessingActor:
         if not timedelta(minutes=5) <= lifetime <= timedelta(days=7):
             raise ConversationError("A bounded processing lease is required.")
         usage, now, claimed = await self._owned_usage(
-            submission_id, token=token, actor=actor, mutation=True
+            submission_id,
+            token=token,
+            actor=actor,
+            mutation=True,
+            allow_organisation_start=allow_organisation_start,
         )
         principal = await self.database.scalar(
             select(ConversationProcessingPrincipal).where(
@@ -314,6 +344,7 @@ class GuestOwnership:
         key: str,
         token: str | None = None,
         actor: ActorContext | None = None,
+        allow_organisation_start: bool = False,
     ) -> UUID | None:
         """Append one short owner grant when a saved call's lease has expired.
 
@@ -325,16 +356,28 @@ class GuestOwnership:
         if not isinstance(key, str) or re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", key) is None:
             raise ConversationError("A valid Idempotency-Key is required.")
         usage, now, claimed = await self._owned_usage(
-            submission_id, token=token, actor=actor, mutation=False
+            submission_id,
+            token=token,
+            actor=actor,
+            mutation=False,
+            allow_organisation_start=allow_organisation_start,
         )
         if usage.visitor_id is not None:
             await self.sessions.fence_visitor(usage.visitor_id, shared=False)
             usage, now, claimed = await self._owned_usage(
-                submission_id, token=token, actor=actor, mutation=True
+                submission_id,
+                token=token,
+                actor=actor,
+                mutation=True,
+                allow_organisation_start=allow_organisation_start,
             )
         else:
             usage, now, claimed = await self._owned_usage(
-                submission_id, token=token, actor=actor, mutation=True
+                submission_id,
+                token=token,
+                actor=actor,
+                mutation=True,
+                allow_organisation_start=allow_organisation_start,
             )
         link = await self.database.get(ConversationGuestSubmission, (self.tenant_id, submission_id))
         if link is None or link.usage_id != usage.id or link.source_sha256 != usage.source_sha256:
@@ -503,6 +546,7 @@ class GuestOwnership:
         actor: ActorContext | None = None,
         shared_identity_locks: bool = False,
         allow_organisation_read: bool = False,
+        allow_organisation_start: bool = False,
     ) -> SubmissionScope:
         usage, now, claimed = await self._owned_usage(
             submission_id,
@@ -511,6 +555,7 @@ class GuestOwnership:
             mutation=False,
             shared_identity_locks=shared_identity_locks,
             allow_organisation_read=allow_organisation_read,
+            allow_organisation_start=allow_organisation_start,
         )
         if usage.visitor_id is not None:
             await self.sessions.fence_visitor(usage.visitor_id, shared=True)
@@ -521,6 +566,7 @@ class GuestOwnership:
                 mutation=False,
                 shared_identity_locks=shared_identity_locks,
                 allow_organisation_read=allow_organisation_read,
+                allow_organisation_start=allow_organisation_start,
             )
         link = await self.database.get(ConversationGuestSubmission, (self.tenant_id, submission_id))
         if link is None or link.usage_id != usage.id or link.source_sha256 != usage.source_sha256:

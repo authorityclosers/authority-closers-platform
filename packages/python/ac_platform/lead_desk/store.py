@@ -668,6 +668,7 @@ class LeadDesk:
             if isinstance(data.get("changed"), list)
             else None,
             simulated=data.get("simulated") if isinstance(data.get("simulated"), bool) else None,
+            recording=True if data.get("recording") is True else None,
             duration_seconds=int(data["duration_seconds"])
             if isinstance(data.get("duration_seconds"), (int, float))
             else None,
@@ -1186,6 +1187,29 @@ class LeadDesk:
                 "duration_seconds": duration_seconds,
                 "sample": sample,
             },
+            actor=self.viewer.person_id,
+            command_id=command_id,
+        )
+        await self.db.flush()
+        return await self.detail(lead.id)
+
+    async def attach_recording(
+        self, lead_id: UUID, *, command_id: UUID, submission_id: UUID
+    ) -> LeadDetail:
+        """Puts an uploaded call recording on the lead; the call itself was already counted."""
+        seen = await self._command_seen(command_id)
+        if seen is not None:
+            return await self.detail(seen.lead_id)
+        lead = await self._lead(lead_id, lock=True)
+        if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
+            raise DeskError(403, "Only the lead's owner or a manager can add its call recording.")
+        lead.last_submission_id = submission_id
+        lead.revision += 1
+        lead.updated_at = self.now
+        self._event(
+            lead,
+            "call",
+            {"submission_id": str(submission_id), "simulated": False, "recording": True},
             actor=self.viewer.person_id,
             command_id=command_id,
         )

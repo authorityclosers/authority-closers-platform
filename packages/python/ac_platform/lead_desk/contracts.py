@@ -117,6 +117,7 @@ class LeadEventView(Model):
     source_label: str | None = None
     submission_id: UUID | None = None
     simulated: bool | None = None
+    recording: bool | None = None
     duration_seconds: int | None = None
     changed: tuple[str, ...] | None = None
 
@@ -335,13 +336,31 @@ class SimulationPick(Model):
 
 
 class CallRecord(Command):
-    """A call made from the desk. Only simulated calls exist until real calling passes its gates."""
+    """A simulated call made from the desk: a sample recording becomes the lead's call."""
 
     command_id: UUID
     submission_id: UUID
     simulated: Literal[True]
     duration_seconds: int = Field(ge=0, le=7200)
     sample: str = Field(min_length=1, max_length=160, pattern=r"^syn-[A-Za-z0-9._-]+$")
+
+
+class PhoneCall(Command):
+    """A call the seller placed from their own phone: the desk opened the dialer.
+
+    Nothing is recorded or processed here; the seller's phone made the call. A recording,
+    when there is one, arrives later through the normal upload and its processing plan.
+    """
+
+    command_id: UUID
+    duration_seconds: int | None = Field(default=None, ge=0, le=7200)
+
+
+class RecordingCommand(Command):
+    """The recording of a call on this lead, uploaded as a Sales Xray call (its own consent)."""
+
+    command_id: UUID
+    submission_id: UUID
 
 
 class SeedCommand(Command):

@@ -1382,14 +1382,25 @@ function CallsLibraryContent({
       ? `${counts.attention} ${counts.attention === 1 ? "needs" : "need"} attention`
       : "",
   ].filter(Boolean);
-  // Only the person who saved a call can start its analysis.
+  // The person who saved a call may start it; an organisation owner or admin
+  // may start any member's call there too (owner, 16 Oct).
+  const runsWorkspace = (() => {
+    const here = access?.workspaces?.find(
+      (item) => item.tenant_id === access?.context?.tenantId,
+    );
+    return (
+      here?.kind === "organisation" &&
+      (here.role === "owner" || here.role === "admin")
+    );
+  })();
   const canAnalyseAll =
     analyseAllHere &&
     workspace &&
     sort === "reports" &&
     submissions.some(
       (submission) =>
-        notAnalysed(submission) && ownsCall(submission.owner, viewerId),
+        notAnalysed(submission) &&
+        (runsWorkspace || ownsCall(submission.owner, viewerId)),
     );
   const renderRows = () => {
     if (!grouped) return visibleSubmissions.map(callRow);
@@ -1413,6 +1424,7 @@ function CallsLibraryContent({
                 <span data-group-label="">{group}</span>
                 <AnalyseAllControl
                   viewerId={viewerId}
+                  everyone={runsWorkspace}
                   onFinished={() => refreshHandler.current(identityKey, true)}
                 />
               </span>

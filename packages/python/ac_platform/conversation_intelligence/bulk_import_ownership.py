@@ -137,7 +137,11 @@ class ImportOwnership(GuestOwnership):
         mutation: bool,
         shared_identity_locks: bool = False,
         allow_organisation_read: bool = False,
+        allow_organisation_start: bool = False,
     ) -> tuple[ConversationAcquisitionUsage, datetime, bool]:
+        # An import grant covers only the uploader's own exact call: the
+        # organisation read/start paths are accepted here but never forwarded.
+        del allow_organisation_read, allow_organisation_start
         _, item = await self.imports.authorize(
             self.uploader, self.reference, shared_identity_locks=shared_identity_locks
         )

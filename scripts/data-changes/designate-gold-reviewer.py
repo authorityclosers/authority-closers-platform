@@ -24,7 +24,7 @@ from ac_platform.identity.models import Person
 from ac_platform.tenancy.models import Membership
 
 REVIEWER = "dipak@authorityclosers.com"
-APPROVER = "suyash@authorityclosers.com"
+APPROVER = "admin@authorityclosers.com"
 ISSUE = "ecff5661"
 
 
@@ -39,6 +39,7 @@ async def change(database, *, operations_tenant_id: UUID, apply: bool, create_pe
         "run_id": str(run_id),
         "reviewer": REVIEWER,
         "approver": "Suyash",
+        "approver_email": APPROVER,
         "issue": ISSUE,
         "before": {
             "person_exists": before_person,
@@ -73,7 +74,8 @@ async def change(database, *, operations_tenant_id: UUID, apply: bool, create_pe
         or member.role not in {"admin", "owner"}
     ):
         raise ValueError(
-            "The verified approving Suyash and current AC operations membership are required."
+            f"Verified approver {APPROVER} and an active admin/owner membership in the "
+            "configured AC operations workspace are required. No membership is created."
         )
     if not apply:
         return result
@@ -98,6 +100,7 @@ async def change(database, *, operations_tenant_id: UUID, apply: bool, create_pe
             "run_id": str(run_id),
             "issue": ISSUE,
             "approver": "Suyash",
+            "approver_email": APPROVER,
             "before": result["before"],
             "after": result["after"],
         },

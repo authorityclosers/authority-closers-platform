@@ -352,6 +352,28 @@ _MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
 _MAX_PART = 20 * 1024 * 1024
 
+# Spreadsheet bounds, checked while reading so nothing is built past them. A
+# cell's reference (say ZZZZZZ2) is never trusted to size a row: a leads file
+# uses at most MAX_COLUMNS columns, a row is built only from its own cells, and
+# reading stops at MAX_ROWS leads.
+MAX_COLUMNS: Final[int] = 200
+_MAX_COLUMN_LETTERS: Final[int] = 3  # Excel's last column is XFD
+_MAX_CELL_TEXT: Final[int] = 4096  # far beyond any field the desk keeps
+_MAX_SHARED: Final[int] = 500_000  # distinct texts in one workbook
+_MAX_SHEET_ELEMENTS: Final[int] = 2_000_000  # cells, values and rows read
+_MAX_ELEMENTS: Final[int] = 10_000  # the workbook and its relationships are small
+_TOO_LARGE: Final[str] = (
+    "The spreadsheet is too large to read. Save just the leads as .xlsx or .csv."
+)
+_TOO_WIDE: Final[str] = (
+    f"The spreadsheet uses more than {MAX_COLUMNS} columns. "
+    f"Keep the leads' details in columns A to GR and try again."
+)
+
+
+class _Enough(Exception):
+    """Every lead the importer can take has been read; stop parsing."""
+
 
 class _Node:
     """A tiny element tree for the few spreadsheet parts the importer reads."""
@@ -375,21 +397,9 @@ class _Node:
         found = self.kids(local)
         return found[0] if found else None
 
-    def texts(self, local: str) -> str:
-        """All text of the named descendants, in document order."""
-        tag = f"{{{_MAIN}}}{local}"
-        parts: list[str] = []
-        stack = [self]
-        while stack:
-            node = stack.pop()
-            if node.tag == tag:
-                parts.append(node.text)
-            stack.extend(reversed(node.children))
-        return "".join(parts)
 
-
-def _parse_xml(raw: bytes) -> _Node:
-    """Parse untrusted spreadsheet XML safely.
+def _parser() -> expat.XMLParserType:
+    """An expat parser for untrusted spreadsheet XML.
 
     Any DTD or entity declaration is refused outright (as defusedxml's
     forbid_dtd does), so entity expansion and external entities can't happen.
@@ -404,10 +414,30 @@ def _parse_xml(raw: bytes) -> _Node:
     parser.EntityDeclHandler = refuse
     parser.UnparsedEntityDeclHandler = refuse
     parser.ExternalEntityRefHandler = refuse  # type: ignore[assignment]
+    return parser
+
+
+def _run(parser: expat.XMLParserType, raw: bytes) -> None:
+    try:
+        parser.Parse(raw, True)
+    except expat.ExpatError:
+        raise CaptureError("The spreadsheet can't be read.") from None
+    except _Enough:
+        pass
+
+
+def _parse_xml(raw: bytes) -> _Node:
+    """A small part (the workbook or its relationships) as a tree."""
+    parser = _parser()
     root = _Node("", {})
     stack = [root]
+    count = 0
 
     def start(name: str, attrib: dict[str, str]) -> None:
+        nonlocal count
+        count += 1
+        if count > _MAX_ELEMENTS:
+            raise CaptureError(_TOO_LARGE)
         node = _Node(
             "{" + name if "}" in name else name,
             {("{" + key if "}" in key else key): value for key, value in attrib.items()},
@@ -424,13 +454,65 @@ def _parse_xml(raw: bytes) -> _Node:
     parser.StartElementHandler = start
     parser.EndElementHandler = end
     parser.CharacterDataHandler = data
-    try:
-        parser.Parse(raw, True)
-    except expat.ExpatError:
-        raise CaptureError("The spreadsheet can't be read.") from None
+    _run(parser, raw)
     if not root.children:
         raise CaptureError("The spreadsheet can't be read.")
     return root.children[0]
+
+
+class _Text:
+    """Text gathered from one cell or shared string, cut at _MAX_CELL_TEXT."""
+
+    __slots__ = ("parts", "size")
+
+    def __init__(self) -> None:
+        self.parts: list[str] = []
+        self.size = 0
+
+    def add(self, text: str) -> None:
+        room = _MAX_CELL_TEXT - self.size
+        if room > 0:
+            self.parts.append(text[:room])
+            self.size += min(len(text), room)
+
+    def value(self) -> str:
+        return "".join(self.parts)
+
+
+def _shared_strings(raw: bytes) -> list[str]:
+    """The workbook's shared texts, read as a stream (no tree is built)."""
+    item, text_tag = f"{_MAIN}}}si", f"{_MAIN}}}t"
+    strings: list[str] = []
+    current: _Text | None = None
+    inside = 0  # open <t> elements in the current item
+
+    def start(name: str, _attrib: dict[str, str]) -> None:
+        nonlocal current, inside
+        if name == item:
+            if len(strings) >= _MAX_SHARED:
+                raise CaptureError(_TOO_LARGE)
+            current, inside = _Text(), 0
+        elif name == text_tag and current is not None:
+            inside += 1
+
+    def end(name: str) -> None:
+        nonlocal current, inside
+        if name == item and current is not None:
+            strings.append(current.value())
+            current = None
+        elif name == text_tag and inside:
+            inside -= 1
+
+    def data(text: str) -> None:
+        if current is not None and inside:
+            current.add(text)
+
+    parser = _parser()
+    parser.StartElementHandler = start
+    parser.EndElementHandler = end
+    parser.CharacterDataHandler = data
+    _run(parser, raw)
+    return strings
 
 
 def _part(archive: zipfile.ZipFile, name: str) -> bytes | None:
@@ -444,9 +526,12 @@ def _part(archive: zipfile.ZipFile, name: str) -> bytes | None:
 
 
 def _column(reference: str) -> int:
+    """A cell reference's zero-based column; MAX_COLUMNS or more when out of bounds."""
     letters = re.match(r"[A-Z]+", reference or "")
     if not letters:
         return -1
+    if len(letters.group(0)) > _MAX_COLUMN_LETTERS:
+        return MAX_COLUMNS
     number = 0
     for letter in letters.group(0):
         number = number * 26 + (ord(letter) - 64)
@@ -461,6 +546,84 @@ def _number(text: str) -> str:
     if value == value.to_integral_value() and abs(value) < Decimal(10) ** 16:
         return str(int(value))
     return text
+
+
+def _cell_text(kind: str | None, text: str, shared: list[str]) -> str:
+    if kind == "s":
+        index = int(text) if text.isdigit() and len(text) <= 9 else -1
+        return shared[index] if 0 <= index < len(shared) else ""
+    if kind in {"str", "e", "inlineStr"}:
+        return text
+    if kind == "b":
+        return "TRUE" if text == "1" else "FALSE"
+    return _number(text)
+
+
+def _sheet_rows(raw: bytes, shared: list[str]) -> list[list[str]]:
+    """The worksheet's rows of text, read as a stream and bounded as it goes.
+
+    Each row is built from the cells it actually has, after every one of them
+    is known to sit within MAX_COLUMNS; reading stops once enough leads are in.
+    """
+    row_tag, cell_tag = f"{_MAIN}}}row", f"{_MAIN}}}c"
+    value_tag, text_tag = f"{_MAIN}}}v", f"{_MAIN}}}t"
+    rows: list[list[str]] = []
+    cells: dict[int, str] = {}
+    cell: dict[str, str] | None = None
+    text: _Text | None = None  # the open cell's value, once it has one
+    reading = 0
+    elements = 0
+
+    def start(name: str, attrib: dict[str, str]) -> None:
+        nonlocal cell, text, reading, elements
+        elements += 1
+        if elements > _MAX_SHEET_ELEMENTS:
+            raise CaptureError(_TOO_LARGE)
+        if name == row_tag:
+            cells.clear()
+        elif name == cell_tag:
+            cell, text, reading = attrib, None, 0
+        elif cell is not None and (
+            name == text_tag if cell.get("t") == "inlineStr" else name == value_tag
+        ):
+            text = text or _Text()
+            reading += 1
+
+    def end(name: str) -> None:
+        nonlocal cell, text, reading
+        if name in (value_tag, text_tag) and reading:
+            reading -= 1
+        elif name == cell_tag and cell is not None:
+            kind = cell.get("t")
+            found = text.value() if text is not None else None
+            reference = cell.get("r", "") or ""
+            cell, text = None, None
+            # An inline text cell counts even when empty; any other needs a value.
+            if found is None or (not found and kind != "inlineStr"):
+                return
+            column = _column(reference)
+            if column < 0:
+                column = len(cells)
+            if column >= MAX_COLUMNS:
+                raise CaptureError(_TOO_WIDE)
+            cells[column] = _cell_text(kind, found, shared)
+        elif name == row_tag:
+            if cells:
+                rows.append([cells.get(i, "") for i in range(max(cells) + 1)])
+                cells.clear()
+            if len(rows) > MAX_ROWS + 1:
+                raise _Enough
+
+    def data(chunk: str) -> None:
+        if reading and text is not None:
+            text.add(chunk)
+
+    parser = _parser()
+    parser.StartElementHandler = start
+    parser.EndElementHandler = end
+    parser.CharacterDataHandler = data
+    _run(parser, raw)
+    return rows
 
 
 def read_xlsx(data: bytes) -> Sheet:
@@ -483,42 +646,12 @@ def read_xlsx(data: bytes) -> Sheet:
         if not target:
             raise CaptureError("The spreadsheet's first sheet is missing.")
         path = target.lstrip("/") if target.startswith("/") else f"xl/{target}"
-        shared: list[str] = []
         strings = _part(archive, "xl/sharedStrings.xml")
-        if strings:
-            shared = [item.texts("t") for item in _parse_xml(strings).kids("si")]
+        shared = _shared_strings(strings) if strings else []
         sheet_xml = _part(archive, path)
         if sheet_xml is None:
             raise CaptureError("The spreadsheet's first sheet is missing.")
-        sheet = _parse_xml(sheet_xml)
-    rows: list[list[str]] = []
-    sheet_data = sheet.first("sheetData")
-    for row in sheet_data.kids("row") if sheet_data else []:
-        cells: dict[int, str] = {}
-        for cell in row.kids("c"):
-            kind = cell.get("t")
-            value = cell.first("v")
-            if kind == "inlineStr":
-                text = cell.texts("t")
-            elif value is None or not value.text:
-                continue
-            elif kind == "s":
-                index = int(value.text) if value.text.isdigit() else -1
-                text = shared[index] if 0 <= index < len(shared) else ""
-            elif kind in {"str", "e"}:
-                text = value.text
-            elif kind == "b":
-                text = "TRUE" if value.text == "1" else "FALSE"
-            else:
-                text = _number(value.text)
-            column = _column(cell.get("r", "") or "")
-            cells[column if column >= 0 else len(cells)] = text
-        if cells:
-            width = max(cells) + 1
-            rows.append([cells.get(i, "") for i in range(width)])
-        if len(rows) > MAX_ROWS + 1:
-            break
-    return _rows_to_sheet(rows)
+    return _rows_to_sheet(_sheet_rows(sheet_xml, shared))
 
 
 def read_file(name: str, data: bytes) -> Sheet:
