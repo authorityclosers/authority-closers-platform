@@ -1942,3 +1942,40 @@ the illustrative Siddhant Report overlays the existing fictional Amit source,
 so Coaching still shows that underlying authored focus; this does not establish
 saved-call feedback/lesson mapping or real saved outcome acceptance. Those
 remain the owner's existing signed-in readback, already requested07ace258.
+
+### API-shaped Report projection — 2026-10-16 00:36 UTC
+
+`fixture_report_api_structure`, QA `7d25e3ad` / product `bae78551`, shared
+3026 `?example=api`, 1440/390 light/dark: **4/4 FAIL visual acceptance**
+(desktop/light 9.97s, remaining three 19.15s; both launchers exit1).
+Every pair completed the functional projection checks: overall74 and AI-draft
+labels, no Illustrative badge, all27 exact owner titles/order/statuses/scores,
+two expanded quotes and times matched directly to the original fictional
+amitTranscript segments (00:04,00:13), independent native Enter/Space disclosure,
+11 null-score statuses/No score, and all authored outcome stages/reasons/both
+objections/owner-tagged dated next steps/note/suggested action. Partner agreement
+stays open; the other objection stays handled. Outcome remains the existing
+call-derived Decision Pending. No person record exists in this fixture, so its
+precedence and real saved-call persistence remain untested; no writes invoked.
+
+Readability defects sent to report-ui/INBOX and coord/INBOX:
+- Desktop `.origin` “As heard on the call” is11.5px, below12px.
+- Phone stage `.stepName`11.5px / `.stepState`10.5px are below12px;
+  Solution Presentation and Negotiation also touch in both themes.
+- Separate source gap: all11 null-score `what_happened` values are null.
+  Fallback is checked, but the supplied-reason criterion is NOT COVERED.
+
+Runtime/server errors, overflow, text clipping, API mutations, media requests
+and live refreshes0. Raw source helper reads AMIT_STRUCTURE/amitTranscript
+without the product mapper and retains SHA256 pins in each receipt. All52 final
+PNG files accounted:38 unique contents inspected and14 byte-equal duplicates
+recorded in `png-equivalence.json`. The earlier score-regex harness failure
+(1FAIL10.53s) is retained/inspected in `harness-score-text-boundary/`, fixed
+`7d25e3ad`; no product assertion failed in that first attempt. Preparation
+`6ca6370f`; Ruff/format/API import/Node syntax/diffPASS, opt-in4skip/236deselected.
+No completed old suite, build, provider, session, real-call or ship action.
+
+Screens/receipts: `/home/acdev/strikes/1694/shots/2026-10-16-report-api/`.
+Only affected readability/supplied-reason checks should resume after the
+builder's committed return and normal interval. Owner-side real-call handoff
+`07ace258` and the existing reader-unit request remain unchanged.
