@@ -27,7 +27,9 @@
     return new Promise(function (resolve, reject) {
       var id = "m" + ++counter;
       pending[id] = { resolve: resolve, reject: reject };
-      window.SXPhone.postMessage(JSON.stringify({ id: id, method: method, args: args || {} }));
+      window.SXPhone.postMessage(
+        JSON.stringify({ id: id, method: method, args: args || {} }),
+      );
     });
   }
 
@@ -98,7 +100,13 @@
 
   function escape(text) {
     return String(text == null ? "" : text).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      return {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[c];
     });
   }
   function clock(ms) {
@@ -111,10 +119,16 @@
   }
   function when(ms) {
     var d = new Date(ms);
-    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+    return (
+      d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }) +
+      " · " +
+      d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })
+    );
   }
   function megabytes(bytes) {
-    return bytes ? (bytes / 1048576).toFixed(bytes > 10485760 ? 0 : 1) + " MB" : "";
+    return bytes
+      ? (bytes / 1048576).toFixed(bytes > 10485760 ? 0 : 1) + " MB"
+      : "";
   }
 
   var toastTimer;
@@ -133,7 +147,8 @@
   }
 
   // Leads has its own call and recording flow, so the panel stays out of its way.
-  var hiddenPaths = /^\/(login|register|forgot-password|reset-password|verify|auth|leads)(\/|$)/;
+  var hiddenPaths =
+    /^\/(login|register|forgot-password|reset-password|verify|auth|leads)(\/|$)/;
   var fab;
   var items = [];
   var state = null;
@@ -157,7 +172,10 @@
       document.body.appendChild(fab);
     }
     var count = newCount();
-    fab.innerHTML = PHONE + "<span>Calls</span>" + (count ? '<span class="sxp-badge">' + count + "</span>" : "");
+    fab.innerHTML =
+      PHONE +
+      "<span>Calls</span>" +
+      (count ? '<span class="sxp-badge">' + count + "</span>" : "");
     fab.hidden = !show || Boolean(document.querySelector(".sxp-sheet"));
   }
 
@@ -200,9 +218,12 @@
     drawSheet(sheet);
     refresh().then(function () {
       if (document.body.contains(sheet)) drawSheet(sheet);
-      var newest = items.reduce(function (max, item) {
-        return Math.max(max, item.addedMs);
-      }, load(SEEN_KEY, 0));
+      var newest = items.reduce(
+        function (max, item) {
+          return Math.max(max, item.addedMs);
+        },
+        load(SEEN_KEY, 0),
+      );
       save(SEEN_KEY, newest);
     });
   }
@@ -217,7 +238,9 @@
       '<p class="sxp-sub">Your phone records calls. Sales Xray finds them here. Nothing leaves this phone until you tap Analyse.</p>' +
       (state && (state.audio || state.allFiles)
         ? '<div class="sxp-watch"><span><b>Tell me about new recordings</b><small>Checks every 15 minutes, even when Sales Xray is closed</small></span>' +
-          '<button type="button" class="sxp-switch" role="switch" aria-label="Tell me about new recordings" aria-checked="' + Boolean(watching) + '"></button></div>'
+          '<button type="button" class="sxp-switch" role="switch" aria-label="Tell me about new recordings" aria-checked="' +
+          Boolean(watching) +
+          '"></button></div>'
         : "") +
       "</header>";
     var body;
@@ -246,12 +269,31 @@
               : item.addedMs > seen
                 ? '<span class="sxp-tag sxp-new">New</span>'
                 : "";
-            var meta = [when(item.addedMs), clock(item.durationMs), megabytes(item.size)].filter(Boolean).join(" · ");
-            var note = item.supported ? "" : ' · <span>.' + escape(item.ext) + " not supported yet</span>";
+            var meta = [
+              when(item.addedMs),
+              clock(item.durationMs),
+              megabytes(item.size),
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            var note = item.supported
+              ? ""
+              : " · <span>." + escape(item.ext) + " not supported yet</span>";
             return (
-              '<div class="sxp-row"><span class="sxp-icon">' + WAVE + '</span><span class="sxp-main"><span class="sxp-name">' +
-              escape(item.title) + tag + '</span><span class="sxp-meta">' + escape(meta) + note + "</span></span>" +
-              '<button type="button" class="sxp-go" data-index="' + index + '"' + (item.supported ? "" : " disabled") + ">Analyse</button></div>"
+              '<div class="sxp-row"><span class="sxp-icon">' +
+              WAVE +
+              '</span><span class="sxp-main"><span class="sxp-name">' +
+              escape(item.title) +
+              tag +
+              '</span><span class="sxp-meta">' +
+              escape(meta) +
+              note +
+              "</span></span>" +
+              '<button type="button" class="sxp-go" data-index="' +
+              index +
+              '"' +
+              (item.supported ? "" : " disabled") +
+              ">Analyse</button></div>"
             );
           })
           .join("") +
@@ -262,11 +304,19 @@
     var toggle = sheet.querySelector(".sxp-switch");
     if (toggle)
       toggle.addEventListener("click", function () {
-        call("setWatch", { on: !(state && state.watching) }).then(function (status) {
-          state = status;
-          drawSheet(sheet);
-          toast(status.watching ? (status.notifications ? "Sales Xray will tell you about new call recordings." : "Turn on notifications for Sales Xray to get alerts.") : "New-recording alerts are off.");
-        });
+        call("setWatch", { on: !(state && state.watching) }).then(
+          function (status) {
+            state = status;
+            drawSheet(sheet);
+            toast(
+              status.watching
+                ? status.notifications
+                  ? "Sales Xray will tell you about new call recordings."
+                  : "Turn on notifications for Sales Xray to get alerts."
+                : "New-recording alerts are off.",
+            );
+          },
+        );
       });
     var allow = sheet.querySelector('[data-act="allow"]');
     if (allow)
@@ -281,13 +331,18 @@
     if (allFiles)
       allFiles.addEventListener("click", function () {
         call("openAllFiles");
-        toast("Turn on “Allow access to manage all files” for Sales Xray, then come back.");
+        toast(
+          "Turn on “Allow access to manage all files” for Sales Xray, then come back.",
+        );
       });
-    Array.prototype.forEach.call(sheet.querySelectorAll(".sxp-go"), function (button) {
-      button.addEventListener("click", function () {
-        analyse(items[Number(button.getAttribute("data-index"))]);
-      });
-    });
+    Array.prototype.forEach.call(
+      sheet.querySelectorAll(".sxp-go"),
+      function (button) {
+        button.addEventListener("click", function () {
+          analyse(items[Number(button.getAttribute("data-index"))]);
+        });
+      },
+    );
   }
 
   function waitFor(selector, ms) {
@@ -296,7 +351,8 @@
       (function look() {
         var node = document.querySelector(selector);
         if (node) return resolve(node);
-        if (Date.now() - started > ms) return reject(new Error("upload_area_missing"));
+        if (Date.now() - started > ms)
+          return reject(new Error("upload_area_missing"));
         setTimeout(look, 250);
       })();
     });
@@ -306,15 +362,22 @@
     var chunks = [];
     var offset = 0;
     function next() {
-      return call("read", { source: item.source, offset: offset }).then(function (result) {
-        var binary = atob(result.data);
-        var bytes = new Uint8Array(binary.length);
-        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        chunks.push(bytes);
-        offset += bytes.length;
-        progress(item.size ? Math.min(99, Math.round((offset / item.size) * 100)) : 0);
-        return result.eof || bytes.length === 0 ? chunks : next();
-      });
+      return call("read", { source: item.source, offset: offset }).then(
+        function (result) {
+          var binary = atob(result.data);
+          var bytes = new Uint8Array(binary.length);
+          for (var i = 0; i < binary.length; i++)
+            bytes[i] = binary.charCodeAt(i);
+          chunks.push(bytes);
+          offset += bytes.length;
+          progress(
+            item.size
+              ? Math.min(99, Math.round((offset / item.size) * 100))
+              : 0,
+          );
+          return result.eof || bytes.length === 0 ? chunks : next();
+        },
+      );
     }
     return next();
   }
@@ -332,12 +395,22 @@
       .then(function (area) {
         return readAll(item, function (percent) {
           var node = document.querySelector(".sxp-toast");
-          if (node) node.textContent = "Preparing " + item.title + "… " + percent + "%";
+          if (node)
+            node.textContent = "Preparing " + item.title + "… " + percent + "%";
         }).then(function (chunks) {
-          var file = new File(chunks, item.name, { type: item.mime, lastModified: item.addedMs });
+          var file = new File(chunks, item.name, {
+            type: item.mime,
+            lastModified: item.addedMs,
+          });
           var transfer = new DataTransfer();
           transfer.items.add(file);
-          area.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
+          area.dispatchEvent(
+            new DragEvent("drop", {
+              bubbles: true,
+              cancelable: true,
+              dataTransfer: transfer,
+            }),
+          );
           var sent = load(SENT_KEY, {});
           sent[item.source] = Date.now();
           save(SENT_KEY, sent);
@@ -346,7 +419,9 @@
         });
       })
       .catch(function () {
-        toast("That recording could not be added. Open New analysis and try again.");
+        toast(
+          "That recording could not be added. Open New analysis and try again.",
+        );
       });
   }
 

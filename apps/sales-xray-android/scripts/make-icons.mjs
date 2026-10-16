@@ -53,10 +53,22 @@ async function write(svg, file) {
 const densities = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
 for (const [name, k] of Object.entries(densities)) {
   await write(legacy(48 * k, false), `${res}/mipmap-${name}/ic_launcher.png`);
-  await write(legacy(48 * k, true), `${res}/mipmap-${name}/ic_launcher_round.png`);
-  await write(foreground(108 * k), `${res}/mipmap-${name}/ic_launcher_foreground.png`);
-  await write(splash(320 * k, 480 * k), `${res}/drawable-port-${name}/splash.png`);
-  await write(splash(480 * k, 320 * k), `${res}/drawable-land-${name}/splash.png`);
+  await write(
+    legacy(48 * k, true),
+    `${res}/mipmap-${name}/ic_launcher_round.png`,
+  );
+  await write(
+    foreground(108 * k),
+    `${res}/mipmap-${name}/ic_launcher_foreground.png`,
+  );
+  await write(
+    splash(320 * k, 480 * k),
+    `${res}/drawable-port-${name}/splash.png`,
+  );
+  await write(
+    splash(480 * k, 320 * k),
+    `${res}/drawable-land-${name}/splash.png`,
+  );
 }
 await write(splash(480, 800), `${res}/drawable/splash.png`);
 console.log("icons written");

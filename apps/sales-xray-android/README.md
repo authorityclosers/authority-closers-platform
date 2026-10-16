@@ -9,16 +9,16 @@ The Sales Xray web app (https://salesxray.authorityclosers.com) in a Capacitor 8
   - the app places the call itself;
   - when the call ends, the app reads the phone's call history (connected or not, talk time) and the lead screen opens "How did it go?" already filled in;
   - the app looks for the recording the phone's own dialer saved for that call, and the lead screen offers it for analysis.
-  Nothing is uploaded until the person ticks the consent box and taps Analyse. The web side is `apps/sales-xray-web/app/leads/native-phone.ts`.
+    Nothing is uploaded until the person ticks the consent box and taps Analyse. The web side is `apps/sales-xray-web/app/leads/native-phone.ts`.
 - **Calls on this phone.** A button on other pages lists the call recordings the phone saved by itself, from these folders:
 
-  | Phone maker | Folder |
-  |---|---|
-  | Samsung | `Recordings/Call` |
-  | Xiaomi, Redmi, POCO | `MIUI/sound_recorder/call_rec` |
+  | Phone maker           | Folder                                                           |
+  | --------------------- | ---------------------------------------------------------------- |
+  | Samsung               | `Recordings/Call`                                                |
+  | Xiaomi, Redmi, POCO   | `MIUI/sound_recorder/call_rec`                                   |
   | OnePlus, Realme, Oppo | `Recordings/Call Recordings`, `Music/Recordings/Call Recordings` |
-  | Vivo | `Record/Call` |
-  | Others | `PhoneRecord`, `Call Recordings` |
+  | Vivo                  | `Record/Call`                                                    |
+  | Others                | `PhoneRecord`, `Call Recordings`                                 |
 
 - **Tell me about new recordings.** A 15-minute background check (WorkManager) posts a notification for each new recording.
 
