@@ -100,6 +100,7 @@ export type LeadEvent = {
   source_label: string | null;
   submission_id: string | null;
   simulated: boolean | null;
+  recording?: boolean | null;
   duration_seconds: number | null;
   changed?: string[] | null;
 };

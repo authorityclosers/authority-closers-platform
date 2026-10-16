@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Mail,
   MessageCircle,
+  Mic,
   Pencil,
   Phone,
   PhoneMissed,
@@ -44,6 +45,7 @@ import {
   whatsappHref,
   when,
   type CallTime,
+  type Desk,
   type LeadDetail,
   type LeadEvent,
   type Stage,
@@ -52,6 +54,7 @@ import { sourceText, whyLine } from "./desk-view";
 import {
   pickSimulation,
   readUploadPolicy,
+  runRecordingUpload,
   runSimulatedCall,
   STEP_LABELS,
   type SimulationPick,
@@ -561,6 +564,7 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
           };
     }
     case "call":
+      if (event.recording) return { title: `${who} added the call recording` };
       return {
         title: `${who} ${event.simulated ? "made a sample call" : "called"}${
           event.duration_seconds
@@ -643,7 +647,7 @@ function SimulatedCall({
   if (!detail.can_assign)
     return (
       <p className={styles.hint}>
-        Practice calls are started by an owner or admin for now.
+        Sample calls are started by an owner or admin.
       </p>
     );
 
@@ -701,21 +705,21 @@ function SimulatedCall({
     return (
       <Button onClick={prepare}>
         <Radio size={14} aria-hidden="true" />
-        Practice call
+        Get a sample recording
       </Button>
     );
 
   return (
     <div className={styles.simulation} aria-live="polite">
-      <strong className={styles.simulationTitle}>Practice call</strong>
+      <strong className={styles.simulationTitle}>Sample call</strong>
       {state === "loading" ? (
-        <p className={styles.hint}>Getting a practice recording…</p>
+        <p className={styles.hint}>Getting a sample recording…</p>
       ) : null}
       {pick && (state === "ready" || state === "running") ? (
         <p>
-          Plays a {Math.max(1, Math.round(pick.duration_seconds / 60))}-minute
-          practice recording as {pick.owner_name}&apos;s call and analyses it
-          like a real one. Nobody is dialled.
+          Uses a {Math.max(1, Math.round(pick.duration_seconds / 60))}-minute
+          sample recording as {pick.owner_name}&apos;s call and analyses it like
+          a real one. Nobody is dialled.
         </p>
       ) : null}
       {state === "ready" && policy ? (
@@ -735,7 +739,7 @@ function SimulatedCall({
           <div className={styles.row}>
             <Button onClick={() => setState("idle")}>Cancel</Button>
             <Button variant="primary" onClick={run} disabled={!agreed}>
-              Make the simulated call
+              Analyse the sample call
             </Button>
           </div>
         </>
@@ -780,6 +784,220 @@ function SimulatedCall({
         </>
       ) : null}
     </div>
+  );
+}
+
+/* ---------- Call recording ---------- */
+
+type Me = Desk["me"];
+
+const UPLOAD_STEPS: SimulationStep[] = [
+  "saving",
+  "linking",
+  "checking",
+  "starting",
+];
+const AUDIO = "audio/*,.m4a,.mp3,.wav,.aac,.amr,.awb,.ogg,.opus,.3gp,.3ga";
+
+function sizeLabel(bytes: number): string {
+  return bytes >= 1_000_000
+    ? `${(bytes / 1_000_000).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1_000))} KB`;
+}
+
+/** After a real call: the phone's own recording becomes this lead's analysed call. */
+function RecordingUpload({
+  detail,
+  me,
+  onDone,
+}: {
+  detail: LeadDetail;
+  me: Me;
+  onDone: (next: LeadDetail) => void;
+}) {
+  const [state, setState] = useState<
+    "idle" | "ready" | "running" | "done" | "error"
+  >("idle");
+  const [file, setFile] = useState<File | null>(null);
+  // One attempt per chosen file, so trying again never saves the call twice.
+  const [attempt, setAttempt] = useState("");
+  const [policy, setPolicy] = useState<UploadPolicy | null>(null);
+  const [agreed, setAgreed] = useState(false);
+  const [step, setStep] = useState<SimulationStep>("saving");
+  const [error, setError] = useState<string | null>(null);
+  const [submission, setSubmission] = useState<string | null>(null);
+  const task = useRef<AbortController | null>(null);
+
+  useEffect(() => () => task.current?.abort(), []);
+
+  const choose = async (picked: File | undefined) => {
+    if (!picked) return;
+    setFile(picked);
+    setAttempt(crypto.randomUUID());
+    setError(null);
+    setState("ready");
+    if (policy) return;
+    try {
+      setPolicy(await readUploadPolicy());
+    } catch {
+      setError("The recording terms didn't load. Try again.");
+      setState("error");
+    }
+  };
+
+  const run = async () => {
+    if (!file || !policy || !agreed) return;
+    const controller = new AbortController();
+    task.current = controller;
+    setState("running");
+    setStep("saving");
+    setError(null);
+    try {
+      const next = await runRecordingUpload({
+        lead: detail,
+        file,
+        me,
+        policy,
+        attempt,
+        onStep: setStep,
+        signal: controller.signal,
+      });
+      const call = next.events.find(
+        (event) => event.kind === "call" && event.recording,
+      );
+      setSubmission(call?.submission_id ?? null);
+      setState("done");
+      onDone(next);
+    } catch (reason) {
+      if (controller.signal.aborted) return;
+      setError(
+        reason instanceof LeadsError
+          ? reason.message
+          : "The recording didn't upload. Check your connection and try again.",
+      );
+      setState("error");
+    }
+  };
+
+  const picker = (label: string, sub: string) => (
+    <label className={styles.recordPick}>
+      <span className={styles.wayIcon}>
+        <Mic size={20} aria-hidden="true" />
+      </span>
+      <span>
+        <strong>{label}</strong>
+        <small>{sub}</small>
+      </span>
+      <input
+        type="file"
+        accept={AUDIO}
+        aria-label={label}
+        onChange={(event) => {
+          void choose(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
+    </label>
+  );
+
+  return (
+    <section
+      className={styles.panel}
+      aria-label="Call recording"
+      aria-live="polite"
+    >
+      <div className={styles.panelHead}>
+        <h3>Call recording</h3>
+        {state === "done" ? <Badge tone="good">Added</Badge> : null}
+      </div>
+      {state === "idle"
+        ? picker(
+            "Add the recording",
+            "Pick the call your phone just recorded. Sales Xray analyses it and puts its Report here.",
+          )
+        : null}
+      {file && (state === "ready" || state === "running") ? (
+        <p className={styles.fileLine}>
+          <strong>{file.name}</strong>
+          <small>{sizeLabel(file.size)} · saved as your call</small>
+        </p>
+      ) : null}
+      {state === "ready" ? (
+        policy ? (
+          <>
+            <details className={styles.terms}>
+              <summary>{policy.title}</summary>
+              <p>{policy.description}</p>
+            </details>
+            <label className={styles.toggle}>
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(event) => setAgreed(event.target.checked)}
+              />
+              The customer knows this call is recorded, and I agree to these
+              terms
+            </label>
+            <div className={styles.row}>
+              <Button onClick={() => setState("idle")}>Choose another</Button>
+              <Button variant="primary" onClick={run} disabled={!agreed}>
+                Analyse the call
+              </Button>
+            </div>
+          </>
+        ) : (
+          <p className={styles.hint}>Getting the recording terms…</p>
+        )
+      ) : null}
+      {state === "running" ? (
+        <>
+          <ol className={styles.steps}>
+            {UPLOAD_STEPS.map((item) => (
+              <li
+                key={item}
+                data-state={
+                  UPLOAD_STEPS.indexOf(item) < UPLOAD_STEPS.indexOf(step)
+                    ? "done"
+                    : item === step
+                      ? "now"
+                      : "later"
+                }
+              >
+                {STEP_LABELS[item]}
+              </li>
+            ))}
+          </ol>
+          <p className={styles.hint}>
+            Keep this open until the analysis starts.
+          </p>
+        </>
+      ) : null}
+      {state === "done" ? (
+        <p className={styles.hint}>
+          Analysis started. The call&apos;s Report appears in a few minutes.{" "}
+          {submission ? (
+            <Link className={styles.historyLink} href={callHref(submission)}>
+              Open the call
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
+      {state === "error" ? (
+        <>
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+          <div className={styles.row}>
+            <Button onClick={() => setState("idle")}>Choose another</Button>
+            {file && policy && agreed ? (
+              <Button variant="primary" onClick={run}>
+                Try again
+              </Button>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -930,10 +1148,12 @@ function NoteBox({
 
 function LeadCard({
   detail,
+  me,
   onChanged,
   outcome,
 }: {
   detail: LeadDetail;
+  me: Me | null;
   onChanged: (next: LeadDetail) => void;
   outcome: ReactNode;
 }) {
@@ -1077,6 +1297,12 @@ function LeadCard({
       ) : null}
 
       {detail.can_edit ? outcome : null}
+      {detail.can_edit &&
+      detail.call_mode === "phone" &&
+      me &&
+      lead.calls > 0 ? (
+        <RecordingUpload detail={detail} me={me} onDone={onChanged} />
+      ) : null}
 
       <section className={styles.panel} aria-label="Details">
         <div className={styles.panelHead}>
@@ -1187,10 +1413,12 @@ function LeadCard({
 
 export function LeadSheet({
   leadId,
+  me,
   onClose,
   onChanged,
 }: {
   leadId: string | null;
+  me: Me | null;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -1252,6 +1480,7 @@ export function LeadSheet({
       ) : detail ? (
         <LeadCard
           detail={detail}
+          me={me}
           onChanged={update}
           outcome={
             <CallOutcome
@@ -1280,10 +1509,12 @@ export function LeadSheet({
 
 export function CallingLoop({
   open,
+  me,
   onClose,
   onChanged,
 }: {
   open: boolean;
+  me: Me | null;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -1371,6 +1602,7 @@ export function CallingLoop({
         <LeadCard
           key={detail.lead.lead_id}
           detail={detail}
+          me={me}
           onChanged={(next) => {
             setDetail(next);
             onChanged();

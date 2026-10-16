@@ -209,7 +209,7 @@ export function LeadsRoute() {
             desk.sandbox ? (
               <Badge key="label">Test leads</Badge>
             ) : desk.call_mode === "simulated" ? (
-              <Badge key="label">Practice calls</Badge>
+              <Badge key="label">Sample calls</Badge>
             ) : null,
           ]}
           actions={
@@ -261,12 +261,14 @@ export function LeadsRoute() {
       </div>
       <LeadSheet
         leadId={openLead}
+        me={desk.me}
         onClose={() => setOpenLead(null)}
         onChanged={refresh}
       />
       <CallingLoop
         key={rounds.calling}
         open={calling}
+        me={desk.me}
         onClose={() => {
           setCalling(false);
           refresh();
