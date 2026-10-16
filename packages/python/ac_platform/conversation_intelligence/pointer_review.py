@@ -459,6 +459,23 @@ def merge_into_structure(structure: dict[str, Any], review: dict[str, Any]) -> d
     return merged
 
 
+def project_structure(structure: dict[str, Any], plan: Any) -> dict[str, Any]:
+    """Apply the canonical privacy projection after every enrichment (AUT-2010).
+
+    Runs at read time with the recording's current marks, so a mark made after
+    a review was saved still hides that review's quotes and narratives. The
+    person-recorded final outcome is the person's own record and keeps
+    precedence: it is never rewritten by the projection.
+    """
+    from ac_platform.conversation_intelligence.sensitive_segments import withhold
+
+    person = structure.get("final_call_outcome")
+    projected = withhold({k: v for k, v in structure.items() if k != "final_call_outcome"}, plan)
+    if "final_call_outcome" in structure:
+        projected["final_call_outcome"] = person
+    return projected
+
+
 async def latest_review(database: Any, envelope: dict[str, Any]) -> dict[str, Any] | None:
     """Newest saved review for exactly this run, source and transcript revision."""
     from uuid import UUID

@@ -232,3 +232,77 @@ def test_a_review_without_outcome_details_still_parses() -> None:
     assert "call_outcome_details" not in merge_into_structure(
         {"overview": {}, "pointers": []}, review
     )
+
+
+def _merged_structure() -> dict:
+    review = parse_review(
+        answer(
+            call_opening_first_impression={
+                "evidence": ["s2"],
+                "what_happened": "They said our leads are poor quality, so you pivoted.",
+            }
+        ),
+        SEGMENTS,
+    )
+    structure = {
+        "version": "report-structure/1",
+        "overview": {"score": None, "score_status": "not_scored"},
+        "pointers": [
+            {"id": pointer_id, "number": n, "status": "insufficient_evidence", "score": None}
+            for n, pointer_id in enumerate(POINTER_IDS, 1)
+        ],
+        "final_call_outcome": {"outcome": "Lost", "lost_reason": "Leads are poor quality."},
+    }
+    return merge_into_structure(structure, review)
+
+
+def test_projection_hides_a_later_marked_quote_and_matching_narratives() -> None:
+    from ac_platform.conversation_intelligence.pointer_review import project_structure
+    from ac_platform.conversation_intelligence.sensitive_segments import (
+        WITHHELD_MARKER,
+        grams,
+        withheld_plan,
+    )
+
+    merged = _merged_structure()
+    # s2 is marked after the review was saved: rule A hides its quote by id, and
+    # rule C hides any narrative sharing its words.
+    plan = withheld_plan(
+        [(s["id"], s["text"]) for s in SEGMENTS], {"s2"}, grams(SEGMENTS[1]["text"])
+    )
+    projected = project_structure(merged, plan)
+    first = projected["pointers"][0]
+    assert first["evidence"][0]["segment_id"] == "s2"
+    assert first["evidence"][0]["quote"] == WITHHELD_MARKER
+    assert first["what_happened"] == WITHHELD_MARKER
+    # Unrelated words stay readable; the person's own record keeps precedence.
+    assert projected["pointers"][2]["what_happened"] == "You did this well."
+    assert projected["final_call_outcome"] == merged["final_call_outcome"]
+    assert "poor quality" in json.dumps(merged)  # the input is not mutated
+
+
+def test_projection_follows_marks_from_another_revision_by_their_words() -> None:
+    from ac_platform.conversation_intelligence.pointer_review import project_structure
+    from ac_platform.conversation_intelligence.sensitive_segments import (
+        WITHHELD_MARKER,
+        grams,
+        withheld_plan,
+    )
+
+    merged = _merged_structure()
+    # The mark sits on another revision under a different id ("x9"): no id
+    # matches, but its words do, so the served segment s2 is withheld too.
+    plan = withheld_plan(
+        [(s["id"], s["text"]) for s in SEGMENTS], set(), grams(SEGMENTS[1]["text"])
+    )
+    projected = project_structure(merged, plan)
+    assert projected["pointers"][0]["evidence"][0]["quote"] == WITHHELD_MARKER
+    assert projected["pointers"][0]["what_happened"] == WITHHELD_MARKER
+
+
+def test_projection_is_identity_without_marks() -> None:
+    from ac_platform.conversation_intelligence.pointer_review import project_structure
+    from ac_platform.conversation_intelligence.sensitive_segments import EMPTY_PLAN
+
+    merged = _merged_structure()
+    assert project_structure(merged, EMPTY_PLAN) == merged
