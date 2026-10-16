@@ -58,10 +58,11 @@ a{color:var(--accent)}
 
 <div class="wrap">
 <header>
-  <span class="eyebrow">Gap map · 16 Oct 2026 · for Utkarsh and Suyash</span>
+  <span class="eyebrow">Gap map · updated 16 Oct 2026, 12:45 IST · for Utkarsh and Suyash</span>
   <h1>Sales Xray CRM Gap Map</h1>
-  <p class="lead">The CRM lives inside Sales Xray at <span class="q">/leads</span>: same app, same sign-in. NeoDove is the reference, copied freely (15 Oct decision). Each row shows what NeoDove does, what Sales Xray has today, and what the CRM builds, with its slice and status.</p>
+  <p class="lead">The CRM lives inside Sales Xray at <a href="https://salesxray-dev.authorityclosers.com/leads">salesxray-dev /leads</a>: same app, same sign-in. Switch to the AC Sandbox organisation to see test leads. NeoDove is the reference, copied freely (15 Oct decision). Each row shows what NeoDove does, what Sales Xray has today, and what the CRM builds, with its slice and status.</p>
   <div class="legend">
+    <span class="chip c-done">Live on dev</span>
     <span class="chip c-now">Building now</span>
     <span class="chip c-next">Next</span>
     <span class="chip c-gate">Blocked by a gate</span>
@@ -80,47 +81,47 @@ a{color:var(--accent)}
         <td>"Start" button, then My Leads in three groups: Open, Follow-up, Not Connected. Each has View or Start Calling. Also My Reports, Call Logs and Walk-In Leads.</td>
         <td>Dashboard of analysed calls. Work starts at "New analysis". There is no lead object.</td>
         <td>Desk at /leads: Start calling, three tiles (New, Follow-ups due, Not connected), my day in numbers, today's queue with a "why now" line, Add lead.</td>
-        <td class="slice">a</td><td><span class="chip c-now">Building now</span></td></tr>
+        <td class="slice">a</td><td><span class="chip c-done">Live on dev</span></td></tr>
       <tr><td class="area">Call loop</td>
         <td>One lead at a time, ordered by follow-ups due and priority. The phone's own dialer places the call, with optional auto-dial. The lead must be disposed before the next one appears.</td>
         <td>None.</td>
         <td>Same loop: one lead card, Call, dispose, next lead. Until a calling provider passes its gates, Call makes a simulated call.</td>
-        <td class="slice">a, d</td><td><span class="chip c-now">Building now</span></td></tr>
+        <td class="slice">a, d</td><td><span class="chip c-done">Live on dev</span></td></tr>
       <tr><td class="area">After the call</td>
         <td>"Was the Call Connected?" No: one of 10 reasons (Did not pick, Busy, Switch off…), each with its own retry timing. Yes: stage, tags, follow-up chips (One Hour, Tomorrow, Next Week) and a remark. Only Converted and Lost close a lead.</td>
         <td>Person-entered call outcome per analysed call (won, lost, follow-up, no decision).</td>
         <td>NeoDove's screen: the same 10 reasons, retry after 1 hour then 1 day (none for bad numbers). Connected: Follow-up, Interested, Won or Lost. Open stages need a follow-up time; optional deal value.</td>
-        <td class="slice">a</td><td><span class="chip c-now">Building now</span></td></tr>
+        <td class="slice">a</td><td><span class="chip c-done">Live on dev</span></td></tr>
       <tr><td class="area">Lead record</td>
         <td>Fixed fields plus custom text, date and number fields, a campaign, and contact history.</td>
         <td>Prospect pages (person, company) built from calls.</td>
         <td>A flexible record: every field the source sent is kept as is, and name, phone, email, company, city, language and interest are pulled out. A full history timeline sits on each lead.</td>
-        <td class="slice">a, b</td><td><span class="chip c-now">Building now</span></td></tr>
+        <td class="slice">a, b</td><td><span class="chip c-done">Live on dev</span></td></tr>
       <tr><td class="area">Capture sources</td>
         <td>Facebook and Instagram lead forms, Google Sheets, Forms and Ads, IndiaMART, JustDial, 99acres, Magicbricks, WhatsApp providers, a JSON endpoint, file upload.</td>
         <td>None.</td>
         <td>Manual and referral, CSV and Excel upload with column matching, website form or webhook (JSON or form post, per-source key), Google Sheet sync, then Meta lead forms. Portals come later.</td>
-        <td class="slice">b</td><td><span class="chip c-now">Building now</span><small>Meta: after the Meta app exists</small></td></tr>
+        <td class="slice">b</td><td><span class="chip c-done">Live on dev</span><small>Manual, referral, CSV/Excel, website form, Google Sheet, Google Ads lead form. Meta: waits for AC's Meta app</small></td></tr>
       <tr><td class="area">Duplicates</td>
         <td>On upload: Ignore, Merge, Create duplicates, or Merge and reopen closed leads. The match key isn't public.</td>
         <td>None.</td>
         <td>Matched by phone (normalised, +91 by default). The same record again changes nothing. A new enquiry from a known phone is marked "Asked again", reopens a closed lead, and goes back to the seller who had it.</td>
-        <td class="slice">b</td><td><span class="chip c-now">Building now</span></td></tr>
+        <td class="slice">b</td><td><span class="chip c-done">Live on dev</span></td></tr>
       <tr><td class="area">Allocation</td>
         <td>On-demand (active callers pull), Equal split, or Conditional rules (column = value, assign to user or group, otherwise a fallback). Untouched scheduled leads can move to someone else. Assignment can be disabled per user. No load caps found.</td>
         <td>Organisations, teams and people exist.</td>
         <td>Fair by rules and load, never random: language, area and product, available now, under an open-lead cap. The fewest open leads wins. A returning lead goes back to its seller. Every lead stores why it went to that person. Managers reassign; optional auto-reassign when nobody calls within N minutes.</td>
-        <td class="slice">c</td><td><span class="chip c-now">Building now</span></td></tr>
+        <td class="slice">c</td><td><span class="chip c-done">Live on dev</span></td></tr>
       <tr><td class="area">Recording</td>
         <td>Reads the Android phone's built-in call-recorder folder (or NeoDialer). Cloud telephony records on the server.</td>
         <td>Upload in all common phone formats. Android app with dialer pickup (PR #331) not merged (AUT-1552). Provider route A chosen; adapter is fixtures only.</td>
         <td>Now: a simulated recording, one of the synthetic audio calls matching the lead's language. Later: the Android app on a test phone, then the provider.</td>
-        <td class="slice">d</td><td><span class="chip c-now">Simulated now</span><small><span class="chip c-gate">Real calls gated</span></small></td></tr>
+        <td class="slice">d</td><td><span class="chip c-done">Simulated: live on dev</span><small><span class="chip c-gate">Real calls gated</span></small></td></tr>
       <tr><td class="area">Analysis</td>
         <td>Paid AI plans with AI minutes.</td>
         <td><span class="chip c-done">Exists</span> Full pipeline (about ₹0.56 per audio minute) and the new three-part Report with 27 pointers.</td>
         <td>Every desk call runs the real pipeline. Its Report is attached to the lead and opens from the lead's history.</td>
-        <td class="slice">d</td><td><span class="chip c-now">Building now</span></td></tr>
+        <td class="slice">d</td><td><span class="chip c-next">Waits on the dev AI budget</span></td></tr>
       <tr><td class="area">Offers and packages</td>
         <td>A deal amount on disposition only.</td>
         <td>Sales Xray's plans are its own subscriptions, not AC's offers.</td>
@@ -130,7 +131,7 @@ a{color:var(--accent)}
         <td>Dashboard: pinned campaigns, lead source summary, lead analysis, call analysis (attempts, connected %), live agent tracking.</td>
         <td>Organisation insights and Team Coaching.</td>
         <td>Team tab: per seller, open leads, due now, calls and connected today. Leads by stage and by source, unassigned, waiting for a first call. Rules editor per seller.</td>
-        <td class="slice">c</td><td><span class="chip c-now">Building now</span></td></tr>
+        <td class="slice">c</td><td><span class="chip c-done">Live on dev</span></td></tr>
       <tr><td class="area">Messages</td>
         <td>WhatsApp, SMS and email templates that open the phone's own apps.</td>
         <td>None.</td>
