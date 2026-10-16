@@ -12,14 +12,22 @@ from ac_platform.lead_desk.connectors.google_ads import (
 
 # Google's documented sample shape, with a custom question.
 SAMPLE = {
-    "lead_id": "TeSter-123-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz-0123456789-AaBbCcDdEe",
+    "lead_id": "TeSter-123-ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789-AaBbCcDdEe",
     "user_column_data": [
         {"column_name": "Full Name", "string_value": "Asha Rao", "column_id": "FULL_NAME"},
-        {"column_name": "User Phone", "string_value": "+91 98765 43210", "column_id": "PHONE_NUMBER"},
+        {
+            "column_name": "User Phone",
+            "string_value": "+91 98765 43210",
+            "column_id": "PHONE_NUMBER",
+        },
         {"column_name": "User Email", "string_value": "Asha@Example.com", "column_id": "EMAIL"},
         {"column_name": "City", "string_value": "Pune", "column_id": "CITY"},
         {"column_name": "Company Name", "string_value": "Rao Solar", "column_id": "COMPANY_NAME"},
-        {"column_name": "What is your monthly budget?", "string_value": "50k-1L", "column_id": "budget_q"},
+        {
+            "column_name": "What is your monthly budget?",
+            "string_value": "50k-1L",
+            "column_id": "budget_q",
+        },
     ],
     "api_version": "1.0",
     "form_id": 40000000000,
@@ -36,7 +44,9 @@ def test_key_is_the_sources_key() -> None:
     assert google_key(SAMPLE) == "source-key-123"
 
 
-@pytest.mark.parametrize("bad", [{}, {"google_key": ""}, {"google_key": 5}, {"google_key": "x" * 200}])
+@pytest.mark.parametrize(
+    "bad", [{}, {"google_key": ""}, {"google_key": 5}, {"google_key": "x" * 200}]
+)
 def test_a_missing_or_odd_key_is_refused(bad: dict) -> None:
     with pytest.raises(GoogleAdsError):
         google_key(bad)
