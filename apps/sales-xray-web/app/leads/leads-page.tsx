@@ -48,10 +48,17 @@ import styles from "./leads.module.css";
 
 type Tab = "desk" | "all" | "team" | "sources";
 
-const readHash = () => window.location.hash;
+// The handed-over lead is read once, then wiped from the address at once, so it
+// never sits in the address bar or the browser's history.
+let handedOver: string | null = null;
+const readHash = () => (handedOver ??= window.location.hash);
 const onHashChange = (change: () => void) => {
-  window.addEventListener("hashchange", change);
-  return () => window.removeEventListener("hashchange", change);
+  const listener = () => {
+    handedOver = null;
+    change();
+  };
+  window.addEventListener("hashchange", listener);
+  return () => window.removeEventListener("hashchange", listener);
 };
 
 export function LeadsSkeleton() {
@@ -82,6 +89,14 @@ export function LeadsRoute() {
   // travels after "#", so the lead's details never reach a server or its logs.
   const hash = useSyncExternalStore(onHashChange, readHash, () => "");
   const shared = sharedLead(new URLSearchParams(hash.replace(/^#/, "")));
+  useEffect(() => {
+    if (window.location.hash.includes("add=lead"))
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname + window.location.search,
+      );
+  }, [hash]);
   const authenticated =
     access?.authenticated === true &&
     access.status === "ready" &&
@@ -119,10 +134,7 @@ export function LeadsRoute() {
   };
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
-  const closeShared = () => {
-    setSharedDone(true);
-    router.replace(LEADS_PATH);
-  };
+  const closeShared = () => setSharedDone(true);
 
   useEffect(() => {
     if (!authenticated) return;
