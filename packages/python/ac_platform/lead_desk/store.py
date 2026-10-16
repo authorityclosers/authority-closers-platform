@@ -308,7 +308,7 @@ class LeadDesk:
                 return "due", f"Asked again · {source}"
             return "due", f"{STAGE_LABELS[lead.stage]} due"
         if due is not None and due <= day_end:
-            return "later", f"{STAGE_LABELS[lead.stage]} later today"
+            return "later", "Try again" if lead.stage == "not_connected" else "Follow-up"
         return "open", STAGE_LABELS[lead.stage]
 
     def _row(self, lead: Lead, names: Mapping[UUID, str], day_end: datetime) -> LeadRow:

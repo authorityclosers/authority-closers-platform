@@ -375,6 +375,7 @@
 .sheetBody {
   position: relative;
   display: grid;
+  align-content: start;
   gap: 14px;
   min-height: 100%;
   box-sizing: border-box;
