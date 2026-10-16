@@ -11,7 +11,8 @@ export type PolicySlug =
   | "privacy"
   | "refunds"
   | "delivery"
-  | "contact";
+  | "contact"
+  | "data-deletion";
 
 const TITLES: Record<PolicySlug, string> = {
   pricing: "Pricing",
@@ -20,6 +21,18 @@ const TITLES: Record<PolicySlug, string> = {
   refunds: "Refund and cancellation policy",
   delivery: "Delivery policy",
   contact: "Contact us",
+  "data-deletion": "Data deletion",
+};
+
+// Each page's own "Last updated" date.
+const UPDATED: Record<PolicySlug, [string, string]> = {
+  pricing: ["2026-10-03", "3 October 2026"],
+  terms: ["2026-10-03", "3 October 2026"],
+  privacy: ["2026-10-16", "16 October 2026"],
+  refunds: ["2026-10-03", "3 October 2026"],
+  delivery: ["2026-10-03", "3 October 2026"],
+  contact: ["2026-10-03", "3 October 2026"],
+  "data-deletion": ["2026-10-16", "16 October 2026"],
 };
 
 type Section = {
@@ -29,6 +42,57 @@ type Section = {
 };
 
 const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
+  "data-deletion": [
+    {
+      title: "How to ask",
+      paragraphs: [
+        'Email admin@authorityclosers.com from the email address your data is linked to, with the subject "Delete my data". Say what you want deleted: your whole account, particular recordings or reports, or a lead.',
+        "If you have a Sales Xray account, you can also ask for a recording or report to be deleted from inside your account.",
+      ],
+    },
+    {
+      title: "Leads from Facebook or Instagram forms",
+      paragraphs: [
+        "Businesses that use Sales Xray can receive the answers you give in their Facebook or Instagram lead forms, such as your name, phone number and email address. That business decides how it uses your details, so you can also ask it directly.",
+        "To have such a lead deleted from Sales Xray, email us the phone number or email address you entered in the form. We delete the lead and tell the business that we have.",
+      ],
+    },
+    {
+      title: "Businesses that connected a Facebook Page",
+      paragraphs: [
+        "In Sales Xray, open Leads, then Sources, and disconnect the Page. New leads stop arriving at once.",
+        "To remove Sales Xray's access at Meta as well, open Facebook Settings, then Business integrations, and remove Sales Xray Leads.",
+        "To delete the leads already received, or the stored connection to your Page, email us.",
+      ],
+    },
+    {
+      title: "What we delete",
+      bullets: [
+        "Account details: name, email address and mobile number.",
+        "Recordings, transcripts and reports.",
+        "Leads and what is stored with them, including lead-form answers, notes and call history.",
+        "The stored connection to a Facebook Page.",
+      ],
+    },
+    {
+      title: "When",
+      paragraphs: [
+        "We reply to confirm that we received your request, and again when the deletion is done.",
+      ],
+    },
+    {
+      title: "What we keep",
+      bullets: [
+        "Invoices and payment records that tax law requires us to keep.",
+        "Audit records that show a request was made and carried out.",
+        "Backups and copies held by our service providers, which this request does not delete.",
+      ],
+    },
+    {
+      title: "More",
+      paragraphs: ["See the Privacy policy at /privacy."],
+    },
+  ],
   delivery: [
     {
       title: "Online service",
@@ -211,6 +275,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
       title: "Your rights",
       paragraphs: [
         "You may contact us about access, correction, or deletion of your personal data, or to raise a grievance. Email marketing@estateautopilots.com. We handle requests under applicable law.",
+        "To ask for deletion, including leads from Facebook or Instagram lead forms, see /data-deletion.",
       ],
     },
     {
@@ -221,6 +286,25 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     },
   ],
 };
+
+// These page paths, written in the text, become links.
+const LINKED = /(\/(?:privacy|data-deletion))(?=[.,\s]|$)/;
+
+function Linked({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(LINKED).map((part, index) =>
+        index % 2 ? (
+          <a key={index} href={part}>
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
 
 function ContentSections({
   slug,
@@ -235,12 +319,16 @@ function ContentSections({
           {section.bullets ? (
             <ul>
               {section.bullets.map((bullet) => (
-                <li key={bullet}>{bullet}</li>
+                <li key={bullet}>
+                  <Linked text={bullet} />
+                </li>
               ))}
             </ul>
           ) : null}
           {section.paragraphs?.map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
+            <p key={paragraph}>
+              <Linked text={paragraph} />
+            </p>
           ))}
         </section>
       ))}
@@ -310,7 +398,8 @@ export function PolicyPage({
         <p className={styles.eyebrow}>Sales Xray</p>
         <h1>{TITLES[slug]}</h1>
         <p className={styles.updated}>
-          Last updated <time dateTime="2026-10-03">3 October 2026</time>
+          Last updated{" "}
+          <time dateTime={UPDATED[slug][0]}>{UPDATED[slug][1]}</time>
         </p>
         {slug === "pricing" ? (
           <>

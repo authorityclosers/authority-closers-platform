@@ -104,6 +104,7 @@ const policyRoutes: PolicySlug[] = [
   "refunds",
   "delivery",
   "contact",
+  "data-deletion",
 ];
 
 for (const slug of policyRoutes) {
@@ -218,4 +219,16 @@ it("hides unavailable plan prices and top-up amounts", () => {
   expect(pricingWithMissingPrice).toContain(
     "Price is not listed in the catalogue.",
   );
+});
+
+it("explains how to delete data, including leads from Meta lead forms", () => {
+  const page = renderToStaticMarkup(<PolicyPage slug="data-deletion" />);
+  const privacy = renderToStaticMarkup(<PolicyPage slug="privacy" />);
+  expect(page).toContain("<h1>Data deletion</h1>");
+  expect(page).toContain("admin@authorityclosers.com");
+  expect(page).toContain("Facebook or Instagram lead forms");
+  expect(page).toContain("What we keep");
+  expect(page).toContain('dateTime="2026-10-16"');
+  expect(privacy).toContain('see <a href="/data-deletion">/data-deletion</a>');
+  expect(page).toContain('<a href="/privacy">/privacy</a>');
 });
