@@ -614,6 +614,100 @@ export function quickFollowUp(
   return at;
 }
 
+export type CallTime = "hour" | "evening" | "morning" | "week";
+
+/** When to call again, as a human time: this evening, tomorrow at 10, next week at 10. */
+export function nextCallTime(choice: CallTime, now: Date = new Date()): Date {
+  const at = new Date(now);
+  at.setSeconds(0, 0);
+  if (choice === "hour") {
+    at.setHours(at.getHours() + 1);
+    return at;
+  }
+  if (choice === "evening") {
+    const six = new Date(at);
+    six.setHours(18, 0, 0, 0);
+    if (six.getTime() - now.getTime() >= 60 * 60 * 1000) return six;
+    at.setHours(at.getHours() + 2);
+    return at;
+  }
+  at.setDate(at.getDate() + (choice === "morning" ? 1 : 7));
+  at.setHours(10, 0, 0, 0);
+  return at;
+}
+
+/** A phone number as people read it: "+91 98765 43210" for Indian mobiles. */
+export function displayPhone(phone: string): string {
+  const india = /^\+91([6-9]\d{4})(\d{5})$/.exec(phone);
+  return india ? `+91 ${india[1]} ${india[2]}` : phone;
+}
+
+/** A WhatsApp chat with this number (digits only, country code included). */
+export function whatsappHref(phone: string): string {
+  return `https://wa.me/${phone.replace(/[^0-9]/g, "")}`;
+}
+
+/** Logs a call the seller placed from their own phone, with the time they were away. */
+export function logPhoneCall(
+  leadId: string,
+  seconds: number | null,
+  command = commandId(),
+) {
+  return request<LeadDetail>(
+    `/leads/${encodeURIComponent(leadId)}/calls/phone`,
+    json("POST", {
+      command_id: command,
+      ...(seconds == null
+        ? {}
+        : {
+            duration_seconds: Math.min(7200, Math.max(0, Math.round(seconds))),
+          }),
+    }),
+  );
+}
+
+// The call the seller just started from the desk, so the result can follow it
+// even if the phone reloads the page while the dialer is open.
+const PENDING_CALL = "sx-leads-pending-call";
+const PENDING_MAX_MS = 3 * 60 * 60 * 1000;
+
+export type PendingCall = { leadId: string; at: number };
+
+export function rememberCall(leadId: string, now: number = Date.now()): void {
+  try {
+    localStorage.setItem(PENDING_CALL, JSON.stringify({ leadId, at: now }));
+  } catch {
+    // Storage blocked: the result is still asked when the lead is open.
+  }
+}
+
+export function peekPendingCall(now: number = Date.now()): PendingCall | null {
+  try {
+    const raw = localStorage.getItem(PENDING_CALL);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PendingCall>;
+    if (typeof value.leadId !== "string" || typeof value.at !== "number")
+      return null;
+    if (now - value.at > PENDING_MAX_MS) {
+      localStorage.removeItem(PENDING_CALL);
+      return null;
+    }
+    return { leadId: value.leadId, at: value.at };
+  } catch {
+    return null;
+  }
+}
+
+export function takePendingCall(now: number = Date.now()): PendingCall | null {
+  const pending = peekPendingCall(now);
+  try {
+    localStorage.removeItem(PENDING_CALL);
+  } catch {
+    // Nothing to clear.
+  }
+  return pending;
+}
+
 /** A value for <input type="datetime-local"> in the viewer's own time. */
 export function localInputValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");

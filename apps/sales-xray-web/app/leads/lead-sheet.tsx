@@ -1,12 +1,23 @@
 "use client";
 
 /**
- * One lead: its card, NeoDove's dispose screen and its history, in a side
- * sheet. CallingLoop is NeoDove's "Start": one lead at a time, and the next
- * one appears only after this one is disposed.
+ * One lead, made for calling from a phone: a big Call button, then "How did
+ * the call go?" the moment the seller is back from the dialer, then the
+ * details, the owner and the history. CallingLoop is NeoDove's "Start": one
+ * lead at a time, and the next one appears only after this one is saved.
  */
 
-import { CheckCircle2, Phone, PhoneOff, Radio, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Mail,
+  MessageCircle,
+  Pencil,
+  Phone,
+  PhoneMissed,
+  PhoneOff,
+  Radio,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
@@ -15,19 +26,24 @@ import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
 import {
   addNote,
   ago,
-  CONNECTED_STAGES,
   dispose,
+  displayPhone,
   editLead,
   FIELD_LABELS,
   LeadsError,
   localInputValue,
+  logPhoneCall,
   minutesLabel,
-  NOT_CONNECTED_REASONS,
-  quickFollowUp,
+  nextCallTime,
+  peekPendingCall,
   readLead,
   readNext,
   reassign,
+  rememberCall,
+  takePendingCall,
+  whatsappHref,
   when,
+  type CallTime,
   type LeadDetail,
   type LeadEvent,
   type Stage,
@@ -42,6 +58,9 @@ import {
   type SimulationStep,
 } from "./simulated-call";
 import styles from "./leads.module.css";
+
+// Sources whose leads arrive with a form's own answers worth showing.
+const FORM_SOURCES = new Set(["meta", "webhook", "sheet", "csv", "google_ads"]);
 
 const NO_RETRY = new Set([
   "invalid_number",
@@ -99,220 +118,311 @@ export function Sheet({
   );
 }
 
-/* ---------- Dispose ("Was the call connected?") ---------- */
+/* ---------- After the call ---------- */
 
-type Follow = "hour" | "tomorrow" | "week" | "custom" | null;
+type Talk = "talked" | "missed" | null;
+type Pick = CallTime | "custom";
 
-export function DisposeForm({
+const MISSED: { key: string; label: string }[] = [
+  { key: "did_not_pick", label: "No answer" },
+  { key: "busy", label: "Busy" },
+  { key: "disconnected", label: "Cut the call" },
+  { key: "switched_off", label: "Phone switched off" },
+  { key: "out_of_coverage", label: "No network" },
+  { key: "not_connected", label: "Call didn't go through" },
+  { key: "invalid_number", label: "Wrong number" },
+  { key: "not_in_use", label: "Number not in use" },
+  { key: "incoming_not_available", label: "Can't take calls" },
+  { key: "other", label: "Something else" },
+];
+
+const NEXT: { key: Stage; label: string; sub: string; tone: string }[] = [
+  {
+    key: "interested",
+    label: "Interested",
+    sub: "Wants to buy or see more",
+    tone: "warm",
+  },
+  {
+    key: "follow_up",
+    label: "Call back later",
+    sub: "Asked to talk another time",
+    tone: "later",
+  },
+  { key: "won", label: "Won", sub: "They bought", tone: "good" },
+  { key: "lost", label: "Not interested", sub: "Close this lead", tone: "bad" },
+];
+
+const TIMES: { key: Pick; label: string }[] = [
+  { key: "hour", label: "In 1 hour" },
+  { key: "evening", label: "This evening" },
+  { key: "morning", label: "Tomorrow morning" },
+  { key: "week", label: "Next week" },
+  { key: "custom", label: "Pick a time" },
+];
+
+function timeOf(pick: Pick | null, custom: string): Date | null {
+  if (pick === null) return null;
+  if (pick !== "custom") return nextCallTime(pick);
+  const at = custom ? new Date(custom) : null;
+  return at && !Number.isNaN(at.getTime()) ? at : null;
+}
+
+function TimePicker({
+  label,
+  pick,
+  custom,
+  onPick,
+  onCustom,
+}: {
+  label: string;
+  pick: Pick;
+  custom: string;
+  onPick: (pick: Pick) => void;
+  onCustom: (value: string) => void;
+}) {
+  const at = timeOf(pick, custom);
+  return (
+    <div className={styles.outcomeStep}>
+      <span className={styles.stepLabel}>{label}</span>
+      <div className={styles.chips} role="group" aria-label={label}>
+        {TIMES.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={styles.chip}
+            aria-pressed={pick === item.key}
+            onClick={() => onPick(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {pick === "custom" ? (
+        <Field label="Date and time">
+          <input
+            type="datetime-local"
+            value={custom}
+            min={localInputValue(new Date())}
+            onChange={(event) => onCustom(event.target.value)}
+          />
+        </Field>
+      ) : at ? (
+        <p className={styles.hint}>{when(at.toISOString())}</p>
+      ) : null}
+    </div>
+  );
+}
+
+export function CallOutcome({
   detail,
   submitLabel,
+  attention,
+  beforeSave,
   onSaved,
 }: {
   detail: LeadDetail;
   submitLabel: string;
+  /** The seller just came back from the dialer: this card asks first. */
+  attention: boolean;
+  /** Logs a call still waiting to be logged; returns the lead as it now is. */
+  beforeSave: () => Promise<LeadDetail>;
   onSaved: (next: LeadDetail) => void;
 }) {
   const id = useId();
-  const [connected, setConnected] = useState<boolean | null>(null);
+  const ref = useRef<HTMLElement>(null);
+  const [talk, setTalk] = useState<Talk>(null);
   const [reason, setReason] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage | null>(null);
-  const [follow, setFollow] = useState<Follow>(null);
+  const [next, setNext] = useState<Pick>("morning");
+  const [retry, setRetry] = useState<Pick | null>(null);
   const [custom, setCustom] = useState(() =>
-    localInputValue(quickFollowUp("tomorrow")),
+    localInputValue(nextCallTime("morning")),
   );
-  const [remark, setRemark] = useState("");
+  const [note, setNote] = useState("");
   const [deal, setDeal] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (attention)
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [attention]);
+
   const closes = stage === "won" || stage === "lost";
-  const needsFollow = connected === true && stage !== null && !closes;
-  const followAt =
-    follow === null
-      ? null
-      : follow === "custom"
-        ? custom
-          ? new Date(custom)
-          : null
-        : quickFollowUp(follow);
-  const valid =
-    connected === false
-      ? reason !== null
-      : connected === true &&
-        stage !== null &&
-        (!needsFollow ||
-          (followAt !== null && !Number.isNaN(followAt.getTime())));
-  const retryNote =
-    connected === false && reason
-      ? NO_RETRY.has(reason)
-        ? "No automatic retry for a bad number."
-        : `If you don't pick a time, it comes back ${detail.lead.attempts ? "tomorrow" : "in 1 hour"}.`
+  const needsTime = talk === "talked" && stage !== null && !closes;
+  const at = needsTime
+    ? timeOf(next, custom)
+    : talk === "missed"
+      ? timeOf(retry, custom)
       : null;
+  const valid =
+    talk === "missed"
+      ? reason !== null && (retry === null || at !== null)
+      : talk === "talked" && stage !== null && (!needsTime || at !== null);
+  const autoRetry =
+    reason === null
+      ? null
+      : NO_RETRY.has(reason)
+        ? "No automatic retry for a bad number."
+        : `It comes back on the desk ${detail.lead.attempts ? "tomorrow" : "in 1 hour"}.`;
 
   const submit = async () => {
     if (!valid || saving) return;
     setSaving(true);
     setError(null);
     try {
-      const next = await dispose(detail.lead, {
-        connected: connected === true,
-        reason: connected === false ? (reason ?? undefined) : undefined,
-        stage: connected === true ? (stage ?? undefined) : undefined,
-        follow_up_at:
-          followAt && (needsFollow || connected === false)
-            ? followAt.toISOString()
-            : undefined,
-        remark: remark.trim() || undefined,
-        deal_value: deal.trim() || undefined,
-      });
-      onSaved(next);
-    } catch (reason) {
+      const current = await beforeSave();
+      onSaved(
+        await dispose(current.lead, {
+          connected: talk === "talked",
+          reason: talk === "missed" ? (reason ?? undefined) : undefined,
+          stage: talk === "talked" ? (stage ?? undefined) : undefined,
+          follow_up_at: at ? at.toISOString() : undefined,
+          remark: note.trim() || undefined,
+          deal_value: deal.trim() || undefined,
+        }),
+      );
+    } catch (failure) {
       setError(
-        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+        failure instanceof LeadsError
+          ? failure.message
+          : "Not saved. Try again.",
       );
     } finally {
       setSaving(false);
     }
   };
 
-  const chip = (
-    key: string,
-    label: string,
-    on: boolean,
-    pick: () => void,
-    tone?: string,
-  ) => (
-    <button
-      key={key}
-      type="button"
-      className={styles.chip}
-      aria-pressed={on}
-      data-tone={tone}
-      onClick={pick}
-    >
-      {label}
-    </button>
-  );
-
   return (
-    <section className={styles.dispose} aria-labelledby={`${id}-q`}>
-      <h3 id={`${id}-q`} className={styles.disposeQuestion}>
-        Was the call connected?
+    <section
+      ref={ref}
+      className={styles.outcome}
+      data-attention={attention || undefined}
+      aria-labelledby={`${id}-q`}
+    >
+      <h3 id={`${id}-q`} className={styles.outcomeTitle}>
+        {attention
+          ? "Back from the call. How did it go?"
+          : "How did the call go?"}
       </h3>
-      <div className={styles.connectRow}>
+      <div
+        className={styles.choiceRow}
+        role="group"
+        aria-label="Did you talk to them?"
+      >
         <button
           type="button"
-          className={styles.connectButton}
-          aria-pressed={connected === true}
-          data-kind="yes"
+          className={styles.choiceTile}
+          data-kind="talked"
+          aria-pressed={talk === "talked"}
           onClick={() => {
-            setConnected(true);
+            setTalk("talked");
             setReason(null);
+            setRetry(null);
           }}
         >
-          <CheckCircle2 size={16} aria-hidden="true" />
-          Yes, connected
+          <CheckCircle2 size={22} aria-hidden="true" />
+          We talked
         </button>
         <button
           type="button"
-          className={styles.connectButton}
-          aria-pressed={connected === false}
-          data-kind="no"
+          className={styles.choiceTile}
+          data-kind="missed"
+          aria-pressed={talk === "missed"}
           onClick={() => {
-            setConnected(false);
+            setTalk("missed");
             setStage(null);
           }}
         >
-          <PhoneOff size={16} aria-hidden="true" />
-          Not connected
+          <PhoneMissed size={22} aria-hidden="true" />
+          Didn&apos;t get through
         </button>
       </div>
 
-      {connected === false ? (
-        <div className={styles.disposeBlock}>
-          <span className={styles.blockLabel}>Why didn&apos;t it connect?</span>
-          <div className={styles.chips} role="group" aria-label="Reason">
-            {NOT_CONNECTED_REASONS.map((item) =>
-              chip(item.key, item.label, reason === item.key, () =>
-                setReason(item.key),
-              ),
-            )}
-          </div>
-          {retryNote ? <p className={styles.hint}>{retryNote}</p> : null}
-        </div>
-      ) : null}
-
-      {connected === true ? (
-        <div className={styles.disposeBlock}>
-          <span className={styles.blockLabel}>Where does the lead stand?</span>
-          <div className={styles.chips} role="group" aria-label="Stage">
-            {CONNECTED_STAGES.map((item) =>
-              chip(
-                item.key,
-                item.label,
-                stage === item.key,
-                () => setStage(item.key),
-                item.key === "won"
-                  ? "good"
-                  : item.key === "lost"
-                    ? "bad"
-                    : undefined,
-              ),
-            )}
-          </div>
-          {stage === "won" || stage === "lost" ? (
-            <p className={styles.hint}>
-              {stage === "won" ? "Won" : "Lost"} closes the lead. It reopens if
-              they get in touch again.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {connected !== null &&
-      (connected === false ? reason : stage && !closes) ? (
-        <div className={styles.disposeBlock}>
-          <span className={styles.blockLabel}>
-            {connected ? "Next follow-up" : "Try again (optional)"}
-          </span>
+      {talk === "missed" ? (
+        <div className={styles.outcomeStep}>
+          <span className={styles.stepLabel}>What happened?</span>
           <div
-            className={styles.chips}
+            className={styles.reasonGrid}
             role="group"
-            aria-label="Follow-up time"
+            aria-label="What happened"
           >
-            {chip("hour", "One hour", follow === "hour", () =>
-              setFollow("hour"),
-            )}
-            {chip("tomorrow", "Tomorrow", follow === "tomorrow", () =>
-              setFollow("tomorrow"),
-            )}
-            {chip("week", "Next week", follow === "week", () =>
-              setFollow("week"),
-            )}
-            {chip("custom", "Pick a time", follow === "custom", () =>
-              setFollow("custom"),
-            )}
+            {MISSED.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={styles.reasonTile}
+                aria-pressed={reason === item.key}
+                onClick={() => setReason(item.key)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
-          {follow === "custom" ? (
-            <Field label="Follow-up date and time">
-              <input
-                type="datetime-local"
-                value={custom}
-                min={localInputValue(new Date())}
-                onChange={(event) => setCustom(event.target.value)}
-              />
-            </Field>
-          ) : followAt ? (
-            <p className={styles.hint}>
-              Follow up {when(followAt.toISOString())}.
+          {reason && retry === null ? (
+            <p className={styles.retryLine}>
+              {autoRetry}
+              {!NO_RETRY.has(reason) ? (
+                <button
+                  type="button"
+                  className={styles.linkButton}
+                  onClick={() => setRetry("evening")}
+                >
+                  Pick a time instead
+                </button>
+              ) : null}
             </p>
+          ) : null}
+          {reason && retry !== null ? (
+            <TimePicker
+              label="Try again"
+              pick={retry}
+              custom={custom}
+              onPick={setRetry}
+              onCustom={setCustom}
+            />
           ) : null}
         </div>
       ) : null}
 
-      {connected !== null ? (
-        <div className={styles.disposeFields}>
-          {connected && (stage === "interested" || stage === "won") ? (
+      {talk === "talked" ? (
+        <div className={styles.outcomeStep}>
+          <span className={styles.stepLabel}>What happens next?</span>
+          <div
+            className={styles.stageGrid}
+            role="group"
+            aria-label="What happens next"
+          >
+            {NEXT.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={styles.stageTile}
+                data-tone={item.tone}
+                aria-pressed={stage === item.key}
+                onClick={() => setStage(item.key)}
+              >
+                <strong>{item.label}</strong>
+                <small>{item.sub}</small>
+              </button>
+            ))}
+          </div>
+          {needsTime ? (
+            <TimePicker
+              label="Next call"
+              pick={next}
+              custom={custom}
+              onPick={setNext}
+              onCustom={setCustom}
+            />
+          ) : null}
+          {closes ? (
+            <p className={styles.hint}>
+              This closes the lead. It reopens if they get in touch again.
+            </p>
+          ) : null}
+          {stage === "interested" || stage === "won" ? (
             <Field label="Deal value (₹, optional)">
               <input
                 inputMode="decimal"
@@ -323,19 +433,26 @@ export function DisposeForm({
               />
             </Field>
           ) : null}
-          <Field label="Notes from the call" wide>
-            <textarea
-              value={remark}
-              maxLength={1000}
-              placeholder={
-                connected
-                  ? "What they said, what you promised"
-                  : "Anything to know before the next try"
-              }
-              onChange={(event) => setRemark(event.target.value)}
-            />
-          </Field>
         </div>
+      ) : null}
+
+      {talk !== null ? (
+        <Field
+          label={talk === "talked" ? "What did they say?" : "Note (optional)"}
+          wide
+        >
+          <textarea
+            rows={2}
+            value={note}
+            maxLength={1000}
+            placeholder={
+              talk === "talked"
+                ? "What they need, what you promised"
+                : "Anything to know before the next try"
+            }
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </Field>
       ) : null}
 
       {error ? (
@@ -343,13 +460,63 @@ export function DisposeForm({
           {error}
         </p>
       ) : null}
-      <div className={styles.disposeActions}>
-        <Button variant="primary" onClick={submit} disabled={!valid || saving}>
+      {talk !== null ? (
+        <button
+          type="button"
+          className={styles.saveButton}
+          onClick={submit}
+          disabled={!valid || saving}
+        >
           {saving ? "Saving…" : submitLabel}
-        </Button>
-      </div>
+        </button>
+      ) : null}
     </section>
   );
+}
+
+/* ---------- Back from the dialer ---------- */
+
+/**
+ * Calls `onReturn` with the seconds away when the seller comes back to the
+ * page after tapping Call for this lead (the dialer hid the page). It also
+ * runs once on open, for a phone that reloaded the page while calling.
+ */
+function useCallReturn(
+  leadId: string | null,
+  onReturn: (seconds: number) => void,
+) {
+  const latest = useRef(onReturn);
+  useEffect(() => {
+    latest.current = onReturn;
+  });
+  useEffect(() => {
+    if (!leadId) return;
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      const pending = peekPendingCall();
+      if (!pending || pending.leadId !== leadId) return;
+      const seconds = (Date.now() - pending.at) / 1000;
+      if (seconds < 4) return;
+      takePendingCall();
+      latest.current(seconds);
+    };
+    const timer = window.setTimeout(check, 0);
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+    };
+  }, [leadId]);
+}
+
+/** A call tapped on a computer (no dialer came up) is logged when its result is saved. */
+async function logWaitingCall(detail: LeadDetail): Promise<LeadDetail> {
+  const pending = peekPendingCall();
+  if (!pending || pending.leadId !== detail.lead.lead_id) return detail;
+  takePendingCall();
+  return logPhoneCall(detail.lead.lead_id, (Date.now() - pending.at) / 1000);
 }
 
 /* ---------- History ---------- */
@@ -395,7 +562,7 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
     }
     case "call":
       return {
-        title: `${who} ${event.simulated ? "made a simulated call" : "called"}${
+        title: `${who} ${event.simulated ? "made a sample call" : "called"}${
           event.duration_seconds
             ? ` · ${minutesLabel(event.duration_seconds)}`
             : ""
@@ -674,7 +841,7 @@ function EditDetails({
   };
 
   return (
-    <section className={styles.dispose} aria-label="Edit details">
+    <div className={styles.editForm}>
       <div className={styles.formGrid}>
         {EDITABLE.map((key) => (
           <Field key={key} label={FIELD_LABELS[key]}>
@@ -684,6 +851,7 @@ function EditDetails({
               inputMode={
                 key === "phone" ? "tel" : key === "email" ? "email" : undefined
               }
+              autoComplete="off"
               onChange={(event) =>
                 setForm((current) => ({
                   ...current,
@@ -705,7 +873,7 @@ function EditDetails({
           {saving ? "Saving…" : "Save details"}
         </Button>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -736,24 +904,24 @@ function NoteBox({
   };
   return (
     <div className={styles.noteBox}>
-      <Field label="Add a note">
+      <div className={styles.noteRow}>
         <textarea
+          aria-label="Add a note"
+          rows={1}
           value={note}
           maxLength={1000}
-          placeholder="Anything the next caller should know"
+          placeholder="Add a note for the next caller"
           onChange={(event) => setNote(event.target.value)}
         />
-      </Field>
+        <Button onClick={save} disabled={saving || !note.trim()}>
+          {saving ? "Adding…" : "Add"}
+        </Button>
+      </div>
       {error ? (
         <p className={styles.error} role="alert">
           {error}
         </p>
       ) : null}
-      <div className={styles.row}>
-        <Button onClick={save} disabled={saving || !note.trim()}>
-          {saving ? "Saving…" : "Add note"}
-        </Button>
-      </div>
     </div>
   );
 }
@@ -763,19 +931,47 @@ function NoteBox({
 function LeadCard({
   detail,
   onChanged,
-  dispose: disposeSlot,
+  outcome,
 }: {
   detail: LeadDetail;
   onChanged: (next: LeadDetail) => void;
-  dispose: ReactNode;
+  outcome: ReactNode;
 }) {
   const { lead } = detail;
+  const [editing, setEditing] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
   const sub = [lead.company, lead.city, lead.language]
     .filter(Boolean)
     .join(" · ");
+  const rows: { label: string; value: ReactNode }[] = [
+    ...(detail.phone
+      ? [
+          {
+            label: "Phone",
+            value: (
+              <a href={`tel:${detail.phone}`}>{displayPhone(detail.phone)}</a>
+            ),
+          },
+        ]
+      : []),
+    ...(detail.email
+      ? [
+          {
+            label: "Email",
+            value: <a href={`mailto:${detail.email}`}>{detail.email}</a>,
+          },
+        ]
+      : []),
+    ...detail.fields
+      .filter(
+        (field) => !["phone", "email"].includes(field.label.toLowerCase()),
+      )
+      .map((field) => ({ label: field.label, value: field.value })),
+  ];
+  // A lead typed in by hand has no form: its answers are the details above.
+  const answers = FORM_SOURCES.has(lead.source) ? detail.source_fields : [];
 
   const move = async (personId: string | null) => {
     setMoving(true);
@@ -793,8 +989,8 @@ function LeadCard({
 
   return (
     <div className={styles.card}>
-      <header className={styles.cardHead}>
-        <Avatar name={lead.name} size={44} />
+      <header className={styles.leadHead}>
+        <Avatar name={lead.name} size={52} />
         <div className={styles.cardTitle}>
           <h2>{lead.name}</h2>
           {sub ? <p>{sub}</p> : null}
@@ -811,64 +1007,142 @@ function LeadCard({
               {lead.stage_label}
             </Badge>
             <Badge>{sourceText(lead)}</Badge>
-            {detail.can_edit && !editing ? (
-              <Button variant="ghost" onClick={() => setEditing(true)}>
-                Edit details
-              </Button>
-            ) : null}
           </div>
         </div>
       </header>
-      {editing ? (
-        <EditDetails
-          detail={detail}
-          onCancel={() => setEditing(false)}
-          onSaved={(next) => {
-            setEditing(false);
-            onChanged(next);
-          }}
-        />
-      ) : null}
-
-      <div className={styles.contact}>
-        {detail.phone ? (
-          <>
-            <a className={styles.dial} href={`tel:${detail.phone}`}>
-              <Phone size={16} aria-hidden="true" />
-              {detail.phone}
-            </a>
-            <span className={styles.hint}>
-              Tap the number to call from your phone.
-            </span>
-          </>
-        ) : (
-          <span className={styles.hint}>No phone number on this lead.</span>
-        )}
-        {detail.email ? (
-          <span className={styles.contactLine}>{detail.email}</span>
-        ) : null}
-        {detail.call_mode === "simulated" && detail.can_edit ? (
-          <SimulatedCall detail={detail} onDone={onChanged} />
-        ) : null}
-      </div>
-
       <p className={styles.why}>{whyLine(lead)}</p>
       {detail.next_action_note ? (
         <p className={styles.nextNote}>Last note: {detail.next_action_note}</p>
       ) : null}
 
-      <div className={styles.owner}>
-        <span>
-          {lead.owner_name ? `With ${lead.owner_name}` : "No owner yet"}
-          {detail.owner_reason ? <small>{detail.owner_reason}</small> : null}
-          <small>
-            {detail.first_call_minutes != null
-              ? `First call ${detail.first_call_minutes} min after it came in`
-              : `Not called yet · came in ${ago(lead.created_at)}`}
-          </small>
-        </span>
-        {detail.can_assign ? (
-          <span className={styles.ownerControls}>
+      <div className={styles.actions}>
+        {detail.phone ? (
+          <a
+            className={styles.callButton}
+            href={`tel:${detail.phone}`}
+            onClick={() => rememberCall(lead.lead_id)}
+          >
+            <Phone size={20} aria-hidden="true" />
+            <span>
+              <strong>Call</strong>
+              <small>{displayPhone(detail.phone)}</small>
+            </span>
+          </a>
+        ) : detail.can_edit ? (
+          <button
+            type="button"
+            className={styles.callButton}
+            data-empty=""
+            onClick={() => setEditing(true)}
+          >
+            <Phone size={20} aria-hidden="true" />
+            <span>
+              <strong>Add a phone number</strong>
+              <small>to call this lead</small>
+            </span>
+          </button>
+        ) : (
+          <p className={styles.hint}>No phone number on this lead.</p>
+        )}
+        {detail.phone ? (
+          <a
+            className={styles.actionButton}
+            href={whatsappHref(detail.phone)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <MessageCircle size={18} aria-hidden="true" />
+            WhatsApp
+          </a>
+        ) : null}
+        {detail.email ? (
+          <a className={styles.actionButton} href={`mailto:${detail.email}`}>
+            <Mail size={18} aria-hidden="true" />
+            Email
+          </a>
+        ) : null}
+      </div>
+      {detail.call_mode === "simulated" && detail.can_edit ? (
+        testing ? (
+          <SimulatedCall detail={detail} onDone={onChanged} />
+        ) : (
+          <button
+            type="button"
+            className={styles.linkButton}
+            onClick={() => setTesting(true)}
+          >
+            Test workspace: try with a sample recording
+          </button>
+        )
+      ) : null}
+
+      {detail.can_edit ? outcome : null}
+
+      <section className={styles.panel} aria-label="Details">
+        <div className={styles.panelHead}>
+          <h3>Details</h3>
+          {detail.can_edit && !editing ? (
+            <button
+              type="button"
+              className={styles.linkButton}
+              onClick={() => setEditing(true)}
+            >
+              <Pencil size={14} aria-hidden="true" />
+              Edit
+            </button>
+          ) : null}
+        </div>
+        {editing ? (
+          <EditDetails
+            detail={detail}
+            onCancel={() => setEditing(false)}
+            onSaved={(next) => {
+              setEditing(false);
+              onChanged(next);
+            }}
+          />
+        ) : rows.length ? (
+          <dl className={styles.detailRows}>
+            {rows.map((row) => (
+              <div key={row.label}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className={styles.hint}>No details yet.</p>
+        )}
+        {answers.length ? (
+          <div className={styles.formAnswers}>
+            <span className={styles.stepLabel}>Answers from the form</span>
+            <dl className={styles.detailRows}>
+              {answers.map((field, index) => (
+                <div key={`${field.label}-${index}`}>
+                  <dt>{field.label}</dt>
+                  <dd>{field.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ) : null}
+      </section>
+
+      <section className={styles.panel} aria-label="Owner">
+        <div className={styles.ownerRow}>
+          <Avatar name={lead.owner_name ?? "No owner"} size={32} />
+          <span>
+            <strong>
+              {lead.owner_name ? `With ${lead.owner_name}` : "No owner yet"}
+            </strong>
+            {detail.owner_reason ? <small>{detail.owner_reason}</small> : null}
+            <small>
+              {detail.first_call_minutes != null
+                ? `First call ${detail.first_call_minutes} min after it came in`
+                : `Not called yet · came in ${ago(lead.created_at)}`}
+            </small>
+          </span>
+          {detail.can_assign ? (
             <select
               aria-label="Move this lead to"
               value=""
@@ -889,43 +1163,17 @@ function LeadCard({
                   </option>
                 ))}
             </select>
-          </span>
+          ) : null}
+        </div>
+        {moveError ? (
+          <p className={styles.error} role="alert">
+            {moveError}
+          </p>
         ) : null}
-      </div>
-      {moveError ? (
-        <p className={styles.error} role="alert">
-          {moveError}
-        </p>
-      ) : null}
-
-      {detail.can_edit ? disposeSlot : null}
-
-      {detail.fields.length ? (
-        <dl className={styles.fields}>
-          {detail.fields.map((field) => (
-            <div key={field.label}>
-              <dt>{field.label}</dt>
-              <dd>{field.value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-      {detail.source_fields.length ? (
-        <details className={styles.sourceFields}>
-          <summary>More details</summary>
-          <dl className={styles.fields}>
-            {detail.source_fields.map((field, index) => (
-              <div key={`${field.label}-${index}`}>
-                <dt>{field.label}</dt>
-                <dd>{field.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
-      ) : null}
+      </section>
 
       <section className={styles.historyBlock} aria-label="History">
-        <h3 className={styles.blockLabel}>History</h3>
+        <h3 className={styles.stepLabel}>History</h3>
         {detail.can_edit ? (
           <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
         ) : null}
@@ -952,6 +1200,7 @@ export function LeadSheet({
     message: string;
   } | null>(null);
   const [formKey, setFormKey] = useState(0);
+  const [backFrom, setBackFrom] = useState<string | null>(null);
   // Only the open lead's own detail (or error) shows; anything else is stale.
   const detail = loaded?.lead.lead_id === leadId ? loaded : null;
   const error = failed?.leadId === leadId ? failed.message : null;
@@ -984,6 +1233,14 @@ export function LeadSheet({
     onChanged();
   };
 
+  useCallReturn(leadId, (seconds) => {
+    if (!leadId) return;
+    setBackFrom(leadId);
+    logPhoneCall(leadId, seconds)
+      .then(update)
+      .catch(() => undefined);
+  });
+
   return (
     <Sheet
       open={leadId !== null}
@@ -996,12 +1253,17 @@ export function LeadSheet({
         <LeadCard
           detail={detail}
           onChanged={update}
-          dispose={
-            <DisposeForm
+          outcome={
+            <CallOutcome
               key={formKey}
               detail={detail}
               submitLabel="Save"
-              onSaved={update}
+              attention={backFrom === leadId}
+              beforeSave={() => logWaitingCall(detail)}
+              onSaved={(next) => {
+                setBackFrom(null);
+                update(next);
+              }}
             />
           }
         />
@@ -1031,6 +1293,7 @@ export function CallingLoop({
   );
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(0);
+  const [backFrom, setBackFrom] = useState<string | null>(null);
 
   // The page gives each opening a new key, so a round starts at zero, loading.
   const load = (signal?: AbortSignal) => {
@@ -1062,13 +1325,26 @@ export function CallingLoop({
     return () => controller.abort();
   }, [open]);
 
+  const current =
+    open && state === "ready" ? (detail?.lead.lead_id ?? null) : null;
+  useCallReturn(current, (seconds) => {
+    if (!current) return;
+    setBackFrom(current);
+    logPhoneCall(current, seconds)
+      .then((next) => {
+        setDetail(next);
+        onChanged();
+      })
+      .catch(() => undefined);
+  });
+
   return (
     <Sheet open={open} label="Start calling" onClose={onClose}>
       <div className={styles.loopHead}>
         <span className={styles.loopTitle}>Calling</span>
         <span className={styles.hint}>
-          {done ? `${done} done this round · ` : ""}One lead at a time. Save
-          what happened to get the next one.
+          {done ? `${done} done this round · ` : ""}One lead at a time. Call,
+          then say how it went to get the next one.
         </span>
       </div>
       {state === "loading" ? (
@@ -1099,12 +1375,15 @@ export function CallingLoop({
             setDetail(next);
             onChanged();
           }}
-          dispose={
-            <DisposeForm
+          outcome={
+            <CallOutcome
               key={`${detail.lead.lead_id}-${detail.lead.revision}`}
               detail={detail}
               submitLabel="Save and next lead"
+              attention={backFrom === detail.lead.lead_id}
+              beforeSave={() => logWaitingCall(detail)}
               onSaved={() => {
+                setBackFrom(null);
                 setDone((value) => value + 1);
                 onChanged();
                 loadNext();
