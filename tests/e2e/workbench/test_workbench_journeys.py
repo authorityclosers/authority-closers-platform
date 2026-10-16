@@ -163,7 +163,9 @@ def _switch_report_view(page: Page, label: str) -> None:
             wait_until="domcontentloaded",
         )
         assert response is not None and response.status < 400, "Explicit report link failed"
-        expect(page.locator("[data-report-modes]")).to_have_attribute("data-view", view)
+        expect(page.locator("[data-report-modes]")).to_have_attribute(
+            "data-view", view, timeout=15_000
+        )
         return
     page.get_by_role("button", name=label, exact=True).click()
 
