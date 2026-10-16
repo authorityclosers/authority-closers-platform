@@ -82,6 +82,15 @@ reads whether Dipak's global Person exists. An absent Person can be created
 unverified with `--create-person`; the normal reviewer mailbox proof is required.
 It never creates a learner membership, enrollment, session or outbound message.
 
+The owner-confirmed approving account is `admin@authorityclosers.com`. The
+script resolves that active, verified Person and requires its current active
+admin/owner membership in the configured AC operations workspace. Receipt and
+audit retain Suyash/ecff5661 attribution and include `approver_email`. The script
+does not create this membership; an owner role in another workspace does not
+qualify. The existing Admin → Reviewers → Gold reviewers route also requires
+the operations workspace and admits Dipak's verified control account with its
+existing admin/owner membership through an Admin account session.
+
 The builder has no injected dev database execution context and cannot use the
 Docker socket. The read-only dev Person lookup and approved dev apply are
 requested through the coordinator's existing operator route. This is not a
@@ -145,3 +154,28 @@ rollback test used an Alembic context without the repository's naming convention
 and failed its schema comparison; the final test supplies `target_metadata`,
 matching `db/migrations/env.py`. Both logs are retained under
 `/home/acdev/strikes/1801/gold-migration-repair-*20261016*.log`.
+
+## Approver identity repair — 16 October
+
+The owner laptop operator reported that production inspection found Dipak's
+active, verified Person, but both dev and production dry-runs refused the old
+hardcoded `suyash@` identity. The script now uses the owner's actual `admin@`
+identity. The previous database test silently replaced `APPROVER` with `admin@`;
+the regression now exercises the script's configured identity directly.
+
+The operator also reported that `admin@` belongs to a different workspace, while
+Dipak is the configured operations workspace's sole owner. This source repair
+preserves that membership boundary. It grants no memberships and performs no
+dev or production apply. The existing operator must return the real designation
+receipt; authenticated Dipak acceptance remains pending. Exact script commands
+and the existing self-designation UI option are in the strike's REVIEWER-LINK.md.
+
+Focused regression: **14 passed / 22.60s**, using only the disposable PostgreSQL
+harness. The accepted admin/owner cases cover dry-run without Person/audit writes,
+repeat apply, unchanged membership count, and the approving Person's exact audit
+identity and run ids. Missing approver, unverified or suspended approver, owner in
+another workspace, non-admin membership, and inactive membership each refuse both
+dry-run and apply without creating a Person, designation, membership or audit row.
+Ruff and the required `import ac_platform.http` pass. Receipt:
+`/home/acdev/strikes/1801/gold-approver-tests-20261016.log`. No UI change or browser
+replay; existing four-context rendering evidence remains applicable.
