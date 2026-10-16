@@ -8,7 +8,7 @@ import { Panel, Table, Unavailable } from "@/app/ui/kit";
 
 export async function GoldReviewRows() {
   const result = await adminRead("/v1/admin/conversation/gold-rows", (body) =>
-    z.object({ items: z.array(goldRow) }).parse(body),
+    z.object({ items: z.array(goldRow).default([]) }).parse(body),
   );
   if (!result.ok)
     return <Unavailable title="Report line reviews" reason={result.error} />;
