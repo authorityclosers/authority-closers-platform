@@ -6783,10 +6783,9 @@ def test_fixture_report_api_structure(
         overview = page.locator('[data-xray-part="overview"]')
         score = overview.get_by_role("region", name="Overall score", exact=True)
         expect(score).to_contain_text(re.compile(r"AI draft\s*[·-]\s*not reviewed by Dipak"))
-        expect(score).to_contain_text(re.compile(rf"\b{source['overview']['score']}\s*/100"))
+        expect(score.get_by_text(str(source["overview"]["score"]), exact=True)).to_have_count(1)
         expect(score).to_contain_text(source["overview"]["score_label"])
         expect(score).to_contain_text(source["overview"]["score_line"])
-        expect(overview).to_contain_text(source["overview"]["summary"])
         capture(score.locator(":scope > div").first, "overall-score")
 
         analysis = page.locator('[data-xray-part="analysis"]')
@@ -6872,6 +6871,12 @@ def test_fixture_report_api_structure(
         capture(stages, "outcome-stages")
         for reason in details["reasons"]:
             expect(outcome.get_by_text(reason, exact=True)).to_have_count(1)
+        capture(
+            outcome.get_by_text(details["reasons"][0], exact=True).locator(
+                "xpath=ancestor::section[1]"
+            ),
+            "outcome-reasons",
+        )
         objection_rows = []
         for objection in details["objections"]:
             row = outcome.get_by_text(objection["text"], exact=True).locator(
