@@ -306,3 +306,81 @@ def test_projection_is_identity_without_marks() -> None:
 
     merged = _merged_structure()
     assert project_structure(merged, EMPTY_PLAN) == merged
+
+
+def _attempt(action: str, attempt: str, minutes: int, outcome: str | None = None) -> dict:
+    from datetime import UTC, datetime, timedelta
+
+    from ac_platform.conversation_intelligence import pointer_review_admission as admission
+
+    start = datetime(2026, 10, 16, 6, 0, tzinfo=UTC)
+    return {
+        "action": admission.STARTED if action == "start" else admission.FINISHED,
+        "attempt_id": attempt,
+        "outcome": outcome,
+        "occurred_at": start + timedelta(minutes=minutes),
+    }
+
+
+def test_attempt_history_counts_failures_and_uncertain_attempts() -> None:
+    """AUT-2010: an attempt without an outcome may have been paid."""
+    from datetime import UTC, datetime, timedelta
+
+    from ac_platform.conversation_intelligence.pointer_review_admission import history_refusal
+
+    at = datetime(2026, 10, 16, 6, 0, tzinfo=UTC)
+    assert history_refusal([], at) is None
+    running = [_attempt("start", "a", 0)]
+    assert history_refusal(running, at + timedelta(minutes=5)) == "in_flight"
+    assert history_refusal(running, at + timedelta(minutes=11)) is None
+    failed = [*running, _attempt("finish", "a", 1, "timeout"), _attempt("start", "b", 20)]
+    assert history_refusal(failed, at + timedelta(minutes=31)) == "attempts_exhausted"
+    saved = [*failed, _attempt("finish", "b", 21, "saved"), _attempt("start", "c", 30)]
+    assert history_refusal(saved, at + timedelta(minutes=35)) == "in_flight"
+    later = [*saved, _attempt("finish", "c", 31, "parse_failed")]
+    assert history_refusal(later, at + timedelta(minutes=40)) is None
+    refused = [*later, _attempt("start", "d", 50), _attempt("finish", "d", 51, "refused_x")]
+    assert history_refusal(refused, at + timedelta(minutes=60)) == "attempts_exhausted"
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        (
+            ["--recent-hours", "4", "--not-before", "2026-10-16T00:00:00+00:00", "--force"],
+            "--force",
+        ),
+        (["--recent-hours", "4"], "--not-before"),
+        (["--tenant", "00000000-0000-0000-0000-000000000001", "--daily-cap", "0"], "--daily-cap"),
+    ],
+)
+def test_runner_arguments_refuse_unadmitted_modes(
+    extra: list[str], message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from ac_platform.conversation_intelligence.pointer_review_cli import _arguments
+
+    base = ["--service-config", "s.json", "--database-url-file", "d"]
+    with pytest.raises(SystemExit):
+        _arguments([*base, *extra])
+    assert message in capsys.readouterr().err
+
+
+def test_automatic_mode_no_longer_needs_a_state_file() -> None:
+    from ac_platform.conversation_intelligence.pointer_review_cli import _arguments
+
+    parsed = _arguments(
+        [
+            "--service-config",
+            "s.json",
+            "--database-url-file",
+            "d",
+            "--recent-hours",
+            "48",
+            "--not-before",
+            "2026-10-16T05:18:50+00:00",
+            "--daily-cap",
+            "100",
+            "--apply",
+        ]
+    )
+    assert parsed.state_file is None and parsed.daily_cap == 100 and not parsed.force

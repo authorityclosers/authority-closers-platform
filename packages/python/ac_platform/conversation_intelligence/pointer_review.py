@@ -571,6 +571,80 @@ def erase_reviews_of_erased_calls(connection: Any, *, apply: bool) -> dict[str, 
     return {"found": count, "erased": int(erased or 0)}
 
 
+_ADMISSION = """
+    SELECT d.erased_at IS NULL AS draft_live, d.run_id AS draft_run,
+           d.source_sha256 AS draft_source,
+           d.payload ->> 'transcript_revision' AS draft_revision,
+           c.source_sha256 AS call_source,
+           (SELECT n.id FROM conversation_report_drafts n
+            WHERE n.recording_id = c.id AND n.erased_at IS NULL
+            ORDER BY n.created_at DESC LIMIT 1) AS latest_draft,
+           p.revoked_at IS NULL AND p.provider = 'local' AND p.source_sha256 = c.source_sha256
+             AND p.expires_at > :now AND p.retention_until > :now
+             AND length(p.permission_reference) > 0 AND length(p.retention_reference) > 0
+             AS permitted,
+           t.status = 'active' AND person.status = 'active'
+             AND coalesce(m.status = 'active' AND m.ended_at IS NULL, false) AS active
+    FROM conversation_recordings c
+    JOIN conversation_report_drafts d ON d.id = :draft AND d.recording_id = c.id
+    JOIN conversation_permissions p ON p.id = c.permission_id
+    JOIN tenants t ON t.id = c.tenant_id
+    JOIN persons person ON person.id = c.person_id
+    LEFT JOIN memberships m ON m.tenant_id = c.tenant_id AND m.person_id = c.person_id
+    WHERE c.id = :recording
+    FOR SHARE OF d, p
+"""
+
+
+def admission_refusal(connection: Any, report: dict[str, Any], now: datetime) -> str | None:
+    """Why this call may not be reviewed or saved now, or None when it may (AUT-2010).
+
+    The same execution-time checks as the canonical worker: the call is ready
+    and not being erased; its recording permission is current (not revoked or
+    expired, retention not passed, same source); its workspace, person and
+    membership are active; and the report is still the call's newest, from
+    the same run, source and transcript revision. The recording, report and
+    permission rows stay locked FOR SHARE until the caller's transaction ends,
+    so erasure or revocation waits for (and is then fenced by) this check.
+    """
+    from sqlalchemy import text
+
+    call = connection.execute(
+        text(
+            "SELECT state, deleted_at IS NULL AS live FROM conversation_recordings"
+            " WHERE id = :id AND tenant_id = :tenant FOR SHARE"
+        ),
+        {"id": report["recording_id"], "tenant": report["tenant_id"]},
+    ).first()
+    if call is None:
+        return "call_missing"
+    if call.state in {"deleting", "deleted"} or not call.live:
+        return "call_erased"
+    row = connection.execute(
+        text(_ADMISSION),
+        {"recording": report["recording_id"], "draft": report["draft_id"], "now": now},
+    ).first()
+    if row is None:
+        return "call_missing"
+    if not row.draft_live:
+        return "call_erased"
+    if call.state != "ready":
+        return "call_not_ready"
+    if (
+        str(row.latest_draft) != str(report["draft_id"])
+        or str(row.draft_run) != str(report["run_id"])
+        or row.draft_source != report["source_sha256"]
+        or row.call_source != report["source_sha256"]
+        or row.draft_revision != report["transcript_revision"]
+    ):
+        return "stale_source"
+    if not row.permitted:
+        return "permission_inactive"
+    if not row.active:
+        return "account_inactive"
+    return None
+
+
 def save_review(
     connection: Any,
     *,
@@ -580,34 +654,27 @@ def save_review(
     usage: dict[str, Any],
     created_by: str,
     now: datetime,
-) -> bool:
-    """Save one review unless its call or report was erased meanwhile.
+) -> Any:
+    """Save one review if the call still passes admission; returns its id, else None.
 
-    The recording row is locked FOR SHARE, which waits for (and is fenced by)
-    canonical erasure's FOR UPDATE, so a late provider answer never restores
-    content after erasure began. Returns False when it refuses.
+    ``admission_refusal`` runs in the same transaction, so a late provider
+    answer never restores content after erasure began, after the permission
+    was revoked, or once a newer report replaced this one.
     """
     from uuid import uuid4
 
-    from sqlalchemy import insert, text
+    from sqlalchemy import insert
 
     from ac_platform.conversation_intelligence.pointer_review_models import (
         ConversationPointerReview,
     )
 
-    state = connection.execute(
-        text("SELECT state FROM conversation_recordings WHERE id = :id FOR SHARE"),
-        {"id": report["recording_id"]},
-    ).scalar()
-    draft_live = connection.execute(
-        text("SELECT erased_at IS NULL FROM conversation_report_drafts WHERE id = :id FOR SHARE"),
-        {"id": report["draft_id"]},
-    ).scalar()
-    if state is None or state in {"deleting", "deleted"} or draft_live is not True:
-        return False
+    if admission_refusal(connection, report, now) is not None:
+        return None
+    review_id = uuid4()
     connection.execute(
         insert(ConversationPointerReview).values(
-            id=uuid4(),
+            id=review_id,
             tenant_id=report["tenant_id"],
             recording_id=report["recording_id"],
             run_id=report["run_id"],
@@ -625,4 +692,4 @@ def save_review(
             created_at=now,
         )
     )
-    return True
+    return review_id
