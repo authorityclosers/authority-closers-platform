@@ -2247,9 +2247,7 @@
 
 .qr {
   flex: none;
-  padding: 6px;
   border-radius: var(--sx-radius-sm);
-  background: #ffffff;
 }
 
 .downloadButton {
