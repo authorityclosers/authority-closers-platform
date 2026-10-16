@@ -114,3 +114,23 @@ Infisical presence reaches a container. Check names and availability only.
 `AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT`; the shorthand is not a settings alias.
 See [the ingress and rollout packet](BILLING_INGRESS.md) for the fixed proposed
 UTC instant, production hold, release checks and rollback boundary.
+
+## Sales Xray CRM lead sources (optional)
+
+The API reads these from the same Infisical `/application` path. The Meta Lead
+Ads connector stays off (the CRM shows "Coming soon") until all five exist, and
+no release requires them. Compose forwards them to the API only, not to the
+worker or the migrator.
+
+| Secret                         | Constraint                                                                        |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| `AC_META_APP_ID`               | that environment's Meta app: production the parent app, staging its own test app |
+| `AC_META_APP_SECRET`           | the App Secret of that same app                                                   |
+| `AC_META_LOGIN_CONFIG_ID`      | the Facebook Login for Business configuration ID in that app                      |
+| `AC_META_WEBHOOK_VERIFY_TOKEN` | independent random value, entered once in that app's lead webhook subscription    |
+| `AC_LEAD_DESK_TOKEN_KEY`       | independent 32-byte url-safe base64 key that seals stored Page tokens             |
+
+Each environment has its own Meta app and its own values; never copy a
+production value into staging or dev. Changing `AC_LEAD_DESK_TOKEN_KEY` means
+every connected Page must connect again. `POST /v1/lead-desk/meta/webhook`
+accepts only requests signed with that app's App Secret (`X-Hub-Signature-256`).

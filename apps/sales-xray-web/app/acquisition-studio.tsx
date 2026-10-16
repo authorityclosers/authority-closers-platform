@@ -121,6 +121,7 @@ import {
 import { startAnalysis } from "./analysis-start";
 import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
+import { openInCallWorkspace } from "./call-workspace";
 import { useTheme } from "./lightbox/theme-provider";
 import { NewAnalysisFooter, NewAnalysisHero } from "./new-analysis-hero";
 import { CallAudioDock } from "./call-audio-dock";
@@ -882,6 +883,15 @@ export function AcquisitionStudio({
               error instanceof AcquisitionError &&
               (error.status === 403 || error.status === 404)
             ) {
+              // Each device keeps its own selected workspace: a link to a call
+              // in another of the person's workspaces opens it there (16 Oct).
+              if (requested && (await openInCallWorkspace(saved, signal))) {
+                setExistingCallEntry({
+                  submissionId: requested,
+                  state: "opening",
+                });
+                return;
+              }
               setDeletionOnlyId(saved);
               setError(
                 "This saved call cannot be opened here. If you own it, you can still delete it.",

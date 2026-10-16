@@ -384,3 +384,15 @@ def test_automatic_mode_no_longer_needs_a_state_file() -> None:
         ]
     )
     assert parsed.state_file is None and parsed.daily_cap == 100 and not parsed.force
+
+
+def test_unscored_only_is_for_one_workspace(capsys: pytest.CaptureFixture[str]) -> None:
+    """16 Oct backfill: the newest reports without a saved review, workspace mode only."""
+    from ac_platform.conversation_intelligence.pointer_review_cli import _arguments
+
+    base = ["--service-config", "s.json", "--database-url-file", "d"]
+    tenant = "00000000-0000-0000-0000-000000000001"
+    assert _arguments([*base, "--tenant", tenant, "--unscored-only"]).unscored_only
+    with pytest.raises(SystemExit):
+        _arguments([*base, "--erase-erased-calls", "--unscored-only"])
+    assert "--unscored-only" in capsys.readouterr().err
