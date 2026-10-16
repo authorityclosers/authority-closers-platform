@@ -83,6 +83,12 @@ variable explicitly, so these five must be added there (and to
    Pages) and the WhatsApp Tech Provider review.
 4. Privacy policy, terms and data-deletion pages on authorityclosers.com
    (required for review and for Sign-in going live).
+5. Cloudflare Access: salesxray-dev (and staging) sit behind Access, so Meta
+   cannot reach the webhook. Add an Access bypass for
+   `/v1/lead-desk/meta/webhook` (and `/v1/lead-desk/capture/*` for Google Ads
+   and website forms). The Meta return address needs no bypass: the signed-in
+   person's browser makes that request. Until then, connecting a Page still
+   pulls its last 7 days of leads.
 
 ## Order
 
