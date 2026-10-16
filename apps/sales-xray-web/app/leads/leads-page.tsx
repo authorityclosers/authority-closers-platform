@@ -37,6 +37,7 @@ import {
   LeadsError,
   pickContacts,
   readDesk,
+  sharedLead,
   type Desk,
   type PickedContact,
 } from "./leads-client";
@@ -71,6 +72,8 @@ export function LeadsRoute() {
   const router = useRouter();
   const params = useSearchParams();
   const requested = params.get("tab");
+  // A lead handed over by the Chrome extension opens Add lead, filled in.
+  const shared = sharedLead(params);
   const authenticated =
     access?.authenticated === true &&
     access.status === "ready" &&
@@ -87,6 +90,7 @@ export function LeadsRoute() {
   const [importing, setImporting] = useState(false);
   const [menu, setMenu] = useState(false);
   const [apps, setApps] = useState(false);
+  const [sharedDone, setSharedDone] = useState(false);
   const [contacts, setContacts] = useState(false);
   const [picked, setPicked] = useState<PickedContact[]>([]);
   // Each opening mounts a fresh dialog, so nothing is reset in an effect.
@@ -107,6 +111,10 @@ export function LeadsRoute() {
   };
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
+  const closeShared = () => {
+    setSharedDone(true);
+    router.replace(LEADS_PATH);
+  };
 
   useEffect(() => {
     if (!authenticated) return;
@@ -283,6 +291,20 @@ export function LeadsRoute() {
         }}
         onChanged={refresh}
       />
+      {shared ? (
+        <AddLeadDialog
+          key={`shared-${params.toString()}`}
+          open={!sharedDone}
+          canManage={can}
+          initial={shared}
+          onClose={closeShared}
+          onAdded={(leadId) => {
+            closeShared();
+            refresh();
+            setOpenLead(leadId);
+          }}
+        />
+      ) : null}
       <AddLeadDialog
         key={rounds.adding}
         open={adding}

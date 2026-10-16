@@ -14,6 +14,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Badge, Button, Field } from "../ui/kit";
 import {
   addSource,
+  ago,
   LeadsError,
   readSources,
   rotateSource,
@@ -31,6 +32,16 @@ type MetaPage = {
   name: string;
   active: boolean;
   received: number;
+  /** When Sales Xray last asked Meta for this Page's leads (every 10 minutes). */
+  lastPulledAt?: string | null;
+};
+type MetaPull = {
+  page: MetaPage;
+  fetched: number;
+  created: number;
+  repeat: number;
+  known: number;
+  skipped: number;
 };
 type MetaStatus = { configured: boolean; pages: MetaPage[] };
 const META = "/v1/lead-desk/meta";
@@ -144,6 +155,32 @@ function MetaTile() {
     }
   };
 
+  // Meta's push can be late or missing (apps in development mode never get it),
+  // so Sales Xray also asks every 10 minutes; this asks now.
+  const pull = async (page: MetaPage) => {
+    setBusy(page.pageId);
+    setNote(null);
+    try {
+      const result = await metaCall<MetaPull>(
+        `/pages/${encodeURIComponent(page.pageId)}/pull`,
+        { method: "POST" },
+      );
+      const added = result.created + result.repeat;
+      setNote(
+        added
+          ? `${added} new lead${added === 1 ? "" : "s"} from ${page.name}.`
+          : `No new leads from ${page.name}.`,
+      );
+      await load();
+    } catch (reason) {
+      setNote(
+        reason instanceof LeadsError ? reason.message : "That didn't work.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <ConnectTile
       kind="meta"
@@ -162,7 +199,21 @@ function MetaTile() {
                 {page.active ? "Connected: " : ""}
                 <strong>{page.name}</strong>
                 {page.active ? ` · ${page.received} leads` : ""}
+                {page.active && page.lastPulledAt ? (
+                  <small className={styles.connectChecked}>
+                    Checked {ago(page.lastPulledAt)}
+                  </small>
+                ) : null}
               </span>
+              {page.active ? (
+                <Button
+                  variant="ghost"
+                  disabled={busy === page.pageId}
+                  onClick={() => pull(page)}
+                >
+                  Check for new leads
+                </Button>
+              ) : null}
               <Button
                 variant={page.active ? "ghost" : "primary"}
                 disabled={busy === page.pageId}

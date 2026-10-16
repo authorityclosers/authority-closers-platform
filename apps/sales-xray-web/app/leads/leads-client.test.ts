@@ -11,6 +11,7 @@ import {
   displayPhone,
   nextCallTime,
   parseContactText,
+  sharedLead,
   peekPendingCall,
   quickFollowUp,
   rememberCall,
@@ -231,5 +232,24 @@ describe("adding leads", () => {
       phone: undefined,
       email: undefined,
     });
+  });
+});
+
+describe("a lead handed over by the Chrome extension", () => {
+  it("fills Add lead only from an add=lead link, trimmed and bounded", () => {
+    const link = (query: string) => sharedLead(new URLSearchParams(query));
+    expect(link("tab=all")).toBeNull();
+    expect(link("add=lead")).toBeNull();
+    expect(
+      link(
+        "add=lead&name=%20Asha%20Patil%20&phone=%2B91%2098765%2043210&note=From%20LinkedIn",
+      ),
+    ).toEqual({
+      name: "Asha Patil",
+      phone: "+91 98765 43210",
+      email: "",
+      note: "From LinkedIn",
+    });
+    expect(link(`add=lead&name=${"x".repeat(500)}`)?.name).toHaveLength(200);
   });
 });

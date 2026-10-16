@@ -2332,3 +2332,9 @@
     grid-column: 3;
   }
 }
+
+.connectChecked {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

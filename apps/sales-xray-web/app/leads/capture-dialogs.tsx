@@ -33,6 +33,7 @@ import {
   type ImportResult,
   type NewLead,
   type PickedContact,
+  type SharedLead,
 } from "./leads-client";
 import styles from "./leads.module.css";
 
@@ -129,18 +130,23 @@ export function AddLeadDialog({
   canManage,
   onClose,
   onAdded,
+  initial = null,
 }: {
   open: boolean;
   canManage: boolean;
   onClose: () => void;
   onAdded: (leadId: string) => void;
+  /** Details handed over by the Chrome extension; the person still checks and adds. */
+  initial?: SharedLead | null;
 }) {
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState(() =>
+    initial ? { ...EMPTY, ...initial } : EMPTY,
+  );
   const [source, setSource] = useState<"manual" | "referral">("manual");
   const [assign, setAssign] = useState<"rules" | "me">(
     canManage ? "rules" : "me",
   );
-  const [more, setMore] = useState(false);
+  const [more, setMore] = useState(Boolean(initial?.email || initial?.note));
   const [paste, setPaste] = useState("");
   const [pasteNote, setPasteNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -209,6 +215,11 @@ export function AddLeadDialog({
       }
     >
       <div className={styles.form}>
+        {initial ? (
+          <p className={styles.hint} role="status">
+            From the Sales Xray extension. Check the details, then add the lead.
+          </p>
+        ) : null}
         <div className={styles.pasteBox}>
           <textarea
             aria-label="Paste a contact or message"

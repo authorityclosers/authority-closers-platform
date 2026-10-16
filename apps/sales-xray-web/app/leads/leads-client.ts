@@ -673,6 +673,33 @@ export async function pickContacts(): Promise<PickedContact[]> {
 }
 
 /** Name, phone and email from pasted text: a WhatsApp message or contact card. */
+export type SharedLead = {
+  name: string;
+  phone: string;
+  email: string;
+  note: string;
+};
+
+/**
+ * A lead handed over in the link, as the Sales Xray Chrome extension opens
+ * /leads?add=lead&name=…&phone=…&email=…&note=…. It only fills the Add lead
+ * form; nothing is saved until the person taps Add lead.
+ */
+export function sharedLead(params: {
+  get: (name: string) => string | null;
+}): SharedLead | null {
+  if (params.get("add") !== "lead") return null;
+  const take = (name: string, max: number) =>
+    (params.get(name) ?? "").trim().slice(0, max);
+  const lead = {
+    name: take("name", 200),
+    phone: take("phone", 40),
+    email: take("email", 254),
+    note: take("note", 1000),
+  };
+  return lead.name || lead.phone || lead.email || lead.note ? lead : null;
+}
+
 export function parseContactText(text: string): {
   name?: string;
   phone?: string;
