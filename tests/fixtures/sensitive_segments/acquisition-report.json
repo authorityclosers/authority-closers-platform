@@ -358,6 +358,1286 @@
           "title": "Clarify the stated barrier"
         }
       ],
+      "structure": {
+        "final_call_outcome": {
+          "basis": null,
+          "deal_value": null,
+          "follow_up_on": null,
+          "lost_reason": null,
+          "outcome": null,
+          "revision": 0,
+          "status": "unavailable"
+        },
+        "overview": {
+          "biggest_improvement": {
+            "evidence": [
+              {
+                "end_ms": 8900,
+                "quote": "Our kettle whistles whenever the moon rises over the shed",
+                "segment_id": "s9",
+                "start_ms": 8000
+              }
+            ],
+            "source": "improvements[0]",
+            "text": "The line gives a source bound reason to explore the barrier."
+          },
+          "biggest_strength": {
+            "evidence": [
+              {
+                "end_ms": 8900,
+                "quote": "Our kettle whistles whenever the moon rises over the shed",
+                "segment_id": "s9",
+                "start_ms": 8000
+              }
+            ],
+            "source": "strengths[0]",
+            "text": "The line gives a source bound reason to explore the barrier."
+          },
+          "call_statistics": {
+            "duration_ms": null,
+            "longest_rep_turn": null,
+            "longest_turn": null,
+            "question_count_method": "transcript_question_marks",
+            "questions_asked": {
+              "prospect": null,
+              "rep": null
+            },
+            "role_status": "unavailable",
+            "rules": "call-metrics/3",
+            "speakers": [],
+            "status": "unavailable",
+            "talk_share_percent": {
+              "prospect": null,
+              "rep": null
+            }
+          },
+          "evidence": [],
+          "score": null,
+          "score_status": "not_scored",
+          "summary": "The draft describes observable conversation behaviour and its uncertainty."
+        },
+        "pointers": [
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "call_opening_first_impression",
+            "label": "Call Opening & First Impression",
+            "number": 1,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-1",
+                    "sections": [
+                      "\u00a78\u2013\u00a710",
+                      "\u00a752",
+                      "\u00a754\u2013\u00a756"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a76"
+                    ]
+                  }
+                ],
+                "dimension_id": "human_connection_trust",
+                "label": "Human Connection & Trust",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "unavailable",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "purpose_agenda_setting",
+            "label": "Purpose & Agenda Setting",
+            "number": 2,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "tone_energy",
+            "label": "Tone and Energy",
+            "number": 3,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-2",
+                    "sections": [
+                      "\u00a71\u2013\u00a75",
+                      "\u00a79\u2013\u00a716",
+                      "\u00a731\u2013\u00a755"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a733\u2013\u00a737",
+                      "\u00a763\u2013\u00a766"
+                    ]
+                  }
+                ],
+                "dimension_id": "communication_tonality",
+                "label": "Communication & Tonality",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "active_listening",
+            "label": "Active Listening",
+            "number": 4,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-1",
+                    "sections": [
+                      "\u00a74\u2013\u00a77",
+                      "\u00a711\u2013\u00a716"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a75\u2013\u00a711",
+                      "\u00a716",
+                      "\u00a745\u2013\u00a752"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a77\u2013\u00a710"
+                    ]
+                  }
+                ],
+                "dimension_id": "discovery_deep_understanding",
+                "evidence": [
+                  {
+                    "end_ms": 8900,
+                    "quote": "Our kettle whistles whenever the moon rises over the shed",
+                    "segment_id": "s9",
+                    "start_ms": 8000
+                  },
+                  {
+                    "end_ms": 2900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s3",
+                    "start_ms": 2000
+                  },
+                  {
+                    "end_ms": 3900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s4",
+                    "start_ms": 3000
+                  }
+                ],
+                "label": "Discovery & Deep Understanding",
+                "observation": "[Withheld for privacy]",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "open_ended_questions",
+            "label": "Asking Open-Ended Questions",
+            "number": 5,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-1",
+                    "sections": [
+                      "\u00a74\u2013\u00a77",
+                      "\u00a711\u2013\u00a716"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a75\u2013\u00a711",
+                      "\u00a716",
+                      "\u00a745\u2013\u00a752"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a77\u2013\u00a710"
+                    ]
+                  }
+                ],
+                "dimension_id": "discovery_deep_understanding",
+                "evidence": [
+                  {
+                    "end_ms": 8900,
+                    "quote": "Our kettle whistles whenever the moon rises over the shed",
+                    "segment_id": "s9",
+                    "start_ms": 8000
+                  },
+                  {
+                    "end_ms": 2900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s3",
+                    "start_ms": 2000
+                  },
+                  {
+                    "end_ms": 3900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s4",
+                    "start_ms": 3000
+                  }
+                ],
+                "label": "Discovery & Deep Understanding",
+                "observation": "[Withheld for privacy]",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "enough_questions",
+            "label": "Asking Enough Questions",
+            "number": 6,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-1",
+                    "sections": [
+                      "\u00a74\u2013\u00a77",
+                      "\u00a711\u2013\u00a716"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a75\u2013\u00a711",
+                      "\u00a716",
+                      "\u00a745\u2013\u00a752"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a77\u2013\u00a710"
+                    ]
+                  }
+                ],
+                "dimension_id": "discovery_deep_understanding",
+                "evidence": [
+                  {
+                    "end_ms": 8900,
+                    "quote": "Our kettle whistles whenever the moon rises over the shed",
+                    "segment_id": "s9",
+                    "start_ms": 8000
+                  },
+                  {
+                    "end_ms": 2900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s3",
+                    "start_ms": 2000
+                  },
+                  {
+                    "end_ms": 3900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s4",
+                    "start_ms": 3000
+                  }
+                ],
+                "label": "Discovery & Deep Understanding",
+                "observation": "[Withheld for privacy]",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "prospect_role",
+            "label": "Understanding the Prospect's Role",
+            "number": 7,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a717\u2013\u00a718",
+                      "\u00a744"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a711\u2013\u00a713"
+                    ]
+                  }
+                ],
+                "dimension_id": "qualification",
+                "label": "Qualification",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "needs_challenges",
+            "label": "Identifying Needs and Challenges",
+            "number": 8,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-1",
+                    "sections": [
+                      "\u00a74\u2013\u00a77",
+                      "\u00a711\u2013\u00a716"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a75\u2013\u00a711",
+                      "\u00a716",
+                      "\u00a745\u2013\u00a752"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a77\u2013\u00a710"
+                    ]
+                  }
+                ],
+                "dimension_id": "discovery_deep_understanding",
+                "evidence": [
+                  {
+                    "end_ms": 8900,
+                    "quote": "Our kettle whistles whenever the moon rises over the shed",
+                    "segment_id": "s9",
+                    "start_ms": 8000
+                  },
+                  {
+                    "end_ms": 2900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s3",
+                    "start_ms": 2000
+                  },
+                  {
+                    "end_ms": 3900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s4",
+                    "start_ms": 3000
+                  }
+                ],
+                "label": "Discovery & Deep Understanding",
+                "observation": "[Withheld for privacy]",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "current_solution",
+            "label": "Exploring Current Solution",
+            "number": 9,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-1",
+                    "sections": [
+                      "\u00a74\u2013\u00a77",
+                      "\u00a711\u2013\u00a716"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a75\u2013\u00a711",
+                      "\u00a716",
+                      "\u00a745\u2013\u00a752"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a77\u2013\u00a710"
+                    ]
+                  }
+                ],
+                "dimension_id": "discovery_deep_understanding",
+                "evidence": [
+                  {
+                    "end_ms": 8900,
+                    "quote": "Our kettle whistles whenever the moon rises over the shed",
+                    "segment_id": "s9",
+                    "start_ms": 8000
+                  },
+                  {
+                    "end_ms": 2900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s3",
+                    "start_ms": 2000
+                  },
+                  {
+                    "end_ms": 3900,
+                    "quote": "[Withheld for privacy]",
+                    "segment_id": "s4",
+                    "start_ms": 3000
+                  }
+                ],
+                "label": "Discovery & Deep Understanding",
+                "observation": "[Withheld for privacy]",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "business_impact",
+            "label": "Quantifying Business Impact",
+            "number": 10,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a77\u2013\u00a715",
+                      "\u00a719"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a714\u2013\u00a717"
+                    ]
+                  }
+                ],
+                "dimension_id": "problem_impact_desire",
+                "label": "Problem, Impact & Desire Clarity",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "decision_process",
+            "label": "Understanding Decision Process",
+            "number": 11,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a717\u2013\u00a718",
+                      "\u00a744"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a711\u2013\u00a713"
+                    ]
+                  }
+                ],
+                "dimension_id": "qualification",
+                "label": "Qualification",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "stakeholders",
+            "label": "Identifying Stakeholders",
+            "number": 12,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a717\u2013\u00a718",
+                      "\u00a744"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a711\u2013\u00a713"
+                    ]
+                  }
+                ],
+                "dimension_id": "qualification",
+                "label": "Qualification",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "handling_objections",
+            "label": "Handling Objections",
+            "number": 13,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-4",
+                    "sections": [
+                      "\u00a73\u2013\u00a76",
+                      "\u00a78\u2013\u00a718",
+                      "\u00a740\u2013\u00a770"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a722\u2013\u00a728"
+                    ]
+                  }
+                ],
+                "dimension_id": "certainty_objection_intelligence",
+                "label": "Certainty & Objection Intelligence",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [
+              {
+                "evidence": [
+                  {
+                    "end_ms": 8900,
+                    "quote": "Our kettle whistles whenever the moon rises over the shed",
+                    "segment_id": "s9",
+                    "start_ms": 8000
+                  }
+                ],
+                "source": "objection_analysis[0]",
+                "text": "The line gives a source bound reason to explore the barrier."
+              }
+            ],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "solution_value",
+            "label": "Positioning Solution Value",
+            "number": 14,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a720\u2013\u00a726"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a718\u2013\u00a721"
+                    ]
+                  }
+                ],
+                "dimension_id": "solution_relevance_presentation",
+                "label": "Solution Relevance & Presentation",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "unavailable",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "discussing_pricing",
+            "label": "Discussing Pricing",
+            "number": 15,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "handling_competition",
+            "label": "Handling Competition",
+            "number": 16,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-4",
+                    "sections": [
+                      "\u00a73\u2013\u00a76",
+                      "\u00a78\u2013\u00a718",
+                      "\u00a740\u2013\u00a770"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a722\u2013\u00a728"
+                    ]
+                  }
+                ],
+                "dimension_id": "certainty_objection_intelligence",
+                "label": "Certainty & Objection Intelligence",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "checking_concerns",
+            "label": "Checking for Concerns",
+            "number": 17,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-4",
+                    "sections": [
+                      "\u00a73\u2013\u00a76",
+                      "\u00a78\u2013\u00a718",
+                      "\u00a740\u2013\u00a770"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a722\u2013\u00a728"
+                    ]
+                  }
+                ],
+                "dimension_id": "certainty_objection_intelligence",
+                "label": "Certainty & Objection Intelligence",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "next_steps",
+            "label": "Next Steps",
+            "number": 18,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a734\u2013\u00a742",
+                      "\u00a748\u2013\u00a752"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a729\u2013\u00a732",
+                      "\u00a739\u2013\u00a742"
+                    ]
+                  }
+                ],
+                "dimension_id": "closing_decision_management",
+                "label": "Closing & Decision Management",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "call_control",
+            "label": "Call Control",
+            "number": 19,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-2",
+                    "sections": [
+                      "\u00a71\u2013\u00a75",
+                      "\u00a79\u2013\u00a716",
+                      "\u00a731\u2013\u00a755"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a733\u2013\u00a737",
+                      "\u00a763\u2013\u00a766"
+                    ]
+                  }
+                ],
+                "dimension_id": "communication_tonality",
+                "label": "Communication & Tonality",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "unavailable",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "question_talk_ratio",
+            "label": "Question to Talk Ratio",
+            "number": 20,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "unavailable",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "handling_silence",
+            "label": "Handling Silence",
+            "number": 21,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "professionalism",
+            "label": "Professionalism",
+            "number": 22,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-2",
+                    "sections": [
+                      "\u00a71\u2013\u00a75",
+                      "\u00a79\u2013\u00a716",
+                      "\u00a731\u2013\u00a755"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a733\u2013\u00a737",
+                      "\u00a763\u2013\u00a766"
+                    ]
+                  }
+                ],
+                "dimension_id": "communication_tonality",
+                "label": "Communication & Tonality",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "closing_attitude",
+            "label": "Closing Attitude",
+            "number": 23,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a734\u2013\u00a742",
+                      "\u00a748\u2013\u00a752"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a729\u2013\u00a732",
+                      "\u00a739\u2013\u00a742"
+                    ]
+                  }
+                ],
+                "dimension_id": "closing_decision_management",
+                "label": "Closing & Decision Management",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [
+              {
+                "evidence": [
+                  {
+                    "end_ms": 8900,
+                    "quote": "Our kettle whistles whenever the moon rises over the shed",
+                    "segment_id": "s9",
+                    "start_ms": 8000
+                  }
+                ],
+                "source": "closing_analysis[0]",
+                "text": "The line gives a source bound reason to explore the barrier."
+              }
+            ],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "building_rapport",
+            "label": "Building Rapport",
+            "number": 24,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-1",
+                    "sections": [
+                      "\u00a78\u2013\u00a710",
+                      "\u00a752",
+                      "\u00a754\u2013\u00a756"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a76"
+                    ]
+                  }
+                ],
+                "dimension_id": "human_connection_trust",
+                "label": "Human Connection & Trust",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "presenting_solution",
+            "label": "Presenting the Solution",
+            "number": 25,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a720\u2013\u00a726"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a718\u2013\u00a721"
+                    ]
+                  }
+                ],
+                "dimension_id": "solution_relevance_presentation",
+                "label": "Solution Relevance & Presentation",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "creating_value",
+            "label": "Creating Value",
+            "number": 26,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a77\u2013\u00a715",
+                      "\u00a719"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a714\u2013\u00a717"
+                    ]
+                  }
+                ],
+                "dimension_id": "problem_impact_desire",
+                "label": "Problem, Impact & Desire Clarity",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              },
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-3",
+                    "sections": [
+                      "\u00a720\u2013\u00a726"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a718\u2013\u00a721"
+                    ]
+                  }
+                ],
+                "dimension_id": "solution_relevance_presentation",
+                "label": "Solution Relevance & Presentation",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          },
+          {
+            "coverage": "related_analysis",
+            "evidence": [],
+            "how_to_improve": null,
+            "id": "overall_communication",
+            "label": "Overall Communication",
+            "number": 27,
+            "observations": [],
+            "rating": null,
+            "related_dimensions": [
+              {
+                "citations": [
+                  {
+                    "doc": "Doc-2",
+                    "sections": [
+                      "\u00a71\u2013\u00a75",
+                      "\u00a79\u2013\u00a716",
+                      "\u00a731\u2013\u00a755"
+                    ]
+                  },
+                  {
+                    "doc": "Doc-5",
+                    "sections": [
+                      "\u00a733\u2013\u00a737",
+                      "\u00a763\u2013\u00a766"
+                    ]
+                  }
+                ],
+                "dimension_id": "communication_tonality",
+                "label": "Communication & Tonality",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "status": "unknown"
+              }
+            ],
+            "related_findings": [],
+            "score": null,
+            "score_status": "not_scored",
+            "status": "insufficient_evidence",
+            "status_reason": "No separate assessment for this pointer is saved.",
+            "training_video": null,
+            "what_happened": null,
+            "why_it_matters": null
+          }
+        ],
+        "version": "report-structure/1"
+      },
       "summary": "The draft describes observable conversation behaviour and its uncertainty.",
       "verdict": "Qualitative draft for human review."
     },
