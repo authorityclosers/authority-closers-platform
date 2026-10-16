@@ -408,6 +408,18 @@ def test_edit_details_and_notes_keep_history(postgres_harness: Any, tmp_path: Pa
                     "kind": "note",
                     "note": "Prefers WhatsApp after 6 pm",
                 }
+                # A call from the seller's own phone is logged; nothing is simulated.
+                assert noted.json()["call_mode"] == "phone"
+                called = await client.post(
+                    f"{BASE}/leads/{lead_id}/calls/phone",
+                    json={"command_id": str(uuid4()), "duration_seconds": 95},
+                    headers=WRITE,
+                )
+                assert called.status_code == 200, called.text
+                call = called.json()["events"][0]
+                assert call["kind"] == "call" and call["simulated"] is False
+                assert call["duration_seconds"] == 95
+                assert called.json()["lead"]["revision"] > noted.json()["lead"]["revision"]
         finally:
             await setup.engine.dispose()
 
