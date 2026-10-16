@@ -4,7 +4,9 @@ name: Sales Xray Android
 # already carry the Android SDK and JDK 21 (AUT-1210; calling from the app,
 # owner order 16 Oct 2026). Two APKs per run: "Sales Xray" opens the live site,
 # "Sales Xray Dev" opens dev and installs beside it. Task branches build too.
-# The APKs are workflow artifacts only; the download page promotes one.
+# Every run keeps both APKs as artifacts. A main build also replaces the files
+# of the "sales-xray-android-latest" test release, which Sales Xray's
+# Phone app dialog links to; that job alone may write to the repo.
 on:
   workflow_dispatch:
   push:
@@ -71,3 +73,28 @@ jobs:
           path: apps/sales-xray-android/dist/*.apk
           retention-days: 30
           if-no-files-found: error
+
+  publish:
+    needs: apk
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Get the APKs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sales-xray-android-${{ github.run_number }}
+          path: dist
+      - name: Replace the test release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: 0.2.${{ github.run_number }}
+        run: |
+          cp "sales-xray-android-$VERSION.apk" sales-xray-android.apk
+          cp "sales-xray-dev-android-$VERSION.apk" sales-xray-dev-android.apk
+          sha256sum sales-xray-android.apk sales-xray-dev-android.apk > SHA256SUMS.txt
+          gh release delete sales-xray-android-latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create sales-xray-android-latest             --repo "$GITHUB_REPOSITORY"             --target "$GITHUB_SHA"             --prerelease             --title "Sales Xray for Android $VERSION (test build)"             --notes "Test build from $GITHUB_SHA, signed with the test key. sales-xray-android.apk opens the live site; sales-xray-dev-android.apk opens dev. Install from the Phone app button on the Leads page in Sales Xray."             sales-xray-android.apk sales-xray-dev-android.apk SHA256SUMS.txt
