@@ -18,7 +18,11 @@ import {
 import { SpeakerAvatar } from "./speaker-avatar";
 import { WorkspaceAccessContext } from "./workspace-access";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  // The account menu marks the page you are on (phone sheet tiles).
+  usePathname: () => "/dashboard",
+}));
 vi.mock("./notice-center", () => ({ notify: vi.fn(), dismissNotice: vi.fn() }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }

@@ -344,7 +344,8 @@ export function SettingsMenu({
             : undefined
         }
       >
-        <span className={styles.grip} aria-hidden="true" />
+        {/* Empty, so nothing to announce: the sheet handle is drawn only. */}
+        <span className={styles.grip} />
         <div key={view} className={styles.view}>
           {view === "main" && (
             <>
