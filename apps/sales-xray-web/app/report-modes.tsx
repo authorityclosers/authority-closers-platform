@@ -791,9 +791,22 @@ export function ReportModes({
   const requestedView: View = linked
     ? (linked.view ?? preferredView)
     : (scopedLocal.view ?? preferredView);
-  const view =
-    (requestedView === "story" && !storyPanels.length) ||
-    (requestedView === "coaching" && !coachingPanels.length)
+  // 16 Oct owner: the new Report replaces the old views on every report that
+  // has it. No menu, default or saved choice leads to Details, Reading or
+  // Document any more; only an explicit link to one (print and Word use the
+  // Document link) still opens it. Review fixtures keep demoing them.
+  const legacy = (value: View | null | undefined) =>
+    value === "reading" || value === "tabs" || value === "document";
+  const linkedLegacy =
+    legacy(linked?.view) || (fixture && legacy(requestedView));
+  const view: View = storyPanels.length
+    ? requestedView === "coaching" && coachingPanels.length
+      ? "coaching"
+      : linkedLegacy
+        ? requestedView
+        : "story"
+    : (requestedView === "story" && !storyPanels.length) ||
+        (requestedView === "coaching" && !coachingPanels.length)
       ? "reading"
       : requestedView;
   const panels =
@@ -1155,7 +1168,7 @@ export function ReportModes({
               ] as const,
             ]
           : []),
-        ...(view === "tabs"
+        ...(fixture && view === "tabs"
           ? [
               [
                 "tabs",
@@ -1164,7 +1177,7 @@ export function ReportModes({
                 PanelsTopLeft,
               ] as const,
             ]
-          : view === "document"
+          : fixture && view === "document"
             ? [
                 [
                   "document",
@@ -1180,24 +1193,27 @@ export function ReportModes({
         ["tabs", "Tabbed view", "Tabbed view", PanelsTopLeft],
         ["document", "Document view", "Document view", FileText],
       ];
-  const moreViews: ViewChoice[] = storyPanels.length
-    ? (
-        [
+  // The old Details and Document views are gone where the new Report exists
+  // (review fixtures still offer them).
+  const moreViews: ViewChoice[] =
+    storyPanels.length && fixture
+      ? (
           [
-            "document",
-            VIEWS_COPY.document.menu,
-            VIEWS_COPY.document.hint,
-            BookOpen,
-          ],
-          [
-            "tabs",
-            VIEWS_COPY.details.menu,
-            VIEWS_COPY.details.hint,
-            PanelsTopLeft,
-          ],
-        ] as const
-      ).filter(([value]) => value !== view)
-    : [];
+            [
+              "document",
+              VIEWS_COPY.document.menu,
+              VIEWS_COPY.document.hint,
+              BookOpen,
+            ],
+            [
+              "tabs",
+              VIEWS_COPY.details.menu,
+              VIEWS_COPY.details.hint,
+              PanelsTopLeft,
+            ],
+          ] as const
+        ).filter(([value]) => value !== view)
+      : [];
 
   // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),
   // with the view choice at its trailing edge. Wide screens host it in the

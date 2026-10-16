@@ -182,7 +182,7 @@ it.each(["", "&print=1"])(
     window.history.replaceState(
       null,
       "",
-      `/?call=${boundCall}&view=reading${printQuery}`,
+      `/?call=${boundCall}&view=document${printQuery}`,
     );
     const fullSummary =
       "First observation. Final source-backed summary detail.";
@@ -211,19 +211,13 @@ it.each(["", "&print=1"])(
         />,
       ),
     );
-    const disclosure =
-      host.querySelector<HTMLDetailsElement>("[class*='inShort']")!;
-    expect(disclosure.open).toBe(false);
-    await act(async () =>
-      host.querySelector<HTMLButtonElement>('[title="Document view"]')!.click(),
-    );
     expect(host.querySelector("[data-docx-preview-stub]")?.textContent).toBe(
       fullSummary,
     );
-    expect(disclosure.open).toBe(false);
-    expect(
-      disclosure.closest("[data-reading-panels]")?.hasAttribute("hidden"),
-    ).toBe(true);
+    const disclosure = host.querySelector<HTMLDetailsElement>(
+      "[class*='inShort']",
+    );
+    expect(disclosure?.open ?? false).toBe(false);
   },
 );
 
