@@ -6389,6 +6389,10 @@ def test_fixture_report_explicit_views(browser: Browser, viewport: tuple[int, st
         expect(_document_preview(page).locator("section[data-document-section]")).to_have_count(6)
         expect(_document_download(page)).to_be_visible()
         page.evaluate("() => document.fonts.ready")
+        if journey.width == 390:
+            _document_preview(page).locator("header").evaluate(
+                "el => el.scrollIntoView({block: 'center', behavior: 'instant'})"
+            )
         journey.snapshot("document-link")
         journey.document_controls()
         linked_query = parse_qs(urlsplit(page.url).query, keep_blank_values=True)
@@ -6399,6 +6403,8 @@ def test_fixture_report_explicit_views(browser: Browser, viewport: tuple[int, st
         expect(page.locator('[data-report-sections][role="tablist"]')).to_be_visible()
         expect(page.get_by_role("tab", name="Overview", exact=True)).to_be_visible()
         page.evaluate("() => document.fonts.ready")
+        if journey.width == 390:
+            page.get_by_role("tab", name="Overview", exact=True).click()
         journey.snapshot("details-link")
 
         report = page.get_by_role("button", name="Report view", exact=True)
