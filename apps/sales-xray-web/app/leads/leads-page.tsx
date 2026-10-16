@@ -8,7 +8,7 @@
  * and admins also get All leads, Team (allocation rules) and Sources.
  */
 
-import { Building2, PhoneCall, Plus } from "lucide-react";
+import { Building2, PhoneCall, Plus, Smartphone } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -29,6 +29,7 @@ import {
   ImportDialog,
   type AddWay,
 } from "./capture-dialogs";
+import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { DeskView } from "./desk-view";
 import { CallingLoop, LeadSheet } from "./lead-sheet";
 import {
@@ -85,6 +86,7 @@ export function LeadsRoute() {
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [apps, setApps] = useState(false);
   const [contacts, setContacts] = useState(false);
   const [picked, setPicked] = useState<PickedContact[]>([]);
   // Each opening mounts a fresh dialog, so nothing is reset in an effect.
@@ -94,6 +96,7 @@ export function LeadsRoute() {
     importing: 0,
     menu: 0,
     contacts: 0,
+    apps: 0,
   });
   const begin = (
     which: keyof typeof rounds,
@@ -214,6 +217,10 @@ export function LeadsRoute() {
           ]}
           actions={
             <>
+              <Button onClick={() => begin("apps", setApps)}>
+                <Smartphone size={14} aria-hidden="true" />
+                Phone app
+              </Button>
               <Button onClick={() => begin("menu", setMenu)}>
                 <Plus size={14} aria-hidden="true" />
                 Add leads
@@ -231,6 +238,7 @@ export function LeadsRoute() {
             </>
           }
         />
+        <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
         <QueryTabs base={LEADS_PATH} items={tabs} current={tab} />
         {error ? (
           <div className={styles.notice} role="status">
@@ -285,6 +293,11 @@ export function LeadsRoute() {
           refresh();
           setOpenLead(leadId);
         }}
+      />
+      <PhoneAppDialog
+        key={`apps-${rounds.apps}`}
+        open={apps}
+        onClose={() => setApps(false)}
       />
       <AddLeadsMenu
         key={`menu-${rounds.menu}`}

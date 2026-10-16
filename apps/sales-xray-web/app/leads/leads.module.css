@@ -2198,3 +2198,137 @@
   margin: 0;
   padding-left: 18px;
 }
+
+/* ---------- Phone app ---------- */
+
+.apps {
+  display: grid;
+  gap: 12px;
+}
+
+.appCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+}
+
+.appHead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.appHead > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+}
+
+.appHead small {
+  color: var(--sx-muted);
+}
+
+.appGet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.appGetText {
+  display: grid;
+  flex: 1 1 200px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.qr {
+  flex: none;
+  padding: 6px;
+  border-radius: var(--sx-radius-sm);
+  background: #ffffff;
+}
+
+.downloadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  box-shadow: var(--lx-shadow-cta);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.downloadButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.soon {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.soon li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink-2);
+}
+
+.appBanner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+}
+
+.bannerClose {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+@media (max-width: 560px) {
+  .appBanner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .bannerAction {
+    grid-row: 2;
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .bannerClose {
+    grid-row: 1;
+    grid-column: 3;
+  }
+}
