@@ -14,6 +14,7 @@ import {
 } from "../acquisition-client";
 import { previewImportFolder } from "../bulk-import-client";
 import { inventoryImportFiles } from "../bulk-import-files";
+import { readCallLabel, renameCall } from "../call-label-client";
 import {
   advanceImport,
   confirmImport,
@@ -177,6 +178,7 @@ export async function runSimulatedCall({
         // Put the call on the lead first, so closing the page never loses it.
         onStep("linking");
         linked = await linkCall(lead, pick, item.submissionId, signal);
+        await nameCall(item.submissionId, lead.lead.name, signal);
       }
       if (
         item.state === "done" ||
@@ -252,4 +254,25 @@ function linkCall(
       signal,
     },
   );
+}
+
+/** Best effort: the call's Report is titled after the lead instead of "Untitled call". */
+async function nameCall(
+  submissionId: string,
+  leadName: string,
+  signal: AbortSignal,
+): Promise<void> {
+  try {
+    const label = await readCallLabel(submissionId, signal);
+    if (label && !label.displayName)
+      await renameCall(
+        submissionId,
+        `${leadName} · simulated call`.slice(0, 80),
+        label.revision,
+        signal,
+      );
+  } catch (error) {
+    if (signal.aborted) throw error;
+    // Only the seller may rename their call; otherwise it keeps its default name.
+  }
 }
