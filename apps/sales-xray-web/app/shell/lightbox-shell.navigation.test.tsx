@@ -144,6 +144,7 @@ it("reaches every section from the phone tab bar, plus a dev settings control", 
       liveData
         ? [
             "Dashboard",
+            "Leads",
             "Calls",
             "New",
             "Prospects",
@@ -151,7 +152,15 @@ it("reaches every section from the phone tab bar, plus a dev settings control", 
             "More",
             "Settings",
           ]
-        : ["Dashboard", "Calls", "New", "Prospects", "Coaching", "More"],
+        : [
+            "Dashboard",
+            "Leads",
+            "Calls",
+            "New",
+            "Prospects",
+            "Coaching",
+            "More",
+          ],
     );
     expect(nav.querySelector('a[href="/prospects"]')?.textContent?.trim()).toBe(
       "Prospects",
