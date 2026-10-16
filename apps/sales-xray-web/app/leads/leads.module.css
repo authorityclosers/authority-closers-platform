@@ -2159,3 +2159,42 @@
 .fileLine small {
   color: var(--sx-muted);
 }
+
+/* ---------- Calling from the phone app ---------- */
+
+.heard {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: -4px 0 4px;
+  color: var(--lx-teal);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.recordPick[data-found] {
+  border-style: solid;
+  font: inherit;
+  text-align: left;
+}
+
+.permits {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+}
+
+.permits h3 {
+  font: var(--sx-text-panel);
+}
+
+.permits ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}

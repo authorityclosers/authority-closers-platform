@@ -9,6 +9,7 @@
 
 import {
   CheckCircle2,
+  History as HistoryIcon,
   Mail,
   MessageCircle,
   Mic,
@@ -51,6 +52,19 @@ import {
   type Stage,
 } from "./leads-client";
 import { sourceText, whyLine } from "./desk-view";
+import {
+  askCallAccess,
+  forgetCall,
+  inPhoneApp,
+  missedReason,
+  onPhoneCall,
+  phoneStatus,
+  readLastCall,
+  readPhoneRecording,
+  startPhoneCall,
+  type NativeCall,
+  type NativeRecording,
+} from "./native-phone";
 import {
   pickSimulation,
   readUploadPolicy,
@@ -223,19 +237,30 @@ export function CallOutcome({
   attention,
   beforeSave,
   onSaved,
+  heard = null,
 }: {
   detail: LeadDetail;
   submitLabel: string;
   /** The seller just came back from the dialer: this card asks first. */
   attention: boolean;
+  /** What the phone app saw of the call: it pre-fills the answer. */
+  heard?: NativeCall | null;
   /** Logs a call still waiting to be logged; returns the lead as it now is. */
   beforeSave: () => Promise<LeadDetail>;
   onSaved: (next: LeadDetail) => void;
 }) {
   const id = useId();
   const ref = useRef<HTMLElement>(null);
-  const [talk, setTalk] = useState<Talk>(null);
-  const [reason, setReason] = useState<string | null>(null);
+  const [talk, setTalk] = useState<Talk>(
+    heard?.connected === true
+      ? "talked"
+      : heard?.connected === false
+        ? "missed"
+        : null,
+  );
+  const [reason, setReason] = useState<string | null>(
+    heard?.connected === false ? missedReason(heard.result) : null,
+  );
   const [stage, setStage] = useState<Stage | null>(null);
   const [next, setNext] = useState<Pick>("morning");
   const [retry, setRetry] = useState<Pick | null>(null);
@@ -309,6 +334,12 @@ export function CallOutcome({
           ? "Back from the call. How did it go?"
           : "How did the call go?"}
       </h3>
+      {heard && heardLine(heard) ? (
+        <p className={styles.heard}>
+          <HistoryIcon size={14} aria-hidden="true" />
+          {heardLine(heard)}
+        </p>
+      ) : null}
       <div
         className={styles.choiceRow}
         role="group"
@@ -520,6 +551,58 @@ async function logWaitingCall(detail: LeadDetail): Promise<LeadDetail> {
   if (!pending || pending.leadId !== detail.lead.lead_id) return detail;
   takePendingCall();
   return logPhoneCall(detail.lead.lead_id, (Date.now() - pending.at) / 1000);
+}
+
+/** The phone app's call, once it has ended, for the open lead. */
+function usePhoneAppCall(
+  leadId: string | null,
+  onCall: (call: NativeCall) => void,
+) {
+  const latest = useRef(onCall);
+  useEffect(() => {
+    latest.current = onCall;
+  });
+  useEffect(() => {
+    if (!leadId || !inPhoneApp()) return;
+    const take = (call: NativeCall) => {
+      if (call.leadId === leadId && call.endedMs) latest.current(call);
+    };
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      void readLastCall(leadId).then((call) => {
+        if (call) take(call);
+      });
+    };
+    const stop = onPhoneCall(take);
+    check();
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [leadId]);
+}
+
+function talkTime(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds));
+  return whole < 60
+    ? `${whole} seconds`
+    : `${Math.floor(whole / 60)} min ${whole % 60} s`;
+}
+
+const HEARD_MISSED: Partial<Record<NativeCall["result"], string>> = {
+  no_answer: "nobody answered",
+  busy: "the line was busy",
+  rejected: "they cut the call",
+  failed: "the call didn't go through",
+};
+
+function heardLine(call: NativeCall): string {
+  if (call.connected === true)
+    return `Your phone says you talked for ${talkTime(call.durationSeconds ?? 0)}.`;
+  if (call.connected === false)
+    return `Your phone says ${HEARD_MISSED[call.result] ?? "the call didn't connect"}.`;
+  return "";
 }
 
 /* ---------- History ---------- */
@@ -810,13 +893,19 @@ function RecordingUpload({
   detail,
   me,
   onDone,
+  found = null,
+  waiting = false,
 }: {
   detail: LeadDetail;
   me: Me;
   onDone: (next: LeadDetail) => void;
+  /** The phone app found its own recording of the call that just ended. */
+  found?: NativeRecording | null;
+  /** The phone app is still looking for that recording. */
+  waiting?: boolean;
 }) {
   const [state, setState] = useState<
-    "idle" | "ready" | "running" | "done" | "error"
+    "idle" | "reading" | "ready" | "running" | "done" | "error"
   >("idle");
   const [file, setFile] = useState<File | null>(null);
   // One attempt per chosen file, so trying again never saves the call twice.
@@ -841,6 +930,20 @@ function RecordingUpload({
       setPolicy(await readUploadPolicy());
     } catch {
       setError("The recording terms didn't load. Try again.");
+      setState("error");
+    }
+  };
+
+  const takeFound = async () => {
+    if (!found) return;
+    setError(null);
+    setState("reading");
+    try {
+      await choose(await readPhoneRecording(found));
+    } catch {
+      setError(
+        "Your phone didn't share the recording. Pick it from your files instead.",
+      );
       setState("error");
     }
   };
@@ -910,12 +1013,43 @@ function RecordingUpload({
         <h3>Call recording</h3>
         {state === "done" ? <Badge tone="good">Added</Badge> : null}
       </div>
+      {state === "idle" && found ? (
+        <button
+          type="button"
+          className={styles.recordPick}
+          data-found=""
+          onClick={() => void takeFound()}
+        >
+          <span className={styles.wayIcon}>
+            <Mic size={20} aria-hidden="true" />
+          </span>
+          <span>
+            <strong>Analyse this call&apos;s recording</strong>
+            <small>
+              Your phone recorded it: {found.name}
+              {found.durationMs
+                ? ` · ${talkTime(found.durationMs / 1000)}`
+                : ""}
+            </small>
+          </span>
+        </button>
+      ) : null}
+      {state === "idle" && !found && waiting ? (
+        <p className={styles.hint}>
+          Looking for your phone&apos;s recording of this call…
+        </p>
+      ) : null}
       {state === "idle"
         ? picker(
-            "Add the recording",
-            "Pick the call your phone just recorded. Sales Xray analyses it and puts its Report here.",
+            found ? "Pick a different recording" : "Add the recording",
+            found
+              ? "From your phone's recordings or files."
+              : "Pick the call your phone just recorded. Sales Xray analyses it and puts its Report here.",
           )
         : null}
+      {state === "reading" ? (
+        <p className={styles.hint}>Getting the recording from your phone…</p>
+      ) : null}
       {file && (state === "ready" || state === "running") ? (
         <p className={styles.fileLine}>
           <strong>{file.name}</strong>
@@ -1151,13 +1285,46 @@ function LeadCard({
   me,
   onChanged,
   outcome,
+  phoneCall = null,
 }: {
   detail: LeadDetail;
   me: Me | null;
   onChanged: (next: LeadDetail) => void;
   outcome: ReactNode;
+  /** The phone app's last call to this lead, once it has ended. */
+  phoneCall?: NativeCall | null;
 }) {
   const { lead } = detail;
+  const [permits, setPermits] = useState(false);
+  const [calling, setCalling] = useState(false);
+
+  // Inside the phone app the call is placed and followed by the app.
+  const callFromApp = async (askFirst: boolean) => {
+    if (!detail.phone) return;
+    setCalling(true);
+    try {
+      if (askFirst) await askCallAccess();
+      else {
+        const status = await phoneStatus();
+        if (status && !status.callAccess) {
+          setPermits(true);
+          return;
+        }
+      }
+      setPermits(false);
+      await startPhoneCall({
+        leadId: lead.lead_id,
+        number: detail.phone,
+        name: lead.name,
+      });
+    } catch {
+      setPermits(false);
+      rememberCall(lead.lead_id);
+      window.location.href = `tel:${detail.phone}`;
+    } finally {
+      setCalling(false);
+    }
+  };
   const [editing, setEditing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -1240,7 +1407,13 @@ function LeadCard({
           <a
             className={styles.callButton}
             href={`tel:${detail.phone}`}
-            onClick={() => rememberCall(lead.lead_id)}
+            aria-busy={calling || undefined}
+            onClick={(event) => {
+              if (inPhoneApp()) {
+                event.preventDefault();
+                void callFromApp(false);
+              } else rememberCall(lead.lead_id);
+            }}
           >
             <Phone size={20} aria-hidden="true" />
             <span>
@@ -1282,6 +1455,42 @@ function LeadCard({
           </a>
         ) : null}
       </div>
+      {permits ? (
+        <section className={styles.permits} aria-label="Allow calling">
+          <h3>Call from Sales Xray</h3>
+          <p>Your phone asks you to allow three things, once:</p>
+          <ul>
+            <li>
+              <strong>Phone</strong> to place the call
+            </li>
+            <li>
+              <strong>Call history</strong> to see whether it connected and for
+              how long
+            </li>
+            <li>
+              <strong>Music and audio</strong> to find your phone&apos;s
+              recording of the call
+            </li>
+          </ul>
+          <p className={styles.hint}>
+            Nothing leaves your phone until you choose to analyse a recording.
+          </p>
+          <div className={styles.row}>
+            <Button
+              onClick={() => {
+                setPermits(false);
+                rememberCall(lead.lead_id);
+                window.location.href = `tel:${detail.phone}`;
+              }}
+            >
+              Just call
+            </Button>
+            <Button variant="primary" onClick={() => void callFromApp(true)}>
+              Allow and call
+            </Button>
+          </div>
+        </section>
+      ) : null}
       {detail.call_mode === "simulated" && detail.can_edit ? (
         testing ? (
           <SimulatedCall detail={detail} onDone={onChanged} />
@@ -1300,8 +1509,14 @@ function LeadCard({
       {detail.can_edit &&
       detail.call_mode === "phone" &&
       me &&
-      lead.calls > 0 ? (
-        <RecordingUpload detail={detail} me={me} onDone={onChanged} />
+      (lead.calls > 0 || phoneCall) ? (
+        <RecordingUpload
+          detail={detail}
+          me={me}
+          onDone={onChanged}
+          found={phoneCall?.recording ?? null}
+          waiting={phoneCall ? !phoneCall.final : false}
+        />
       ) : null}
 
       <section className={styles.panel} aria-label="Details">
@@ -1429,6 +1644,13 @@ export function LeadSheet({
   } | null>(null);
   const [formKey, setFormKey] = useState(0);
   const [backFrom, setBackFrom] = useState<string | null>(null);
+  const [heard, setHeard] = useState<NativeCall | null>(null);
+  const logged = useRef("");
+  const [answered, setAnswered] = useState(0);
+  const phoneCall = heard?.leadId === leadId ? heard : null;
+  // The phone's call pre-fills the answer until that answer is saved.
+  const asked =
+    phoneCall && phoneCall.startedMs !== answered ? phoneCall : null;
   // Only the open lead's own detail (or error) shows; anything else is stale.
   const detail = loaded?.lead.lead_id === leadId ? loaded : null;
   const error = failed?.leadId === leadId ? failed.message : null;
@@ -1469,6 +1691,19 @@ export function LeadSheet({
       .catch(() => undefined);
   });
 
+  usePhoneAppCall(leadId, (call) => {
+    setHeard(call);
+    const key = `${call.leadId}:${call.startedMs}`;
+    if (logged.current !== key) {
+      logged.current = key;
+      setBackFrom(call.leadId);
+      logPhoneCall(call.leadId, call.durationSeconds ?? 0)
+        .then(update)
+        .catch(() => undefined);
+    }
+    if (call.final) void forgetCall(call.leadId);
+  });
+
   return (
     <Sheet
       open={leadId !== null}
@@ -1482,15 +1717,18 @@ export function LeadSheet({
           detail={detail}
           me={me}
           onChanged={update}
+          phoneCall={phoneCall}
           outcome={
             <CallOutcome
-              key={formKey}
+              key={`${formKey}-${asked?.startedMs ?? 0}`}
               detail={detail}
               submitLabel="Save"
+              heard={asked}
               attention={backFrom === leadId}
               beforeSave={() => logWaitingCall(detail)}
               onSaved={(next) => {
                 setBackFrom(null);
+                if (asked) setAnswered(asked.startedMs);
                 update(next);
               }}
             />
@@ -1525,6 +1763,8 @@ export function CallingLoop({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(0);
   const [backFrom, setBackFrom] = useState<string | null>(null);
+  const [heard, setHeard] = useState<NativeCall | null>(null);
+  const logged = useRef("");
 
   // The page gives each opening a new key, so a round starts at zero, loading.
   const load = (signal?: AbortSignal) => {
@@ -1569,6 +1809,23 @@ export function CallingLoop({
       .catch(() => undefined);
   });
 
+  usePhoneAppCall(current, (call) => {
+    setHeard(call);
+    const key = `${call.leadId}:${call.startedMs}`;
+    if (logged.current !== key) {
+      logged.current = key;
+      setBackFrom(call.leadId);
+      logPhoneCall(call.leadId, call.durationSeconds ?? 0)
+        .then((next) => {
+          setDetail(next);
+          onChanged();
+        })
+        .catch(() => undefined);
+    }
+    if (call.final) void forgetCall(call.leadId);
+  });
+  const phoneCall = heard && heard.leadId === current ? heard : null;
+
   return (
     <Sheet open={open} label="Start calling" onClose={onClose}>
       <div className={styles.loopHead}>
@@ -1603,15 +1860,17 @@ export function CallingLoop({
           key={detail.lead.lead_id}
           detail={detail}
           me={me}
+          phoneCall={phoneCall}
           onChanged={(next) => {
             setDetail(next);
             onChanged();
           }}
           outcome={
             <CallOutcome
-              key={`${detail.lead.lead_id}-${detail.lead.revision}`}
+              key={`${detail.lead.lead_id}-${detail.lead.revision}-${phoneCall?.startedMs ?? 0}`}
               detail={detail}
               submitLabel="Save and next lead"
+              heard={phoneCall}
               attention={backFrom === detail.lead.lead_id}
               beforeSave={() => logWaitingCall(detail)}
               onSaved={() => {
