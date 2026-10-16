@@ -1,6 +1,11 @@
 "use client";
 
-import { ChevronRight, Inbox, PhoneCall, Plus, Upload } from "lucide-react";
+/**
+ * My desk: one big "who to call now" card, the four counts, today's queue and
+ * my day. Plain words only; nothing internal on screen (owner, 16 Oct).
+ */
+
+import { ChevronRight, Inbox, PhoneCall, Plus } from "lucide-react";
 
 import {
   Avatar,
@@ -44,6 +49,18 @@ export function whyLine(row: LeadRow, now: Date = new Date()): string {
   return row.why;
 }
 
+/** Where the lead came from, as a seller would say it. */
+export function sourceText(
+  row: Pick<LeadRow, "source" | "source_label">,
+): string {
+  if (row.source === "synthetic") {
+    const kind = row.source_label.split("·").pop()?.trim() ?? "";
+    return kind ? kind[0].toUpperCase() + kind.slice(1) : "Lead";
+  }
+  if (row.source === "csv") return "File upload";
+  return row.source_label.replace(/^Sheet: /, "Sheet · ");
+}
+
 export function LeadLine({
   row,
   onOpen,
@@ -53,9 +70,7 @@ export function LeadLine({
   onOpen: (leadId: string) => void;
   showOwner?: boolean;
 }) {
-  const sub = [row.interest, row.company, row.city, row.language]
-    .filter(Boolean)
-    .join(" · ");
+  const sub = [row.interest, row.company, row.city].filter(Boolean).join(" · ");
   return (
     <li className={styles.leadLine}>
       <button
@@ -64,12 +79,9 @@ export function LeadLine({
         onClick={() => onOpen(row.lead_id)}
         aria-label={`Open ${row.name}`}
       >
-        <Avatar name={row.name} size={32} />
+        <Avatar name={row.name} size={34} />
         <span className={styles.leadMain}>
-          <span className={styles.leadName}>
-            {row.name}
-            {row.test_data ? <Badge>Test</Badge> : null}
-          </span>
+          <span className={styles.leadName}>{row.name}</span>
           {sub ? <span className={styles.leadSub}>{sub}</span> : null}
           <span className={styles.leadWhy} data-tone={WHY_TONE[row.why_kind]}>
             {whyLine(row)}
@@ -87,13 +99,9 @@ export function LeadLine({
           >
             {row.stage_label}
           </Badge>
-          {showOwner ? (
-            <span className={styles.leadOwner}>
-              {row.owner_name ?? "No owner yet"}
-            </span>
-          ) : (
-            <span className={styles.leadOwner}>{row.source_label}</span>
-          )}
+          <span className={styles.leadOwner}>
+            {showOwner ? (row.owner_name ?? "No owner yet") : sourceText(row)}
+          </span>
         </span>
         <ChevronRight
           size={16}
@@ -105,22 +113,69 @@ export function LeadLine({
   );
 }
 
+function NextUp({
+  desk,
+  onStart,
+  onAdd,
+}: {
+  desk: Desk;
+  onStart: () => void;
+  onAdd: () => void;
+}) {
+  const next = desk.queue[0];
+  const toCall =
+    desk.counts.new + desk.counts.follow_up_due + desk.counts.not_connected;
+  if (!next)
+    return (
+      <section className={styles.hero} aria-label="Next call">
+        <div className={styles.heroText}>
+          <span className={styles.heroEyebrow}>All clear</span>
+          <h2 className={styles.heroTitle}>Nobody to call right now</h2>
+          <p className={styles.heroSub}>
+            New leads land here the moment they come in. Add one yourself any
+            time.
+          </p>
+        </div>
+        <Button onClick={onAdd}>
+          <Plus size={16} aria-hidden="true" />
+          Add a lead
+        </Button>
+      </section>
+    );
+  return (
+    <section className={styles.hero} aria-label="Next call">
+      <div className={styles.heroText}>
+        <span className={styles.heroEyebrow}>
+          {toCall
+            ? `${toCall} lead${toCall === 1 ? "" : "s"} to call now`
+            : "Next on your list"}
+        </span>
+        <h2 className={styles.heroTitle}>{next.name}</h2>
+        <p className={styles.heroSub}>{whyLine(next)}</p>
+      </div>
+      <button type="button" className={styles.heroButton} onClick={onStart}>
+        <PhoneCall size={20} aria-hidden="true" />
+        Start calling
+      </button>
+    </section>
+  );
+}
+
 export function DeskView({
   desk,
   onOpen,
   onStart,
   onAdd,
-  onImport,
 }: {
   desk: Desk;
   onOpen: (leadId: string) => void;
   onStart: () => void;
   onAdd: () => void;
-  onImport: () => void;
 }) {
   const { counts, numbers } = desk;
   return (
     <>
+      <NextUp desk={desk} onStart={onStart} onAdd={onAdd} />
       <Tiles label="My leads">
         <Kpi
           label="New"
@@ -133,13 +188,13 @@ export function DeskView({
           label="Follow-ups due"
           tone="warn"
           value={counts.follow_up_due}
-          note="Due now or overdue"
+          note="Due now"
           href="/leads?tab=all&stage=follow_up"
         />
         <Kpi
           label="Not connected"
           value={counts.not_connected}
-          note="Waiting for a retry"
+          note="Try again"
           href="/leads?tab=all&stage=not_connected"
         />
         <Kpi
@@ -152,16 +207,8 @@ export function DeskView({
       <div className={styles.deskGrid}>
         <div className={styles.deskMain}>
           <Panel
-            title="Today's queue"
+            title="Today's list"
             sub={desk.queue.length ? `${desk.queue.length}` : undefined}
-            tools={
-              desk.queue.length ? (
-                <Button variant="ghost" onClick={onStart}>
-                  <PhoneCall size={14} aria-hidden="true" />
-                  Call them in order
-                </Button>
-              ) : null
-            }
           >
             {desk.queue.length ? (
               <ul className={styles.leadList} aria-label="Today's queue">
@@ -173,33 +220,19 @@ export function DeskView({
               <div className={styles.emptyQueue}>
                 <Empty
                   icon={Inbox}
-                  title={
-                    counts.open
-                      ? "Nothing due right now"
-                      : "No leads on your desk yet"
-                  }
+                  title={counts.open ? "All caught up" : "No leads yet"}
                   text={
                     counts.open
-                      ? "Your follow-ups are all later. New leads land here the moment they're given to you."
-                      : "Add a lead, import a file, or connect a source. New leads go to whoever fits best and has the fewest open."
+                      ? "Your follow-ups are later. New leads appear here first."
+                      : "New leads appear here first."
                   }
                 />
-                <div className={styles.emptyActions}>
-                  <Button onClick={onAdd}>
-                    <Plus size={14} aria-hidden="true" />
-                    Add lead
-                  </Button>
-                  <Button onClick={onImport}>
-                    <Upload size={14} aria-hidden="true" />
-                    Import a file
-                  </Button>
-                </div>
               </div>
             )}
           </Panel>
         </div>
         <aside className={styles.deskSide} aria-label="My day">
-          <Panel title="My day" sub="since midnight">
+          <Panel title="My day">
             <dl className={styles.dayNumbers}>
               <div>
                 <dt>Calls</dt>
@@ -224,21 +257,15 @@ export function DeskView({
                 <dt>Follow-ups done</dt>
                 <dd>{numbers.follow_ups_done}</dd>
               </div>
-              <div>
-                <dt>New for me today</dt>
-                <dd>{numbers.new_assigned}</dd>
-              </div>
             </dl>
           </Panel>
-          {desk.me.can_manage ? (
+          {desk.me.can_manage && counts.unassigned ? (
             <Panel
               title="Team"
-              action={{ href: "/leads?tab=team", label: "Open team" }}
+              action={{ href: "/leads?tab=team", label: "Open" }}
             >
               <p className={styles.sideNote}>
-                {counts.unassigned
-                  ? `${counts.unassigned} lead${counts.unassigned === 1 ? " is" : "s are"} waiting for an owner.`
-                  : "Every open lead has an owner."}
+                {`${counts.unassigned} lead${counts.unassigned === 1 ? " needs" : "s need"} an owner.`}
               </p>
             </Panel>
           ) : null}

@@ -160,7 +160,7 @@ export function LeadsRoute() {
             label: "Team",
             count: desk.counts.unassigned || undefined,
           },
-          { key: "sources", label: "Sources" },
+          { key: "sources", label: "Lead sources" },
         ]
       : []),
   ];
@@ -172,33 +172,36 @@ export function LeadsRoute() {
           title="Leads"
           context={[
             desk.me.can_manage
-              ? "Your desk and your team's leads"
-              : "Your desk for today",
-            desk.call_mode === "simulated" ? (
-              <Badge tone="warn" key="sim">
-                Calls are simulated
-              </Badge>
+              ? "Your calls and your team's leads"
+              : "Who to call today",
+            desk.sandbox ? (
+              <Badge key="label">Test leads</Badge>
+            ) : desk.call_mode === "simulated" ? (
+              <Badge key="label">Practice calls</Badge>
             ) : null,
-            desk.sandbox ? <Badge key="sandbox">Test data</Badge> : null,
           ]}
           actions={
             <>
-              <Button onClick={() => setImporting(true)}>
-                <Upload size={14} aria-hidden="true" />
-                Import
-              </Button>
+              {can ? (
+                <Button onClick={() => setImporting(true)}>
+                  <Upload size={14} aria-hidden="true" />
+                  Import
+                </Button>
+              ) : null}
               <Button onClick={() => setAdding(true)}>
                 <Plus size={14} aria-hidden="true" />
                 Add lead
               </Button>
-              <Button
-                variant="primary"
-                onClick={() => setCalling(true)}
-                disabled={desk.counts.open === 0}
-              >
-                <PhoneCall size={14} aria-hidden="true" />
-                Start calling
-              </Button>
+              {tab !== "desk" ? (
+                <Button
+                  variant="primary"
+                  onClick={() => setCalling(true)}
+                  disabled={desk.counts.open === 0}
+                >
+                  <PhoneCall size={14} aria-hidden="true" />
+                  Start calling
+                </Button>
+              ) : null}
             </>
           }
         />
@@ -217,7 +220,6 @@ export function LeadsRoute() {
             onOpen={setOpenLead}
             onStart={() => setCalling(true)}
             onAdd={() => setAdding(true)}
-            onImport={() => setImporting(true)}
           />
         ) : tab === "all" ? (
           <ListView canManage={can} onOpen={setOpenLead} version={version} />

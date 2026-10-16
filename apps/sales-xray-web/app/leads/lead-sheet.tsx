@@ -32,7 +32,7 @@ import {
   type LeadEvent,
   type Stage,
 } from "./leads-client";
-import { whyLine } from "./desk-view";
+import { sourceText, whyLine } from "./desk-view";
 import {
   pickSimulation,
   readUploadPolicy,
@@ -476,8 +476,7 @@ function SimulatedCall({
   if (!detail.can_assign)
     return (
       <p className={styles.hint}>
-        Simulated calls are started by an owner or admin for now. Real calling
-        comes once the calling provider is approved.
+        Practice calls are started by an owner or admin for now.
       </p>
     );
 
@@ -535,24 +534,21 @@ function SimulatedCall({
     return (
       <Button onClick={prepare}>
         <Radio size={14} aria-hidden="true" />
-        Simulated call
+        Practice call
       </Button>
     );
 
   return (
     <div className={styles.simulation} aria-live="polite">
-      <strong className={styles.simulationTitle}>Simulated call</strong>
+      <strong className={styles.simulationTitle}>Practice call</strong>
       {state === "loading" ? (
-        <p className={styles.hint}>Finding a test recording for this lead…</p>
+        <p className={styles.hint}>Getting a practice recording…</p>
       ) : null}
       {pick && (state === "ready" || state === "running") ? (
         <p>
-          A {Math.max(1, Math.round(pick.duration_seconds / 60))}-minute test
-          call ({pick.language_mix}, {pick.business_name}) becomes{" "}
-          {pick.owner_name}&apos;s call and goes through the normal analysis.
-          Nobody is dialled. It uses about{" "}
-          {Math.max(1, Math.round(pick.duration_seconds / 60))} analysis
-          minutes.
+          Plays a {Math.max(1, Math.round(pick.duration_seconds / 60))}-minute
+          practice recording as {pick.owner_name}&apos;s call and analyses it
+          like a real one. Nobody is dialled.
         </p>
       ) : null}
       {state === "ready" && policy ? (
@@ -567,7 +563,7 @@ function SimulatedCall({
               checked={agreed}
               onChange={(event) => setAgreed(event.target.checked)}
             />
-            I agree to these upload terms for this test recording
+            I agree to these terms
           </label>
           <div className={styles.row}>
             <Button onClick={() => setState("idle")}>Cancel</Button>
@@ -814,8 +810,7 @@ function LeadCard({
             >
               {lead.stage_label}
             </Badge>
-            <Badge>{lead.source_label}</Badge>
-            {lead.test_data ? <Badge tone="warn">Test data</Badge> : null}
+            <Badge>{sourceText(lead)}</Badge>
             {detail.can_edit && !editing ? (
               <Button variant="ghost" onClick={() => setEditing(true)}>
                 Edit details
@@ -843,7 +838,7 @@ function LeadCard({
               {detail.phone}
             </a>
             <span className={styles.hint}>
-              Dial from your phone, then record what happened below.
+              Tap the number to call from your phone.
             </span>
           </>
         ) : (
@@ -917,9 +912,7 @@ function LeadCard({
       ) : null}
       {detail.source_fields.length ? (
         <details className={styles.sourceFields}>
-          <summary>
-            Everything the source sent ({detail.source_fields.length})
-          </summary>
+          <summary>More details</summary>
           <dl className={styles.fields}>
             {detail.source_fields.map((field, index) => (
               <div key={`${field.label}-${index}`}>
