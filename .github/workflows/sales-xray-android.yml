@@ -4,9 +4,11 @@ name: Sales Xray Android
 # already carry the Android SDK and JDK 21 (AUT-1210; calling from the app,
 # owner order 16 Oct 2026). Two APKs per run: "Sales Xray" opens the live site,
 # "Sales Xray Dev" opens dev and installs beside it. Task branches build too.
-# Every run keeps both APKs as artifacts. A main build also replaces the files
-# of the "sales-xray-android-latest" test release, which Sales Xray's
-# Phone app dialog links to; that job alone may write to the repo.
+# Every run keeps both APKs as artifacts. Builds are signed with the durable
+# key when the owner has set it in GitHub secrets (SX_ANDROID_SIGNING_*), and
+# only such builds from main replace the files of the "sales-xray-android-latest"
+# release that Sales Xray's Phone app dialog links to. Test-key builds are never
+# published: the repo is public and so is the test key.
 on:
   workflow_dispatch:
   push:
@@ -28,6 +30,8 @@ jobs:
   apk:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      signing: ${{ steps.signing.outputs.signing }}
     defaults:
       run:
         working-directory: apps/sales-xray-android
@@ -40,6 +44,19 @@ jobs:
           node-version: 22
       - name: Use the runner's JDK 21
         run: echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+      - name: Use the durable signing key when it is set
+        id: signing
+        env:
+          STORE_BASE64: ${{ secrets.SX_ANDROID_SIGNING_STORE_BASE64 }}
+        run: |
+          if [ -n "$STORE_BASE64" ]; then
+            printf '%s' "$STORE_BASE64" | base64 -d > "$RUNNER_TEMP/sales-xray.keystore"
+            echo "SX_SIGNING_STORE=$RUNNER_TEMP/sales-xray.keystore" >> "$GITHUB_ENV"
+            echo "signing=durable" >> "$GITHUB_OUTPUT"
+          else
+            echo "No durable key set: signing with the test key; this build won't be published."
+            echo "signing=test" >> "$GITHUB_OUTPUT"
+          fi
       - name: Install Capacitor
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Sync the web shell into Android (live site)
@@ -48,6 +65,7 @@ jobs:
         working-directory: apps/sales-xray-android/android
         env:
           SX_BUILD_NUMBER: ${{ github.run_number }}
+          SX_SIGNING_PASSWORD: ${{ secrets.SX_ANDROID_SIGNING_PASSWORD }}
         run: ./gradlew --no-daemon --stacktrace assembleDebug
       - name: Keep Sales Xray
         run: |
@@ -61,6 +79,7 @@ jobs:
         working-directory: apps/sales-xray-android/android
         env:
           SX_BUILD_NUMBER: ${{ github.run_number }}
+          SX_SIGNING_PASSWORD: ${{ secrets.SX_ANDROID_SIGNING_PASSWORD }}
         run: ./gradlew --no-daemon --stacktrace assembleDebug -PsxDev
       - name: Keep Sales Xray Dev
         run: |
@@ -76,7 +95,7 @@ jobs:
 
   publish:
     needs: apk
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.apk.outputs.signing == 'durable'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -87,7 +106,7 @@ jobs:
         with:
           name: sales-xray-android-${{ github.run_number }}
           path: dist
-      - name: Replace the test release
+      - name: Replace the published release
         working-directory: dist
         env:
           GH_TOKEN: ${{ github.token }}
@@ -97,4 +116,10 @@ jobs:
           cp "sales-xray-dev-android-$VERSION.apk" sales-xray-dev-android.apk
           sha256sum sales-xray-android.apk sales-xray-dev-android.apk > SHA256SUMS.txt
           gh release delete sales-xray-android-latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
-          gh release create sales-xray-android-latest             --repo "$GITHUB_REPOSITORY"             --target "$GITHUB_SHA"             --prerelease             --title "Sales Xray for Android $VERSION (test build)"             --notes "Test build from $GITHUB_SHA, signed with the test key. sales-xray-android.apk opens the live site; sales-xray-dev-android.apk opens dev. Install from the Phone app button on the Leads page in Sales Xray."             sales-xray-android.apk sales-xray-dev-android.apk SHA256SUMS.txt
+          gh release create sales-xray-android-latest \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Sales Xray for Android $VERSION" \
+            --notes "Built from $GITHUB_SHA and signed with Authority Closers' key. sales-xray-android.apk opens the live site; sales-xray-dev-android.apk opens dev. Install from the Phone app button on the Leads page in Sales Xray." \
+            sales-xray-android.apk sales-xray-dev-android.apk SHA256SUMS.txt

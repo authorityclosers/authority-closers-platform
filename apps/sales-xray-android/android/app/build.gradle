@@ -33,10 +33,20 @@ android {
             keyAlias "androiddebugkey"
             keyPassword "android"
         }
+        // The durable key: CI writes it from GitHub secrets that only the
+        // owner's laptop sets. Only builds signed with it are ever published.
+        if (System.getenv("SX_SIGNING_STORE")) {
+            durable {
+                storeFile file(System.getenv("SX_SIGNING_STORE"))
+                storePassword System.getenv("SX_SIGNING_PASSWORD")
+                keyAlias System.getenv("SX_SIGNING_ALIAS") ?: "sales-xray"
+                keyPassword System.getenv("SX_SIGNING_PASSWORD")
+            }
+        }
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.test
+            signingConfig System.getenv("SX_SIGNING_STORE") ? signingConfigs.durable : signingConfigs.test
         }
         release {
             minifyEnabled false

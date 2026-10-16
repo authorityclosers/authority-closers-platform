@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   ANDROID_APP,
   ANDROID_DEV_APP,
+  ANDROID_DOWNLOAD_READY,
   appLink,
   PhoneAppBanner,
   PhoneAppDialog,
@@ -18,13 +19,17 @@ describe("getting the phone app", () => {
     );
   });
 
-  it("first paints the download with a QR code, the same on the server and the phone", () => {
+  it("shows no download until builds are signed with Authority Closers' key", () => {
     const html = renderToStaticMarkup(
       <PhoneAppDialog open onClose={() => undefined} />,
     );
-    expect(html).toContain("Download for Android");
-    expect(html).toContain(`href="${ANDROID_APP}"`);
-    expect(html).toContain("<svg");
+    if (ANDROID_DOWNLOAD_READY) {
+      expect(html).toContain(`href="${ANDROID_APP}"`);
+      expect(html).toContain("<svg");
+    } else {
+      expect(html).not.toContain(".apk");
+      expect(html).toContain("being tested");
+    }
     expect(html).toContain("Coming");
   });
 

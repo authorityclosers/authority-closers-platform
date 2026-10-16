@@ -28,6 +28,11 @@ const RELEASE =
 export const ANDROID_APP = `${RELEASE}/sales-xray-android.apk`;
 export const ANDROID_DEV_APP = `${RELEASE}/sales-xray-dev-android.apk`;
 const BANNER_KEY = "sx-leads-app-banner";
+/**
+ * Off until builds are signed with Authority Closers' own key and published.
+ * Test-key builds stay inside GitHub, because anyone could imitate them.
+ */
+export const ANDROID_DOWNLOAD_READY = false;
 
 const never = () => () => undefined;
 
@@ -99,11 +104,18 @@ export function PhoneAppDialog({
               <strong>{dev ? "Sales Xray Dev for Android" : "Android"}</strong>
               <small>Test build, updated with every release</small>
             </span>
-            <Badge tone="accent">New</Badge>
+            <Badge tone="accent">
+              {ANDROID_DOWNLOAD_READY ? "New" : "Testing"}
+            </Badge>
           </div>
           {app ? (
             <p className={styles.hint}>
               You&apos;re using the app. On any lead, tap Call.
+            </p>
+          ) : !ANDROID_DOWNLOAD_READY ? (
+            <p className={styles.hint}>
+              The Android app is being tested by the Authority Closers team. The
+              download appears here once it&apos;s signed for your phones.
             </p>
           ) : (
             <>
@@ -200,7 +212,8 @@ export function PhoneAppBanner({ onOpen }: { onOpen: () => void }) {
   const { android, app } = useDevice();
   const stored = useSyncExternalStore(never, readHidden, () => true);
   const [closed, setClosed] = useState(false);
-  if (!android || app || stored || closed) return null;
+  if (!ANDROID_DOWNLOAD_READY || !android || app || stored || closed)
+    return null;
   return (
     <div className={styles.appBanner} role="note">
       <Smartphone size={18} aria-hidden="true" />
