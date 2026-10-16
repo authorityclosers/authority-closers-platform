@@ -32,6 +32,22 @@ app can use them), and a parent can have up to 50.
 | Who can connect | people with a role on the app | same | any business, after Advanced Access |
 | Infisical | `dev` `/sales-xray-dev` | `staging` `/application` | `prod` `/application` |
 
+## Created 16 Oct 2026 (Authority Closers portfolio 1027309697060163)
+
+| | App | App ID | Login configuration |
+| --- | --- | --- | --- |
+| production | Sales Xray Leads (parent, unpublished) | 29252912124316608 | not yet (needs the owner's go-ahead) |
+| staging | Sales Xray Leads - staging (test app) | 1864458368324359 | 1132781386071692 |
+| dev | Sales Xray Leads - dev (test app) | 1092841566696886 | 1098608695872724 |
+
+Use case: Capture & manage ad leads, plus `pages_manage_metadata`. Each
+configuration is a user access token with eight permissions: `ads_management`,
+`ads_read`, `business_management`, `leads_retrieval`, `pages_manage_ads`,
+`pages_manage_metadata`, `pages_read_engagement`, `pages_show_list`. Return
+addresses are saved for dev and staging. Test Page "Sales Xray Test Leads"
+(1326368220570095) has the Instant Form "Sales Xray test - enquiry" (email,
+full name, phone).
+
 ## Settings the CRM reads (Leads app)
 
 `AC_META_APP_ID`, `AC_META_APP_SECRET`, `AC_META_LOGIN_CONFIG_ID`,
