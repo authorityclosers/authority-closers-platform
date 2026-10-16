@@ -84,10 +84,11 @@ async def enrich_report_structure(
     if database is None:
         return result
     review = await latest_review(database, envelope)
-    if review is not None:
-        structure = merge_into_structure(structure, review)
-    # The canonical privacy projection runs after every enrichment, at read time
-    # with current marks (AUT-2010): later and cross-revision marks included.
+    if review is None:
+        return result
+    # The envelope arrived privacy-projected; the AI review overlay adds call
+    # words after that, so the canonical projection runs again at read time with
+    # current marks, later and other-revision marks included (AUT-2010).
     try:
         recording_id = UUID(str(envelope["recording_id"]))
         revision = str(envelope["transcript_revision"])
@@ -96,5 +97,6 @@ async def enrich_report_structure(
     plan = await withheld_plan_for(
         database, recording_id=recording_id, served_revisions=(revision,)
     )
-    result["report"]["content"]["structure"] = project_structure(structure, plan)
+    merged = merge_into_structure(structure, review)
+    result["report"]["content"]["structure"] = project_structure(merged, plan)
     return result
