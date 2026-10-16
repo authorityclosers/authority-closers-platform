@@ -363,8 +363,10 @@
   }
 }
 @media (max-width: 620px) {
-  .app[data-stage="upload"] :global(.studio-main) {
-    padding: 18px 16px 16px;
+  /* The app frame around it already gives the 16 px side margin. */
+  .app[data-stage="upload"] :global(.studio-main),
+  .app[data-stage="upload"][data-variant="standalone"] :global(.studio-main) {
+    padding: 18px 0 16px;
     gap: 20px;
   }
   .app[data-stage="upload"] :global(.studio-intro) h1 {
@@ -1711,8 +1713,9 @@
   }
 }
 @media (max-width: 620px) {
+  /* The app frame already gives the 16 px side margin. */
   .app[data-stage="upload"][data-selected="false"] :global(.studio-main) {
-    padding: 16px 16px 22px;
+    padding: 16px 0 22px;
   }
   .uploadCardHeader {
     flex-wrap: wrap;
@@ -3590,5 +3593,14 @@
   .report[data-reveal],
   .report[data-reveal] [data-report-pillar="overview"] > * {
     animation: none;
+  }
+}
+
+/* Touch screens: the report's header actions (transcript, more) are full
+   44 px targets (owner, 17 Oct phone sweep). */
+@media (pointer: coarse) {
+  .app.app[data-stage="report"] .reportAction {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

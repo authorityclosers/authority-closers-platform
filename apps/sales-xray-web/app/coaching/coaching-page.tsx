@@ -219,6 +219,7 @@ export function CoachingPage({
     >
       <div className={styles.root}>
         <PageHeader
+          titleInBar={!callId && !sharedPersonId && !team}
           title={
             callId
               ? PAGE.call

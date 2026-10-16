@@ -57,6 +57,20 @@
   white-space: nowrap;
 }
 
+/* Phones (the tab-bar layout) show the page name in the top bar already. */
+@media (max-width: 899.98px) {
+  .titleInBar .title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 /* As in a row's meta: the dot sits in the gap before each item, so a wrapped
    line never starts with "·" (its dot falls past the clipped left edge). */
 .context {

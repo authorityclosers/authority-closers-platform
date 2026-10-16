@@ -1450,3 +1450,17 @@
   min-width: 100px;
   text-align: left;
 }
+
+/* Phones (owner, 17 Oct: a quarter of the screen was menus while reading).
+   Here the bar wraps: Report / Coaching on the first row, the three parts on
+   the second. Only the parts row stays pinned; the first row scrolls away
+   with the title and comes back at the top. 58 px = 8 px padding + the
+   44 px first row + the 6 px gap between the rows. */
+@media (max-width: 540px) {
+  .navRow:not([data-placement="toolbar"]):has(> .contents):has(
+      > .toolbar > button + button
+    ) {
+    row-gap: 6px;
+    top: calc(var(--report-nav-sticky-top, 0px) - 58px);
+  }
+}

@@ -17,6 +17,25 @@
   }
 }
 
+/* Phones: the shell already gives the 16 px side margin, and its top bar
+   names the page (owner, 17 Oct). */
+@media (max-width: 899.98px) {
+  .root {
+    padding-inline: 0;
+  }
+
+  .titleInBar {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 /* ---------- Header ---------- */
 .intro {
   display: flex;

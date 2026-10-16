@@ -30,10 +30,39 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 12px;
   margin-block: 8px;
-  color: var(--lx-muted);
-  font: 500 12.5px/1.4 var(--lx-font-ui);
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-surface);
+  color: var(--lx-ink-3);
+  font: 500 13px/1.4 var(--lx-font-ui);
+}
+
+.mapNotice > span {
+  flex: 1 1 14em;
+  min-width: 0;
+}
+
+/* The one action here reads as a button, not as more grey text. */
+.mapNotice > button {
+  min-height: 36px;
+  color: var(--lx-teal);
+  font-weight: 700;
+}
+
+/* Phones: the report column has no side padding of its own, so the notice
+   keeps the shell's 16 px gutter instead of touching the screen edge. */
+@media (max-width: 899.98px) {
+  .mapNotice {
+    margin-inline: max(16px, env(safe-area-inset-left, 0px))
+      max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  .mapNotice > button {
+    min-height: 44px;
+  }
 }
 
 /* Shown in the top layer (popover), placed beside its chip by script. */

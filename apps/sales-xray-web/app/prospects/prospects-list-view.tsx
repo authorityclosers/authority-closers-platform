@@ -171,7 +171,9 @@ export function ProspectsListView() {
       <div className={styles.root}>
         <div className={styles.intro}>
           <div>
-            <h1 className={styles.title}>Prospects</h1>
+            <h1 className={`${styles.title} ${styles.titleInBar}`}>
+              Prospects
+            </h1>
             <p className={styles.summary}>
               Everyone you&apos;re selling to, their main problem and what
               happens next.

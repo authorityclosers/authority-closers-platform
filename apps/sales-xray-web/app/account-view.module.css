@@ -5,6 +5,13 @@
   padding: 20px clamp(16px, 3vw, 40px) 24px;
 }
 
+/* Phones: the shell already gives the 16 px side margin. */
+@media (max-width: 899.98px) {
+  .page {
+    padding-inline: 0;
+  }
+}
+
 .header h1 {
   margin: 0;
   color: var(--lx-ink);
@@ -815,4 +822,17 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Billing that could not load is a calm note with its retry, not red page
+   text (owner rule: problems are never alarming banners). */
+.billingCard .error {
+  padding: 12px 14px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-surface);
+}
+
+.billingCard .error p {
+  color: var(--lx-ink-3);
 }
