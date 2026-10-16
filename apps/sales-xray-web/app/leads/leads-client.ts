@@ -636,6 +636,79 @@ export function nextCallTime(choice: CallTime, now: Date = new Date()): Date {
   return at;
 }
 
+export type PickedContact = { name: string; phone: string; email?: string };
+
+type ContactsManager = {
+  select: (
+    properties: string[],
+    options?: { multiple?: boolean },
+  ) => Promise<{ name?: string[]; tel?: string[]; email?: string[] }[]>;
+};
+
+/** The phone's contact picker (Android Chrome and the Sales Xray app). */
+export function contactsSupported(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    "contacts" in navigator &&
+    typeof window !== "undefined" &&
+    "ContactsManager" in window
+  );
+}
+
+export async function pickContacts(): Promise<PickedContact[]> {
+  const manager = (navigator as Navigator & { contacts?: ContactsManager })
+    .contacts;
+  if (!manager) return [];
+  const picked = await manager.select(["name", "tel", "email"], {
+    multiple: true,
+  });
+  return picked
+    .map((person) => ({
+      name: (person.name?.[0] ?? "").trim(),
+      phone: (person.tel?.[0] ?? "").trim(),
+      email: person.email?.[0]?.trim() || undefined,
+    }))
+    .filter((person) => person.name || person.phone);
+}
+
+/** Name, phone and email from pasted text: a WhatsApp message or contact card. */
+export function parseContactText(text: string): {
+  name?: string;
+  phone?: string;
+  email?: string;
+} {
+  const email = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.exec(text)?.[0];
+  const rest = email ? text.replace(email, " ") : text;
+  const digits = /\+?\d[\d\s().-]{7,}\d/.exec(rest)?.[0];
+  const phone = digits ? digits.replace(/[^\d+]/g, "") : undefined;
+  const name = text
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/^\s*(name|naam|contact)\s*[:\-]\s*/i, "")
+        .replace(/^[~*\s]+|[*\s]+$/g, ""),
+    )
+    .find(
+      (line) =>
+        line.length > 1 &&
+        line.length <= 80 &&
+        /[A-Za-z\u0900-\u097F]/.test(line) &&
+        !line.includes("@") &&
+        !/\d{5,}/.test(line.replace(/\s/g, "")),
+    );
+  return {
+    name: name || undefined,
+    phone: phone && phone.replace(/\D/g, "").length >= 8 ? phone : undefined,
+    email,
+  };
+}
+
+export const SAMPLE_CSV = [
+  "Name,Phone,Email,City,Interested in",
+  "Asha Patil,98765 43210,asha@example.com,Pune,Solar rooftop",
+  "Ravi Kumar,+91 91234 56780,,Mumbai,Home loan",
+].join("\n");
+
 /** A phone number as people read it: "+91 98765 43210" for Indian mobiles. */
 export function displayPhone(phone: string): string {
   const india = /^\+91([6-9]\d{4})(\d{5})$/.exec(phone);

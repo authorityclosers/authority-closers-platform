@@ -10,6 +10,7 @@ import {
   NOT_CONNECTED_REASONS,
   displayPhone,
   nextCallTime,
+  parseContactText,
   peekPendingCall,
   quickFollowUp,
   rememberCall,
@@ -201,5 +202,34 @@ describe("calling from the desk", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("adding leads", () => {
+  it("fills a lead from a pasted WhatsApp contact or message", () => {
+    expect(parseContactText("Asha Patil\n+91 98765 43210")).toEqual({
+      name: "Asha Patil",
+      phone: "+919876543210",
+      email: undefined,
+    });
+    expect(
+      parseContactText(
+        "Name: Ravi Kumar\nPhone: 91234-56780\nravi@example.com",
+      ),
+    ).toEqual({
+      name: "Ravi Kumar",
+      phone: "9123456780",
+      email: "ravi@example.com",
+    });
+    expect(parseContactText("call me on 98765 43210")).toEqual({
+      name: undefined,
+      phone: "9876543210",
+      email: undefined,
+    });
+    expect(parseContactText("hello")).toEqual({
+      name: "hello",
+      phone: undefined,
+      email: undefined,
+    });
   });
 });

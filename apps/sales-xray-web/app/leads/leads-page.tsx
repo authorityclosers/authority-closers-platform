@@ -8,8 +8,8 @@
  * and admins also get All leads, Team (allocation rules) and Sources.
  */
 
-import { Building2, PhoneCall, Plus, Upload } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { Building2, PhoneCall, Plus } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
@@ -22,10 +22,23 @@ import {
   Skeleton,
 } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
-import { AddLeadDialog, ImportDialog } from "./capture-dialogs";
+import {
+  AddLeadDialog,
+  AddLeadsMenu,
+  ContactsDialog,
+  ImportDialog,
+  type AddWay,
+} from "./capture-dialogs";
 import { DeskView } from "./desk-view";
 import { CallingLoop, LeadSheet } from "./lead-sheet";
-import { readDesk, type Desk, LEADS_PATH, LeadsError } from "./leads-client";
+import {
+  LEADS_PATH,
+  LeadsError,
+  pickContacts,
+  readDesk,
+  type Desk,
+  type PickedContact,
+} from "./leads-client";
 import { ListView } from "./list-view";
 import { SourcesView } from "./sources-view";
 import { TeamView } from "./team-view";
@@ -54,6 +67,7 @@ export function LeadsSkeleton() {
 
 export function LeadsRoute() {
   const access = useWorkspaceAccess();
+  const router = useRouter();
   const params = useSearchParams();
   const requested = params.get("tab");
   const authenticated =
@@ -70,8 +84,17 @@ export function LeadsRoute() {
   const [calling, setCalling] = useState(false);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [contacts, setContacts] = useState(false);
+  const [picked, setPicked] = useState<PickedContact[]>([]);
   // Each opening mounts a fresh dialog, so nothing is reset in an effect.
-  const [rounds, setRounds] = useState({ calling: 0, adding: 0, importing: 0 });
+  const [rounds, setRounds] = useState({
+    calling: 0,
+    adding: 0,
+    importing: 0,
+    menu: 0,
+    contacts: 0,
+  });
   const begin = (
     which: keyof typeof rounds,
     show: (value: boolean) => void,
@@ -191,15 +214,9 @@ export function LeadsRoute() {
           ]}
           actions={
             <>
-              {can ? (
-                <Button onClick={() => begin("importing", setImporting)}>
-                  <Upload size={14} aria-hidden="true" />
-                  Import
-                </Button>
-              ) : null}
-              <Button onClick={() => begin("adding", setAdding)}>
+              <Button onClick={() => begin("menu", setMenu)}>
                 <Plus size={14} aria-hidden="true" />
-                Add lead
+                Add leads
               </Button>
               {tab !== "desk" ? (
                 <Button
@@ -228,7 +245,7 @@ export function LeadsRoute() {
             desk={desk}
             onOpen={setOpenLead}
             onStart={() => begin("calling", setCalling)}
-            onAdd={() => begin("adding", setAdding)}
+            onAdd={() => begin("menu", setMenu)}
           />
         ) : tab === "all" ? (
           <ListView canManage={can} onOpen={setOpenLead} version={version} />
@@ -266,6 +283,34 @@ export function LeadsRoute() {
           refresh();
           setOpenLead(leadId);
         }}
+      />
+      <AddLeadsMenu
+        key={`menu-${rounds.menu}`}
+        open={menu}
+        canManage={can}
+        onClose={() => setMenu(false)}
+        onPick={(way: AddWay) => {
+          setMenu(false);
+          if (way === "type") begin("adding", setAdding);
+          else if (way === "file") begin("importing", setImporting);
+          else if (way === "sources") router.push(`${LEADS_PATH}?tab=sources`);
+          else
+            pickContacts()
+              .then((people) => {
+                if (!people.length) return;
+                setPicked(people);
+                begin("contacts", setContacts);
+              })
+              .catch(() => undefined);
+        }}
+      />
+      <ContactsDialog
+        key={`contacts-${rounds.contacts}`}
+        open={contacts}
+        picked={picked}
+        canManage={can}
+        onClose={() => setContacts(false)}
+        onDone={refresh}
       />
       <ImportDialog
         key={rounds.importing}

@@ -1987,3 +1987,114 @@
     grid-column: 1 / -1;
   }
 }
+
+/* ---------- Add leads ---------- */
+
+.ways {
+  display: grid;
+  gap: 8px;
+}
+
+.wayButton {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  min-height: 68px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wayButton:hover {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+}
+
+.wayButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.wayButton > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.wayButton strong {
+  font-size: var(--sx-text-md);
+}
+
+.wayButton small {
+  color: var(--sx-muted);
+}
+
+.wayIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.pasteBox {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--lx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.pasteBox textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.pasteBox > p {
+  grid-column: 1 / -1;
+}
+
+.pickList {
+  display: grid;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.pickList label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 48px;
+  border-bottom: 1px solid var(--sx-line);
+  cursor: pointer;
+}
+
+.pickList span {
+  display: grid;
+}
+
+.pickList small {
+  color: var(--sx-muted);
+}
