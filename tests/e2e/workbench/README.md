@@ -508,3 +508,17 @@ existing opening pointer's null-href training button must open the same fictiona
 call's Coaching, preserve the example query and document, and request no media or
 writes. Two changed-state screenshots per pair cover training and Coaching. This
 does not repeat the all27/outcome matrix or certify saved outcome API mapping.
+
+Select only `-k fixture_report_api_structure` for the `bae78551` API-shaped
+fixture. Four viewport/theme pairs read raw `AMIT_STRUCTURE` and `amitTranscript`
+through the local TypeScript source helper (without the product mapper) and
+retain SHA256 source pins. They compare all27 scores/statuses/names/order,
+overall score and AI-draft labels, expanded feedback and original quote/time,
+null-score status, stages/reasons, open and handled objections, owner-tagged
+dated next steps, notes and suggested action. No illustrative badge, live API,
+media or writes are allowed. If the source has a null-score `what_happened`,
+its exact supplied reason is checked; otherwise the receipt explicitly records
+that source gap while checking the honest fallback. The initial `bae78551`
+source has11 null-score pointers and no supplied reason on any of them.
+This proves fictional reader/rendering only. It does not prove saved-call
+persistence, person-recorded precedence without a supplied record, or AI quality.

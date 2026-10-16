@@ -6690,6 +6690,243 @@ def test_fixture_report_scroll_training(browser: Browser, viewport: tuple[int, s
         }
 
 
+@pytest.fixture(scope="session")
+def report_api_source() -> dict[str, object]:
+    """Read raw fictional input, without calling the product's structure reader."""
+    node = shutil.which("node")
+    assert node, "The fictional source reader requires Node"
+    return json.loads(
+        subprocess.check_output(  # noqa: S603 -- fixed local source reader, no shell
+            [node, str(Path(__file__).with_name("report-api-source.cjs"))],
+            text=True,
+            timeout=15,
+        )
+    )
+
+
+def test_fixture_report_api_structure(
+    browser: Browser, viewport: tuple[int, str], report_api_source: dict[str, object]
+) -> None:
+    """The real structure reader renders authored scores/evidence/outcome details."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("API-shaped Report acceptance uses fictional source only")
+    contract = json.loads(Path(__file__).with_name("report-15oct-acceptance.json").read_text())
+    source = report_api_source["structure"]
+    pointers = source["pointers"]
+    assert [pointer["label"] for pointer in pointers] == contract["pointer_titles"]
+    status_words = {
+        "excellent": "Excellent",
+        "good": "Good",
+        "average": "Average",
+        "needs_improvement": "Needs Improvement",
+        "not_observed": "Not observed",
+        "not_applicable": "Not applicable",
+        "insufficient_evidence": "Insufficient evidence",
+    }
+    with _journey(browser, viewport, "report-api") as journey:
+        page = journey.page
+        reads: list[str] = []
+        mutations: list[str] = []
+        media: list[str] = []
+        replies: dict[tuple[str, str, str], dict[str, object]] = {}
+        journey.observations.append(
+            {
+                "step": "raw-fictional-source-and-network-guard",
+                "source_sha256": report_api_source["sources"],
+                "bootstrap_reads": reads,
+                "mutations": mutations,
+                "media": media,
+            }
+        )
+
+        def read_only(route: Route) -> None:
+            request = route.request
+            url = urlsplit(request.url)
+            if request.method not in {"GET", "HEAD"}:
+                mutations.append(request.method)
+                route.abort("blockedbyclient")
+            elif request.resource_type == "media" or re.search(
+                r"\.(?:mp3|mp4|m4a|wav|ogg|webm|aac)$", url.path, re.I
+            ):
+                media.append("source-read")
+                route.abort("blockedbyclient")
+            elif url.path.startswith("/v1/"):
+                reads.append(url.path)
+                key = (request.method, url.path, url.query)
+                if key not in replies:
+                    replies[key] = _fictional_api_reply(*key)
+                reply = replies[key]
+                route.fulfill(
+                    status=reply["status"],
+                    content_type="application/json",
+                    body=json.dumps(reply["body"]),
+                )
+            else:
+                route.continue_()
+
+        page.route("**/*", read_only)
+        journey.open("/review-fixture/report/story?example=api")
+        page.wait_for_load_state("load")
+        page.wait_for_load_state("networkidle")
+        page.evaluate("() => document.fonts.ready")
+        expect(page.locator("[data-report-modes]")).to_have_attribute("data-view", "story")
+        expect(page.get_by_text("Illustrative example", exact=True)).to_have_count(0)
+        assert page.locator("[data-xray-part]").evaluate_all(
+            "els => els.map(el => el.dataset.xrayPart)"
+        ) == ["overview", "analysis", "outcome"]
+
+        def capture(target: Locator, label: str) -> None:
+            target.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+            journey.snapshot(label)
+            journey.unclipped_text(target)
+
+        overview = page.locator('[data-xray-part="overview"]')
+        score = overview.get_by_role("region", name="Overall score", exact=True)
+        expect(score).to_contain_text(re.compile(r"AI draft\s*[·-]\s*not reviewed by Dipak"))
+        expect(score).to_contain_text(re.compile(rf"\b{source['overview']['score']}\s*/100"))
+        expect(score).to_contain_text(source["overview"]["score_label"])
+        expect(score).to_contain_text(source["overview"]["score_line"])
+        expect(overview).to_contain_text(source["overview"]["summary"])
+        capture(score.locator(":scope > div").first, "overall-score")
+
+        analysis = page.locator('[data-xray-part="analysis"]')
+        expect(analysis).to_contain_text(re.compile(r"AI draft\s*[·-]\s*not reviewed by Dipak"))
+        rows = analysis.locator("li[data-pointer]")
+        expect(rows).to_have_count(27)
+        assert rows.evaluate_all("els => els.map(el => el.dataset.pointer)") == [
+            pointer["id"] for pointer in pointers
+        ]
+        for index, pointer in enumerate(pointers):
+            control = rows.nth(index).locator(":scope > button")
+            words = status_words[pointer["status"]]
+            expected_name = f"{pointer['number']}. {pointer['label']}: {words}"
+            if pointer["score"] is not None:
+                expected_name += f", {pointer['score']} out of 100"
+                expect(control.locator("strong")).to_have_text(str(pointer["score"]))
+            else:
+                expect(control.get_by_text("No score", exact=True)).to_have_count(1)
+            expect(control).to_have_attribute("aria-label", expected_name + ". View more")
+            expect(control.get_by_text(pointer["label"], exact=True)).to_have_count(1)
+            expect(control.get_by_text(words, exact=True)).to_have_count(1)
+        capture(rows.first, "pointer-rows")
+
+        scored = next(pointer for pointer in pointers if pointer["score"] is not None)
+        control = analysis.locator(f'li[data-pointer="{scored["id"]}"] > button')
+        capture(control, "scored-row")
+        journey.control_target(control, "scored-pointer")
+        control.focus()
+        page.keyboard.press("Enter")
+        expect(control).to_have_attribute("aria-expanded", "true")
+        detail = page.locator("#" + str(control.get_attribute("aria-controls")))
+        expect(detail).to_contain_text(scored["what_happened"])
+        expect(detail).to_contain_text(scored["why_it_matters"])
+        for tip in scored["how_to_improve"]:
+            expect(detail).to_contain_text(tip)
+        capture(detail.get_by_role("heading", name="What Happened?", exact=True), "feedback")
+        figures = detail.locator("figure")
+        expect(figures).to_have_count(len(scored["evidence"]))
+        original = {
+            segment["id"]: segment for segment in report_api_source["transcript"]["segments"]
+        }
+        for index, evidence in enumerate(scored["evidence"]):
+            segment = original[evidence["segment_id"]]
+            assert evidence["quote"] == segment["text"]
+            assert (evidence["start_ms"], evidence["end_ms"]) == (
+                segment["start_ms"],
+                segment["end_ms"],
+            )
+            figure = figures.nth(index)
+            expect(figure.locator("blockquote")).to_have_text(f"“{segment['text']}”")
+            seconds = segment["start_ms"] // 1000
+            expect(figure.locator("figcaption")).to_contain_text(
+                re.compile(rf"\b0?{seconds // 60}:{seconds % 60:02d}\b")
+            )
+            expect(figure.locator("blockquote").locator("a,strong,em,code")).to_have_count(0)
+        capture(figures.first, "original-quotes")
+
+        nulls = [pointer for pointer in pointers if pointer["score"] is None]
+        supplied = next((pointer for pointer in nulls if pointer["what_happened"]), None)
+        unscored = supplied or nulls[0]
+        null_control = analysis.locator(f'li[data-pointer="{unscored["id"]}"] > button')
+        capture(null_control, "unscored-row")
+        journey.control_target(null_control, "unscored-pointer")
+        null_control.focus()
+        page.keyboard.press("Space")
+        expect(null_control).to_have_attribute("aria-expanded", "true")
+        expect(control).to_have_attribute("aria-expanded", "true")
+        null_detail = page.locator("#" + str(null_control.get_attribute("aria-controls")))
+        expect(
+            null_detail.get_by_role("heading", name=status_words[unscored["status"]])
+        ).to_be_visible()
+        if supplied:
+            expect(null_detail.get_by_text(supplied["what_happened"], exact=True)).to_have_count(1)
+        else:
+            expect(null_detail).to_contain_text("No score is given for this pointer.")
+        capture(null_detail, "unscored-detail")
+
+        outcome = page.locator('[data-xray-part="outcome"]')
+        details = source["call_outcome_details"]
+        stages = outcome.get_by_role("region", name="Sales process stage", exact=True)
+        for index, stage in enumerate(details["stages"]):
+            expect(stages.get_by_role("listitem").nth(index)).to_contain_text(stage)
+        capture(stages, "outcome-stages")
+        for reason in details["reasons"]:
+            expect(outcome.get_by_text(reason, exact=True)).to_have_count(1)
+        objection_rows = []
+        for objection in details["objections"]:
+            row = outcome.get_by_text(objection["text"], exact=True).locator(
+                "xpath=ancestor::li[1]"
+            )
+            expect(row.locator('[aria-label="Still open"]')).to_have_count(
+                0 if objection["handled"] else 1
+            )
+            expect(row.locator("svg.lucide-circle-check")).to_have_count(
+                1 if objection["handled"] else 0
+            )
+            objection_rows.append(row)
+        capture(objection_rows[0].locator("xpath=ancestor::section[1]"), "outcome-objections")
+        for step in details["next_steps"]:
+            row = outcome.get_by_text(step["text"], exact=True).locator("xpath=ancestor::li[1]")
+            expect(row.get_by_text(step["when"], exact=True)).to_have_count(1)
+            expect(
+                row.get_by_text("You" if step["owner"] == "you" else "Prospect", exact=True)
+            ).to_have_count(1)
+        capture(
+            outcome.get_by_role("heading", name="Next Steps", exact=True).locator(
+                "xpath=ancestor::section[1]"
+            ),
+            "outcome-next-steps",
+        )
+        for note in details["notes"]:
+            expect(outcome.get_by_text(note, exact=True)).to_have_count(1)
+        expect(outcome.get_by_text(details["suggested_action"], exact=True)).to_have_count(1)
+        capture(
+            outcome.get_by_role("heading", name="Additional Notes", exact=True).locator(
+                "xpath=ancestor::section[1]"
+            ),
+            "outcome-notes-action",
+        )
+        assert not mutations and not media
+        assert journey.live_refreshes == 0, "A live edit interrupted this source-pinned readback"
+        assert parse_qs(urlsplit(page.url).query).get("example") == ["api"]
+        journey.observations[-1]["api_structure_projection"] = {
+            "overall_score": source["overview"]["score"],
+            "exact_pointer_scores_and_statuses": len(pointers),
+            "original_transcript_quotes_and_times": len(scored["evidence"]),
+            "null_score_statuses": len(nulls),
+            "supplied_unscored_reason_checked": supplied is not None,
+            "source_gap": None if supplied else "All11 null-score what_happened values are null",
+            "outcome_details": details,
+            "rendered_outcome_kind": outcome.get_attribute("data-outcome"),
+            "person_recorded_precedence": (
+                "No pre-existing person record in this authored fixture; no writes invoked"
+            ),
+            "api_mutations": len(mutations),
+            "media_requests": len(media),
+            "real_saved_call_or_scoring_quality_acceptance": False,
+        }
+
+
 def test_live_report_15oct_structure(browser: Browser, viewport: tuple[int, str]) -> None:
     """Read one explicitly supplied saved call using an existing approved session."""
     if os.environ.get("WB_MODE") != "live":
