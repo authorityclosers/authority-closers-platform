@@ -152,7 +152,7 @@ def test_projection_rejects_a_boundary_that_would_exceed_the_envelope() -> None:
     assert policy["R2_MAX_STANDARD_BYTES"] == 107_374_182_400
     assert policy["R2_WARN_STANDARD_BYTES"] == 80_530_636_800
     projection = backup.projected_logical_bytes(policy)
-    assert projection == 8_388_608 * 336 * 2
+    assert projection == 67_108_864 * 336 * 2
 
     unsafe = dict(policy)
     unsafe["R2_MAX_STANDARD_BYTES"] = projection - 1
@@ -791,7 +791,7 @@ def local_backup_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleN
     sequence = [0]
 
     def capture(target, logical_dir, max_bytes):
-        assert max_bytes == 8 * 1024 * 1024
+        assert max_bytes == 64 * 1024 * 1024
         sequence[0] += 1
         capture_dir = logical_dir / (f"20260911T000000.{sequence[0]:06d}Z-101-{target.environment}")
         capture_dir.mkdir()
