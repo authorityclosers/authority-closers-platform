@@ -11,7 +11,7 @@ This document describes implemented routes, not permission to activate processin
 | Standalone | `apps/sales-xray-web`, upload/report screen with evidence moments, saved sound measurements and report printing | Separate server image and exact host/API/auth routing |
 | LMS | New `apps/learner-web/app/sales-xray/page.tsx` and `layout.tsx` | UI owner adds the Practice/navigation entry using current session/layout conventions |
 | Admin | New `apps/admin-web/app/sales-xray/` | UI owner adds its admin navigation entry; backend rechecks verified control account and current admin permission |
-| Free course / website | Reusable shared client and server API | Distinct entry buttons and entitlement policy remain to integrate; no invented minute grants |
+| Free course / website | Server API | Distinct entry buttons and entitlement policy remain to integrate; no invented minute grants |
 
 The new learner route imports the shared CallStudio and scoped stylesheet. No
 existing learner, admin or apex navigation files are replaced. The standalone
@@ -31,15 +31,10 @@ permission returns 403. Write routes require the approved AC Origin.
 | Method and path | Behavior |
 | --- | --- |
 | `GET /v1/conversation/workspace` | Public connection status, sign-in destination, authenticated/intake flags |
-| `GET /v1/conversation/capabilities` | Static capability contract; not provider activation |
-| `GET /v1/conversation/example` | Explicitly synthetic example only |
 | `GET /v1/conversation/recordings` | Up to 20 own current recordings, newest first, latest own run and `has_report` |
-| `GET /v1/conversation/recordings/{id}` | Current authorized source metadata |
-| `GET /v1/conversation/runs/{id}` | Current authorized run state |
 | `GET /v1/conversation/runs/{id}/report` | Run state plus validated qualitative draft, or `report: null` with honest status |
 | `GET /v1/conversation/recordings/{id}/transcript` | Validated transcript source hash/revision, source clock, duration and literal segments; no raw provider receipt |
 | `GET /v1/conversation/recordings/{id}/measurements` | Current authorized saved C1 display, canonical C0 parent, explicit physical-channel units and decoded clock; no audio reread or inference |
-| `GET /v1/conversation/recordings/{id}/checkpoints` | Own source-bound checkpoint metadata |
 | `DELETE /v1/conversation/recordings/{id}` | Idempotent durable deletion request; blocks further use and erases private descendants through worker |
 | `POST /v1/conversation/intake/quote` | Configured private composition: checks explicit allowance/storage capacity and returns exact local-processing quote |
 | `POST /v1/conversation/quotes/{id}/approve` | Accepts that quote fingerprint/privacy revision; no implicit provider permission |
@@ -50,6 +45,14 @@ permission returns 403. Write routes require the approved AC Origin.
 | `POST /v1/conversation/recordings/{id}/analysis` | Records exact owner consent and reserves/enqueues the selected approved stage |
 | `GET /v1/conversation/recordings/{id}/analysis` | Current owned persisted stage state; no execution from reads |
 
+Removed on 2026-10-17 (cleanup stage 1; no client called them):
+`GET /v1/conversation/capabilities`, `GET /v1/conversation/example`,
+`GET /v1/conversation/recordings/{id}`, `GET /v1/conversation/runs/{id}`,
+`GET /v1/conversation/recordings/{id}/checkpoints` and the local/test-only
+`POST /v1/admin/conversation/runs/{id}/draft`. They now return 404.
+`DELETE /v1/conversation/recordings/{id}` stays: it is the owner erasure for
+recordings created through `POST /v1/conversation/recordings`.
+
 Registration, quote creation, run creation, deletion and admin saves take
 `Idempotency-Key`. The current intake recipe produces C0/C1 local measurements.
 `completed` with `report: null` must not be presented as a generated sales report.
@@ -59,7 +62,7 @@ The new analysis routes use the separate hash-pinned release approval described 
 providers, models, profiles or credential references. Automatic progression is
 explicitly false until a durable processing-plan controller is connected.
 
-## Admin controls and local proof import
+## Admin controls and test-only draft import
 
 `GET/POST /v1/admin/conversation/providers` require the exact admin surface,
 verified `admin@authorityclosers.com`, active owner/admin membership and current
@@ -70,10 +73,11 @@ The response explicitly declares zero paid allowance and
 `execution_activated: false`. Dormant adapters do not become implemented by saving
 a configuration. Current provider/task readiness is exposed in the catalog.
 
-`POST /v1/admin/conversation/runs/{id}/draft` exists **only** when local/test
-composition explicitly supplies private import storage. Hosted composition rejects
-that activation. It links an already-produced draft to an owned, completed local
-run with a verified C1 source manifest and retained original bytes. It rehashes
+There is no HTTP draft-import route. The former local/test-only
+`POST /v1/admin/conversation/runs/{id}/draft` was removed; tests call the
+report-store boundary `ConversationReports.import_internal_draft` directly. That
+import links an already-produced draft to an owned, completed local run with a
+verified C1 source manifest and retained original bytes. It rehashes
 native transcript bytes, validates source-clock spans and literal quotes, binds the
 frozen Dipak profile and stores the draft/normalized transcript immutably.
 
@@ -94,10 +98,11 @@ transcript and receipt contents while retaining audit hashes. No operational
 direct-SQL recovery or production bootstrap is part of this change.
 
 New paths: `apps/sales-xray-web/`, new learner/admin `app/sales-xray/` routes,
-`packages/typescript/sales-xray-client/`, Python `conversation_intelligence/`,
-the four `http/conversation*.py` modules, local-only `development/sales_xray_app.py`,
+Python `conversation_intelligence/`, the four `http/conversation*.py` modules,
 migration 0030, `native/audioatlas/`, `infra/conversation-worker/`, scoped tests
-and Sales Xray contract/evidence/implementation documents.
+and Sales Xray contract/evidence/implementation documents. (The original
+`packages/typescript/sales-xray-client/` package and the local-only
+`development/sales_xray_app.py` were removed in cleanup stage 1.)
 
 Shared edits: model registration in `db/models.py`, optional HTTP composition in
 `http/app.py`, exact request limits, related composition tests, pnpm workspace/lock
