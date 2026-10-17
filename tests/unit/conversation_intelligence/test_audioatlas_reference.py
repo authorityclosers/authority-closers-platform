@@ -6,10 +6,14 @@ Regenerate it only from that pinned source:
 
     uv run python tests/unit/conversation_intelligence/test_audioatlas_reference.py --write
 
-Columns that never touch the FFT must be bit-identical. FFT-derived columns may
-differ only by floating-point rounding, so each has an explicit absolute bound far
-below any displayed or stored precision. Voicing (F0 present or absent) must match
-exactly. No provider is contacted and no real voice is used.
+Columns that never touch the FFT must be bit-identical, except that ``rms_dbfs``
+(``20*log10(rms)``) may differ by 1e-12 relative from the stored reference, because
+another C library's ``log10`` (macOS, MSVC) can round differently from the glibc that
+produced it. Against the original kernel compiled on the same host it stays exact.
+FFT-derived columns may differ only by floating-point rounding, so each has an
+explicit absolute bound far below any displayed or stored precision. Voicing (F0
+present or absent) must match exactly. No provider is contacted and no real voice is
+used.
 """
 
 from __future__ import annotations
@@ -62,9 +66,13 @@ RAW_COLUMNS = (
 )
 # Computed before any FFT: the replacement must not change a single bit.
 EXACT = frozenset(range(9)) | {17}
-# Absolute bounds for FFT-derived columns. Observed maxima over the canary and
-# one-hour mono/stereo calls were 4e-11 Hz, 0 Hz, 2.4e-10, 4.3e-15, 1.1e-15,
-# 8.8e-13 Hz and 8.5e-15 respectively. Rolloff may move by at most one bin.
+# EXACT columns that go through libm (log10). Compared with this relative bound only
+# against the stored, glibc-generated reference; same-host comparisons stay exact.
+LIBM_RELATIVE = {4: 1e-12}
+# Absolute bounds for FFT-derived columns. Largest observed differences (canary,
+# one-hour calls, tonal synthetics, 8-96 kHz review): centroid 2.1e-10 Hz, bandwidth
+# 1.4e-10 Hz, rolloff 0 Hz, flatness 2.4e-10, entropy 4.3e-15, flux 1.3e-15,
+# F0 2.8e-12 Hz, YIN periodicity 4.6e-14. Rolloff may move by at most one bin.
 TOLERANCE = {
     9: 1e-6,
     10: 1e-6,
@@ -193,13 +201,19 @@ def build_reference(workspace: Path) -> dict[str, Any]:
 
 
 def _assert_rows_match(
-    expected: Sequence[Sequence[float]], actual: Sequence[Sequence[float]]
+    expected: Sequence[Sequence[float]],
+    actual: Sequence[Sequence[float]],
+    *,
+    stored_reference: bool,
 ) -> None:
     assert len(actual) == len(expected)
     for index, (left, right) in enumerate(zip(expected, actual, strict=True)):
         for column in range(18):
             name = RAW_COLUMNS[column]
-            if column in EXACT:
+            if stored_reference and column in LIBM_RELATIVE:
+                bound = LIBM_RELATIVE[column] * abs(left[column])
+                assert abs(right[column] - left[column]) <= bound, (index, name)
+            elif column in EXACT:
                 assert right[column] == left[column], (index, name)
             else:
                 assert abs(right[column] - left[column]) <= TOLERANCE[column], (
@@ -247,10 +261,16 @@ def test_canary_matches_stored_original_kernel_reference(tmp_path: Path, kernel:
 
     assert len(rows) == reference["rows"]
     assert _voicing(rows) == reference["voiced_bitmap"]
-    _assert_rows_match(reference["sampled_rows"], rows[:: reference["sample_stride"]])
+    _assert_rows_match(
+        reference["sampled_rows"], rows[:: reference["sample_stride"]], stored_reference=True
+    )
     for column, expected in enumerate(reference["column_sums"]):
         actual = math.fsum(row[column] for row in rows)
-        if column in EXACT:
+        if column in LIBM_RELATIVE:
+            magnitude = math.fsum(abs(row[column]) for row in rows)
+            bound = LIBM_RELATIVE[column] * magnitude
+            assert abs(actual - expected) <= bound, RAW_COLUMNS[column]
+        elif column in EXACT:
             assert actual == expected, RAW_COLUMNS[column]
         else:
             assert abs(actual - expected) <= TOLERANCE[column] * len(rows), RAW_COLUMNS[column]
@@ -309,7 +329,7 @@ def test_synthetic_stereo_matches_original_kernel_row_by_row(
     assert {int(row[1]) for row in current} == {0, 1}
     assert any(row[F0] > 0 for row in current) and any(row[F0] == 0 for row in current)
     assert any(row[17] > 0 for row in current) and any(row[6] > 0 for row in current)
-    _assert_rows_match(reference, current)
+    _assert_rows_match(reference, current, stored_reference=False)
 
 
 def test_spectrum_output_matches_original_kernel(
