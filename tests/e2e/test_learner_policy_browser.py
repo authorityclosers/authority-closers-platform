@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("playwright.sync_api")
 from playwright.sync_api import Browser, Route, expect, sync_playwright  # noqa: E402
 
-POLICY_VERSION = "ac-learner-terms-privacy-2026-09-30-v1"
+POLICY_VERSION = "ac-learner-terms-privacy-2026-10-18-v2"
 
 
 @pytest.fixture(scope="module")
@@ -67,7 +67,7 @@ def test_published_policies_and_consent_reflow(
             expect(page.locator('label a[href="/privacy"]')).to_be_visible()
         else:
             expect(page.locator(".policy-hero__status")).to_contain_text(POLICY_VERSION)
-            expect(page.locator(".policy-hero__status")).to_contain_text("30 September 2026")
+            expect(page.locator(".policy-hero__status")).to_contain_text("18 October 2026")
             expect(page.locator('a[href="mailto:admin@authorityclosers.com"]')).to_be_visible()
             expect(page.locator(".policy-copy > section")).to_have_count(
                 8 if path == "terms" else 9

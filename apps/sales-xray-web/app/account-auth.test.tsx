@@ -196,7 +196,7 @@ it("keeps the local file through explicit consent, neutral code request and veri
       ?.parentElement?.textContent?.replace(/\s+/g, " ")
       .trim(),
   ).toBe(
-    "I confirm that I am 18 or older and accept the current Authority Closers Terms and Privacy notice for my learner account.",
+    "I confirm that I am 18 or older and accept the current Authority Closers Terms and Privacy notice for my Authority Closers account.",
   );
   await changeInput("#account-email", "first@example.test");
   await act(async () =>

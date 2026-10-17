@@ -901,7 +901,7 @@ export function AccountAuth({
                       >
                         Privacy notice
                       </a>{" "}
-                      for my learner account.
+                      for my Authority Closers account.
                     </span>
                   </label>
                   {googleBlocked ? (

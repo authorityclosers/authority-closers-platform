@@ -263,8 +263,8 @@ Arbitrary campaign content is outside this release.
 The worker requires both the released profile and durable recovery state `READY`.
 An outstanding recovery hold remains closed until canonical audited
 reconciliation; activation must not silently release queued work outside the
-approved initial delivery scope. The source-owned profiles retain the reviewed
-consent version `ac-learner-terms-privacy-2026-09-30-v1`. The installer clears
+approved initial delivery scope. The source-owned profiles carry the reviewed
+consent version `ac-learner-terms-privacy-2026-10-18-v2`. The installer clears
 injected `AC_LEARNER_CONSENT_VERSION`, so a secret-store-only update cannot
 replace that reviewed contract.
 

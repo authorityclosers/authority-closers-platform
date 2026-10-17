@@ -404,10 +404,10 @@ describe("published learner consent policies", () => {
 
     expect(h1Count(privacy)).toBe(1);
     expect(h1Count(terms)).toBe(1);
-    expect(privacy).toContain("ac-learner-terms-privacy-2026-09-30-v1");
-    expect(terms).toContain("ac-learner-terms-privacy-2026-09-30-v1");
-    expect(privacy).toContain("30 September 2026");
-    expect(terms).toContain("30 September 2026");
+    expect(privacy).toContain("ac-learner-terms-privacy-2026-10-18-v2");
+    expect(terms).toContain("ac-learner-terms-privacy-2026-10-18-v2");
+    expect(privacy).toContain("18 October 2026");
+    expect(terms).toContain("18 October 2026");
     expect(privacy).toContain(
       "With Google sign-in we also keep your first and last name, language setting, your Google Workspace organization&#x27;s email domain when there is one, and our own small copy of your Google profile photo; we refresh them each time you sign in with Google.",
     );
