@@ -1,0 +1,144 @@
+"""``sx.analysis_completed.v1`` body, built exactly per the contract (fictional data)."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import replace
+from datetime import UTC, datetime
+from uuid import UUID
+
+from ac_platform.partner_events.payload import (
+    MAX_BODY_BYTES,
+    CallContext,
+    Extraction,
+    Lead,
+    Person,
+    body_bytes,
+    body_sha256,
+    build_event,
+    iso,
+)
+from ac_platform.partner_events.quote_facts import FACT_TYPES
+
+EVENT = UUID("6b6b1a0e-5f1c-4c7e-9a1d-2f0c9e3b7a11")
+PREVIOUS = UUID("0f0f0f0f-0000-4000-8000-000000000001")
+CONTEXT = CallContext(
+    tenant_id=UUID("11111111-1111-4111-8111-111111111111"),
+    recording_id=UUID("22222222-2222-4222-8222-222222222222"),
+    report_draft_id=UUID("33333333-3333-4333-8333-333333333333"),
+    submission_id=UUID("44444444-4444-4444-8444-444444444444"),
+    completed_at=datetime(2026, 10, 19, 5, 14, 2, 731_000, tzinfo=UTC),
+    uploaded_at=datetime(2026, 10, 19, 5, 10, 40, tzinfo=UTC),
+    duration_ms=611_600,
+    report_language="en",
+    summary="  The customer wants a 5 kW system; the salesperson sends a quotation today.  ",
+    outcome_kind="follow_up",
+    salesperson=Person(
+        UUID("55555555-5555-4555-8555-555555555555"),
+        "Salesperson A",
+        "salesperson.a@example.test",
+    ),
+    lead=Lead(UUID("66666666-6666-4666-8666-666666666666"), "+910000000000", "Customer A", "Pune"),
+    analysis_revision=2,
+    supersedes_event_id=PREVIOUS,
+)
+FACT = {
+    "type": "system_size",
+    "status": "stated",
+    "value": {"stated_as": "5 kW", "quantity": 5, "unit": "kW"},
+    "source": {"segment_id": "s41", "t_start_sec": 190, "t_end_sec": 197, "speaker": "customer"},
+}
+APP = "https://salesxray.example.test/"
+
+
+def test_golden_event_body() -> None:
+    payload = build_event(
+        EVENT, CONTEXT, Extraction("complete", "wiselife-quote-v1", [FACT]), app_url=APP
+    )
+    assert payload == {
+        "schema": "sx.analysis_completed.v1",
+        "event_id": "6b6b1a0e-5f1c-4c7e-9a1d-2f0c9e3b7a11",
+        "event_type": "analysis.completed",
+        "occurred_at": "2026-10-19T05:14:02Z",
+        "tenant_ref": "ten_11111111111141118111111111111111",
+        "analysis_id": "sub_44444444444444448444444444444444",
+        "analysis_revision": 2,
+        "supersedes_event_id": "0f0f0f0f-0000-4000-8000-000000000001",
+        "analysis_url": (
+            "https://salesxray.example.test/analysis/calls/44444444-4444-4444-8444-444444444444"
+        ),
+        "call": {
+            "uploaded_at": "2026-10-19T05:10:40Z",
+            "duration_sec": 612,
+            "report_language": "en",
+        },
+        "salesperson": {
+            "ref": "per_55555555555545558555555555555555",
+            "name": "Salesperson A",
+            "email": "salesperson.a@example.test",
+        },
+        "lead": {
+            "ref": "lead_66666666666646668666666666666666",
+            "phone_e164": "+910000000000",
+            "name": "Customer A",
+            "city": "Pune",
+        },
+        "summary": "The customer wants a 5 kW system; the salesperson sends a quotation today.",
+        "outcome": {"kind": "follow_up"},
+        "extraction": {
+            "profile": "wiselife-quote-v1",
+            "status": "complete",
+            "looked_for": list(FACT_TYPES),
+        },
+        "facts": [FACT],
+    }
+    # Signed bytes are canonical JSON: the same stored payload always gives the same bytes.
+    raw = body_bytes(payload)
+    assert raw == body_bytes(json.loads(raw))
+    assert body_sha256(payload) == hashlib.sha256(raw).hexdigest()
+    assert "\\u" not in raw.decode()
+
+
+def test_no_lead_no_outcome_skipped_and_failed_extractions() -> None:
+    context = replace(CONTEXT, lead=None, outcome_kind="won_big", supersedes_event_id=None)
+    skipped = build_event(EVENT, context, Extraction("skipped", None), app_url=APP)
+    assert skipped["lead"] is None
+    assert skipped["outcome"] == {"kind": None}
+    assert skipped["supersedes_event_id"] is None
+    assert skipped["extraction"] == {"profile": None, "status": "skipped", "looked_for": []}
+    assert skipped["facts"] == []
+    failed = build_event(
+        EVENT, context, Extraction("failed", "wiselife-quote-v1", [FACT]), app_url=APP
+    )
+    assert failed["extraction"]["status"] == "failed"
+    assert failed["extraction"]["looked_for"] == list(FACT_TYPES)
+    assert failed["facts"] == []
+    unknown_length = build_event(
+        EVENT, replace(CONTEXT, duration_ms=None), Extraction("skipped", None), app_url=APP
+    )
+    assert unknown_length["call"]["duration_sec"] is None
+
+
+def test_summary_is_cut_to_1500_characters() -> None:
+    long = replace(CONTEXT, summary="word " * 1000)
+    payload = build_event(EVENT, long, Extraction("skipped", None), app_url=APP)
+    assert len(payload["summary"]) == 1500
+    assert payload["summary"].endswith("…")
+
+
+def test_a_body_over_256_kb_drops_its_facts_and_reads_failed() -> None:
+    many = [
+        {**FACT, "type": "load", "value": {"stated_as": "x" * 200}, "source": FACT["source"]}
+        for _ in range(2000)
+    ]
+    payload = build_event(
+        EVENT, CONTEXT, Extraction("complete", "wiselife-quote-v1", many), app_url=APP
+    )
+    assert payload["extraction"]["status"] == "failed"
+    assert payload["facts"] == []
+    assert len(body_bytes(payload)) <= MAX_BODY_BYTES
+
+
+def test_times_are_utc_whole_seconds() -> None:
+    assert iso(datetime(2026, 10, 19, 10, 44, 2, 999_999)) == "2026-10-19T10:44:02Z"
