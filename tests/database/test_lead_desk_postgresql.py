@@ -642,3 +642,76 @@ def test_booked_calls_ready_messages_and_phone_alerts(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_a_seller_turns_new_leads_off_and_on(postgres_harness: Any, tmp_path: Path) -> None:
+    """UX study item 8, 18 Oct: a seller's own "Taking new leads" switch. While it is
+    off the lead rules give them nothing new; managers see it on Team."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            other = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                as_(setup.token)
+                # The admin takes no leads, so the two sellers share them.
+                saved = await client.put(
+                    f"{BASE}/team/{setup.state.person_id}",
+                    json={"expected_revision": 0, "available": False, "max_open": 10},
+                    headers=WRITE,
+                )
+                assert saved.status_code == 200, saved.text
+
+                as_(seller_token)
+                assert (await client.get(BASE)).json()["me"]["taking_leads"] is True
+                off = await client.put(f"{BASE}/me/taking", json={"taking": False}, headers=WRITE)
+                assert off.status_code == 200, off.text
+                assert off.json()["taking_leads"] is False
+                assert (await client.get(BASE)).json()["me"]["taking_leads"] is False
+                # Switching off twice changes nothing.
+                again = await client.put(f"{BASE}/me/taking", json={"taking": False}, headers=WRITE)
+                assert again.status_code == 200 and again.json()["taking_leads"] is False
+                refused = await client.put(f"{BASE}/me/taking", json={"taking": "yes please"})
+                assert refused.status_code in {403, 422}
+
+                as_(setup.token)
+                for index, name in enumerate(("Ravi Kulkarni", "Meena Shah")):
+                    added = await client.post(
+                        f"{BASE}/leads",
+                        json={
+                            "command_id": str(uuid4()),
+                            "name": name,
+                            "phone": f"98765 4321{index}",
+                        },
+                        headers=WRITE,
+                    )
+                    assert added.status_code == 201, added.text
+                    assert added.json()["lead"]["owner_person_id"] == str(other.person_id)
+                team = (await client.get(f"{BASE}/team")).json()
+                row = next(rep for rep in team["reps"] if rep["person_id"] == str(seller.person_id))
+                assert row["available"] is False and row["revision"] == 1
+
+                as_(seller_token)
+                on = await client.put(f"{BASE}/me/taking", json={"taking": True}, headers=WRITE)
+                assert on.json()["taking_leads"] is True
+                as_(setup.token)
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={"command_id": str(uuid4()), "name": "Kiran Rao", "phone": "98765 43299"},
+                    headers=WRITE,
+                )
+                # Back on, with fewer open leads than the other seller: it comes to them.
+                assert added.json()["lead"]["owner_person_id"] == str(seller.person_id)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

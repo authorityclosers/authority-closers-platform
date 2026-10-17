@@ -57,7 +57,14 @@ export type Stage =
   | "lost";
 
 export type Desk = {
-  me: { person_id: string; name: string; role: string; can_manage: boolean };
+  me: {
+    person_id: string;
+    name: string;
+    role: string;
+    can_manage: boolean;
+    /** Off: the lead rules give this seller no new leads (UX study item 8). */
+    taking_leads?: boolean;
+  };
   numbers: {
     calls: number;
     connected: number;
@@ -564,6 +571,11 @@ export function reassign(
       person_id: personId,
     }),
   );
+}
+
+/** The seller's own "Taking new leads" switch. */
+export function setTaking(taking: boolean) {
+  return request<Desk["me"]>("/me/taking", json("PUT", { taking }));
 }
 
 export function readTeam(signal?: AbortSignal) {

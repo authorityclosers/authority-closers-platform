@@ -2473,6 +2473,104 @@
   display: contents;
 }
 
+/* Taking new leads (UX study item 8): a switch in the header on wide screens,
+   a slim row under the next call on phones. */
+.taking {
+  display: grid;
+  gap: 4px;
+}
+
+.taking[data-place="row"] {
+  display: none;
+}
+
+.takingSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--sx-control-h);
+  padding: 0 12px 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.takingSwitch:hover:not(:disabled) {
+  background: var(--sx-sunken);
+}
+
+.takingSwitch:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.takingSwitch:disabled {
+  cursor: default;
+}
+
+.takingTrack {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--sx-line-strong);
+  transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.takingTrack > span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-1);
+  transition: transform var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.takingSwitch[aria-checked="true"] .takingTrack {
+  background: var(--sx-accent);
+}
+
+.takingSwitch[aria-checked="true"] .takingTrack > span {
+  transform: translateX(14px);
+}
+
+.takingLabel {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.takingLabel strong {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.takingLabel small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.takingSwitch[aria-checked="false"] {
+  border-color: color-mix(in oklab, var(--sx-warn) 45%, var(--sx-line));
+  background: var(--lx-warning-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .takingTrack,
+  .takingTrack > span {
+    transition: none;
+  }
+}
+
 .srOnly {
   position: absolute;
   width: 1px;
@@ -2933,6 +3031,20 @@
 @media (max-width: 899.98px) {
   .wideOnly {
     display: none;
+  }
+
+  .taking[data-place="row"] {
+    display: grid;
+  }
+
+  .taking[data-place="row"] .takingSwitch {
+    width: 100%;
+    min-height: 52px;
+    padding: 8px 14px 8px 10px;
+  }
+
+  .taking[data-place="row"] .takingLabel strong {
+    white-space: normal;
   }
 
   .root[data-tab="desk"] {

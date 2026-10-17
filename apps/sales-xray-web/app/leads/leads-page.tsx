@@ -65,6 +65,7 @@ import { MessageSetup } from "./message-sheet";
 import { onPhoneSignal } from "./native-phone";
 import { ListView } from "./list-view";
 import { SourcesView } from "./sources-view";
+import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
 import styles from "./leads.module.css";
 
@@ -410,6 +411,12 @@ export function LeadsRoute() {
               ]}
               actions={
                 <>
+                  <TakingSwitch
+                    key={`taking-${desk.me.taking_leads !== false}`}
+                    initial={desk.me.taking_leads !== false}
+                    place="header"
+                    onChanged={refresh}
+                  />
                   <Button onClick={() => begin("menu", setMenu)}>
                     <Plus size={14} aria-hidden="true" />
                     Add leads
@@ -452,6 +459,12 @@ export function LeadsRoute() {
               links={links}
               afterHero={
                 <>
+                  <TakingSwitch
+                    key={`taking-${desk.me.taking_leads !== false}`}
+                    initial={desk.me.taking_leads !== false}
+                    place="row"
+                    onChanged={refresh}
+                  />
                   <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
                   <AlertsCard />
                 </>
