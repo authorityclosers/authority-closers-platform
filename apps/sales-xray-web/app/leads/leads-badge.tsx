@@ -6,6 +6,8 @@
  * shared reader serves the rail and the phone tab bar: it reads on open, when
  * the app or tab comes back to the front, and every two minutes while shown.
  * The Leads page also hands over its fresh counts, so the badge never lags it.
+ * It reads only while the shell says so: signed in, loaded and not under test,
+ * so a signed-out visitor never sends a read (pages count their reads).
  */
 
 import { PhoneCall } from "lucide-react";
@@ -70,16 +72,26 @@ function subscribe(listener: () => void): () => void {
 
 const snapshot = () => current;
 const serverSnapshot = () => null;
+/** Not live: no reads, no timer, no listeners. */
+const idle = () => () => undefined;
 
 /** The Leads icon with its badge, for the rail and the phone tab bar. */
 export function LeadsTabIcon({
   size = 20,
   strokeWidth,
+  live,
 }: {
   size?: number;
   strokeWidth?: number;
+  /** Signed in, loaded and not under test; otherwise no badge and no read. */
+  live: boolean;
 }) {
-  const badge = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  const latest = useSyncExternalStore(
+    live ? subscribe : idle,
+    snapshot,
+    serverSnapshot,
+  );
+  const badge = live ? latest : null;
   const late = badge?.overdue ?? 0;
   const due = badge?.to_call ?? 0;
   const count = late || due;

@@ -689,6 +689,9 @@ function LightboxShellFrame({
   const invites = useInvites(
     authenticated && !loading && process.env.NODE_ENV !== "test",
   );
+  // The Leads tab badge reads on the same terms.
+  const leadsBadgeLive =
+    authenticated && !loading && process.env.NODE_ENV !== "test";
   useEffect(() => {
     if (!invites.live) return;
     const open = () => setCreateOpen(true);
@@ -863,7 +866,11 @@ function LightboxShellFrame({
               data-rail-tip="Leads"
               aria-current={place === "leads" ? "page" : undefined}
             >
-              <LeadsTabIcon size={20} strokeWidth={1.75} />
+              <LeadsTabIcon
+                size={20}
+                strokeWidth={1.75}
+                live={leadsBadgeLive}
+              />
               <span style={RAIL_NAME_STYLE}>Leads</span>
             </Link>
             <Link
@@ -1274,7 +1281,7 @@ function LightboxShellFrame({
             prefetch={false}
             aria-current={phoneTab === "leads" ? "page" : undefined}
           >
-            <LeadsTabIcon size={20} />
+            <LeadsTabIcon size={20} live={leadsBadgeLive} />
             <span>Leads</span>
           </Link>
         )}
