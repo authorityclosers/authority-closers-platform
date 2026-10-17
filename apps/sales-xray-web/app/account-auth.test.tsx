@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AccountAuth } from "./account-auth";
 import { AUTH_COMPLETE_MESSAGE } from "./account-auth-client";
+import { ThemeProvider } from "./lightbox/theme-provider";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -138,6 +139,30 @@ it("returns to the staged call with the same selected file and no navigation", a
   expect(onCancel).toHaveBeenCalledExactlyOnceWith(file);
   expect(host.textContent).toContain(file.name);
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("keeps the theme switch in its own slot so phones can float it onto the banner", async () => {
+  vi.stubGlobal("fetch", vi.fn());
+  await act(async () =>
+    root.render(
+      <ThemeProvider controlEnabled>
+        <AccountAuth
+          selectedFile={file}
+          onAuthenticated={vi.fn()}
+          previewState="auth.email"
+        />
+      </ThemeProvider>,
+    ),
+  );
+  await flush();
+  const toggle = host.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Theme:"]',
+  );
+  expect(toggle).toBeTruthy();
+  const slot = toggle!.parentElement!;
+  expect(slot.tagName).toBe("SPAN");
+  expect(slot.className).toContain("themeSlot");
+  expect(slot.parentElement?.className).toContain("formBar");
 });
 
 it("keeps the local file through explicit consent, neutral code request and verified account", async () => {
