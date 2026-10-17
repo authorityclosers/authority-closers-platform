@@ -29,8 +29,10 @@ from typing import Any, BinaryIO
 # the vendored pocketfft header pinned below (see native/audioatlas/README.md).
 NATIVE_SOURCE_SHA256 = "4ebf3e5c4721172f16fa82633a7dfed21700737478d7b586c6b51876d7396ce0"
 # The original AudioAtlas 0.1 source. C1 checkpoints it produced stay valid: the
-# replacement is numerically equivalent (same formulas, float64 differences at the
-# 1e-13 relative level, identical voicing decisions) and published rows are float32.
+# replacement uses the same formulas, keeps every non-FFT column bit-identical and
+# every voicing decision, and moves FFT-derived float64 values only by rounding
+# (absolute differences at most 2.4e-10; see native/audioatlas/README.md). Published
+# float32 rows can still flip one ULP in spectral_flatness, so feature hashes differ.
 LEGACY_NATIVE_SOURCE_SHA256 = "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3"
 ACCEPTED_NATIVE_SOURCE_SHA256 = frozenset({NATIVE_SOURCE_SHA256, LEGACY_NATIVE_SOURCE_SHA256})
 NATIVE_ROOT = Path(__file__).resolve().parents[4] / "native" / "audioatlas"
