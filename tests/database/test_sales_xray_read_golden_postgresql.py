@@ -95,10 +95,10 @@ _DATE = re.compile(r"\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|De
 # Upper bounds on SQL statements per HTTP read, including session admission.
 # Lower a bound when a read gets cheaper; never raise one to hide a regression.
 BUDGETS: dict[str, int] = {
-    "list.owners.page1": 1018,
-    "list.owners.page2": 85,
-    "list.newest.page1": 1017,
-    "list.reports_first.page1": 1039,
+    "list.owners.page1": 14,
+    "list.owners.page2": 15,
+    "list.newest.page1": 14,
+    "list.reports_first.page1": 14,
     "list.summary": 13,
     "progress.analysed": 76,
     "progress.local_only": 54,
@@ -120,7 +120,7 @@ BUDGETS: dict[str, int] = {
     "speaker_map.legacy": 57,
     "coaching.home": 117,
     "coaching.team": 158,
-    "rep.list.page1": 61,
+    "rep.list.page1": 14,
     "rep.progress.rep": 54,
     "rep.report.rep": 168,
     "rep.report.analysed": 17,
