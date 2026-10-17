@@ -7,7 +7,7 @@ from uuid import UUID
 
 import pytest
 
-from ac_platform.coaching.report_adapter import from_report
+from ac_platform.coaching.report_adapter import call_name, from_report
 
 NOW, CALL = datetime(2026, 10, 10, tzinfo=UTC), UUID(int=10)
 
@@ -260,3 +260,25 @@ def test_a_v7_overview_always_wins_over_v8_pillars() -> None:
     assert result is not None
     row = next(row for row in result.skills if row.mission)
     assert row.mission.behavior == "Ask one impact question."
+
+
+def test_a_transcript_id_is_never_a_call_name() -> None:
+    """B25: a report made without a name carries its transcript id as its label."""
+    data = envelope()
+    data["source_label"] = f"Scribe transcript revision {'1310ab5e' * 8} · source-bound"
+    late_evening = datetime(2026, 9, 30, 21, 0, tzinfo=UTC)
+    assert call_name(data, late_evening) == "Sales call · 30 Sep 2026"
+    result = adapt(data)
+    assert result is not None
+    assert {moment.call_label for row in result.skills for moment in row.evidence} == {
+        "Sales call · 10 Oct 2026"
+    }
+    data["source_label"] = "a" * 64
+    assert call_name(data, late_evening) == "Sales call · 30 Sep 2026"
+    # A real name stands, from the envelope or else from the report itself.
+    data["source_label"] = "Fictional sales call"
+    assert call_name(data, late_evening) == "Fictional sales call"
+    data["source_label"] = None
+    data["report"]["content"]["source_label"] = "Fictional renewal call"
+    assert call_name(data, late_evening) == "Fictional renewal call"
+    assert call_name({}, datetime(2026, 1, 5, tzinfo=UTC)) == "Sales call · 5 Jan 2026"

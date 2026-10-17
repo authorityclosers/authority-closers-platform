@@ -5,7 +5,8 @@ correct-execution verdict. A unique evidence link associates a finding with a
 skill. Older C5 findings without that link remain explicit call suggestions.
 """
 
-from datetime import datetime
+import re
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -67,6 +68,23 @@ def _text(value: Any, maximum: int) -> str | None:
     )
 
 
+# A report made without a call name carries its transcript id as its source
+# label ("Scribe transcript revision <hex> · source-bound"); that id is never a
+# call name (B25, 17 Oct). Same test as the web's shownCallLabel.
+_INTERNAL_LABEL = re.compile(r"\b[0-9a-f]{32,}\b|^scribe transcript revision\b", re.IGNORECASE)
+
+
+def call_name(envelope: dict[str, Any], created_at: datetime) -> str:
+    """The report's call name, or "Sales call · 30 Sep 2026" when it has none."""
+    content = envelope.get("report", {}).get("content", {})
+    for value in (envelope.get("source_label"), content.get("source_label")):
+        label = _text(value, 256)
+        if label and not _INTERNAL_LABEL.search(label):
+            return label
+    when = created_at.astimezone(UTC) if created_at.tzinfo else created_at
+    return f"Sales call · {when.day} {when:%b %Y}"
+
+
 # A v8 report names no observable target for its mission; this plain line is.
 V8_DONE_WHEN = "You do it once on your next call, when the same kind of moment comes up."
 CUE = "Read your one mission before the call."
@@ -122,11 +140,7 @@ def _moments(
             source_sha256=envelope["source_sha256"],
             transcript_revision=envelope["transcript_revision"],
             created_at=created_at,
-            call_label=(
-                _text(envelope.get("source_label"), 256)
-                or _text(envelope.get("report", {}).get("content", {}).get("source_label"), 256)
-                or "Sales call"
-            ),
+            call_label=call_name(envelope, created_at),
             segment_id=ref[0],
             quote=ref[1],
             start_ms=ref[2],

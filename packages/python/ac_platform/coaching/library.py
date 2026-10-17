@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CallHistory, CallSummary, CoachingView
 from ac_platform.coaching.learner import build_learner, recurring_focus
-from ac_platform.coaching.report_adapter import _text, from_report
+from ac_platform.coaching.report_adapter import call_name, from_report
 from ac_platform.coaching.sharing_store import member_name, rep_has_shared, shared_reps
 from ac_platform.coaching.team import TeamCoachingView, summarize_team
 from ac_platform.conversation_intelligence.acquisition_library import (
@@ -214,7 +214,9 @@ class CoachingLibrary:
             summaries.append(
                 CallSummary(
                     submission_id=usage.submission_id,
-                    call_label=names.get(usage.submission_id) or label or "Sales call",
+                    call_label=(
+                        names.get(usage.submission_id) or label or call_name({}, usage.created_at)
+                    ),
                     created_at=usage.created_at,
                     state=state,
                     focus_label=focus,
@@ -263,7 +265,7 @@ class CoachingLibrary:
                 summary(
                     usage,
                     "ready",
-                    _text(envelope.get("source_label"), 256),
+                    call_name(envelope, usage.created_at),
                     next((row.label for row in call.skills if row.mission), None) if call else None,
                 )
             except (ConversationError, ValueError, KeyError):
