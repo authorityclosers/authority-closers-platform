@@ -391,6 +391,9 @@
   gap: 12px;
   min-height: 44px;
 }
+.themeSlot {
+  display: inline-flex;
+}
 .returnLink {
   display: inline-flex;
   align-items: center;
@@ -1177,10 +1180,36 @@
     top: calc(50% - var(--track-h) / 2 - 4px);
   }
   .formColumn {
+    position: static;
     padding: 6px 8px 24px;
+  }
+  /* The theme switch sits on the film banner, level with the brand lockup,
+     so it no longer takes a row of its own above the form. */
+  .auth {
+    position: relative;
+  }
+  .formBar {
+    min-height: 0;
+  }
+  .themeSlot {
+    position: absolute;
+    z-index: 1;
+    top: 34px;
+    right: 32px;
+    --lx-surface: color-mix(in srgb, var(--lx-film-text) 10%, transparent);
+    --lx-line: color-mix(in srgb, var(--lx-film-text) 24%, transparent);
+    --lx-line-strong: color-mix(in srgb, var(--lx-film-text) 44%, transparent);
+    --lx-muted: var(--lx-film-text-2);
+    --lx-ink: var(--lx-film-text);
+    --lx-shadow-1: none;
   }
   .card {
     margin: 12px auto 0;
+  }
+}
+@media (max-width: 900px) and (pointer: coarse) {
+  .themeSlot {
+    top: 28px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

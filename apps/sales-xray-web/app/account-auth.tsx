@@ -805,7 +805,9 @@ export function AccountAuth({
           ) : (
             <span />
           )}
-          <ThemeToggle />
+          <span className={styles.themeSlot}>
+            <ThemeToggle />
+          </span>
         </div>
         <div className={styles.card}>
           <p className={styles.eyebrow}>
