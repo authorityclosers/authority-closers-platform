@@ -165,6 +165,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "lead_desk_reps",
         "lead_desk_sources",
         "lead_desk_settings",
+        "lead_desk_devices",
         "conversation_report_minute_events",
         "conversation_canary_submissions",
         "conversation_sensitive_segment_marks",

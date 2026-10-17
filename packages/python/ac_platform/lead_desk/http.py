@@ -30,21 +30,28 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk import simulation
+from ac_platform.lead_desk import push, simulation
 from ac_platform.lead_desk.contracts import (
+    AlertText,
+    Badge,
     CallRecord,
     Desk,
+    DeviceCommand,
+    DeviceView,
     Disposition,
+    FollowUp,
     ImportCommand,
     ImportPreview,
     ImportResult,
     LeadDetail,
     LeadEdit,
     LeadPage,
+    MessageSent,
     NewLead,
     NewSource,
     NoteCommand,
     PhoneCall,
+    PushConfig,
     Reassign,
     RecordingCommand,
     RepRules,
@@ -230,6 +237,66 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.note(lead_id, command)
+
+    @router.post(
+        "/leads/{lead_id}/follow-up", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def follow_up(
+        lead_id: UUID, command: FollowUp, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.follow_up(lead_id, command)
+
+    @router.post(
+        "/leads/{lead_id}/messages", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def message(
+        lead_id: UUID, command: MessageSent, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.message(lead_id, command)
+
+    @router.get("/badge", response_model=Badge, response_model_by_alias=True)
+    async def badge(request: Request, response: Response) -> Badge:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.badge()
+
+    @router.get("/alert", response_model=AlertText, response_model_by_alias=True)
+    async def alert_summary(request: Request, response: Response) -> AlertText:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.alert_summary()
+
+    @router.get("/leads/{lead_id}/alert", response_model=AlertText, response_model_by_alias=True)
+    async def alert_text(lead_id: UUID, request: Request, response: Response) -> AlertText:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.alert_text(lead_id)
+
+    @router.get("/push", response_model=PushConfig, response_model_by_alias=True)
+    async def push_config(request: Request, response: Response) -> PushConfig:
+        no_query(request)
+        async with desk_for(request, response):
+            return push.client_config(push.config())
+
+    @router.post("/devices", response_model=DeviceView, response_model_by_alias=True)
+    async def register_device(
+        command: DeviceCommand, request: Request, response: Response
+    ) -> DeviceView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return DeviceView(registered=await lead_desk.register_device(command))
+
+    @router.post("/devices/forget", response_model=DeviceView, response_model_by_alias=True)
+    async def forget_device(
+        command: DeviceCommand, request: Request, response: Response
+    ) -> DeviceView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return DeviceView(registered=await lead_desk.forget_device(command))
 
     @router.post("/leads/{lead_id}/assign", response_model=LeadDetail, response_model_by_alias=True)
     async def assign(
@@ -431,6 +498,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         return {"received": outcome != "skipped", "outcome": outcome, "lead_id": lead_id}
 
     application.include_router(router)
+    push.attach(application, ctx.sessions, settings.environment)
 
 
 async def _body(request: Request, limit: int) -> bytes:

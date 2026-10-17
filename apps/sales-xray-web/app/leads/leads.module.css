@@ -2344,3 +2344,597 @@
     padding-inline: 0;
   }
 }
+
+/* ---------- App feel on phones (UX study, 17 Oct) ----------
+   The desk opens on Start calling: the header, its buttons and the tab row
+   show from 900 px up only; phones get a count strip and the other tabs as a
+   list at the bottom. Rows swipe (right: call, left: message) and hold for
+   more; the page pulls down to refresh. */
+
+.root {
+  position: relative;
+}
+
+.wideOnly {
+  display: contents;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.countStrip,
+.deskLinks {
+  display: none;
+}
+
+.panelBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.addSmall {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--lx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.addSmall:hover {
+  background: var(--sx-sunken);
+}
+
+.sections {
+  display: grid;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 10px 16px 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sectionTitle small {
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.dueSection[data-section="overdue"] .sectionTitle {
+  color: var(--sx-bad);
+}
+
+.dueSection + .dueSection {
+  border-top: 1px solid var(--sx-line);
+}
+
+.lateTag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+/* A row: the face slides over a coloured backing that says what a swipe does. */
+.leadLine {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.leadFace {
+  position: relative;
+  background: var(--sx-surface);
+}
+
+.swipeBack {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: var(--sx-text-sm);
+}
+
+.swipeBack > span {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0 20px;
+  flex: 1;
+}
+
+.swipeBack > [data-side="right"] {
+  justify-content: flex-start;
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+}
+
+.swipeBack > [data-side="left"] {
+  justify-content: flex-end;
+  background: var(--lx-success);
+  color: var(--lx-on-teal);
+}
+
+.leadLine[data-swipe="right"] .swipeBack > [data-side="right"],
+.leadLine[data-swipe="left"] .swipeBack > [data-side="left"] {
+  display: flex;
+}
+
+.leadLine[data-armed="true"] .swipeBack > span {
+  font-size: var(--sx-text-md);
+}
+
+/* Pull to refresh: a round spinner drops in under the top bar. */
+.pullSpinner {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  border: 3px solid var(--sx-line);
+  border-top-color: var(--lx-teal);
+  border-radius: 50%;
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-50%, -44px, 0);
+  transition:
+    transform var(--lx-dur-move) var(--lx-ease-move),
+    opacity var(--lx-dur-move) var(--lx-ease-move);
+}
+
+.pullSpinner[data-mode="busy"] {
+  animation: pullSpin 0.8s linear infinite;
+}
+
+@keyframes pullSpin {
+  from {
+    rotate: 0deg;
+  }
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* The sheet that rises from the bottom: long-press menu and the composer. */
+.actionSheet {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 560px;
+  max-height: min(88dvh, 720px);
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--sx-shadow-float);
+  font-family: var(--lx-font-ui);
+  font-size: var(--sx-text-sm);
+}
+
+.actionSheet::backdrop {
+  background: var(--sx-scrim);
+}
+
+.actionSheet[open] {
+  animation: riseIn var(--lx-dur-move) var(--lx-ease-move);
+}
+
+@keyframes riseIn {
+  from {
+    transform: translateY(32px);
+    opacity: 0;
+  }
+}
+
+.actionSheetBody {
+  display: grid;
+  gap: 14px;
+  padding: 6px var(--sx-gutter, 16px)
+    calc(18px + env(safe-area-inset-bottom, 0px));
+  transition: transform var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.actionSheetBody :is(h2, p) {
+  margin: 0;
+}
+
+.grabber {
+  width: 44px;
+  height: 5px;
+  margin: 4px auto 0;
+  padding: 8px 40px;
+  border-radius: 999px;
+  background: var(--sx-line-strong) content-box;
+  touch-action: none;
+}
+
+.actionSheetHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.actionSheetHead h2 {
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.actionSheetHead p {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.actionSheetClose {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px 0 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.quickActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quickAction {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 72px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.quickAction[data-kind="call"] {
+  border-color: transparent;
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+}
+
+.quickAction[data-kind="message"] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+}
+
+.quickAction:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.doneLine {
+  color: var(--sx-good);
+  font-weight: 650;
+}
+
+.messageBody {
+  display: grid;
+  gap: 12px;
+}
+
+.channelSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-sunken);
+}
+
+.channelSwitch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--lx-radius-md);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.channelSwitch button[aria-pressed="true"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.templateChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.messageField {
+  display: grid;
+  gap: 6px;
+}
+
+.messageField :is(textarea, select) {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  line-height: 1.45;
+}
+
+.messageField textarea {
+  min-height: 104px;
+  resize: vertical;
+}
+
+.sendButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.sendButton[data-channel="whatsapp"] {
+  background: var(--lx-success);
+}
+
+.sendButton[aria-disabled="true"] {
+  opacity: 0.45;
+}
+
+.sendButton:focus-visible,
+.quickAction:focus-visible,
+.addSmall:focus-visible,
+.saveMessage:focus-visible,
+.channelSwitch button:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.saveRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.saveRow > :only-child {
+  grid-column: 1 / -1;
+}
+
+.saveMessage {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.alertsCard {
+  composes: appBanner;
+}
+
+/* The Leads tab badge (rail and phone tab bar). */
+.tabIcon {
+  position: relative;
+  display: inline-flex;
+}
+
+.tabBadge {
+  position: absolute;
+  top: -7px;
+  left: calc(100% - 9px);
+  box-sizing: border-box;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 2px solid var(--sx-surface);
+  border-radius: 999px;
+  background: var(--lx-danger);
+  color: var(--lx-surface);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabBadge[data-tone="accent"] {
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+}
+
+@media (pointer: coarse) {
+  .addSmall {
+    min-height: 44px;
+    padding: 0 14px;
+  }
+}
+
+@media (max-width: 899.98px) {
+  .wideOnly {
+    display: none;
+  }
+
+  .root[data-tab="desk"] {
+    gap: 12px;
+    padding-top: 4px;
+  }
+
+  .hero {
+    padding: 16px 18px;
+  }
+
+  .heroButton {
+    width: 100%;
+  }
+
+  .countStrip {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 6px;
+  }
+
+  .countItem {
+    display: grid;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--lx-radius-lg);
+    background: var(--sx-surface);
+    color: var(--sx-ink);
+    text-decoration: none;
+  }
+
+  .countItem strong {
+    font: var(--sx-text-kpi);
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .countItem span {
+    color: var(--sx-muted);
+    font-size: var(--sx-text-xs);
+    font-weight: 600;
+  }
+
+  .countItem[data-tone="bad"] {
+    border-color: var(--lx-danger-edge);
+    background: var(--lx-danger-soft);
+  }
+
+  .countItem[data-tone="bad"] :is(strong, span) {
+    color: var(--sx-bad);
+  }
+
+  .deskSide {
+    position: static;
+  }
+
+  .deskLinks {
+    display: grid;
+    overflow: hidden;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--lx-radius-lg);
+    background: var(--sx-surface);
+  }
+
+  .deskLink {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    align-items: center;
+    min-height: 56px;
+    padding: 8px 14px;
+    border: 0;
+    background: transparent;
+    color: var(--sx-ink);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .deskLink + .deskLink {
+    border-top: 1px solid var(--sx-line);
+  }
+
+  .deskLink span {
+    font-weight: 650;
+  }
+
+  .deskLink small {
+    grid-row: 2;
+    color: var(--sx-muted);
+    font-size: var(--sx-text-xs);
+  }
+
+  .deskLink svg {
+    grid-row: 1 / 3;
+    grid-column: 2;
+    color: var(--sx-muted);
+  }
+}
+
+@media (min-width: 900px) {
+  .actionSheet {
+    margin: auto;
+    border-radius: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionSheet[open],
+  .pullSpinner,
+  .actionSheetBody {
+    animation: none;
+    transition: none;
+  }
+}

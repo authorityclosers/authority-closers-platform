@@ -287,3 +287,84 @@ export function missedReason(result: NativeCallResult): string | null {
       return null;
   }
 }
+
+/**
+ * A light buzz, as an app gives on a long-press, a swipe or a save. Inside the
+ * phone app the app does it (no vibration permission needed); in a phone
+ * browser the page asks the browser; elsewhere nothing happens.
+ */
+export function buzz(kind: "tick" | "press" | "done" = "tick"): void {
+  if (inPhoneApp()) {
+    void ask("haptic", { kind }, 2_000).catch(() => undefined);
+    return;
+  }
+  try {
+    navigator.vibrate?.(kind === "press" ? 18 : 10);
+  } catch {
+    // Not allowed here: no buzz.
+  }
+}
+
+export type PushState = {
+  /** This app build can receive lead alerts. */
+  supported: boolean;
+  /** The phone allows Sales Xray notifications. */
+  allowed: boolean;
+  /** The phone's alert address, once alerts are on. */
+  token: string | null;
+};
+
+/** What the phone app says about lead alerts; null in a browser or an older app. */
+export async function pushStatus(): Promise<PushState | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    const raw = await ask<Record<string, unknown>>("pushStatus", {}, 5_000);
+    return {
+      supported: raw.supported === true,
+      allowed: raw.allowed === true,
+      token: typeof raw.token === "string" && raw.token ? raw.token : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Turns lead alerts on: the phone asks to allow notifications (once), starts
+ * Firebase with the client settings Sales Xray sent, and returns its address.
+ */
+export async function pushEnable(config: {
+  project_id: string;
+  app_id: string;
+  api_key: string;
+  sender_id: string;
+}): Promise<PushState | null> {
+  try {
+    const raw = await ask<Record<string, unknown>>(
+      "pushEnable",
+      config,
+      120_000,
+    );
+    return {
+      supported: raw.supported === true,
+      allowed: raw.allowed === true,
+      token: typeof raw.token === "string" && raw.token ? raw.token : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Signals from the phone app: "resume" when it comes back to the front,
+ * "alert" when a lead alert arrives while it is open. Older apps send none;
+ * the page also listens for the browser's own visibility change.
+ */
+export function onPhoneSignal(listener: (event: string) => void): () => void {
+  const handle = (event: Event) => {
+    const detail = (event as CustomEvent<{ event?: unknown }>).detail;
+    if (typeof detail?.event === "string") listener(detail.event);
+  };
+  window.addEventListener("sx-phone", handle);
+  return () => window.removeEventListener("sx-phone", handle);
+}

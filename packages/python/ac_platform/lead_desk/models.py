@@ -1,4 +1,4 @@
-"""Lead Desk tables (migration 20261016_0093, owner order 16 Oct 2026).
+"""Lead Desk tables (migrations 20261016_0093 and 20261017_0095, owner order 16 Oct 2026).
 
 A lead is a flexible record: ``payload`` keeps every field its source sent,
 and the desk reads the few fields pulled out of it. ``LeadEvent`` rows are the
@@ -107,6 +107,12 @@ class Lead(Base):
     created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # The phone alert already sent for this owner's assignment, and for this due
+    # time (0095): each is sent once, and a new owner or a new time sends again.
+    alerted_assigned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    alerted_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class LeadEvent(Base):
@@ -119,7 +125,7 @@ class LeadEvent(Base):
         ),
         CheckConstraint(
             "kind IN ('captured', 'repeat', 'assigned', 'reassigned', 'call', 'result', 'note',"
-            " 'edited')",
+            " 'edited', 'message', 'scheduled')",
             name="lead_desk_event_kind",
         ),
         Index("ix_lead_desk_event_lead", "tenant_id", "lead_id", "created_at"),
@@ -209,3 +215,30 @@ class LeadDeskSettings(Base):
     config: Mapped[dict[str, Any]] = mapped_column(JSON)
     updated_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadDevice(Base):
+    """A seller's phone that gets lead alerts (0095). The token is the phone's FCM address."""
+
+    __tablename__ = "lead_desk_devices"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_device_member",
+        ),
+        UniqueConstraint("tenant_id", "token_sha256", name="uq_lead_desk_device_token"),
+        CheckConstraint("platform IN ('android')", name="lead_desk_device_platform"),
+        CheckConstraint("length(token_sha256) = 64", name="lead_desk_device_digest"),
+        Index("ix_lead_desk_device_person", "tenant_id", "person_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    platform: Mapped[str] = mapped_column(String(16))
+    token: Mapped[str] = mapped_column(String(4096))
+    token_sha256: Mapped[str] = mapped_column(String(64))
+    app_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

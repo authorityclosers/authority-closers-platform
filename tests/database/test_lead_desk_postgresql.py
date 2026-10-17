@@ -470,3 +470,175 @@ def test_edit_details_and_notes_keep_history(postgres_harness: Any, tmp_path: Pa
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_booked_calls_ready_messages_and_phone_alerts(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """UX study, 17 Oct: book the next call from the list, log a ready message, see what
+    is overdue and coming up, and send each phone alert once with no lead details."""
+    import json
+    from uuid import UUID
+
+    from ac_platform.lead_desk import push
+    from ac_platform.lead_desk.models import LeadDevice
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            other = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            other_token = await _session(setup, other)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                async def add_for_seller(name: str, phone: str) -> dict[str, Any]:
+                    as_(setup.token)
+                    made = await client.post(
+                        f"{BASE}/leads",
+                        json={
+                            "command_id": str(uuid4()),
+                            "name": name,
+                            "phone": phone,
+                            "interest": "Solar rooftop",
+                            "assign": "person",
+                            "person_id": str(seller.person_id),
+                        },
+                        headers=WRITE,
+                    )
+                    assert made.status_code == 201, made.text
+                    return made.json()
+
+                asha = await add_for_seller("Asha Patil", "9800000031")
+                ravi = await add_for_seller("Ravi Kumar", "9800000032")
+
+                # The seller's phone asks for alerts; the API stays off without FCM here.
+                as_(seller_token)
+                assert (await client.get(f"{BASE}/push")).json()["enabled"] is False
+                device = {"token": "fcm-token-" + "a" * 40, "app_version": "0.3.20"}
+                saved = await client.post(f"{BASE}/devices", json=device, headers=WRITE)
+                assert saved.status_code == 200 and saved.json()["registered"] is True
+                again = await client.post(f"{BASE}/devices", json=device, headers=WRITE)
+                assert again.status_code == 200
+                bad = await client.post(f"{BASE}/devices", json={"token": "short"}, headers=WRITE)
+                assert bad.status_code == 422
+
+                # Two new leads for the seller: one alert for both, ids and counts only.
+                now = datetime.now(UTC)
+                async with setup.sessions() as db, db.begin():
+                    alerts = await push.collect(db, now)
+                assert len(alerts) == 1
+                data = alerts[0].data()
+                assert data["kind"] == "many" and data["alerts"] == "2" and data["count"] == "2"
+                assert alerts[0].tokens == [device["token"]]
+                assert "Asha" not in json.dumps(data) and "98000" not in json.dumps(data)
+                async with setup.sessions() as db, db.begin():
+                    assert await push.collect(db, now) == []
+
+                # The phone reads the words on the seller's own session.
+                asha_id = asha["lead"]["lead_id"]
+                text = (await client.get(f"{BASE}/leads/{asha_id}/alert")).json()
+                assert text["title"] == "New lead: Asha Patil"
+                assert text["url"] == f"/leads#lead={asha_id}"
+                assert "Solar rooftop" in text["body"]
+                summary = (await client.get(f"{BASE}/alert")).json()
+                assert summary["title"] == "2 leads to call now"
+                as_(other_token)
+                assert (await client.get(f"{BASE}/leads/{asha_id}/alert")).status_code == 404
+                as_(seller_token)
+
+                # A ready message is logged by its template, never its text.
+                sent = await client.post(
+                    f"{BASE}/leads/{asha_id}/messages",
+                    json={"command_id": str(uuid4()), "channel": "whatsapp", "template": "intro"},
+                    headers=WRITE,
+                )
+                assert sent.status_code == 200, sent.text
+                event = sent.json()["events"][0]
+                assert event["kind"] == "message" and event["channel"] == "WhatsApp"
+                assert event["template_label"] == "Introduction"
+                unknown = await client.post(
+                    f"{BASE}/leads/{asha_id}/messages",
+                    json={"command_id": str(uuid4()), "channel": "sms", "template": "spam"},
+                    headers=WRITE,
+                )
+                assert unknown.status_code == 422
+
+                # Book Asha's call for later without calling; it leaves New.
+                lead = sent.json()["lead"]
+                booked = await client.post(
+                    f"{BASE}/leads/{asha_id}/follow-up",
+                    json={
+                        "command_id": str(uuid4()),
+                        "expected_revision": lead["revision"],
+                        "at": (now + timedelta(days=2)).isoformat(),
+                    },
+                    headers=WRITE,
+                )
+                assert booked.status_code == 200, booked.text
+                assert booked.json()["events"][0]["kind"] == "scheduled"
+                assert booked.json()["lead"]["why"] == "Call booked"
+                stale = await client.post(
+                    f"{BASE}/leads/{asha_id}/follow-up",
+                    json={
+                        "command_id": str(uuid4()),
+                        "expected_revision": lead["revision"],
+                        "at": (now + timedelta(days=1)).isoformat(),
+                    },
+                    headers=WRITE,
+                )
+                assert stale.status_code == 409
+
+                # Ravi waited two hours: overdue on the desk and on the badge.
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(Lead)
+                        .where(Lead.id == UUID(ravi["lead"]["lead_id"]))
+                        .values(created_at=now - timedelta(hours=2))
+                    )
+                desk = (await client.get(BASE)).json()
+                assert desk["counts"]["overdue"] == 1
+                rows = {row["name"]: row for row in desk["queue"]}
+                assert rows["Ravi Kumar"]["overdue"] is True
+                assert [row["name"] for row in desk["upcoming"]] == ["Asha Patil"]
+                assert {item["key"] for item in desk["templates"]} >= {"intro", "missed_call"}
+                badge = (await client.get(f"{BASE}/badge")).json()
+                assert badge["overdue"] == 1 and badge["to_call"] == 1
+
+                # When Asha's booked time comes, one "due" alert; then nothing.
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(Lead)
+                        .where(Lead.id == UUID(asha_id))
+                        .values(next_action_at=now - timedelta(minutes=1))
+                    )
+                async with setup.sessions() as db, db.begin():
+                    alerts = await push.collect(db, now)
+                assert [alert.data()["kind"] for alert in alerts] == ["due"]
+                assert alerts[0].data()["lead"] == asha_id
+                async with setup.sessions() as db, db.begin():
+                    assert await push.collect(db, now) == []
+                text = (await client.get(f"{BASE}/leads/{asha_id}/alert")).json()
+                assert text["title"] == "Call Asha Patil now"
+
+                # Someone else signing in on the same phone takes its alerts over.
+                as_(other_token)
+                taken = await client.post(f"{BASE}/devices", json=device, headers=WRITE)
+                assert taken.status_code == 200
+                async with setup.sessions() as db:
+                    owners = (await db.scalars(select(LeadDevice.person_id))).all()
+                assert owners == [other.person_id]
+                forgot = await client.post(f"{BASE}/devices/forget", json=device, headers=WRITE)
+                assert forgot.status_code == 200 and forgot.json()["registered"] is False
+                async with setup.sessions() as db:
+                    assert await db.scalar(select(func.count()).select_from(LeadDevice)) == 0
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

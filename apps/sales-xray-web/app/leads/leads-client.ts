@@ -42,7 +42,11 @@ export type LeadRow = {
   last_result: string | null;
   last_result_label: string | null;
   test_data: boolean;
+  /** Its call is more than an hour late (a new lead counts from its arrival). */
+  overdue?: boolean;
 };
+
+export type MessageTemplate = { key: string; label: string; text: string };
 
 export type Stage =
   | "new"
@@ -68,12 +72,18 @@ export type Desk = {
     not_connected: number;
     later_today: number;
     unassigned: number | null;
+    overdue?: number;
   };
   queue: LeadRow[];
   call_mode: "simulated" | "phone";
   sandbox: boolean;
   generated_at: string;
+  /** The next few days, after today. */
+  upcoming?: LeadRow[];
+  templates?: MessageTemplate[];
 };
+
+export type Badge = { overdue: number; to_call: number };
 
 export type LeadEvent = {
   kind:
@@ -84,7 +94,9 @@ export type LeadEvent = {
     | "call"
     | "result"
     | "note"
-    | "edited";
+    | "edited"
+    | "message"
+    | "scheduled";
   at: string;
   actor_name: string | null;
   stage: string | null;
@@ -103,6 +115,8 @@ export type LeadEvent = {
   recording?: boolean | null;
   duration_seconds: number | null;
   changed?: string[] | null;
+  channel?: string | null;
+  template_label?: string | null;
 };
 
 export type LeadDetail = {
@@ -304,6 +318,28 @@ function json(method: string, body: unknown): RequestInit {
 
 export const commandId = () => crypto.randomUUID();
 
+/** Overdue, then call now, then later today: the due-now list in sections. */
+export function deskSections(queue: LeadRow[]): {
+  key: "overdue" | "now" | "later";
+  title: string;
+  rows: LeadRow[];
+}[] {
+  const overdue = queue.filter((row) => row.overdue);
+  const now = queue.filter(
+    (row) =>
+      !row.overdue && row.why_kind !== "later" && row.why_kind !== "open",
+  );
+  const later = queue.filter(
+    (row) =>
+      !row.overdue && (row.why_kind === "later" || row.why_kind === "open"),
+  );
+  return [
+    { key: "overdue" as const, title: "Overdue", rows: overdue },
+    { key: "now" as const, title: "Call now", rows: now },
+    { key: "later" as const, title: "Later today", rows: later },
+  ].filter((section) => section.rows.length);
+}
+
 function isDesk(value: unknown): value is Desk {
   const desk = value as Desk;
   return (
@@ -440,6 +476,78 @@ export function dispose(
       expected_revision: lead.revision,
       ...body,
     }),
+  );
+}
+
+/** Book the next call without a call (long-press on the list). */
+export function setFollowUp(
+  lead: Pick<LeadRow, "lead_id" | "revision">,
+  at: Date,
+  command = commandId(),
+) {
+  return request<LeadDetail>(
+    `/leads/${encodeURIComponent(lead.lead_id)}/follow-up`,
+    json("POST", {
+      command_id: command,
+      expected_revision: lead.revision,
+      at: at.toISOString(),
+    }),
+  );
+}
+
+export type Channel = "whatsapp" | "sms";
+
+/** Notes on the lead that a ready message went out; only its template is kept. */
+export function logMessage(
+  leadId: string,
+  message: { channel: Channel; template: string | null; edited: boolean },
+  command = commandId(),
+) {
+  return request<LeadDetail>(
+    `/leads/${encodeURIComponent(leadId)}/messages`,
+    json("POST", { command_id: command, ...message }),
+  );
+}
+
+export async function readBadge(signal?: AbortSignal): Promise<Badge | null> {
+  try {
+    const badge = await request<Partial<Badge>>("/badge", { signal });
+    return typeof badge.overdue === "number" &&
+      typeof badge.to_call === "number"
+      ? { overdue: badge.overdue, to_call: badge.to_call }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export type PushConfig = {
+  enabled: boolean;
+  project_id?: string | null;
+  app_id?: string | null;
+  api_key?: string | null;
+  sender_id?: string | null;
+};
+
+export async function readPushConfig(): Promise<PushConfig | null> {
+  try {
+    return await request<PushConfig>("/push");
+  } catch {
+    return null;
+  }
+}
+
+export function registerDevice(token: string, appVersion?: string) {
+  return request<{ registered: boolean }>(
+    "/devices",
+    json("POST", { token, platform: "android", app_version: appVersion }),
+  );
+}
+
+export function forgetDevice(token: string) {
+  return request<{ registered: boolean }>(
+    "/devices/forget",
+    json("POST", { token, platform: "android" }),
   );
 }
 
@@ -745,8 +853,67 @@ export function displayPhone(phone: string): string {
 }
 
 /** A WhatsApp chat with this number (digits only, country code included). */
-export function whatsappHref(phone: string): string {
-  return `https://wa.me/${phone.replace(/[^0-9]/g, "")}`;
+export function whatsappHref(phone: string, text?: string): string {
+  const chat = `https://wa.me/${phone.replace(/[^0-9]/g, "")}`;
+  return text ? `${chat}?text=${encodeURIComponent(text)}` : chat;
+}
+
+/** The phone's own Messages app with the text ready. */
+export function smsHref(phone: string, text: string): string {
+  return `sms:${phone.replace(/[^0-9+]/g, "")}?body=${encodeURIComponent(text)}`;
+}
+
+/** How a seller greets a lead: the first word of a real name, or "there". */
+export function firstName(name: string): string {
+  const word = name.trim().split(/\s+/)[0] ?? "";
+  return /^[A-Za-z\u0900-\u097F][A-Za-z\u0900-\u097F.'-]*$/.test(word)
+    ? word
+    : "there";
+}
+
+/** A ready message with the lead's and the seller's names put in. */
+export function fillTemplate(
+  text: string,
+  values: {
+    leadName: string;
+    myName: string;
+    org: string;
+    interest?: string | null;
+  },
+): string {
+  const mine = firstName(values.myName);
+  const fills: Record<string, string> = {
+    first_name: firstName(values.leadName),
+    my_name: mine === "there" ? values.myName.trim() : mine,
+    org: values.org,
+    about_interest: values.interest?.trim()
+      ? ` about ${values.interest.trim()}`
+      : "",
+  };
+  return text
+    .replace(/\{(\w+)\}/g, (whole, name: string) => fills[name] ?? whole)
+    .replace(/ from \./g, ".")
+    .replace(/, \./g, ".")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/**
+ * A lead to open from the link, as a phone alert opens /leads#lead=<id>
+ * (and #lead=<id>&call=1 for its Call button). Ids only, after "#".
+ */
+export function linkedLead(
+  hash: string,
+): { leadId: string; call: boolean } | null {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const leadId = params.get("lead") ?? "";
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      leadId,
+    )
+  )
+    return null;
+  return { leadId, call: params.get("call") === "1" };
 }
 
 /** Logs a call the seller placed from their own phone, with the time they were away. */
