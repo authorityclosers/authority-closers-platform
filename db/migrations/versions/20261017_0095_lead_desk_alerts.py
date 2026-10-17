@@ -22,18 +22,17 @@ down_revision = "20261016_0094"
 branch_labels = None
 depends_on = None
 
-KINDS_0093 = "'captured', 'repeat', 'assigned', 'reassigned', 'call', 'result', 'note', 'edited'"
-KINDS_0095 = KINDS_0093 + ", 'message', 'scheduled'"
-
-
-def _event_kinds(kinds: str) -> None:
-    name = op.f("ck_lead_desk_events_lead_desk_event_kind")
-    op.drop_constraint(name, "lead_desk_events", type_="check")
-    op.create_check_constraint(name, "lead_desk_events", f"kind IN ({kinds})")
-
 
 def upgrade() -> None:
-    _event_kinds(KINDS_0095)
+    op.drop_constraint(
+        op.f("ck_lead_desk_events_lead_desk_event_kind"), "lead_desk_events", type_="check"
+    )
+    op.create_check_constraint(
+        op.f("ck_lead_desk_events_lead_desk_event_kind"),
+        "lead_desk_events",
+        "kind IN ('captured', 'repeat', 'assigned', 'reassigned', 'call', 'result', "
+        "'note', 'edited', 'message', 'scheduled')",
+    )
     op.add_column(
         "lead_desk_leads",
         sa.Column("alerted_assigned_at", sa.DateTime(timezone=True), nullable=True),
@@ -80,4 +79,18 @@ def downgrade() -> None:
     op.drop_table("lead_desk_devices")
     op.drop_column("lead_desk_leads", "alerted_due_at")
     op.drop_column("lead_desk_leads", "alerted_assigned_at")
-    _event_kinds(KINDS_0093)
+    op.drop_constraint(
+        op.f("ck_lead_desk_events_lead_desk_event_kind"), "lead_desk_events", type_="check"
+    )
+    op.create_check_constraint(
+        op.f("ck_lead_desk_events_lead_desk_event_kind"),
+        "lead_desk_events",
+        # Same list as 0093, written the way PostgreSQL deparses it after pg_restore: a fresh
+        # `kind IN (...)` is deparsed differently from the restored staging baseline.
+        "(kind)::text = ANY (ARRAY["
+        "('captured'::character varying)::text, ('repeat'::character varying)::text, "
+        "('assigned'::character varying)::text, ('reassigned'::character varying)::text, "
+        "('call'::character varying)::text, ('result'::character varying)::text, "
+        "('note'::character varying)::text, ('edited'::character varying)::text"
+        "])",
+    )
