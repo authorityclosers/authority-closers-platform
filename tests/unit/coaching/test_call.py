@@ -187,3 +187,9 @@ def test_derived_cache_is_scoped_bounded_and_invalidated_by_withholding(monkeypa
     clock[0] += 61
     assert cache.read(data, **CONTEXT) is not withheld
     assert len(cache._entries) == 1
+
+
+def test_a_call_whose_label_is_a_transcript_id_is_named_by_its_date() -> None:
+    data = envelope()
+    data["source_label"] = f"Scribe transcript revision {'b' * 64} · source-bound"
+    assert build_call_coaching(data, **CONTEXT).call_label == "Sales call · 10 Oct 2026"

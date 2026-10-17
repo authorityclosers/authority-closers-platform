@@ -586,7 +586,8 @@ function PersonalState({ organisations }: { organisations: Workspace[] }) {
       {organisations.length > 0 ? (
         <p className={styles.stateHint}>
           To open {organisations.map((item) => item.name).join(", ")}, switch
-          workspace from the menu at the top of the sidebar.
+          workspace from the workspace menu: at the top of the sidebar, or under
+          More on a phone.
         </p>
       ) : null}
       {/* One action, and only one the server can keep. */}

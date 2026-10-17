@@ -73,7 +73,7 @@
   border-radius: 50%;
   background: var(--lx-surface);
   color: var(--lx-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -225,6 +225,8 @@
 .seg small {
   margin-left: 4px;
   color: var(--lx-teal);
+  /* <small> would shrink it to 10.8 px; 12 px is the floor (B19). */
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -271,7 +273,7 @@
   width: fit-content;
   padding: 4px 10px;
   border-radius: 999px;
-  font: 700 11px/1.2 var(--lx-font-ui);
+  font: 700 12px/1.2 var(--lx-font-ui);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   background: var(--lx-teal-soft);
@@ -693,7 +695,7 @@
 
 .payRow small {
   color: var(--lx-muted);
-  font: 500 11.5px/1.3 var(--lx-font-ui);
+  font: 500 12px/1.3 var(--lx-font-ui);
 }
 
 .payRow b {
@@ -793,7 +795,7 @@
 
 .ring span {
   color: var(--lx-muted);
-  font: 500 11.5px/1.4 var(--lx-font-ui);
+  font: 500 12px/1.4 var(--lx-font-ui);
 }
 
 .ok {
@@ -1004,7 +1006,7 @@
 }
 
 .segLabel {
-  font: 600 11.5px/1 var(--lx-font-ui);
+  font: 600 12px/1 var(--lx-font-ui);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--lx-muted);
@@ -1199,7 +1201,7 @@
 }
 
 .topUpPriceBadge small {
-  font: 500 11px/1 var(--lx-font-ui);
+  font: 500 12px/1 var(--lx-font-ui);
   color: var(--lx-muted);
 }
 
@@ -1240,7 +1242,7 @@
   border-radius: var(--lx-radius-pill, 999px);
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 600 11.5px/1 var(--lx-font-ui);
+  font: 600 12px/1 var(--lx-font-ui);
 }
 
 .paymentMethodsBlock {
@@ -1272,7 +1274,7 @@
   border-radius: 6px;
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 700 11.5px/1.2 var(--lx-font-ui);
+  font: 700 12px/1.2 var(--lx-font-ui);
 }
 
 .razorpayTag {
@@ -1300,7 +1302,7 @@
 .legalLinks {
   margin: 4px 0 0;
   color: var(--lx-muted);
-  font: 500 11.5px/1.4 var(--lx-font-ui);
+  font: 500 12px/1.4 var(--lx-font-ui);
 }
 
 .legalLinks a {
@@ -1580,7 +1582,11 @@
   right: 12px;
   padding: 3px 8px;
   border-radius: var(--lx-radius-pill, 999px);
-  font: 700 11px/1 var(--lx-font-ui);
+  font: 700 12px/1 var(--lx-font-ui);
+  /* At 12 px, capitals with wide tracking ran into the plan name on a
+     360 px phone; sentence case keeps the badge clear of it (B19). */
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .popularBadge {
@@ -1655,7 +1661,7 @@
 }
 
 .ladderGuarantee {
-  font: 500 11.5px/1.3 var(--lx-font-ui);
+  font: 500 12px/1.3 var(--lx-font-ui);
   color: var(--lx-muted);
 }
 

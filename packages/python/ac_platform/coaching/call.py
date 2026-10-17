@@ -24,6 +24,7 @@ from ac_platform.coaching.report_adapter import (
     _moments,
     _refs,
     _text,
+    call_name,
     from_report,
     quoted_strength,
 )
@@ -195,7 +196,7 @@ def build_call_coaching(
         source_sha256=envelope["source_sha256"],
         transcript_revision=envelope["transcript_revision"],
         report_revision=content_hash(projection),
-        call_label=_text(envelope.get("source_label"), 256) or "Sales call",
+        call_label=call_name(envelope, created_at),
     )
     if not label and WITHHELD_MARKER in str(report):
         return CallCoachingView(

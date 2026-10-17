@@ -185,3 +185,29 @@
     gap: 10px 16px;
   }
 }
+
+/* Touch screens: the home link, contact links and footer links are full 44 px
+   targets (B20, 17 Oct phone sweep). Inline links inside sentences stay text. */
+@media (pointer: coarse), (max-width: 520px) {
+  .brand,
+  .details a,
+  .footerLinks a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .brand {
+    margin-left: -10px;
+    padding: 0 10px;
+  }
+
+  .footerLinks {
+    row-gap: 0;
+  }
+
+  .footerLinks a {
+    min-width: 44px;
+    justify-content: center;
+  }
+}

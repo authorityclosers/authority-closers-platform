@@ -669,6 +669,50 @@
   .row {
     flex-wrap: wrap;
   }
+
+  /* The email wraps instead of ending in "…" (B21). */
+  .navWho p {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  /* B21: the Account page is the list itself, not a card holding cards. No
+     frame and no fixed height, so no empty white area under the list. */
+  .settings[data-variant="page"] {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .settings[data-variant="page"] .nav,
+  .settings[data-variant="page"] .content {
+    overflow: visible;
+  }
+
+  .settings[data-variant="page"] .nav {
+    padding: 0;
+    background: transparent;
+  }
+
+  .settings[data-variant="page"] .navHead {
+    padding: 0 2px 4px;
+    border-bottom: 0;
+  }
+
+  .settings[data-variant="page"] .tab {
+    border: 1px solid var(--lx-line);
+    background: var(--lx-surface);
+  }
+
+  .settings[data-variant="page"] .pane {
+    border: 1px solid var(--lx-line);
+    border-radius: var(--lx-radius-lg);
+    background: var(--lx-surface);
+  }
 }
 
 @keyframes slide {
