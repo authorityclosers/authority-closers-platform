@@ -134,3 +134,20 @@ Each environment has its own Meta app and its own values; never copy a
 production value into staging or dev. Changing `AC_LEAD_DESK_TOKEN_KEY` means
 every connected Page must connect again. `POST /v1/lead-desk/meta/webhook`
 accepts only requests signed with that app's App Secret (`X-Hub-Signature-256`).
+
+## Sales Xray CRM push alerts (optional)
+
+The API reads these from the same Infisical `/application` path to send Lead Desk
+alerts to the Sales Xray Android app through Firebase Cloud Messaging. Alerts stay
+off until all four exist; no release requires them. Compose forwards them to the
+API only.
+
+| Secret                   | Constraint                                                          |
+| ------------------------ | ------------------------------------------------------------------- |
+| `AC_FCM_SERVICE_ACCOUNT` | that environment's Firebase service-account key (JSON), never shown |
+| `AC_FCM_APP_ID`          | the Android app's Firebase app ID                                   |
+| `AC_FCM_API_KEY`         | the Android app's Firebase client API key                           |
+| `AC_FCM_SENDER_ID`       | the Firebase project's sender ID                                    |
+
+Each environment keeps its own values; never copy a production value into staging
+or dev.

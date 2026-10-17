@@ -10,6 +10,10 @@ LEAD_CONNECTOR_SETTINGS = {
     "AC_META_LOGIN_CONFIG_ID": "fixture-meta-login-config",
     "AC_META_WEBHOOK_VERIFY_TOKEN": "fixture-meta-verify-token",
     "AC_LEAD_DESK_TOKEN_KEY": "fixture-lead-desk-token-key",
+    "AC_FCM_SERVICE_ACCOUNT": "fixture-fcm-service-account",
+    "AC_FCM_APP_ID": "fixture-fcm-app-id",
+    "AC_FCM_API_KEY": "fixture-fcm-api-key",
+    "AC_FCM_SENDER_ID": "fixture-fcm-sender-id",
 }
 
 

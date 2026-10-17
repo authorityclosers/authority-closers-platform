@@ -147,6 +147,10 @@ services:
       AC_META_LOGIN_CONFIG_ID: ${AC_META_LOGIN_CONFIG_ID:-}
       AC_META_WEBHOOK_VERIFY_TOKEN: ${AC_META_WEBHOOK_VERIFY_TOKEN:-}
       AC_LEAD_DESK_TOKEN_KEY: ${AC_LEAD_DESK_TOKEN_KEY:-}
+      AC_FCM_SERVICE_ACCOUNT: ${AC_FCM_SERVICE_ACCOUNT:-}
+      AC_FCM_APP_ID: ${AC_FCM_APP_ID:-}
+      AC_FCM_API_KEY: ${AC_FCM_API_KEY:-}
+      AC_FCM_SENDER_ID: ${AC_FCM_SENDER_ID:-}
     depends_on:
       postgres:
         condition: service_healthy
