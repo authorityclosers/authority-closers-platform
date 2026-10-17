@@ -255,17 +255,6 @@ class Path(Model):
     explanation: str
 
 
-class LearnerFeedback(Model):
-    """A command concept; persistence is required before reporting it as saved."""
-
-    agreement: Literal["agree", "not_completely", "add_context"]
-    context: str = Field(default="", max_length=2000)
-    reflection_answer: str = Field(default="", max_length=2000)
-    focus_skill_id: str
-    evidence_submission_ids: tuple[UUID, ...] = Field(min_length=1, max_length=4)
-    resolution: Literal["pending", "maintain", "modify", "withdraw"] = "pending"
-
-
 class Slide(Model):
     segment_id: str = Field(min_length=1, max_length=128)
     title: str = Field(min_length=1, max_length=256)

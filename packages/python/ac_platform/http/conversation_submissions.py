@@ -789,7 +789,6 @@ def install_submission_http(
             raise fail(error.status, str(error)) from None
         finally:
             capacity.release()
-        raise fail(500, "The upload did not finish. Try again.")
 
     @router.get("/submissions/{submission_id}")
     async def progress(

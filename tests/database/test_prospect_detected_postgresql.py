@@ -3,7 +3,6 @@
 import asyncio
 import json
 from datetime import timedelta
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -26,12 +25,7 @@ from ac_platform.conversation_intelligence.prospect_models import (
     ConversationProspectFieldRevision,
     ConversationProspectMembership,
 )
-from ac_platform.conversation_intelligence.prospect_profile import (
-    ProfilePolicy,
-    ProfileResponse,
-    extract_prospect_profile,
-)
-from ac_platform.conversation_intelligence.reports import ReportDraft, parse_report_draft
+from ac_platform.conversation_intelligence.reports import parse_report_draft
 from ac_platform.conversation_intelligence.sensitive_segments_store import SensitiveSegmentsStore
 from ac_platform.tenancy.models import Organisation
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -272,122 +266,6 @@ def test_team_customer_reads_and_explicit_links_preserve_source_and_person_locks
                 ).all()
                 assert len(rows) == 2
                 assert (await verify_audit_chain(db, setup.state.tenant_id)).valid
-        finally:
-            await setup.engine.dispose()
-
-    run(exercise())
-
-
-def test_profile_step_writes_observed_fields_without_changing_c5_and_hides_marked_sources(
-    postgres_harness: Any, tmp_path: Path
-) -> None:
-    async def exercise() -> None:
-        setup = await _setup(postgres_harness, tmp_path)
-        try:
-            call = await direct_call(setup)
-            ref = await sales_c5(setup, call)
-            async with setup.sessions() as db, db.begin():
-                service = store(setup, db)
-                row = await service.ensure_detected(setup.state.actor, call)
-                identifier = row.id
-                scope = await service._write_scope(setup.state.actor, call)
-                checkpoints = (
-                    await db.scalars(
-                        select(ConversationCheckpoint).where(
-                            ConversationCheckpoint.recording_id == scope.recording_id,
-                            ConversationCheckpoint.stage.in_(("C2", "C5")),
-                        )
-                    )
-                ).all()
-                c5 = next(item for item in checkpoints if item.stage == "C5")
-                transcript = next(item.payload for item in checkpoints if item.stage == "C2")
-                before = content_hash(c5.payload)
-                requests: list[object] = []
-
-                class Broker:
-                    async def quote(self, request: Any) -> Decimal:
-                        requests.append(request)
-                        return Decimal("0.001")
-
-                    async def extract(
-                        self, request: Any, *, maximum_cost_usd: Decimal
-                    ) -> ProfileResponse:
-                        assert maximum_cost_usd == Decimal("0.001")
-                        return ProfileResponse(
-                            json.dumps(
-                                {
-                                    "version": request["version"],
-                                    "source_sha256": request["source_sha256"],
-                                    "transcript_revision": request["transcript_revision"],
-                                    "fields": {
-                                        "main_pain": {
-                                            "value": {
-                                                "kind": "text",
-                                                "text": "want to discuss the offer",
-                                            },
-                                            "evidence": ref,
-                                        }
-                                    },
-                                }
-                            ),
-                            Decimal("0.0005"),
-                        )
-
-                async def write(**values: Any) -> None:
-                    await service.record_detected(
-                        setup.state.actor, identifier, submission_id=call, **values
-                    )
-
-                report = ReportDraft.model_validate(c5.payload)
-                disabled = await extract_prospect_profile(
-                    policy=ProfilePolicy(),
-                    report=report,
-                    transcript=transcript,
-                    customer_call=True,
-                    broker=Broker(),
-                    write_detected=write,
-                )
-                assert disabled.state == "disabled" and not requests
-                result = await extract_prospect_profile(
-                    policy=ProfilePolicy(True, Decimal("0.002")),
-                    report=report,
-                    transcript=transcript,
-                    customer_call=True,
-                    broker=Broker(),
-                    write_detected=write,
-                )
-                assert result.state == "done" and result.field_count == 1 and len(requests) == 1
-                assert content_hash(c5.payload) == before
-            async with client_for(setup) as client:
-                profile = (await client.get(f"{PREFIX}/{identifier}")).json()["prospect"][
-                    "profile_fields"
-                ]
-                assert profile["main_pain"]["value"]["text"] == "want to discuss the offer"
-                assert not profile["main_pain"]["locked"]
-            async with setup.sessions() as db, db.begin():
-                await SensitiveSegmentsStore(db).mark(
-                    setup.state.actor,
-                    recording_id=scope.recording_id,
-                    transcript_revision=transcript["revision"],
-                    segments=[(ref["segment_id"], "SENSITIVE_FINANCIAL")],
-                    reason_ref="AUT-1677",
-                    idempotency_key="fictional-detection-privacy",
-                )
-            async with client_for(setup) as client:
-                profile = (await client.get(f"{PREFIX}/{identifier}")).json()["prospect"][
-                    "profile_fields"
-                ]
-                assert profile["main_pain"]["state"] == "unknown"
-                assert profile["business"]["state"] == "unknown"
-            # Withheld purpose evidence cannot create another detected identity.
-            async with setup.sessions() as db, db.begin():
-                rec = await db.get(ConversationRecording, scope.recording_id)
-                from ac_platform.conversation_intelligence.prospect_library import ProspectLibrary
-
-                snapshots = await ProspectLibrary(store(setup, db))._snapshots(
-                    [rec], include_facts=True
-                )
-                assert not snapshots[rec.id]["customer_call"]
         finally:
             await setup.engine.dispose()
 

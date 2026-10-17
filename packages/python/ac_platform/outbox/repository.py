@@ -968,16 +968,6 @@ class OutboxRepository:
             return existing
         return row
 
-    async def enqueue_event(
-        self,
-        event: EventEnvelope,
-        *,
-        dedupe_key: str | None = None,
-    ) -> OutboxEvent:
-        """Explicitly named alias for callers composing a transactional command."""
-
-        return await self.enqueue(event, dedupe_key=dedupe_key)
-
     async def claim_pending(
         self,
         *,
@@ -1994,27 +1984,6 @@ class JobRepository:
         await self._session.flush()
         return row
 
-    async def record_ambiguous_evidence(
-        self,
-        job: Job | UUID,
-        *,
-        lease_token: UUID,
-        recovery_generation: int,
-        provider_idempotency_key: str,
-        error: str | BaseException,
-        now: datetime | None = None,
-    ) -> Job:
-        """Compatibility alias for the strictly fenced ambiguity operation."""
-
-        return await self.record_delivery_ambiguity(
-            job,
-            lease_token=lease_token,
-            recovery_generation=recovery_generation,
-            provider_idempotency_key=provider_idempotency_key,
-            error=error,
-            now=now,
-        )
-
     async def complete(
         self,
         job: Job | UUID,
@@ -2044,17 +2013,6 @@ class JobRepository:
         row.updated_at = current_time
         await self._session.flush()
         return row
-
-    async def succeed(
-        self,
-        job: Job | UUID,
-        lease_token: UUID,
-        *,
-        now: datetime | None = None,
-    ) -> Job:
-        """Alias for :meth:`complete`."""
-
-        return await self.complete(job, lease_token, now=now)
 
     async def fail(
         self,
@@ -2239,16 +2197,6 @@ class JobRepository:
         await self._session.flush()
         return len(rows)
 
-    async def mark_restored(
-        self,
-        *,
-        reason: str | None = None,
-        now: datetime | None = None,
-    ) -> int:
-        """Alias emphasizing that restore handling is a durable state change."""
-
-        return await self.hold_for_restore(reason=reason, now=now)
-
     async def reconcile_held(
         self,
         job_ids: Iterable[UUID],
@@ -2319,16 +2267,6 @@ class JobRepository:
             )
         await self._session.flush()
         return ordered
-
-    async def restore_and_hold_external_side_effects(
-        self,
-        *,
-        reason: str | None = None,
-        now: datetime | None = None,
-    ) -> int:
-        """Long-form alias used by recovery runbooks."""
-
-        return await self.hold_for_restore(reason=reason, now=now)
 
     async def _require_lease(
         self,

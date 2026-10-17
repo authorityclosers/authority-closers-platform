@@ -44,7 +44,7 @@ The `/coaching?focus=<skill>` report destination accepts only the eight supporte
 
 The lesson source is the approved owner specification’s impact framework and own-call comparison/practice principles. `dipak_report_v1.json` is an unapproved candidate and is not represented as an approved knowledge base. These lessons do not claim Dipak media provenance. Catalogue contracts admit only revision-bound reviewed tags, confirmed Dipak provenance and valid durations; unreviewed proposals are unusable. The metadata review also binds the exact item and full proposed tags by hash; changing tags, rationale, provenance, duration or title requires a new attributable review. Approval boundaries revalidate copied/constructed models and reject a coerced creator flag.
 
-`python -m ac_platform.coaching.index_import <export.db> <new-private-package.json>` reads an owner-exported SQLite index in read-only mode. It restricts metadata triage to the requested categories and exported aliases, excludes documents/directories, and emits a private, noncanonical review package without overwriting an earlier package. The metadata snapshot hash is not a content revision. Creator, duration, skill and gap tags stay unknown; a folder named Dipak cannot confirm the creator. No content is fetched and no provider is called. The first private export yielded five media candidates, none eligible for recommendation. AI content tagging and a persisted review queue are not active.
+The former `index_import` metadata-triage CLI was removed (cleanup stage 1, unused by any service or script); its history is in git.
 
 ## Media and Academy foundation
 
@@ -134,28 +134,6 @@ retry. Browser/server processes are closed. Raw placeholder drafts subsequently
 arrived; no verified playable export is present. These proofs do not certify
 Dipak content, source timing or deployment.
 
-Strike F's actual `coaching-media/1` drafts arrived during verification.
-`dataset_drafts.py` imports exact topic IDs from its index, pins export/script
-hashes, verifies declared source-document hashes under the supplied-script
-root and preserves raw skill/gap labels without inferring canonical equivalence.
-The resulting immutable private snapshots are review proposals, explicitly
-noncanonical, with no playback or approval authority. Supplied script, authored
-draft and title-only origins stay distinct. CLI is dry-run by default; an
-explicit output directory saves append-only snapshots with mode 0600, never
-overwriting a prior revision or writing input data. No script text or media
-bytes are copied into the snapshot.
-
-The real read imported all 115 records with zero rejected: 36 upstream
-`provided_docx`, 4 authored drafts and 75 title-only, 245 estimated segments,
-zero playable media. Raw tags `skill-1`…`skill-8` / `skill_execution` remain
-proposals, not assumed equivalent to the canonical skill/gap taxonomy. Human
-review and verified narration are still missing. The learner continues using
-the structured text lesson. The mixed-library read/cache bound is 150, covering
-all 115 topics and the index; draft exclusions are cached by current file
-revision so an unreviewed library cannot repeatedly add parsing work.
-
-Run `uv run python -m ac_platform.coaching.dataset_drafts` for counts-only
-verification. Add `--output-dir <private-strike-folder>` to save an immutable
-review-proposal snapshot. This is not a deployed import, canonical review queue
-or provider activation. Source playback now also reuses the canonical current
+The former `dataset_drafts.py` Strike F draft importer CLI was removed (cleanup stage 1, unused
+by any service or script); its history is in git. Source playback now also reuses the canonical current
 person/session/tenant admission and fails for suspended workspaces.

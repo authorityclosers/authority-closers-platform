@@ -191,19 +191,6 @@ async def account_usage(
     }
 
 
-async def existing_account_seconds(
-    database: AsyncSession, *, tenant_id: UUID, person_id: UUID
-) -> int:
-    """Count reserved/uncertain/settled use; only confirmed releases count zero."""
-    committed_seconds, _ = await existing_account_usage(
-        database,
-        tenant_id=tenant_id,
-        person_id=person_id,
-        operations_tenant_id=None,
-    )
-    return committed_seconds
-
-
 async def existing_account_usage(
     database: AsyncSession,
     *,

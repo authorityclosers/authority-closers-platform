@@ -148,17 +148,6 @@ class C5RepairIntent(Contract):
         return self
 
 
-class ReviewIntent(Contract):
-    run_revision: Revision
-    transcript_revision: Revision
-    measurement_revision: Revision
-    profile_revision: Revision
-    lane: Literal["contextual", "measurement"]
-    target: str = Field(min_length=1, max_length=128)
-    kind: Literal["agree", "partly", "incorrect", "insufficient_context"]
-    note: str = Field(min_length=1, max_length=4000)
-
-
 class Capabilities(Contract):
     product: Literal["Sales Xray"] = "Sales Xray"
     intake: Literal["unavailable", "enabled"] = "unavailable"
