@@ -70,7 +70,6 @@ from ac_platform.conversation_intelligence.processing_plan import (
     parse_report_language_preference,
 )
 from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
-from ac_platform.conversation_intelligence.read_memo import memoized_reads
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
 from ac_platform.conversation_intelligence.report_structure_service import enrich_report_structure
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
@@ -469,16 +468,12 @@ def install_submission_http(
         """Retry progress and its private label together after a PostgreSQL deadlock."""
 
         async def read(current: _Owner) -> tuple[dict[str, Any], SubmissionLabel]:
-            with memoized_reads(current.ownership.database):
-                progress = await AcquisitionReports(current.ownership).progress(
-                    submission_id, **current.arguments, allow_organisation_read=True
-                )
-                label = await read_submission_label(
-                    current.ownership,
-                    submission_id,
-                    **current.arguments,
-                    allow_organisation_read=True,
-                )
+            progress = await AcquisitionReports(current.ownership).progress(
+                submission_id, **current.arguments, allow_organisation_read=True
+            )
+            label = await read_submission_label(
+                current.ownership, submission_id, **current.arguments, allow_organisation_read=True
+            )
             return progress, label
 
         try:
@@ -813,22 +808,19 @@ def install_submission_http(
         submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
-        # One read-only transaction: ownership, the recording fence and report
-        # verification run once and are reused by the enrichment and the label.
-        with memoized_reads(owner.ownership.database):
-            result = await AcquisitionReports(owner.ownership).report(
-                submission_id, **owner.arguments, allow_organisation_read=True
-            )
-            result = await enrich_report_structure(
-                result,
-                owner.ownership,
-                submission_id,
-                actor=owner.actor,
-                shared_identity_locks=owner.shared_identity_locks,
-            )
-            label = await read_submission_label(
-                owner.ownership, submission_id, **owner.arguments, allow_organisation_read=True
-            )
+        result = await AcquisitionReports(owner.ownership).report(
+            submission_id, **owner.arguments, allow_organisation_read=True
+        )
+        result = await enrich_report_structure(
+            result,
+            owner.ownership,
+            submission_id,
+            actor=owner.actor,
+            shared_identity_locks=owner.shared_identity_locks,
+        )
+        label = await read_submission_label(
+            owner.ownership, submission_id, **owner.arguments, allow_organisation_read=True
+        )
         return {
             **result,
             "display_name": label.display_name,
@@ -912,14 +904,13 @@ def install_submission_http(
     ) -> dict[str, Any]:
         guard(request, response)
         try:
-            with memoized_reads(owner.ownership.database):
-                result = await read_speaker_map(
-                    owner.ownership,
-                    submission_id,
-                    actor=owner.actor,
-                    shared_identity_locks=owner.shared_identity_locks,
-                    allow_organisation_read=True,
-                )
+            result = await read_speaker_map(
+                owner.ownership,
+                submission_id,
+                actor=owner.actor,
+                shared_identity_locks=owner.shared_identity_locks,
+                allow_organisation_read=True,
+            )
         except ConversationError as error:
             raise speaker_map_failure(error) from None
         response.headers["ETag"] = format_revision_etag(result["user_revision"])
@@ -1002,10 +993,9 @@ def install_submission_http(
         submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
-        with memoized_reads(owner.ownership.database):
-            return await AcquisitionReports(owner.ownership).transcript(
-                submission_id, **owner.arguments, allow_organisation_read=True
-            )
+        return await AcquisitionReports(owner.ownership).transcript(
+            submission_id, **owner.arguments, allow_organisation_read=True
+        )
 
     @router.get("/submissions/{submission_id}/waveform")
     async def waveform(

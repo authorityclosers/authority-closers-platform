@@ -137,19 +137,11 @@ class AcquisitionSessions:
             # Every claim/reservation takes the same short transaction lock as
             # the billing ledger's capacity-lowering writes.
             await take_admission_lock(self.database, self.tenant_id)
-        from ac_platform.conversation_intelligence.read_memo import active_memo
-
-        memo = None if mutation else active_memo(self.database)
-        if memo is not None and ("tenant", self.tenant_id) in memo.values:
-            # This transaction already share-locked the active tenant row.
-            return utc(self.clock())
         tenant = await self.database.scalar(
             select(Tenant).where(Tenant.id == self.tenant_id).with_for_update(read=True)
         )
         if tenant is None or tenant.status != "active":
             raise ConversationDenied("This upload workspace is unavailable.")
-        if memo is not None:
-            memo.values[("tenant", self.tenant_id)] = True
         return utc(self.clock())
 
     @staticmethod

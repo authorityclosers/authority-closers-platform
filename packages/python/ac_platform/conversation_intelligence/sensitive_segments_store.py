@@ -198,19 +198,7 @@ async def withheld_plan_for(
     every C2 revision of the recording (the raw checkpoints surface).
     """
 
-    from ac_platform.conversation_intelligence.read_memo import fenced_memo
-
-    # C2 checkpoints are append-only content erased only under the recording's
-    # update lock; a request that holds its share lock reads them once. Marks
-    # are always read fresh.
-    memo = fenced_memo(database, recording_id)
-    key = ("c2_segment_texts", recording_id)
-    if memo is not None and key in memo.values:
-        texts = memo.values[key]
-    else:
-        texts = await _c2_segment_texts(database, recording_id)
-        if memo is not None:
-            memo.values[key] = texts
+    texts = await _c2_segment_texts(database, recording_id)
     served = frozenset(texts) if served_revisions is None else frozenset(served_revisions)
     marks = await _marks_for_read(database, recording_id, served)
     if not marks:

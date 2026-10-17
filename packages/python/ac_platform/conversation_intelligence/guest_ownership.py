@@ -98,13 +98,6 @@ class GuestOwnership:
             or self.tenant_id == self.sessions.operations_tenant_id
         ):
             return False
-        from ac_platform.conversation_intelligence.read_memo import active_memo
-
-        memo = active_memo(self.database)
-        key = ("organisation_reader", self.tenant_id, actor.person_id)
-        if memo is not None and key in memo.values:
-            # This transaction share-locked the same membership row.
-            return bool(memo.values[key])
         member = await self.database.scalar(
             select(Membership)
             .join(Organisation, Organisation.tenant_id == Membership.tenant_id)
@@ -115,15 +108,12 @@ class GuestOwnership:
             .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
-        reader = (
+        return (
             member is not None
             and member.status == "active"
             and member.ended_at is None
             and member.role in {"owner", "admin"}
         )
-        if memo is not None and member is not None:
-            memo.values[key] = reader
-        return reader
 
     async def provision(
         self,
@@ -558,44 +548,6 @@ class GuestOwnership:
         allow_organisation_read: bool = False,
         allow_organisation_start: bool = False,
     ) -> SubmissionScope:
-        from ac_platform.conversation_intelligence.read_memo import (
-            active_memo,
-            fenced_memo,
-            owner_scope_key,
-        )
-
-        # Reuse only a successful account check of this exact request, and only
-        # while its recording is share-locked; import grants keep their own path.
-        memo = (
-            active_memo(self.database)
-            if actor is not None and type(self) is GuestOwnership
-            else None
-        )
-        key = owner_scope_key(
-            self,
-            submission_id,
-            # An account check never reads the guest token (see _owned_usage).
-            token=None,
-            actor=actor,
-            shared_identity_locks=shared_identity_locks,
-            allow_organisation_read=allow_organisation_read,
-            allow_organisation_start=allow_organisation_start,
-        )
-        cached = None if memo is None else memo.values.get(key)
-        if (
-            cached is not None
-            and actor is not None
-            and fenced_memo(self.database, cached[0].recording_id)
-        ):
-            scope, retention_until = cached
-            # Re-check what time alone can change: session expiry (admission) and
-            # the recording's retention deadline. Locked rows cannot change.
-            await ConversationApplication(self.database, clock=self.clock).admit(
-                actor, shared_identity_locks=shared_identity_locks
-            )
-            if utc(retention_until) > await self.sessions._admit():
-                cached_scope: SubmissionScope = scope
-                return cached_scope
         usage, now, claimed = await self._owned_usage(
             submission_id,
             token=token,
@@ -637,7 +589,7 @@ class GuestOwnership:
             raise ConversationNotFound("This upload is unavailable.")
         # Reading owned, retained results does not renew an expired execution
         # lease or permit another paid request. No full account token is issued.
-        result = SubmissionScope(
+        return SubmissionScope(
             link.tenant_id,
             link.submission_id,
             link.recording_id,
@@ -647,37 +599,6 @@ class GuestOwnership:
             link.source_sha256,
             claimed,
         )
-        if (
-            memo is not None
-            and actor is not None
-            and fenced_memo(self.database, link.recording_id) is not None
-        ):
-            # Only a check made while this transaction holds the recording lock is
-            # reused. The call's own account also passes the stricter checks.
-            memo.values[key] = (result, permission.retention_until)
-            # _owned_usage already loaded any claim; this get uses the identity map.
-            own_call = usage.person_id == actor.person_id or (
-                usage.visitor_id is not None
-                and getattr(
-                    await self.database.get(ConversationVisitorClaim, usage.visitor_id),
-                    "person_id",
-                    None,
-                )
-                == actor.person_id
-            )
-            if own_call:
-                for organisation_read in (False, True):
-                    memo.values[
-                        owner_scope_key(
-                            self,
-                            submission_id,
-                            token=None,
-                            actor=actor,
-                            shared_identity_locks=shared_identity_locks,
-                            allow_organisation_read=organisation_read,
-                        )
-                    ] = (result, permission.retention_until)
-        return result
 
     async def request_deletion(
         self,

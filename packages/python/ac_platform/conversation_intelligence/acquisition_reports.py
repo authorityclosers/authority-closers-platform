@@ -8,7 +8,6 @@ binding. Reading retained evidence cannot renew processing or dispatch a provide
 from __future__ import annotations
 
 import re
-from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -43,7 +42,6 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
-from ac_platform.conversation_intelligence.read_memo import fenced_memo, mark_recording_locked
 from ac_platform.conversation_intelligence.report_access import (
     ReportAccess,
     ReportSourceBinding,
@@ -195,32 +193,6 @@ def _progress_failure_code(
     return task_failure_code if task_failure_code is not None else failure_code
 
 
-async def _fenced(
-    database: Any,
-    recording: ConversationRecording,
-    key: Callable[[], tuple[Any, ...]],
-    load: Callable[[], Awaitable[Any]],
-    *,
-    keep_none: bool = True,
-) -> Any:
-    """Load once per request while this transaction holds the recording lock.
-
-    Writers of drafts, retained versions, runs and checkpoints lock the recording
-    (or are append-only), so a repeated read inside the fence returns the same row.
-    Without an opted-in request this is exactly ``await load()``.
-    """
-    memo = fenced_memo(database, recording.id)
-    if memo is None:
-        return await load()
-    identity = key()
-    if identity in memo.values:
-        return memo.values[identity]
-    value = await load()
-    if keep_none or value is not None:
-        memo.values[identity] = value
-    return value
-
-
 class AcquisitionReports:
     def __init__(self, ownership: GuestOwnership) -> None:
         self.ownership, self.database = ownership, ownership.database
@@ -246,18 +218,6 @@ class AcquisitionReports:
             shared_identity_locks=shared_identity_locks,
             allow_organisation_read=allow_organisation_read,
         )
-        memo = fenced_memo(self.database, scope.recording_id)
-        cached = None if memo is None else memo.values.get(("recording", scope.recording_id))
-        if (
-            cached is not None
-            and cached.tenant_id == scope.tenant_id
-            and cached.person_id == scope.processing_person_id
-            and cached.source_sha256 == scope.source_sha256
-            and cached.state in ("awaiting_upload", "ready")
-        ):
-            # This transaction already holds the recording's share lock (which
-            # serializes erasure/revocation) and re-checked ownership under it.
-            return scope, cached
         recording = await self.database.scalar(
             select(ConversationRecording)
             .where(
@@ -272,7 +232,6 @@ class AcquisitionReports:
         )
         if recording is None:
             raise ConversationNotFound("This upload is unavailable.")
-        mark_recording_locked(self.database, recording.id)
         # The recording lock also serializes erasure/permission revocation.
         await self.ownership.require_submission_owner(
             submission_id,
@@ -281,61 +240,20 @@ class AcquisitionReports:
             shared_identity_locks=shared_identity_locks,
             allow_organisation_read=allow_organisation_read,
         )
-        memo = fenced_memo(self.database, recording.id)
-        if memo is not None:
-            memo.values[("recording", recording.id)] = recording
         return scope, recording
 
     async def _draft(self, recording: ConversationRecording) -> ConversationReportDraft | None:
-        async def load() -> ConversationReportDraft | None:
-            result: ConversationReportDraft | None = await self.database.scalar(
-                select(ConversationReportDraft)
-                .where(
-                    ConversationReportDraft.recording_id == recording.id,
-                    ConversationReportDraft.tenant_id == recording.tenant_id,
-                    ConversationReportDraft.person_id == recording.person_id,
-                    ConversationReportDraft.erased_at.is_(None),
-                )
-                .order_by(
-                    ConversationReportDraft.created_at.desc(), ConversationReportDraft.id.desc()
-                )
-                .limit(1)
+        result: ConversationReportDraft | None = await self.database.scalar(
+            select(ConversationReportDraft)
+            .where(
+                ConversationReportDraft.recording_id == recording.id,
+                ConversationReportDraft.tenant_id == recording.tenant_id,
+                ConversationReportDraft.person_id == recording.person_id,
+                ConversationReportDraft.erased_at.is_(None),
             )
-            return result
-
-        draft: ConversationReportDraft | None = await _fenced(
-            self.database, recording, lambda: ("draft", recording.id), load
+            .order_by(ConversationReportDraft.created_at.desc(), ConversationReportDraft.id.desc())
+            .limit(1)
         )
-        return draft
-
-    async def _retained(self, recording: ConversationRecording) -> Any:
-        """The latest retained C5 version, read once while the recording lock is held."""
-        return await _fenced(
-            self.database,
-            recording,
-            lambda: ("retained", recording.id, recording.generation),
-            lambda: RetainedC5RecoveryService(self.application).latest_for_recording(recording),
-        )
-
-    async def _verified(
-        self, draft: ConversationReportDraft, recording: ConversationRecording
-    ) -> tuple[ReportDraft, dict[str, Any]]:
-        """Validate a stored draft and its canonical evidence; once per request.
-
-        A failure is never memoised: the next caller re-runs and raises again.
-        """
-        memo = fenced_memo(self.database, recording.id)
-        if memo is None:
-            result = self.reports._validated(draft, recording)
-            await self.reports._canonical_draft(draft, recording)
-            return result
-        key = ("verified", recording.id, draft.id, draft.report_sha256, recording.generation)
-        if key in memo.values:
-            verified: tuple[ReportDraft, dict[str, Any]] = memo.values[key]
-            return verified
-        result = self.reports._validated(draft, recording)
-        await self.reports._canonical_draft(draft, recording)
-        memo.values[key] = result
         return result
 
     async def report(
@@ -371,7 +289,9 @@ class AcquisitionReports:
     ) -> dict[str, Any]:
         """The post-authorization report projection, withheld per the recording's marks."""
 
-        recovered = await self._retained(recording)
+        recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
+            recording
+        )
         if recovered is not None and recovered.payload is not None:
             report = ReportDraft.model_validate(recovered.payload)
             run = await self.database.scalar(
@@ -412,31 +332,20 @@ class AcquisitionReports:
         draft = await self._draft(recording)
         if draft is None:
             raise ConversationNotFound("Your sales report is not ready yet.")
-        completed_run = draft.run_id
-
-        async def load_run() -> ConversationRun | None:
-            row: ConversationRun | None = await self.database.scalar(
-                select(ConversationRun).where(
-                    ConversationRun.id == completed_run,
-                    ConversationRun.recording_id == recording.id,
-                    ConversationRun.tenant_id == recording.tenant_id,
-                    ConversationRun.person_id == recording.person_id,
-                    ConversationRun.generation == recording.generation,
-                    ConversationRun.state == "completed",
-                )
+        run = await self.database.scalar(
+            select(ConversationRun).where(
+                ConversationRun.id == draft.run_id,
+                ConversationRun.recording_id == recording.id,
+                ConversationRun.tenant_id == recording.tenant_id,
+                ConversationRun.person_id == recording.person_id,
+                ConversationRun.generation == recording.generation,
+                ConversationRun.state == "completed",
             )
-            return row
-
-        run = await _fenced(
-            self.database,
-            recording,
-            lambda: ("completed_run", recording.id, completed_run, recording.generation),
-            load_run,
-            keep_none=False,
         )
         if run is None:
             raise ConversationConflict("The stored report needs review.")
-        report, _ = await self._verified(draft, recording)
+        report, _ = self.reports._validated(draft, recording)
+        await self.reports._canonical_draft(draft, recording)
         envelope = project_bound_report(
             report,
             access=access,
@@ -498,7 +407,9 @@ class AcquisitionReports:
     async def render_transcript(self, recording: ConversationRecording) -> dict[str, Any]:
         """The post-authorization transcript projection, withheld per the recording's marks."""
 
-        recovered = await self._retained(recording)
+        recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
+            recording
+        )
         if recovered is not None:
             checkpoint = await self.database.scalar(
                 select(ConversationCheckpoint).where(
@@ -540,7 +451,8 @@ class AcquisitionReports:
             draft = await self._draft(recording)
             if draft is None:
                 raise ConversationNotFound("The transcript will appear with your sales report.")
-            _, transcript = await self._verified(draft, recording)
+            _, transcript = self.reports._validated(draft, recording)
+            await self.reports._canonical_draft(draft, recording)
         return await self._withheld(
             recording,
             transcript["revision"],
@@ -647,14 +559,17 @@ class AcquisitionReports:
         tasks = [row[0] for row in task_rows]
         has_report = False
         report_finished_at = None
-        recovered = await self._retained(recording)
+        recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
+            recording
+        )
         if recovered is not None:
             has_report = True
             report_finished_at = recovered.created_at
         draft = await self._draft(recording)
         if draft is not None:
             try:
-                await self._verified(draft, recording)
+                self.reports._validated(draft, recording)
+                await self.reports._canonical_draft(draft, recording)
                 has_report = True
                 if recovered is None:
                     report_finished_at = draft.created_at
