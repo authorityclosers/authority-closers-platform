@@ -14,7 +14,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 DOCKERFILE = ROOT / "infra" / "conversation-worker" / "Dockerfile"
 README = ROOT / "infra" / "conversation-worker" / "README.md"
-SOURCE_HASH = "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3"
+SOURCE_HASH = "4ebf3e5c4721172f16fa82633a7dfed21700737478d7b586c6b51876d7396ce0"
+VENDORED_HASHES = (
+    "3e9a05318d8e3b1446bda1c4617e6a103cdd23599ae0a776a92a6e8800e92fdc",
+    "a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056",
+)
 
 
 def _instructions(text: str) -> list[str]:
@@ -57,11 +61,17 @@ def _candidate_violations(dockerfile: str, readme: str) -> set[str]:
         "native/audioatlas/atlas_dsp.cpp",
         "native/audioatlas/LICENSE",
         "native/audioatlas/source_provenance.json",
+        "native/audioatlas/third_party/pocketfft/pocketfft_hdronly.h",
+        "native/audioatlas/third_party/pocketfft/LICENSE.md",
     }
     copied = {item for line in context_copies for item in line.split()[1:-1]}
     if copied != allowed_sources:
         violations.add("broad-context-copy")
-    if SOURCE_HASH not in dockerfile or "build_native()" not in dockerfile:
+    if (
+        SOURCE_HASH not in dockerfile
+        or any(digest not in dockerfile for digest in VENDORED_HASHES)
+        or "build_native()" not in dockerfile
+    ):
         violations.add("unverified-native")
     runtime = dockerfile.split(" AS runtime", 1)[-1]
     if "g++=" in runtime or "pip install" in runtime or "ffmpeg=7:5.1.9-0+deb12u1" not in runtime:

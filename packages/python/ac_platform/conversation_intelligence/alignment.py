@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any, NoReturn
 
 from .checkpoints import content_hash, require_sha256
-from .signals import MAX_SECONDS, NATIVE_SOURCE_SHA256
+from .signals import ACCEPTED_NATIVE_SOURCE_SHA256, MAX_SECONDS
 from .speaker_roles import SPEAKER_ROLE_ORIGINS
 
 ALIGNMENT_SCHEMA = "ac.sales-xray.alignment-checkpoint/1"
@@ -235,7 +235,7 @@ def _validate_audioatlas(signal_payload: dict[str, Any]) -> _SignalInfo:
     native_receipt = _object(signal_payload.get("native_receipt"), "native_receipt")
     native_source_sha256 = _digest(native_receipt.get("source_sha256"), "native_source_sha256")
     if (
-        native_source_sha256 != NATIVE_SOURCE_SHA256
+        native_source_sha256 not in ACCEPTED_NATIVE_SOURCE_SHA256
         or native_receipt.get("mode") != "fft"
         or native_receipt.get("rows") != rows
     ):

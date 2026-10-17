@@ -1,3 +1,6 @@
 atlas_dsp.cpp -text
 LICENSE -text
 source_provenance.json -text
+reference/atlas_dsp_0.1.cpp -text
+third_party/pocketfft/pocketfft_hdronly.h -text
+third_party/pocketfft/LICENSE.md -text

@@ -778,7 +778,7 @@ def prepare(
         native_manifest_sha256=args.native_artifact_sha256,
         target_release=args.target_core,
     )
-    require(len(compatibility["inputs"]) == 14, "native_input_inventory_changed")
+    require(len(compatibility["inputs"]) == 16, "native_input_inventory_changed")
     run = decoded(read(Path(proof["workflow_run"]["path"]), paths).raw)
     artifact = decoded(read(Path(proof["artifact_metadata"]["path"]), paths).raw)
     require(

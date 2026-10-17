@@ -2,7 +2,31 @@
   "native_source": "AC_AudioAtlas_v0.1_Source_and_Binaries.zip / AC_AudioAtlas_v0_1/src/dsp.cpp",
   "legacy_sha256": "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3",
   "copied_sha256": "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3",
-  "modified": false,
+  "reference_path": "reference/atlas_dsp_0.1.cpp",
+  "modified": true,
+  "kernel_path": "atlas_dsp.cpp",
+  "kernel_sha256": "4ebf3e5c4721172f16fa82633a7dfed21700737478d7b586c6b51876d7396ce0",
+  "modification": "The hand-written radix-2 fft() was replaced by the vendored pocketfft real-input transform (one plan per run); the optional log spectrum is computed only when its output file is requested. No window, hop, descriptor formula, threshold or output layout changed.",
+  "vendored": [
+    {
+      "path": "third_party/pocketfft/pocketfft_hdronly.h",
+      "sha256": "3e9a05318d8e3b1446bda1c4617e6a103cdd23599ae0a776a92a6e8800e92fdc",
+      "upstream": "https://github.com/mreineck/pocketfft",
+      "branch": "cpp",
+      "commit": "c90e55b3d529f8efa40ed01a20de22405f45fc65",
+      "license": "BSD-3-Clause",
+      "modified": false
+    },
+    {
+      "path": "third_party/pocketfft/LICENSE.md",
+      "sha256": "a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056",
+      "upstream": "https://github.com/mreineck/pocketfft",
+      "branch": "cpp",
+      "commit": "c90e55b3d529f8efa40ed01a20de22405f45fc65",
+      "license": "BSD-3-Clause",
+      "modified": false
+    }
+  ],
   "other_inspected_sources": [
     "AC_SignalLab_v0.3_App_Source.zip",
     "AC_AudioAtlas_Review_Kit_v1.0.zip",

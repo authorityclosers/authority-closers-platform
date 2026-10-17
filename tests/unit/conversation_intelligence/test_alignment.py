@@ -11,7 +11,10 @@ from ac_platform.conversation_intelligence.alignment import (
     build_alignment,
     project_transcript_for_playback,
 )
-from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256
+from ac_platform.conversation_intelligence.signals import (
+    LEGACY_NATIVE_SOURCE_SHA256,
+    NATIVE_SOURCE_SHA256,
+)
 
 SOURCE_SHA = "a" * 64
 
@@ -290,6 +293,22 @@ def test_alignment_rejects_cross_source_or_duration_mismatch(
         signal[field] = value
     with pytest.raises(AlignmentError, match=f"^{error}$"):
         build_alignment(signal, transcript)
+
+
+@pytest.mark.parametrize("digest", [NATIVE_SOURCE_SHA256, LEGACY_NATIVE_SOURCE_SHA256])
+def test_alignment_accepts_current_and_original_audioatlas_kernels(digest: str) -> None:
+    # C1 checkpoints recorded by the original kernel remain valid after the FFT swap.
+    signal = _signal()
+    signal["native_receipt"]["source_sha256"] = digest
+    aligned = build_alignment(signal, _transcript(_segment("s1", 0, 200)))
+    assert aligned["measurement_parent"]["native_source_sha256"] == digest
+
+
+def test_alignment_rejects_unreviewed_audioatlas_kernel() -> None:
+    signal = _signal()
+    signal["native_receipt"]["source_sha256"] = "e" * 64
+    with pytest.raises(AlignmentError, match="^alignment_native_provenance_invalid$"):
+        build_alignment(signal, _transcript(_segment("s1", 0, 200)))
 
 
 @pytest.mark.parametrize(

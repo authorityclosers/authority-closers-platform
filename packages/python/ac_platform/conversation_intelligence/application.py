@@ -51,7 +51,10 @@ from ac_platform.conversation_intelligence.processing_actor import (
 )
 from ac_platform.conversation_intelligence.sensitive_segments import withhold
 from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
-from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256, _feature_metadata
+from ac_platform.conversation_intelligence.signals import (
+    ACCEPTED_NATIVE_SOURCE_SHA256,
+    _feature_metadata,
+)
 from ac_platform.conversation_intelligence.source_objects import (
     lock_source_object,
     reference_source_object,
@@ -923,7 +926,8 @@ class ConversationApplication:
                     or any(meta.get(k) != v for k, v in expected.items())
                     or meta["source_sha256"] != recording.source_sha256
                     or meta["feature_sha256"] != payload["feature_sha256"]
-                    or payload["native_receipt"]["source_sha256"] != NATIVE_SOURCE_SHA256
+                    or payload["native_receipt"]["source_sha256"]
+                    not in ACCEPTED_NATIVE_SOURCE_SHA256
                     or payload["native_receipt"]["rows"] != meta["rows"]
                     or payload["timebase"]["rate"] != decode_rate
                     or payload["timebase"]["clock"] != "decoded_audio_track"

@@ -24,8 +24,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
-NATIVE_SOURCE_SHA256 = "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3"
+# The kernel source compiled for new C1 runs. Its only change from the original
+# AudioAtlas source is the FFT: the hand-written radix-2 transform was replaced by
+# the vendored pocketfft header pinned below (see native/audioatlas/README.md).
+NATIVE_SOURCE_SHA256 = "4ebf3e5c4721172f16fa82633a7dfed21700737478d7b586c6b51876d7396ce0"
+# The original AudioAtlas 0.1 source. C1 checkpoints it produced stay valid: the
+# replacement is numerically equivalent (same formulas, float64 differences at the
+# 1e-13 relative level, identical voicing decisions) and published rows are float32.
+LEGACY_NATIVE_SOURCE_SHA256 = "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3"
+ACCEPTED_NATIVE_SOURCE_SHA256 = frozenset({NATIVE_SOURCE_SHA256, LEGACY_NATIVE_SOURCE_SHA256})
 NATIVE_ROOT = Path(__file__).resolve().parents[4] / "native" / "audioatlas"
+# Vendored third-party inputs of the kernel build, relative to NATIVE_ROOT.
+# pocketfft C++ header-only, BSD-3-Clause, github.com/mreineck/pocketfft branch
+# cpp at c90e55b3d529f8efa40ed01a20de22405f45fc65, copied without edits.
+NATIVE_VENDORED_SHA256 = {
+    "third_party/pocketfft/pocketfft_hdronly.h": (
+        "3e9a05318d8e3b1446bda1c4617e6a103cdd23599ae0a776a92a6e8800e92fdc"
+    ),
+    "third_party/pocketfft/LICENSE.md": (
+        "a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056"
+    ),
+}
 MAX_SOURCE_BYTES = 128 * 1024 * 1024
 # Hosted AudioAtlas runs at 16 kHz and supports a one-hour source window.  The
 # 360,000-frame-per-channel bound below keeps the derived feature artifact
@@ -179,10 +198,21 @@ def _tool(name: str) -> str:
     return found
 
 
+def _native_inputs_pinned() -> bool:
+    """True only when the kernel source and every vendored input match their pins."""
+    try:
+        return file_sha256(NATIVE_ROOT / "atlas_dsp.cpp") == NATIVE_SOURCE_SHA256 and all(
+            file_sha256(NATIVE_ROOT / name) == digest
+            for name, digest in NATIVE_VENDORED_SHA256.items()
+        )
+    except OSError:
+        return False
+
+
 def build_native(output_dir: Path | None = None, *, compiler: Path | None = None) -> Path:
     """Explicit operator/test build; inspect_media never compiles executable code."""
     source = NATIVE_ROOT / "atlas_dsp.cpp"
-    if file_sha256(source) != NATIVE_SOURCE_SHA256:
+    if not _native_inputs_pinned():
         raise SignalError("signal_native_source_mismatch")
     destination = output_dir or NATIVE_ROOT / "build"
     destination.mkdir(parents=True, exist_ok=True)
@@ -217,6 +247,7 @@ def build_native(output_dir: Path | None = None, *, compiler: Path | None = None
         built.replace(executable)
     manifest = {
         "source_sha256": NATIVE_SOURCE_SHA256,
+        "vendored_sha256": dict(NATIVE_VENDORED_SHA256),
         "binary_sha256": file_sha256(executable),
         "compiler": Path(compiler_path).name,
         "flags": "O2 C++17",
@@ -235,8 +266,9 @@ def _native_executable(path: Path | None) -> Path:
         manifest = json.loads(native.with_suffix(".build.json").read_text(encoding="utf-8"))
         if (
             manifest["source_sha256"] != NATIVE_SOURCE_SHA256
+            or manifest["vendored_sha256"] != NATIVE_VENDORED_SHA256
             or manifest["binary_sha256"] != file_sha256(native)
-            or file_sha256(NATIVE_ROOT / "atlas_dsp.cpp") != NATIVE_SOURCE_SHA256
+            or not _native_inputs_pinned()
         ):
             raise SignalError("signal_native_build_mismatch")
     except (OSError, KeyError, json.JSONDecodeError):

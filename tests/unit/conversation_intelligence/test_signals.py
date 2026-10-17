@@ -71,9 +71,32 @@ def test_native_source_preserved() -> None:
         signals.file_sha256(signals.NATIVE_ROOT / "atlas_dsp.cpp") == signals.NATIVE_SOURCE_SHA256
     )
     provenance = json.loads((signals.NATIVE_ROOT / "source_provenance.json").read_text())
-    assert provenance["modified"] is False
-    assert provenance["legacy_sha256"] == signals.NATIVE_SOURCE_SHA256
+    # The original kernel is kept byte for byte; the compiled kernel only swaps the FFT.
+    assert provenance["modified"] is True
+    assert provenance["kernel_sha256"] == signals.NATIVE_SOURCE_SHA256
+    assert provenance["legacy_sha256"] == signals.LEGACY_NATIVE_SOURCE_SHA256
+    assert (
+        signals.file_sha256(signals.NATIVE_ROOT / provenance["reference_path"])
+        == signals.LEGACY_NATIVE_SOURCE_SHA256
+    )
+    for name, digest in signals.NATIVE_VENDORED_SHA256.items():
+        assert signals.file_sha256(signals.NATIVE_ROOT / name) == digest
     assert "MIT License" in (signals.NATIVE_ROOT / "LICENSE").read_text()
+    pocketfft_license = (signals.NATIVE_ROOT / "third_party/pocketfft/LICENSE.md").read_text()
+    assert "Redistributions in binary form must reproduce" in pocketfft_license
+
+
+def test_native_build_refuses_unpinned_vendored_fft(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "audioatlas"
+    shutil.copytree(signals.NATIVE_ROOT, root, ignore=shutil.ignore_patterns("build"))
+    header = root / "third_party/pocketfft/pocketfft_hdronly.h"
+    header.write_bytes(header.read_bytes() + b"\n// drift\n")
+    monkeypatch.setattr(signals, "NATIVE_ROOT", root)
+    with pytest.raises(signals.SignalError, match="signal_native_source_mismatch"):
+        signals.build_native(tmp_path / "build")
+    assert not (tmp_path / "build").exists()
 
 
 def test_packing_retains_integer_support_tail_and_missing_pitch(tmp_path: Path) -> None:

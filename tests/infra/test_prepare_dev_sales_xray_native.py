@@ -347,7 +347,7 @@ def test_dry_run_without_native_core_is_invariant_and_verifies_real_bundle(fixtu
     plan, previous, candidate, units = fixture.prepare()
     assert fixture.snapshot() == before
     assert fixture.host.inspect() == states
-    assert len(plan["compatibility"]["inputs"]) == 14
+    assert len(plan["compatibility"]["inputs"]) == 16
     assert not (fixture.paths.application / "releases" / fixture.bundle.source).exists()
     assert plan["renderer_sha256"] == MODULE.RENDERER_HASH
     assert plan["target_core"] == fixture.bundle.target

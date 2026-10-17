@@ -83,6 +83,8 @@ jobs:
           test -f infra/conversation-worker/Dockerfile
           test -f native/audioatlas/atlas_dsp.cpp
           test -f native/audioatlas/source_provenance.json
+          test -f native/audioatlas/third_party/pocketfft/pocketfft_hdronly.h
+          test -f native/audioatlas/third_party/pocketfft/LICENSE.md
           test -f packages/python/ac_platform/conversation_intelligence/__main__.py
           test -f packages/python/ac_platform/conversation_intelligence/signals.py
 
@@ -275,11 +277,28 @@ jobs:
           context_tree_id="$(git rev-parse HEAD^{tree})"
           native_source_sha256="$(sha256sum native/audioatlas/atlas_dsp.cpp | cut -d' ' -f1)"
           provenance_source_sha256="$(python3 -c \
-            'import json; print(json.load(open("native/audioatlas/source_provenance.json"))["copied_sha256"])')"
+            'import json; print(json.load(open("native/audioatlas/source_provenance.json"))["kernel_sha256"])')"
           [ "$native_source_sha256" = "$provenance_source_sha256" ] || {
             printf 'Native source does not match source_provenance.json.\n' >&2
             exit 1
           }
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("native/audioatlas")
+          provenance = json.loads((root / "source_provenance.json").read_text(encoding="utf-8"))
+          vendored = provenance["vendored"]
+          assert {item["path"] for item in vendored} == {
+              "third_party/pocketfft/pocketfft_hdronly.h",
+              "third_party/pocketfft/LICENSE.md",
+          }
+          for item in vendored:
+              digest = hashlib.sha256((root / item["path"]).read_bytes()).hexdigest()
+              if digest != item["sha256"] or item["modified"] is not False:
+                  raise SystemExit("Vendored native input does not match source_provenance.json.")
+          PY
           doctor_json="$(docker run --rm --network=none --read-only \
             --entrypoint=python "$image_id" \
             -m ac_platform.conversation_intelligence doctor)"

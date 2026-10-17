@@ -30,7 +30,10 @@ FFmpeg's runtime libraries are still required; no Python dependency beyond the
 standard library is installed. Build tools remain in the build stage.
 
 The native source hash is checked before compiling and by the Python build helper:
-`40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3`.
+`4ebf3e5c4721172f16fa82633a7dfed21700737478d7b586c6b51876d7396ce0`. The vendored
+pocketfft header (`3e9a05318d8e3b1446bda1c4617e6a103cdd23599ae0a776a92a6e8800e92fdc`)
+and its BSD-3-Clause licence (`a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056`)
+are checked the same way; the licence is copied into the image beside the kernel.
 Only explicit offline Python modules, native source, license and provenance enter
 the build context's COPY allowlist. The final image contains its own Linux build
 and binary manifest, not the local Windows executable.

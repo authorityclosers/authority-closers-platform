@@ -24,7 +24,7 @@ WORKFLOW = ".github/workflows/sales-xray-native-image.yml"
 DOCKERFILE = "infra/conversation-worker/Dockerfile"
 # The complete COPY/dependency set below has been reviewed for this recipe.
 # An unfamiliar recipe needs a fresh build or an explicit code review here.
-RECIPE_SHA256 = "f35dc9842adff174efce5f26ee5e323e9a0d2169221f9708ea445d1f110c6658"
+RECIPE_SHA256 = "2f48a1212a80e0e84f747949aefb528e3266775873786ace2ccb9618cbfdd3c6"
 # The host runtime/helper import only stdlib and the packaged signal parser.
 # The smoke harness has a reviewed optional full-app measurement import; its
 # ImportError path explicitly reports upload_preflight_measured=False. Pin
@@ -59,6 +59,8 @@ INPUT_FILES = tuple(
             "native/audioatlas/atlas_dsp.cpp",
             "native/audioatlas/LICENSE",
             "native/audioatlas/source_provenance.json",
+            "native/audioatlas/third_party/pocketfft/LICENSE.md",
+            "native/audioatlas/third_party/pocketfft/pocketfft_hdronly.h",
             "infra/release/validate-artifact-pool.py",
         }
     )
