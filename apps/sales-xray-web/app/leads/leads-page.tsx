@@ -6,11 +6,23 @@
  * A seller's desk copied from NeoDove's telecalling app: Start calling serves
  * one lead at a time, and every call ends on "Was the call connected?". Owners
  * and admins also get All leads, Team (allocation rules) and Sources.
+ *
+ * Phones (UX study, 17 Oct): Start calling comes first (no subtitle, buttons
+ * or tab row on the desk), pull down to refresh, swipe a row to call or
+ * message, hold it for more. The desk refreshes itself whenever the app or tab
+ * comes back to the front and every minute while it is open. A phone alert
+ * opens its lead through /leads#lead=<id> (ids only, after "#").
  */
 
 import { Building2, PhoneCall, Plus, Smartphone } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import {
@@ -30,24 +42,36 @@ import {
   ImportDialog,
   type AddWay,
 } from "./capture-dialogs";
+import { AlertsCard } from "./alerts-card";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
-import { DeskView } from "./desk-view";
-import { CallingLoop, LeadSheet } from "./lead-sheet";
+import { DeskView, dueNow, type DeskLink, type RowActions } from "./desk-view";
+import { usePullToRefresh } from "./gestures";
+import { LeadActions } from "./lead-actions";
+import { CallingLoop, LeadSheet, type LeadIntent } from "./lead-sheet";
+import { publishBadge } from "./leads-badge";
 import {
   LEADS_PATH,
   LeadsError,
+  linkedLead,
   pickContacts,
   readDesk,
   sharedLead,
   type Desk,
+  type LeadRow,
   type PickedContact,
 } from "./leads-client";
+import { MessageSetup } from "./message-sheet";
+import { inPhoneApp, onPhoneSignal } from "./native-phone";
 import { ListView } from "./list-view";
 import { SourcesView } from "./sources-view";
 import { TeamView } from "./team-view";
 import styles from "./leads.module.css";
 
 type Tab = "desk" | "all" | "team" | "sources";
+
+// The desk reads itself again when the app comes back, and every minute.
+const REFRESH_EVERY_MS = 60 * 1000;
+const REFRESH_GAP_MS = 15 * 1000;
 
 // The handed-over lead is read once, then wiped from the address at once, so it
 // never sits in the address bar or the browser's history.
@@ -90,8 +114,10 @@ export function LeadsRoute() {
   // travels after "#", so the lead's details never reach a server or its logs.
   const hash = useSyncExternalStore(onHashChange, readHash, () => "");
   const shared = sharedLead(new URLSearchParams(hash.replace(/^#/, "")));
+  const linked = linkedLead(hash);
+  const [linkDone, setLinkDone] = useState<string | null>(null);
   useEffect(() => {
-    if (window.location.hash.includes("add=lead"))
+    if (/(^|[#&])(add=lead|lead=)/.test(window.location.hash))
       window.history.replaceState(
         window.history.state,
         "",
@@ -109,6 +135,10 @@ export function LeadsRoute() {
   const [error, setError] = useState<LeadsError | null>(null);
   const [version, setVersion] = useState(0);
   const [openLead, setOpenLead] = useState<string | null>(null);
+  const [intent, setIntent] = useState<LeadIntent | null>(null);
+  const [holding, setHolding] = useState<LeadRow | null>(null);
+  const waiters = useRef<(() => void)[]>([]);
+  const lastRead = useRef(0);
   const [calling, setCalling] = useState(false);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -136,15 +166,34 @@ export function LeadsRoute() {
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
   const closeShared = () => setSharedDone(true);
+  // Pull to refresh waits for the desk to come back before the spinner goes.
+  const reload = useCallback(
+    () =>
+      new Promise<void>((resolve) => {
+        waiters.current.push(resolve);
+        refresh();
+      }),
+    [refresh],
+  );
+  const { area, spinner } = usePullToRefresh(reload);
 
   useEffect(() => {
     if (!authenticated) return;
     const controller = new AbortController();
+    const settle = () => {
+      lastRead.current = Date.now();
+      waiters.current.splice(0).forEach((resolve) => resolve());
+    };
     readDesk(controller.signal)
       .then((next) => {
         setDesk(next);
         setDeskKey(contextKey);
         setError(null);
+        publishBadge({
+          overdue: next.counts.overdue ?? 0,
+          to_call: dueNow(next),
+        });
+        settle();
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
@@ -154,9 +203,33 @@ export function LeadsRoute() {
             : new LeadsError("Your leads didn't load. Try again.", 0),
         );
         setDeskKey(contextKey);
+        settle();
       });
     return () => controller.abort();
   }, [authenticated, contextKey, version]);
+
+  // Back in the app or the tab, an alert while open, or a minute gone: read again.
+  useEffect(() => {
+    if (!authenticated) return;
+    const again = (force = false) => {
+      if (document.visibilityState !== "visible") return;
+      if (!force && Date.now() - lastRead.current < REFRESH_GAP_MS) return;
+      refresh();
+    };
+    const onVisible = () => again();
+    const timer = window.setInterval(() => again(true), REFRESH_EVERY_MS);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    const stop = onPhoneSignal((event) => {
+      if (event === "resume" || event === "alert") again(event === "alert");
+    });
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      stop();
+    };
+  }, [authenticated, refresh]);
 
   if (!authenticated) {
     const loading =
@@ -234,6 +307,72 @@ export function LeadsRoute() {
 
   if (!current || !desk) return <LeadsSkeleton />;
 
+  // A phone alert's lead opens once; closing it leaves the desk.
+  const fromLink = linked && linkDone !== hash ? linked : null;
+  const shownLead = openLead ?? fromLink?.leadId ?? null;
+  const shownIntent: LeadIntent | null = openLead
+    ? intent
+    : fromLink?.call
+      ? "call"
+      : null;
+  const open = (leadId: string, next: LeadIntent | null = null) => {
+    setLinkDone(hash);
+    setHolding(null);
+    setIntent(next);
+    setOpenLead(leadId);
+  };
+  const rowActions: RowActions = {
+    onCall: (row) => open(row.lead_id, "call"),
+    onMessage: (row) => open(row.lead_id, "message"),
+    onHold: (row) => setHolding(row),
+  };
+  const org =
+    access?.workspaces?.find(
+      (workspace) => workspace.tenant_id === access.context?.tenantId,
+    )?.name ?? "";
+  const links: DeskLink[] = [
+    {
+      key: "all",
+      label: "All leads",
+      note: "Search and filters",
+      href: `${LEADS_PATH}?tab=all`,
+    },
+    ...(can
+      ? [
+          {
+            key: "team",
+            label: "Team",
+            note: desk.counts.unassigned
+              ? `${desk.counts.unassigned} need an owner`
+              : "Who gets which leads",
+            href: `${LEADS_PATH}?tab=team`,
+          },
+          {
+            key: "sources",
+            label: "Lead sources",
+            note: "Meta, forms, sheets",
+            href: `${LEADS_PATH}?tab=sources`,
+          },
+        ]
+      : []),
+    {
+      key: "add",
+      label: "Add leads",
+      note: "Type, paste, contacts or a file",
+      onClick: () => begin("menu", setMenu),
+    },
+    ...(inPhoneApp()
+      ? []
+      : [
+          {
+            key: "app",
+            label: "Phone app",
+            note: "Call from your phone",
+            onClick: () => begin("apps", setApps),
+          },
+        ]),
+  ];
+
   const tabs = [
     { key: "desk", label: "My desk", count: desk.counts.open },
     { key: "all", label: "All leads" },
@@ -251,153 +390,199 @@ export function LeadsRoute() {
 
   return (
     <AcquisitionShell authenticated active="leads">
-      <div className={styles.root}>
-        <PageHeader
-          title="Leads"
-          titleInBar
-          context={[
-            desk.me.can_manage
-              ? "Your calls and your team's leads"
-              : "Who to call today",
-            desk.sandbox ? (
-              <Badge key="label">Test leads</Badge>
-            ) : desk.call_mode === "simulated" ? (
-              <Badge key="label">Sample calls</Badge>
-            ) : null,
-          ]}
-          actions={
-            <>
-              <Button onClick={() => begin("apps", setApps)}>
-                <Smartphone size={14} aria-hidden="true" />
-                Phone app
-              </Button>
-              <Button onClick={() => begin("menu", setMenu)}>
-                <Plus size={14} aria-hidden="true" />
-                Add leads
-              </Button>
-              {tab !== "desk" ? (
-                <Button
-                  variant="primary"
-                  onClick={() => begin("calling", setCalling)}
-                  disabled={desk.counts.open === 0}
-                >
-                  <PhoneCall size={14} aria-hidden="true" />
-                  Start calling
-                </Button>
-              ) : null}
-            </>
-          }
-        />
-        <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
-        <QueryTabs base={LEADS_PATH} items={tabs} current={tab} />
-        {error ? (
-          <div className={styles.notice} role="status">
-            {error.message}
-            <Button variant="ghost" onClick={refresh}>
-              Try again
-            </Button>
+      <MessageSetup.Provider
+        value={{ templates: desk.templates ?? [], myName: desk.me.name, org }}
+      >
+        <div ref={area} className={styles.root} data-tab={tab}>
+          <div
+            ref={spinner}
+            className={styles.pullSpinner}
+            aria-hidden="true"
+          />
+          <div className={styles.wideOnly}>
+            <PageHeader
+              title="Leads"
+              titleInBar
+              context={[
+                desk.me.can_manage
+                  ? "Your calls and your team's leads"
+                  : "Who to call today",
+                desk.sandbox ? (
+                  <Badge key="label">Test leads</Badge>
+                ) : desk.call_mode === "simulated" ? (
+                  <Badge key="label">Sample calls</Badge>
+                ) : null,
+              ]}
+              actions={
+                <>
+                  <Button onClick={() => begin("apps", setApps)}>
+                    <Smartphone size={14} aria-hidden="true" />
+                    Phone app
+                  </Button>
+                  <Button onClick={() => begin("menu", setMenu)}>
+                    <Plus size={14} aria-hidden="true" />
+                    Add leads
+                  </Button>
+                  {tab !== "desk" ? (
+                    <Button
+                      variant="primary"
+                      onClick={() => begin("calling", setCalling)}
+                      disabled={desk.counts.open === 0}
+                    >
+                      <PhoneCall size={14} aria-hidden="true" />
+                      Start calling
+                    </Button>
+                  ) : null}
+                </>
+              }
+            />
           </div>
-        ) : null}
-        {tab === "desk" ? (
-          <DeskView
-            desk={desk}
-            onOpen={setOpenLead}
-            onStart={() => begin("calling", setCalling)}
-            onAdd={() => begin("menu", setMenu)}
-          />
-        ) : tab === "all" ? (
-          <ListView canManage={can} onOpen={setOpenLead} version={version} />
-        ) : tab === "team" ? (
-          <TeamView onChanged={refresh} onOpen={setOpenLead} />
-        ) : (
-          <SourcesView
-            sandbox={desk.sandbox}
+          {tab === "desk" ? null : (
+            <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
+          )}
+          <div className={tab === "desk" ? styles.wideOnly : undefined}>
+            <QueryTabs base={LEADS_PATH} items={tabs} current={tab} />
+          </div>
+          {error ? (
+            <div className={styles.notice} role="status">
+              {error.message}
+              <Button variant="ghost" onClick={refresh}>
+                Try again
+              </Button>
+            </div>
+          ) : null}
+          {tab === "desk" ? (
+            <DeskView
+              desk={desk}
+              onOpen={(leadId) => open(leadId)}
+              onStart={() => begin("calling", setCalling)}
+              onAdd={() => begin("menu", setMenu)}
+              actions={rowActions}
+              links={links}
+              afterHero={
+                <>
+                  <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
+                  <AlertsCard />
+                </>
+              }
+            />
+          ) : tab === "all" ? (
+            <ListView
+              canManage={can}
+              onOpen={(leadId) => open(leadId)}
+              version={version}
+              actions={rowActions}
+            />
+          ) : tab === "team" ? (
+            <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
+          ) : (
+            <SourcesView
+              sandbox={desk.sandbox}
+              onChanged={refresh}
+              onImport={() => begin("importing", setImporting)}
+            />
+          )}
+        </div>
+        <LeadSheet
+          leadId={shownLead}
+          me={desk.me}
+          intent={shownIntent}
+          onClose={() => {
+            setLinkDone(hash);
+            setOpenLead(null);
+            setIntent(null);
+          }}
+          onChanged={refresh}
+        />
+        {holding ? (
+          <LeadActions
+            key={holding.lead_id}
+            row={holding}
+            canManage={can}
+            onClose={() => setHolding(null)}
+            onCall={(row) => open(row.lead_id, "call")}
+            onMessage={(row) => open(row.lead_id, "message")}
+            onOpen={(leadId) => open(leadId)}
             onChanged={refresh}
-            onImport={() => begin("importing", setImporting)}
           />
-        )}
-      </div>
-      <LeadSheet
-        leadId={openLead}
-        me={desk.me}
-        onClose={() => setOpenLead(null)}
-        onChanged={refresh}
-      />
-      <CallingLoop
-        key={rounds.calling}
-        open={calling}
-        me={desk.me}
-        onClose={() => {
-          setCalling(false);
-          refresh();
-        }}
-        onChanged={refresh}
-      />
-      {shared ? (
+        ) : null}
+        <CallingLoop
+          key={rounds.calling}
+          open={calling}
+          me={desk.me}
+          onClose={() => {
+            setCalling(false);
+            refresh();
+          }}
+          onChanged={refresh}
+        />
+        {shared ? (
+          <AddLeadDialog
+            key={`shared-${hash}`}
+            open={!sharedDone}
+            canManage={can}
+            initial={shared}
+            onClose={closeShared}
+            onAdded={(leadId) => {
+              closeShared();
+              refresh();
+              setOpenLead(leadId);
+            }}
+          />
+        ) : null}
         <AddLeadDialog
-          key={`shared-${hash}`}
-          open={!sharedDone}
+          key={rounds.adding}
+          open={adding}
           canManage={can}
-          initial={shared}
-          onClose={closeShared}
+          onClose={() => setAdding(false)}
           onAdded={(leadId) => {
-            closeShared();
+            setAdding(false);
             refresh();
             setOpenLead(leadId);
           }}
         />
-      ) : null}
-      <AddLeadDialog
-        key={rounds.adding}
-        open={adding}
-        canManage={can}
-        onClose={() => setAdding(false)}
-        onAdded={(leadId) => {
-          setAdding(false);
-          refresh();
-          setOpenLead(leadId);
-        }}
-      />
-      <PhoneAppDialog
-        key={`apps-${rounds.apps}`}
-        open={apps}
-        onClose={() => setApps(false)}
-      />
-      <AddLeadsMenu
-        key={`menu-${rounds.menu}`}
-        open={menu}
-        canManage={can}
-        onClose={() => setMenu(false)}
-        onPick={(way: AddWay) => {
-          setMenu(false);
-          if (way === "type") begin("adding", setAdding);
-          else if (way === "file") begin("importing", setImporting);
-          else if (way === "sources") router.push(`${LEADS_PATH}?tab=sources`);
-          else
-            pickContacts()
-              .then((people) => {
-                if (!people.length) return;
-                setPicked(people);
-                begin("contacts", setContacts);
-              })
-              .catch(() => undefined);
-        }}
-      />
-      <ContactsDialog
-        key={`contacts-${rounds.contacts}`}
-        open={contacts}
-        picked={picked}
-        canManage={can}
-        onClose={() => setContacts(false)}
-        onDone={refresh}
-      />
-      <ImportDialog
-        key={rounds.importing}
-        open={importing}
-        canManage={can}
-        onClose={() => setImporting(false)}
-        onDone={refresh}
-      />
+        <PhoneAppDialog
+          key={`apps-${rounds.apps}`}
+          open={apps}
+          onClose={() => setApps(false)}
+        />
+        <AddLeadsMenu
+          key={`menu-${rounds.menu}`}
+          open={menu}
+          canManage={can}
+          onClose={() => setMenu(false)}
+          onPick={(way: AddWay) => {
+            setMenu(false);
+            if (way === "type") begin("adding", setAdding);
+            else if (way === "file") begin("importing", setImporting);
+            else if (way === "sources")
+              router.push(`${LEADS_PATH}?tab=sources`);
+            else
+              pickContacts()
+                .then((people) => {
+                  if (!people.length) return;
+                  setPicked(people);
+                  begin("contacts", setContacts);
+                })
+                .catch(() => undefined);
+          }}
+        />
+        <ContactsDialog
+          key={`contacts-${rounds.contacts}`}
+          open={contacts}
+          picked={picked}
+          canManage={can}
+          onClose={() => setContacts(false)}
+          onDone={refresh}
+        />
+        <ImportDialog
+          key={rounds.importing}
+          open={importing}
+          canManage={can}
+          onClose={() => setImporting(false)}
+          onDone={refresh}
+        />
+      </MessageSetup.Provider>
     </AcquisitionShell>
   );
 }

@@ -11,7 +11,6 @@ import {
   LogIn,
   PanelLeftClose,
   PanelLeftOpen,
-  PhoneCall,
   Plus,
   Search,
   Settings,
@@ -95,6 +94,7 @@ import {
   isRelativeUpdateHref,
   type UpdateNotification,
 } from "./updates-client";
+import { LeadsTabIcon } from "../leads/leads-badge";
 import styles from "./lightbox-shell.module.css";
 
 export type LightboxShellProps = {
@@ -863,7 +863,7 @@ function LightboxShellFrame({
               data-rail-tip="Leads"
               aria-current={place === "leads" ? "page" : undefined}
             >
-              <PhoneCall size={20} strokeWidth={1.75} aria-hidden="true" />
+              <LeadsTabIcon size={20} strokeWidth={1.75} />
               <span style={RAIL_NAME_STYLE}>Leads</span>
             </Link>
             <Link
@@ -1274,7 +1274,7 @@ function LightboxShellFrame({
             prefetch={false}
             aria-current={phoneTab === "leads" ? "page" : undefined}
           >
-            <PhoneCall size={20} aria-hidden="true" />
+            <LeadsTabIcon size={20} />
             <span>Leads</span>
           </Link>
         )}

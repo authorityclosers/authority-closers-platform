@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button, Empty, Panel, Segmented, Skeleton } from "../ui/kit";
-import { LeadLine } from "./desk-view";
+import { LeadLine, type RowActions } from "./desk-view";
 import {
   LeadsError,
   readLeads,
@@ -21,10 +21,12 @@ export function ListView({
   canManage,
   onOpen,
   version,
+  actions,
 }: {
   canManage: boolean;
   onOpen: (leadId: string) => void;
   version: number;
+  actions?: RowActions;
 }) {
   const params = useSearchParams();
   const initialStage = params.get("stage");
@@ -38,6 +40,7 @@ export function ListView({
   const [query, setQuery] = useState("");
   const [loaded, setLoaded] = useState<{
     key: string;
+    question: string;
     page: LeadPage;
     rows: LeadRow[];
   } | null>(null);
@@ -46,10 +49,12 @@ export function ListView({
   );
   const [loadingMore, setLoadingMore] = useState(false);
   // Results remember the question they answer; until the current one is
-  // answered the list shows its skeleton.
+  // answered the list shows its skeleton. A refresh of the same question
+  // (pull down, back in the app) keeps the rows on screen meanwhile.
+  const question = JSON.stringify([scope, stage, query]);
   const key = JSON.stringify([scope, stage, query, version]);
-  const page = loaded?.key === key ? loaded.page : null;
-  const rows = loaded?.key === key ? loaded.rows : [];
+  const page = loaded?.question === question ? loaded.page : null;
+  const rows = loaded?.question === question ? loaded.rows : [];
   const error = failed?.key === key ? failed.message : null;
 
   useEffect(() => {
@@ -60,7 +65,9 @@ export function ListView({
   useEffect(() => {
     const controller = new AbortController();
     readLeads({ scope, stage, search: query }, controller.signal)
-      .then((next) => setLoaded({ key, page: next, rows: next.leads }))
+      .then((next) =>
+        setLoaded({ key, question, page: next, rows: next.leads }),
+      )
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setFailed({
@@ -72,7 +79,7 @@ export function ListView({
         });
       });
     return () => controller.abort();
-  }, [key, scope, stage, query]);
+  }, [key, question, scope, stage, query]);
 
   const more = async () => {
     if (!page?.next_offset || loadingMore) return;
@@ -86,7 +93,12 @@ export function ListView({
       });
       setLoaded((current) =>
         current?.key === key
-          ? { key, page: next, rows: [...current.rows, ...next.leads] }
+          ? {
+              key,
+              question,
+              page: next,
+              rows: [...current.rows, ...next.leads],
+            }
           : current,
       );
     } catch (reason) {
@@ -180,6 +192,7 @@ export function ListView({
                 row={row}
                 onOpen={onOpen}
                 showOwner={scope !== "mine"}
+                actions={actions}
               />
             ))}
           </ul>

@@ -21,7 +21,14 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
@@ -43,7 +50,6 @@ import {
   reassign,
   rememberCall,
   takePendingCall,
-  whatsappHref,
   when,
   type CallTime,
   type Desk,
@@ -53,7 +59,14 @@ import {
 } from "./leads-client";
 import { sourceText, whyLine } from "./desk-view";
 import {
+  MessageSetup,
+  MessageSheet,
+  OpenMessage,
+  type MessageTarget,
+} from "./message-sheet";
+import {
   askCallAccess,
+  buzz,
   forgetCall,
   inPhoneApp,
   missedReason,
@@ -295,22 +308,23 @@ export function CallOutcome({
         ? "No automatic retry for a bad number."
         : `It comes back on the desk ${detail.lead.attempts ? "tomorrow" : "in 1 hour"}.`;
 
+  const openMessage = useContext(OpenMessage);
   const submit = async () => {
     if (!valid || saving) return;
     setSaving(true);
     setError(null);
     try {
       const current = await beforeSave();
-      onSaved(
-        await dispose(current.lead, {
-          connected: talk === "talked",
-          reason: talk === "missed" ? (reason ?? undefined) : undefined,
-          stage: talk === "talked" ? (stage ?? undefined) : undefined,
-          follow_up_at: at ? at.toISOString() : undefined,
-          remark: note.trim() || undefined,
-          deal_value: deal.trim() || undefined,
-        }),
-      );
+      const saved = await dispose(current.lead, {
+        connected: talk === "talked",
+        reason: talk === "missed" ? (reason ?? undefined) : undefined,
+        stage: talk === "talked" ? (stage ?? undefined) : undefined,
+        follow_up_at: at ? at.toISOString() : undefined,
+        remark: note.trim() || undefined,
+        deal_value: deal.trim() || undefined,
+      });
+      buzz("done");
+      onSaved(saved);
     } catch (failure) {
       setError(
         failure instanceof LeadsError
@@ -495,14 +509,28 @@ export function CallOutcome({
         </p>
       ) : null}
       {talk !== null ? (
-        <button
-          type="button"
-          className={styles.saveButton}
-          onClick={submit}
-          disabled={!valid || saving}
-        >
-          {saving ? "Saving…" : submitLabel}
-        </button>
+        <div className={styles.saveRow}>
+          {openMessage && detail.phone ? (
+            <button
+              type="button"
+              className={styles.saveMessage}
+              onClick={() =>
+                openMessage(talk === "missed" ? "missed_call" : "as_promised")
+              }
+            >
+              <MessageCircle size={18} aria-hidden="true" />
+              {talk === "missed" ? "Message them" : "Send details"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={styles.saveButton}
+            onClick={submit}
+            disabled={!valid || saving}
+          >
+            {saving ? "Saving…" : submitLabel}
+          </button>
+        </div>
       ) : null}
     </section>
   );
@@ -663,6 +691,18 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
       };
     case "note":
       return { title: `${who} added a note`, detail: event.note ?? undefined };
+    case "message":
+      return {
+        title: `${who} sent ${event.channel === "SMS" ? "an SMS" : "a WhatsApp"}${
+          event.template_label ? ` · ${event.template_label}` : ""
+        }`,
+      };
+    case "scheduled":
+      return {
+        title: event.next_action_at
+          ? `${who} booked the next call for ${when(event.next_action_at)}`
+          : `${who} booked the next call`,
+      };
     default:
       return { title: event.note ?? "Updated" };
   }
@@ -1286,6 +1326,7 @@ function LeadCard({
   onChanged,
   outcome,
   phoneCall = null,
+  intent = null,
 }: {
   detail: LeadDetail;
   me: Me | null;
@@ -1293,10 +1334,30 @@ function LeadCard({
   outcome: ReactNode;
   /** The phone app's last call to this lead, once it has ended. */
   phoneCall?: NativeCall | null;
+  /** Opened by a swipe, a hold or an alert's Call button: do it straight away. */
+  intent?: LeadIntent | null;
 }) {
   const { lead } = detail;
+  const setup = useContext(MessageSetup);
   const [permits, setPermits] = useState(false);
   const [calling, setCalling] = useState(false);
+  const [messaging, setMessaging] = useState<{
+    round: number;
+    preset: string | null;
+  } | null>(null);
+  const openMessage = (preset: string | null = null) =>
+    setMessaging((current) => ({
+      round: (current?.round ?? 0) + 1,
+      preset,
+    }));
+  const target: MessageTarget | null = detail.phone
+    ? {
+        leadId: lead.lead_id,
+        name: lead.name,
+        phone: detail.phone,
+        interest: lead.interest,
+      }
+    : null;
 
   // Inside the phone app the call is placed and followed by the app.
   const callFromApp = async (askFirst: boolean) => {
@@ -1325,6 +1386,25 @@ function LeadCard({
       setCalling(false);
     }
   };
+  const placeCall = () => {
+    if (!detail.phone) return;
+    if (inPhoneApp()) void callFromApp(false);
+    else {
+      rememberCall(lead.lead_id);
+      window.location.href = `tel:${detail.phone}`;
+    }
+  };
+  // Once per opening: the intent came with this lead.
+  const acted = useRef(false);
+  const act = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    act.current = () => (intent === "call" ? placeCall() : openMessage(null));
+  });
+  useEffect(() => {
+    if (!intent || acted.current || !detail.phone || !detail.can_edit) return;
+    acted.current = true;
+    act.current();
+  }, [intent, detail.phone, detail.can_edit]);
   const [editing, setEditing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -1438,15 +1518,14 @@ function LeadCard({
           <p className={styles.hint}>No phone number on this lead.</p>
         )}
         {detail.phone ? (
-          <a
+          <button
+            type="button"
             className={styles.actionButton}
-            href={whatsappHref(detail.phone)}
-            target="_blank"
-            rel="noreferrer"
+            onClick={() => openMessage(null)}
           >
             <MessageCircle size={18} aria-hidden="true" />
-            WhatsApp
-          </a>
+            Message
+          </button>
         ) : null}
         {detail.email ? (
           <a className={styles.actionButton} href={`mailto:${detail.email}`}>
@@ -1505,7 +1584,22 @@ function LeadCard({
         )
       ) : null}
 
-      {detail.can_edit ? outcome : null}
+      <OpenMessage.Provider value={target ? openMessage : null}>
+        {detail.can_edit ? outcome : null}
+      </OpenMessage.Provider>
+      {target ? (
+        <MessageSheet
+          key={messaging?.round ?? 0}
+          open={messaging !== null}
+          target={target}
+          templates={setup.templates}
+          myName={setup.myName || me?.name || ""}
+          org={setup.org}
+          preset={messaging?.preset}
+          onClose={() => setMessaging(null)}
+          onLogged={onChanged}
+        />
+      ) : null}
       {detail.can_edit &&
       detail.call_mode === "phone" &&
       me &&
@@ -1626,16 +1720,21 @@ function LeadCard({
 
 /* ---------- Lead sheet ---------- */
 
+export type LeadIntent = "call" | "message";
+
 export function LeadSheet({
   leadId,
   me,
   onClose,
   onChanged,
+  intent = null,
 }: {
   leadId: string | null;
   me: Me | null;
   onClose: () => void;
   onChanged: () => void;
+  /** Do this as soon as the lead is open (swipe, hold, an alert's Call). */
+  intent?: LeadIntent | null;
 }) {
   const [loaded, setLoaded] = useState<LeadDetail | null>(null);
   const [failed, setFailed] = useState<{
@@ -1718,6 +1817,7 @@ export function LeadSheet({
           me={me}
           onChanged={update}
           phoneCall={phoneCall}
+          intent={intent}
           outcome={
             <CallOutcome
               key={`${formKey}-${asked?.startedMs ?? 0}`}
