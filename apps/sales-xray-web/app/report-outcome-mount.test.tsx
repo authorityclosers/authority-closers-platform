@@ -12,11 +12,6 @@ import {
   type WorkspaceAccessValue,
 } from "./workspace-access";
 
-// This test is about outcomes: Coaching's recurring-pattern read stays out.
-vi.mock("./coaching/recurring-issue", () => ({
-  recurringIssue: async () => null,
-}));
-
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

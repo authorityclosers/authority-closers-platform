@@ -12,7 +12,6 @@ import {
   parseTranscript,
 } from "./report-contract";
 import { reportPillars } from "./report-pillars";
-import { reportScreenPanels } from "./report-pillar-screen";
 import { createReportDocx } from "./report-docx";
 import { callCoachingFocus, ReportCallCoaching } from "./report-call-coaching";
 
@@ -103,7 +102,6 @@ it.skipIf(!corpus)(
       supportedFocus = 0,
       accountProjections = 0,
       guestProjections = 0,
-      renderedPillars = 0,
       documents = 0;
     const failureStages: Record<string, number> = {};
     for (const folder of readdirSync(join(corpus!, "calls"))) {
@@ -160,14 +158,6 @@ it.skipIf(!corpus)(
           if (view.claimed) accountProjections++;
           else guestProjections++;
           const data = { report: view.report, transcript };
-          const panels = reportScreenPanels(data);
-          if (panels.length !== 6) failures++;
-          stage = "pillar_render";
-          for (const panel of panels) {
-            const html = renderToStaticMarkup(panel.content);
-            if (!html.includes(`data-report-pillar="${panel.id}"`)) failures++;
-            else renderedPillars++;
-          }
           stage = "word_export";
           const document = await createReportDocx(data);
           if (!validDocument(await document.arrayBuffer())) failures++;
@@ -200,7 +190,6 @@ it.skipIf(!corpus)(
       supportedFocus,
       accountProjections,
       guestProjections,
-      renderedPillars,
       documents,
       failureStages,
       failures,

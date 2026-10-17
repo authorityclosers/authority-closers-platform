@@ -17,7 +17,6 @@ RUN corepack enable && corepack prepare pnpm@11.19.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/sales-xray-web/package.json apps/sales-xray-web/package.json
 COPY packages/typescript/config/package.json packages/typescript/config/package.json
-COPY packages/typescript/sales-xray-client/package.json packages/typescript/sales-xray-client/package.json
 COPY packages/typescript/ui/package.json packages/typescript/ui/package.json
 
 RUN --mount=type=cache,id=ac-pnpm-store,target=/pnpm/store \

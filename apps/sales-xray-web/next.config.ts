@@ -41,7 +41,7 @@ const config: NextConfig = {
   },
   devIndicators: false,
   poweredByHeader: false,
-  transpilePackages: ["@ac/ui", "@ac/sales-xray-client"],
+  transpilePackages: ["@ac/ui"],
   logging: false,
   // Both development bundlers use the same opt-in review port. Production
   // retains the ordinary no-op port regardless of the review environment flag.

@@ -68,7 +68,7 @@ it("documents missing benchmark APIs without rendering an unsafe run action", as
     "Test runs are not available from Admin yet",
   );
   expect(host.textContent).toContain("/v1/admin/conversation/benchmarks");
-  expect(host.textContent).toContain("approved_call_test");
+  expect(host.textContent).not.toContain("approved_call_test");
   expect(
     host.querySelector('a[href="/sales-xray/providers?tab=providers"]'),
   ).toBeTruthy();

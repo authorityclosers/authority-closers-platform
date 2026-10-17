@@ -175,10 +175,6 @@ export function BenchmarkCenterPanel() {
               route fields remain revision references in provider configuration.
             </li>
             <li>
-              The private <code>approved_call_test</code> module is a supervised
-              local proof runner, not a hosted worker or browser-safe endpoint.
-            </li>
-            <li>
               Model training, automatic scoring, paid external calls, and
               execution activation remain outside this workspace.
             </li>

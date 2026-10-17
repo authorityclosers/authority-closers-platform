@@ -79,7 +79,6 @@ jobs:
           test -f infra/sales-xray-web/Dockerfile
           test -f apps/sales-xray-web/package.json
           test -f apps/sales-xray-web/next.config.ts
-          test -f packages/typescript/sales-xray-client/package.json
           test -f packages/typescript/ui/package.json
           test -f pnpm-lock.yaml
 
