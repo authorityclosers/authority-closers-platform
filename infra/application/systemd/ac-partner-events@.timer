@@ -1,0 +1,10 @@
+[Unit]
+Description=Every minute: Sales Xray partner webhooks (%i)
+
+[Timer]
+OnBootSec=2min
+OnCalendar=minutely
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
