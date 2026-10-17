@@ -236,7 +236,6 @@ SyntheticKind = Literal[
     "missions",
     "call_summary",
 ]
-PRIVATE_KINDS = frozenset(("skills", "missions"))
 
 
 class SyntheticRecordInput(BaseModel):
@@ -285,27 +284,4 @@ class SyntheticRecordInput(BaseModel):
             report = self.payload.get("report")
             if not isinstance(report, dict) or not report.keys() >= PILLARS:
                 raise ValueError("Preserve the six authored summary pillars.")
-        return self
-
-
-class SyntheticRecordBatch(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    schema_version: Literal["synthetic-record-batch/1"] = Field(alias="schema")
-    synthetic: Literal[True]
-    records: list[SyntheticRecordInput] = Field(min_length=1, max_length=128)
-
-    @model_validator(mode="before")
-    @classmethod
-    def explicit_marker(cls, value: Any) -> Any:
-        if not isinstance(value, dict) or value.get("synthetic") is not True:
-            raise ValueError("Synthetic must be explicitly true.")
-        return value
-
-    @model_validator(mode="after")
-    def bounded_unique_batch(self) -> SyntheticRecordBatch:
-        keys = {(record.kind, record.key, record.revision) for record in self.records}
-        if len(keys) != len(self.records):
-            raise ValueError("Each synthetic record revision must occur once per request.")
-        if len(self.model_dump_json(by_alias=True).encode()) > 900 * 1024:
-            raise ValueError("Import at most 900 KiB per synthetic record batch.")
         return self

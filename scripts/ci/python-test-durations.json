@@ -490,7 +490,6 @@
     "tests/unit/conversation_intelligence/test_submission_labels.py": 0.012,
     "tests/unit/conversation_intelligence/test_submission_progress.py": 0.004,
     "tests/unit/conversation_intelligence/test_synthetic_dataset.py": 0.011,
-    "tests/unit/conversation_intelligence/test_synthetic_import_audio.py": 0.023,
     "tests/unit/conversation_intelligence/test_synthetic_import_contracts.py": 0.004,
     "tests/unit/conversation_intelligence/test_synthetic_import_dataset.py": 0.343,
     "tests/unit/conversation_intelligence/test_worker_sandbox_contract.py": 0.026,

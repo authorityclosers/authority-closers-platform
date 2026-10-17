@@ -1,27 +1,22 @@
-"""Bounded adapter for Strike F's exact published files; no name-based identity merge."""
+"""Bounded adapter for Strike F's exact published files; no name-based identity merge.
+
+Used by the direct-DB AC Sandbox loaders in scripts/dev and scripts/data-changes.
+"""
 
 from __future__ import annotations
 
 import gzip
-import hashlib
 import json
-import shutil
-import subprocess
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from ac_platform.conversation_intelligence.application import utc
 from ac_platform.conversation_intelligence.checkpoints import content_hash
-from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
-from ac_platform.conversation_intelligence.synthetic_import_audio import SyntheticAudioManifest
 from ac_platform.conversation_intelligence.synthetic_import_contracts import (
-    MAX_BUNDLE_BYTES,
     SYNTHETIC_KEY,
     SyntheticCallBundle,
-    SyntheticRecordBatch,
     SyntheticRecordInput,
 )
 
@@ -40,33 +35,6 @@ OPERATIONS = (
     ("skill_trajectory", "skills", "rep_id", "at"),
     ("coaching_missions", "missions", "mission_id", "started_at"),
 )
-
-
-def record_batches(records: Iterable[SyntheticRecordInput]) -> Iterator[SyntheticRecordBatch]:
-    """Bound ordinary JSON requests below the existing 1 MiB HTTP middleware cap."""
-    pending: list[SyntheticRecordInput] = []
-    size = 256
-    for row in records:
-        row_bytes = len(row.model_dump_json().encode()) + 1
-        if pending and (len(pending) == 128 or size + row_bytes > 850 * 1024):
-            yield SyntheticRecordBatch.model_validate(
-                {
-                    "schema": "synthetic-record-batch/1",
-                    "synthetic": True,
-                    "records": pending,
-                }
-            )
-            pending, size = [], 256
-        pending.append(row)
-        size += row_bytes
-    if pending:
-        yield SyntheticRecordBatch.model_validate(
-            {
-                "schema": "synthetic-record-batch/1",
-                "synthetic": True,
-                "records": pending,
-            }
-        )
 
 
 def exact_file(root: Path, relative: str) -> Path:
@@ -228,113 +196,3 @@ def bundles(root: Path) -> Iterator[SyntheticCallBundle]:
         if parsed.metadata["call_id"] != call_id:
             raise ValueError("The indexed call differs from its authored bundle identity.")
         yield parsed
-
-
-@dataclass(frozen=True)
-class SyntheticAudioAttachment:
-    manifest: SyntheticAudioManifest
-    path: Path
-
-
-def verify_decode(path: Path, *, duration_ms: int) -> None:
-    """Reproduce complete local MP3 decode; the operator runs this through ac-heavy."""
-    try:
-        probe_program, decode_program = shutil.which("ffprobe"), shutil.which("ffmpeg")
-        if probe_program is None or decode_program is None:
-            raise ValueError("The local media tools are unavailable.")
-        probe = subprocess.run(  # noqa: S603 -- fixed argv, exact in-root file, no shell
-            [
-                probe_program,
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration:stream=codec_name",
-                "-of",
-                "json",
-                str(path),
-            ],
-            capture_output=True,
-            timeout=30,
-            check=True,
-        )
-        data = json.loads(probe.stdout)
-        if (
-            not data.get("streams")
-            or any(row.get("codec_name") != "mp3" for row in data["streams"])
-            or abs(float(data["format"]["duration"]) * 1000 - duration_ms) > 150
-        ):
-            raise ValueError("The verified media decode/duration differs from its receipt.")
-        subprocess.run(  # noqa: S603 -- fixed offline decoder, bounded complete local read
-            [
-                decode_program,
-                "-nostdin",
-                "-v",
-                "error",
-                "-xerror",
-                "-protocol_whitelist",
-                "file,pipe",
-                "-i",
-                str(path),
-                "-f",
-                "null",
-                "-",
-            ],
-            capture_output=True,
-            timeout=30,
-            check=True,
-        )
-    except (OSError, subprocess.SubprocessError, ValueError, KeyError):
-        raise ValueError("The synthetic MP3 could not be independently decoded.") from None
-
-
-def attachments(root: Path) -> Iterator[SyntheticAudioAttachment]:
-    verification = None
-    for bundle in bundles(root):
-        if bundle.metadata.get("audio_file") is None:
-            continue
-        if verification is None:
-            verification = read_json(
-                root, "validation/audio_verification.json", maximum=8 * 1024 * 1024
-            )
-            if not isinstance(verification, dict) or verification.get("synthetic") is not True:
-                raise ValueError("Media verification must be explicitly synthetic.")
-            receipts = verification.get("calls")
-            if (
-                not isinstance(receipts, list)
-                or not 1 <= len(receipts) <= 4096
-                or any(not isinstance(row, dict) for row in receipts)
-            ):
-                raise ValueError("Media verification needs a bounded canonical call index.")
-        call_id = str(bundle.metadata["call_id"])
-        matches = [row for row in verification.get("calls", []) if row.get("call_id") == call_id]
-        if len(matches) != 1:
-            raise ValueError("The indexed audio needs one exact canonical verification receipt.")
-        path = exact_file(root, f"import_ready/{call_id}/audio.mp3")
-        if not 0 < path.stat().st_size <= MAX_AUDIO_BYTES:
-            raise ValueError("An audio attachment exceeds its byte budget.")
-        sha = hashlib.sha256()
-        with path.open("rb") as source:
-            while block := source.read(1024 * 1024):
-                sha.update(block)
-        timing_path = exact_file(root, f"import_ready/{call_id}/audio.timing.json")
-        if timing_path.stat().st_size > MAX_BUNDLE_BYTES:
-            raise ValueError("A timing attachment exceeds its byte budget.")
-        timing_bytes = timing_path.read_bytes()
-        manifest = SyntheticAudioManifest.model_validate(
-            {
-                "schema": "synthetic-call-audio/1",
-                "synthetic": True,
-                "call_id": call_id,
-                "call_bundle_sha256": content_hash(bundle.model_dump(by_alias=True)),
-                "audio_sha256": sha.hexdigest(),
-                "audio_bytes": path.stat().st_size,
-                "content_type": "audio/mpeg",
-                "duration_ms": bundle.metadata["duration_ms"],
-                "timing_file_sha256": hashlib.sha256(timing_bytes).hexdigest(),
-                "timing": json.loads(timing_bytes),
-                "verification": matches[0],
-            }
-        )
-        manifest.require_bundle(bundle)
-        verify_decode(path, duration_ms=manifest.duration_ms)
-        yield SyntheticAudioAttachment(manifest=manifest, path=path)

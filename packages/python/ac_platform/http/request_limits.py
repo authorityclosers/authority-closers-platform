@@ -29,9 +29,6 @@ _STUDIO_VIDEO_BYTES_PATH = re.compile(
 _FILESYSTEM_AVATAR_BYTES_PATH = re.compile(r"/v1/media/filesystem-avatar-upload/.{1,512}")
 _CONVERSATION_BYTES_PATH = re.compile(rf"/v1/conversation/recordings/{_UUID}/source")
 _ACQUISITION_BYTES_PATH = re.compile(rf"/v1/conversation/acquisition/submissions/{_UUID}/source")
-_SYNTHETIC_BYTES_PATH = re.compile(
-    r"/v1/conversation/acquisition/imports/sandbox/calls/syn-[A-Za-z0-9][A-Za-z0-9._:-]{0,150}/source"
-)
 _CONVERSATION_DRAFT_IMPORT_PATH = re.compile(rf"/v1/admin/conversation/runs/{_UUID}/draft")
 
 
@@ -153,10 +150,7 @@ class RequestBodyLimitMiddleware:
             self.conversation_upload_max_bytes
             if _CONVERSATION_BYTES_PATH.fullmatch(scope.get("path", ""))
             else self.acquisition_upload_max_bytes
-            if (
-                _ACQUISITION_BYTES_PATH.fullmatch(scope.get("path", ""))
-                or _SYNTHETIC_BYTES_PATH.fullmatch(scope.get("path", ""))
-            )
+            if _ACQUISITION_BYTES_PATH.fullmatch(scope.get("path", ""))
             else None
         )
         if upload_limit is not None and scope.get("method") == "PUT":
