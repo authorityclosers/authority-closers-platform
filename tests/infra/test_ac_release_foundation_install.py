@@ -37,10 +37,21 @@ class FoundationRunner(FakeRunner):
         self.operations = []
         self.archives = {}
         self.history_at_core = []
+        self.trees = {}  # sha -> {repository path: content} for git show/diff
 
     def __call__(self, argv, **kwargs):
         argv = list(argv)
         self.operations.append((argv, kwargs))
+        if argv[0] == "git" and "show" in argv:
+            sha, _, path = argv[-1].partition(":")
+            if path not in self.trees.get(sha, {}):
+                raise MODULE.ReleaseError("git failed")
+            return subprocess.CompletedProcess(argv, 0, self.trees[sha][path], "")
+        if argv[0] == "git" and "diff" in argv:
+            split = argv.index("--")
+            old, new = (self.trees[sha] for sha in argv[split - 2 : split])
+            differs = any(old.get(path) != new.get(path) for path in argv[split + 1 :])
+            return subprocess.CompletedProcess(argv, int(differs), "", "")
         if argv[0] == "git" and "archive" in argv:
             archive = Path(
                 next(arg.removeprefix("--output=") for arg in argv if arg.startswith("--output="))
@@ -266,4 +277,135 @@ def test_invalid_bundle_does_not_attempt_a_foundation_install(tmp_path):
     with pytest.raises(MODULE.ReleaseError, match="no valid AC_MIGRATION_HEAD"):
         engine.deploy_core("staging", build)
     assert runner.operations == []
+    assert engine.history() == []
+
+
+SCOPE_ROWS = (
+    "executable\tscripts/ac-postgres-backup.py\t/usr/local/libexec/authority-closers/"
+    "ac-postgres-backup.py\t0755\troot\troot",
+    "unit\tsystemd/ac-postgres-backup.timer\t/etc/systemd/system/ac-postgres-backup.timer"
+    "\t0644\troot\troot",
+)
+OTHER_ROW = "executable\tscripts/ac-edge-check\t/usr/local/sbin/ac-edge-check\t0755\troot\troot"
+
+
+def foundation_tree(**changes):
+    tree = {
+        MODULE.BACKUP_POLICY: "AC_R2_LOGICAL_DUMP_MAX_BYTES=8388608\n",
+        MODULE.BACKUP_SCOPE_LIST: "# backup scope\n"
+        "/usr/local/libexec/authority-closers/ac-postgres-backup.py\n"
+        "/etc/systemd/system/ac-postgres-backup.timer\n",
+        MODULE.FOUNDATION_MANIFEST: "\n".join(("# kind\tsource", *SCOPE_ROWS, OTHER_ROW)) + "\n",
+        f"{MODULE.FOUNDATION_PREFIX}/scripts/ac-postgres-backup.py": f'HEAD = "{MIGRATION}"\n',
+        f"{MODULE.FOUNDATION_PREFIX}/systemd/ac-postgres-backup.timer": "[Timer]\n",
+        f"{MODULE.FOUNDATION_PREFIX}/scripts/ac-edge-check": "# edge\n",
+    }
+    return {**tree, **changes}
+
+
+def scoped_host(tmp_path, installed=OLD, **changes):
+    """A host whose backup scope came from `installed` and knows the build's head."""
+    engine, runner, build = setup(tmp_path)
+    foundation_backup_tool(engine, MIGRATION, PREVIOUS_MIGRATION)
+    engine.paths.foundation_scopes.mkdir(parents=True)
+    (engine.paths.foundation_scopes / "backup.release").write_text(f"foundation-{installed}\n")
+    runner.trees = {OLD: foundation_tree(), HEAD: foundation_tree(**changes)}
+    return engine, runner, build
+
+
+def foundation_installs(runner):
+    return [argv for argv, _ in runner.installers() if "install-foundation" in argv[1]]
+
+
+POLICY_ONLY = {MODULE.BACKUP_POLICY: "AC_R2_LOGICAL_DUMP_MAX_BYTES=67108864\n"}
+
+
+def test_policy_only_change_is_planned_in_a_dry_run(tmp_path):
+    engine, runner, build = scoped_host(tmp_path, **POLICY_ONLY)
+    result = engine.deploy_core("staging", build, dry_run=True)
+    assert result["foundation_backup_install"] == MIGRATION
+    assert result["foundation_backup_reason"] == "scope"
+    assert foundation_installs(runner) == []
+    assert engine.history() == []
+
+
+def test_policy_only_change_installs_the_backup_scope_before_core(tmp_path):
+    engine, runner, build = scoped_host(tmp_path, **POLICY_ONLY)
+    result = engine.attempt("staging", "core", build, dry_run=False, trigger="auto")
+    assert result["result"] == "success"
+    (foundation, options), (core, _) = runner.installers()
+    assert foundation[1].endswith("install-foundation-release.sh")
+    assert options["env"]["AC_INSTALL_SCOPE"] == "backup"
+    assert options["env"]["AC_RELEASE_ID"] == f"foundation-{HEAD}"
+    assert core[1].endswith("install-application-release.sh")
+    entry, deployed = engine.history()
+    assert entry["action"] == "foundation-backup-install"
+    assert (entry["reason"], entry["result"]) == ("scope", "success")
+    assert deployed["result"] == "success"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {f"{MODULE.FOUNDATION_PREFIX}/scripts/ac-postgres-backup.py": f'HEAD = "{MIGRATION}"\n#\n'},
+        {f"{MODULE.FOUNDATION_PREFIX}/systemd/ac-postgres-backup.timer": "[Timer]\nX=1\n"},
+        {
+            MODULE.FOUNDATION_MANIFEST: "\n".join(
+                (SCOPE_ROWS[0].replace("0755", "0750"), SCOPE_ROWS[1], OTHER_ROW)
+            )
+            + "\n"
+        },
+        {MODULE.BACKUP_SCOPE_LIST: "/usr/local/libexec/authority-closers/ac-postgres-backup.py\n"},
+    ],
+    ids=["tool", "unit", "mode", "scope-list"],
+)
+def test_scope_tool_or_manifest_change_is_drift(tmp_path, changes):
+    engine, _, build = scoped_host(tmp_path, **changes)
+    assert engine.backup_scope_drift(build.sha) is True
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{}, {f"{MODULE.FOUNDATION_PREFIX}/scripts/ac-edge-check": "# edge v2\n"}],
+    ids=["identical", "outside-scope"],
+)
+def test_unchanged_scope_installs_nothing(tmp_path, changes):
+    engine, runner, build = scoped_host(tmp_path, **changes)
+    engine.deploy_core("staging", build)
+    assert foundation_installs(runner) == []
+    assert all(argv[-1] != "infra/vps-foundation" for argv, _ in runner.operations)
+    assert engine.history() == []
+
+
+def test_scope_installed_from_the_build_needs_no_comparison(tmp_path):
+    engine, runner, build = scoped_host(tmp_path, installed=HEAD, **POLICY_ONLY)
+    engine.deploy_core("staging", build)
+    assert foundation_installs(runner) == []
+    assert not any(argv[0] == "git" and "show" in argv for argv, _ in runner.operations)
+
+
+def test_host_without_scope_record_keeps_full_foundation_policy(tmp_path):
+    engine, runner, build = scoped_host(tmp_path, **POLICY_ONLY)
+    (engine.paths.foundation_scopes / "backup.release").unlink()
+    assert engine.backup_scope_drift(build.sha) is False
+
+
+def test_unreadable_installed_commit_reinstalls(tmp_path):
+    engine, runner, build = scoped_host(tmp_path)
+    del runner.trees[OLD]
+    assert engine.backup_scope_drift(build.sha) is True
+
+
+def test_invalid_scope_record_is_refused(tmp_path):
+    engine, _, build = scoped_host(tmp_path)
+    (engine.paths.foundation_scopes / "backup.release").write_text("foundation-latest\n")
+    with pytest.raises(MODULE.ReleaseError, match="invalid release ID"):
+        engine.deploy_core("staging", build)
+
+
+def test_rollback_only_ignores_scope_drift(tmp_path):
+    engine, runner, build = scoped_host(tmp_path, **POLICY_ONLY)
+    engine.installed_engine = lambda: OUTSIDE
+    engine.deploy_core("staging", build, rollback_only=True)
+    assert foundation_installs(runner) == []
     assert engine.history() == []

@@ -85,6 +85,12 @@ WEB_FILES = frozenset({"SHA256SUMS", "web-image.env", "web-image.json", "web-ima
 MAX_ARTIFACT_BYTES = 450_000_000
 APPLICATION_SOURCE_MANIFEST = "infra/application/release-source-files.txt"
 APPLICATION_SOURCE_EXTRAS = ("scripts/data-changes/production-smoke-email-verification.py",)
+# What a scoped backup install puts on the host: the backup tools named in the
+# scope list (with their manifest rows) and the policy the backup reads.
+FOUNDATION_PREFIX = "infra/vps-foundation"
+BACKUP_POLICY = f"{FOUNDATION_PREFIX}/config/r2/free-tier-policy.conf"
+BACKUP_SCOPE_LIST = f"{FOUNDATION_PREFIX}/config/release/install-scope-backup.txt"
+FOUNDATION_MANIFEST = f"{FOUNDATION_PREFIX}/config/release/install-manifest.tsv"
 # Stored bundles are several hundred MB each. Keep whatever runs in staging or
 # production plus this many recent successful deploys (rollback and promotion).
 KEEP_RECENT_BUILDS = 10
@@ -888,6 +894,7 @@ class Paths:
     lock: Path = Path("/run/ac-release.lock")
     foundation: Path = Path("/srv/authority-closers/current")
     backup_tool: Path = Path("/usr/local/libexec/authority-closers/ac-postgres-backup.py")
+    foundation_scopes: Path = Path("/var/lib/authority-closers/foundation-scopes")
     sales_xray: Path = Path("/etc/authority-closers/sales-xray")
     engine: Path = Path("/opt/ac-release")
     backups: Path = Path("/srv/authority-closers/backups/application/production")
@@ -2739,8 +2746,13 @@ class Engine:
                 except ReleaseError:
                     if rollback_only:
                         raise
+                    reason = "migration"
+                else:
+                    drift = not rollback_only and self.backup_scope_drift(build.sha)
+                    reason = "scope" if drift else ""
+                if reason:
                     planned = self.install_backup_foundation(
-                        environment, build, bundle, stage, log, dry_run=dry_run
+                        environment, build, bundle, stage, log, dry_run=dry_run, reason=reason
                     )
             except ReleaseError as error:
                 if not dry_run:
@@ -2923,8 +2935,76 @@ class Engine:
                 "backups for every environment would stop"
             )
 
+    def installed_backup_scope(self) -> str | None:
+        """The foundation commit of the last scoped backup install, if any."""
+        record = self.paths.foundation_scopes / "backup.release"
+        try:
+            value = record.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return None
+        match = re.fullmatch(r"foundation-([0-9a-f]{40})", value)
+        if match is None:
+            raise ReleaseError("backup foundation scope record has an invalid release ID")
+        return match.group(1)
+
+    def backup_scope(self, sha: str) -> tuple[frozenset[str], frozenset[str]]:
+        """The scope's manifest rows and the source paths a scoped install reads."""
+        git = ["git", f"--git-dir={self.paths.mirror}", "show"]
+        targets = {
+            line.strip()
+            for line in self.run([*git, f"{sha}:{BACKUP_SCOPE_LIST}"]).stdout.splitlines()
+            if line.strip() and not line.startswith("#")
+        }
+        rows: set[str] = set()
+        paths = {BACKUP_POLICY, BACKUP_SCOPE_LIST}
+        for line in self.run([*git, f"{sha}:{FOUNDATION_MANIFEST}"]).stdout.splitlines():
+            fields = line.split("\t")
+            if len(fields) >= 3 and fields[2] in targets:
+                rows.add(line)
+                paths.add(f"{FOUNDATION_PREFIX}/{fields[1]}")
+        return frozenset(rows), frozenset(paths)
+
+    def backup_scope_drift(self, sha: str) -> bool:
+        """Whether the build's backup tools or policy differ from the installed scope.
+
+        A host without a scope record takes its backup policy from the full
+        foundation release, which this engine does not install.
+        """
+        installed = self.installed_backup_scope()
+        if installed is None or installed == sha:
+            return False
+        candidate_rows, candidate_paths = self.backup_scope(sha)
+        try:
+            installed_rows, installed_paths = self.backup_scope(installed)
+        except ReleaseError:
+            return True  # The installed commit is unreadable; reinstalling converges.
+        if candidate_rows != installed_rows:
+            return True
+        compared = self.run(
+            [
+                "git",
+                f"--git-dir={self.paths.mirror}",
+                "diff",
+                "--quiet",
+                installed,
+                sha,
+                "--",
+                *sorted(candidate_paths | installed_paths),
+            ],
+            check=False,
+        )
+        return compared.returncode != 0  # 1 differs; anything else cannot prove sameness.
+
     def install_backup_foundation(
-        self, environment: str, build: Build, bundle: Path, stage: Path, log: Path, *, dry_run: bool
+        self,
+        environment: str,
+        build: Build,
+        bundle: Path,
+        stage: Path,
+        log: Path,
+        *,
+        dry_run: bool,
+        reason: str = "migration",
     ) -> dict[str, str]:
         head = self.bundle_migration_head(bundle)
         entry: dict[str, Any] = {
@@ -2933,6 +3013,7 @@ class Engine:
             "environment": environment,
             "sha": build.sha,
             "migration": head,
+            "reason": reason,
             "log": str(log),
         }
         try:
@@ -2952,7 +3033,7 @@ class Engine:
                         f"candidate foundation backup tool does not recognise migration {required}"
                     )
             if dry_run:
-                return {"foundation_backup_install": head}
+                return {"foundation_backup_install": head, "foundation_backup_reason": reason}
             completed = self.run(
                 ["bash", str(scripts / "install-foundation-release.sh")],
                 env={

@@ -138,6 +138,7 @@ def make_engine(tmp_path: Path, github: FakeGitHub | None = None, runner: FakeRu
         lock=tmp_path / "lock",
         foundation=tmp_path / "foundation",
         backup_tool=tmp_path / "libexec" / "ac-postgres-backup.py",
+        foundation_scopes=tmp_path / "foundation-scopes",
         sales_xray=tmp_path / "sales-xray",
     )
     for directory in (paths.state, paths.config, paths.application):
