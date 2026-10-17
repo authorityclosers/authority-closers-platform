@@ -28,10 +28,15 @@ export function ActionSheet({
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const drag = useRef<{ y: number; moved: number } | null>(null);
+  // The tap that ends a long-press can land on the new backdrop: ignore it.
+  const openedAt = useRef(0);
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      openedAt.current = Date.now();
+      dialog.showModal();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
   return (
@@ -44,7 +49,11 @@ export function ActionSheet({
         onClose();
       }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (
+          event.target === event.currentTarget &&
+          Date.now() - openedAt.current > 500
+        )
+          onClose();
       }}
     >
       {open ? (
