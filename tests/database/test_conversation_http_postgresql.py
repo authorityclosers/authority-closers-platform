@@ -100,7 +100,8 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
             return {"Cookie": f"{settings.session_cookie_name}={value}"}
 
         root = "/v1/conversation"
-        source_path = f"{root}/recordings/{prepared.recording_id}/source"
+        recording_path = f"{root}/recordings/{prepared.recording_id}"
+        source_path = f"{recording_path}/source"
         transcript_path = f"{root}/recordings/{prepared.recording_id}/transcript"
         report_path = f"{root}/runs/{prepared.run_id}/report"
         docx_path = f"{report_path}.docx"
@@ -225,6 +226,16 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                     for path in (source_path, transcript_path, report_path, docx_path):
                         denied = await client.get(path, headers=cookie(other_token))
                         assert denied.status_code == 404, denied.text
+                    # Another person, in or outside the tenant, cannot erase the call.
+                    foreign_delete = await client.delete(
+                        recording_path,
+                        headers={
+                            **cookie(other_token),
+                            "Origin": "http://learner.test",
+                            "Idempotency-Key": f"foreign-erase-{same_tenant}",
+                        },
+                    )
+                    assert foreign_delete.status_code == 404, foreign_delete.text
                     assert (
                         await client.get(f"{root}/recordings", headers=cookie(other_token))
                     ).json() == {"recordings": []}
@@ -239,6 +250,25 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                 assert (await client.get(f"{root}/recordings", headers=cookie(token))).json() == {
                     "recordings": []
                 }
+                # Owner erasure still works after consent revocation; it is origin-gated,
+                # idempotent per key, and hides the source at once.
+                erase_headers = {
+                    **cookie(token),
+                    "Origin": "http://learner.test",
+                    "Idempotency-Key": "owner-erase",
+                }
+                cross_origin = await client.delete(
+                    recording_path,
+                    headers={**erase_headers, "Origin": "https://untrusted.invalid"},
+                )
+                assert cross_origin.status_code == 403
+                erased = await client.delete(recording_path, headers=erase_headers)
+                assert erased.status_code == 202, erased.text
+                assert erased.json() == {"id": str(prepared.recording_id), "state": "deleting"}
+                assert erased.headers["cache-control"] == "private, no-store"
+                replay = await client.delete(recording_path, headers=erase_headers)
+                assert replay.status_code == 202 and replay.json() == erased.json()
+                assert (await client.get(source_path, headers=cookie(token))).status_code == 404
         finally:
             await engine.dispose()
 

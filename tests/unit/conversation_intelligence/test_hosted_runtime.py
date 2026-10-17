@@ -251,8 +251,8 @@ def test_deployed_composition_has_owned_routes_without_local_proof_import(
         "/v1/conversation/runs/{run_id}",
     ):
         assert removed not in paths
-    assert "get" not in paths.get("/v1/conversation/recordings/{recording_id}", {})
-    assert "delete" not in paths.get("/v1/conversation/recordings/{recording_id}", {})
+    # Owner erasure for legacy recordings stays until POST /recordings is retired.
+    assert set(paths["/v1/conversation/recordings/{recording_id}"]) == {"delete"}
     assert not any("/imports/sandbox" in path for path in paths)
     assert "/v1/conversation/recordings/{recording_id}/transcript" in paths
     assert application.docs_url is None

@@ -249,4 +249,24 @@ def install_conversation_http(
                 )
             )
 
+        # Owner-initiated erasure for legacy CallStudio recordings (still creatable
+        # through POST /recordings). Kept until that intake surface is removed.
+        @router.delete("/recordings/{recording_id}", status_code=202)
+        async def delete_recording(
+            recording_id: UUID,
+            request: Request,
+            response: Response,
+            key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
+            auth: AuthenticatedTransaction = dependency,
+        ) -> Any:
+            admitted(request, response)
+            require_safe_origin(request, settings)
+            return await result(
+                ConversationApplication(auth.database).request_deletion(
+                    auth.resolved.actor,
+                    recording_id,
+                    key=key,
+                )
+            )
+
     app.include_router(router)

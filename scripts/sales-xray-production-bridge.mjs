@@ -389,6 +389,7 @@ function resolveApiRouteBase(method, pathname, search = "") {
   ).exec(pathname);
   if (recording) {
     const suffix = recording[2];
+    if (!suffix && verb === "DELETE" && noQuery) return api();
     if (suffix === "source" && (verb === "GET" || verb === "PUT") && noQuery)
       return api();
     if (
