@@ -9,7 +9,7 @@ Controlled inputs: snapshot-repair-decision revision 99c9862d-323b-4619-a2f0-53f
 Pinned admission
 
 - Application and backup-scope commit fa846dc1264130e295eccc13daf6164c673c8a8a. Installed backup Python bytes must hash to fea361c9883d603b0fae78c8081b4492be965afeb65ac619448ca2556aa294cf before any import. No pycache is written by that loader.
-- Existing backup.release must contain the exact foundation scope. Policy bytes must hash to bd04b1397a802ec8923e3e488d3b1a2fea8454219aae4ea19ad5ee151ce84846. Existing canonical release checksum/profile/image admission is reused.
+- Existing backup.release must contain the exact foundation scope. Policy bytes must hash to 76c752979ed9d8fcac299b0bd4b54962fcc3af30b57d7072d963ead35c4f7d2d (re-pinned 17 Oct 2026 when the owner-approved 64 MiB logical dump bound replaced 8 MiB; was bd04b1397a802ec8923e3e488d3b1a2fea8454219aae4ea19ad5ee151ce84846). Existing canonical release checksum/profile/image admission is reused.
 - Exact schema head 20261011_0087 / ac-postgres-parity-v58 / 149 canonical parity tables come from that approved backup source. Public table/view/foreign/materialized relation inventory must equal the approved ordinary-table inventory; unexpected, missing or substituted relations refuse. This is the existing migration-identity/table-inventory schema contract, not a column-by-column schema attestation.
 - PostgreSQL server version must be 180006. Existing ac_backup role must have SELECT/USAGE and no table-write privilege, superuser/createdb/createrole/inheritance/replication/bypass-RLS flags. RLS filtering is refused with row_security=off. No grants, schema changes or role changes occur in the diagnostic.
 
