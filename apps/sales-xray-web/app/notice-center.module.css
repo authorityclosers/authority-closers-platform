@@ -9,6 +9,12 @@
   pointer-events: none;
 }
 
+/* While the Terms card is open (consent-renewal.tsx) it sits above the
+   shell; corner cards stay above it so their buttons can be used. */
+:global(html[data-sx-consent]) .stack {
+  z-index: 1100;
+}
+
 .card {
   position: relative;
   display: grid;
