@@ -190,6 +190,7 @@ const TIMES: { key: Pick; label: string }[] = [
   { key: "evening", label: "This evening" },
   { key: "morning", label: "Tomorrow morning" },
   { key: "week", label: "Next week" },
+  { key: "someday", label: "Someday" },
   { key: "custom", label: "Pick a time" },
 ];
 
