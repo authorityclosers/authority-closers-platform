@@ -1360,114 +1360,137 @@
   }
 }
 
-/* ---------- Connect tiles ---------- */
+/* ---------- Lead sources (owner, 18 Oct: real logos, one clean list) ---------- */
 
-.connectGrid {
+.sourceList {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--sx-gap);
-}
-
-.connectTile {
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  align-content: start;
-  gap: 8px;
-  min-width: 0;
-  padding: 20px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
 }
 
-.brandMark {
+.sourceRow {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 4px 14px;
+  align-items: center;
+  padding: 16px 18px;
+}
+
+.sourceRow + .sourceRow {
+  border-top: 1px solid var(--sx-line);
+}
+
+.sourceLogo {
+  position: relative;
   display: grid;
   place-items: center;
   width: 44px;
   height: 44px;
+  box-sizing: border-box;
+  border: 1px solid var(--sx-line);
   border-radius: 12px;
-  /* White on the strong light-theme colours, dark on the lighter dark-theme ones. */
-  color: var(--sx-surface);
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1;
+  background: var(--sx-surface);
 }
 
-.brandMark[data-brand="meta"] {
-  background: var(--lx-closing);
-}
-
-.brandMark[data-brand="google"] {
-  background: var(--lx-objection);
-}
-
-.brandMark[data-brand="linkedin"] {
-  background: var(--lx-closing-ink);
-  font-size: 18px;
-}
-
-.connectTitle {
-  font: var(--sx-text-panel);
-  font-size: 17px;
-}
-
-.connectText {
-  color: var(--sx-muted);
-}
-
-.connectBody {
+/* Instagram rides on the Facebook mark: one source, both apps. */
+.sourceLogoBadge {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
   display: grid;
-  gap: 8px;
-  align-content: end;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 1px solid var(--sx-line);
+  border-radius: 7px;
+  background: var(--sx-surface);
 }
 
-.connectButton {
-  display: inline-flex;
+.sourceMain {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sourceTitle {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  border-radius: var(--sx-radius-sm);
-  background: var(--lx-closing);
-  color: var(--lx-on-teal);
+  gap: 4px 8px;
+}
+
+.sourceTitle h3 {
+  margin: 0;
+  color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.connectButton:hover {
-  background: var(--lx-closing-ink);
-}
-
-.connectButton:focus-visible {
-  outline: none;
-  box-shadow: var(--sx-focus-ring);
-}
-
-.connectSoon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  border: 1px dashed var(--sx-line-strong);
-  border-radius: var(--sx-radius-sm);
-  color: var(--sx-muted);
   font-weight: 650;
 }
 
-.connectedLine {
+.sourceMain p {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.sourceAction {
+  display: flex;
+  gap: 8px;
+}
+
+.sourceMore {
+  display: grid;
+  grid-column: 2 / -1;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pageList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  list-style: none;
+}
+
+.pageRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-sunken);
+  gap: 6px 12px;
+  padding: 8px 8px 8px 12px;
 }
 
-.connectNote {
+.pageRow + .pageRow {
+  border-top: 1px solid var(--sx-line);
+}
+
+.pageName {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.pageName strong {
+  overflow-wrap: anywhere;
+}
+
+.pageName small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
+}
+
+.pageRow[data-off] .pageName strong {
+  color: var(--sx-muted);
+}
+
+.pageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 /* ---------- Other ways (collapsed) ---------- */
@@ -1535,8 +1558,18 @@
 }
 
 @container (max-width: 760px) {
-  .connectGrid {
-    grid-template-columns: minmax(0, 1fr);
+  .sourceRow {
+    grid-template-columns: 44px minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .sourceAction,
+  .sourceMore {
+    grid-column: 1 / -1;
+  }
+
+  .sourceAction > * {
+    flex: 1;
   }
 
   .hero {
@@ -1935,14 +1968,99 @@
   color: var(--sx-muted);
 }
 
-.ownerRow select {
-  min-height: 40px;
-  padding: 0 10px;
+.ownerRow strong {
+  overflow-wrap: anywhere;
+}
+
+/* Reassign: the people to choose from, one tap each (owner, 18 Oct). */
+.reassignList {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.reassignList > .stepLabel {
+  margin-bottom: 2px;
+}
+
+.repPick {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.repPick:hover:not(:disabled) {
+  background: var(--sx-sunken);
+}
+
+.repPick:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.repPick:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.repPick > span:last-child {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.repPick small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* A big team scrolls inside the card, with a name filter on top. */
+.repPeople {
+  display: grid;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.repFind {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--sx-control-h);
+  margin: 2px 0 4px;
+  padding: 0 12px;
   border: 1px solid var(--sx-line-strong);
   border-radius: var(--sx-radius-sm);
   background: var(--sx-paper);
   color: var(--sx-ink);
   font: inherit;
+}
+
+.repFind:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.repPickIcon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--sx-accent-soft);
+  color: var(--lx-strength-ink);
 }
 
 .noteRow {
@@ -1983,8 +2101,10 @@
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .ownerRow select {
-    grid-column: 1 / -1;
+  /* Reassign sits under the words, lined up with them. */
+  .ownerRow > button {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 
@@ -2329,12 +2449,6 @@
     grid-row: 1;
     grid-column: 3;
   }
-}
-
-.connectChecked {
-  display: block;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
 }
 
 /* Phones: the shell already gives the 16 px side margin (owner, 17 Oct:

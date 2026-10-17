@@ -125,25 +125,44 @@
 }
 
 /* ---------- Menu ---------- */
+/* Shown in the top layer (popover) and placed below the ⋯ by script, so the
+   rows under it can never paint over it. */
 .menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 30;
+  position: fixed;
+  inset: auto;
+  top: 0;
+  left: 0;
+  z-index: 60;
   display: grid;
-  min-width: 188px;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 200px;
+  max-width: calc(100vw - 16px);
+  margin: 0;
   padding: 5px;
+  overflow: visible;
   border: 1px solid var(--lx-line);
   border-radius: 12px;
   background: var(--lx-surface);
-  box-shadow: var(--lx-shadow-2);
-  transform-origin: top right;
+  box-shadow:
+    var(--lx-shadow-2),
+    0 16px 32px -20px color-mix(in srgb, var(--lx-ink) 35%, transparent);
+  color: var(--lx-ink);
+  transform-origin: top left;
   animation: menu-in var(--lx-dur-move) var(--lx-ease-pop) both;
+}
+.menu[data-side="top"] {
+  transform-origin: bottom left;
+}
+.menu::backdrop {
+  background: transparent;
 }
 .menu > :is(button, a) {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-height: 34px;
+  white-space: nowrap;
   padding: 8px 10px;
   border: 0;
   border-radius: 8px;

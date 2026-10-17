@@ -398,7 +398,7 @@ it("shows source-resolved seller and prospect suggestions with one-tap confirmat
     host.querySelector('[aria-label="Detected speakers"]')?.textContent,
   ).toContain("Fictional Buyer");
   expect(puts()).toHaveLength(0);
-  await act(async () => button("Confirm speakers").click());
+  await act(async () => button("Confirm").click());
   expect(puts()).toHaveLength(1);
   expect(host.querySelector('[aria-label="Detected speakers"]')).toBeNull();
   expect(host.querySelector("output")!.textContent).toContain(
@@ -419,7 +419,86 @@ it("lets the detected-speakers card wait without writing anything", async () => 
   };
   await render();
   expect(host.querySelector('[aria-label="Detected speakers"]')).not.toBeNull();
-  await act(async () => button("Not now").click());
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[aria-label="Not now"]')!.click(),
+  );
   expect(host.querySelector('[aria-label="Detected speakers"]')).toBeNull();
   expect(puts()).toHaveLength(0);
+});
+
+it("names each detected voice with its role and first line, never a raw speaker id", async () => {
+  data = {
+    ...initial(),
+    status: "predicted",
+    user_revision: 0,
+    speakers: initial().speakers.map((row, i) => ({
+      ...row,
+      display_name: null as unknown as string,
+      role: i ? "prospect" : "salesperson",
+      role_source: "predicted",
+    })),
+  };
+  await act(async () =>
+    root.render(
+      <SpeakerServerProfiles
+        callId={CALL}
+        transcriptRevision={transcript.revision}
+        enabled
+        transcript={transcript}
+      >
+        <Probe />
+      </SpeakerServerProfiles>,
+    ),
+  );
+  const card = host.querySelector('[aria-label="Detected speakers"]')!;
+  expect(card.textContent).toContain("Did we get the speakers right?");
+  expect(card.textContent).toContain("Speaker 1");
+  expect(card.textContent).toContain("Speaker 2");
+  expect(card.textContent).toContain("Salesperson");
+  expect(card.textContent).toContain("Prospect");
+  expect(card.textContent).not.toMatch(new RegExp(ids.join("|")));
+  expect(card.querySelectorAll("q").length).toBeGreaterThan(0);
+});
+
+it("changes roles on the card: a taken role swaps, names are kept, one save", async () => {
+  data = {
+    ...initial(),
+    status: "predicted",
+    user_revision: 0,
+    speakers: initial().speakers.map((row, i) => ({
+      ...row,
+      role: i ? "prospect" : "salesperson",
+      role_source: "predicted",
+    })),
+  };
+  await render();
+  await act(async () => button("Change").click());
+  const card = host.querySelector('[aria-label="Detected speakers"]')!;
+  const roleButton = (speaker: number, role: string) =>
+    [
+      ...card.querySelectorAll<HTMLButtonElement>(
+        `[aria-label="Role for speaker ${speaker}"] button`,
+      ),
+    ].find((b) => b.textContent === role)!;
+  // Speaker 1 is the prospect after all: speaker 2 takes the seller's role.
+  await act(async () => roleButton(1, "Prospect").click());
+  expect(roleButton(1, "Prospect").getAttribute("aria-pressed")).toBe("true");
+  expect(roleButton(2, "Salesperson").getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  await act(async () => button("Save").click());
+  expect(puts()).toHaveLength(1);
+  const sent = JSON.parse(puts()[0][1]!.body as string).speakers as {
+    speaker_id: string;
+    role: string;
+    display_name: string | null;
+  }[];
+  expect(sent.find((row) => row.speaker_id === ids[0])).toMatchObject({
+    role: "prospect",
+    display_name: "Fictional Seller",
+  });
+  expect(sent.find((row) => row.speaker_id === ids[1])).toMatchObject({
+    role: "salesperson",
+    display_name: "Fictional Buyer",
+  });
 });

@@ -18,6 +18,7 @@ import {
   PhoneMissed,
   PhoneOff,
   Radio,
+  Shuffle,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -58,6 +59,7 @@ import {
   type Stage,
 } from "./leads-client";
 import { sourceText, whyLine } from "./desk-view";
+import { firstCallWords, ownerNote } from "./owner-words";
 import {
   MessageSetup,
   MessageSheet,
@@ -648,17 +650,17 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
     case "assigned":
       return event.owner_name
         ? {
-            title: `Given to ${event.owner_name}`,
-            detail: event.allocation_reason ?? undefined,
+            title: `Assigned to ${event.owner_name}`,
+            detail: ownerNote(event.allocation_reason) ?? undefined,
           }
         : {
             title: "Waiting for an owner",
-            detail: event.allocation_reason ?? undefined,
+            detail: ownerNote(event.allocation_reason) ?? undefined,
           };
     case "reassigned":
       return {
-        title: `Moved from ${event.previous_owner_name ?? "nobody"} to ${event.owner_name ?? "nobody"}`,
-        detail: event.allocation_reason ?? undefined,
+        title: `Reassigned from ${event.previous_owner_name ?? "nobody"} to ${event.owner_name ?? "nobody"}`,
+        detail: ownerNote(event.allocation_reason) ?? undefined,
       };
     case "result": {
       const next = event.next_action_at
@@ -1408,6 +1410,15 @@ function LeadCard({
   const [editing, setEditing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [find, setFind] = useState("");
+  const others = detail.reps.filter(
+    (rep) => rep.person_id !== lead.owner_person_id,
+  );
+  const needle = find.trim().toLocaleLowerCase();
+  const shownReps = needle
+    ? others.filter((rep) => rep.name.toLocaleLowerCase().includes(needle))
+    : others;
   const [moveError, setMoveError] = useState<string | null>(null);
   const sub = [lead.company, lead.city, lead.language]
     .filter(Boolean)
@@ -1445,6 +1456,7 @@ function LeadCard({
     setMoveError(null);
     try {
       onChanged(await reassign(lead, personId));
+      setPicking(false);
     } catch (reason) {
       setMoveError(
         reason instanceof LeadsError ? reason.message : "Not moved. Try again.",
@@ -1663,43 +1675,101 @@ function LeadCard({
         ) : null}
       </section>
 
+      {/* Owner, 18 Oct: "With X · 0 open leads (fewest)" and "Move to…" were
+          not intuitive. It says who has the lead, why, and offers Reassign. */}
       <section className={styles.panel} aria-label="Owner">
         <div className={styles.ownerRow}>
           <Avatar name={lead.owner_name ?? "No owner"} size={32} />
           <span>
             <strong>
-              {lead.owner_name ? `With ${lead.owner_name}` : "No owner yet"}
+              {!lead.owner_name
+                ? "Not assigned yet"
+                : me && lead.owner_person_id === me.person_id
+                  ? "Assigned to you"
+                  : `Assigned to ${lead.owner_name}`}
             </strong>
-            {detail.owner_reason ? <small>{detail.owner_reason}</small> : null}
+            {ownerNote(detail.owner_reason) ? (
+              <small>{ownerNote(detail.owner_reason)}</small>
+            ) : null}
             <small>
-              {detail.first_call_minutes != null
-                ? `First call ${detail.first_call_minutes} min after it came in`
-                : `Not called yet · came in ${ago(lead.created_at)}`}
+              {firstCallWords(detail.first_call_minutes, ago(lead.created_at))}
             </small>
           </span>
-          {detail.can_assign ? (
-            <select
-              aria-label="Move this lead to"
-              value=""
+          {detail.can_assign && detail.reps.length ? (
+            <Button
+              aria-expanded={picking}
               disabled={moving}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value) void move(value === "__rules" ? null : value);
+              onClick={() => {
+                setMoveError(null);
+                setPicking((open) => !open);
               }}
             >
-              <option value="">Move to…</option>
-              <option value="__rules">Whoever the rules pick</option>
-              {detail.reps
-                .filter((rep) => rep.person_id !== lead.owner_person_id)
-                .map((rep) => (
-                  <option key={rep.person_id} value={rep.person_id}>
-                    {rep.name} · {rep.open_leads} open
-                    {rep.available ? "" : " · away"}
-                  </option>
-                ))}
-            </select>
+              <Shuffle size={14} aria-hidden="true" />
+              {lead.owner_name ? "Reassign" : "Assign"}
+            </Button>
           ) : null}
         </div>
+        {picking ? (
+          <div
+            className={styles.reassignList}
+            role="group"
+            aria-label={lead.owner_name ? "Reassign to" : "Assign to"}
+          >
+            <span className={styles.stepLabel}>
+              {lead.owner_name ? "Reassign to" : "Assign to"}
+            </span>
+            <button
+              type="button"
+              className={styles.repPick}
+              disabled={moving}
+              onClick={() => void move(null)}
+            >
+              <span className={styles.repPickIcon} aria-hidden="true">
+                <Shuffle size={15} />
+              </span>
+              <span>
+                <strong>Let the lead rules pick</strong>
+                <small>
+                  Whoever is free, fits this lead and has the fewest open leads
+                </small>
+              </span>
+            </button>
+            {others.length > 6 ? (
+              <input
+                className={styles.repFind}
+                type="search"
+                value={find}
+                placeholder="Find a person"
+                aria-label="Find a person"
+                onChange={(event) => setFind(event.target.value)}
+              />
+            ) : null}
+            <div className={styles.repPeople}>
+              {shownReps.map((rep) => (
+                <button
+                  key={rep.person_id}
+                  type="button"
+                  className={styles.repPick}
+                  disabled={moving}
+                  onClick={() => void move(rep.person_id)}
+                >
+                  <Avatar name={rep.name} size={28} />
+                  <span>
+                    <strong>{rep.name}</strong>
+                    <small>
+                      {rep.open_leads} open lead
+                      {rep.open_leads === 1 ? "" : "s"}
+                      {rep.available ? "" : " · away now"}
+                    </small>
+                  </span>
+                </button>
+              ))}
+              {shownReps.length ? null : (
+                <p className={styles.hint}>Nobody by that name.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
         {moveError ? (
           <p className={styles.error} role="alert">
             {moveError}

@@ -3756,6 +3756,7 @@ export function AcquisitionStudio({
         callId={submission?.id ?? null}
         transcriptRevision={result?.transcript.revision ?? ""}
         enabled={Boolean(result?.claimed && access?.authenticated === true)}
+        transcript={result?.transcript}
       >
         {content}
       </SpeakerServerProfiles>

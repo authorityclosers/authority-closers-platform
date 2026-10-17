@@ -4,6 +4,7 @@ import { Ellipsis, ExternalLink, Link2, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -20,6 +21,8 @@ import type { ShellRecentCall } from "./shell-store";
 import styles from "./recent-call-item.module.css";
 
 const UNTITLED = "Untitled call";
+const GAP = 6;
+const EDGE = 8;
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -73,8 +76,61 @@ export function RecentCallItem({
   const rowRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   // Enter submits and the input then loses focus: save only once.
   const saving = useRef(false);
+
+  // Owner, 18 Oct: the menu sat under the rows below it (each row's entrance
+  // animation makes it its own layer). It now opens in the top layer, just
+  // below the dots and over the page, so no row or date shows through it.
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    const anchor = moreRef.current;
+    if (!menuOpen || !menu || !anchor) return;
+    try {
+      menu.showPopover?.();
+    } catch {
+      // Already open, or no popover support: it is fixed-position anyway.
+    }
+    const place = () => {
+      const dots = anchor.getBoundingClientRect();
+      const width = menu.offsetWidth;
+      const height = menu.offsetHeight;
+      const left =
+        dots.left + width + EDGE <= window.innerWidth
+          ? dots.left
+          : Math.max(EDGE, dots.right - width);
+      const below = dots.bottom + GAP + height + EDGE <= window.innerHeight;
+      menu.style.left = `${left}px`;
+      menu.style.top = `${
+        below ? dots.bottom + GAP : Math.max(EDGE, dots.top - GAP - height)
+      }px`;
+      menu.dataset.side = below ? "bottom" : "top";
+    };
+    place();
+    let frame = 0;
+    const follow = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(place);
+    };
+    // The delete question is taller than the list; keep it on screen.
+    const resized =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(follow);
+    resized?.observe(menu);
+    window.addEventListener("resize", follow);
+    document.addEventListener("scroll", follow, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      resized?.disconnect();
+      window.removeEventListener("resize", follow);
+      document.removeEventListener("scroll", follow, true);
+      try {
+        menu.hidePopover?.();
+      } catch {
+        // Already closed.
+      }
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -301,7 +357,13 @@ export function RecentCallItem({
         </button>
       )}
       {menuOpen && (
-        <div className={styles.menu} role="menu" aria-label={shown}>
+        <div
+          ref={menuRef}
+          className={styles.menu}
+          role="menu"
+          aria-label={shown}
+          popover="manual"
+        >
           {confirmingDelete ? (
             <div className={styles.confirm}>
               <p>Delete this call and its report?</p>

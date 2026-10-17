@@ -21,17 +21,15 @@ import { useState, useSyncExternalStore } from "react";
 
 import { Badge, Button, Dialog } from "../ui/kit";
 import { inPhoneApp } from "./native-phone";
+import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import styles from "./leads.module.css";
+
+export { ANDROID_DOWNLOAD_READY };
 
 const RELEASE =
   "https://github.com/authorityclosers/authority-closers-platform/releases/download/sales-xray-android-latest";
 export const ANDROID_APP = `${RELEASE}/sales-xray-android.apk`;
 const BANNER_KEY = "sx-leads-app-banner";
-/**
- * Off (17 Oct release decision): the published build is a debuggable test
- * build, so nobody is offered it until a release build is published.
- */
-export const ANDROID_DOWNLOAD_READY = false;
 
 const never = () => () => undefined;
 

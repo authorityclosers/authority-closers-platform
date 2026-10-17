@@ -1,17 +1,28 @@
 "use client";
 
 /**
- * Lead sources, as simple as signing in (owner, 16 Oct): three big Connect
- * buttons — Facebook & Instagram, Google Ads, LinkedIn — and one line per
- * connected account. Files, sheets and website forms sit behind one collapsed
- * "Other ways to add leads"; technical details appear only when asked for.
+ * Lead sources, as simple as signing in (owner, 16 Oct): Facebook &
+ * Instagram, Google Ads and LinkedIn, each one row with its real logo, a
+ * status and one action, and one line per connected Page under it (owner,
+ * 18 Oct: proper icons and a cleaner layout). Files, sheets and website forms
+ * sit behind one collapsed "Other ways to add leads"; technical details
+ * appear only when asked for.
  */
 
-import { ChevronDown, Copy, FileSpreadsheet, FlaskConical } from "lucide-react";
+import {
+  ChevronDown,
+  Copy,
+  FileSpreadsheet,
+  FlaskConical,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { Badge, Button, Field } from "../ui/kit";
+import { BRANDS, type Brand } from "../brands/brand-registry";
+import { BrandMark } from "../report-entities";
+import { Badge, Button, Field, kitStyles } from "../ui/kit";
 import {
   addSource,
   ago,
@@ -75,34 +86,63 @@ async function metaCall<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await response.json()) as T;
 }
 
-/* ---------- Brand marks (simple, token-coloured) ---------- */
+/* ---------- Brand marks (our own public/brands files) ---------- */
 
-function Mark({ kind }: { kind: "meta" | "google" | "linkedin" }) {
-  const text = kind === "meta" ? "f" : kind === "google" ? "G" : "in";
+const brand = (key: string): Brand =>
+  BRANDS.find((item) => item.key === key) as Brand;
+
+/**
+ * The official marks from our own brand files (Simple Icons, CC0). Instagram's
+ * colour file is a black glyph that vanishes in dark mode, so it uses its
+ * one-colour mark in Instagram's colour instead.
+ */
+function SourceLogo({ kind }: { kind: "meta" | "google" | "linkedin" }) {
+  if (kind === "meta")
+    return (
+      <span className={styles.sourceLogo} aria-hidden="true">
+        <BrandMark brand={brand("facebook")} size={26} />
+        <span className={styles.sourceLogoBadge}>
+          <BrandMark brand={{ ...brand("instagram"), logo: false }} size={14} />
+        </span>
+      </span>
+    );
   return (
-    <span className={styles.brandMark} data-brand={kind} aria-hidden="true">
-      {text}
+    <span className={styles.sourceLogo} aria-hidden="true">
+      <BrandMark
+        brand={brand(kind === "google" ? "googleads" : "linkedin")}
+        size={24}
+      />
     </span>
   );
 }
 
-function ConnectTile({
+function SourceRow({
   kind,
   title,
   text,
+  status,
+  action,
   children,
 }: {
   kind: "meta" | "google" | "linkedin";
   title: string;
   text: string;
-  children: ReactNode;
+  status?: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
 }) {
   return (
-    <article className={styles.connectTile} data-brand={kind}>
-      <Mark kind={kind} />
-      <h3 className={styles.connectTitle}>{title}</h3>
-      <p className={styles.connectText}>{text}</p>
-      <div className={styles.connectBody}>{children}</div>
+    <article className={styles.sourceRow} data-brand={kind}>
+      <SourceLogo kind={kind} />
+      <div className={styles.sourceMain}>
+        <div className={styles.sourceTitle}>
+          <h3>{title}</h3>
+          {status}
+        </div>
+        <p>{text}</p>
+      </div>
+      {action ? <div className={styles.sourceAction}>{action}</div> : null}
+      {children ? <div className={styles.sourceMore}>{children}</div> : null}
     </article>
   );
 }
@@ -181,63 +221,94 @@ function MetaTile() {
     }
   };
 
+  const live = status?.pages.filter((page) => page.active).length ?? 0;
   return (
-    <ConnectTile
+    <SourceRow
       kind="meta"
       title="Facebook & Instagram"
       text="Leads from your Instant Form ads arrive here in seconds."
-    >
-      {status === null ? (
-        <span className={styles.connectSoon}>Checking…</span>
-      ) : !status.configured ? (
-        <span className={styles.connectSoon}>Coming soon</span>
-      ) : (
-        <>
-          {status.pages.map((page) => (
-            <div key={page.pageId} className={styles.connectedLine}>
-              <span>
-                {page.active ? "Connected: " : ""}
-                <strong>{page.name}</strong>
-                {page.active ? ` · ${page.received} leads` : ""}
-                {page.active && page.lastPulledAt ? (
-                  <small className={styles.connectChecked}>
-                    Checked {ago(page.lastPulledAt)}
-                  </small>
-                ) : null}
-              </span>
-              {page.active ? (
-                <Button
-                  variant="ghost"
-                  disabled={busy === page.pageId}
-                  onClick={() => pull(page)}
-                >
-                  Check for new leads
-                </Button>
-              ) : null}
-              <Button
-                variant={page.active ? "ghost" : "primary"}
-                disabled={busy === page.pageId}
-                onClick={() => toggle(page)}
-              >
-                {page.active ? "Switch off" : "Turn on"}
-              </Button>
-            </div>
-          ))}
+      status={
+        status === null ? (
+          <Badge>Checking…</Badge>
+        ) : !status.configured ? (
+          <Badge>Coming soon</Badge>
+        ) : live ? (
+          <Badge tone="good">Connected</Badge>
+        ) : status.pages.length ? (
+          <Badge>Switched off</Badge>
+        ) : null
+      }
+      action={
+        status?.configured ? (
           <a
-            className={styles.connectButton}
-            data-brand="meta"
+            className={kitStyles.button}
+            data-variant={status.pages.length ? undefined : "primary"}
             href={`${META}/connect`}
           >
-            {status.pages.length ? "Add another Page" : "Connect"}
+            {status.pages.length ? (
+              <>
+                <Plus size={14} aria-hidden="true" />
+                Add a Page
+              </>
+            ) : (
+              "Connect"
+            )}
           </a>
-        </>
-      )}
+        ) : null
+      }
+    >
+      {status?.configured && status.pages.length ? (
+        <ul className={styles.pageList} aria-label="Facebook Pages">
+          {status.pages.map((page) => (
+            <li
+              key={page.pageId}
+              className={styles.pageRow}
+              data-off={page.active ? undefined : ""}
+            >
+              <span className={styles.pageName}>
+                <strong>{page.name}</strong>
+                <small>
+                  {page.active
+                    ? [
+                        `${page.received} lead${page.received === 1 ? "" : "s"}`,
+                        page.lastPulledAt
+                          ? `checked ${ago(page.lastPulledAt)}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Switched off: no new leads come in"}
+                </small>
+              </span>
+              <span className={styles.pageActions}>
+                {page.active ? (
+                  <Button
+                    variant="ghost"
+                    disabled={busy === page.pageId}
+                    onClick={() => pull(page)}
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
+                    Check now
+                  </Button>
+                ) : null}
+                <Button
+                  variant={page.active ? "ghost" : "primary"}
+                  disabled={busy === page.pageId}
+                  onClick={() => toggle(page)}
+                >
+                  {page.active ? "Switch off" : "Turn on"}
+                </Button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {note ? (
-        <p className={styles.connectNote} role="status">
+        <p className={styles.hint} role="status">
           {note}
         </p>
       ) : null}
-    </ConnectTile>
+    </SourceRow>
   );
 }
 
@@ -540,24 +611,22 @@ export function SourcesView({
   return (
     <div className={styles.sourcesGrid}>
       <section
-        className={styles.connectGrid}
+        className={styles.sourceList}
         aria-label="Connect where your leads come from"
       >
         <MetaTile />
-        <ConnectTile
+        <SourceRow
           kind="google"
           title="Google Ads"
           text="Leads from your lead form ads, without copying anything."
-        >
-          <span className={styles.connectSoon}>Coming soon</span>
-        </ConnectTile>
-        <ConnectTile
+          status={<Badge>Coming soon</Badge>}
+        />
+        <SourceRow
           kind="linkedin"
           title="LinkedIn"
           text="Leads from your Lead Gen Form ads."
-        >
-          <span className={styles.connectSoon}>Coming soon</span>
-        </ConnectTile>
+          status={<Badge>Coming soon</Badge>}
+        />
       </section>
       <OtherWays sandbox={sandbox} onChanged={onChanged} onImport={onImport} />
     </div>

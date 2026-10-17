@@ -162,7 +162,7 @@ export function LeadActions({
       )}
       {canManage && detail?.reps.length ? (
         <label className={styles.messageField}>
-          <span className={styles.stepLabel}>Move to</span>
+          <span className={styles.stepLabel}>Reassign</span>
           <select
             value=""
             disabled={busy}
@@ -172,9 +172,11 @@ export function LeadActions({
             }}
           >
             <option value="">
-              {row.owner_name ? `With ${row.owner_name}` : "No owner yet"}
+              {row.owner_name
+                ? `Assigned to ${row.owner_name}`
+                : "Not assigned yet"}
             </option>
-            <option value="__rules">Whoever the rules pick</option>
+            <option value="__rules">Let the lead rules pick</option>
             {detail.reps
               .filter((rep) => rep.person_id !== row.owner_person_id)
               .map((rep) => (
