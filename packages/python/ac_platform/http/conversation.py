@@ -12,8 +12,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
 )
-from ac_platform.conversation_intelligence.contracts import Capabilities, RecordingIntent, RunIntent
-from ac_platform.conversation_intelligence.example import example_report
+from ac_platform.conversation_intelligence.contracts import RecordingIntent, RunIntent
 from ac_platform.conversation_intelligence.report_access import (
     ReportAccess,
     ReportSourceBinding,
@@ -105,16 +104,6 @@ def install_conversation_http(
                 answer["message"] = str(error)
         return answer
 
-    @router.get("/capabilities", response_model=Capabilities)
-    def capabilities(response: Response) -> Capabilities:
-        response.headers["Cache-Control"] = "no-store"
-        return Capabilities()
-
-    @router.get("/example")
-    def example(response: Response) -> dict[str, Any]:
-        response.headers["Cache-Control"] = "no-store"
-        return example_report()
-
     if settings is not None and require_actor is not None:
         install_measurement_routes(router, require_actor)
         if intake_runtime is not None:
@@ -166,21 +155,6 @@ def install_conversation_http(
                 )
             )
 
-        @router.get("/recordings/{recording_id}")
-        async def get_recording(
-            recording_id: UUID,
-            request: Request,
-            response: Response,
-            auth: AuthenticatedTransaction = dependency,
-        ) -> Any:
-            admitted(request, response)
-            return await result(
-                ConversationApplication(auth.database).get(
-                    auth.resolved.actor,
-                    recording_id,
-                )
-            )
-
         @router.post("/runs", status_code=202)
         async def request_run(
             payload: RunIntent,
@@ -203,21 +177,6 @@ def install_conversation_http(
                     payload,
                     key=key,
                     authority=(intake_runtime.authority if intake_runtime is not None else None),
-                )
-            )
-
-        @router.get("/runs/{run_id}")
-        async def get_run(
-            run_id: UUID,
-            request: Request,
-            response: Response,
-            auth: AuthenticatedTransaction = dependency,
-        ) -> Any:
-            admitted(request, response)
-            return await result(
-                ConversationApplication(auth.database).get_run(
-                    auth.resolved.actor,
-                    run_id,
                 )
             )
 
@@ -287,39 +246,6 @@ def install_conversation_http(
             return await result(
                 ConversationReports(ConversationApplication(auth.database)).transcript(
                     auth.resolved.actor, recording_id
-                )
-            )
-
-        @router.get("/recordings/{recording_id}/checkpoints")
-        async def get_checkpoints(
-            recording_id: UUID,
-            request: Request,
-            response: Response,
-            auth: AuthenticatedTransaction = dependency,
-        ) -> Any:
-            admitted(request, response)
-            return await result(
-                ConversationApplication(auth.database).checkpoints(
-                    auth.resolved.actor,
-                    recording_id,
-                )
-            )
-
-        @router.delete("/recordings/{recording_id}", status_code=202)
-        async def delete_recording(
-            recording_id: UUID,
-            request: Request,
-            response: Response,
-            key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
-            auth: AuthenticatedTransaction = dependency,
-        ) -> Any:
-            admitted(request, response)
-            require_safe_origin(request, settings)
-            return await result(
-                ConversationApplication(auth.database).request_deletion(
-                    auth.resolved.actor,
-                    recording_id,
-                    key=key,
                 )
             )
 

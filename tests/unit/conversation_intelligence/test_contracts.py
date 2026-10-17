@@ -28,21 +28,10 @@ def test_caller_cannot_select_tenant_or_enable_providers():
             RecordingIntent.model_validate({**payload, key: value})
 
 
-def test_example_is_authored_and_no_intake_or_paid_route_is_exposed():
+def test_unconfigured_surface_exposes_no_intake_or_paid_route():
     app = FastAPI()
     install_conversation_http(app)
     with TestClient(app) as client:
-        capability = client.get("/v1/conversation/capabilities")
-        assert capability.json()["provider_processing"] == "disabled"
-        assert capability.json()["numeric_publication"] == "withheld"
-        assert capability.headers["cache-control"] == "no-store"
-        sample = client.get("/v1/conversation/example").json()
-        assert sample["state"] == "example"
-        assert sample["profile"]["source_total"] == 95
-        assert sample["profile"]["declared_total"] == 100
-        assert sample["profile"]["numeric_score"] is None
-        assert sample["measurements"]["state"] == "not_measured"
-        assert "Authored" in sample["provenance"]
         assert client.post("/v1/conversation/recordings", content=b"media").status_code == 404
         assert client.post("/v1/conversation/runs", json={}).status_code == 404
 

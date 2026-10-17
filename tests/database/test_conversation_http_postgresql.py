@@ -25,11 +25,12 @@ from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.application import (
     AUDIOATLAS_HOSTED_RECIPE,
     AUDIOATLAS_RECIPE,
+    ConversationApplication,
 )
 from ac_platform.conversation_intelligence.models import ConversationPermission
+from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
-from ac_platform.http.conversation_admin import install_conversation_admin_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
@@ -81,9 +82,6 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
         install_conversation_http(
             app, settings=settings, require_actor=require_actor, intake_runtime=runtime
         )
-        install_conversation_admin_http(
-            app, settings=settings, require_actor=require_actor, import_storage=prepared.storage
-        )
         app.add_middleware(RequestBodyLimitMiddleware)
 
         async def set_token(session_id: Any, value: str) -> None:
@@ -106,12 +104,6 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
         transcript_path = f"{root}/recordings/{prepared.recording_id}/transcript"
         report_path = f"{root}/runs/{prepared.run_id}/report"
         docx_path = f"{report_path}.docx"
-        admin_path = f"/v1/admin/conversation/runs/{prepared.run_id}/draft"
-        admin_headers = {
-            **cookie(token),
-            "Origin": "http://admin.test",
-            "Idempotency-Key": "http-draft",
-        }
         try:
             await set_token(prepared.state.session_id, token)
             async with httpx.AsyncClient(
@@ -148,26 +140,21 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                 assert (await client.get(transcript_path, headers=cookie(token))).status_code == 404
                 before_docx = await client.get(docx_path, headers=cookie(token))
                 assert before_docx.status_code == 409
-                blocked_surface = await client.post(
-                    admin_path, headers=admin_headers, json=fixture.intent.model_dump(mode="json")
-                )
-                assert blocked_surface.status_code == 403
-                blocked_origin = await client.post(
-                    f"http://admin.test{admin_path}",
-                    headers={**admin_headers, "Origin": "https://untrusted.invalid"},
-                    json=fixture.intent.model_dump(mode="json"),
-                )
-                assert blocked_origin.status_code == 403
-                imported = await client.post(
-                    f"http://admin.test{admin_path}",
-                    headers=admin_headers,
-                    json=fixture.intent.model_dump(mode="json"),
-                )
-                assert imported.status_code == 201, imported.text
-                assert imported.headers["cache-control"] == "private, no-store"
+                # Seed the saved draft through the production report-store boundary
+                # (the unused admin /draft HTTP seam was removed in cleanup stage 1).
+                async with sessions() as database, database.begin():
+                    imported = await ConversationReports(
+                        ConversationApplication(database)
+                    ).import_internal_draft(
+                        fixture.actor,
+                        prepared.run_id,
+                        fixture.intent,
+                        storage=prepared.storage,
+                        key="http-draft",
+                    )
                 report = await client.get(report_path, headers=cookie(token))
                 assert report.status_code == 200
-                assert report.json() == imported.json()
+                assert report.json() == imported
                 assert report.json()["report"]["source_sha256"] == prepared.state.source_sha256
                 assert report.json()["report"]["review_status"] == "draft_not_dipak_adjudicated"
                 docx = await client.get(docx_path, headers=cookie(token))
@@ -241,12 +228,6 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                     assert (
                         await client.get(f"{root}/recordings", headers=cookie(other_token))
                     ).json() == {"recordings": []}
-                oversized = await client.post(
-                    f"http://admin.test{admin_path}",
-                    headers=admin_headers,
-                    content=b" " * (4 * 1024 * 1024 + 1),
-                )
-                assert oversized.status_code == 413
                 async with sessions() as database, database.begin():
                     await database.execute(
                         update(ConversationPermission)

@@ -324,12 +324,6 @@ function resolveApiRouteBase(method, pathname, search = "") {
     return { kind: "oauth" };
 
   if (exact("GET", "/v1/conversation/workspace") && noQuery) return api();
-  if (
-    (exact("GET", "/v1/conversation/capabilities") ||
-      exact("GET", "/v1/conversation/example")) &&
-    noQuery
-  )
-    return api("public", false);
 
   const acquisitionExact = {
     "/v1/conversation/acquisition/entry": new Set(["GET"]),
@@ -395,8 +389,6 @@ function resolveApiRouteBase(method, pathname, search = "") {
   ).exec(pathname);
   if (recording) {
     const suffix = recording[2];
-    if (!suffix && (verb === "GET" || verb === "DELETE") && noQuery)
-      return api();
     if (suffix === "source" && (verb === "GET" || verb === "PUT") && noQuery)
       return api();
     if (
@@ -412,7 +404,7 @@ function resolveApiRouteBase(method, pathname, search = "") {
 
   if (pathname === "/v1/conversation/runs" && verb === "POST" && noQuery)
     return api();
-  const run = new RegExp(`^/v1/conversation/runs/(${UUID})(?:/report)?$`).exec(
+  const run = new RegExp(`^/v1/conversation/runs/(${UUID})/report$`).exec(
     pathname,
   );
   if (run && verb === "GET" && noQuery) return api();

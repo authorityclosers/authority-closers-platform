@@ -208,9 +208,7 @@ def create_app(
         settings=settings,
         require_actor=require_actor,
         intake=resolved_conversation,
-        # Recovery reads use the resolved hosted composition.  The old private
-        # draft importer remains an explicit test-only seam and is not enabled
-        # by passing the raw caller-supplied runtime here.
+        # Recovery reads use the resolved hosted composition.
         recovery_storage=resolved_conversation.storage if resolved_conversation else None,
     )
     # The company view (AUT-1798): Sales Xray Insights and its Admin counterpart.

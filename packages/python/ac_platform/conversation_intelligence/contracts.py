@@ -146,16 +146,3 @@ class C5RepairIntent(Contract):
         ):
             raise ValueError("prospect_repair_dimensions_required")
         return self
-
-
-class Capabilities(Contract):
-    product: Literal["Sales Xray"] = "Sales Xray"
-    intake: Literal["unavailable", "enabled"] = "unavailable"
-    provider_processing: Literal["disabled"] = "disabled"
-    numeric_publication: Literal["withheld"] = "withheld"
-    local_checkpoint_import: bool = True
-    reasons: tuple[str, ...] = (
-        "Local checkpoint inspection is available.",
-        "Server recording intake requires the configured internal workspace.",
-        "External provider processing has not been activated.",
-    )

@@ -14,7 +14,7 @@ from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.prospect_fields import field_registry, validate_fields
 from ac_platform.conversation_intelligence.prospect_library import ProspectLibrary, profile
-from ac_platform.conversation_intelligence.prospect_store import ProspectStore, validated_tags
+from ac_platform.conversation_intelligence.prospect_store import ProspectStore
 from ac_platform.conversation_intelligence.prospect_suggestions import (
     SCHEMA,
     membership_json,
@@ -47,30 +47,6 @@ class _Detect(BaseModel):
 class _ConfirmDetected(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     expected_revision: int = Field(gt=0)
-
-
-class _Edit(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    display_name: str = Field(min_length=1, max_length=160)
-    expected_revision: int = Field(gt=0)
-
-    @field_validator("display_name")
-    @classmethod
-    def trim_name(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("Supply a valid prospect name.")
-        return value.strip()
-
-
-class _EditTags(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    tags: list[str] = Field(max_length=10)
-    expected_revision: int = Field(gt=0)
-
-    @field_validator("tags")
-    @classmethod
-    def trim_tags(cls, value: list[str]) -> list[str]:
-        return validated_tags(value)
 
 
 class _EditFields(BaseModel):
@@ -251,14 +227,7 @@ def install_prospect_http(
                 401, "Sign in to confirm your prospect.", headers=_PRIVATE
             ) from None
 
-    async def edit(
-        prospect_id: str,
-        request: Request,
-        response: Response,
-        *,
-        tags: bool = False,
-        fields: bool = False,
-    ) -> Any:
+    async def edit(prospect_id: str, request: Request, response: Response) -> Any:
         response.headers.update(_PRIVATE)
         if (
             settings.sales_xray_app_url is None
@@ -275,7 +244,7 @@ def install_prospect_http(
             require_safe_origin(request, settings)
         except DomainError:
             raise HTTPException(403, "Save from this Sales Xray page.", headers=_PRIVATE) from None
-        body = await _body(request, _EditFields if fields else _EditTags if tags else _Edit)
+        body = await _body(request, _EditFields)
         try:
             async with asynccontextmanager(require_actor)(request) as auth:
                 actor = auth.resolved.actor
@@ -285,52 +254,22 @@ def install_prospect_http(
                 if sessions.tenant_id != actor.tenant_id:
                     raise RuntimeError("Prospect edits must use the selected workspace.")
                 store = ProspectStore(GuestOwnership(sessions))
-                if fields:
-                    row, history = await store.edit_fields_and_read(
-                        actor, target, fields=body.fields, expected_revision=body.expected_revision
-                    )
-                    return {
-                        "schema": "ac.sales-xray.prospect-fields/1",
-                        "field_registry": field_registry(),
-                        "prospect": profile(row, list(history)),
-                    }
-                if tags:
-                    row = await store.edit_tags(
-                        actor, target, tags=body.tags, expected_revision=body.expected_revision
-                    )
-                else:
-                    row = await store.edit_name(
-                        actor,
-                        target,
-                        display_name=body.display_name,
-                        expected_revision=body.expected_revision,
-                    )
+                row, history = await store.edit_fields_and_read(
+                    actor, target, fields=body.fields, expected_revision=body.expected_revision
+                )
                 return {
-                    "schema": "ac.sales-xray.prospect-tags/1"
-                    if tags
-                    else "ac.sales-xray.prospect-name/1",
-                    "prospect": {
-                        "prospect_id": str(row.id),
-                        **({"tags": row.tags} if tags else {"name": row.display_name}),
-                        "revision": row.revision,
-                    },
+                    "schema": "ac.sales-xray.prospect-fields/1",
+                    "field_registry": field_registry(),
+                    "prospect": profile(row, list(history)),
                 }
         except ConversationError as error:
             raise HTTPException(error.status, str(error), headers=_PRIVATE) from None
         except DomainError:
             raise HTTPException(401, "Sign in to edit your prospect.", headers=_PRIVATE) from None
 
-    @router.patch("/{prospect_id}")
-    async def edit_name(prospect_id: str, request: Request, response: Response) -> Any:
-        return await edit(prospect_id, request, response)
-
-    @router.patch("/{prospect_id}/tags")
-    async def edit_tags(prospect_id: str, request: Request, response: Response) -> Any:
-        return await edit(prospect_id, request, response, tags=True)
-
     @router.put("/{prospect_id}/fields")
     async def edit_fields(prospect_id: str, request: Request, response: Response) -> Any:
-        return await edit(prospect_id, request, response, fields=True)
+        return await edit(prospect_id, request, response)
 
     async def read(
         request: Request,

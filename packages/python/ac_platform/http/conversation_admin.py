@@ -29,10 +29,6 @@ from ac_platform.conversation_intelligence.provider_registry import (
     RegistryPolicy,
     catalog_public_view,
 )
-from ac_platform.conversation_intelligence.report_store import (
-    ConversationReports,
-    PrivateDraftIntent,
-)
 from ac_platform.conversation_intelligence.retained_c5_recovery import (
     RetainedC5CorrectionIntent,
     RetainedC5RecoveryService,
@@ -74,11 +70,8 @@ def install_conversation_admin_http(
     settings: Settings,
     require_actor: RequireActor,
     intake: ConversationIntakeRuntime | None = None,
-    import_storage: PrivateLocalRecordingStorage | None = None,
     recovery_storage: PrivateLocalRecordingStorage | None = None,
 ) -> None:
-    if import_storage is not None and settings.environment not in {"local", "test"}:
-        raise ValueError("Internal proof import is limited to the local test composition.")
     router = APIRouter(prefix="/v1/admin/conversation", tags=["conversation-admin"])
     dependency = Depends(require_actor, scope="function")
 
@@ -395,33 +388,6 @@ def install_conversation_admin_http(
                     key=key,
                     storage=recovery_storage,
                     correction=intent,
-                )
-            except ConversationError as error:
-                raise HTTPException(error.status, str(error)) from None
-
-    if import_storage is not None:
-
-        @router.post("/runs/{run_id}/draft", status_code=201)
-        async def import_draft(
-            run_id: UUID,
-            intent: PrivateDraftIntent,
-            request: Request,
-            response: Response,
-            key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
-            auth: AuthenticatedTransaction = dependency,
-        ) -> dict[str, Any]:
-            surface(request, response)
-            require_safe_origin(request, settings)
-            assert import_storage is not None
-            try:
-                return await ConversationReports(
-                    ConversationApplication(auth.database)
-                ).import_internal_draft(
-                    auth.resolved.actor,
-                    run_id,
-                    intent,
-                    storage=import_storage,
-                    key=key,
                 )
             except ConversationError as error:
                 raise HTTPException(error.status, str(error)) from None

@@ -262,9 +262,7 @@ test("production destination is pinned and Sales Xray route surface is narrow", 
       requiresSession: false,
     });
   assert.deepEqual(resolveApiRoute("GET", "/v1/conversation/example"), {
-    kind: "api",
-    auth: "public",
-    requiresSession: false,
+    kind: "blocked",
   });
   assert.deepEqual(resolveApiRoute("GET", "/v1/admin/people/directory"), {
     kind: "blocked",
@@ -457,9 +455,9 @@ test("analysis read-only mode denies data mutations before upstream fetch", asyn
       "denied actions must not invoke upstream fetch",
     );
 
-    const read = await request(bridge, "/v1/conversation/capabilities");
+    const read = await request(bridge, "/v1/conversation/acquisition/entry");
     assert.equal(read.status, 200);
-    assert.equal(calls.at(-1).path, "/v1/conversation/capabilities");
+    assert.equal(calls.at(-1).path, "/v1/conversation/acquisition/entry");
 
     const login = await request(bridge, "/v1/auth/password/login", {
       method: "POST",

@@ -75,6 +75,11 @@ def test_put_persistence_noop_stale_race_denials_rollback_and_queries(
             statements.append(args[2])
 
         try:
+            paths = setup.app.openapi()["paths"]
+            # PATCH name/tags had no client and were removed (cleanup stage 1).
+            assert "put" in paths[PREFIX + "/{prospect_id}/fields"]
+            assert "patch" not in paths.get(PREFIX + "/{prospect_id}", {})
+            assert PREFIX + "/{prospect_id}/tags" not in paths
             call = await direct_call(setup)
             async with client_for(setup) as client:
                 created = await client.post(

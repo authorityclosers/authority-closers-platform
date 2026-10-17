@@ -243,6 +243,18 @@ def test_deployed_composition_has_owned_routes_without_local_proof_import(
     assert "/v1/conversation/recordings/{recording_id}/source" in paths
     assert "/v1/conversation/recordings/{recording_id}/analysis/quote" in paths
     assert "/v1/admin/conversation/runs/{run_id}/draft" not in paths
+    # Unused legacy handlers removed in cleanup stage 1 stay absent.
+    for removed in (
+        "/v1/conversation/capabilities",
+        "/v1/conversation/example",
+        "/v1/conversation/recordings/{recording_id}/checkpoints",
+        "/v1/conversation/runs/{run_id}",
+    ):
+        assert removed not in paths
+    assert "get" not in paths.get("/v1/conversation/recordings/{recording_id}", {})
+    assert "delete" not in paths.get("/v1/conversation/recordings/{recording_id}", {})
+    assert not any("/imports/sandbox" in path for path in paths)
+    assert "/v1/conversation/recordings/{recording_id}/transcript" in paths
     assert application.docs_url is None
     # Deployment composition still rejects arbitrary injected local runtimes.
     with pytest.raises(RuntimeError, match="Hosted conversation intake"):
