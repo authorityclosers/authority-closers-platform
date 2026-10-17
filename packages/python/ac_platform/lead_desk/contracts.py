@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
-from ac_platform.lead_desk.vocabulary import ConnectedStage, Reason
+from ac_platform.lead_desk.vocabulary import Channel, ConnectedStage, Reason
 
 SCHEMA: Literal["lead-desk/1"] = "lead-desk/1"
 _Short = Field(default=None, max_length=200)
@@ -49,6 +49,8 @@ class Counts(Model):
     not_connected: int
     later_today: int
     unassigned: int | None
+    # Calls more than an hour late (new leads included): the red badge.
+    overdue: int = 0
 
 
 class LeadRow(Model):
@@ -75,6 +77,13 @@ class LeadRow(Model):
     last_result: str | None
     last_result_label: str | None
     test_data: bool
+    overdue: bool = False
+
+
+class MessageTemplate(Model):
+    key: str
+    label: str
+    text: str
 
 
 class Desk(Model):
@@ -85,6 +94,18 @@ class Desk(Model):
     queue: tuple[LeadRow, ...]
     call_mode: Literal["simulated", "phone"]
     sandbox: bool
+    generated_at: datetime
+    # The next few days, after today ("Coming up").
+    upcoming: tuple[LeadRow, ...] = ()
+    templates: tuple[MessageTemplate, ...] = ()
+
+
+class Badge(Model):
+    """The Leads tab's badge and the phone's icon count: what is due for me now."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    overdue: int
+    to_call: int
     generated_at: datetime
 
 
@@ -120,6 +141,8 @@ class LeadEventView(Model):
     recording: bool | None = None
     duration_seconds: int | None = None
     changed: tuple[str, ...] | None = None
+    channel: str | None = None
+    template_label: str | None = None
 
 
 class RepOption(Model):
@@ -279,6 +302,23 @@ class NoteCommand(Command):
     note: str = Field(min_length=1, max_length=1000)
 
 
+class FollowUp(Command):
+    """Set when to call next without a call (long-press on the list)."""
+
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+    at: AwareDatetime
+
+
+class MessageSent(Command):
+    """The seller opened WhatsApp or SMS with a ready message. Only the template is kept."""
+
+    command_id: UUID
+    channel: Channel
+    template: str | None = Field(default=None, max_length=40)
+    edited: bool = False
+
+
 class Reassign(Command):
     command_id: UUID
     expected_revision: int = Field(ge=1)
@@ -361,6 +401,40 @@ class RecordingCommand(Command):
 
     command_id: UUID
     submission_id: UUID
+
+
+class PushConfig(Model):
+    """What the phone app needs to receive lead alerts; empty while alerts are off here."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    enabled: bool
+    project_id: str | None = None
+    app_id: str | None = None
+    api_key: str | None = None
+    sender_id: str | None = None
+
+
+class DeviceCommand(Command):
+    """This phone's alert address (an FCM registration token) for the signed-in seller."""
+
+    token: str = Field(min_length=20, max_length=4096, pattern=r"^[A-Za-z0-9_:\-]+$")
+    platform: Literal["android"] = "android"
+    app_version: str | None = Field(default=None, max_length=40)
+
+
+class AlertText(Model):
+    """The words on a phone alert, read by the app on the seller's own session."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    title: str
+    body: str
+    lead_id: UUID | None
+    url: str
+
+
+class DeviceView(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    registered: bool
 
 
 class SeedCommand(Command):

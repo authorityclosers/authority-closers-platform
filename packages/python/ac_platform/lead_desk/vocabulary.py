@@ -13,7 +13,7 @@ Evidence: docs/product/lead-desk/neodove-evidence.md (section 1.6 and 9.1).
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Final, Literal
 
 Stage = Literal["new", "not_connected", "follow_up", "interested", "won", "lost"]
@@ -101,6 +101,51 @@ SOURCE_LABELS: Final[dict[str, str]] = {
 }
 
 
+# A lead is overdue when its next call is more than an hour late. A new lead's
+# first call is due the moment it arrives (UX study, 17 Oct 2026).
+OVERDUE_AFTER: Final[timedelta] = timedelta(hours=1)
+# The desk's "Coming up" list: the next few days, after today.
+UPCOMING_DAYS: Final[int] = 7
+
+Channel = Literal["whatsapp", "sms"]
+CHANNELS: Final[tuple[Channel, ...]] = ("whatsapp", "sms")
+CHANNEL_LABELS: Final[dict[str, str]] = {"whatsapp": "WhatsApp", "sms": "SMS"}
+
+# Ready messages on the lead and after a call (Privyr's quick responses, NeoDove's
+# after-call templates). The page fills {first_name}, {my_name}, {org} and
+# {about_interest} (" about <interest>", or nothing); the seller reads it,
+# changes it if they like, and sends it from their own WhatsApp or SMS. Only
+# the template's key is kept on the lead's history, never the text. An editor
+# for these comes later.
+MESSAGE_TEMPLATES: Final[tuple[tuple[str, str, str], ...]] = (
+    (
+        "intro",
+        "Introduction",
+        "Hi {first_name}, this is {my_name} from {org}. Thanks for your enquiry"
+        "{about_interest}. When is a good time to call you?",
+    ),
+    (
+        "missed_call",
+        "Tried calling",
+        "Hi {first_name}, this is {my_name} from {org}. I tried calling you just now."
+        " When is a good time to talk?",
+    ),
+    (
+        "follow_up",
+        "Following up",
+        "Hi {first_name}, just following up on your enquiry{about_interest}. Is this a good"
+        " time for a quick call? - {my_name}, {org}",
+    ),
+    (
+        "as_promised",
+        "As promised",
+        "Hi {first_name}, thank you for your time today. As promised, here are the details:",
+    ),
+)
+TEMPLATE_KEYS: Final[frozenset[str]] = frozenset(key for key, _, _ in MESSAGE_TEMPLATES)
+TEMPLATE_LABELS: Final[dict[str, str]] = {key: label for key, label, _ in MESSAGE_TEMPLATES}
+
+
 def retry_after(reason: str, attempts: int) -> timedelta | None:
     """NeoDove's default retry logic: first retry after 1 hour, later ones after 1 day."""
     if reason in NO_RETRY:
@@ -119,3 +164,19 @@ def stage_after_not_connected(current: str) -> str:
     if current in {"follow_up", "interested"}:
         return current
     return "not_connected"
+
+
+def due_at(stage: str, next_action_at: datetime | None, created_at: datetime) -> datetime | None:
+    """When the lead's next call is due: its follow-up time, or a new lead's arrival."""
+    if stage in CLOSED_STAGES:
+        return None
+    if next_action_at is not None:
+        return next_action_at
+    return created_at if stage == "new" else None
+
+
+def is_overdue(
+    stage: str, next_action_at: datetime | None, created_at: datetime, now: datetime
+) -> bool:
+    due = due_at(stage, next_action_at, created_at)
+    return due is not None and due < now - OVERDUE_AFTER

@@ -17,7 +17,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,16 +31,22 @@ from ac_platform.lead_desk.capture import (
     flatten,
 )
 from ac_platform.lead_desk.contracts import (
+    AlertText,
+    Badge,
     Counts,
     Desk,
+    DeviceCommand,
     Disposition,
     FieldValue,
+    FollowUp,
     LeadDetail,
     LeadEdit,
     LeadEventView,
     LeadPage,
     LeadRow,
     Me,
+    MessageSent,
+    MessageTemplate,
     NewLead,
     NoteCommand,
     Numbers,
@@ -52,14 +58,21 @@ from ac_platform.lead_desk.contracts import (
     SettingsView,
     Team,
 )
-from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadEvent, LeadRep
+from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent, LeadRep
 from ac_platform.lead_desk.vocabulary import (
+    CHANNEL_LABELS,
     CLOSED_STAGES,
+    MESSAGE_TEMPLATES,
     NEEDS_FOLLOW_UP,
     OPEN_STAGES,
+    OVERDUE_AFTER,
     REASON_LABELS,
     SOURCE_LABELS,
     STAGE_LABELS,
+    TEMPLATE_KEYS,
+    TEMPLATE_LABELS,
+    UPCOMING_DAYS,
+    is_overdue,
     retry_after,
     stage_after_connected,
     stage_after_not_connected,
@@ -70,7 +83,9 @@ MANAGERS = frozenset({"owner", "admin"})
 WhyKind = Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
 SELLER_ROLES = ("owner", "admin", "member")
 QUEUE_LIMIT = 30
+UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
+DEVICES_PER_PERSON = 5
 DEFAULT_MAX_OPEN = 50
 DEFAULT_SETTINGS: dict[str, Any] = {
     "auto_reassign": False,
@@ -144,6 +159,40 @@ def median(values: Sequence[int]) -> int | None:
     if len(ordered) % 2:
         return ordered[middle]
     return round((ordered[middle - 1] + ordered[middle]) / 2)
+
+
+def token_digest(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def overdue_filter(now: datetime) -> Any:
+    """SQL for "more than an hour late": a follow-up time, or a new lead's arrival."""
+    late = now - OVERDUE_AFTER
+    return or_(
+        Lead.next_action_at < late,
+        and_(Lead.stage == "new", Lead.next_action_at.is_(None), Lead.created_at < late),
+    )
+
+
+def ago_text(at: datetime, now: datetime) -> str:
+    minutes = max(0, round((now - at).total_seconds() / 60))
+    if minutes < 1:
+        return "just now"
+    if minutes < 60:
+        return f"{minutes} min ago"
+    hours = round(minutes / 60)
+    return f"{hours} h ago" if hours < 24 else f"{round(hours / 24)} d ago"
+
+
+def clock_text(at: datetime) -> str:
+    """A time as a seller in India reads it: 3:05 PM."""
+    local = at.astimezone(IST)
+    return f"{local.hour % 12 or 12}:{local.minute:02d} {'PM' if local.hour >= 12 else 'AM'}"
+
+
+def _short(name: str, limit: int = 60) -> str:
+    name = " ".join(name.split())
+    return name if len(name) <= limit else name[: limit - 1] + "…"
 
 
 def _strings(values: Any) -> tuple[str, ...]:
@@ -331,10 +380,14 @@ class LeadDesk:
                 tries = f"{lead.attempts} tr{'y' if lead.attempts == 1 else 'ies'}"
                 return "retry", f"Try again · {label.lower()} · {tries}"
             if lead.stage == "new":
-                return "due", f"Asked again · {source}"
+                return "due", f"Asked again · {source}" if lead.repeats else "Call booked"
             return "due", f"{STAGE_LABELS[lead.stage]} due"
         if due is not None and due <= day_end:
+            if lead.stage == "new":
+                return "later", "Call booked"
             return "later", "Try again" if lead.stage == "not_connected" else "Follow-up"
+        if due is not None and lead.stage == "new":
+            return "open", "Call booked"
         return "open", STAGE_LABELS[lead.stage]
 
     def _row(self, lead: Lead, names: Mapping[UUID, str], day_end: datetime) -> LeadRow:
@@ -368,6 +421,8 @@ class LeadDesk:
             last_result=lead.last_result,
             last_result_label=result_label,
             test_data=lead.test_data,
+            overdue=lead.owner_person_id is not None
+            and is_overdue(lead.stage, lead.next_action_at, lead.created_at, self.now),
         )
 
     async def _rows(self, leads: Sequence[Lead]) -> tuple[LeadRow, ...]:
@@ -424,9 +479,22 @@ class LeadDesk:
                     func.count().filter(
                         Lead.next_action_at > self.now, Lead.next_action_at < day_end
                     ),
+                    func.count().filter(overdue_filter(self.now)),
                 ).where(mine)
             )
         ).one()
+        upcoming = (
+            await self.db.scalars(
+                select(Lead)
+                .where(
+                    mine,
+                    Lead.next_action_at >= day_end,
+                    Lead.next_action_at < day_end + timedelta(days=UPCOMING_DAYS),
+                )
+                .order_by(Lead.next_action_at)
+                .limit(UPCOMING_LIMIT)
+            )
+        ).all()
         unassigned = None
         if self.viewer.can_manage:
             unassigned = int(
@@ -487,12 +555,39 @@ class LeadDesk:
                 not_connected=int(counts_row[3]),
                 later_today=int(counts_row[4]),
                 unassigned=unassigned,
+                overdue=int(counts_row[5]),
             ),
             queue=await self._rows(queue),
             call_mode=self.call_mode,
             sandbox=self.sandbox,
             generated_at=self.now,
+            upcoming=await self._rows(upcoming),
+            templates=tuple(
+                MessageTemplate(key=key, label=label, text=text)
+                for key, label, text in MESSAGE_TEMPLATES
+            ),
         )
+
+    async def badge(self) -> Badge:
+        """What is due for me now: the Leads tab's badge and the phone's icon count."""
+        row = (
+            await self.db.execute(
+                select(
+                    func.count().filter(overdue_filter(self.now)),
+                    func.count().filter(
+                        or_(
+                            Lead.next_action_at <= self.now,
+                            and_(Lead.stage == "new", Lead.next_action_at.is_(None)),
+                        )
+                    ),
+                ).where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.owner_person_id == self.viewer.person_id,
+                    Lead.stage.in_(OPEN_STAGES),
+                )
+            )
+        ).one()
+        return Badge(overdue=int(row[0]), to_call=int(row[1]), generated_at=self.now)
 
     async def next_lead(self, skip: UUID | None = None) -> LeadDetail | None:
         """'Start calling': the one lead to call now (follow-ups due, then new leads)."""
@@ -671,6 +766,12 @@ class LeadDesk:
             recording=True if data.get("recording") is True else None,
             duration_seconds=int(data["duration_seconds"])
             if isinstance(data.get("duration_seconds"), (int, float))
+            else None,
+            channel=CHANNEL_LABELS.get(data["channel"])
+            if isinstance(data.get("channel"), str)
+            else None,
+            template_label=TEMPLATE_LABELS.get(data["template"])
+            if isinstance(data.get("template"), str)
             else None,
         )
 
@@ -1108,6 +1209,173 @@ class LeadDesk:
         )
         await self.db.flush()
         return await self.detail(lead.id)
+
+    async def follow_up(self, lead_id: UUID, command: FollowUp) -> LeadDetail:
+        """When to call next, set from the list without a call (long-press)."""
+        seen = await self._command_seen(command.command_id)
+        if seen is not None:
+            if seen.lead_id != lead_id:
+                raise DeskError(409, "That request was already used for another lead.")
+            return await self.detail(lead_id)
+        lead = await self._lead(lead_id, lock=True)
+        if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
+            raise DeskError(403, "Only the lead's owner or a manager can set its next call.")
+        if lead.revision != command.expected_revision:
+            raise DeskError(409, "This lead changed. Check it and try again.")
+        if lead.stage in CLOSED_STAGES:
+            raise DeskError(409, "This lead is closed. Open it to reopen it.")
+        at = command.at
+        if at < self.now - timedelta(minutes=5) or at > self.now + timedelta(days=366):
+            raise DeskError(422, "Pick a time in the next year that's still ahead.")
+        previous = lead.next_action_at
+        lead.next_action_at = at
+        lead.revision += 1
+        lead.updated_at = self.now
+        self._event(
+            lead,
+            "scheduled",
+            {
+                "follow_up_at": at.isoformat(),
+                "previous_at": previous.isoformat() if previous else None,
+            },
+            actor=self.viewer.person_id,
+            command_id=command.command_id,
+        )
+        await self.db.flush()
+        return await self.detail(lead.id)
+
+    async def message(self, lead_id: UUID, command: MessageSent) -> LeadDetail:
+        """A WhatsApp or SMS the seller opened with a ready message (the text isn't kept)."""
+        seen = await self._command_seen(command.command_id)
+        if seen is not None:
+            if seen.lead_id != lead_id:
+                raise DeskError(409, "That request was already used for another lead.")
+            return await self.detail(lead_id)
+        lead = await self._lead(lead_id, lock=True)
+        if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
+            raise DeskError(403, "Only the lead's owner or a manager can message this lead.")
+        if lead.phone is None:
+            raise DeskError(422, "Add a phone number to message this lead.")
+        if command.template is not None and command.template not in TEMPLATE_KEYS:
+            raise DeskError(422, "Pick one of the ready messages.")
+        lead.updated_at = self.now
+        self._event(
+            lead,
+            "message",
+            {"channel": command.channel, "template": command.template, "edited": command.edited},
+            actor=self.viewer.person_id,
+            command_id=command.command_id,
+        )
+        await self.db.flush()
+        return await self.detail(lead.id)
+
+    # ----- phone alerts ----------------------------------------------------------
+
+    async def alert_text(self, lead_id: UUID) -> AlertText:
+        """The words on a phone alert for one lead: who, why now, from where."""
+        lead = await self._lead(lead_id)
+        if lead.stage in CLOSED_STAGES or lead.owner_person_id != self.viewer.person_id:
+            raise DeskError(404, "This lead isn't waiting on you.")
+        name = _short(lead.name)
+        source = lead.source_label or SOURCE_LABELS.get(lead.source, lead.source)
+        if lead.stage == "new" and lead.next_action_at is None:
+            body = " · ".join(
+                part
+                for part in (source, lead.interest, ago_text(lead.created_at, self.now))
+                if part
+            )
+            title = f"New lead: {name}"
+        else:
+            _, why = self._why(lead, self._day_start() + timedelta(days=1))
+            when = f"was {clock_text(lead.next_action_at)}" if lead.next_action_at else None
+            body = " · ".join(part for part in (why, when) if part)
+            title = f"Call {name} now"
+        return AlertText(
+            title=title[:120], body=body[:240], lead_id=lead.id, url=f"/leads#lead={lead.id}"
+        )
+
+    async def alert_summary(self) -> AlertText:
+        """The words on a phone alert for several leads at once."""
+        badge = await self.badge()
+        names = (
+            await self.db.scalars(
+                select(Lead.name)
+                .where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.owner_person_id == self.viewer.person_id,
+                    Lead.stage.in_(OPEN_STAGES),
+                    or_(
+                        Lead.next_action_at <= self.now,
+                        and_(Lead.stage == "new", Lead.next_action_at.is_(None)),
+                    ),
+                )
+                .order_by(func.coalesce(Lead.next_action_at, Lead.created_at).desc())
+                .limit(3)
+            )
+        ).all()
+        shown = [_short(name, 30) for name in names[:2]]
+        rest = badge.to_call - len(shown)
+        body = ", ".join(shown) + (f" and {rest} more" if rest > 0 else "")
+        count = max(badge.to_call, len(names))
+        return AlertText(
+            title=f"{count} lead{'' if count == 1 else 's'} to call now",
+            body=body or "Open Sales Xray to see who.",
+            lead_id=None,
+            url="/leads",
+        )
+
+    async def register_device(self, command: DeviceCommand) -> bool:
+        """This phone gets my lead alerts in this workspace (and nobody else's)."""
+        digest = token_digest(command.token)
+        me = self.viewer.person_id
+        # A phone has one owner: someone else signing in on it takes its alerts over.
+        await self.db.execute(
+            delete(LeadDevice).where(LeadDevice.token_sha256 == digest, LeadDevice.person_id != me)
+        )
+        device = await self.db.scalar(
+            select(LeadDevice).where(
+                LeadDevice.tenant_id == self.tenant_id, LeadDevice.token_sha256 == digest
+            )
+        )
+        if device is None:
+            self.db.add(
+                LeadDevice(
+                    id=uuid4(),
+                    tenant_id=self.tenant_id,
+                    person_id=me,
+                    platform=command.platform,
+                    token=command.token,
+                    token_sha256=digest,
+                    app_version=command.app_version,
+                    created_at=self.now,
+                    last_seen_at=self.now,
+                )
+            )
+        else:
+            device.app_version = command.app_version
+            device.last_seen_at = self.now
+        await self.db.flush()
+        stale = (
+            await self.db.scalars(
+                select(LeadDevice.id)
+                .where(LeadDevice.tenant_id == self.tenant_id, LeadDevice.person_id == me)
+                .order_by(LeadDevice.last_seen_at.desc())
+                .offset(DEVICES_PER_PERSON)
+            )
+        ).all()
+        if stale:
+            await self.db.execute(delete(LeadDevice).where(LeadDevice.id.in_(stale)))
+        return True
+
+    async def forget_device(self, command: DeviceCommand) -> bool:
+        """This phone stops getting my alerts (signed out, or alerts switched off)."""
+        await self.db.execute(
+            delete(LeadDevice).where(
+                LeadDevice.token_sha256 == token_digest(command.token),
+                LeadDevice.person_id == self.viewer.person_id,
+            )
+        )
+        return False
 
     async def reassign(self, lead_id: UUID, command: Reassign) -> LeadDetail:
         if not self.viewer.can_manage:
