@@ -2053,6 +2053,13 @@
   box-shadow: var(--sx-focus-ring);
 }
 
+/* Last call, in short (UX study item 10): same height while it loads. */
+.briefSkeleton {
+  display: grid;
+  gap: 10px;
+  padding-block: 4px;
+}
+
 .repPickIcon {
   display: grid;
   place-items: center;

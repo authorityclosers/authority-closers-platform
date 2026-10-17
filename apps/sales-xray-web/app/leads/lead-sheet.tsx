@@ -58,6 +58,7 @@ import {
   type LeadEvent,
   type Stage,
 } from "./leads-client";
+import { LastCallBrief } from "./call-brief-card";
 import { sourceText, whyLine } from "./desk-view";
 import { firstCallWords, ownerNote } from "./owner-words";
 import {
@@ -1777,6 +1778,8 @@ function LeadCard({
           </p>
         ) : null}
       </section>
+
+      <LastCallBrief detail={detail} onChanged={onChanged} />
 
       <section className={styles.historyBlock} aria-label="History">
         <h3 className={styles.stepLabel}>History</h3>
