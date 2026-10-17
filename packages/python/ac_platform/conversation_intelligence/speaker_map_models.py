@@ -42,7 +42,6 @@ class ConversationSpeakerMapRevision(Base):
             "length(trim(transcript_revision)) > 0 AND length(transcript_revision) <= 256",
             name="transcript_bounds",
         ),
-        Index("ix_speaker_map_latest", "tenant_id", "submission_id", "revision"),
         Index("ix_speaker_map_actor", "tenant_id", "actor_person_id"),
     )
 

@@ -8,7 +8,6 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKeyConstraint,
-    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -66,7 +65,6 @@ class ConversationCallOutcomeRevision(Base):
             ondelete="RESTRICT",
         ),
         _member("set_by_person_id", "fk_call_outcome_set_by_member"),
-        Index("ix_call_outcome_read", "tenant_id", "submission_id", "revision"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)

@@ -9,6 +9,7 @@ import signal
 import stat
 import subprocess
 import sys
+from contextlib import nullcontext
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -1248,8 +1249,74 @@ def test_checked_in_migrations_preserve_forward_only_recovery_policy() -> None:
             with pytest.raises(RuntimeError, match="history requires forward recovery"):
                 migration.downgrade()
             continue
+        if migration.revision in INDEX_ONLY_MIGRATIONS:
+            # Index-only migrations hold no history: rollback restores the prior
+            # index set and never reads, locks or changes a row.
+            calls: list[tuple[str, str]] = []
+            migration.op = SimpleNamespace(
+                get_context=lambda: SimpleNamespace(autocommit_block=nullcontext),
+                create_index=lambda name, *_, calls=calls, **__: calls.append(("create", name)),
+                drop_index=lambda name, calls=calls, **__: calls.append(("drop", name)),
+            )
+            migration.downgrade()
+            assert {kind for kind, _ in calls} <= {"create", "drop"} and calls
+            continue
         with pytest.raises(RuntimeError, match="forward-only"):
             migration.downgrade()
+
+
+INDEX_ONLY_MIGRATIONS = frozenset({"20261017_0096"})
+
+
+def test_read_path_index_rollback_restores_the_exact_previous_index_set() -> None:
+    path = ROOT / "db/migrations/versions/20261017_0096_read_path_indexes.py"
+    spec = importlib.util.spec_from_file_location("read_path_index_migration", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    created: dict[str, tuple[str, tuple[str, ...], dict[str, Any]]] = {}
+    dropped: list[str] = []
+    migration.op = SimpleNamespace(
+        get_context=lambda: SimpleNamespace(autocommit_block=nullcontext),
+        create_index=lambda name, table, columns, **kwargs: created.__setitem__(
+            name, (table, tuple(str(column) for column in columns), kwargs)
+        ),
+        drop_index=lambda name, **kwargs: dropped.append(name),
+    )
+    migration.upgrade()
+    added = {
+        "ix_conversation_report_drafts_recording",
+        "ix_conversation_runs_recording",
+        "ix_conversation_processing_plans_recording",
+        "ix_conversation_inference_tasks_checkpoint",
+    }
+    duplicates = {
+        "ix_speaker_map_latest": (
+            "conversation_speaker_map_revisions",
+            ("tenant_id", "submission_id", "revision"),
+        ),
+        "ix_submission_label_latest": (
+            "conversation_submission_label_revisions",
+            ("tenant_id", "submission_id", "revision"),
+        ),
+        "ix_call_outcome_read": (
+            "conversation_call_outcome_revisions",
+            ("tenant_id", "submission_id", "revision"),
+        ),
+        "ix_coaching_share_latest": (
+            "coaching_share_revisions",
+            ("tenant_id", "rep_person_id", "revision"),
+        ),
+    }
+    assert set(created) == added
+    assert set(dropped) == added | set(duplicates)
+    assert all(kwargs.get("postgresql_concurrently") is True for *_, kwargs in created.values())
+    created.clear()
+    dropped.clear()
+    migration.downgrade()
+    assert set(dropped) == added | set(duplicates)
+    # Each recreated index matches its original migration's exact definition.
+    assert {name: value[:2] for name, value in created.items()} == duplicates
 
 
 def test_empty_terminal_failure_migration_can_reverse_without_touching_history() -> None:

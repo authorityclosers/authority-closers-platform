@@ -40,7 +40,6 @@ class CoachingShareRevision(Base):
             "tenant_id", "rep_person_id", "revision", name="uq_coaching_share_revision"
         ),
         CheckConstraint("revision >= 1", name="positive_revision"),
-        Index("ix_coaching_share_latest", "tenant_id", "rep_person_id", "revision"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)

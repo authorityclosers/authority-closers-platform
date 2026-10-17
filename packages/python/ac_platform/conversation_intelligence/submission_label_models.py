@@ -49,7 +49,6 @@ class ConversationSubmissionLabelRevision(Base):
             "AND length(display_name) <= 120)",
             name="display_name_bounds",
         ),
-        Index("ix_submission_label_latest", "tenant_id", "submission_id", "revision"),
         Index("ix_submission_label_actor", "tenant_id", "actor_person_id"),
     )
 

@@ -29,3 +29,12 @@ def test_lead_desk_phones_are_in_all_consumers() -> None:
             *module.parity_tables_for_head("20261016_0094"),
             "lead_desk_devices",
         )
+
+
+def test_index_only_read_path_head_keeps_the_lead_alerts_contract() -> None:
+    # 0096 adds and drops indexes only: same counted tables, same contract.
+    for module in (backup, proof, drill):
+        assert module.parity_contract_for_head("20261017_0096") == "ac-postgres-parity-v62"
+        assert module.parity_tables_for_head("20261017_0096") == module.parity_tables_for_head(
+            "20261017_0095"
+        )

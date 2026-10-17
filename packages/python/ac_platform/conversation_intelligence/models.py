@@ -12,11 +12,13 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     LargeBinary,
     String,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -107,6 +109,8 @@ class ConversationRun(Base):
             "state IN ('queued','running','completed','cancelled','failed')", name="state"
         ),
         CheckConstraint("generation >= 1", name="positive_generation"),
+        # One recording's runs for its current generation (progress, retry).
+        Index("ix_conversation_runs_recording", "recording_id", "generation"),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
@@ -360,6 +364,14 @@ class ConversationReportDraft(Base):
         ),
         UniqueConstraint("run_id", "report_sha256"),
         CheckConstraint("source_revision >= 1", name="positive_source_revision"),
+        # The latest unerased draft of a recording (every report/progress read).
+        Index(
+            "ix_conversation_report_drafts_recording",
+            "recording_id",
+            text("created_at DESC"),
+            text("id DESC"),
+            postgresql_where=text("erased_at IS NULL"),
+        ),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
@@ -398,6 +410,8 @@ class ConversationInferenceTask(Base):
             "state IN ('queued','running','completed','failed','uncertain','cancelled')",
             name="state",
         ),
+        # The provider task behind a saved checkpoint (canonical report checks).
+        Index("ix_conversation_inference_tasks_checkpoint", "checkpoint_id"),
     )
     run_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
@@ -436,6 +450,14 @@ class ConversationProcessingPlan(Base):
         ),
         CheckConstraint("state <> 'active' OR acceptance_command_id IS NOT NULL", name="consent"),
         CheckConstraint("(session_id IS NULL) <> (processing_lease_id IS NULL)", name="one_actor"),
+        # A recording's newest plan per generation (progress, Calls list, retry).
+        Index(
+            "ix_conversation_processing_plans_recording",
+            "recording_id",
+            "generation",
+            text("created_at DESC"),
+            text("id DESC"),
+        ),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
