@@ -30,6 +30,7 @@ from ac_platform.billing.trial import TRIAL_LOT_ID, TrialPolicy
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
+    ConversationReportMinuteEvent,
     ConversationVisitorClaim,
 )
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount
@@ -292,23 +293,48 @@ class BillingLedger:
         )
 
     async def _acquisition_uses(self, tenant_id: UUID, owner: object) -> list[Use]:
+        """A call uses its seconds only when its report succeeds (owner, 17 Oct 2026).
+
+        Settled calls count their charged seconds. A call whose latest minute event
+        released it (failed, cancelled or expired before a report) uses nothing. Any
+        other call still holds its reserved seconds, so parallel uploads cannot spend
+        the same allowance twice.
+        """
         usage = ConversationAcquisitionUsage
         settlement = ConversationAcquisitionSettlement
+        event = ConversationReportMinuteEvent
+        latest_kind = (
+            select(event.kind)
+            .where(event.usage_id == usage.id)
+            .order_by(event.revision.desc())
+            .limit(1)
+            .correlate(usage)
+            .scalar_subquery()
+        )
         rows = await self.database.execute(
-            select(usage.id, usage.created_at, usage.reserved_seconds, settlement.charged_seconds)
+            select(
+                usage.id,
+                usage.created_at,
+                usage.reserved_seconds,
+                settlement.charged_seconds,
+                latest_kind,
+            )
             .select_from(usage)
             .outerjoin(settlement, settlement.usage_id == usage.id)
             .where(usage.tenant_id == tenant_id, owner)  # type: ignore[arg-type]
         )
-        return [
-            Use(
-                use_id=str(usage_id),
-                at=_utc(created_at),
-                seconds=reserved if charged is None else charged,
-                pending=charged is None,
+        uses = []
+        for usage_id, created_at, reserved, charged, kind in rows:
+            released = charged is None and kind == "released"
+            uses.append(
+                Use(
+                    use_id=str(usage_id),
+                    at=_utc(created_at),
+                    seconds=charged if charged is not None else 0 if released else reserved,
+                    pending=charged is None and not released,
+                )
             )
-            for usage_id, created_at, reserved, charged in rows
-        ]
+        return uses
 
     # ---- legacy grants ----------------------------------------------------
 
