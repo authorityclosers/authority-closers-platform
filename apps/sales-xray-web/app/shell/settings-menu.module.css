@@ -193,7 +193,7 @@
   border-radius: 99px;
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   animation: badge-in 420ms var(--lx-ease-pop, ease) 200ms both;
 }

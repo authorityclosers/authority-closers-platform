@@ -1266,15 +1266,18 @@ function LightboxShellFrame({
           <LayoutGrid size={20} aria-hidden="true" />
           <span>Home</span>
         </Link>
-        <Link
-          className={styles.bottomLink}
-          href="/leads"
-          prefetch={false}
-          aria-current={phoneTab === "leads" ? "page" : undefined}
-        >
-          <PhoneCall size={20} aria-hidden="true" />
-          <span>Leads</span>
-        </Link>
+        {/* Signed out, Leads and Calls only lead to a sign-in prompt (B22). */}
+        {guest ? null : (
+          <Link
+            className={styles.bottomLink}
+            href="/leads"
+            prefetch={false}
+            aria-current={phoneTab === "leads" ? "page" : undefined}
+          >
+            <PhoneCall size={20} aria-hidden="true" />
+            <span>Leads</span>
+          </Link>
+        )}
         <Link
           className={`${styles.bottomLink} ${styles.bottomNew}`}
           href={newAnalysisHref}
@@ -1286,14 +1289,16 @@ function LightboxShellFrame({
           </span>
           <span>New</span>
         </Link>
-        <Link
-          className={styles.bottomLink}
-          href="/analysis/calls"
-          aria-current={phoneTab === "calls" ? "page" : undefined}
-        >
-          <FolderOpen size={20} aria-hidden="true" />
-          <span>Calls</span>
-        </Link>
+        {guest ? null : (
+          <Link
+            className={styles.bottomLink}
+            href="/analysis/calls"
+            aria-current={phoneTab === "calls" ? "page" : undefined}
+          >
+            <FolderOpen size={20} aria-hidden="true" />
+            <span>Calls</span>
+          </Link>
+        )}
         {/* Signed out shows Sign in (the phone app has its own sign-in
             screen, so it hides this); an unconfirmed session keeps More. */}
         {guest ? (

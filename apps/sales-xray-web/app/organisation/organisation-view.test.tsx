@@ -523,6 +523,10 @@ it("shows no promised Create/Join buttons on Personal and reads only your invita
   await render();
   expect(host.textContent).toContain("You are on your personal account");
   expect(host.textContent).toContain("To open Directory name");
+  // B23: phones have no sidebar; the switcher is under More there.
+  expect(host.textContent).toContain(
+    "at the top of the sidebar, or under More on a phone",
+  );
   expect(host.textContent).not.toMatch(/soon/i);
   // This server has no invitations yet (404): nothing is offered.
   expect(host.querySelectorAll("button, a")).toHaveLength(0);

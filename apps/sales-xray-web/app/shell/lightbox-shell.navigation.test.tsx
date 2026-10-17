@@ -159,7 +159,7 @@ it("keeps the phone tab bar to five tabs, plus a dev settings control", () => {
   }
 });
 
-it("keeps More for an unconfirmed session and offers Sign in once signed out", () => {
+it("keeps the five tabs for an unconfirmed session; signed out offers Home, New and Sign in", () => {
   const tabs = (shell: React.ReactElement) => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(shell);
@@ -174,15 +174,16 @@ it("keeps More for an unconfirmed session and offers Sign in once signed out", (
       <AcquisitionShell authenticated={false} loading active="dashboard">
         <p>Dashboard</p>
       </AcquisitionShell>,
-    ).at(-1),
-  ).toBe("More");
+    ),
+  ).toEqual(["Home", "Leads", "New", "Calls", "More"]);
+  // B22: Leads and Calls only lead to a sign-in prompt for a visitor.
   expect(
     tabs(
       <AcquisitionShell authenticated={false} active="dashboard">
         <p>Dashboard</p>
       </AcquisitionShell>,
-    ).at(-1),
-  ).toBe("Sign in");
+    ),
+  ).toEqual(["Home", "New", "Sign in"]);
 });
 
 it("names the current workspace in the phone header and the desktop top bar", () => {
