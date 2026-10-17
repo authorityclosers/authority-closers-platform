@@ -100,33 +100,33 @@ BUDGETS: dict[str, int] = {
     "list.newest.page1": 14,
     "list.reports_first.page1": 14,
     "list.summary": 13,
-    "progress.analysed": 76,
-    "progress.local_only": 54,
-    "progress.queued": 54,
-    "progress.legacy": 54,
-    "progress.held": 65,
-    "progress.active": 53,
-    "progress.quoted": 53,
-    "progress.claimed": 95,
-    "progress.rep": 60,
-    "report.analysed": 268,
-    "report.legacy": 168,
-    "report.rep": 182,
-    "report.local_only": 34,
-    "transcript.analysed": 61,
-    "transcript.legacy": 36,
-    "transcript.local_only": 34,
-    "speaker_map.analysed": 106,
-    "speaker_map.legacy": 57,
+    "progress.analysed": 48,
+    "progress.local_only": 28,
+    "progress.queued": 28,
+    "progress.legacy": 28,
+    "progress.held": 27,
+    "progress.active": 27,
+    "progress.quoted": 27,
+    "progress.claimed": 36,
+    "progress.rep": 31,
+    "report.analysed": 65,
+    "report.legacy": 42,
+    "report.rep": 44,
+    "report.local_only": 21,
+    "transcript.analysed": 46,
+    "transcript.legacy": 23,
+    "transcript.local_only": 21,
+    "speaker_map.analysed": 55,
+    "speaker_map.legacy": 32,
     "coaching.home": 117,
     "coaching.team": 158,
     "rep.list.page1": 14,
-    "rep.progress.rep": 54,
-    "rep.report.rep": 168,
-    "rep.report.analysed": 17,
-    "guest.progress.unclaimed": 47,
-    "guest.report.unclaimed": 28,
-    "guest.transcript.unclaimed": 28,
+    "rep.progress.rep": 28,
+    "rep.report.rep": 42,
+    "rep.report.analysed": 13,
+    "guest.progress.unclaimed": 38,
+    "guest.report.unclaimed": 23,
+    "guest.transcript.unclaimed": 23,
     "guest.report.analysed": 4,
 }
 
@@ -621,3 +621,84 @@ def test_normaliser_keeps_identity_equalities_and_key_order_independence() -> No
             {"summary": "Follow up on 17 Oct 2026"},
         ],
     }
+
+
+def test_request_reuse_keeps_failures_unmemoised_and_ends_with_the_transaction(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Within one memoised read: a failed integrity check raises every time, a
+    successful read is answered again identically, and a new transaction (or an
+    expired session) checks the database again from the start."""
+    from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
+    from ac_platform.conversation_intelligence.application import (
+        ConversationConflict,
+        ConversationDenied,
+    )
+    from ac_platform.conversation_intelligence.read_memo import active_memo, memoized_reads
+    from ac_platform.conversation_intelligence.report_store import ConversationReports
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            call = await _call(setup)
+            await draft_for(setup, call, line="Golden reuse line: the buyer asks about scope.")
+            actor = setup.state.actor
+            async with setup.sessions() as db, db.begin():
+                ownership = GuestOwnership(setup.factory(db))
+                plain = await AcquisitionReports(ownership).report(call, actor=actor)
+            async with setup.sessions() as db, db.begin():
+                ownership = GuestOwnership(setup.factory(db))
+                with memoized_reads(db):
+                    reports = AcquisitionReports(ownership)
+                    first = await reports.report(call, actor=actor)
+                    statements: list[str] = []
+
+                    def capture(_c: Any, _k: Any, statement: str, *_: Any) -> None:
+                        statements.append(statement)
+
+                    event.listen(setup.engine.sync_engine, "before_cursor_execute", capture)
+                    try:
+                        again = await AcquisitionReports(ownership).report(call, actor=actor)
+                    finally:
+                        event.remove(setup.engine.sync_engine, "before_cursor_execute", capture)
+                    assert first == again == plain
+                    # Only the fresh reads remain: marks and previous-call context.
+                    assert len(statements) <= 8, statements
+                    memo = active_memo(db)
+                    assert memo is not None
+                    assert any(key[0] == "verified" for key in memo.values)
+            # A failed verification is not remembered: it raises on every read.
+            calls = 0
+            original = ConversationReports._validated
+
+            def failing(draft: Any, recording: Any) -> Any:
+                nonlocal calls
+                calls += 1
+                raise ConversationConflict("The stored report needs review.")
+
+            ConversationReports._validated = staticmethod(failing)  # type: ignore[method-assign]
+            try:
+                async with setup.sessions() as db, db.begin():
+                    ownership = GuestOwnership(setup.factory(db))
+                    with memoized_reads(db):
+                        for _ in range(2):
+                            with pytest.raises(ConversationConflict):
+                                await AcquisitionReports(ownership).report(call, actor=actor)
+                        memo = active_memo(db)
+                        assert memo is not None
+                        assert not any(key[0] == "verified" for key in memo.values)
+            finally:
+                ConversationReports._validated = staticmethod(original)  # type: ignore[method-assign]
+            assert calls == 2
+            # Session expiry is re-checked against the clock on every reuse.
+            async with setup.sessions() as db, db.begin():
+                ownership = GuestOwnership(setup.factory(db))
+                with memoized_reads(db):
+                    await AcquisitionReports(ownership).report(call, actor=actor)
+                    setup.clock[0] += timedelta(days=2)
+                    with pytest.raises(ConversationDenied):
+                        await AcquisitionReports(ownership).report(call, actor=actor)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

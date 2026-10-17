@@ -127,6 +127,17 @@ class ConversationApplication:
             now = utc(self.clock())
             await admit_processing_actor(self.database, actor, now)
             return now
+        from ac_platform.conversation_intelligence.read_memo import active_memo
+
+        memo = active_memo(self.database)
+        if memo is not None:
+            # This transaction already locked and admitted the same rows; an
+            # exclusive admission also answers a shared one. Expiry is rechecked.
+            expires_at = memo.values.get(("admit", actor, False))
+            if expires_at is None and shared_identity_locks:
+                expires_at = memo.values.get(("admit", actor, True))
+            if expires_at is not None and utc(expires_at) > utc(self.clock()):
+                return utc(self.clock())
         # The same person/session locks as existing AC commands serialize revocation
         # and idempotency. Never trust a previously hydrated actor as current authority.
         person = await self.database.scalar(
@@ -176,6 +187,8 @@ class ConversationApplication:
             or member.ended_at is not None
         ):
             raise ConversationDenied("A current AC workspace session is required.")
+        if memo is not None:
+            memo.values[("admit", actor, shared_identity_locks)] = session.expires_at
         return now
 
     async def _recording(
