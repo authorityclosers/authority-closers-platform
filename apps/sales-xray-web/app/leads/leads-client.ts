@@ -57,7 +57,14 @@ export type Stage =
   | "lost";
 
 export type Desk = {
-  me: { person_id: string; name: string; role: string; can_manage: boolean };
+  me: {
+    person_id: string;
+    name: string;
+    role: string;
+    can_manage: boolean;
+    /** Off: the lead rules give this seller no new leads (UX study item 8). */
+    taking_leads?: boolean;
+  };
   numbers: {
     calls: number;
     connected: number;
@@ -566,6 +573,11 @@ export function reassign(
   );
 }
 
+/** The seller's own "Taking new leads" switch. */
+export function setTaking(taking: boolean) {
+  return request<Desk["me"]>("/me/taking", json("PUT", { taking }));
+}
+
 export function readTeam(signal?: AbortSignal) {
   return request<Team>("/team", { signal });
 }
@@ -723,14 +735,24 @@ export function quickFollowUp(
   return at;
 }
 
-export type CallTime = "hour" | "evening" | "morning" | "week";
+export type CallTime = "hour" | "evening" | "morning" | "week" | "someday";
 
-/** When to call again, as a human time: this evening, tomorrow at 10, next week at 10. */
+/**
+ * When to call again, as a human time: this evening, tomorrow at 10, next
+ * week at 10, or Someday (Privyr's, UX study item 9): three weeks out at 11,
+ * moved off a Sunday, so a "not now" lead still has a next date.
+ */
 export function nextCallTime(choice: CallTime, now: Date = new Date()): Date {
   const at = new Date(now);
   at.setSeconds(0, 0);
   if (choice === "hour") {
     at.setHours(at.getHours() + 1);
+    return at;
+  }
+  if (choice === "someday") {
+    at.setDate(at.getDate() + 21);
+    if (at.getDay() === 0) at.setDate(at.getDate() + 1);
+    at.setHours(11, 0, 0, 0);
     return at;
   }
   if (choice === "evening") {

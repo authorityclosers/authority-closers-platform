@@ -115,7 +115,11 @@ async def account_smoke(
         )
         await request("GET", "/v1/me/sales-xray-profile/write-eligibility")
         policy = await request("GET", PREFIX + "/upload-policy")
-        if environment == "production" and not 1 <= policy["retention_days"] <= 7:
+        if (
+            environment == "production"
+            and not 1 <= policy["retention_days"] <= 7
+            and policy.get("retention_mode") != "until_deleted"
+        ):
             raise failure("qa_retention_refused")
         fixture = (
             resources.files("ac_platform.conversation_intelligence")

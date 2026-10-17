@@ -18,6 +18,7 @@ import {
   Info,
   Minus,
   Pencil,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -793,6 +794,26 @@ export function InlineEdit({
  * A small modal: one title, a line of context, the body and its actions.
  * Native <dialog>, so focus stays inside and Escape closes it.
  */
+/**
+ * A press on a modal dialog's backdrop lands on the dialog element itself,
+ * outside its box. Keyboard clicks carry no position and never count.
+ */
+export function onBackdrop(event: {
+  target: EventTarget;
+  currentTarget: Element;
+  clientX: number;
+  clientY: number;
+}): boolean {
+  if (event.target !== event.currentTarget) return false;
+  const box = event.currentTarget.getBoundingClientRect();
+  return (
+    event.clientX < box.left ||
+    event.clientX > box.right ||
+    event.clientY < box.top ||
+    event.clientY > box.bottom
+  );
+}
+
 export function Dialog({
   open,
   title,
@@ -809,6 +830,10 @@ export function Dialog({
   children?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Owner, 18 Oct: Escape alone is hard to find on a computer. A press that
+  // starts and ends on the dimmed backdrop closes too; a text selection
+  // dragged out of the box does not.
+  const pressedOutside = useRef(false);
   const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
@@ -825,12 +850,31 @@ export function Dialog({
         event.preventDefault();
         onClose();
       }}
+      onPointerDown={(event) => {
+        pressedOutside.current = onBackdrop(event);
+      }}
+      onClick={(event) => {
+        const started = pressedOutside.current;
+        pressedOutside.current = false;
+        if (started && onBackdrop(event)) onClose();
+      }}
     >
       {open ? (
         <>
-          <h2 id={titleId} className={styles.dialogTitle}>
-            {title}
-          </h2>
+          <div className={styles.dialogHead}>
+            <h2 id={titleId} className={styles.dialogTitle}>
+              {title}
+            </h2>
+            <button
+              type="button"
+              className={styles.dialogClose}
+              aria-label="Close"
+              title="Close"
+              onClick={onClose}
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
           {description ? (
             <p className={styles.dialogText}>{description}</p>
           ) : null}

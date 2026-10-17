@@ -954,6 +954,44 @@ a.rowTitle:focus-visible::after {
   font: var(--sx-text-panel);
 }
 
+/* The title shares its row with a visible close X in the corner. */
+.dialogHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -6px -8px 0 0;
+}
+
+.dialogHead > .dialogTitle {
+  min-width: 0;
+  padding-top: 6px;
+}
+
+.dialogClose {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--sx-control-h);
+  height: var(--sx-control-h);
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.dialogClose:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.dialogClose:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 1px;
+}
+
 .dialogText {
   margin: -8px 0 0;
   color: var(--sx-muted);

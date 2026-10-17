@@ -14,7 +14,7 @@
  * opens its lead through /leads#lead=<id> (ids only, after "#").
  */
 
-import { Building2, PhoneCall, Plus, Smartphone } from "lucide-react";
+import { Building2, PhoneCall, Plus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
@@ -44,6 +44,7 @@ import {
 } from "./capture-dialogs";
 import { AlertsCard } from "./alerts-card";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
+import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { DeskView, dueNow, type DeskLink, type RowActions } from "./desk-view";
 import { usePullToRefresh } from "./gestures";
 import { LeadActions } from "./lead-actions";
@@ -61,9 +62,10 @@ import {
   type PickedContact,
 } from "./leads-client";
 import { MessageSetup } from "./message-sheet";
-import { inPhoneApp, onPhoneSignal } from "./native-phone";
+import { onPhoneSignal } from "./native-phone";
 import { ListView } from "./list-view";
 import { SourcesView } from "./sources-view";
+import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
 import styles from "./leads.module.css";
 
@@ -143,7 +145,11 @@ export function LeadsRoute() {
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const [menu, setMenu] = useState(false);
-  const [apps, setApps] = useState(false);
+  // The account menu's "Phone app" row lands here (only while the download
+  // is on); the Leads header no longer carries it (owner, 18 Oct).
+  const [apps, setApps] = useState<boolean>(
+    () => ANDROID_DOWNLOAD_READY && params.get("app") === "1",
+  );
   const [sharedDone, setSharedDone] = useState(false);
   const [contacts, setContacts] = useState(false);
   const [picked, setPicked] = useState<PickedContact[]>([]);
@@ -361,16 +367,6 @@ export function LeadsRoute() {
       note: "Type, paste, contacts or a file",
       onClick: () => begin("menu", setMenu),
     },
-    ...(inPhoneApp()
-      ? []
-      : [
-          {
-            key: "app",
-            label: "Phone app",
-            note: "Call from your phone",
-            onClick: () => begin("apps", setApps),
-          },
-        ]),
   ];
 
   const tabs = [
@@ -415,10 +411,12 @@ export function LeadsRoute() {
               ]}
               actions={
                 <>
-                  <Button onClick={() => begin("apps", setApps)}>
-                    <Smartphone size={14} aria-hidden="true" />
-                    Phone app
-                  </Button>
+                  <TakingSwitch
+                    key={`taking-${desk.me.taking_leads !== false}`}
+                    initial={desk.me.taking_leads !== false}
+                    place="header"
+                    onChanged={refresh}
+                  />
                   <Button onClick={() => begin("menu", setMenu)}>
                     <Plus size={14} aria-hidden="true" />
                     Add leads
@@ -461,6 +459,12 @@ export function LeadsRoute() {
               links={links}
               afterHero={
                 <>
+                  <TakingSwitch
+                    key={`taking-${desk.me.taking_leads !== false}`}
+                    initial={desk.me.taking_leads !== false}
+                    place="row"
+                    onChanged={refresh}
+                  />
                   <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
                   <AlertsCard />
                 </>

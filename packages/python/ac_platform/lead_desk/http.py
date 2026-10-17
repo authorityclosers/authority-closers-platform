@@ -46,6 +46,7 @@ from ac_platform.lead_desk.contracts import (
     LeadDetail,
     LeadEdit,
     LeadPage,
+    Me,
     MessageSent,
     NewLead,
     NewSource,
@@ -60,6 +61,7 @@ from ac_platform.lead_desk.contracts import (
     SimulationPick,
     Sources,
     SourceView,
+    TakingLeads,
     Team,
 )
 from ac_platform.lead_desk.intake import MAX_FILE_BYTES, Intake
@@ -404,6 +406,12 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.save_rep(person_id, command)
+
+    @router.put("/me/taking", response_model=Me, response_model_by_alias=True)
+    async def set_taking(command: TakingLeads, request: Request, response: Response) -> Me:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.set_taking(command)
 
     @router.put("/settings", response_model=Team, response_model_by_alias=True)
     async def save_settings(command: SettingsCommand, request: Request, response: Response) -> Team:

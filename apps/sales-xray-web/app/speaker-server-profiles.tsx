@@ -1,19 +1,49 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { UsersRound, X } from "lucide-react";
 import { ActionButton } from "@ac/ui";
 
 import { ACQUISITION, UUID, record } from "./acquisition-client";
+import { voicesOf } from "./call-data";
 import { callLabelEtag } from "./call-label";
+import type { Transcript } from "./report-contract";
+import { getShellState } from "./shell/shell-store";
+import { SpeakerAvatar } from "./speaker-avatar";
 import {
+  MAX_SPEAKER_NAME,
   SpeakerProfilesContext,
   clearSpeakerProfiles,
   readSpeakerProfiles,
   ROLE_WORDS,
+  speakerName,
+  voiceStyle,
+  type SpeakerProfile,
   type SpeakerProfiles,
   type SpeakerRole,
 } from "./speaker-profiles";
 import styles from "./speaker.module.css";
+
+const CARD_ROLES: readonly SpeakerRole[] = [
+  "you",
+  "salesperson",
+  "prospect",
+  "other",
+];
+/** Roles only one speaker can hold: choosing one that is taken swaps them. */
+const ONE_ONLY = new Set<SpeakerRole>(["you", "prospect"]);
+
+/** The first thing each voice said, so people can tell who is who. */
+function firstLines(transcript: Transcript | undefined) {
+  const lines = new Map<string, string>();
+  for (const segment of transcript?.segments ?? []) {
+    const id = segment.speaker_id;
+    const text = segment.text.replace(/\s+/g, " ").trim();
+    if (id && !lines.has(id) && text.length >= 8)
+      lines.set(id, text.length > 90 ? `${text.slice(0, 88)}…` : text);
+  }
+  return lines;
+}
 
 type SpeakerMap = {
   etag: string;
@@ -154,11 +184,14 @@ export function SpeakerServerProfiles({
   callId,
   transcriptRevision,
   enabled,
+  transcript,
   children,
 }: {
   callId: string | null;
   transcriptRevision: string;
   enabled: boolean;
+  /** The report's transcript: voice colours, order and first lines for the card. */
+  transcript?: Transcript;
   children: ReactNode;
 }) {
   const [map, setMap] = useState<SpeakerMap | null>(null);
@@ -168,6 +201,16 @@ export function SpeakerServerProfiles({
   const [retry, setRetry] = useState(0);
   // "Not now" on the detected-speakers card, for this call in this visit.
   const [laterFor, setLaterFor] = useState<string | null>(null);
+  // The card's Change mode: the roles and names being edited.
+  const [changing, setChanging] = useState<Record<
+    string,
+    SpeakerProfile
+  > | null>(null);
+  const voices = useMemo(
+    () => (transcript ? voicesOf(transcript) : []),
+    [transcript],
+  );
+  const lines = useMemo(() => firstLines(transcript), [transcript]);
   const controller = useRef<AbortController | null>(null);
   const inFlight = useRef(false);
   const validCall = enabled && callId !== null && UUID.test(callId);
@@ -281,6 +324,39 @@ export function SpeakerServerProfiles({
     }
   }
 
+  const showCard =
+    Boolean(needsConfirmation && completeSuggestion) && laterFor !== callId;
+  const accountName = getShellState().profileName;
+  const voiceOf = (id: string) => {
+    const at = voices.indexOf(id);
+    return at >= 0 ? at : predicted.findIndex(([other]) => other === id);
+  };
+  const shownRows: Array<[string, SpeakerProfile]> = changing
+    ? predicted.map(([id]) => [id, changing[id]])
+    : predicted;
+  const choose = (id: string, role: SpeakerRole) =>
+    setChanging((current) => {
+      if (!current) return current;
+      const before = current[id].role;
+      const next = { ...current, [id]: { ...current[id], role } };
+      // Two people can't both be the prospect (or you): picking a taken role
+      // gives the other speaker this one's old role, so a swap is one tap.
+      if (ONE_ONLY.has(role))
+        for (const [other, profile] of Object.entries(next))
+          if (other !== id && profile.role === role)
+            next[other] = { ...profile, role: before };
+      return next;
+    });
+  const rename = (id: string, name: string) =>
+    setChanging((current) =>
+      current
+        ? {
+            ...current,
+            [id]: { ...current[id], name: name.slice(0, MAX_SPEAKER_NAME) },
+          }
+        : current,
+    );
+
   return (
     <SpeakerProfilesContext.Provider
       value={{
@@ -293,7 +369,8 @@ export function SpeakerServerProfiles({
         server: true,
       }}
     >
-      {error && (
+      {/* While the card asks, a save problem shows inside it, not above the report. */}
+      {error && !showCard && (
         <p role="alert">
           {error}
           {!map && validCall && (
@@ -317,38 +394,123 @@ export function SpeakerServerProfiles({
           </ActionButton>
         </div>
       )}
-      {/* A floating card (owner, 17 Oct): it arrives after the report and
-          must never push the report down or keep a band of the screen. */}
-      {needsConfirmation && completeSuggestion && laterFor !== callId && (
+      {/* A floating corner card (owner, 17 Oct): it arrives after the report
+          and never pushes it down. 18 Oct: "pretty shit UI" with raw
+          speaker_0 ids; it now shows each voice's name, role and first line,
+          asks one question, and offers Confirm or Change. */}
+      {showCard && (
         <div
-          className={`${styles.mapNotice} ${styles.detected}`}
+          className={styles.detected}
           role="region"
           aria-label="Detected speakers"
+          data-changing={changing ? "" : undefined}
         >
-          <span>
-            Detected:{" "}
-            {predicted
-              .map(
-                ([id, profile]) =>
-                  `${profile.name || id} · ${ROLE_WORDS[profile.role!]}`,
-              )
-              .join("; ")}
-          </span>
-          <ActionButton
-            variant="quiet"
-            disabled={saving}
-            onClick={() => void save(drafts)}
-          >
-            {saving ? "Saving…" : "Confirm speakers"}
-          </ActionButton>
-          <button
-            type="button"
-            className={styles.later}
-            disabled={saving}
-            onClick={() => setLaterFor(callId)}
-          >
-            Not now
-          </button>
+          <div className={styles.detectedHead}>
+            <span className={styles.detectedIcon} aria-hidden="true">
+              <UsersRound size={16} />
+            </span>
+            <p className={styles.detectedTitle}>
+              {changing
+                ? "Who is who on this call?"
+                : "Did we get the speakers right?"}
+            </p>
+            <button
+              type="button"
+              className={styles.detectedClose}
+              aria-label="Not now"
+              title="Not now"
+              disabled={saving}
+              onClick={() => {
+                setChanging(null);
+                setLaterFor(callId);
+              }}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <ul className={styles.detectedList}>
+            {shownRows.map(([id, profile]) => {
+              const voice = voiceOf(id);
+              const label = speakerName(voice, profile, accountName);
+              const line = lines.get(id);
+              return (
+                <li key={id} style={voiceStyle(voice)}>
+                  <SpeakerAvatar
+                    voice={voice}
+                    profile={profile}
+                    youName={accountName}
+                    size={28}
+                  />
+                  {changing ? (
+                    <input
+                      className={styles.detectedName}
+                      value={profile.name}
+                      placeholder={`Speaker ${voice + 1}`}
+                      maxLength={MAX_SPEAKER_NAME}
+                      aria-label={`Name for speaker ${voice + 1}`}
+                      onChange={(event) => rename(id, event.target.value)}
+                    />
+                  ) : (
+                    <span className={styles.detectedWho}>
+                      <strong>{label}</strong>
+                      {line ? <q>{line}</q> : null}
+                    </span>
+                  )}
+                  {changing ? (
+                    <div
+                      className={styles.detectedRoles}
+                      role="group"
+                      aria-label={`Role for speaker ${voice + 1}`}
+                    >
+                      {CARD_ROLES.map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          aria-pressed={profile.role === role}
+                          onClick={() => choose(id, role)}
+                        >
+                          {ROLE_WORDS[role]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className={styles.detectedRole}>
+                      {ROLE_WORDS[profile.role!]}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {error ? (
+            <p className={styles.detectedError} role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className={styles.detectedActions}>
+            <button
+              type="button"
+              className={styles.detectedPrimary}
+              disabled={saving}
+              onClick={() =>
+                void save(changing ?? drafts).then((saved) => {
+                  if (saved) setChanging(null);
+                })
+              }
+            >
+              {saving ? "Saving…" : changing ? "Save" : "Confirm"}
+            </button>
+            <button
+              type="button"
+              className={styles.detectedSecondary}
+              disabled={saving}
+              onClick={() =>
+                setChanging(changing ? null : Object.fromEntries(predicted))
+              }
+            >
+              {changing ? "Cancel" : "Change"}
+            </button>
+          </div>
         </div>
       )}
       {children}

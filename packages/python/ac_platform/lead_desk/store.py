@@ -56,6 +56,7 @@ from ac_platform.lead_desk.contracts import (
     RepView,
     SettingsCommand,
     SettingsView,
+    TakingLeads,
     Team,
 )
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent, LeadRep
@@ -534,12 +535,14 @@ class LeadDesk:
             )
             or 0
         )
+        rules = await self.db.get(LeadRep, (self.tenant_id, me))
         return Desk(
             me=Me(
                 person_id=me,
                 name=self.viewer.name,
                 role=self.viewer.role,
                 can_manage=self.viewer.can_manage,
+                taking_leads=rules.available if rules else True,
             ),
             numbers=Numbers(
                 calls=len(results),
@@ -1642,6 +1645,39 @@ class LeadDesk:
         row.updated_at = self.now
         await self.db.flush()
         return await self.team()
+
+    async def set_taking(self, command: TakingLeads) -> Me:
+        """The seller's own "Taking new leads" switch: the same flag a manager
+        sets on Team, so the lead rules skip them while it is off. Their open
+        leads stay with them."""
+        me = self.viewer.person_id
+        await self._require_seller(me)
+        row = await self.db.get(LeadRep, (self.tenant_id, me), with_for_update=True)
+        if row is None:
+            row = LeadRep(
+                tenant_id=self.tenant_id,
+                person_id=me,
+                revision=0,
+                available=True,
+                max_open=DEFAULT_MAX_OPEN,
+                languages=[],
+                areas=[],
+                interests=[],
+            )
+            self.db.add(row)
+        if row.revision == 0 or row.available != command.taking:
+            row.revision += 1
+            row.available = command.taking
+            row.updated_by_person_id = me
+            row.updated_at = self.now
+            await self.db.flush()
+        return Me(
+            person_id=me,
+            name=self.viewer.name,
+            role=self.viewer.role,
+            can_manage=self.viewer.can_manage,
+            taking_leads=row.available,
+        )
 
     async def save_settings(self, command: SettingsCommand) -> Team:
         self._require_manager()
