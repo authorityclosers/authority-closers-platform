@@ -41,6 +41,8 @@ export type UploadPolicy = {
   maximum_file_bytes: number;
   maximum_call_seconds: number;
   retention_days: number;
+  // "until_deleted", "keep_for_training" or "days"; absent from older servers.
+  retention_mode?: string;
 };
 export const MAX_ACQUISITION_FILE_BYTES = 100_000_000;
 export type Submission = {
@@ -404,6 +406,9 @@ export function parsePolicy(value: unknown): UploadPolicy {
     maximum_file_bytes,
     maximum_call_seconds,
     retention_days,
+    ...(typeof item.retention_mode === "string"
+      ? { retention_mode: item.retention_mode }
+      : {}),
   };
 }
 export function parseSubmission(value: unknown): Submission {

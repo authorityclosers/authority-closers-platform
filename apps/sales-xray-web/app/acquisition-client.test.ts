@@ -399,6 +399,16 @@ describe("acquisition source-bound presentation", () => {
       parsePolicy({ ...policy, retention_days: 3650 }).retention_days,
     ).toBe(3650);
     expect(() => parsePolicy({ ...policy, retention_days: 3651 })).toThrow();
+    const kept = parsePolicy({
+      ...policy,
+      retention_days: 3650,
+      retention_mode: "until_deleted",
+      privacy_details:
+        "AC keeps your recording, transcript and report privately until you delete the call or ask us to delete it.",
+    });
+    expect(kept.retention_mode).toBe("until_deleted");
+    expect(kept.privacy_details).toContain("until you delete the call");
+    expect(parsePolicy(policy).retention_mode).toBeUndefined();
     expect(() =>
       parseProgress(
         { ...progress, source_sha256: "a".repeat(64) },

@@ -3087,25 +3087,37 @@ export function AcquisitionStudio({
                       >
                         <summary>Privacy details</summary>
                         <p>{policy.description}</p>
-                        <p>
-                          {policy.retention_days > STANDARD_RETENTION_DAYS ? (
-                            <>
-                              Your recording is kept privately to improve
-                              AC&apos;s coaching AI until you delete it.
-                            </>
-                          ) : (
-                            <>
-                              Your recording is retained for{" "}
-                              {policy.retention_days} days so this review can
-                              finish and remain available.
-                            </>
-                          )}{" "}
-                          You can request deletion from Privacy &amp; support.
-                        </p>
-                        <p>
-                          {policy.privacy_details ||
-                            "Approved service providers may process this recording to prepare the transcript and coaching report. The recording and report remain private for the retention period above."}
-                        </p>
+                        {/* The server's own words come with the terms' fingerprint;
+                            the fixed sentences below are only for older servers. */}
+                        {policy.privacy_details ? (
+                          <p>{policy.privacy_details}</p>
+                        ) : (
+                          <>
+                            <p>
+                              {policy.retention_days >
+                              STANDARD_RETENTION_DAYS ? (
+                                <>
+                                  Your recording is kept privately to improve
+                                  AC&apos;s coaching AI until you delete it.
+                                </>
+                              ) : (
+                                <>
+                                  Your recording is retained for{" "}
+                                  {policy.retention_days} days so this review
+                                  can finish and remain available.
+                                </>
+                              )}{" "}
+                              You can request deletion from Privacy &amp;
+                              support.
+                            </p>
+                            <p>
+                              Approved service providers may process this
+                              recording to prepare the transcript and coaching
+                              report. The recording and report remain private
+                              for the retention period above.
+                            </p>
+                          </>
+                        )}
                       </details>
                       <label className={styles.consentLabel}>
                         <input

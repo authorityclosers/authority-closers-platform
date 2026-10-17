@@ -47,9 +47,12 @@ ACQUISITION_POLICY_SCHEMA: Literal["ac.sales-xray.acquisition-provider-policy/1"
 MAX_ACQUISITION_POLICY_STAGES = 3
 # Owner limits (28 Sep 2026): recordings may be kept beyond the standard week only
 # under a keep-for-training retention policy, which records the consent basis.
+# Owner decision (18 Oct 2026): or kept until their owner deletes them, with no
+# training purpose, under a keep-until-deleted retention policy.
 STANDARD_RETENTION_DAYS = 7
 MAX_RETENTION_DAYS = 3650
 KEEP_FOR_TRAINING_RETENTION_PREFIX = "ref:retention/sales-xray-keep-for-training"
+UNTIL_DELETED_RETENTION_PREFIX = "ref:retention/sales-xray-until-deleted"
 MAX_ACQUISITION_RECORDINGS = 10_000
 MAX_ACQUISITION_STORED_SOURCE_BYTES = 34_359_738_368
 
@@ -647,7 +650,9 @@ class HostedApprovalBundle(_StrictFrozenModel):
         if self.expires_at_epoch <= self.issued_at_epoch:
             raise ValueError("approval_bundle_window_invalid")
         if self.retention_days > STANDARD_RETENTION_DAYS and not (
-            self.intake_retention_ref.startswith(KEEP_FOR_TRAINING_RETENTION_PREFIX)
+            self.intake_retention_ref.startswith(
+                (KEEP_FOR_TRAINING_RETENTION_PREFIX, UNTIL_DELETED_RETENTION_PREFIX)
+            )
         ):
             raise ValueError("retention_beyond_standard_requires_keep_for_training")
         if self.stage_call_supplements and self.environment == "production":
@@ -913,6 +918,17 @@ class HostedApprovalBundle(_StrictFrozenModel):
             max_recordings=2000,
         )
         return AcquisitionProviderPolicy.model_validate(payload)
+
+    def ai_processor_ids(self) -> tuple[str, ...]:
+        """Every provider id this bundle can send a recording or transcript to."""
+
+        ids = {stage.provider_id for stage in self.stages}
+        for policy in (self.acquisition_policy, *self.organisation_acquisition_policies):
+            if policy is None:
+                continue
+            ids.update(stage.provider_id for stage in policy.stages)
+            ids.update(stage.provider_id for profile in policy.profiles for stage in profile.stages)
+        return tuple(sorted(ids))
 
     def acquisition_tenant_ids(self) -> tuple[UUID, ...]:
         """Return public and organisation tenants in release order."""

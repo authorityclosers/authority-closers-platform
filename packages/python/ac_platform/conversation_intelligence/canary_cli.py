@@ -38,7 +38,10 @@ from ac_platform.conversation_intelligence.hosted_runtime import (
     compose_hosted_intake,
     load_pinned_approval,
 )
-from ac_platform.conversation_intelligence.intake import KEEP_FOR_TRAINING_RETENTION_PREFIX
+from ac_platform.conversation_intelligence.intake import (
+    KEEP_FOR_TRAINING_RETENTION_PREFIX,
+    UNTIL_DELETED_RETENTION_PREFIX,
+)
 from ac_platform.conversation_intelligence.models import ConversationCheckpoint
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_cli import (
@@ -211,9 +214,12 @@ async def poll(
 
 
 def retention_allowed(environment: str, retention_days: int, retention_ref: str) -> bool:
-    """Production needs standard retention; staging and development may keep for training."""
+    """Production keeps for a week or until deleted; only staging and development may keep
+    for training. Canary recordings are fictional and never reach the retention step."""
     if retention_ref.startswith(KEEP_FOR_TRAINING_RETENTION_PREFIX):
         return environment in {"staging", "development"}
+    if retention_ref.startswith(UNTIL_DELETED_RETENTION_PREFIX):
+        return True
     return retention_days <= 7
 
 

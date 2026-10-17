@@ -24,7 +24,53 @@ if TYPE_CHECKING:
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 
 
+# Names shown in the upload terms for the provider ids an approval can seal.
+AI_PROCESSOR_NAMES = {
+    "deepgram": "Deepgram",
+    "elevenlabs": "ElevenLabs",
+    "gemini": "Google Gemini",
+    "groq": "Groq",
+    "openai": "OpenAI",
+}
+
+
+def _processor_names(policy: IntakePolicy) -> str:
+    names = sorted({AI_PROCESSOR_NAMES.get(item, item) for item in policy.ai_processors})
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
 def upload_policy(policy: IntakePolicy) -> dict[str, Any]:
+    """The exact upload terms a person accepts; its hash is recorded with each upload."""
+
+    named = _processor_names(policy) if policy.ai_processors else ""
+    processing = (
+        f"then sends the recording and its transcript to its AI service providers, {named}, "
+        "to transcribe the call and prepare and score your coaching report. "
+        if named
+        else "then uses its AI service providers to transcribe the recording and prepare "
+        "your coaching report. "
+    )
+    if policy.keeps_until_deleted:
+        kept = "Your recording and report are kept privately until you delete them. "
+        kept_detail = (
+            "AC keeps your recording, transcript and report privately until you delete "
+            "the call or ask us to delete it."
+        )
+    elif policy.keeps_for_training:
+        kept = (
+            "Your recording and report are kept privately to improve AC's coaching AI "
+            "until you delete them. "
+        )
+        kept_detail = (
+            "AC keeps your recording, transcript and report privately to improve its "
+            "coaching AI until you delete them."
+        )
+    else:
+        kept = f"Your recording and report stay private for up to {policy.retention_days} days. "
+        kept_detail = (
+            "AC keeps your recording, transcript and report privately for up to "
+            f"{policy.retention_days} days, then deletes them."
+        )
     view: dict[str, Any] = {
         "schema": "ac.sales-xray.private-upload-consent/1",
         "privacy_revision": policy.privacy_revision,
@@ -33,21 +79,27 @@ def upload_policy(policy: IntakePolicy) -> dict[str, Any]:
         "maximum_call_seconds": MAX_SECONDS,
         "max_cost_paise": 0,
         "retention_days": policy.retention_days,
+        "retention_mode": policy.retention_mode,
         "title": "Upload your call and get your report",
         "description": (
             "Upload only a call you have permission to analyse. AC checks its length, "
-            "then uses its AI service providers to transcribe the recording and prepare "
-            "your coaching report. The call uses its length from your displayed free "
-            "allowance once; you will not be charged a payment. "
-            + (
-                "Your recording and report are kept privately to improve AC's coaching AI "
-                "until you delete them. "
-                if policy.keeps_for_training
-                else "Your recording and report stay private for up to "
-                f"{policy.retention_days} days. "
-            )
+            + processing
+            + "The call uses its length from your displayed free allowance once; you will "
+            "not be charged a payment. "
+            + kept
             + "You can request deletion at admin@authorityclosers.com. "
             "Review the privacy details before starting your analysis."
+        ),
+        "privacy_details": (
+            (
+                f"{named} receive the recording or its transcript only to transcribe the "
+                "call and prepare and score your report. "
+                if named
+                else "Approved service providers may process this recording to prepare the "
+                "transcript and coaching report. "
+            )
+            + kept_detail
+            + " You can request deletion from Privacy & support."
         ),
     }
     return {**view, "policy_sha256": content_hash(view)}

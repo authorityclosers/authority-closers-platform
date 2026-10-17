@@ -438,3 +438,19 @@ def test_owner_limits_allow_large_recording_counts_within_the_ceiling() -> None:
     payload["allowances"][0]["max_recordings"] = 10_001
     with pytest.raises(ActivationContractError, match="hosted_approval_invalid"):
         load_hosted_approval_bundle(payload)
+
+
+def test_retention_beyond_a_week_may_keep_until_deleted_without_training() -> None:
+    payload = json.loads(_bundle().to_json())
+    payload["retention_days"] = 3650
+    payload["intake_retention_ref"] = "ref:retention/sales-xray-until-deleted-v1"
+    assert load_hosted_approval_bundle(payload).retention_days == 3650
+
+
+def test_ai_processor_ids_lists_every_sealed_stage_provider_once() -> None:
+    bundle = _bundle()
+    first = bundle.stages[0]
+    second = first.model_copy(update={"id": UUID(int=77), "provider_id": "elevenlabs"})
+    third = first.model_copy(update={"id": UUID(int=78), "provider_id": "elevenlabs"})
+    copy = bundle.model_copy(update={"stages": (first, second, third)})
+    assert copy.ai_processor_ids() == tuple(sorted({first.provider_id, "elevenlabs"}))
