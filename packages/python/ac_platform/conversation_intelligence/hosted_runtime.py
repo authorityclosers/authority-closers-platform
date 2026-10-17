@@ -198,6 +198,8 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
             retention_days=bundle.retention_days,
             acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE,
             registered_organisations=True,
+            # Report scoring (pointer_review) also sends the transcript to Gemini.
+            ai_processors=tuple(sorted({*bundle.ai_processor_ids(), "gemini"})),
         ),
         storage=PrivateLocalRecordingStorage(storage_path),
         scratch=PrivateLocalRecordingStorage(scratch_path),

@@ -2,9 +2,11 @@
 
 /**
  * Get the Sales Xray phone app (owner order 16 Oct 2026: Android first, a
- * download link inside Sales Xray, stores later). Each GitHub build of
- * apps/sales-xray-android replaces the files of one fixed test release, so
- * these links always fetch the newest build.
+ * download link inside Sales Xray, stores later). The link is the signed
+ * release build from authorityclosers/sales-xray-apps (Orchestrator 2,
+ * 18 Oct): each publish replaces the files of one fixed release, so it always
+ * fetches the newest build. It is offered only from the account menu, and
+ * only while ANDROID_DOWNLOAD_READY is on.
  */
 
 import {
@@ -21,17 +23,15 @@ import { useState, useSyncExternalStore } from "react";
 
 import { Badge, Button, Dialog } from "../ui/kit";
 import { inPhoneApp } from "./native-phone";
+import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import styles from "./leads.module.css";
 
+export { ANDROID_DOWNLOAD_READY };
+
 const RELEASE =
-  "https://github.com/authorityclosers/authority-closers-platform/releases/download/sales-xray-android-latest";
+  "https://github.com/authorityclosers/sales-xray-apps/releases/download/sales-xray-android-latest";
 export const ANDROID_APP = `${RELEASE}/sales-xray-android.apk`;
 const BANNER_KEY = "sx-leads-app-banner";
-/**
- * Off (17 Oct release decision): the published build is a debuggable test
- * build, so nobody is offered it until a release build is published.
- */
-export const ANDROID_DOWNLOAD_READY = false;
 
 const never = () => () => undefined;
 

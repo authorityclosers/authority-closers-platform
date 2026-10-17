@@ -238,3 +238,51 @@ it("opens a dialog as a modal with its title, and closes on Escape", async () =>
   expect(dialog.open).toBe(false);
   expect(dialog.textContent).toBe("");
 });
+
+it("closes a dialog from its X and from a press on the backdrop, not from inside", async () => {
+  const onClose = vi.fn();
+  await act(async () =>
+    root.render(
+      <Dialog open title="Add leads" onClose={onClose}>
+        <input aria-label="Name" />
+      </Dialog>,
+    ),
+  );
+  const dialog = host.querySelector("dialog")!;
+  const close = dialog.querySelector<HTMLButtonElement>(
+    'button[aria-label="Close"]',
+  )!;
+  expect(close).not.toBeNull();
+  await act(async () => close.click());
+  expect(onClose).toHaveBeenCalledTimes(1);
+
+  // The box sits at 100,100 to 500,400; the backdrop is everything else.
+  dialog.getBoundingClientRect = () =>
+    ({ left: 100, top: 100, right: 500, bottom: 400 }) as DOMRect;
+  const press = async (target: Element, x: number, y: number) =>
+    act(async () => {
+      const init = { bubbles: true, clientX: x, clientY: y };
+      target.dispatchEvent(new MouseEvent("pointerdown", init));
+      target.dispatchEvent(new MouseEvent("click", init));
+    });
+  await press(dialog, 20, 20);
+  expect(onClose).toHaveBeenCalledTimes(2);
+  // Inside the box (padding included) and on the field: stays open.
+  await press(dialog, 300, 120);
+  await press(dialog.querySelector("input")!, 20, 20);
+  expect(onClose).toHaveBeenCalledTimes(2);
+  // A drag that starts inside and ends on the backdrop is a text selection.
+  await act(async () => {
+    dialog.dispatchEvent(
+      new MouseEvent("pointerdown", {
+        bubbles: true,
+        clientX: 300,
+        clientY: 200,
+      }),
+    );
+    dialog.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, clientX: 20, clientY: 20 }),
+    );
+  });
+  expect(onClose).toHaveBeenCalledTimes(2);
+});

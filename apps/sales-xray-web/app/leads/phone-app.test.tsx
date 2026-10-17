@@ -15,8 +15,9 @@ describe("getting the phone app", () => {
     );
     expect(html).not.toContain("sales-xray-dev-android");
     expect(html).not.toContain("Sales Xray Dev");
-    expect(ANDROID_APP).toMatch(
-      /^https:\/\/github\.com\/.+\/releases\/download\/sales-xray-android-latest\/sales-xray-android\.apk$/,
+    // The signed release build from the apps repo (Orchestrator 2, 18 Oct).
+    expect(ANDROID_APP).toBe(
+      "https://github.com/authorityclosers/sales-xray-apps/releases/download/sales-xray-android-latest/sales-xray-android.apk",
     );
   });
 

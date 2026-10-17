@@ -41,6 +41,10 @@ import { useSalesXraySignOut } from "../account-navigation";
 import { formatAnalysisTime } from "../analysis-time";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
+import {
+  ANDROID_DOWNLOAD_READY,
+  PHONE_APP_HREF,
+} from "../leads/phone-app-flag";
 import { notify } from "../notice-center";
 import { openSettings } from "../settings-open";
 import { AccountAvatarImage } from "../speaker-avatar";
@@ -551,6 +555,25 @@ export function SettingsMenu({
                   onClick={() => setView("news")}
                 />
                 <span className={styles.divider} />
+                {/* The phone app lives here, not in the Leads header (owner,
+                    18 Oct), and only once its download is on. */}
+                {ANDROID_DOWNLOAD_READY && !inApp ? (
+                  <Link
+                    href={PHONE_APP_HREF}
+                    className={styles.row}
+                    onClick={onClose}
+                  >
+                    <span className={styles.rowIcon} aria-hidden="true">
+                      <Smartphone size={16} />
+                    </span>
+                    <span className={styles.rowLabel}>Phone app</span>
+                    <ChevronRight
+                      size={15}
+                      className={styles.chev}
+                      aria-hidden="true"
+                    />
+                  </Link>
+                ) : null}
                 <Row
                   icon={<LifeBuoy size={16} />}
                   label="Help & support"

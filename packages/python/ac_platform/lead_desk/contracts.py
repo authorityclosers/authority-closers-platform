@@ -30,6 +30,9 @@ class Me(Model):
     name: str
     role: str
     can_manage: bool
+    # Off: the lead rules give this seller no new leads; their open leads stay
+    # with them (UX study item 8, 18 Oct). Managers set the same switch on Team.
+    taking_leads: bool = True
 
 
 class Numbers(Model):
@@ -342,6 +345,12 @@ class RepRules(Command):
             if text and text.lower() not in {item.lower() for item in cleaned}:
                 cleaned.append(text)
         return tuple(cleaned)
+
+
+class TakingLeads(Command):
+    """A seller turns new leads on or off for themselves."""
+
+    taking: bool
 
 
 class SettingsCommand(Command):

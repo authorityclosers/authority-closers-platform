@@ -52,12 +52,19 @@ from ac_platform.tenancy.models import Organisation, Tenant
 if TYPE_CHECKING:
     from ac_platform.conversation_intelligence.authority import ConversationAuthority
 
-PRIVACY_REVISION = "local-private-audio-v1"
+# v2 (18 Oct 2026): the upload terms name the AI service providers.
+PRIVACY_REVISION = "local-private-audio-v2"
 # Recorded with each consent when the recording is kept for model training.
-KEEP_FOR_TRAINING_PRIVACY_REVISION = "local-private-audio-keep-for-training-v1"
+KEEP_FOR_TRAINING_PRIVACY_REVISION = "local-private-audio-keep-for-training-v2"
+# Recorded with each consent when the recording is kept until its owner deletes it
+# (owner decision, 18 Oct 2026: "keep until deleted, delete on request").
+UNTIL_DELETED_PRIVACY_REVISION = "local-private-audio-until-deleted-v1"
 STANDARD_RETENTION_DAYS = 7
 MAX_RETENTION_DAYS = 3650
 KEEP_FOR_TRAINING_RETENTION_PREFIX = "ref:retention/sales-xray-keep-for-training"
+UNTIL_DELETED_RETENTION_PREFIX = "ref:retention/sales-xray-until-deleted"
+LONG_RETENTION_PREFIXES = (KEEP_FOR_TRAINING_RETENTION_PREFIX, UNTIL_DELETED_RETENTION_PREFIX)
+MAX_AI_PROCESSORS = 8
 CONSENT_PREFIX = "intake-consent-v1:"
 
 
@@ -70,6 +77,9 @@ class IntakePolicy:
     retention_days: int = 7
     acoustic_recipe: str = AUDIOATLAS_RECIPE
     registered_organisations: bool = False
+    # Provider ids from the sealed approval (e.g. "elevenlabs", "gemini"), named in
+    # the upload terms; empty where no approval names them (local tools).
+    ai_processors: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -81,27 +91,49 @@ class IntakePolicy:
             or not 1 <= self.retention_days <= MAX_RETENTION_DAYS
             or self.acoustic_recipe not in AUDIOATLAS_RECIPES
             or type(self.registered_organisations) is not bool
+            or type(self.ai_processors) is not tuple
+            or len(self.ai_processors) > MAX_AI_PROCESSORS
+            or any(
+                type(value) is not str or not value.isascii() or not 1 <= len(value) <= 64
+                for value in self.ai_processors
+            )
         ):
             raise ValueError("An exact internal workspace and bounded retention are required.")
         require_text(self.authorization_ref, "intake authorization")
         require_text(self.retention_ref, "retention reference")
-        if self.keeps_for_training and not self.retention_ref.startswith(
-            KEEP_FOR_TRAINING_RETENTION_PREFIX
+        if self.retention_days > STANDARD_RETENTION_DAYS and not self.retention_ref.startswith(
+            LONG_RETENTION_PREFIXES
         ):
             raise ValueError(
                 "Keeping recordings beyond the standard week needs a keep-for-training "
-                "retention policy."
+                "or keep-until-deleted retention policy."
             )
 
     @property
+    def keeps_until_deleted(self) -> bool:
+        return self.retention_days > STANDARD_RETENTION_DAYS and self.retention_ref.startswith(
+            UNTIL_DELETED_RETENTION_PREFIX
+        )
+
+    @property
     def keeps_for_training(self) -> bool:
-        return self.retention_days > STANDARD_RETENTION_DAYS
+        return self.retention_days > STANDARD_RETENTION_DAYS and not self.keeps_until_deleted
+
+    @property
+    def retention_mode(self) -> str:
+        if self.keeps_until_deleted:
+            return "until_deleted"
+        return "keep_for_training" if self.keeps_for_training else "days"
 
     @property
     def privacy_revision(self) -> str:
+        if self.keeps_until_deleted:
+            return UNTIL_DELETED_PRIVACY_REVISION
         return KEEP_FOR_TRAINING_PRIVACY_REVISION if self.keeps_for_training else PRIVACY_REVISION
 
     def retention_sentence(self) -> str:
+        if self.keeps_until_deleted:
+            return "Your recording stays in AC's private storage until you delete it. "
         if self.keeps_for_training:
             return (
                 "Your recording is kept in AC's private storage to improve AC's coaching "
