@@ -586,12 +586,19 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                   const history = await fetch('/v1/conversation/recordings', {
                     credentials: 'same-origin', cache: 'no-store', redirect: 'error',
                   });
-                  const personal = await fetch('/v1/conversation/recordings/' + recordingId, {
+                  // Owner-scoped reads the Personal workspace serves with 200/206.
+                  const base = '/v1/conversation/recordings/' + recordingId;
+                  const source = await fetch(base + '/source', {
+                    credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+                    headers: {Range: 'bytes=0-15'},
+                  });
+                  const measurements = await fetch(base + '/measurements', {
                     credentials: 'same-origin', cache: 'no-store', redirect: 'error',
                   });
                   return {directory_status: directory.status, directory: await directory.json(),
                     history_status: history.status, history: await history.json(),
-                    personal_recording_status: personal.status};
+                    personal_source_status: source.status,
+                    personal_measurements_status: measurements.status};
                 }""",
                 str(backend.account.recording_id),
             )
@@ -605,7 +612,10 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             )
             assert selected_workspace["sales_xray_enabled"] is True
             assert organisation["history"] == {"recordings": []}
-            assert organisation["personal_recording_status"] == 404
+            # The same person's Personal recording is invisible from the organisation:
+            # the kept owner-scoped routes answer 404, not 200/206 as in Personal.
+            assert organisation["personal_source_status"] == 404
+            assert organisation["personal_measurements_status"] == 404
             expect(page.locator(".recording-history-item")).to_have_count(0)
             proof["organisation_workspace"] = organisation
             page.set_viewport_size({"width": 390, "height": 844})
@@ -620,7 +630,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 page.wait_for_load_state("networkidle")
             checks.append(
                 "Registered organisation is enabled; its empty history and 404 for the "
-                "Personal recording preserve workspace isolation."
+                "Personal recording's source and measurements preserve workspace isolation."
             )
 
             page.get_by_role("complementary", name="Sales Xray navigation", exact=True).get_by_role(
