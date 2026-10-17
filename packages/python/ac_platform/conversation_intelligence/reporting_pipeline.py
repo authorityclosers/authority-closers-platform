@@ -357,7 +357,19 @@ class ReportingPipeline:
         self, recording: ConversationRecording, identifier: UUID, stage: str
     ) -> tuple[ConversationCheckpoint, Checkpoint]:
         from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
+        from ac_platform.conversation_intelligence.read_memo import fenced_memo
 
+        # Checkpoints are append-only and erased only under the recording's update
+        # lock; a read-only request holding its share lock verifies each one once.
+        memo = fenced_memo(self.database, recording.id)
+        key = (
+            None
+            if memo is None
+            else ("checkpoint", recording.id, identifier, stage, recording.generation)
+        )
+        if memo is not None and key is not None and key in memo.values:
+            verified: tuple[ConversationCheckpoint, Checkpoint] = memo.values[key]
+            return verified
         row = await self.database.scalar(
             select(ConversationCheckpoint).where(
                 ConversationCheckpoint.id == identifier,
@@ -370,7 +382,10 @@ class ReportingPipeline:
         )
         if row is None:
             raise ConversationConflict("The required saved analysis is unavailable.")
-        return row, verified_checkpoint(row, binding_for(recording))
+        result = row, verified_checkpoint(row, binding_for(recording))
+        if memo is not None and key is not None:
+            memo.values[key] = result
+        return result
 
     async def provider_task(
         self, recording: ConversationRecording, row: ConversationCheckpoint

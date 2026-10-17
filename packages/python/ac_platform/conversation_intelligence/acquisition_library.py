@@ -24,7 +24,9 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
 )
 from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
-from ac_platform.conversation_intelligence.submission_labels import read_submission_label
+from ac_platform.conversation_intelligence.submission_label_models import (
+    ConversationSubmissionLabelRevision,
+)
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 
@@ -227,41 +229,18 @@ async def account_library(
     if started is not None:
         ordering = (started.desc(), *ordering)
     rows = (await ownership.database.scalars(query.order_by(*ordering).limit(PAGE_SIZE + 1))).all()
-    owners = {}
-    if include_owners and every_owner:
+    page = rows[:PAGE_SIZE]
+    current = await _page_rows(
+        ownership, actor, now, every_owner=every_owner, receipt_ids=[row.id for row in page]
+    )
+    owners = include_owners and every_owner
+    if owners:
         from ac_platform.organisations.activity import _mask_email
-
-        for receipt, person, name, email in await ownership.database.execute(
-            _account_library_query(actor, now, every_owner=True)
-            .join(
-                Person,
-                Person.id == func.coalesce(usage.person_id, ConversationVisitorClaim.person_id),
-            )
-            .where(usage.id.in_([row.id for row in rows[:PAGE_SIZE]]))
-            .with_only_columns(usage.id, Person.id, Person.display_name, Person.email)
-        ):
-            owners[receipt] = dict(
-                owner_person_id=str(person), owner_name=name or _mask_email(email)
-            )
-    reports = AcquisitionReports(ownership)
     entries = []
-    for row in rows[:PAGE_SIZE]:
-        try:
-            progress = await reports.progress(
-                row.submission_id,
-                actor=actor,
-                shared_identity_locks=shared_identity_locks,
-                allow_organisation_read=True,
-            )
-            label = await read_submission_label(
-                ownership,
-                row.submission_id,
-                actor=actor,
-                shared_identity_locks=shared_identity_locks,
-                allow_organisation_read=True,
-            )
-        except ConversationNotFound:
-            # A concurrent deletion/revocation may win before the per-record locks.
+    for row in page:
+        found = current.get(row.id)
+        if found is None:
+            # A concurrent deletion may win before the record locks.
             # Never return the stale selector; pagination still advances past it.
             continue
         entries.append(
@@ -269,17 +248,84 @@ async def account_library(
                 "submission_id": str(row.submission_id),
                 "created_at": row.created_at.isoformat(),
                 "duration_seconds": row.reserved_seconds,
-                "display_name": label.display_name,
-                "display_name_revision": label.revision,
-                "state": progress["state"],
-                "has_report": progress["has_report"],
-                **owners.get(row.id, {}),
+                "display_name": found.display_name,
+                "display_name_revision": found.display_name_revision,
+                "state": "report_ready"
+                if found.has_report
+                else found.plan_state
+                if found.plan_state is not None
+                else found.recording_state,
+                "has_report": bool(found.has_report),
+                **(
+                    dict(
+                        owner_person_id=str(found.owner_id),
+                        owner_name=found.owner_name or _mask_email(found.owner_email),
+                    )
+                    if owners and found.owner_id is not None
+                    else {}
+                ),
             }
         )
     return {
         "submissions": entries,
         "next_cursor": str(rows[PAGE_SIZE - 1].submission_id) if len(rows) > PAGE_SIZE else None,
     }
+
+
+async def _page_rows(
+    ownership: GuestOwnership,
+    actor: ActorContext,
+    now: datetime,
+    *,
+    every_owner: bool,
+    receipt_ids: list[UUID],
+) -> dict[UUID, Any]:
+    """Recheck one page under the recording read fence; one statement for every row.
+
+    The same scope as the page query is re-evaluated with each recording share-locked,
+    so a call deleted after the page was chosen drops out: deletion updates the
+    recording row, which PostgreSQL re-checks after waiting for its lock. Report
+    presence and plan state are the library summary's own columns (an unerased draft
+    or retained version counts as a report; the Report read verifies it); the call
+    name is the latest label revision (none: no name, revision 0).
+    """
+    if not receipt_ids:
+        return {}
+    usage, label = ConversationAcquisitionUsage, ConversationSubmissionLabelRevision
+    has_report, latest_plan = _report_columns()
+
+    def latest_label(column: Any) -> Any:
+        return (
+            select(column)
+            .where(label.tenant_id == usage.tenant_id, label.submission_id == usage.submission_id)
+            .order_by(label.revision.desc())
+            .limit(1)
+            .correlate(usage)
+            .scalar_subquery()
+        )
+
+    statement = (
+        _account_library_query(actor, now, every_owner=every_owner)
+        .outerjoin(
+            Person,
+            Person.id == func.coalesce(usage.person_id, ConversationVisitorClaim.person_id),
+        )
+        .where(usage.id.in_(receipt_ids))
+        .with_only_columns(
+            usage.id.label("receipt_id"),
+            has_report.label("has_report"),
+            latest_plan.label("plan_state"),
+            ConversationRecording.state.label("recording_state"),
+            latest_label(label.display_name).label("display_name"),
+            func.coalesce(latest_label(label.revision), 0).label("display_name_revision"),
+            Person.id.label("owner_id"),
+            Person.display_name.label("owner_name"),
+            Person.email.label("owner_email"),
+            maintain_column_froms=True,
+        )
+        .with_for_update(read=True, of=ConversationRecording)
+    )
+    return {row.receipt_id: row for row in await ownership.database.execute(statement)}
 
 
 def _analysis_started() -> Any:

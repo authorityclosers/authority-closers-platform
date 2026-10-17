@@ -25,11 +25,15 @@ from ac_platform.conversation_intelligence.acquisition_processing import (
 from ac_platform.conversation_intelligence.acquisition_sessions import MeasuredSource
 from ac_platform.conversation_intelligence.acquisition_source import MeasuredUpload
 from ac_platform.conversation_intelligence.contracts import IntakeIntent
-from ac_platform.conversation_intelligence.guest_models import ConversationProcessingLease
+from ac_platform.conversation_intelligence.guest_models import (
+    ConversationGuestSubmission,
+    ConversationProcessingLease,
+)
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import (
     ConversationPermission,
     ConversationRecording,
+    ConversationReportDraft,
 )
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
@@ -341,6 +345,152 @@ def test_account_library_bounded_cursor_survives_equal_timestamps(
                 assert deleted.status_code == 202
                 continued = await client.get(PREFIX + "/submissions?before=" + first["next_cursor"])
                 assert continued.status_code == 200 and continued.json() == second
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_account_library_page_recheck_drops_a_call_removed_after_selection(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A call deleted between page selection and its read fence drops out.
+
+    A permission revoked before the re-check statement starts is excluded too.
+
+    The cursor still names the page's last selected call, so the next page starts
+    after it exactly as it would have without the race.
+    """
+    from ac_platform.conversation_intelligence import acquisition_library
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set("ac_session", setup.token)
+                for _ in range(22):
+                    await _upload(client)
+                expected = (await client.get(PREFIX + "/submissions")).json()
+                victims = [
+                    UUID(expected["submissions"][index]["submission_id"]) for index in (1, 19)
+                ]
+                original = acquisition_library._page_rows
+
+                async def race(ownership: Any, *args: Any, **kwargs: Any) -> Any:
+                    # Another transaction commits after the page query and before the
+                    # re-check statement: one call starts deletion, one loses its
+                    # permission.
+                    async with setup.sessions() as db, db.begin():
+                        recordings = []
+                        for victim in victims:
+                            link = await db.scalar(
+                                select(ConversationGuestSubmission).where(
+                                    ConversationGuestSubmission.submission_id == victim
+                                )
+                            )
+                            assert link is not None
+                            recording = await db.get(ConversationRecording, link.recording_id)
+                            assert recording is not None
+                            recordings.append(recording)
+                        recordings[0].state = "deleting"
+                        permission = await db.get(
+                            ConversationPermission, recordings[1].permission_id
+                        )
+                        assert permission is not None
+                        permission.revoked_at = setup.clock[0]
+                    return await original(ownership, *args, **kwargs)
+
+                monkeypatch.setattr(acquisition_library, "_page_rows", race)
+                raced = (await client.get(PREFIX + "/submissions")).json()
+                monkeypatch.setattr(acquisition_library, "_page_rows", original)
+                assert raced["next_cursor"] == expected["next_cursor"]
+                assert raced["submissions"] == [
+                    row
+                    for row in expected["submissions"]
+                    if UUID(row["submission_id"]) not in victims
+                ]
+                after = (
+                    await client.get(PREFIX + "/submissions?before=" + raced["next_cursor"])
+                ).json()
+                assert len(after["submissions"]) == 2 and after["next_cursor"] is None
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_account_library_lists_an_unverifiable_latest_draft_as_a_report(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Chosen semantics (review S1): the Calls list counts a report as the summary does.
+
+    Any unerased draft (or retained version) makes the row ``report_ready``; the list
+    no longer re-verifies the draft's stored evidence. A latest draft that fails
+    verification therefore lists as ready, even over a held plan, and counts as
+    completed in the summary, while opening its Report returns 409 and the call's own
+    progress (which still verifies) reports no Report and the held plan.
+    """
+    from tests.database.test_coaching_postgresql import draft_for
+    from tests.database.test_conversation_library_reports_first_postgresql import (
+        _pause_analysis,
+    )
+    from tests.database.test_prospect_store_postgresql import direct_call
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            call = await direct_call(setup)
+            recording_id, _ = await draft_for(setup, call)
+            async with setup.sessions() as db, db.begin():
+                valid = await db.scalar(
+                    select(ConversationReportDraft).where(
+                        ConversationReportDraft.recording_id == recording_id
+                    )
+                )
+                assert valid is not None
+                # A newer draft whose report digest does not match its payload.
+                db.add(
+                    ConversationReportDraft(
+                        id=uuid4(),
+                        tenant_id=valid.tenant_id,
+                        person_id=valid.person_id,
+                        recording_id=valid.recording_id,
+                        run_id=valid.run_id,
+                        source_revision=valid.source_revision,
+                        source_sha256=valid.source_sha256,
+                        report_sha256="f" * 64,
+                        transcript_sha256=valid.transcript_sha256,
+                        profile_sha256=valid.profile_sha256,
+                        evidence_receipt_sha256=valid.evidence_receipt_sha256,
+                        payload=valid.payload,
+                        transcript=valid.transcript,
+                        evidence_receipt=valid.evidence_receipt,
+                        created_at=valid.created_at + timedelta(seconds=1),
+                    )
+                )
+            await _pause_analysis(setup, str(call))
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set("ac_session", setup.token)
+                listed = (await client.get(PREFIX + "/submissions")).json()["submissions"]
+                assert [(row["state"], row["has_report"]) for row in listed] == [
+                    ("report_ready", True)
+                ]
+                summary = (await client.get(PREFIX + "/submissions/summary")).json()
+                assert summary == {
+                    "total": 1,
+                    "completed": 1,
+                    "processing": 0,
+                    "needs_attention": 0,
+                }
+                report = await client.get(PREFIX + f"/submissions/{call}/report")
+                assert report.status_code == 409
+                assert report.json() == {"detail": "The stored report evidence is unavailable."}
+                progress = (await client.get(PREFIX + f"/submissions/{call}")).json()
+                assert (progress["state"], progress["has_report"]) == ("held", False)
         finally:
             await setup.engine.dispose()
 
