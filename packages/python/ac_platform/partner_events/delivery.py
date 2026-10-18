@@ -54,7 +54,8 @@ LOCAL_ENVIRONMENTS = frozenset({"development", "local", "test"})
 DROP_REFUSALS = frozenset(
     {"call_missing", "call_erased", "permission_inactive", "account_inactive"}
 )
-# The owner's alert command on AC hosts (Telegram); absent inside containers.
+# The owner's alert command on AC hosts (Telegram); absent inside containers, where the
+# host wrapper (infra/application/scripts/ac-partner-events) forwards the alert lines.
 NOTIFY_OWNER = "/usr/local/sbin/ac-notify-owner"
 
 Resolver = Callable[[str, int], Awaitable[list[str]]]
@@ -528,8 +529,10 @@ async def deliver_one(
     if outcome.error_code:
         line["error"] = outcome.error_code
     if line["status"] == "dead_letter":
-        # A structured line for the journal, and the owner's alert where the host has it.
+        # A structured line for the journal (the host wrapper forwards it from containers),
+        # and the owner's alert where this host has the command.
         line["alert"] = "dead_letter"
+        line["endpoint"] = str(claimed.endpoint_id)[:8]
         line["notified"] = await asyncio.to_thread(
             notify_owner,
             dead_letter_text(environment, claimed.endpoint_id, claimed.event_id, claimed.attempt),

@@ -12,8 +12,105 @@
 # Endpoints are registered by hand (python -m ac_platform.partner_events.cli
 # register-endpoint ..., dry run unless --apply, audited).
 #
+# Alerts: the runner prints one JSON line per dead letter ("alert":
+# "dead_letter") and per batch of reports that aged out ("alert":
+# "reports_aged_out"). On staging and production it runs inside the worker
+# container, which has no owner alert command, so this wrapper reads its
+# output on the host and sends the owner a content-free message with
+# /usr/local/sbin/ac-notify-owner: the environment, short hex ids, attempts
+# and counts, built from fixed words (nothing else from the line is copied).
+# A line the runner already sent itself ("notified": "sent", development-live
+# on the host) is not sent again. Every line still reaches the journal as is.
+#
 #   ac-partner-events development-live | staging | production
 set -euo pipefail
+
+# The owner's alert command (tests point NOTIFY at a recorder).
+NOTIFY=${NOTIFY:-/usr/local/sbin/ac-notify-owner}
+MAX_ALERTS=5 # messages per run; any more are counted in one closing message
+
+# notify <text>: best effort; the child gets no secrets (PATH, HOME, LANG only) and
+# 30 seconds at most. Prints a status line; never fails the run.
+notify() {
+  local status=sent
+  if [[ ! -x "$NOTIFY" ]]; then
+    status=absent
+  elif ! env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 \
+    timeout 30 "$NOTIFY" "$1" </dev/null >/dev/null 2>&1; then
+    status=failed
+  fi
+  printf '{"alert_forwarded": "%s"}\n' "$status"
+}
+
+# alert_text <environment> <line>: the owner's message for one alert line, or nothing
+# (status 1) for a line that is not an alert. Only fixed words, hex id prefixes and
+# numbers are used; anything else in the line becomes "?".
+alert_text() {
+  local env_name=$1 line=$2 event="?" endpoint="?" attempts="?" count="?" rest joined
+  local re_event='"event": "([0-9a-f]{8})' re_endpoint='"endpoint": "([0-9a-f]{8})"'
+  local re_attempt='"attempt": ([0-9]{1,4})[,}]' re_count='"count": ([0-9]{1,6})[,}]'
+  local re_endpoints='"endpoints": \[([^]]*)\]' re_id='([0-9a-f]{8})'
+  local -a ids=()
+  case "$line" in
+    *'"alert": "dead_letter"'*)
+      [[ $line =~ $re_event ]] && event=${BASH_REMATCH[1]}
+      [[ $line =~ $re_endpoint ]] && endpoint=${BASH_REMATCH[1]}
+      [[ $line =~ $re_attempt ]] && attempts=${BASH_REMATCH[1]}
+      printf 'Sales X-Ray partner webhook dead letter (%s): endpoint %s, event %s, %s attempts. Replay it with the partner_events CLI once the endpoint answers.' \
+        "$env_name" "$endpoint" "$event" "$attempts"
+      ;;
+    *'"alert": "reports_aged_out"'*)
+      [[ $line =~ $re_count ]] && count=${BASH_REMATCH[1]}
+      if [[ $line =~ $re_endpoints ]]; then
+        rest=${BASH_REMATCH[1]}
+        while [[ ${#ids[@]} -lt 5 && $rest =~ $re_id ]]; do
+          ids+=("${BASH_REMATCH[1]}")
+          rest=${rest#*"${BASH_REMATCH[1]}"}
+        done
+      fi
+      joined=$(IFS=,; printf '%s' "${ids[*]:-?}")
+      printf 'Sales X-Ray partner webhooks (%s): %s report(s) aged out without an event (endpoint %s). Recorded as dropped (aged_out); check the runner and the daily cap.' \
+        "$env_name" "$count" "${joined//,/, }"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# forward_alerts <environment>: copy the runner's lines to stdout unchanged, and send
+# the owner one message per alert line the runner could not send itself (at most
+# MAX_ALERTS a run, then one message with the count of the rest).
+forward_alerts() {
+  local env_name=$1 line text sent=0 extra=0
+  while IFS= read -r line || [[ -n $line ]]; do
+    printf '%s\n' "$line"
+    [[ $line == *'"notified": "sent"'* ]] && continue
+    text=$(alert_text "$env_name" "$line") || continue
+    if ((sent < MAX_ALERTS)); then
+      notify "$text"
+      sent=$((sent + 1))
+    else
+      extra=$((extra + 1))
+    fi
+  done
+  if ((extra > 0)); then
+    notify "Sales X-Ray partner webhooks ($env_name): $extra more alert(s) in this run; see the journal of ac-partner-events@$env_name."
+  fi
+  return 0
+}
+
+# run_with_alerts <environment> <command...>: the command with its lines forwarded;
+# returns the command's own exit status.
+run_with_alerts() {
+  local env_name=$1 status=0
+  shift
+  "$@" | forward_alerts "$env_name" || status=$?
+  return "$status"
+}
+
+# Sourced (by the tests): the functions only.
+if [[ ${BASH_SOURCE[0]} != "$0" ]]; then
+  return 0
+fi
 
 env_name=${1:?usage: ac-partner-events development-live|staging|production}
 module=ac_platform.partner_events.cli
@@ -43,18 +140,21 @@ run=(run --apply --seconds 55 --interval 5 --daily-cap "$cap")
 
 case "$env_name" in
   development-live)
-    exec env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 PYTHONUNBUFFERED=1 \
-      "$python" -m "$module" \
-      --service-config /etc/authority-closers/development/service-live.json \
-      --database-url-file /etc/authority-closers/development/database-url-live \
-      --token-file /etc/authority-closers/development/identities/gemini/token \
-      --infisical /usr/local/bin/infisical \
-      "${run[@]}"
+    command=(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 PYTHONUNBUFFERED=1
+      "$python" -m "$module"
+      --service-config /etc/authority-closers/development/service-live.json
+      --database-url-file /etc/authority-closers/development/database-url-live
+      --token-file /etc/authority-closers/development/identities/gemini/token
+      --infisical /usr/local/bin/infisical
+      "${run[@]}")
     ;;
   staging | production)
-    exec docker exec "$container" python -m "$module" \
-      --service-config /run/ac-sales-xray/service.json \
-      --database-url-file /run/ac-sales-xray/database-url \
-      "${run[@]}"
+    command=(docker exec "$container" python -m "$module"
+      --service-config /run/ac-sales-xray/service.json
+      --database-url-file /run/ac-sales-xray/database-url
+      "${run[@]}")
     ;;
 esac
+status=0
+run_with_alerts "$env_name" "${command[@]}" || status=$?
+exit "$status"

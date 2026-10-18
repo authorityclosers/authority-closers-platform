@@ -601,6 +601,9 @@ def test_retries_dead_letter_replay_admission_drop_and_no_double_send(
                 assert line is not None and line["status"] == "dead_letter"
                 # Review 18 Oct, item 6: the owner is alerted, with ids and a count only.
                 assert line["alert"] == "dead_letter" and line["notified"] == "sent"
+                # Re-review 18 Oct, M4: the host wrapper builds its message from these.
+                assert line["endpoint"] == str(endpoint_id)[:8]
+                assert line["event"] == str(target.id) and line["attempt"] == 25
                 (alert,) = owner_alerts
                 assert alert == (
                     "Sales X-Ray partner webhook dead letter (development): endpoint "
