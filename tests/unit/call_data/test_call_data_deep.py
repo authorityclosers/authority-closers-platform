@@ -181,3 +181,28 @@ def test_deep_supersedes_machine_facts_keeps_a_persons_and_retracts_weak_ones() 
         "conversation.segment",
         "s7",
     )
+
+
+def test_labels_match_by_id_in_any_form_or_by_the_segments_words() -> None:
+    def label(**key: object) -> dict[str, object]:
+        return {
+            **key,
+            "intent": "pain",
+            "act": "statement",
+            "sentiment": "negative",
+            "tone": "frustrated",
+            "topics": [],
+        }
+
+    raw = {
+        "labels": [
+            label(segment_id="[s1]"),
+            label(segment_id="2"),
+            label(segment_id=SEGMENTS[2].text),  # the model answered with the words
+            label(segment_id="s4 LABEL"),
+        ]
+    }
+    drafts, dropped = classifier.validate_labels(raw, SEGMENTS, 0, 4)
+    assert [d.evidence[0]["segment_id"] for d in drafts] == ["s1", "s2", "s3", "s4"]
+    assert dropped == {}
+    assert "segment_id" in classifier.response_schema()["properties"]["labels"]["items"]["required"]

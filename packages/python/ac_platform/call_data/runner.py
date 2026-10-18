@@ -94,8 +94,8 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         parser.error("--backfill runs once, never in the loop")
     if not 1.0 <= arguments.interval <= 300.0:
         parser.error("--interval must be 1-300 seconds")
-    if arguments.force and (arguments.recording is None or arguments.loop):
-        parser.error("--force is for one call (--recording), never the loop")
+    if arguments.force and (arguments.loop or not (arguments.recording or arguments.backfill)):
+        parser.error("--force is for one call (--recording) or a --backfill, never the loop")
     return arguments
 
 

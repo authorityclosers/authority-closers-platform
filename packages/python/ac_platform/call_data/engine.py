@@ -163,7 +163,7 @@ def candidates(
     include_done: bool = False,
 ) -> list[Call]:
     only = "AND cp.recording_id = :recording" if recording_id else ""
-    done = "" if include_done and recording_id else _NOT_DONE
+    done = "" if include_done else _NOT_DONE
     after_fast = _AFTER_FAST if pipeline == "deep" else ""
     rows = connection.execute(
         text(_CANDIDATES.format(only=only, done=done, after_fast=after_fast)),

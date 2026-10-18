@@ -34,6 +34,8 @@ listed English words. Label ONLY the segments marked LABEL; the others are
 context.
 
 For each labelled segment give:
+- segment_id: the id in square brackets at the start of its line (e.g. s12),
+  never the segment's words.
 - intent: what it does in the sale. One of: {", ".join(taxonomy.SEGMENT_INTENTS)}.
 - act: the kind of utterance. One of: {", ".join(taxonomy.SEGMENT_ACTS)}.
 - sentiment: {", ".join(taxonomy.SENTIMENTS)}.
@@ -60,19 +62,40 @@ def response_schema() -> dict[str, Any]:
                 "items": {
                     "type": "object",
                     "properties": {
-                        "segment": text,
+                        "segment_id": text,
                         "intent": {"type": "string", "enum": list(taxonomy.SEGMENT_INTENTS)},
                         "act": {"type": "string", "enum": list(taxonomy.SEGMENT_ACTS)},
                         "sentiment": {"type": "string", "enum": list(taxonomy.SENTIMENTS)},
                         "tone": {"type": "string", "enum": list(taxonomy.TONES)},
                         "topics": {"type": "array", "items": text},
                     },
-                    "required": ["segment", "intent", "act", "sentiment", "tone", "topics"],
+                    "required": [
+                        "segment_id",
+                        "intent",
+                        "act",
+                        "sentiment",
+                        "tone",
+                        "topics",
+                    ],
                 },
             }
         },
         "required": ["labels"],
     }
+
+
+def _match(
+    item: Mapping[str, Any], wanted: Mapping[str, Segment], by_text: Mapping[str, Segment]
+) -> Segment | None:
+    """The labelled segment: by id (brackets and stray words tolerated), else by its exact words."""
+    raw = item.get("segment_id", item.get("segment"))
+    if not isinstance(raw, (str, int)) or isinstance(raw, bool):
+        return None
+    value = str(raw).strip()
+    token = value.strip("[]").split(" ")[0].strip("[]:")
+    if token.isdigit():
+        token = f"s{token}"
+    return wanted.get(token) or by_text.get(" ".join(value.split()))
 
 
 def validate_labels(
@@ -85,6 +108,7 @@ def validate_labels(
 ) -> tuple[list[Draft], dict[str, int]]:
     """One segment object per labelled segment of this chunk; the rest dropped with a code."""
     wanted = {s.id: s for s in segments[start:end] if s.id not in withheld}
+    by_text = {" ".join(s.text.split()): s for s in wanted.values()}
     dropped: dict[str, int] = {}
     labels = raw.get("labels") if isinstance(raw, Mapping) else None
     drafts: dict[str, Draft] = {}
@@ -92,7 +116,7 @@ def validate_labels(
         if not isinstance(item, Mapping):
             dropped["shape"] = dropped.get("shape", 0) + 1
             continue
-        segment = wanted.get(str(item.get("segment")))
+        segment = _match(item, wanted, by_text)
         if segment is None or segment.id in drafts:
             dropped["segment"] = dropped.get("segment", 0) + 1
             continue
