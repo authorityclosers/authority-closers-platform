@@ -83,7 +83,7 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
     [...container.querySelectorAll("[data-report-mode-section]")].map((s) =>
       s.getAttribute("data-report-mode-section"),
     ),
-  ).toEqual(["overview", "analysis", "outcome"]);
+  ).toEqual(["overview", "analysis", "outcome", "prospect"]);
   // The Report starts with its conclusion: no glance strip in the header.
   expect(
     report?.querySelector('[aria-label="This call at a glance"]'),
@@ -102,7 +102,13 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
     .filter((url) => !/^\/(?:brands|emotes)\//.test(url));
   // Only the rail and mobile profile menus' read-only profile GETs.
   expect(requested.length).toBeGreaterThan(0);
-  expect(new Set(requested)).toEqual(new Set(["/v1/me/sales-xray-profile"]));
+  // The Prospect part reads which prospect this call belongs to (GET).
+  expect(new Set(requested)).toEqual(
+    new Set([
+      "/v1/me/sales-xray-profile",
+      "/v1/conversation/prospects/calls/00000000-0000-4000-8000-000000000002/suggestions",
+    ]),
+  );
   expect(
     fetchMock.mock.calls.every(
       ([, init]) => !init || !init.method || init.method === "GET",

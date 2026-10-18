@@ -1,6 +1,10 @@
 "use client";
 
-import { ChartNoAxesColumnIncreasing, ListChecks } from "lucide-react";
+import {
+  ChartNoAxesColumnIncreasing,
+  ListChecks,
+  UserRound,
+} from "lucide-react";
 import { Component, useMemo, type ReactNode } from "react";
 
 import { computeCallMetrics } from "../call-metrics";
@@ -18,6 +22,7 @@ import { OverviewScore } from "./overview";
 import { readStructure } from "./structure";
 import { FinalOutcome } from "./outcome";
 import { CallAnalysis, PointerProgress } from "./pointers";
+import { ProspectPart } from "./prospect";
 import styles from "./xray.module.css";
 
 export type XrayPanel = {
@@ -270,5 +275,24 @@ export function xrayReportPanels(
         </PartBoundary>
       ),
     },
+    // Owner 18 Oct: Prospect's Information in the Report. Illustrations and
+    // guest previews have no saved prospect behind them.
+    ...(options.illustration || data.report.preview
+      ? []
+      : [
+          {
+            id: "prospect",
+            label: "Prospect’s Information",
+            compactLabel: "Prospect",
+            summary:
+              "Who they are, what they want, what’s stopping them and what happens next.",
+            icon: <UserRound />,
+            content: (
+              <PartBoundary>
+                <ProspectPart data={data} callId={props.callId} />
+              </PartBoundary>
+            ),
+          },
+        ]),
   ];
 }

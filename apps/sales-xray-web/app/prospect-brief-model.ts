@@ -206,6 +206,148 @@ function ownWords(latest: LatestCall | undefined): BriefFact | null {
   };
 }
 
+/** What the call map established about the buyer (structure.prospect_signals). */
+type Signals = {
+  qualification: Partial<
+    Record<
+      "need" | "budget" | "authority" | "decision_maker" | "timeline",
+      { state: "confirmed" | "concern" | "unknown"; source?: BriefSource }
+    >
+  >;
+  pains: { text: string; source?: BriefSource }[];
+  objections: { text: string; open: boolean; source?: BriefSource }[];
+  facts: Partial<
+    Record<
+      "company" | "role" | "industry" | "team_size",
+      { text: string; source?: BriefSource }
+    >
+  >;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Read leniently: an older server, a malformed block or no call map gives nothing. */
+export function prospectSignals(
+  latest: LatestCall | undefined,
+): Signals | null {
+  const structure = latest?.report.structure;
+  const raw = isRecord(structure) ? structure.prospect_signals : null;
+  if (!isRecord(raw) || raw.version !== "prospect-signals/1") return null;
+  const segments = new Map(
+    (latest?.transcript?.segments ?? []).map((segment) => [
+      segment.id,
+      segment,
+    ]),
+  );
+  const source = (evidence: unknown): BriefSource | undefined => {
+    const first = Array.isArray(evidence) ? evidence[0] : null;
+    if (!isRecord(first) || typeof first.quote !== "string") return undefined;
+    const segment = segments.get(String(first.segment_id));
+    if (!segment) return undefined;
+    return {
+      quote: first.quote,
+      start_ms: segment.start_ms,
+      end_ms: segment.end_ms,
+      ...(latest?.callId ? { callId: latest.callId } : {}),
+    };
+  };
+  const text = (value: unknown) =>
+    typeof value === "string" && value.trim()
+      ? value.trim().slice(0, 400)
+      : null;
+  const signals: Signals = {
+    qualification: {},
+    pains: [],
+    objections: [],
+    facts: {},
+  };
+  if (isRecord(raw.qualification))
+    for (const key of [
+      "need",
+      "budget",
+      "authority",
+      "decision_maker",
+      "timeline",
+    ] as const) {
+      const item = raw.qualification[key];
+      if (
+        isRecord(item) &&
+        (item.state === "confirmed" ||
+          item.state === "concern" ||
+          item.state === "unknown")
+      )
+        signals.qualification[key] = {
+          state: item.state,
+          source: source(item.evidence),
+        };
+    }
+  for (const item of Array.isArray(raw.pains) ? raw.pains.slice(0, 4) : []) {
+    const words = isRecord(item) ? text(item.text) : null;
+    if (words)
+      signals.pains.push({ text: words, source: source(item.evidence) });
+  }
+  for (const item of Array.isArray(raw.objections)
+    ? raw.objections.slice(0, 4)
+    : []) {
+    const words = isRecord(item) ? text(item.text) : null;
+    if (words)
+      signals.objections.push({
+        text: words,
+        open: item.status !== "resolved",
+        source: source(item.evidence),
+      });
+  }
+  for (const item of Array.isArray(raw.facts) ? raw.facts : []) {
+    const words = isRecord(item) ? text(item.text) : null;
+    const key = isRecord(item) ? item.key : null;
+    if (
+      words &&
+      (key === "company" ||
+        key === "role" ||
+        key === "industry" ||
+        key === "team_size")
+    )
+      signals.facts[key] ??= { text: words, source: source(item.evidence) };
+  }
+  return signals;
+}
+
+const QUALIFICATION_WORDS = {
+  confirmed: "Confirmed",
+  concern: "Concern",
+  unknown: "Unknown",
+} as const;
+
+function qualificationFact(
+  label: string,
+  item: Signals["qualification"][keyof Signals["qualification"]],
+): BriefFact | null {
+  // Unknown stays in the section's "still unknown" line, named once.
+  if (!item || item.state === "unknown") return null;
+  return {
+    label,
+    value: QUALIFICATION_WORDS[item.state],
+    fact: item.state === "confirmed" ? "Observed" : "Inferred",
+    basis: "call",
+    ...(item.source ? { source: item.source } : {}),
+  };
+}
+
+function heardFact(
+  label: string,
+  item: { text: string; source?: BriefSource } | undefined,
+): BriefFact | null {
+  if (!item) return null;
+  return {
+    label,
+    value: item.text,
+    fact: "Observed",
+    basis: "call",
+    ...(item.source ? { source: item.source } : {}),
+  };
+}
+
 function section(
   fields: Partial<Record<ProfileKey, ProfileField>>,
   entries: (BriefFact | null | undefined | false)[],
@@ -258,6 +400,9 @@ export function prospectBrief(
     : null;
   const callId = latest?.callId;
   const deal = story?.deal;
+  const signals = prospectSignals(latest);
+  const mainPain =
+    field("main_pain") ?? heardFact("Main problem", signals?.pains[0]);
 
   const role =
     fields.role?.state === "known" ? profileValueText(fields.role.value) : null;
@@ -330,9 +475,9 @@ export function prospectBrief(
     fields,
     [
       name,
-      field("role"),
-      field("business"),
-      field("main_pain"),
+      field("role") ?? heardFact("Role", signals?.facts.role),
+      field("business") ?? heardFact("Company", signals?.facts.company),
+      mainPain,
       blocker,
       field("decision_maker"),
       stage,
@@ -359,8 +504,20 @@ export function prospectBrief(
   const want = section(
     fields,
     [
-      field("industry"),
-      field("team_size"),
+      field("industry") ?? heardFact("Industry", signals?.facts.industry),
+      field("team_size") ?? heardFact("Team size", signals?.facts.team_size),
+      signals && signals.pains.length > 1
+        ? {
+            label: "Other problems",
+            value: signals.pains
+              .slice(1)
+              .map((pain) => pain.text)
+              .join(" · "),
+            fact: "Observed",
+            basis: "call",
+            list: signals.pains.slice(1).map((pain) => pain.text),
+          }
+        : null,
       field("turnover", "Revenue / turnover"),
       field("city"),
       field("timeline"),
@@ -382,7 +539,19 @@ export function prospectBrief(
   // sections, so here they only count as answered.
   const buy = section(
     fields,
-    [field("budget", "Budget discussed")],
+    [
+      qualificationFact("Need", signals?.qualification.need),
+      field("budget", "Budget discussed") ??
+        qualificationFact("Budget discussed", signals?.qualification.budget),
+      fields.decision_maker?.state !== "known" &&
+        qualificationFact(
+          "Authority",
+          signals?.qualification.authority ??
+            signals?.qualification.decision_maker,
+        ),
+      fields.timeline?.state !== "known" &&
+        qualificationFact("Timing", signals?.qualification.timeline),
+    ],
     [
       "Need",
       "Desire",
@@ -414,15 +583,21 @@ export function prospectBrief(
     ],
   );
 
-  const objections: BriefFact[] = (latest?.report.objection_analysis ?? [])
-    .slice(0, 3)
-    .map((finding) => ({
-      label: "Objection · open",
-      value: `${finding.title}. ${finding.explanation}`,
-      fact: "Observed",
-      basis: "call",
-      source: fromEvidence(finding.evidence[0], callId),
-    }));
+  const objections: BriefFact[] = signals?.objections.length
+    ? signals.objections.slice(0, 3).map((item) => ({
+        label: item.open ? "Objection · open" : "Objection · resolved",
+        value: item.text,
+        fact: "Observed" as const,
+        basis: "call" as const,
+        ...(item.source ? { source: item.source } : {}),
+      }))
+    : (latest?.report.objection_analysis ?? []).slice(0, 3).map((finding) => ({
+        label: "Objection · open",
+        value: `${finding.title}. ${finding.explanation}`,
+        fact: "Observed",
+        basis: "call",
+        source: fromEvidence(finding.evidence[0], callId),
+      }));
   const concerns: BriefFact[] = calls
     .flatMap((call) =>
       (call.snapshot?.interpretations ?? []).map(

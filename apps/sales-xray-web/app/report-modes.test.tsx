@@ -1431,13 +1431,14 @@ it("opens on the three-part Report with only Report and Coaching (the old views 
     [...container.querySelectorAll("[data-report-mode-section]")].map((e) =>
       e.getAttribute("data-report-mode-section"),
     ),
-  ).toEqual(["overview", "analysis", "outcome"]);
+  ).toEqual(["overview", "analysis", "outcome", "prospect"]);
   expect(
     [...container.querySelectorAll("h2")].map((h) => h.textContent),
   ).toEqual([
     "1. Overview & Score",
     "2. Detailed Call Analysis",
     "3. Final Call Outcome",
+    "4. Prospect’s Information",
   ]);
   // No score is made up in the browser: the 27 pointers wait for the analysis.
   expect(container.textContent).toContain("Not scored yet");

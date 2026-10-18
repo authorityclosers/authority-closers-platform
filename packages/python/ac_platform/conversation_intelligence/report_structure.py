@@ -73,6 +73,81 @@ def unavailable_statistics() -> dict[str, Any]:
     }
 
 
+# Prospect's Information (Dipak's priority structure, 9 Oct; owner 18 Oct).
+# Objection kinds that put a qualification item in doubt while unanswered.
+_CONCERN_WORDS = {
+    "budget": ("price", "budget", "cost", "money", "afford", "fee", "invest"),
+    "timeline": ("time", "timing", "later", "delay", "busy", "wait"),
+    "authority": ("partner", "approval", "boss", "spouse", "family", "authority"),
+    "decision_maker": ("partner", "approval", "decision", "boss", "spouse", "family"),
+    "need": ("need", "fit", "not interested", "already have", "no requirement"),
+}
+
+
+def _prospect_signals(report: ReportDraft) -> dict[str, Any] | None:
+    """Buyer facts the call map already established; no new extraction or inference.
+
+    Qualification states: ``confirmed`` (said in the call, with evidence),
+    ``concern`` (an unanswered objection points at it), ``unknown`` (the
+    analysis lists it as a gap). Items never discussed are left out.
+    """
+    call_map = report.call_map
+    if call_map is None:
+        return None
+    open_objections = [item for item in call_map.objections if item.handling != "answered"]
+    qualification: dict[str, dict[str, Any]] = {}
+    for gap in call_map.qualification_gaps:
+        qualification[gap] = {"state": "unknown", "evidence": []}
+    for confirmed in call_map.qualification_confirmed:
+        qualification[confirmed.item] = {
+            "state": "confirmed",
+            "evidence": [ref.model_dump(mode="json") for ref in confirmed.evidence],
+        }
+    for item, words in _CONCERN_WORDS.items():
+        doubt = next(
+            (
+                objection
+                for objection in open_objections
+                if any(word in f"{objection.kind} {objection.text}".lower() for word in words)
+            ),
+            None,
+        )
+        if doubt is not None and qualification.get(item, {}).get("state") != "confirmed":
+            qualification[item] = {
+                "state": "concern",
+                "evidence": [ref.model_dump(mode="json") for ref in doubt.evidence],
+            }
+    return {
+        "version": "prospect-signals/1",
+        "qualification": qualification,
+        "pains": [
+            {
+                "text": pain.text,
+                "intensity": pain.prospect_intensity,
+                "evidence": [ref.model_dump(mode="json") for ref in pain.evidence],
+            }
+            for pain in call_map.pains[:4]
+        ],
+        "objections": [
+            {
+                "text": objection.text,
+                "kind": objection.kind,
+                "status": "resolved" if objection.handling == "answered" else "open",
+                "evidence": [ref.model_dump(mode="json") for ref in objection.evidence],
+            }
+            for objection in call_map.objections[:4]
+        ],
+        "facts": [
+            {
+                "key": fact.key,
+                "text": fact.text,
+                "evidence": [ref.model_dump(mode="json") for ref in fact.evidence],
+            }
+            for fact in call_map.prospect_facts
+        ],
+    }
+
+
 def project_report_structure(report: ReportDraft) -> dict[str, Any]:
     """Use canonical evidence before the legacy pillars projection drops some refs."""
     raw = report.model_dump(mode="json")
@@ -200,6 +275,7 @@ def project_report_structure(report: ReportDraft) -> dict[str, Any]:
         },
         "pointers": pointers,
         "final_call_outcome": project_final_outcome(None),
+        "prospect_signals": _prospect_signals(report),
     }
 
 
