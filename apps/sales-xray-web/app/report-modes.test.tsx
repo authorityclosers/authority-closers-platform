@@ -209,6 +209,28 @@ it("opens Prospect as its own view between Report and Coaching (owner, 19 Oct)",
   expect(html).not.toContain('data-report-mode-section="prospect"');
 });
 
+it("tells the page which view shows, so the header can follow the tab", async () => {
+  window.history.replaceState(null, "", `/analysis?call=${call}&view=prospect`);
+  const seen = vi.fn();
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        structure="pillars"
+        documentData={{ report: syntheticReport }}
+        onViewChange={seen}
+      />,
+    ),
+  );
+  expect(seen).toHaveBeenLastCalledWith("prospect");
+  await act(async () => root.unmount());
+  host.remove();
+});
+
 it("shows report sections in one continuous reading layout without transcript section", async () => {
   await render();
   expect(mode().dataset.view).toBe("reading");

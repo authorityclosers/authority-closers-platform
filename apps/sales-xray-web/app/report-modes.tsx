@@ -68,7 +68,13 @@ import type { ContextualSourcePlayback } from "./source-playback-context";
 import { OperationalPanel } from "./ui/operational-panel";
 import { useWorkspaceAccess } from "./workspace-access";
 
-type View = "reading" | "tabs" | "document" | "story" | "prospect" | "coaching";
+export type View =
+  | "reading"
+  | "tabs"
+  | "document"
+  | "story"
+  | "prospect"
+  | "coaching";
 const VIEWS: readonly View[] = [
   "reading",
   "tabs",
@@ -609,6 +615,7 @@ export function ReportModes({
   structure = "custom",
   fixture = false,
   illustration = null,
+  onViewChange,
 }: {
   label?: string;
   initialView?: View;
@@ -631,6 +638,8 @@ export function ReportModes({
   fixture?: boolean;
   /** The doc's illustrative example (review fixture only): every number fictional. */
   illustration?: XrayView | null;
+  /** Told which view shows, so the page header can follow it (owner, 19 Oct). */
+  onViewChange?: (view: View) => void;
 }) {
   const storyPanels =
     // A guest preview gets the Report too when the caller asks for pillars;
@@ -859,6 +868,9 @@ export function ReportModes({
   const selected = activePanels.some((panel) => panel.id === address.section)
     ? address.section
     : activePanels[0]?.id;
+  useEffect(() => {
+    onViewChange?.(view);
+  }, [onViewChange, view]);
   const printView =
     view === "document" && new URLSearchParams(search).get("print") === "1";
   const currentSection = activePanels.some(
