@@ -35,13 +35,28 @@ lakhs" stay); "Sau." / "सौ." before a name stays. The same mask runs on prom
 and objection text, and on ``next_step.when_text`` when money is said near its
 number. Callers pass model text through ``amounts.clean_text`` first.
 
+Round 5 (check 5 and the coordinator's decision): more spellings (चौपन्न, एकसष्ठ,
+satalis, ikkavan, nintey; laks, hazzar, lakhat, hajarachi; Marathi hundreds in one word with
+any ending, "अडीचशेला", "didshe"); a word shaped like a number word right after a cost word
+(hedges allowed: "rate lagbhag saath") or right before a per-unit phrase, and an everyday
+word before a per-unit phrase or before "wala" and a cost word, is a number; "ek baar"
+(once) stays. The same reading serves two more rules:
+
+- ``mask_when``: ``next_step.when_text`` shows every number as "[n]" except strict date and
+  time forms (hh:mm, dd/mm[/yyyy], a day or hour of 31 or less next to a clock or date word).
+- ``fact_carries_money``: the stated words of a fact that is not a price keep only numbers
+  explained by a unit, a counted noun, a warranty year word or a model name.
+
 Nothing here calls a model or the network.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 
 from ac_platform.partner_events import number_words as words
 from ac_platform.partner_events.amounts import (
@@ -51,11 +66,18 @@ from ac_platform.partner_events.amounts import (
     HUNDRED_WORDS,
     MONEY_UNITS,
     NUMBER_WORDS,
+    clean_text,
     folded,
+    hundreds_word,
     is_currency,
+    is_time_word,
     is_unit_word,
     money_scale,
+    money_word_said,
     normalise,
+    read_number,
+    soft_price,
+    tokens_of,
 )
 
 MASK = "[n]"
@@ -413,7 +435,7 @@ def _deva_number(token: str) -> bool:
     fraction ("साडेतीन", "सव्वादोन", "पावणेतीनशे") or a money word's ending."""
     if token in _NUMBER or token in _EXTRA_DEVA or money_scale(token) is not None:
         return True
-    if _stem_with_ending(token):
+    if _stem_with_ending(token) or hundreds_word(token):  # "पंधराशे", "अडीचशेला" (round 5)
         return True
     for prefix in _DEVA_FRACTION_PREFIXES:
         rest = token[len(prefix) :]
@@ -465,7 +487,9 @@ def _kind(group: str | None, norm: str) -> str:
         return "deva_do" if norm == "दो" else "soft"
     if group == "deva":
         return "number" if _deva_number(norm) or _compound(norm) else "other"
-    if norm in _NUMBER or _compound(norm):
+    if norm in _NUMBER or _compound(norm) or hundreds_word(norm):
+        return "number"
+    if money_scale(norm) is not None and norm not in _SHORT:  # "lakhat", "hajarachi"
         return "number"
     if norm in _AFTER_TENS:
         return "after_tens"
@@ -478,23 +502,114 @@ def _kind(group: str | None, norm: str) -> str:
     return "other"
 
 
-def mask_numbers(text: str) -> str:
-    """``text`` with every number replaced by "[n]" (idempotent)."""
+# --- Round 5 (check 5 and the coordinator's decision) ------------------------------------------
+
+# Hedges allowed between a cost word and the number after it ("rate lagbhag saath").
+_HEDGES = folded(
+    {
+        "lagbhag",
+        "around",
+        "approx",
+        "approximately",
+        "about",
+        "karib",
+        "kareeb",
+        "nearly",
+        "almost",
+        "roughly",
+        "लगभग",
+        "करीब",
+        "जवळपास",
+        "अंदाजे",
+        "साधारण",
+    }
+)
+_AFTER_COST_GAP = _ONLY | _HEDGES
+# "ek baar" / "एक बार" is "once", not a number.
+_ONCE = folded({"ek", "एक"})
+_TIMES = folded({"baar", "bar", "बार", "dafa", "दफा", "वेळा", "वेळ"})
+# A per-unit phrase: one of these, then a unit ("per watt", "a watt", "har unit", "प्रति वॅट").
+_PER_START = folded(
+    {"per", "prati", "प्रति", "a", "an", "har", "हर", "each", "every", "एका", "pratyek", "प्रत्येक"}
+)
+_PER_UNIT_NAMES = folded(
+    {
+        "watt",
+        "watts",
+        "w",
+        "wp",
+        "kw",
+        "kwp",
+        "kwh",
+        "unit",
+        "units",
+        "panel",
+        "panels",
+        "वॅट",
+        "वाट",
+        "वॉट",
+        "युनिट",
+        "यूनिट",
+        "किलोवॅट",
+        "किलोवाट",
+        "किलोवॉट",
+    }
+)
+# "वॅटला", "वॉटचे", "युनिटमागे": a per-unit phrase in one word.
+_DEVA_PER_FORM = re.compile(
+    r"(?:किलो)?(?:वॅट|वाट|वॉट|युनिट|यूनिट)(?:ला|चे|चा|ची|ना|मागे|साठी|ाला|ाचे|ाचा|ाची|ामागे)"
+)
+_WALA = folded({"wala", "wale", "wali", "vala", "vale", "vali", "वाला", "वाले", "वाली"})
+# The shape of a number word we have no spelling for ("satalis", "एक्क्याण्णव"): read as a
+# number only right after a cost word or right before a per-unit phrase (round 5 fallback).
+# Matched on normalised words, where a nasal half-letter reads as anusvara (न्न as ंन).
+_NUMBER_SHAPED = re.compile(
+    r"[a-z]{2,}(?:alis|alees|anve|anbe|nnav|asi|aasi|sath|saath|sasht|sashta|shath|attar"
+    r"|avan|awan|anna|ees|tis|tees|inshi|nshi)"
+    r"|[ऀ-ॿ]{2,}(?:ीस|ईस|इस|िस|न्न|ंन|वन|पन|सष्ट|सष्ठ|सठ|त्तर|ऐंशी|यंशी|ासी|ण्णव|ंणव|णव|नवे|नबे)"
+)
+
+
+@dataclass(frozen=True)
+class _Scan:
+    """The mask's reading of a text: its tokens, their kinds and which ones are numbers."""
+
+    text: str
+    found: list[re.Match[str]]
+    norms: list[str]
+    kinds: list[str]
+    gaps: list[str]
+    masked: list[bool]
+
+    @property
+    def count(self) -> int:
+        return len(self.found)
+
+    def tight(self, index: int) -> bool:
+        """Token ``index`` follows token ``index - 1`` as part of one number."""
+        return 0 < index < self.count and _TIGHT.fullmatch(self.gaps[index]) is not None
+
+    def norm_at(self, index: int) -> str | None:
+        return self.norms[index] if 0 <= index < self.count else None
+
+
+def _scan(text: str) -> _Scan:
     found = list(_TOKEN.finditer(text))
-    if not found:
-        return text
-    count = len(found)
     norms = [normalise(match.group()).replace("’", "'") for match in found]
     kinds = [_kind(match.lastgroup, norm) for match, norm in zip(found, norms, strict=True)]
-    gaps = [""] + [text[found[index - 1].end() : found[index].start()] for index in range(1, count)]
-    masked = [kind in {"num", "number"} for kind in kinds]
+    gaps = [""] + [
+        text[found[index - 1].end() : found[index].start()] for index in range(1, len(found))
+    ]
+    scan = _Scan(text, found, norms, kinds, gaps, [kind in {"num", "number"} for kind in kinds])
+    if found:
+        _read(scan)
+    return scan
 
-    def tight(index: int) -> bool:
-        """Token ``index`` follows token ``index - 1`` as part of one number."""
-        return 0 < index < count and _TIGHT.fullmatch(gaps[index]) is not None
 
-    def norm_at(index: int) -> str | None:
-        return norms[index] if 0 <= index < count else None
+def _read(scan: _Scan) -> None:
+    """Decide which everyday words, articles, joiners and rupee words belong to a number."""
+    count, norms, kinds, gaps, masked = scan.count, scan.norms, scan.kinds, scan.gaps, scan.masked
+    tight, norm_at = scan.tight, scan.norm_at
 
     def kind_before(index: int) -> str | None:
         return kinds[index - 1] if tight(index) else None
@@ -510,12 +625,42 @@ def mask_numbers(text: str) -> str:
         return 0 <= index < count and masked[index] and kinds[index] != "num"
 
     def after_cost(index: int) -> bool:
-        """Token ``index`` follows a cost word, directly or after "only" ("rate saath")."""
-        if not tight(index):
+        """Token ``index`` follows a cost word, directly or after "only" or a hedge ("rate
+        saath", "rate sirf saath", "rate lagbhag saath"; round 5 adds the hedges)."""
+        step = index
+        for _ in range(3):
+            if not tight(step):
+                return False
+            previous = norm_at(step - 1)
+            if previous in _COST:
+                return True
+            if previous not in _AFTER_COST_GAP:
+                return False
+            step -= 1
+        return False
+
+    def before_per(index: int) -> bool:
+        """A per-unit phrase follows token ``index`` ("saath per watt", "das per unit",
+        "X प्रति वॅट", "X वॅटला"; round 5)."""
+        following = index + 1
+        if not tight(following):
             return False
-        if norm_at(index - 1) in _COST:
+        if _DEVA_PER_FORM.fullmatch(norms[following]):
             return True
-        return tight(index - 1) and norm_at(index - 1) in _ONLY and norm_at(index - 2) in _COST
+        return (
+            norms[following] in _PER_START
+            and tight(following + 1)
+            and norm_at(following + 1) in _PER_UNIT_NAMES
+        )
+
+    def before_wala_cost(index: int) -> bool:
+        """ "wala" and a cost word follow token ``index`` ("saath wala rate"; round 5)."""
+        return (
+            tight(index + 1)
+            and norms[index + 1] in _WALA
+            and tight(index + 2)
+            and norm_at(index + 2) in _COST
+        )
 
     def honorific(index: int) -> bool:
         """The honorific "Sau." or "सौ." before a name, with no number, rupee or cost word
@@ -537,7 +682,7 @@ def mask_numbers(text: str) -> str:
     for index, kind in enumerate(kinds):
         if kind == "after_tens":  # "twenty first"
             masked[index] = tight(index) and norms[index - 1] in _TENS
-        elif kind == "short":  # "45 k", "2.5 L", "forty k"
+        elif kind == "short":  # "45 k", "2.5 L", "forty k", "teen lack"
             masked[index] = kind_before(index) in {"num", "number"} and len(gaps[index]) <= 1
         elif kind == "one":
             pronoun = norm_at(index - 1) in _BEFORE_PRONOUN_ONE and kind_after(index) not in {
@@ -565,15 +710,24 @@ def mask_numbers(text: str) -> str:
             masked[index] = not (verb or last)
         elif kind == "number" and norms[index] in _HONORIFICS:
             masked[index] = not honorific(index)  # "Sau. Sunita", "सौ. सुनीता"
+        elif kind == "number" and norms[index] in _ONCE:
+            masked[index] = not (tight(index + 1) and norm_at(index + 1) in _TIMES)  # "ek baar"
+
     # Everyday number words next to a number word, a money word or a rupee word ("saath
-    # hazaar", "दो अरब", "saath rupay", "₹ saath"; check 4, B4), or right after a cost word
-    # ("rate saath hai", "rate sirf saath"; check 4, M3).
+    # hazaar", "दो अरब", "saath rupay", "₹ saath"; check 4, B4), right after a cost word
+    # ("rate saath hai", "rate lagbhag saath"), right before a per-unit phrase ("saath per
+    # watt", "das per unit") or before "wala" and a cost word ("saath wala rate"; check 5, M3).
+    def number_or_rupee(other: int) -> bool:
+        return (masked[other] and kinds[other] != "num") or kinds[other] == "cur"
+
     for index, kind in enumerate(kinds):
         if kind == "soft":
-            masked[index] = word_beside(
-                index,
-                lambda other: (masked[other] and kinds[other] != "num") or kinds[other] == "cur",
-            ) or after_cost(index)
+            masked[index] = (
+                word_beside(index, number_or_rupee)
+                or after_cost(index)
+                or before_per(index)
+                or before_wala_cost(index)
+            )
     # Ranges: an everyday word or "do" before a range word and a number word ("do se teen
     # lakh", "saath se sattar hazaar", "do-do hazaar"; check 4, M2). Right to left, so a
     # chain of ranges is read whole.
@@ -597,12 +751,22 @@ def mask_numbers(text: str) -> str:
             masked[index] = norms[index + 1] in _TAKES_ARTICLE and not (
                 compound and not masked[index + 2]
             )
-    # A word we have no spelling for, directly before a rupee word or a money word, is read
-    # as a number ("pantalis rupaye", "chalis-ek hazaar"; check 4, M1 fallback), unless it
-    # is an ordinary word ("in rupees", "spent lakhs", "the lakh"). A rupee word that
-    # already goes with the number after it ("quoted Rs 45") does not count.
+    # A word we have no spelling for is read as a number (check 4, M1 fallback; check 5, M2):
+    # - with the shape of a number word, right after a cost word or right before a per-unit
+    #   phrase ("दर एक्क्याण्णव", "satalis per watt");
+    # - any word directly before a rupee word or a money word ("pantalis rupaye",
+    #   "chalis-ek hazaar"), unless it is an ordinary word ("in rupees", "spent lakhs", "the
+    #   lakh"). A rupee word that already goes with the number after it ("quoted Rs 45")
+    #   does not count.
     for index, kind in enumerate(kinds):
-        if kind != "other" or not tight(index + 1) or norms[index] in _ORDINARY_BEFORE_MONEY:
+        if kind != "other" or norms[index] in _ORDINARY_BEFORE_MONEY:
+            continue
+        if _NUMBER_SHAPED.fullmatch(norms[index]) and (
+            after_cost(index) or before_per(index) or before_wala_cost(index)
+        ):
+            masked[index] = True
+            continue
+        if not tight(index + 1):
             continue
         following = index + 1
         if kinds[following] == "cur":
@@ -629,26 +793,1005 @@ def mask_numbers(text: str) -> str:
                 norms[index] in _POINT or kinds[index + 1] not in {"num", "cur"}
             )
 
-    spans: list[list[int]] = []
-    for index in range(count):
-        if not masked[index]:
+
+def _runs(scan: _Scan) -> list[tuple[int, int]]:
+    """Token ranges [start, end) that read as one "[n]"."""
+    runs: list[list[int]] = []
+    for index in range(scan.count):
+        if not scan.masked[index]:
             continue
-        start, end = found[index].start(), found[index].end()
-        currency = "cur" in {kinds[index], kinds[index - 1] if index else None}
-        joined = tight(index) or (currency and index > 0 and _joins_currency(gaps[index]))
-        if spans and index > 0 and masked[index - 1] and joined:
-            spans[-1][1] = end
+        previous = scan.kinds[index - 1] if index else None
+        currency = "cur" in {scan.kinds[index], previous}
+        joined = scan.tight(index) or (currency and index > 0 and _joins_currency(scan.gaps[index]))
+        if runs and index > 0 and scan.masked[index - 1] and joined:
+            runs[-1][1] = index + 1
         else:
-            spans.append([start, end])
+            runs.append([index, index + 1])
+    return [(start, end) for start, end in runs]
+
+
+def _render(scan: _Scan, runs: list[tuple[int, int]]) -> str:
     pieces: list[str] = []
     cursor = 0
-    for start, end in spans:
-        pieces.append(text[cursor:start])
+    for start, end in runs:
+        pieces.append(scan.text[cursor : scan.found[start].start()])
         pieces.append(MASK)
-        cursor = end
-    pieces.append(text[cursor:])
+        cursor = scan.found[end - 1].end()
+    pieces.append(scan.text[cursor:])
     return "".join(pieces)
+
+
+def mask_numbers(text: str) -> str:
+    """``text`` with every number replaced by "[n]" (idempotent)."""
+    scan = _scan(text)
+    if not scan.count:
+        return text
+    return _render(scan, _runs(scan))
 
 
 def _joins_currency(gap: str) -> bool:
     return _CURRENCY_GAP.fullmatch(gap) is not None
+
+
+# --- Reading one number (round 5) ---------------------------------------------------------------
+
+# A digit token's parts: a rupee sign or word before, the digits, what is written onto them.
+_NUM_PARTS = re.compile(
+    rf"(?P<cur>[₹₨$]|(?i:rs|inr)[.:]?)?(?P<body>{_DIGIT}(?:[.,:/\-–]?{_DIGIT})*)(?P<suffix>.*)",
+    re.DOTALL,
+)
+_PLAIN_DECIMAL = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _word_values() -> dict[str, Decimal]:
+    found: dict[str, Decimal] = {}
+    for table in (
+        words.EN_ONES,
+        words.EN_TENS,
+        words.HI_ROMAN,
+        words.MR_ROMAN,
+        words.HI_DEVA,
+        words.MR_DEVA,
+    ):
+        for word, value in table.items():
+            found.setdefault(normalise(word), Decimal(value))
+    for word, fraction in words.FRACTION_VALUES.items():
+        found.setdefault(normalise(word), fraction)
+    for word, number in NUMBER_WORDS.items():
+        found.setdefault(word, number)
+    return found
+
+
+# Every 0-99 and fraction word with its value, everyday words included ("do" 2, "saath" 60).
+_WORD_VALUES = _word_values()
+
+
+def _decimal(body: str) -> Decimal | None:
+    """Digits in any script, with digit-group commas or one decimal point; else None."""
+    plain = body.replace(",", "")
+    if _PLAIN_DECIMAL.fullmatch(plain) is None:
+        return None
+    try:
+        return Decimal(
+            "".join(char if char == "." else str(unicodedata.decimal(char)) for char in plain)
+        )
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _parts(scan: _Scan, index: int) -> re.Match[str] | None:
+    return _NUM_PARTS.fullmatch(scan.found[index].group()) if scan.kinds[index] == "num" else None
+
+
+def _suffix(scan: _Scan, index: int) -> str:
+    """What is written onto a digit token ("kw" in "5kW", "/w" in "45/W"), normalised."""
+    parts = _parts(scan, index)
+    return normalise(parts.group("suffix")) if parts is not None else ""
+
+
+def _value(scan: _Scan, start: int, end: int) -> Decimal | None:
+    """The value of the number in tokens [start, end), or None when it is not one clear
+    number ("45 000" and "4 5 0 0 0" read 45000, "nineteen ninety nine" 1999, "do" 2)."""
+    kinds = scan.kinds[start:end]
+    if all(kind == "num" for kind in kinds):
+        bodies: list[str] = []
+        for index in range(start, end):
+            parts = _parts(scan, index)
+            if parts is None or parts.group("cur"):
+                return None
+            bodies.append(parts.group("body"))
+        if len(bodies) == 1:
+            return _decimal(bodies[0])
+        if not all(body.isdecimal() for body in bodies):
+            return None
+        return _decimal("".join(bodies))  # spaced digit groups are one number
+    if "num" in kinds:
+        return None
+    said = scan.norms[start:end]
+    if len(said) == 1:
+        return _WORD_VALUES.get(said[0])
+    return read_number(said)
+
+
+def _number_groups(scan: _Scan) -> list[tuple[int, int]]:
+    """Token ranges that read as one number, for the fact rule: tight neighbours, but a digit
+    run with a unit written onto it ends its number ("48V 100Ah" is two)."""
+    groups: list[list[int]] = []
+    for index in range(scan.count):
+        if not scan.masked[index] or scan.kinds[index] == "cur":
+            continue
+        if (
+            groups
+            and groups[-1][1] == index
+            and scan.tight(index)
+            and not _suffix(scan, index - 1)
+            # Digits and number words are separate numbers ("55000 ek kW": not one "ek kW").
+            and (scan.kinds[index] == "num") == (scan.kinds[index - 1] == "num")
+        ):
+            groups[-1][1] = index + 1
+        else:
+            groups.append([index, index + 1])
+    return [(start, end) for start, end in groups]
+
+
+# --- next_step.when_text (round 5, R2) ----------------------------------------------------------
+
+_MONTHS = folded(
+    {
+        "jan",
+        "january",
+        "feb",
+        "february",
+        "mar",
+        "march",
+        "apr",
+        "april",
+        "may",
+        "jun",
+        "june",
+        "jul",
+        "july",
+        "aug",
+        "august",
+        "sep",
+        "sept",
+        "september",
+        "oct",
+        "october",
+        "nov",
+        "november",
+        "dec",
+        "december",
+        "जनवरी",
+        "जानेवारी",
+        "फरवरी",
+        "फेब्रुवारी",
+        "मार्च",
+        "अप्रैल",
+        "एप्रिल",
+        "मई",
+        "मे",
+        "जून",
+        "जुलाई",
+        "जुलै",
+        "अगस्त",
+        "ऑगस्ट",
+        "सितंबर",
+        "सप्टेंबर",
+        "अक्टूबर",
+        "ऑक्टोबर",
+        "नवंबर",
+        "नोव्हेंबर",
+        "दिसंबर",
+        "डिसेंबर",
+    }
+)
+# Clock and date words a day or an hour stands next to (R2).
+_DATE_WORDS = (
+    folded(
+        {
+            "baje",
+            "बजे",
+            "वाजता",
+            "am",
+            "pm",
+            "o'clock",
+            "oclock",
+            "tarikh",
+            "tareekh",
+            "tarik",
+            "तारीख",
+            "तारिख",
+            "तारखेला",
+            "din",
+            "dino",
+            "dinon",
+            "day",
+            "days",
+            "week",
+            "weeks",
+            "hafta",
+            "hafte",
+            "दिन",
+            "दिनों",
+            "हफ्ता",
+            "हफ्ते",
+            "दिवस",
+            "दिवसांनी",
+            "दिवसांत",
+            "दिवसात",
+        }
+    )
+    | _MONTHS
+)
+# Endings on the same words ("तारखेपर्यंत", "वाजेपर्यंत", "दिवसांनंतर").
+_DEVA_DATE = re.compile(r"ता(?:री|रि|र)ख[ऀ-ॿ]*|वाज[ऀ-ॿ]*|दिवसां?[ऀ-ॿ]*")
+# Hindi and Marathi months with a case ending ("ऑक्टोबरला", "नोव्हेंबरपर्यंत"); not the short
+# मे / मई, which would match ordinary words.
+_DEVA_MONTH = re.compile(
+    "(?:"
+    + "|".join(
+        sorted(
+            (re.escape(month) for month in _MONTHS if month[0] >= "ऀ" and len(month) > 2),
+            key=len,
+            reverse=True,
+        )
+    )
+    + ")(?:ला|ात|मध्ये|पर्यंत|च्या|ची|चा|चे|में|को|तक|से)"
+)
+_HH_MM = re.compile(r"(\d{1,2}):(\d{2})")
+_DD_MM = re.compile(r"(\d{1,2})/(\d{1,2})(?:/(?:\d{4}|\d{2}))?")
+_DAY_RANGE = re.compile(r"\d{1,2}(?:[-–]\d{1,2})+")
+_ORDINAL_SUFFIXES = frozenset({"st", "nd", "rd", "th"})
+_LAST_DAY = 31
+
+
+def _date_word(norm: str | None) -> bool:
+    return norm is not None and (
+        norm in _DATE_WORDS
+        or _DEVA_DATE.fullmatch(norm) is not None
+        or _DEVA_MONTH.fullmatch(norm) is not None
+    )
+
+
+def _beside_date_word(scan: _Scan, start: int, end: int) -> bool:
+    return (scan.tight(start) and _date_word(scan.norm_at(start - 1))) or (
+        scan.tight(end) and _date_word(scan.norms[end])
+    )
+
+
+def _year_of_a_date(scan: _Scan, start: int, kept: set[int], value: Decimal) -> bool:
+    """A year right after a kept day and its month ("15 November 2026")."""
+    month = start - 1
+    return (
+        value == value.to_integral_value()
+        and 1900 <= value <= 2100
+        and scan.tight(start)
+        and scan.norm_at(month) in _MONTHS
+        and scan.tight(month)
+        and (month - 1) in kept
+    )
+
+
+def _date_or_time(scan: _Scan, start: int, end: int, kept: set[int]) -> bool:
+    """Tokens [start, end) are a strict date or time form (R2): hh:mm (hours to 23), dd/mm
+    or dd/mm/yyyy, a number of 31 or less right next to a clock or date word (baje, बजे,
+    वाजता, am, pm, o'clock, tarikh, तारीख, a month, din, days, weeks, दिवस ...), or a year
+    right after such a day and its month."""
+    if any(kind == "cur" for kind in scan.kinds[start:end]):
+        return False
+    beside = _beside_date_word(scan, start, end)
+    if end - start == 1 and scan.kinds[start] == "num":
+        parts = _parts(scan, start)
+        if parts is None or parts.group("cur"):
+            return False
+        body, suffix = parts.group("body"), normalise(parts.group("suffix"))
+        if suffix in {"am", "pm"}:
+            beside = True
+        elif suffix and suffix not in _ORDINAL_SUFFIXES:
+            return False
+        clock = _HH_MM.fullmatch(body)
+        if clock is not None:
+            return int(clock.group(1)) <= 23 and int(clock.group(2)) <= 59
+        date = _DD_MM.fullmatch(body)
+        if date is not None:
+            return 1 <= int(date.group(1)) <= _LAST_DAY and 1 <= int(date.group(2)) <= 12
+        if _DAY_RANGE.fullmatch(body) is not None:
+            return beside and all(int(day) <= _LAST_DAY for day in re.split("[-–]", body))
+        value = _decimal(body)
+        if value is not None and not suffix and _year_of_a_date(scan, start, kept, value):
+            return True
+    else:
+        value = _value(scan, start, end)
+    return beside and value is not None and value <= _LAST_DAY
+
+
+def mask_when(text: str) -> str:
+    """``next_step.when_text`` with every number as "[n]" except strict date and time forms
+    (round 5, R2): "kal shaam 5 baje", "Monday 10:30", "20 October", "18/10/2026" and "३
+    तारखेला" stay; "advance 25000 dene ke baad" reads "advance [n] dene ke baad"."""
+    scan = _scan(text)
+    if not scan.count:
+        return text
+    kept: set[int] = set()
+    hidden: list[tuple[int, int]] = []
+    for start, end in _runs(scan):
+        if _date_or_time(scan, start, end, kept):
+            kept.update(range(start, end))
+        else:
+            hidden.append((start, end))
+    return _render(scan, hidden)
+
+
+# --- Other facts: the allow rule (round 5, R1) --------------------------------------------------
+
+# Words that drop a fact that is not a price wherever they stand (R1), on top of rupee,
+# money, cost and hundred words.
+_FACT_DENY = folded(
+    {
+        "bill",
+        "bills",
+        "बिल",
+        "amc",
+        "maintenance",
+        "देखभाल",
+        "rent",
+        "kiraya",
+        "किराया",
+        "भाडे",
+        "भाडा",
+        "भाड़ा",
+        "bhada",
+        "bhaada",
+        "bhade",
+        "subscription",
+        "सबस्क्रिप्शन",
+        "advance",
+        "एडवांस",
+        "ॲडव्हान्स",
+        "अॅडव्हान्स",
+        "token",
+        "टोकन",
+        "booking",
+        "बुकिंग",
+        "deposit",
+        "डिपॉझिट",
+        "डिपॉजिट",
+        "subsidy",
+        "सबसिडी",
+        "सब्सिडी",
+        "अनुदान",
+        "पैसे",
+        "पैसा",
+        "paise",
+        "paisa",
+        "आगाऊ",
+        "gst",
+        "जीएसटी",
+        "incl",
+        "excl",
+        "inclusive",
+        "exclusive",
+    }
+)
+# Units that explain the number before them: size, power, capacity, length, area (R1).
+_UNITS = folded(
+    {
+        "kw",
+        "kwp",
+        "w",
+        "wp",
+        "watt",
+        "watts",
+        "kilowatt",
+        "kilowatts",
+        "va",
+        "kva",
+        "kwh",
+        "ah",
+        "mah",
+        "v",
+        "volt",
+        "volts",
+        "ton",
+        "tons",
+        "tonne",
+        "tonnes",
+        "टन",
+        "hp",
+        "bhk",
+        "बीएचके",
+        "sq",
+        "sqft",
+        "sqm",
+        "sqmt",
+        "square",
+        "ft",
+        "feet",
+        "foot",
+        "फूट",
+        "फुट",
+        "फीट",
+        "m",
+        "meter",
+        "meters",
+        "metre",
+        "metres",
+        "mtr",
+        "mtrs",
+        "मीटर",
+        "mm",
+        "cm",
+        "km",
+        "inch",
+        "inches",
+        "इंच",
+        "acre",
+        "acres",
+        "एकर",
+        "guntha",
+        "gunthe",
+        "गुंठा",
+        "गुंठे",
+    }
+)
+# Watt and kilowatt in Hindi and Marathi, with the endings that leave them a size
+# ("पाच किलोवॅटची", "100 वॅटचे दिवे"; "45 वॅटला" is a per-watt price and is not here).
+_DEVA_UNIT = re.compile(r"किलो(?:वॅट|वाट|वॉट)(?:चा|ची|चे|च्या|ला|ना)?|(?:वॅट|वाट|वॉट)(?:चा|ची|चे|च्या)?")
+# Litres, in a load only ("250 L fridge", "geyser 15 L"; R4: elsewhere "L" is lakh).
+_LITRES = folded({"l", "ltr", "ltrs", "litre", "litres", "liter", "liters", "लिटर", "लीटर"})
+# Things counted (up to 100) in solar quotes and household loads.
+_COUNTABLE = folded(
+    {
+        "panel",
+        "panels",
+        "plate",
+        "plates",
+        "module",
+        "modules",
+        "dongle",
+        "dongles",
+        "ac",
+        "acs",
+        "fridge",
+        "fridges",
+        "refrigerator",
+        "refrigerators",
+        "battery",
+        "batteries",
+        "inverter",
+        "inverters",
+        "fan",
+        "fans",
+        "pankha",
+        "pankhe",
+        "tubelight",
+        "tubelights",
+        "tube",
+        "tubes",
+        "light",
+        "lights",
+        "bulb",
+        "bulbs",
+        "led",
+        "leds",
+        "geyser",
+        "geysers",
+        "motor",
+        "motors",
+        "pump",
+        "pumps",
+        "tv",
+        "tvs",
+        "cooler",
+        "coolers",
+        "connector",
+        "connectors",
+        "pit",
+        "pits",
+        "cable",
+        "cables",
+        "wire",
+        "wires",
+        "structure",
+        "structures",
+        "stand",
+        "stands",
+        "room",
+        "rooms",
+        "floor",
+        "floors",
+        "storey",
+        "storeys",
+        "flat",
+        "flats",
+        "house",
+        "houses",
+        "shop",
+        "shops",
+        "machine",
+        "machines",
+        "computer",
+        "computers",
+        "laptop",
+        "laptops",
+        "oven",
+        "ovens",
+        "microwave",
+        "microwaves",
+        "heater",
+        "heaters",
+        "iron",
+        "mixer",
+        "string",
+        "strings",
+        "kit",
+        "kits",
+        "acdb",
+        "dcdb",
+        "arrestor",
+        "arrestors",
+        "arrester",
+        "arresters",
+        "earthing",
+        "earthings",
+        "camera",
+        "cameras",
+        "cctv",
+        "tank",
+        "tanks",
+        "chimney",
+        "purifier",
+        "phase",  # "3 phase" connection in a load
+        "फेज",
+        "पॅनेल",
+        "पॅनल",
+        "पैनल",
+        "प्लेट",
+        "प्लेट्स",
+        "डोंगल",
+        "एसी",
+        "फ्रिज",
+        "फ्रीज",
+        "बॅटरी",
+        "बैटरी",
+        "इन्व्हर्टर",
+        "इनवर्टर",
+        "इन्वर्टर",
+        "पंखे",
+        "पंखा",
+        "पंख्या",
+        "ट्यूबलाईट",
+        "ट्यूबलाइट",
+        "ट्युबलाईट",
+        "लाईट",
+        "लाइट",
+        "बल्ब",
+        "गिझर",
+        "गीझर",
+        "गीजर",
+        "मोटर",
+        "पंप",
+        "टीव्ही",
+        "टीवी",
+        "कूलर",
+        "खोल्या",
+        "खोली",
+        "कमरे",
+        "कमरा",
+        "मजले",
+        "मजला",
+        "दिवे",
+        "दिवा",
+        "केबल",
+        "कनेक्टर",
+        "अर्थिंग",
+        "स्ट्रक्चर",
+        "फ्लॅट",
+        "बंगले",
+    }
+)
+# Words that may stand between a count and the thing counted ("4 earthing pits", "2 extra
+# panels", "2 MC4 connectors" with the code).
+_MODIFIERS = folded(
+    {
+        "extra",
+        "more",
+        "additional",
+        "new",
+        "solar",
+        "mono",
+        "perc",
+        "monoperc",
+        "poly",
+        "bifacial",
+        "topcon",
+        "dc",
+        "ac",
+        "earthing",
+        "lightning",
+        "ceiling",
+        "exhaust",
+        "split",
+        "window",
+        "inverter",
+        "lithium",
+        "tubular",
+        "led",
+        "small",
+        "big",
+        "wifi",
+        "smart",
+        "अतिरिक्त",
+        "जादा",
+        "नवीन",
+        "सोलर",
+        "मोठे",
+        "छोटे",
+        "आणखी",
+        "अजून",
+    }
+)
+_YEAR_WORDS = folded(
+    {
+        "saal",
+        "sal",
+        "saala",
+        "saalon",
+        "salon",
+        "year",
+        "years",
+        "yrs",
+        "yr",
+        "varsh",
+        "varsha",
+        "varshe",
+    }
+)
+_DEVA_YEAR = re.compile(r"(?:वर्ष|साल)[ऀ-ॿ]*")
+_WARRANTY_WORDS = folded(
+    {
+        "warranty",
+        "warrantee",
+        "guarantee",
+        "guaranty",
+        "garanti",
+        "वॉरंटी",
+        "वारंटी",
+        "वॉरन्टी",
+        "वॉरेंटी",
+        "गॅरंटी",
+        "गारंटी",
+        "हमी",
+    }
+)
+# Address labels a small number belongs to in a site ("Plot 45", "Sector 21", "Phase 2").
+# Not "flat": "flat 1500" is also a flat rate.
+_SITE_LABELS = folded(
+    {
+        "plot",
+        "sector",
+        "phase",
+        "survey",
+        "sr",
+        "gat",
+        "ward",
+        "wing",
+        "block",
+        "building",
+        "bldg",
+        "house",
+        "no",
+        "number",
+        "lane",
+        "gali",
+        "galli",
+        "road",
+        "street",
+        "floor",
+        "room",
+        "shop",
+        "tower",
+        "प्लॉट",
+        "सेक्टर",
+        "फेज",
+        "गट",
+        "सर्वे",
+        "वॉर्ड",
+        "विंग",
+        "इमारत",
+        "बिल्डिंग",
+        "क्रमांक",
+        "नंबर",
+        "नं",
+        "गल्ली",
+        "गली",
+        "रोड",
+    }
+)
+_LABEL_GAP = re.compile(r"[\s.:#\-]*")
+_GROUND_PLUS = re.compile(r"(?<![A-Za-z])[Gg]\s*\+\s*$")
+_DIMENSION_WORDS = folded({"by", "x", "into"})
+_DIMENSION_SIGN = re.compile(r"\s*[x×*]\s*")
+# Words after a small number that make it a quoted price, not a model or a label ("Tata wale
+# 42", "Adani 43 wala", "chalis me milta"; check 5, M7).
+_PRICE_TAIL = folded(
+    {
+        "wale",
+        "wala",
+        "wali",
+        "vale",
+        "vala",
+        "vali",
+        "ne",
+        "me",
+        "mein",
+        "main",
+        "में",
+        "मध्ये",
+        "ला",
+        "मे",
+        "ka",
+        "ki",
+        "ke",
+        "का",
+        "की",
+        "के",
+        "se",
+        "से",
+        "pe",
+        "par",
+        "पे",
+        "पर",
+        "tak",
+        "तक",
+        "only",
+        "sirf",
+        "bas",
+        "fakt",
+        "फक्त",
+        "सिर्फ",
+        "final",
+        "fix",
+        "fixed",
+        "lagenge",
+        "lagega",
+        "padega",
+        "padenge",
+        "chalega",
+        "milega",
+        "milta",
+        "milti",
+        "denge",
+        "dega",
+        "de",
+        "देंगे",
+        "देगा",
+        "पडतील",
+        "पडेल",
+        "लागेल",
+        "लागतील",
+        "चालेल",
+        "मिळेल",
+        "चलेगा",
+        "लगेगा",
+        "लगेंगे",
+        "पडेगा",
+        "देऊ",
+    }
+)
+# Per-unit words: a quote when said without their own number (BL6: "watt ke 45").
+_BARE_PER_UNIT = folded(
+    {"watt", "watts", "w", "wp", "unit", "units", "वॅट", "वाट", "वॉट", "युनिट", "यूनिट"}
+)
+_DEVA_PER_WORD = re.compile(r"(?:वॅट|वाट|वॉट|युनिट|यूनिट)[ऀ-ॿ]*")
+_NOT_A_NAME = (
+    _ORDINARY_BEFORE_MONEY
+    | _COUNTABLE
+    | _MODIFIERS
+    | _FACT_DENY
+    | _PRICE_TAIL
+    | _PER_START
+    | _PER_UNIT_NAMES
+    | _UNITS
+    | _SITE_LABELS
+    | _DIMENSION_WORDS
+)
+_COUNT_MAX = 100
+_WARRANTY_YEARS_MAX = 30
+_DIMENSION_MAX = 1000
+
+
+def _unit(norm: str | None, litres: frozenset[str]) -> bool:
+    if norm is None:
+        return False
+    return norm in _UNITS or _DEVA_UNIT.fullmatch(norm) is not None or norm in litres
+
+
+def _year_word(norm: str | None) -> bool:
+    return norm is not None and (norm in _YEAR_WORDS or _DEVA_YEAR.fullmatch(norm) is not None)
+
+
+def _code(scan: _Scan, index: int) -> bool:
+    """A Latin word with digits written onto it ("MC4", "PuREPower5")."""
+    return (
+        scan.found[index].lastgroup == "latin"
+        and index + 1 < scan.count
+        and scan.kinds[index + 1] == "num"
+        and scan.gaps[index + 1] == ""
+    )
+
+
+def _name(scan: _Scan, index: int) -> bool:
+    """A Latin word written with a capital that is not an ordinary, cost, count or unit word
+    ("PuREPower", "Pro", "MC"): the name a small model number belongs to."""
+    if index < 0 or scan.kinds[index] != "other" or scan.found[index].lastgroup != "latin":
+        return False
+    norm = scan.norms[index]
+    if norm in _NOT_A_NAME or is_time_word(norm) or _year_word(norm):
+        return False
+    return any(char.isupper() for char in scan.found[index].group())
+
+
+def _counted_after(scan: _Scan, end: int) -> bool:
+    """A countable noun follows the number ending before ``end``, with at most two modifiers
+    or codes between ("2 panels", "4 earthing pits", "2 MC4 connectors", "तीन पंखे")."""
+    index, skipped = end, 0
+    while index < scan.count and scan.tight(index) and skipped <= 2:
+        norm = scan.norms[index]
+        if norm in _COUNTABLE:
+            return True
+        if _code(scan, index):
+            index, skipped = index + 2, skipped + 1
+        elif norm in _MODIFIERS:
+            index, skipped = index + 1, skipped + 1
+        else:
+            return False
+    return False
+
+
+def _named(scan: _Scan, start: int, fact_type: str | None) -> bool:
+    """The small number at ``start`` belongs to a name or a label: a code written onto it
+    ("MC4"), a model name before it in a product mention ("PuREPower 5", "PuREPower Pro
+    10"), an address label in a site ("Plot 45", "Sector 21") or a ground-plus floor count
+    ("G+2")."""
+    if start == 0:
+        return False
+    previous, gap = start - 1, scan.gaps[start]
+    if gap == "" and scan.kinds[start] == "num" and _name(scan, previous):
+        return True
+    if fact_type == "product_mention" and scan.tight(start) and _name(scan, previous):
+        return True
+    if (
+        fact_type == "site"
+        and _LABEL_GAP.fullmatch(gap) is not None
+        and scan.norms[previous] in _SITE_LABELS
+    ):
+        return True
+    return _GROUND_PLUS.search(scan.text[: scan.found[start].start()]) is not None
+
+
+def _explained(
+    scan: _Scan,
+    start: int,
+    end: int,
+    fact_type: str | None,
+    *,
+    warranty: bool,
+    litres: frozenset[str],
+) -> bool:
+    """Whether the number in tokens [start, end) is explained by what follows it (R1)."""
+    value = _value(scan, start, end)
+    suffix = _suffix(scan, end - 1)
+    if suffix:  # "5kW", "150Ah", "48V", "3rd"; "45/W", "45/-", "18%" are not explained
+        if _unit(suffix, litres):
+            return True
+        return suffix in _ORDINAL_SUFFIXES and value is not None and value <= _COUNT_MAX
+    following = scan.norms[end] if scan.tight(end) else None
+    if _unit(following, litres):
+        return True
+    if following == "kilo" and scan.tight(end + 1) and scan.norms[end + 1].startswith("watt"):
+        return True
+    if following in _PRICE_TAIL or value is None:
+        return False
+    if value <= _COUNT_MAX and _counted_after(scan, end):
+        return True
+    if warranty and value <= _WARRANTY_YEARS_MAX and _year_word(following):
+        return True
+    return value <= _COUNT_MAX and _named(scan, start, fact_type)
+
+
+def _bare_per_unit_word(scan: _Scan) -> bool:
+    """A watt or unit word without its own number directly before it ("watt ke 45", "हर
+    वॉट पे ४६", "45 lagenge per watt"; check 5, BL6)."""
+    for index, norm in enumerate(scan.norms):
+        if scan.kinds[index] == "num":
+            continue
+        if norm not in _BARE_PER_UNIT and _DEVA_PER_WORD.fullmatch(norm) is None:
+            continue
+        before = index - 1
+        if scan.norm_at(before) == "kilo" and scan.tight(index):
+            before -= 1
+        own = (
+            before >= 0
+            and scan.tight(before + 1)
+            and scan.masked[before]
+            and scan.kinds[before] != "cur"
+        )
+        if not own:
+            return True
+    return False
+
+
+def _dimension_pairs(scan: _Scan, groups: list[tuple[int, int]]) -> set[int]:
+    """Groups that are the two sides of an area ("30 by 40", "30x40", "30 × 40")."""
+    paired: set[int] = set()
+    for position in range(len(groups) - 1):
+        (first, first_end), (second, second_end) = groups[position], groups[position + 1]
+        glued = (
+            second == first_end and _suffix(scan, first_end - 1) == "x" and scan.gaps[second] == ""
+        )
+        sign = second == first_end and _DIMENSION_SIGN.fullmatch(scan.gaps[second]) is not None
+        word = (
+            second == first_end + 1
+            and scan.norms[first_end] in _DIMENSION_WORDS
+            and scan.tight(first_end)
+            and scan.tight(second)
+        )
+        if not (glued or sign or word):
+            continue
+        sides = (_value(scan, first, first_end), _value(scan, second, second_end))
+        if all(side is not None and side <= _DIMENSION_MAX for side in sides):
+            paired.update({position, position + 1})
+    return paired
+
+
+def fact_carries_money(text: str, fact_type: str | None = None) -> bool:
+    """True when the stated words of a fact that is not a price must be dropped (round 5,
+    the coordinator's decision R1: an allow rule).
+
+    - Any rupee, money, cost, hundred or GST word, or bill, AMC, maintenance, rent,
+      subscription, advance, token, booking, deposit, subsidy, पैसे, आगाऊ, incl/excl.
+    - Any number (digits in any script, spaced digit groups, keycaps, fractions and every
+      number word the summary mask reads) not explained by what follows it: a size, power,
+      capacity, length or area unit ("5 kW", "150Ah", "2 BHK", "1.5 ton", "800 sq ft";
+      litres in a load only); a countable noun for a count up to 100 ("2 panels", "तीन
+      पंखे"); a year word for up to 30 years in a warranty ("25 saal"); a model name for up
+      to 100 in a product mention ("PuREPower 5"). Also kept: codes ("MC4"), ordinals
+      ("3rd floor"), "G+2", address labels in a site ("Plot 45") and areas ("30 by 40").
+      Time words never explain a number ("bill 3000 mahina", "AMC 2500 saal").
+    - A watt or unit word without its own number before it, while any number is said
+      ("watt ke 45").
+    """
+    keycaps = {0xFE0F: None, 0x20E3: None}  # "1️⃣9️⃣9️⃣9️⃣" reads 1999
+    cleaned = clean_text(text).translate(keycaps)
+    said = tokens_of(cleaned)
+    if money_word_said(cleaned) or soft_price(cleaned) or any(word in _FACT_DENY for word in said):
+        return True
+    scan = _scan(cleaned)
+    litres = _litres(scan, fact_type)
+    for index, kind in enumerate(scan.kinds):
+        if kind == "short" and scan.norms[index] in litres:
+            scan.masked[index] = False  # "250 L fridge": litres, not lakh (R4)
+    groups = _number_groups(scan)
+    if not groups:
+        return False
+    if _bare_per_unit_word(scan):
+        return True
+    paired = _dimension_pairs(scan, groups) if fact_type in {"site", "load"} else set()
+    warranty = fact_type == "warranty" or any(word in _WARRANTY_WORDS for word in said)
+    return not all(
+        position in paired
+        or _explained(scan, start, end, fact_type, warranty=warranty, litres=litres)
+        for position, (start, end) in enumerate(groups)
+    )
+
+
+def _litres(scan: _Scan, fact_type: str | None) -> frozenset[str]:
+    """The litre words that explain a number: in a load only, and "L" only with an
+    appliance or other counted thing named ("250 L fridge"; "3.7 L" alone is lakh, R4)."""
+    if fact_type != "load":
+        return frozenset()
+    if any(norm in _COUNTABLE for norm in scan.norms):
+        return _LITRES
+    return _LITRES - _SHORT

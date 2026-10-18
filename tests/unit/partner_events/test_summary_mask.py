@@ -12,7 +12,7 @@ import pytest
 
 from ac_platform.partner_events import number_words as words
 from ac_platform.partner_events.amounts import FRACTION_WORDS, HUNDRED_WORDS, MONEY_UNITS
-from ac_platform.partner_events.summary_mask import mask_numbers
+from ac_platform.partner_events.summary_mask import mask_numbers, mask_when
 
 
 def _deva(word: str) -> bool:
@@ -417,3 +417,131 @@ def test_check_4_phrases(text: str, expected: str) -> None:
 )  # fmt: skip
 def test_check_4_must_keep(text: str) -> None:
     assert mask_numbers(text) == text
+
+
+# --- Check 5, 18 Oct (round 5, table-driven, the check's own phrases) ----------------------
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        # BL2: Marathi hundreds in one word with a case ending; romanised -she hundreds.
+        ("अडीचशेला डोंगल", "[n] डोंगल"),
+        ("डोंगल पंधराशे", "डोंगल [n]"),
+        ("बाराशेचा खर्च", "[n] खर्च"),
+        ("didshe packing", "[n] packing"),
+        ("pandharashe transport", "[n] transport"),
+        # M2: spellings that were missing.
+        ("चौपन्न प्रति वॅट", "[n] प्रति वॅट"),
+        ("दर एकसष्ठ", "दर [n]"),
+        ("त्रेसष्ठ सहासष्ठ सदुसष्ठ अडुसष्ठ", "[n]"),
+        ("सत्त्याहत्तर एक्क्याऐंशी एक्क्याण्णव", "[n]"),
+        ("satalis per watt", "[n] per watt"),
+        ("ikkavan trepan attavan ikshath", "[n]"),
+        ("chiyasi chiyanve athanve ninanve", "[n]"),
+        ("sattechalis athavanna", "[n]"),
+        ("nintey five per watt", "[n] per watt"),
+        # M3: rupee spellings and everyday words quoted per unit or before wala + cost word.
+        ("saath rupey per watt", "[n] per watt"),
+        ("saath rupe", "[n]"),
+        ("saath ruppe", "[n]"),
+        ("saath rupeya", "[n]"),
+        ("das rupey unit", "[n] unit"),
+        ("bara rupai unit", "[n] unit"),
+        ("नव रुपे", "[n]"),
+        ("saath per watt", "[n] per watt"),
+        ("das per unit", "[n] per unit"),
+        ("rate lagbhag saath", "rate lagbhag [n]"),
+        ("rate around saath hai", "rate around [n] hai"),
+        ("saath wala rate", "[n] wala rate"),
+        # M4: misspelt money words and romanised Marathi endings.
+        ("3.7 laks", "[n]"),
+        ("teen lakhh", "[n]"),
+        ("teen lack", "[n]"),
+        ("pachaas hazzar", "[n]"),
+        ("pachaas hajjar", "[n]"),
+        ("sadetin lakhat hoil", "[n] hoil"),
+        ("did lakhacha inverter", "[n] inverter"),
+        ("pannas hajarachi battery", "[n] battery"),
+        # The fallback: a word shaped like a number word after a cost word or before a
+        # per-unit phrase.
+        ("दर तिरेपन्न", "दर [n]"),
+        ("rate chhattalis hai", "rate [n] hai"),
+        ("gyaarees per watt", "[n] per watt"),
+    ],
+)  # fmt: skip
+def test_check_5_phrases(text: str, expected: str) -> None:
+    assert _masked(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Round 5: "ek baar" (once) stays; ordinary words after a cost word stay.
+        "Ek baar site dekh lo", "एक बार साइट देख लो", "There is a lack of shade on the roof",
+        "Rate negotiate karenge", "Price list bhejo", "दर सोमवारी फोन करू", "दर महिन्याला बिल येते",
+        "Rate was discussed, will share later", "Lakhani Builders project in Baner",
+        "Customer asked in rupees", "Rupesh will call", "रुपेश फोन करेल",
+    ],
+)  # fmt: skip
+def test_round_5_must_keep(text: str) -> None:
+    assert mask_numbers(text) == text
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        # R2: strict date and time forms stay.
+        ("kal shaam 5 baje", "kal shaam 5 baje"),
+        ("parso subah 11 baje", "parso subah 11 baje"),
+        ("Monday 10:30", "Monday 10:30"),
+        ("25 tarikh", "25 tarikh"),
+        ("1st November", "1st November"),
+        ("20-25 October ke beech", "20-25 October ke beech"),
+        ("पुढच्या सोमवारी ११ वाजता", "पुढच्या सोमवारी ११ वाजता"),
+        ("३ तारखेला", "३ तारखेला"),
+        ("2 din baad", "2 din baad"),
+        ("18/10/2026", "18/10/2026"),
+        ("18/10", "18/10"),
+        ("after 2 weeks", "after 2 weeks"),
+        ("शनिवारी संध्याकाळी 6 वाजता", "शनिवारी संध्याकाळी 6 वाजता"),
+        ("agle mahine 5 tarikh tak", "agle mahine 5 tarikh tak"),
+        ("अगले हफ्ते 3 बजे", "अगले हफ्ते 3 बजे"),
+        ("by 31 October", "by 31 October"),
+        ("15 November 2026", "15 November 2026"),
+        ("tomorrow 11 am", "tomorrow 11 am"),
+        ("5pm tomorrow", "5pm tomorrow"),
+        ("do baje", "do baje"),
+        ("पाच वाजता", "पाच वाजता"),
+        ("5 o'clock", "5 o'clock"),
+        ("October 20", "October 20"),
+        ("२० ऑक्टोबरला", "२० ऑक्टोबरला"),
+        ("5 नोव्हेंबरपर्यंत", "5 नोव्हेंबरपर्यंत"),
+        # R2: everything else reads "[n]", years included.
+        ("advance 25000 dene ke baad", "advance [n] dene ke baad"),
+        ("payment 50000 ke baad", "payment [n] ke baad"),
+        ("token 5000 milne par", "token [n] milne par"),
+        ("11000 booking ke baad", "[n] booking ke baad"),
+        ("78000 subsidy aane ke baad", "[n] subsidy aane ke baad"),
+        ("after paying 40000", "after paying [n]"),
+        ("once 50000 is paid", "once [n] is paid"),
+        ("by Monday after 20000 deposit", "by Monday after [n] deposit"),
+        ("25000 आगाऊ दिल्यानंतर", "[n] आगाऊ दिल्यानंतर"),
+        ("पैसे 50000 आल्यावर", "पैसे [n] आल्यावर"),
+        ("salary 30000 aane par", "salary [n] aane par"),
+        ("3,25,000 final", "[n] final"),
+        ("dongle 2499", "dongle [n]"),
+        ("４５０００", "[n]"),
+        ("45 din", "[n] din"),
+        ("5.30", "[n]"),
+        ("25:00 baje", "[n] baje"),
+        ("32/13/2026", "[n]"),
+        ("November 2026", "November [n]"),
+        ("after paying 500 rupees on 20 Oct", "after paying [n] on 20 Oct"),
+        ("rate approx 45", "rate approx [n]"),
+        ("20 tarikh ko 20 hazaar", "20 tarikh ko [n]"),
+        ("Diwali ke baad", "Diwali ke baad"),
+    ],
+)  # fmt: skip
+def test_when_text_keeps_only_dates_and_times(text: str, expected: str) -> None:
+    assert mask_when(text) == expected

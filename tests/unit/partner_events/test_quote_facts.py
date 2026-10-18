@@ -477,9 +477,9 @@ def test_gst_basis_comes_from_the_price_words_only(
          {"speaker": "salesperson", "text": "Rupesh will send the quotation"}),
         ("promise", {"text": "Will send price for 2 ACs"}, "x",
          {"speaker": "salesperson", "text": "Will send price for [n] ACs"}),
-        # A time in next_step stays (the summary masks a bare decimal; when_text keeps it).
+        # Round 5 (R2, expected value changed): a bare decimal is not hh:mm, so it reads [n].
         ("next_step", {"action": "call_back", "when_text": "5.30"}, "call at 5.30",
-         {"action": "call_back", "when_text": "5.30"}),
+         {"action": "call_back", "when_text": "[n]"}),
     ],
 )  # fmt: skip
 def test_ordinary_words_and_far_numbers_keep_the_fact(
@@ -728,12 +728,12 @@ def test_check_4_prices_never_reach_other_facts(
          {"action": "meeting", "when_text": "18/10/2026"}),
         ("next_step", {"action": "call_back", "when_text": "Diwali ke baad"},
          "Diwali ke baad call karna", {"action": "call_back", "when_text": "Diwali ke baad"}),
-        # Rule 3: money said near the number masks every number in when_text.
+        # Rule 3, round 5 (R2, expected value changed): money reads [n], the date stays.
         ("next_step", {"action": "call_back", "when_text": "rate approx 45"}, "rate approx 45",
          {"action": "call_back", "when_text": "rate approx [n]"}),
         ("next_step", {"action": "other", "when_text": "after paying 500 rupees on 20 Oct"},
          "after paying 500 rupees on 20 Oct",
-         {"action": "other", "when_text": "after paying [n] on [n] Oct"}),
+         {"action": "other", "when_text": "after paying [n] on 20 Oct"}),
         # Rule 1: promise and objection text show every number as [n].
         ("promise", {"text": "Will send quotation by tomorrow 11 am"},
          "kal 11 baje tak quotation bhejta hoon",
@@ -779,3 +779,78 @@ def test_hostile_model_text_is_cleaned_before_any_check() -> None:
     assert objections == ["Wants [n] days"]  # "forty five rupees" is a price: dropped
     assert dropped == 2  # the price objection and the empty site
     texts.encode("utf-8")  # no lone surrogate left
+
+
+# --- Check 5, 18 Oct (round 5, table-driven, the check's own phrases) ----------------------
+
+
+@pytest.mark.parametrize(
+    "kind,value,text",
+    [
+        # BL1-BL6 and M7 as the model proposed them in the check-5 event fixtures.
+        ("load", {"stated_as": "light bill 4000 mahina"}, "light bill 4000 mahina aata hai"),
+        ("load", {"stated_as": "बिल 3000 महिन्याला"}, "बिल 3000 महिन्याला येते"),
+        ("add_on", {"kind": "other", "stated_as": "AMC 2500 saal"}, "AMC 2500 saal ka"),
+        ("add_on", {"kind": "dongle", "qty": 1, "stated_as": "dongle nineteen ninety nine"},
+         "dongle nineteen ninety nine thoda zyada hai"),
+        ("add_on", {"kind": "dongle", "qty": 1, "stated_as": "डोंगल दीडशे"},
+         "डोंगल दीडशे रुपये"),
+        ("add_on", {"kind": "dongle", "stated_as": "डोंगल पंधराशे"}, "डोंगल पंधराशे, एक डोंगल"),
+        ("add_on", {"kind": "other", "stated_as": "45 plus GST"}, "45 plus GST lagega"),
+        ("load", {"stated_as": "watt ke 45"}, "watt ke 45 lagenge"),
+        ("product_mention", {"stated_as": "Tata wale 42"}, "Tata wale 42 me de rahe the"),
+        ("site", {"stated_as": "45 000"}, "45 000 final"),
+        # Typed values outside a sane range drop the fact (R1 bounds).
+        ("warranty", {"years": 40, "stated_as": "40 saal"}, "40 saal warranty"),
+        ("warranty", {"years": 1999, "stated_as": "25 saal"}, "25 saal warranty"),
+        ("add_on", {"kind": "panel", "qty": 150, "stated_as": "2 panels"}, "2 panels extra"),
+        ("add_on", {"kind": "dongle", "qty": 0, "stated_as": "ek dongle"}, "ek dongle"),
+        ("system_size", {"stated_as": "5000 kW"}, "5000 kW"),
+    ],
+)  # fmt: skip
+def test_check_5_prices_never_reach_other_facts(
+    kind: str, value: dict[str, Any], text: str
+) -> None:
+    assert _one(kind, value, text) == []
+
+
+@pytest.mark.parametrize(
+    "kind,value,text,expected",
+    [
+        # Check 5's must-keep facts (as the fixtures proposed them) stay whole.
+        ("system_size", {"stated_as": "5 kW"}, "aapne 5 kW ke liye enquiry ki thi",
+         {"stated_as": "5 kW", "quantity": 5, "unit": "kW"}),
+        ("load", {"stated_as": "3 BHK flat"}, "humara 3 BHK flat hai Wakad mein",
+         {"stated_as": "3 BHK flat"}),
+        ("load", {"stated_as": "250 L fridge"}, "ek 250 L fridge hai",
+         {"stated_as": "250 L fridge"}),
+        ("product_mention", {"stated_as": "PuREPower 5"}, "aapko PuREPower 5 lagana chahiye",
+         {"stated_as": "PuREPower 5"}),
+        ("warranty", {"years": 25, "stated_as": "25 saal"}, "panel pe 25 saal warranty hai",
+         {"years": 25, "stated_as": "25 saal"}),
+        ("site", {"stated_as": "terrace 30 by 40"}, "terrace 30 by 40 ka hai",
+         {"stated_as": "terrace 30 by 40"}),
+        ("site", {"stated_as": "Plot 45, Hinjewadi Phase 2"}, "Plot 45, Hinjewadi Phase 2",
+         {"stated_as": "Plot 45, Hinjewadi Phase 2"}),
+        ("add_on", {"kind": "dongle", "qty": 1, "stated_as": "एक डोंगल"},
+         "डोंगल पंधराशे, एक डोंगल पण घ्या", {"kind": "dongle", "qty": 1, "stated_as": "एक डोंगल"}),
+        ("add_on", {"kind": "other", "stated_as": "extended warranty 5 years"},
+         "extended warranty 5 years milega",
+         {"kind": "other", "qty": None, "stated_as": "extended warranty 5 years"}),
+        # R2: when_text keeps only strict date and time forms.
+        ("next_step", {"action": "other", "when_text": "advance 25000 dene ke baad"},
+         "advance 25000 dene ke baad installation",
+         {"action": "other", "when_text": "advance [n] dene ke baad"}),
+        ("next_step", {"action": "send_quotation", "when_text": "उद्या संध्याकाळी 6 वाजता"},
+         "उद्या संध्याकाळी 6 वाजता कोटेशन पाठवतो",
+         {"action": "send_quotation", "when_text": "उद्या संध्याकाळी 6 वाजता"}),
+        ("next_step", {"action": "site_visit", "when_text": "15 November 2026"},
+         "15 November 2026 ko visit",
+         {"action": "site_visit", "when_text": "15 November 2026"}),
+    ],
+)  # fmt: skip
+def test_check_5_facts_that_must_survive(
+    kind: str, value: dict[str, Any], text: str, expected: dict[str, Any]
+) -> None:
+    (fact,) = _one(kind, value, text)
+    assert fact["value"] == expected

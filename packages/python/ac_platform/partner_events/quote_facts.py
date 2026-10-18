@@ -54,7 +54,7 @@ from ac_platform.partner_events.amounts import (
     numbers_in,
     system_size,
 )
-from ac_platform.partner_events.summary_mask import mask_numbers
+from ac_platform.partner_events.summary_mask import mask_numbers, mask_when
 
 Match = Literal["whole", "ambiguous"]
 
@@ -378,6 +378,16 @@ def _counted(
     return value if Decimal(value) in said(stated_as) else None
 
 
+# Plausibility bounds (round 5, R1): a typed value outside them drops the fact.
+_WARRANTY_YEARS_MAX = 30
+_SIZE_MAX = 1000  # kW or kVA
+
+
+def _out_of_range(value: Any, maximum: int) -> bool:
+    """A whole number typed by the model that no real count or warranty can be."""
+    return type(value) is int and not 1 <= value <= maximum
+
+
 def _clean(
     fact_type: str, raw: Any, cited: list[dict[str, Any]], speakers: dict[str, str]
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
@@ -404,11 +414,10 @@ def _clean(
         said = _containing(when, cited) if when else None
         if when is None or said is None:
             return {"action": action, "when_text": None}, cited[0]
-        # Round 4: dates and times stay ("kal shaam 5 baje", "20 October"); with money said
-        # near a number ("rate approx 45", "₹500 advance by Monday") every number reads "[n]".
-        if mentions_price(when, plain_numbers=False):
-            when = mask_numbers(when)
-        return {"action": action, "when_text": when}, said[0]
+        # Round 5 (R2): every number reads "[n]" except strict date and time forms ("kal
+        # shaam 5 baje", "Monday 10:30", "20 October", "18/10/2026"); "advance 25000 dene ke
+        # baad" reads "advance [n] dene ke baad".
+        return {"action": action, "when_text": mask_when(when)}, said[0]
 
     stated_as = _words(raw.get("stated_as"), _LIMITS["stated_as"])
     if stated_as is None:
@@ -431,17 +440,22 @@ def _clean(
             "basis": gst_basis(stated_as),
             "use": "flag_only",
         }, segment
-    # Round 4 (the coordinator's decision): a rupee, money or cost word, or a number above
-    # 100 that is not a unit figure (years included), drops the fact ("dongle 1999",
-    # "Transport 2000 extra", "150 panels"). Small numbers stay ("PuREPower 5", "2 BHK").
-    if carries_money(stated_as):
+    # Round 5 (R1, an allow rule): every number in the words must be explained by a unit, a
+    # counted noun, a warranty year word or a model name, and no money, rupee, cost or GST
+    # word may be said; otherwise the fact is dropped ("bill 3000 mahina", "dongle nineteen
+    # ninety nine", "डोंगल पंधराशे", "watt ke 45"). "5 kW", "2 BHK", "PuREPower 5" stay.
+    if carries_money(stated_as, fact_type):
         return None
     if fact_type == "system_size":
         quantity, unit = (None, None) if ambiguous else system_size(stated_as)
+        if quantity is not None and quantity > (_SIZE_MAX if unit else PLAIN_PRICE_FLOOR):
+            return None  # outside a sane range
         return {"stated_as": stated_as, "quantity": quantity, "unit": unit}, segment
     if fact_type == "add_on":
         kind = raw.get("kind")
         kind = kind if kind in VOCABULARIES["add_on.kind"] else "other"
+        if _out_of_range(raw.get("qty"), PLAIN_PRICE_FLOOR):
+            return None
         # A count is at most 100 and never a number next to a money or cost word.
         qty = None
         if not ambiguous:
@@ -452,7 +466,13 @@ def _clean(
         kind = kind if kind in VOCABULARIES["battery_type.kind"] else None
         return {"kind": kind, "stated_as": stated_as}, segment
     if fact_type == "warranty":
-        years = None if ambiguous else _counted(raw.get("years"), stated_as, maximum=50)
+        if _out_of_range(raw.get("years"), _WARRANTY_YEARS_MAX):
+            return None
+        years = (
+            None
+            if ambiguous
+            else _counted(raw.get("years"), stated_as, maximum=_WARRANTY_YEARS_MAX)
+        )
         return {"years": years, "stated_as": stated_as}, segment
     if fact_type == "delivery_basis":
         kind = raw.get("kind")

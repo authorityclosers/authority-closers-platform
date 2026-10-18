@@ -23,8 +23,13 @@ those words only:
   the evidence check ("twenty five", "sawa do", "3 lakh 70 thousand").
 - ``mentions_price``: whether words carry a price, so no fact type other than
   ``mentioned_price`` ever passes one on; ``carries_money``: the stricter rule for
-  the stated words of every other fact (round 4: any rupee, money or cost word, or
-  a number above 100 that is not a unit figure, years included).
+  the stated words of every other fact (round 5: an allow rule, every number must be
+  explained by a unit, a counted noun, a warranty year or a model name; it lives in
+  ``summary_mask.fact_carries_money``).
+- Round 5 (check 5): Marathi hundreds in one word ("पंधराशे", "अडीचशेला", "didshe")
+  and English pairs ("nineteen ninety nine" 1999, "one fifty" 150) are read; more
+  rupee spellings (rupey, rupai, रुपे, रुपिये ...) and money words (laks, hazzar,
+  lakhat, hajarachi; "lack" only after a number).
 - ``gst_basis``: "incl_gst" / "ex_gst" only when GST was said with one clear
   cue, matched on whole words.
 
@@ -319,6 +324,17 @@ MONEY_UNITS: dict[str, int] = {
     "hajaron": 1_000,
     "hajaaron": 1_000,
     "हजार": 1_000,
+    # Round 5 (check 5, M4): misspelt or misheard; "lack" and "lacks" only right after a
+    # number (``_SHORT_UNITS``), so "a lack of shade" is not money.
+    "laks": 100_000,
+    "lakhh": 100_000,
+    "lakk": 100_000,
+    "lack": 100_000,
+    "lacks": 100_000,
+    "hazzar": 1_000,
+    "hajjar": 1_000,
+    "hazzaar": 1_000,
+    "hajjaar": 1_000,
 }
 # Devanagari money words with a case ending or plural (लाखांत, लाखांपर्यंत, हजारांचा, लाखों,
 # करोडचा, कोटींचा). A closed list of endings, so names and places (हजारीबाग) never match.
@@ -330,8 +346,25 @@ _DEVA_MONEY = re.compile(
 # Endings that make the amount a cap or a guess ("तीन लाखांत" within three lakh,
 # "लाखांपर्यंत" up to, "लाखभर" about a lakh): the amount is not read.
 _CAP_ENDINGS = frozenset({"त", "तच", "पर्यंत", "भर"})
-# Money words that mark a price anywhere; "k", "l" and "lk" only right after a number.
-_SHORT_UNITS = frozenset({"k", "l", "lk"})
+# Romanised Marathi money words with a case ending (round 5, check 5 M4): "lakhat",
+# "lakhacha", "hajarachi", "lakhaparyant". A closed list of endings, so Lakhani, Lakhan and
+# Hajari stay names.
+_ROMAN_MONEY_STEMS = {
+    "lakh": 100_000,
+    "laakh": 100_000,
+    "lac": 100_000,
+    "hajar": 1_000,
+    "hazar": 1_000,
+    "hajaar": 1_000,
+    "hazaar": 1_000,
+}
+_ROMAN_MONEY = re.compile(
+    r"(lakh|laakh|lac|hajar|hazar|hajaar|hazaar)(a|aa)?"
+    r"(t|tach|cha|chi|che|chya|la|paryant|madhe|madhye|var|peksha|sathi|bhar)"
+)
+# Money words that mark a price anywhere; "k", "l", "lk", "lack" and "lacks" only right
+# after a number.
+_SHORT_UNITS = frozenset({"k", "l", "lk", "lack", "lacks"})
 # Rupee words: a closed list, so names (Rupesh, Rupali, Rupinder) are never rupees.
 _CURRENCY_WORDS = frozenset(
     {
@@ -364,6 +397,22 @@ _CURRENCY_WORDS = frozenset(
         "rupies",
         "buck",  # round 4 (check 4, minor): "45 bucks a watt"
         "bucks",
+        # Round 5 (check 5, M3): more spellings; whole words, so Rupesh and Rupali stay names.
+        "rupey",
+        "rupe",
+        "rupai",
+        "ruppe",
+        "rupeya",
+        "rupeye",
+        "rps",
+        "रुपे",
+        "रूपे",
+        "रुपिये",
+        "रूपिये",
+        "रुपिया",
+        "रूपिया",
+        "रुपइया",
+        "रूपइया",
     }
 )
 # Devanagari rupee words: रुपये, रुपया, रुपए, रूपये, रुपयों, रुपै ...
@@ -928,7 +977,10 @@ def money_scale(token: str | None) -> int | None:
     if scale is not None:
         return scale
     found = _DEVA_MONEY.fullmatch(token)
-    return _DEVA_MONEY_STEMS[found.group(1)] if found else None
+    if found:
+        return _DEVA_MONEY_STEMS[found.group(1)]
+    roman = _ROMAN_MONEY.fullmatch(token)
+    return _ROMAN_MONEY_STEMS[roman.group(1)] if roman else None
 
 
 def _money_word(token: str) -> bool:
@@ -949,6 +1001,76 @@ def _joined_fraction(token: str) -> bool:
     )
 
 
+# Round 5 (check 5, BL2): Marathi hundreds said as one word ("पंधराशे" 1500, "दीडशे" 150,
+# "अडीचशेला", "साडेसातशे", "एकशे", "पावणेदोनशे") and their romanised forms ("pandharashe",
+# "didshe", "donshe"), with or without a case ending.
+_HUNDRED_DEVA = re.compile(
+    r"(?P<stem>[ऀ-ॿ]+?)शे(?:ा|ां)?"
+    r"(?:चा|ची|चे|च्या|त|तच|ना|ला|पर्यंत|मध्ये|वर|नी|ने|हून|पेक्षा|शी|साठी|च|ही|भर)?"
+)
+_HUNDRED_ROMAN = re.compile(r"(?P<stem>[a-z]+?)she(?:la|cha|chi|che|chya|t|na|paryant)?")
+# Romanised stems said before "she" that are not in the 0-99 lists as written.
+_ROMAN_HUNDRED_STEMS = folded(
+    {
+        "did",
+        "deed",
+        "adich",
+        "adeech",
+        "adi",
+        "sava",
+        "savva",
+        "sawa",
+        "pavne",
+        "paune",
+        "sade",
+        "saade",
+        "pandhara",
+        "akra",
+        "bara",
+        "tera",
+        "chauda",
+        "sola",
+        "satra",
+        "athara",
+        "ekonis",
+        "don",
+        "tin",
+        "teen",
+        "char",
+        "pach",
+        "saha",
+        "sat",
+        "aath",
+        "ath",
+        "nau",
+        "nav",
+        "ek",
+    }
+)
+# Devanagari stems the 0-99 lists leave out as everyday words (नव, पाव ...), said before "शे"
+# only as numbers ("नवशे", "पावशे").
+_DEVA_HUNDRED_STEMS = folded({"नव", "नऊ", "सहा", "दोन", "एक", "पाव"})
+
+
+def hundreds_word(token: str) -> bool:
+    """A Marathi hundred written as one word, any case ending ("पंधराशे", "दीडशे",
+    "अडीचशेला", "साडेसातशे", "एकशे", "didshe", "pandharashe")."""
+    found = _HUNDRED_DEVA.fullmatch(token)
+    if found is not None:
+        stem = found.group("stem")
+        return (
+            stem in NUMBER_WORDS
+            or stem in FRACTION_WORDS
+            or _joined_fraction(stem)
+            or stem in _DEVA_HUNDRED_STEMS
+        )
+    found = _HUNDRED_ROMAN.fullmatch(token)
+    if found is None:
+        return False
+    stem = found.group("stem")
+    return stem in _ROMAN_HUNDRED_STEMS or stem in NUMBER_WORDS or _joined_fraction(stem)
+
+
 def _is_digits(token: str) -> bool:
     return bool(token) and token[0].isdigit()
 
@@ -961,6 +1083,7 @@ def _numberish(token: str) -> bool:
         or token in FRACTION_WORDS
         or token in _COMPOUND_HUNDREDS
         or _joined_fraction(token)
+        or hundreds_word(token)
     )
 
 
@@ -972,12 +1095,39 @@ def _plain_number(tokens: list[str], index: int) -> tuple[Decimal, int] | None:
             return Decimal(word), 1
         except InvalidOperation:
             return None
-    if word in _TENS_EN and following in _ONES_EN:
-        return _TENS_EN[word] + _ONES_EN[following], 2
+    if word in _EN_NUMBER_WORDS:
+        return _english(tokens, index)
     if word == "do" and following in _AFTER_DO_VERB:
         return None  # "do you want 1 dongle": the English verb
     value = NUMBER_WORDS.get(word)
     return (value, 1) if value is not None else None
+
+
+def _english_1_99(tokens: list[str], index: int) -> tuple[Decimal, int] | None:
+    """An English 1-99 ("seven", "nineteen", "ninety", "twenty five") at ``index``."""
+    word = tokens[index] if index < len(tokens) else None
+    if word is None or word not in _EN_NUMBER_WORDS:
+        return None
+    following = tokens[index + 1] if index + 1 < len(tokens) else None
+    if word in _TENS_EN and following in _ONES_EN:
+        return _TENS_EN[word] + _ONES_EN[following], 2
+    return _EN_NUMBER_WORDS[word], 1
+
+
+def _english(tokens: list[str], index: int) -> tuple[Decimal, int] | None:
+    """An English number at ``index``; round 5 (check 5, BL3): a 1-99 word directly followed
+    by a tens word is said in pairs, "nineteen ninety nine" 1999, "one fifty" 150,
+    "two ninety-five" 290 (the hyphen ends it)."""
+    left = _english_1_99(tokens, index)
+    if left is None:
+        return None
+    value, used = left
+    following = tokens[index + used] if index + used < len(tokens) else None
+    if following in _TENS_EN:
+        right = _english_1_99(tokens, index + used)
+        if right is not None:
+            return value * 100 + right[0], used + right[1]
+    return value, used
 
 
 def _number(tokens: list[str], index: int) -> tuple[Decimal, int] | None:
@@ -1297,16 +1447,49 @@ def _soft_price(tokens: list[str]) -> bool:
     return False
 
 
-def carries_money(text: str) -> bool:
-    """True when the words of a fact that is not a price must be dropped (round 4, the
-    coordinator's decision): a rupee word or sign, a money word, a cost word anywhere
-    ("packing charge", "EMI option"), any price ``mentions_price`` finds, or a number above
-    100 that is not a unit figure, years included ("dongle 1999", "Transport 2000 extra",
-    "150 panels"; "1500 sq ft" and "150Ah" stay)."""
-    tokens = _tokens(text)
-    if any(token in COST_WORDS or token in HUNDRED_WORDS for token in tokens):
-        return True
-    return mentions_price(text, plain_numbers=True, years=False)
+def tokens_of(text: str) -> list[str]:
+    """The normalised words, numbers and signs of ``text`` as the price check reads them."""
+    return _tokens(text)
+
+
+def read_number(said: list[str]) -> Decimal | None:
+    """The value of number words said together, when they read as one whole number
+    ("twenty five" 25, "saade teen" 3.5, "nineteen ninety nine" 1999), else None."""
+    folded_words = [normalise(word) for word in said]
+    if not folded_words or any(not word for word in folded_words):
+        return None
+    parsed = _number(folded_words, 0)
+    return parsed[0] if parsed is not None and parsed[1] == len(folded_words) else None
+
+
+def soft_price(text: str) -> bool:
+    """An everyday number word quoted per unit or right after a cost word in ``text``."""
+    return _soft_price(_tokens(text))
+
+
+def money_word_said(text: str) -> bool:
+    """A rupee word or sign, a money word (not "k"/"l"/"lack" on their own), a cost word
+    or a hundred word anywhere in ``text``."""
+    return any(
+        is_currency(token) or _money_word(token) or token in COST_WORDS or token in HUNDRED_WORDS
+        for token in _tokens(text)
+    )
+
+
+def carries_money(text: str, fact_type: str | None = None) -> bool:
+    """True when the stated words of a fact that is not a price must be dropped.
+
+    Round 5 (the coordinator's decision): an allow rule, not a deny rule. Every number
+    must be explained by what follows it (a size, power, capacity, length or area unit, a
+    countable noun for counts up to 100, a year word in a warranty), or the fact is
+    dropped; so is any money, rupee, cost or GST word, and a per-watt word without its own
+    number. ``fact_type`` (system_size, load, warranty, product_mention, site ...) widens
+    the explanations a little ("250 L" in a load, "PuREPower 5" in a product mention). The
+    rule lives in ``summary_mask.fact_carries_money`` because it reads numbers exactly as
+    the summary mask does."""
+    from ac_platform.partner_events.summary_mask import fact_carries_money  # import cycle
+
+    return fact_carries_money(text, fact_type)
 
 
 def mentions_price(text: str, *, plain_numbers: bool = True, years: bool = True) -> bool:
@@ -1333,7 +1516,9 @@ def mentions_price(text: str, *, plain_numbers: bool = True, years: bool = True)
     tokens = _tokens(text)
     if any(is_currency(token) or _money_word(token) for token in tokens):
         return True
-    if plain_numbers and any(token in _COMPOUND_HUNDREDS for token in tokens):
+    if plain_numbers and any(
+        token in _COMPOUND_HUNDREDS or hundreds_word(token) for token in tokens
+    ):
         return True
     if _soft_price(tokens):
         return True

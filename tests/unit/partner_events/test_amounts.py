@@ -13,9 +13,11 @@ from ac_platform.partner_events.amounts import (
     clean_text,
     counts_in,
     gst_basis,
+    hundreds_word,
     is_currency,
     is_time_word,
     mentions_price,
+    money_scale,
     normalise,
     number_join,
     numbers_in,
@@ -685,9 +687,7 @@ def test_check_4_keeps_what_is_not_a_price(words: str) -> None:
         ("5000 W", False),
         ("150Ah tubular", False),
         ("1500 sq ft", False),
-        ("PuREPower 5", False),
         ("2 BHK", False),
-        ("25 saal", False),
         ("1.5 ton AC", False),
         ("ek dongle", False),
         ("100 panels", False),
@@ -698,6 +698,20 @@ def test_check_4_keeps_what_is_not_a_price(words: str) -> None:
 )
 def test_carries_money(words: str, expected: bool) -> None:
     assert carries_money(words) is expected
+
+
+@pytest.mark.parametrize(
+    "words,fact_type",
+    [
+        # Round 5 (R1): a model number is explained only in a product mention, a year count
+        # only in a warranty (both kept round 4 with no fact type; expected value changed).
+        ("PuREPower 5", "product_mention"),
+        ("25 saal", "warranty"),
+    ],
+)
+def test_carries_money_by_fact_type(words: str, fact_type: str) -> None:
+    assert carries_money(words, fact_type) is False
+    assert carries_money(words, "add_on") is True
 
 
 @pytest.mark.parametrize(
@@ -728,3 +742,193 @@ def test_kwp_reads_as_kw(words: str, expected: tuple[int | float | None, str | N
 def test_clean_text(text: str, expected: str) -> None:
     assert clean_text(text) == expected
     assert clean_text(expected) == expected
+
+
+# --- Check 5, 18 Oct (round 5, table-driven, the check's own phrases) ----------------------
+
+NON_PRICE_TYPES = (
+    "system_size",
+    "product_mention",
+    "load",
+    "add_on",
+    "battery_type",
+    "warranty",
+    "site",
+    "delivery_basis",
+)
+CHECK_5_MONEY = [
+    # BL1: a time word after an amount, bills, AMC, rent, subscription.
+    "light bill 4000 mahina", "बिल 3000 महिन्याला", "बिजली बिल 5000 महीना", "bill 2000 month",
+    "AMC 2500 saal", "service 1500 saal", "maintenance 1200 mahina", "भाडे 2000 महिना",
+    "देखभाल 2500 वर्षाला", "subscription 999 month", "rent 3000 per month", "kiraya 1500",
+    # BL2: Marathi hundreds in one word, with and without endings.
+    "डोंगल पंधराशे", "पॅकिंग दीडशे", "वाहतूक बाराशे", "अर्थिंग अकराशे", "केबल तेराशे",
+    "स्ट्रक्चर सोळाशे जास्त", "वायफाय डोंगल सतराशे", "अठराशे चे डोंगल",
+    "लाइटनिंग अरेस्टर एकोणीसशे", "साडेसातशे जास्त लागतील", "सव्वाशे जास्त",
+    "पावणेदोनशे पॅकिंग", "एकशे पन्नास पॅकिंग", "अडीचशेला डोंगल", "pandharashe transport",
+    "donshe extra lagtil", "didshe packing",
+    # BL3 and M8: English pair numbers.
+    "dongle nineteen ninety-nine", "wifi dongle nineteen ninety-nine",
+    "nineteen ninety nine for the dongle", "nineteen ninety-nine only", "one fifty extra",
+    "two fifty for packing", "seventeen fifty transport", "two ninety-five all inclusive",
+    "fourteen ninety-nine", "twenty-four ninety-nine", "three seventy-five", "four twenty",
+    "two eighty",
+    # BL5: GST words.
+    "45 plus GST", "45 + GST", "45 + 18% GST", "45 excl GST", "45 ex-GST", "45 incl. GST",
+    "46 without GST", "GST extra 45", "GST ke saath 53", "45 GST alag", "45 jodke GST",
+    "53.10 inclusive", "2.95 incl", "forty five plus GST", "fifty with GST", "४५ जीएसटी सहित",
+    "पंचेचाळीस अधिक जीएसटी", "पंचेचाळीस जीएसटी धरून", "45 पर जीएसटी अलग",
+    # BL6: per-watt word orders.
+    "watt ke 45", "watt pe 45 lagenge", "har watt pe 46", "45 lagenge per watt",
+    "50 ka watt padega", "50 chalega watt ka", "42 me watt de denge", "वाट के पैंतालीस लगेंगे",
+    "हर वॉट पे ४६", "४५ लगेंगे प्रति वॉट", "५० चलेगा वॉट का", "प्रति वॅट पडतील ४५",
+    "४२ मध्ये वॅट देऊ", "55000 ek kW ka",
+    # M2: spellings that were missing.
+    "चौपन्न प्रति वॅट", "दर एकसष्ठ", "त्रेसष्ठ प्रति वॅट", "सहासष्ठ प्रति वॅट", "सदुसष्ठ",
+    "अडुसष्ठ", "सत्त्याहत्तर", "एक्क्याऐंशी", "दर एक्क्याण्णव", "satalis per watt",
+    "ikkavan per watt", "trepan", "attavan", "ikshath", "chiyasi", "chiyanve", "athanve",
+    "ninanve", "watt la sattechalis", "athavanna per watt", "nintey five per watt",
+    # M3: rupee spellings and soft words.
+    "45 rupey per watt", "45 rupai", "45 rupe watt", "45 ru per watt", "45 Rps", "45 रुपे वॅट",
+    "45 रुपिये", "साठ रुपिये", "saath rupey per watt", "saath rupe", "saath ruppe",
+    "saath rupeya", "das rupey unit", "bara rupai unit", "saath per watt", "das per unit",
+    "rate lagbhag saath", "saath wala rate", "नव रुपे",
+    # M4: misspelt money words and romanised Marathi endings.
+    "3.7 laks", "teen lakhh", "teen lack", "pachaas hazzar", "pachaas hajjar",
+    "sadetin lakhat hoil", "did lakhacha inverter", "pannas hajarachi battery", "do lakk",
+    # M5: joined and misspelt number words.
+    "teenlakh", "dolakh final", "pachaashazaar", "fortyfive per watt", "fourty per watt",
+    "thirtyfive k",
+    # M6: spaced digit groups and keycaps.
+    "45 000", "inverter 35 000", "2 95 000 final", "3 25 000 total", "4 5 0 0 0",
+    "1️⃣9️⃣9️⃣9️⃣ dongle",
+    # M7: a bare small number quoted by a competitor or with a verb.
+    "Tata ne 42 bola", "Adani wale 40 me de rahe", "Adani 43 wala", "bahar chalis me milta",
+    "टाटावाले चाळीस ला देतात", "बाहर चालीस में मिल रहा है", "45 se 50 ke beech", "Tata wale 42",
+    # Fixtures: advance, subsidy, token, booking, deposit.
+    "advance 25000", "subsidy 78000", "token 5000", "booking 11000", "deposit 2000",
+    "पैसे 50000", "25000 आगाऊ",
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("fact_type", NON_PRICE_TYPES)
+@pytest.mark.parametrize("words", CHECK_5_MONEY)
+def test_check_5_money_never_stays_in_another_fact(words: str, fact_type: str) -> None:
+    assert carries_money(words, fact_type) is True
+
+
+@pytest.mark.parametrize(
+    "fact_type,words",
+    [
+        # Check 4 and check 5 must-keep facts: every number is explained.
+        ("system_size", "5 kW"), ("system_size", "3 kWp"), ("system_size", "5.5 kW"),
+        ("system_size", "पाच किलोवॅट"), ("system_size", "teen kilowatt"),
+        ("system_size", "7.2 kWp"), ("system_size", "6 kW hybrid"), ("system_size", "3 kVA"),
+        ("system_size", "5000 watt"), ("system_size", "तीन किलोवाट"),
+        ("system_size", "5 kilo watt"),
+        ("load", "2 BHK"), ("load", "3 BHK flat"), ("load", "1.5 ton AC"),
+        ("load", "2 AC of 1.5 ton"), ("load", "fridge 250 litre"), ("load", "geyser 15 litre"),
+        ("load", "250 L fridge"), ("load", "geyser 15 L"), ("load", "1 HP motor"),
+        ("load", "5 HP pump"), ("load", "do AC"), ("load", "तीन पंखे"),
+        ("load", "4 fans and 10 tubelights"), ("load", "2000 W geyser"), ("load", "load 6 kW"),
+        ("load", "500 W microwave"), ("load", "दोन एसी आणि एक फ्रिज"), ("load", "2 ACs"),
+        ("load", "3 phase"),
+        ("product_mention", "PuREPower 5"), ("product_mention", "PuREPower 3"),
+        ("product_mention", "PuREPower Pro 10"), ("product_mention", "Waaree 540 Wp"),
+        ("product_mention", "Tata Power Solar panels"), ("product_mention", "PuREPower5"),
+        ("battery_type", "150Ah tubular"), ("battery_type", "200 Ah lithium"),
+        ("battery_type", "lithium 5 kWh"), ("battery_type", "48V 100Ah lithium"),
+        ("battery_type", "do 150Ah tubular"), ("battery_type", "LFP battery"),
+        ("warranty", "25 saal"), ("warranty", "25 years"), ("warranty", "10 saal"),
+        ("warranty", "पंचवीस वर्षे"), ("warranty", "5 years on inverter"),
+        ("warranty", "पच्चीस साल"), ("warranty", "12 years product warranty"),
+        ("site", "Baner"), ("site", "Wakad, Pune"), ("site", "terrace 30 by 40"),
+        ("site", "3rd floor"), ("site", "G+2 building"), ("site", "tin shed roof"),
+        ("site", "RCC roof 800 sq ft"), ("site", "Plot 45, Hinjewadi Phase 2"),
+        ("site", "Sector 21, Nigdi"), ("site", "बाणेरला बंगला"), ("site", "terrace 30x40"),
+        ("delivery_basis", "site pe delivery"), ("delivery_basis", "godown se pickup"),
+        ("delivery_basis", "साईटवर डिलिव्हरी"), ("delivery_basis", "delivery free to site"),
+        ("delivery_basis", "transport included"),
+        ("add_on", "ek dongle"), ("add_on", "2 MC4 connectors"), ("add_on", "extra 2 panels"),
+        ("add_on", "50 meter cable"), ("add_on", "4 earthing pits"), ("add_on", "ACDB DCDB"),
+        ("add_on", "lightning arrestor"), ("add_on", "extended warranty 5 years"),
+        ("add_on", "6 feet elevated structure"), ("add_on", "150 meter DC cable"),
+        ("add_on", "दोन डोंगल"), ("add_on", "एक डोंगल"), ("add_on", "100 panels"),
+    ],
+)  # fmt: skip
+def test_check_5_facts_that_must_stay(fact_type: str, words: str) -> None:
+    assert carries_money(words, fact_type) is False
+
+
+@pytest.mark.parametrize(
+    "fact_type,words",
+    [
+        # Explanations are narrow: time words never explain, years only in a warranty, a
+        # model only in a product mention, litres only in a load with an appliance named,
+        # counts only up to 100, and a label only in a site.
+        ("add_on", "dongle 2 mahina"), ("load", "25 saal"), ("site", "PuREPower 5"),
+        ("load", "3.7 L"), ("site", "250 L fridge"), ("add_on", "150 panels"),
+        ("product_mention", "Plot 45"), ("warranty", "40 saal"), ("add_on", "Flat 1203"),
+        ("product_mention", "dongle 45"), ("product_mention", "packing 50"),
+        ("site", "flat 1500"), ("load", "45/W"), ("load", "45%"), ("add_on", "45 piece"),
+    ],
+)  # fmt: skip
+def test_round_5_explanations_are_narrow(fact_type: str, words: str) -> None:
+    assert carries_money(words, fact_type) is True
+
+
+@pytest.mark.parametrize(
+    "token,expected",
+    [
+        ("पंधराशे", True), ("दीडशे", True), ("अडीचशेला", True), ("साडेसातशे", True),
+        ("एकशे", True), ("पावणेदोनशे", True), ("सव्वाशे", True), ("बाराशेचा", True),
+        ("didshe", True), ("pandharashe", True), ("donshela", True),
+        ("शेत", False), ("देशे", False), ("ashe", False), ("rushe", False),
+    ],
+)  # fmt: skip
+def test_marathi_hundreds_in_one_word(token: str, expected: bool) -> None:
+    assert hundreds_word(normalise(token)) is expected
+
+
+@pytest.mark.parametrize(
+    "words,expected",
+    [
+        ("nineteen ninety nine", {Decimal(1999)}),
+        ("one fifty", {Decimal(150)}),
+        ("seventeen fifty", {Decimal(1750)}),
+        ("twenty four ninety nine", {Decimal(2499)}),
+        ("twenty five", {Decimal(25)}),
+        ("four five", {Decimal(4), Decimal(5)}),
+    ],
+)
+def test_english_pair_numbers(words: str, expected: set[Decimal]) -> None:
+    assert numbers_in(words) == expected
+
+
+@pytest.mark.parametrize(
+    "words,expected",
+    [
+        ("laks", 100_000), ("lakhh", 100_000), ("hazzar", 1_000), ("hajjar", 1_000),
+        ("lakhat", 100_000), ("lakhacha", 100_000), ("hajarachi", 1_000),
+        ("lakhaparyant", 100_000), ("lakhani", None), ("lakhan", None), ("hajari", None),
+    ],
+)  # fmt: skip
+def test_round_5_money_words(words: str, expected: int | None) -> None:
+    assert money_scale(words) == expected
+
+
+@pytest.mark.parametrize(
+    "token,expected",
+    [
+        ("rupey", True), ("rupe", True), ("rupai", True), ("ruppe", True), ("rupeya", True),
+        ("rps", True), ("रुपे", True), ("रूपे", True), ("रुपिये", True), ("रुपइया", True),
+        ("rupesh", False), ("rupali", False), ("रुपेश", False),
+    ],
+)  # fmt: skip
+def test_round_5_rupee_spellings(token: str, expected: bool) -> None:
+    assert is_currency(normalise(token)) is expected
+
+
+def test_lack_is_money_only_after_a_number() -> None:
+    assert mentions_price("teen lack") is True
+    assert mentions_price("There is a lack of shade") is False
