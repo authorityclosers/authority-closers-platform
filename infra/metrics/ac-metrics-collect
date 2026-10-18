@@ -42,6 +42,8 @@ for env in "${environments[@]}"; do
       command=(docker exec -i -e "PGOPTIONS=$options" acdev-live-postgres
         psql -U ac_owner -d ac_platform -At -v ON_ERROR_STOP=1) ;;
     staging|production)
+      # The login variables expand inside the container, so they stay single-quoted here.
+      # shellcheck disable=SC2016
       command=(docker exec -i -e "PGOPTIONS=$options" "ac-application-$env-postgres-1"
         sh -c 'PGPASSWORD=$POSTGRES_PASSWORD exec psql -U "$POSTGRES_USER" -d ac_platform -At -v ON_ERROR_STOP=1') ;;
     *)
