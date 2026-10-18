@@ -155,3 +155,56 @@ export function autoCallTitle(
   if (about) return fit(sentenceCase(about));
   return null;
 }
+
+/** The report's own outcome, in a few words (no AI call). */
+const OUTCOME_TITLES: Record<string, string> = {
+  closed: "Deal closed",
+  follow_up: "Follow-up agreed",
+  future_date: "Meeting scheduled",
+  no_sale: "No sale",
+  disqualified: "Not a fit",
+};
+
+/**
+ * Orchestrator 18 Oct: a call is never left as "Untitled call". When the
+ * summary names nothing, the report's outcome names it ("Follow-up agreed");
+ * otherwise its time and length do ("Call · 18 Oct, 4:04 pm · 3:57").
+ */
+export function fallbackCallTitle({
+  outcomeKind,
+  startedAt,
+  durationMs,
+  timeZone,
+}: {
+  outcomeKind?: string | null;
+  startedAt: Date;
+  durationMs?: number | null;
+  timeZone?: string;
+}): string {
+  const outcome = outcomeKind ? OUTCOME_TITLES[outcomeKind] : undefined;
+  if (outcome) return outcome;
+  const day = new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    timeZone,
+  }).format(startedAt);
+  const time = new Intl.DateTimeFormat("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone,
+  })
+    .format(startedAt)
+    .replace(
+      /\s?([ap])\.?m\.?$/i,
+      (_, half: string) => ` ${half.toLowerCase()}m`,
+    );
+  const parts = [`Call · ${day}, ${time}`];
+  if (durationMs && durationMs > 0) {
+    const seconds = Math.round(durationMs / 1000);
+    parts.push(
+      `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`,
+    );
+  }
+  return parts.join(" · ");
+}

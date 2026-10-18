@@ -2409,6 +2409,14 @@
   text-decoration: none;
 }
 
+.appsLink {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--lx-teal);
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .downloadButton:focus-visible {
   outline: none;
   box-shadow: var(--sx-focus-ring);
