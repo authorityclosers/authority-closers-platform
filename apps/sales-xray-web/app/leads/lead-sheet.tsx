@@ -187,6 +187,11 @@ const NEXT: { key: Stage; label: string; sub: string; tone: string }[] = [
   { key: "lost", label: "Not interested", sub: "Close this lead", tone: "bad" },
 ];
 
+/** The stage a lead already has, chosen again after "We talked" (UX study item 6). */
+export function stageAfterTalk(stage: Stage): Stage | null {
+  return stage === "interested" || stage === "follow_up" ? stage : null;
+}
+
 const TIMES: { key: Pick; label: string }[] = [
   { key: "hour", label: "In 1 hour" },
   { key: "evening", label: "This evening" },
@@ -279,7 +284,8 @@ export function CallOutcome({
   const [reason, setReason] = useState<string | null>(
     heard?.connected === false ? missedReason(heard.result) : null,
   );
-  const [stage, setStage] = useState<Stage | null>(null);
+  const lastStage = stageAfterTalk(detail.lead.stage);
+  const [stage, setStage] = useState<Stage | null>(lastStage);
   const [next, setNext] = useState<Pick>("morning");
   const [retry, setRetry] = useState<Pick | null>(null);
   const [custom, setCustom] = useState(() =>
@@ -373,6 +379,7 @@ export function CallOutcome({
             setTalk("talked");
             setReason(null);
             setRetry(null);
+            setStage((current) => current ?? lastStage);
           }}
         >
           <CheckCircle2 size={22} aria-hidden="true" />
@@ -628,6 +635,7 @@ const HEARD_MISSED: Partial<Record<NativeCall["result"], string>> = {
   busy: "the line was busy",
   rejected: "they cut the call",
   failed: "the call didn't go through",
+  no_network: "it had no network",
 };
 
 function heardLine(call: NativeCall): string {

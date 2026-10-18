@@ -24,6 +24,8 @@ export type NativeCallResult =
   | "busy"
   | "rejected"
   | "failed"
+  /** No SIM, no service or airplane mode when the call was placed. */
+  | "no_network"
   | "unknown";
 
 export type NativeCall = {
@@ -156,6 +158,7 @@ const RESULTS = new Set<NativeCallResult>([
   "busy",
   "rejected",
   "failed",
+  "no_network",
   "unknown",
 ]);
 
@@ -283,6 +286,8 @@ export function missedReason(result: NativeCallResult): string | null {
       return "disconnected";
     case "failed":
       return "not_connected";
+    case "no_network":
+      return "out_of_coverage";
     default:
       return null;
   }
