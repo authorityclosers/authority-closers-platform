@@ -500,10 +500,10 @@ def test_round_5_must_keep(text: str) -> None:
         ("20-25 October ke beech", "20-25 October ke beech"),
         ("पुढच्या सोमवारी ११ वाजता", "पुढच्या सोमवारी ११ वाजता"),
         ("३ तारखेला", "३ तारखेला"),
-        ("2 din baad", "2 din baad"),
+        ("2 din baad", "[n] din baad"),  # round 6 (D3): days are not a date form
         ("18/10/2026", "18/10/2026"),
         ("18/10", "18/10"),
-        ("after 2 weeks", "after 2 weeks"),
+        ("after 2 weeks", "after [n] weeks"),  # round 6 (D3)
         ("शनिवारी संध्याकाळी 6 वाजता", "शनिवारी संध्याकाळी 6 वाजता"),
         ("agle mahine 5 tarikh tak", "agle mahine 5 tarikh tak"),
         ("अगले हफ्ते 3 बजे", "अगले हफ्ते 3 बजे"),
@@ -511,8 +511,8 @@ def test_round_5_must_keep(text: str) -> None:
         ("15 November 2026", "15 November 2026"),
         ("tomorrow 11 am", "tomorrow 11 am"),
         ("5pm tomorrow", "5pm tomorrow"),
-        ("do baje", "do baje"),
-        ("पाच वाजता", "पाच वाजता"),
+        ("do baje", "[n] baje"),  # round 6 (D3): a number word reads [n]
+        ("पाच वाजता", "[n] वाजता"),  # round 6 (D3)
         ("5 o'clock", "5 o'clock"),
         ("October 20", "October 20"),
         ("२० ऑक्टोबरला", "२० ऑक्टोबरला"),

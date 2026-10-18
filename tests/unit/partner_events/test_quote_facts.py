@@ -679,8 +679,9 @@ def test_check_4_prices_never_reach_other_facts(
          {"stated_as": "2 BHK"}),
         ("site", {"stated_as": "Baner"}, "humara 2 BHK flat hai Baner mein",
          {"stated_as": "Baner"}),
-        ("product_mention", {"stated_as": "PuREPower 5"}, "PuREPower 5 lagwa dijiye",
-         {"stated_as": "PuREPower 5"}),
+        # Round 6 (D1): a model number written onto its name (was "PuREPower 5").
+        ("product_mention", {"stated_as": "PuREPower5"}, "PuREPower5 lagwa dijiye",
+         {"stated_as": "PuREPower5"}),
         ("add_on", {"kind": "dongle", "qty": 1, "stated_as": "ek dongle"},
          "ek dongle bhi chahiye", {"kind": "dongle", "qty": 1, "stated_as": "ek dongle"}),
         ("warranty", {"years": 25, "stated_as": "25 saal"}, "panel pe 25 saal warranty hai",
@@ -824,8 +825,9 @@ def test_check_5_prices_never_reach_other_facts(
          {"stated_as": "3 BHK flat"}),
         ("load", {"stated_as": "250 L fridge"}, "ek 250 L fridge hai",
          {"stated_as": "250 L fridge"}),
-        ("product_mention", {"stated_as": "PuREPower 5"}, "aapko PuREPower 5 lagana chahiye",
-         {"stated_as": "PuREPower 5"}),
+        # Round 6 (D1): hyphenated model number (was "PuREPower 5").
+        ("product_mention", {"stated_as": "PuREPower-5"}, "aapko PuREPower-5 lagana chahiye",
+         {"stated_as": "PuREPower-5"}),
         ("warranty", {"years": 25, "stated_as": "25 saal"}, "panel pe 25 saal warranty hai",
          {"years": 25, "stated_as": "25 saal"}),
         ("site", {"stated_as": "terrace 30 by 40"}, "terrace 30 by 40 ka hai",

@@ -335,13 +335,17 @@ MONEY_UNITS: dict[str, int] = {
     "hajjar": 1_000,
     "hazzaar": 1_000,
     "hajjaar": 1_000,
+    # Round 6 (check 6, M7): English slang, only right after a number ("five grand").
+    "grand": 1_000,
+    "grands": 1_000,
 }
 # Devanagari money words with a case ending or plural (लाखांत, लाखांपर्यंत, हजारांचा, लाखों,
 # करोडचा, कोटींचा). A closed list of endings, so names and places (हजारीबाग) never match.
+# Round 6 (D4): the spoken endings "चं" and "नं" too ("लाखाचं", "हजारचं", "लाखांचं").
 _DEVA_MONEY_STEMS = {"लाख": 100_000, "हजार": 1_000, "करोड": 10_000_000, "कोटी": 10_000_000}
 _DEVA_MONEY = re.compile(
     r"(लाख|हजार|करोड|कोटी)(ों|ो|ां|ा|ं)?"
-    r"(चा|ची|चे|च्या|त|तच|ना|ला|पर्यंत|मध्ये|वर|नी|ने|हून|पेक्षा|शी|साठी|च|ही|भर)?"
+    r"(चं|नं|चा|ची|चे|च्या|त|तच|ना|ला|पर्यंत|मध्ये|वर|नी|ने|हून|पेक्षा|शी|साठी|च|ही|भर)?"
 )
 # Endings that make the amount a cap or a guess ("तीन लाखांत" within three lakh,
 # "लाखांपर्यंत" up to, "लाखभर" about a lakh): the amount is not read.
@@ -360,11 +364,11 @@ _ROMAN_MONEY_STEMS = {
 }
 _ROMAN_MONEY = re.compile(
     r"(lakh|laakh|lac|hajar|hazar|hajaar|hazaar)(a|aa)?"
-    r"(t|tach|cha|chi|che|chya|la|paryant|madhe|madhye|var|peksha|sathi|bhar)"
+    r"(t|tach|chan|cha|chi|che|chya|la|paryant|madhe|madhye|var|peksha|sathi|bhar)"
 )
-# Money words that mark a price anywhere; "k", "l", "lk", "lack" and "lacks" only right
-# after a number.
-_SHORT_UNITS = frozenset({"k", "l", "lk", "lack", "lacks"})
+# Money words that mark a price anywhere; "k", "l", "lk", "lack", "lacks" and "grand" only
+# right after a number.
+_SHORT_UNITS = frozenset({"k", "l", "lk", "lack", "lacks", "grand", "grands"})
 # Rupee words: a closed list, so names (Rupesh, Rupali, Rupinder) are never rupees.
 _CURRENCY_WORDS = frozenset(
     {
@@ -1004,11 +1008,14 @@ def _joined_fraction(token: str) -> bool:
 # Round 5 (check 5, BL2): Marathi hundreds said as one word ("पंधराशे" 1500, "दीडशे" 150,
 # "अडीचशेला", "साडेसातशे", "एकशे", "पावणेदोनशे") and their romanised forms ("pandharashe",
 # "didshe", "donshe"), with or without a case ending.
+# Round 6 (D4): the spoken endings "चं" and "नं" ("पंधराशेचं", "अडीचशेचं"; romanised "-chan").
 _HUNDRED_DEVA = re.compile(
     r"(?P<stem>[ऀ-ॿ]+?)शे(?:ा|ां)?"
-    r"(?:चा|ची|चे|च्या|त|तच|ना|ला|पर्यंत|मध्ये|वर|नी|ने|हून|पेक्षा|शी|साठी|च|ही|भर)?"
+    r"(?:चं|नं|चा|ची|चे|च्या|त|तच|ना|ला|पर्यंत|मध्ये|वर|नी|ने|हून|पेक्षा|शी|साठी|च|ही|भर)?"
 )
-_HUNDRED_ROMAN = re.compile(r"(?P<stem>[a-z]+?)she(?:la|cha|chi|che|chya|t|na|paryant)?")
+_HUNDRED_ROMAN = re.compile(
+    r"(?P<stem>[a-z]+?)she(?:la|chan|cha|chi|che|chya|t|na|var|sathi|paryant)?"
+)
 # Romanised stems said before "she" that are not in the 0-99 lists as written.
 _ROMAN_HUNDRED_STEMS = folded(
     {
@@ -1142,6 +1149,10 @@ def _number(tokens: list[str], index: int) -> tuple[Decimal, int] | None:
         if value != value.to_integral_value() or value < smallest:
             return None
         return value + step, used + 1
+    for word, (step, smallest) in FRACTION_WORDS.items():  # "साडेतीन", "पावणेतीन" (round 6)
+        whole = NUMBER_WORDS.get(token[len(word) :]) if token.startswith(word) else None
+        if whole is not None and whole == whole.to_integral_value() and whole >= smallest:
+            return whole + step, 1
     return _plain_number(tokens, index)
 
 

@@ -705,7 +705,8 @@ def test_carries_money(words: str, expected: bool) -> None:
     [
         # Round 5 (R1): a model number is explained only in a product mention, a year count
         # only in a warranty (both kept round 4 with no fact type; expected value changed).
-        ("PuREPower 5", "product_mention"),
+        # Round 6 (D1): only a hyphenated or written-on model number ("PuREPower 5" now drops).
+        ("PuREPower-5", "product_mention"),
         ("25 saal", "warranty"),
     ],
 )
@@ -833,8 +834,9 @@ def test_check_5_money_never_stays_in_another_fact(words: str, fact_type: str) -
         ("load", "4 fans and 10 tubelights"), ("load", "2000 W geyser"), ("load", "load 6 kW"),
         ("load", "500 W microwave"), ("load", "दोन एसी आणि एक फ्रिज"), ("load", "2 ACs"),
         ("load", "3 phase"),
-        ("product_mention", "PuREPower 5"), ("product_mention", "PuREPower 3"),
-        ("product_mention", "PuREPower Pro 10"), ("product_mention", "Waaree 540 Wp"),
+        # Round 6 (D1): "PuREPower 5", "PuREPower 3" and "PuREPower Pro 10" now drop.
+        ("product_mention", "PuREPower-5"), ("product_mention", "PuREPower3"),
+        ("product_mention", "PuREPower Pro-10"), ("product_mention", "Waaree 540 Wp"),
         ("product_mention", "Tata Power Solar panels"), ("product_mention", "PuREPower5"),
         ("battery_type", "150Ah tubular"), ("battery_type", "200 Ah lithium"),
         ("battery_type", "lithium 5 kWh"), ("battery_type", "48V 100Ah lithium"),

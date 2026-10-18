@@ -617,8 +617,9 @@ BIG_WORDS = frozenset(
     }
 )
 # Short money units: a number only right after one ("45 k", "2.5 L", "1.2 cr").
-# "lack" and "lacks" (a misheard lakh, check 5 M4) too, so "a lack of shade" stays.
-SHORT_UNITS = frozenset({"k", "l", "lk", "cr", "mn", "bn", "lack", "lacks"})
+# "lack" and "lacks" (a misheard lakh, check 5 M4) too, so "a lack of shade" stays, and
+# "grand" (round 6, check 6 M7: "five grand"), so "grand total" stays.
+SHORT_UNITS = frozenset({"k", "l", "lk", "cr", "mn", "bn", "lack", "lacks", "grand", "grands"})
 
 # --- Fractions --------------------------------------------------------------------------------
 
