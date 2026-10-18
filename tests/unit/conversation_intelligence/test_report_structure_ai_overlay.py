@@ -23,6 +23,8 @@ from tests.unit.conversation_intelligence import test_report_structure_service a
 from tests.unit.conversation_intelligence.test_pointer_review import SEGMENTS, answer
 
 PIVOT = "They said our leads are poor quality, so you pivoted."
+STATUS = {"status": "scoring", "report_created_at": "2026-10-18T10:37:00+00:00"}
+SCORING = AsyncMock(return_value=STATUS)
 
 
 @pytest.fixture
@@ -36,6 +38,7 @@ def overlay(monkeypatch):
     plan = AsyncMock(return_value=EMPTY_PLAN)
     monkeypatch.setattr(service, "latest_review", latest)
     monkeypatch.setattr(service, "withheld_plan_for", plan)
+    monkeypatch.setattr(service, "review_status", SCORING)
     ownership = SimpleNamespace(database=object())
     return envelope, ownership, submission_id, actor, latest, plan, transcript
 
@@ -123,3 +126,10 @@ async def test_without_a_saved_review_the_report_stays_unscored(overlay):
     assert structure["overview"].get("score_status") != "ai_draft"
     assert "review_status" not in structure
     plan.assert_not_awaited()
+    # Owner 18 Oct: the Report says a new call is being scored.
+    assert structure["pointer_review"] == STATUS
+
+
+async def test_a_saved_review_carries_no_scoring_status(overlay):
+    result = await read(overlay)
+    assert "pointer_review" not in result["report"]["content"]["structure"]

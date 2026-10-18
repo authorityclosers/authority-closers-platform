@@ -27,7 +27,13 @@ import { useCallOutcome } from "../report-outcome-context";
 import type { Line } from "../report-story-model";
 import { PlayChip, type Select } from "../report-visuals/visuals";
 import { MoneyBag, TargetArrow } from "./icons";
-import { scoreBand, type OutcomeKind, type Stat, type XrayView } from "./model";
+import {
+  scoreBand,
+  scoringNote,
+  type OutcomeKind,
+  type Stat,
+  type XrayView,
+} from "./model";
 import styles from "./xray.module.css";
 
 export const BAND_TONE = {
@@ -536,6 +542,7 @@ export function OverviewScore({
   onSelect?: Select;
 }) {
   const { summary, score, stats, strength, improvement } = view.overview;
+  const scoring = scoringNote(view.scoring);
   const band = score ? scoreBand(score.value) : null;
   return (
     <div className={styles.xr} data-xray-part="overview">
@@ -595,10 +602,15 @@ export function OverviewScore({
                 <span className={styles.scoreOf}>/100</span>
               </span>
               <span className={`${styles.pill} ${styles.scoreBadge}`}>
-                Not scored yet
+                {scoring.pending ? scoring.title : "Not scored yet"}
               </span>
-              <p className={styles.body}>
-                The score appears when this call&rsquo;s pointers are evaluated.
+              <p
+                className={styles.body}
+                role={scoring.pending ? "status" : undefined}
+              >
+                {scoring.pending
+                  ? scoring.body
+                  : "The score appears when this call’s pointers are evaluated."}
               </p>
             </>
           )}

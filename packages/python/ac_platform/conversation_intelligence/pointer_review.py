@@ -17,7 +17,7 @@ import hashlib
 import json
 import re
 from copy import deepcopy
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ac_platform.conversation_intelligence.report_structure import POINTERS as STRUCTURE_POINTERS
@@ -509,6 +509,56 @@ async def latest_review(database: Any, envelope: dict[str, Any]) -> dict[str, An
     if row is None or row.payload is None or payload_sha256(row.payload) != row.payload_sha256:
         return None
     return dict(row.payload)
+
+
+# Automatic scoring began on 16 Oct 2026 (rulebook 693645b0). The timer runner
+# (infra/application/scripts/ac-pointer-review) picks up reports finished in the
+# last 48 hours; anything older without a review is never scored automatically.
+AUTOMATIC_SINCE = datetime(2026, 10, 16, tzinfo=UTC)
+AUTOMATIC_WINDOW = timedelta(hours=48)
+
+
+async def review_status(
+    database: Any, envelope: dict[str, Any], *, now: datetime | None = None
+) -> dict[str, Any]:
+    """Why a report has no saved review: still ``scoring``, ``before_scores`` or ``not_scored``.
+
+    Owner 18 Oct: a new call must say it is being scored, never that it was
+    analysed before scores existed. Reads one timestamp; no provider call.
+    """
+    from uuid import UUID
+
+    from sqlalchemy import select
+
+    from ac_platform.conversation_intelligence.models import ConversationReportDraft
+
+    try:
+        recording_id = UUID(str(envelope["recording_id"]))
+        run_id = UUID(str(envelope["run_id"]))
+    except (KeyError, ValueError):
+        return {"status": "not_scored", "report_created_at": None}
+    created = await database.scalar(
+        select(ConversationReportDraft.created_at)
+        .where(
+            ConversationReportDraft.recording_id == recording_id,
+            ConversationReportDraft.run_id == run_id,
+            ConversationReportDraft.erased_at.is_(None),
+        )
+        .order_by(ConversationReportDraft.created_at.desc())
+        .limit(1)
+    )
+    if created is None:
+        return {"status": "not_scored", "report_created_at": None}
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    current = now or datetime.now(UTC)
+    if created < AUTOMATIC_SINCE:
+        status = "before_scores"
+    elif current - created < AUTOMATIC_WINDOW:
+        status = "scoring"
+    else:
+        status = "not_scored"
+    return {"status": status, "report_created_at": created.isoformat()}
 
 
 async def erase_pointer_reviews_for_recording(

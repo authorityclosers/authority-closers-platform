@@ -135,6 +135,25 @@ production value into staging or dev. Changing `AC_LEAD_DESK_TOKEN_KEY` means
 every connected Page must connect again. `POST /v1/lead-desk/meta/webhook`
 accepts only requests signed with that app's App Secret (`X-Hub-Signature-256`).
 
+## Sales Xray CRM Google Ads lead forms (optional)
+
+The API reads these from the same Infisical `/application` path for "Continue
+with Google" on the CRM's Sources tab. The connector stays off (the CRM shows
+"Coming soon") until all three exist alongside `AC_LEAD_DESK_TOKEN_KEY`, which
+also seals each account's Google refresh token and webhook key. No release
+requires them. Compose forwards them to the API only.
+
+| Secret                          | Constraint                                                                                                                  |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `AC_GOOGLE_ADS_CLIENT_ID`       | that environment's OAuth web client in GCP project ac-sales-xray-ads; redirect URI `<Sales Xray URL>/v1/lead-desk/google/callback` |
+| `AC_GOOGLE_ADS_CLIENT_SECRET`   | that client's secret                                                                                                        |
+| `AC_GOOGLE_ADS_DEVELOPER_TOKEN` | the project's Google Ads API developer token (Explorer access or above reaches live Ads accounts)                           |
+
+`AC_GOOGLE_ADS_API_VERSION` is optional and not secret (default `v25`). Each
+environment has its own OAuth client; never copy a production value into
+staging or dev. A Google Ads lead form posts to
+`/v1/lead-desk/capture/{source}/google-ads` with the key Sales Xray wrote into it.
+
 ## Sales Xray CRM push alerts (optional)
 
 The API reads these from the same Infisical `/application` path to send Lead Desk

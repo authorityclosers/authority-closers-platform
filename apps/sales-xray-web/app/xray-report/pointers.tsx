@@ -26,8 +26,10 @@ import {
 import {
   clock,
   isScored,
+  scoringNote,
   type Pointer,
   type PointerStatus,
+  type Scoring,
   type UnscoredStatus,
 } from "./model";
 import { AiDraft, Illustrative, LineWithClip } from "./overview";
@@ -166,12 +168,15 @@ function StatusChip({ status }: { status: PointerStatus | null }) {
 
 function Detail({
   pointer,
+  scoring,
   onSelect,
 }: {
   pointer: Pointer;
+  scoring?: Scoring;
   onSelect?: Select;
 }) {
   if (!isScored(pointer.status)) {
+    const note = scoringNote(scoring);
     const item = pointer.status
       ? UNSCORED.find((row) => row.status === pointer.status)
       : null;
@@ -183,14 +188,14 @@ function Detail({
           </span>
           <div className={styles.blockText}>
             <h4 className={styles.blockTitle}>
-              {item ? item.label : "Not scored yet"}
+              {item ? item.label : note.title}
             </h4>
             <p className={styles.body}>
               {pointer.whatHappened && item
                 ? pointer.whatHappened
                 : item
                   ? `${item.text} No score is given for this pointer.`
-                  : "This call was analysed before pointer scores existed. Its next analysis scores this pointer."}
+                  : note.body}
             </p>
           </div>
         </div>
@@ -360,13 +365,16 @@ export function CallAnalysis({
   pointers,
   illustrative,
   aiDraft = false,
+  scoring,
   onSelect,
 }: {
   pointers: Pointer[];
   illustrative: boolean;
   aiDraft?: boolean;
+  scoring?: Scoring;
   onSelect?: Select;
 }) {
+  const note = scoringNote(scoring);
   const [filter, setFilter] = useState<Filter>("all");
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
   const counts = useMemo(() => {
@@ -422,9 +430,15 @@ export function CallAnalysis({
           ))}
         </div>
       ) : (
-        <p className={`${styles.card} ${styles.empty}`}>
-          This call was analysed before pointer scores existed, so none of the
-          27 is scored yet. Open any pointer to see what the analysis saw.
+        <p
+          className={`${styles.card} ${styles.empty}`}
+          role={note.pending ? "status" : undefined}
+        >
+          {note.pending
+            ? `${note.body} Open any pointer to see what the analysis saw.`
+            : scoring?.status === "not_scored"
+              ? "This call has no pointer scores. Open any pointer to see what the analysis saw."
+              : "This call was analysed before pointer scores existed, so none of the 27 is scored yet. Open any pointer to see what the analysis saw."}
         </p>
       )}
       <div className={styles.filters} role="group" aria-label="Show pointers">
@@ -504,7 +518,11 @@ export function CallAnalysis({
                   </button>
                   {isOpen ? (
                     <div id={`xray-pointer-${pointer.id}`}>
-                      <Detail pointer={pointer} onSelect={onSelect} />
+                      <Detail
+                        pointer={pointer}
+                        scoring={scoring}
+                        onSelect={onSelect}
+                      />
                     </div>
                   ) : null}
                 </li>
