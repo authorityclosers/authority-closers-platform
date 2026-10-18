@@ -65,3 +65,21 @@ def test_a_reached_cap_tells_the_owner_once_a_day_per_pipeline(tmp_path: Path) -
         "today). New calls wait, nothing is lost and Reports are not affected. "
         "Admin -> Sales Xray setup -> Call data -> Raise and resume.",
     ]
+
+
+BACKFILL = ROOT / "scripts/data-changes/call-data-backfill.sh"
+
+
+def test_backfill_is_dry_by_default_and_snapshots_outside_releases() -> None:
+    subprocess.run(["bash", "-n", str(BACKFILL)], check=True, timeout=30)  # noqa: S603, S607
+    text = BACKFILL.read_text()
+    apply_part = text[text.index("exec 9>/run/ac-release.lock") :]
+    # The release lock, then a snapshot, then the paused runner, always restarted.
+    assert apply_part.index("flock -n 9") < apply_part.index("ac-db-snapshot")
+    assert apply_part.index("ac-db-snapshot") < apply_part.index("systemctl stop")
+    assert "trap 'systemctl start" in apply_part
+    assert "--pipeline both --apply" in apply_part
+    for args in (["development-live"], ["staging", "--yes"]):
+        command = ["bash", str(BACKFILL), *args]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30)  # noqa: S603
+        assert result.returncode == 2
