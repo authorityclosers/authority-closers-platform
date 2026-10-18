@@ -68,6 +68,8 @@ class Counts(Model):
     unassigned: int | None
     # Calls more than an hour late (new leads included): the red badge.
     overdue: int = 0
+    # Leads who called and weren't reached since (the Call back list).
+    call_back: int = 0
 
 
 class LeadRow(Model):
@@ -95,6 +97,10 @@ class LeadRow(Model):
     last_result_label: str | None
     test_data: bool
     overdue: bool = False
+    # They called and nobody picked up, and nobody has called them since
+    # (Salestrail's missed-call queue): the newest such call and how many.
+    missed_at: datetime | None = None
+    missed_calls: int = 0
 
 
 class MessageTemplate(Model):
@@ -115,6 +121,8 @@ class Desk(Model):
     # The next few days, after today ("Coming up").
     upcoming: tuple[LeadRow, ...] = ()
     templates: tuple[MessageTemplate, ...] = ()
+    # Missed calls from my leads, newest first, until someone calls them back.
+    call_back: tuple[LeadRow, ...] = ()
 
 
 class Badge(Model):

@@ -1067,3 +1067,72 @@ def test_work_hours_hold_night_leads_and_keep_calls_on_the_phone(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_a_missed_call_from_a_lead_waits_on_the_desk_until_called_back(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Salestrail's missed-call queue, 18 Oct: when a lead calls and nobody picks up, the
+    seller's desk shows Call back with how many calls were missed; it clears when the
+    seller calls them (from the app or the phone dialer)."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, seller_token)
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Asha Rao",
+                        "phone": "98765 41111",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                lead_id = added.json()["lead"]["lead_id"]
+                now = datetime.now(UTC)
+                device = str(uuid4())
+
+                async def phone(
+                    log_id: str, minutes: int, direction: str, seconds: int = 0
+                ) -> None:
+                    sent = await client.post(
+                        f"{BASE}/phone-log",
+                        json={
+                            "device_id": device,
+                            "calls": [
+                                {
+                                    "log_id": log_id,
+                                    "number": "9876541111",
+                                    "started_at": (now - timedelta(minutes=minutes)).isoformat(),
+                                    "duration_seconds": seconds,
+                                    "direction": direction,
+                                }
+                            ],
+                        },
+                        headers=WRITE,
+                    )
+                    assert sent.json()["logged"] == 1, sent.text
+
+                await phone("1", 4, "missed")
+                await phone("2", 3, "rejected")
+                desk = (await client.get(BASE)).json()
+                assert desk["counts"]["call_back"] == 1
+                [row] = desk["call_back"]
+                assert row["lead_id"] == lead_id and row["missed_calls"] == 2
+                assert datetime.fromisoformat(row["missed_at"]) < now - timedelta(minutes=2)
+                # The seller calls them back from the phone dialer: the row clears.
+                await phone("3", 1, "outgoing", 45)
+                desk = (await client.get(BASE)).json()
+                assert desk["counts"]["call_back"] == 0 and desk["call_back"] == []
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

@@ -48,3 +48,20 @@ def test_a_sync_sends_at_most_two_hundred_calls() -> None:
     PhoneLog.model_validate({"device_id": uuid4(), "calls": [_call()] * 200})
     with pytest.raises(ValidationError):
         PhoneLog.model_validate({"device_id": uuid4(), "calls": [_call()] * 201})
+
+
+def test_a_missed_call_waits_until_someone_reaches_them() -> None:
+    from ac_platform.lead_desk.store import missed_call, reached
+
+    assert missed_call("call", {"via": "phone", "direction": "missed"})
+    assert missed_call("call", {"via": "phone", "direction": "rejected"})
+    assert not missed_call("call", {"via": "phone", "direction": "outgoing"})
+    assert not missed_call("result", {"connected": False})
+    # Any call out, a call taken, or a saved result answers it; a recording added does not.
+    assert reached("result", {"connected": False})
+    assert reached("call", {"via": "phone", "direction": "outgoing", "connected": False})
+    assert reached("call", {"via": "phone", "direction": "incoming", "connected": True})
+    assert reached("call", {"duration_seconds": 40})
+    assert not reached("call", {"via": "phone", "direction": "missed"})
+    assert not reached("call", {"recording": True})
+    assert not reached("note", {})

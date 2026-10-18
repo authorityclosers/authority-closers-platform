@@ -44,6 +44,9 @@ export type LeadRow = {
   test_data: boolean;
   /** Its call is more than an hour late (a new lead counts from its arrival). */
   overdue?: boolean;
+  /** They called, nobody picked up, and nobody has called back yet. */
+  missed_at?: string | null;
+  missed_calls?: number;
 };
 
 export type MessageTemplate = { key: string; label: string; text: string };
@@ -82,6 +85,7 @@ export type Desk = {
     later_today: number;
     unassigned: number | null;
     overdue?: number;
+    call_back?: number;
   };
   queue: LeadRow[];
   call_mode: "simulated" | "phone";
@@ -90,6 +94,8 @@ export type Desk = {
   /** The next few days, after today. */
   upcoming?: LeadRow[];
   templates?: MessageTemplate[];
+  /** Missed calls from my leads, newest first, until someone calls back. */
+  call_back?: LeadRow[];
 };
 
 export type Badge = { overdue: number; to_call: number };

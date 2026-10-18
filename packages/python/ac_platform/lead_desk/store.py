@@ -109,6 +109,8 @@ PHONE_DIRECTIONS = frozenset({"outgoing", "incoming", "missed", "rejected", "blo
 # workspace's Lead Desk settings, one entry per person. It is the app's own report,
 # not a manager's setting, so writing it never changes the settings revision.
 PHONES_KEY = "phones"
+# A missed call waits on the desk this long for a call back.
+CALL_BACK_DAYS = 3
 # A dialer call this close to a call the app already logged is that same call.
 IN_APP_BEFORE = timedelta(minutes=2)
 IN_APP_AFTER = timedelta(minutes=20)
@@ -218,6 +220,27 @@ def hours_view(hours: work_hours.WorkHours | None, now: datetime) -> WorkHoursVi
         inside=inside,
         next_start=None if inside else work_hours.next_start(hours, now),
     )
+
+
+def missed_call(kind: str, data: Any) -> bool:
+    """They called and nobody picked up (or the seller cut it), from the phone's call log."""
+    return (
+        kind == "call"
+        and isinstance(data, dict)
+        and data.get("via") == "phone"
+        and data.get("direction") in {"missed", "rejected"}
+    )
+
+
+def reached(kind: str, data: Any) -> bool:
+    """A later contact that answers a missed call: any call out, a call taken, or a result."""
+    if kind == "result":
+        return True
+    if kind != "call" or not isinstance(data, dict):
+        return False
+    if data.get("via") == "phone":
+        return counted_phone_call(data)
+    return not data.get("recording")
 
 
 def median(values: Sequence[int]) -> int | None:
@@ -610,6 +633,7 @@ class LeadDesk:
         )
         rules = await self.db.get(LeadRep, (self.tenant_id, me))
         hours = work_hours.parse((await self.settings())[1])
+        call_back = await self._call_back()
         return Desk(
             me=Me(
                 person_id=me,
@@ -636,6 +660,7 @@ class LeadDesk:
                 later_today=int(counts_row[4]),
                 unassigned=unassigned,
                 overdue=int(counts_row[5]),
+                call_back=len(call_back),
             ),
             queue=await self._rows(queue),
             call_mode=self.call_mode,
@@ -646,7 +671,49 @@ class LeadDesk:
                 MessageTemplate(key=key, label=label, text=text)
                 for key, label, text in MESSAGE_TEMPLATES
             ),
+            call_back=call_back,
         )
+
+    async def _call_back(self) -> tuple[LeadRow, ...]:
+        """My leads who called in the last few days and weren't reached since, newest first."""
+        rows = (
+            await self.db.execute(
+                select(LeadEvent.lead_id, LeadEvent.kind, LeadEvent.data, LeadEvent.created_at)
+                .join(
+                    Lead,
+                    and_(Lead.tenant_id == LeadEvent.tenant_id, Lead.id == LeadEvent.lead_id),
+                )
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    Lead.owner_person_id == self.viewer.person_id,
+                    LeadEvent.kind.in_(("call", "result")),
+                    LeadEvent.created_at >= self.now - timedelta(days=CALL_BACK_DAYS),
+                )
+                .order_by(LeadEvent.created_at)
+                .limit(5000)
+            )
+        ).all()
+        waiting: dict[UUID, tuple[datetime, int]] = {}
+        for lead_id, kind, data, at in rows:
+            if missed_call(kind, data):
+                waiting[lead_id] = (at, waiting.get(lead_id, (at, 0))[1] + 1)
+            elif reached(kind, data):
+                waiting.pop(lead_id, None)
+        if not waiting:
+            return ()
+        leads = (
+            await self.db.scalars(
+                select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id.in_(list(waiting)))
+            )
+        ).all()
+        found = {row.lead_id: row for row in await self._rows(leads)}
+        return tuple(
+            found[lead_id].model_copy(update={"missed_at": at, "missed_calls": count})
+            for lead_id, (at, count) in sorted(
+                waiting.items(), key=lambda item: item[1][0], reverse=True
+            )
+            if lead_id in found
+        )[:QUEUE_LIMIT]
 
     async def badge(self) -> Badge:
         """What is due for me now: the Leads tab's badge and the phone's icon count."""
