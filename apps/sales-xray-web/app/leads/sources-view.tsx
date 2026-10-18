@@ -2,7 +2,8 @@
 
 /**
  * Lead sources, as simple as signing in (owner, 16 Oct): Facebook &
- * Instagram, Google Ads and LinkedIn, each one row with its real logo, a
+ * Instagram, Google Ads (Continue with Google, owner 18 Oct: "done now") and
+ * LinkedIn, each one row with its real logo, a
  * status and one action, and one line per connected Page under it (owner,
  * 18 Oct: proper icons and a cleaner layout). Files, sheets and website forms
  * sit behind one collapsed "Other ways to add leads"; technical details
@@ -63,8 +64,11 @@ const RETURNED: Record<string, string> = {
   failed: "That didn't finish. Try connecting again.",
 };
 
-async function metaCall<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${META}${path}`, {
+async function connectorCall<T>(
+  url: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const response = await fetch(url, {
     credentials: "same-origin",
     cache: "no-store",
     ...init,
@@ -84,6 +88,206 @@ async function metaCall<T>(path: string, init: RequestInit = {}): Promise<T> {
     );
   }
   return (await response.json()) as T;
+}
+
+const metaCall = <T,>(path: string, init: RequestInit = {}) =>
+  connectorCall<T>(`${META}${path}`, init);
+
+/* ---------- Google Ads connector API (lead_desk/connectors) ---------- */
+
+export type GoogleAccount = {
+  customerId: string;
+  name: string;
+  active: boolean;
+  test: boolean;
+  received: number;
+  lastPulledAt?: string | null;
+  /** Lead forms in the account, and how many post each new lead here now. */
+  forms?: number | null;
+  sending?: number | null;
+  /** Forms that keep someone else's webhook: the 10-minute check still reads them. */
+  other?: number | null;
+};
+type GoogleStatus = { configured: boolean; accounts: GoogleAccount[] };
+type GooglePull = { account: GoogleAccount; created: number; repeat: number };
+const GOOGLE = "/v1/lead-desk/google";
+const GOOGLE_RETURNED: Record<string, string> = {
+  connected: "Connected. Turn on the accounts you want leads from.",
+  noaccounts:
+    "That Google account has no Google Ads accounts. Sign in with the one that runs your ads.",
+  cancelled: "Connecting was cancelled.",
+  failed: "That didn't finish. Try connecting again.",
+};
+
+/** One line under an account: leads so far, and where its forms send them. */
+export function googleLine(account: GoogleAccount): string {
+  if (!account.active) return "Switched off: no new leads come in";
+  const parts = [
+    `${account.received} lead${account.received === 1 ? "" : "s"}`,
+  ];
+  if (account.forms != null) {
+    if (account.forms === 0) parts.push("no lead forms yet");
+    else if (account.sending === account.forms)
+      parts.push(
+        `${account.forms} form${account.forms === 1 ? "" : "s"} send here instantly`,
+      );
+    else
+      parts.push(
+        `${account.sending ?? 0} of ${account.forms} forms send here instantly`,
+      );
+  }
+  if (account.lastPulledAt) parts.push(`checked ${ago(account.lastPulledAt)}`);
+  return parts.join(" · ");
+}
+
+function GoogleTile() {
+  const params = useSearchParams();
+  const [status, setStatus] = useState<GoogleStatus | null>(null);
+  const [note, setNote] = useState<string | null>(
+    GOOGLE_RETURNED[params.get("google") ?? ""] ?? null,
+  );
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = () =>
+    connectorCall<GoogleStatus>(`${GOOGLE}/status`)
+      .then(setStatus)
+      .catch(() => setStatus({ configured: false, accounts: [] }));
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const run = async (account: GoogleAccount, work: () => Promise<string>) => {
+    setBusy(account.customerId);
+    setNote(null);
+    try {
+      setNote(await work());
+      await load();
+    } catch (reason) {
+      setNote(
+        reason instanceof LeadsError ? reason.message : "That didn't work.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+  const path = (account: GoogleAccount, tail = "") =>
+    `${GOOGLE}/accounts/${encodeURIComponent(account.customerId)}${tail}`;
+
+  const toggle = (account: GoogleAccount) =>
+    run(account, async () => {
+      if (account.active) {
+        await connectorCall(path(account, "/disconnect"), { method: "POST" });
+        return `${account.name} is switched off.`;
+      }
+      const result = await connectorCall<{ imported: number }>(path(account), {
+        method: "POST",
+      });
+      return result.imported
+        ? `${result.imported} lead${result.imported === 1 ? "" : "s"} from the last 30 days came in.`
+        : `${account.name} is on. New leads arrive here.`;
+    });
+
+  // Google's webhook can be late or missing, so Sales Xray also asks every
+  // 10 minutes; this asks now and points any new lead forms here.
+  const pull = (account: GoogleAccount) =>
+    run(account, async () => {
+      const result = await connectorCall<GooglePull>(path(account, "/pull"), {
+        method: "POST",
+      });
+      const added = result.created + result.repeat;
+      return added
+        ? `${added} new lead${added === 1 ? "" : "s"} from ${account.name}.`
+        : `No new leads from ${account.name}.`;
+    });
+
+  const live = status?.accounts.filter((account) => account.active).length ?? 0;
+  return (
+    <SourceRow
+      kind="google"
+      title="Google Ads"
+      text="Leads from your lead form ads, without copying anything."
+      status={
+        status === null ? (
+          <Badge>Checking…</Badge>
+        ) : !status.configured ? (
+          <Badge>Coming soon</Badge>
+        ) : live ? (
+          <Badge tone="good">Connected</Badge>
+        ) : status.accounts.length ? (
+          <Badge>Switched off</Badge>
+        ) : null
+      }
+      action={
+        status?.configured ? (
+          <a
+            className={kitStyles.button}
+            data-variant={status.accounts.length ? undefined : "primary"}
+            href={`${GOOGLE}/connect`}
+          >
+            {status.accounts.length ? (
+              <>
+                <Plus size={14} aria-hidden="true" />
+                Add an account
+              </>
+            ) : (
+              "Connect"
+            )}
+          </a>
+        ) : null
+      }
+    >
+      {status?.configured && status.accounts.length ? (
+        <ul className={styles.pageList} aria-label="Google Ads accounts">
+          {status.accounts.map((account) => (
+            <li
+              key={account.customerId}
+              className={styles.pageRow}
+              data-off={account.active ? undefined : ""}
+            >
+              <span className={styles.pageName}>
+                <strong>
+                  {account.name}
+                  {account.test ? <Badge>Test account</Badge> : null}
+                </strong>
+                <small>{googleLine(account)}</small>
+              </span>
+              <span className={styles.pageActions}>
+                {account.active ? (
+                  <Button
+                    variant="ghost"
+                    disabled={busy === account.customerId}
+                    onClick={() => pull(account)}
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
+                    Check now
+                  </Button>
+                ) : null}
+                <Button
+                  variant={account.active ? "ghost" : "primary"}
+                  disabled={busy === account.customerId}
+                  onClick={() => toggle(account)}
+                >
+                  {account.active ? "Switch off" : "Turn on"}
+                </Button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {status?.configured &&
+      status.accounts.some((account) => account.active && account.other) ? (
+        <p className={styles.hint}>
+          Some forms already send leads to another tool, so they keep it. Sales
+          Xray still checks them every 10 minutes.
+        </p>
+      ) : null}
+      {note ? (
+        <p className={styles.hint} role="status">
+          {note}
+        </p>
+      ) : null}
+    </SourceRow>
+  );
 }
 
 /* ---------- Brand marks (our own public/brands files) ---------- */
@@ -615,12 +819,7 @@ export function SourcesView({
         aria-label="Connect where your leads come from"
       >
         <MetaTile />
-        <SourceRow
-          kind="google"
-          title="Google Ads"
-          text="Leads from your lead form ads, without copying anything."
-          status={<Badge>Coming soon</Badge>}
-        />
+        <GoogleTile />
         <SourceRow
           kind="linkedin"
           title="LinkedIn"

@@ -9,6 +9,13 @@ Meta Lead Ads live under ``/meta``: a manager connects with Meta, picks Pages an
 forms, and Meta's signed webhook brings each new lead (see ``connectors.meta``). A
 pull every few minutes reads the same leads, because Meta holds webhooks while an
 app is in development mode (see ``connectors.meta_pull``).
+
+Google Ads lead forms can also be connected under ``/google``: Continue with Google,
+turn an account on, and Sales Xray writes its own webhook into the account's lead
+forms and reads new submissions every 10 minutes (``connectors.google_ads_api``,
+``connectors.google_pull``). Each account is a kind ``webhook`` source marked
+``config.connector = "google_ads"``, so its leads come in through the same
+``/capture/{source_id}/google-ads`` route and key check as a by-hand lead form.
 """
 
 from __future__ import annotations
@@ -16,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -38,8 +46,9 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.connectors import google_ads, meta, meta_pull
-from ac_platform.lead_desk.intake import Intake
+from ac_platform.lead_desk.connectors import google_ads, google_pull, meta, meta_pull
+from ac_platform.lead_desk.connectors import google_ads_api as gads
+from ac_platform.lead_desk.intake import Intake, token_hash
 from ac_platform.lead_desk.models import LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership, Organisation
@@ -84,6 +93,43 @@ class Connected(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     page: MetaPage
     imported: int
+
+
+class GoogleAccount(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    customer_id: str = Field(alias="customerId")
+    name: str
+    active: bool
+    test: bool
+    received: int
+    last_received_at: str | None = Field(default=None, alias="lastReceivedAt")
+    last_pulled_at: str | None = Field(default=None, alias="lastPulledAt")
+    forms: int | None = None
+    sending: int | None = None
+    other: int | None = None
+    failed: int | None = None
+
+
+class GoogleStatus(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    configured: bool
+    accounts: list[GoogleAccount]
+
+
+class GoogleConnected(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    account: GoogleAccount
+    imported: int
+
+
+class GooglePull(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    account: GoogleAccount
+    fetched: int
+    created: int
+    repeat: int
+    known: int
+    skipped: int
 
 
 class PullResult(BaseModel):
@@ -194,7 +240,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 )
         except DeskError as error:
             raise HTTPException(error.status, str(error), headers=PRIVATE) from None
-        except meta.MetaError as error:
+        except (meta.MetaError, gads.GoogleAdsApiError) as error:
             raise HTTPException(502, str(error), headers=PRIVATE) from None
         except DomainError:
             raise HTTPException(401, "Sign in to see your leads.", headers=PRIVATE) from None
@@ -505,8 +551,230 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 log.warning("meta lead %s not filed: %s", event.leadgen_id, error)
         return {"received": len(events), "filed": filed}
 
+    # ----- Google Ads lead forms, connected ------------------------------------------
+
+    def google_config() -> gads.GoogleAdsConfig:
+        cfg = gads.config()
+        if cfg is None:
+            raise HTTPException(
+                409,
+                "Google Ads isn't set up for Sales Xray yet: AC's Google Ads app is missing.",
+                headers=PRIVATE,
+            )
+        return cfg
+
+    def google_callback_url() -> str:
+        return f"{app_url()}/v1/lead-desk/google/callback"
+
+    async def google_sources(desk: LeadDesk) -> list[LeadSource]:
+        rows = (
+            await desk.db.scalars(
+                select(LeadSource)
+                .where(LeadSource.tenant_id == desk.viewer.tenant_id, LeadSource.kind == "webhook")
+                .order_by(LeadSource.created_at)
+            )
+        ).all()
+        return [row for row in rows if gads.is_connector(row)]
+
+    def account_view(source: LeadSource) -> GoogleAccount:
+        config = source.config or {}
+        hooks = config.get("webhooks")
+        counts = (
+            {
+                name: int(hooks[name])
+                for name in ("forms", "sending", "other", "failed")
+                if isinstance(hooks.get(name), int)
+            }
+            if isinstance(hooks, dict)
+            else {}
+        )
+        return GoogleAccount(
+            customer_id=str(config.get("customer_id", "")),
+            name=str(config.get("account_name") or source.label),
+            active=bool(source.active),
+            test=bool(config.get("test")),
+            received=int(source.received or 0),
+            last_received_at=source.last_received_at.isoformat()
+            if source.last_received_at
+            else None,
+            last_pulled_at=_epoch_iso(config.get("last_pulled_at")),
+            **counts,
+        )
+
+    async def account_source(desk: LeadDesk, customer_id: str) -> LeadSource:
+        for source in await google_sources(desk):
+            if str((source.config or {}).get("customer_id")) == customer_id:
+                return source
+        raise DeskError(
+            404, "That Google Ads account isn't connected here. Continue with Google first."
+        )
+
+    @router.get("/google/status", response_model=GoogleStatus, response_model_by_alias=True)
+    async def google_status(request: Request, response: Response) -> GoogleStatus:
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            return GoogleStatus(
+                configured=gads.config() is not None,
+                accounts=[account_view(source) for source in await google_sources(desk)],
+            )
+
+    @router.get("/google/connect")
+    async def google_connect(request: Request, response: Response) -> RedirectResponse:
+        cfg = google_config()
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            state = gads.make_state(
+                cfg, tenant_id=desk.viewer.tenant_id, person_id=desk.viewer.person_id
+            )
+        return RedirectResponse(
+            gads.consent_url(cfg, redirect_uri=google_callback_url(), state=state),
+            status_code=303,
+            headers=PRIVATE,
+        )
+
+    @router.get("/google/callback")
+    async def google_callback(request: Request, response: Response) -> RedirectResponse:
+        cfg = google_config()
+        back = f"{app_url()}/leads?tab=sources"
+        if request.query_params.get("error"):
+            return RedirectResponse(f"{back}&google=cancelled", status_code=303, headers=PRIVATE)
+        code = request.query_params.get("code", "")
+        state = request.query_params.get("state", "")
+        if not code or not state:
+            return RedirectResponse(f"{back}&google=failed", status_code=303, headers=PRIVATE)
+        async with desk_for(request, response, write=True, origin=False) as desk:
+            desk._require_manager()
+            gads.read_state(
+                cfg, state, tenant_id=desk.viewer.tenant_id, person_id=desk.viewer.person_id
+            )
+            ads = gads.Ads(cfg)
+            try:
+                refresh = await ads.refresh_token(code=code, redirect_uri=google_callback_url())
+                accounts = await ads.accounts(await ads.access_token(refresh))
+            except gads.GoogleAdsApiError as error:
+                log.warning("google ads connect failed: %s", error)
+                return RedirectResponse(f"{back}&google=failed", status_code=303, headers=PRIVATE)
+            existing = {
+                str((s.config or {}).get("customer_id")): s for s in await google_sources(desk)
+            }
+            count = int(
+                await desk.db.scalar(
+                    select(func.count()).where(LeadSource.tenant_id == desk.viewer.tenant_id)
+                )
+                or 0
+            )
+            for account in accounts:
+                details = {
+                    "account_name": account.name,
+                    "login_customer_id": account.login_customer_id,
+                    "test": account.test,
+                    "token": gads.seal(
+                        cfg.token_key, refresh, customer_id=account.customer_id, what="token"
+                    ),
+                }
+                source = existing.get(account.customer_id)
+                if source is not None:
+                    source.config = {**(source.config or {}), **details}
+                    source.label = f"Google Ads · {account.name}"[:120]
+                    source.updated_at = desk.now
+                    continue
+                if count >= _MAX_SOURCES:
+                    break
+                count += 1
+                key = secrets.token_urlsafe(32)
+                desk.db.add(
+                    LeadSource(
+                        id=uuid4(),
+                        tenant_id=desk.viewer.tenant_id,
+                        kind="webhook",
+                        label=f"Google Ads · {account.name}"[:120],
+                        token_sha256=token_hash(key),
+                        config={
+                            "connector": gads.CONNECTOR,
+                            "customer_id": account.customer_id,
+                            **details,
+                            "key": gads.seal(
+                                cfg.token_key, key, customer_id=account.customer_id, what="key"
+                            ),
+                            "forms": "all",
+                        },
+                        active=False,
+                        received=0,
+                        created_by_person_id=desk.viewer.person_id,
+                        created_at=desk.now,
+                        updated_at=desk.now,
+                    )
+                )
+            await desk.db.flush()
+        found = "connected" if accounts else "noaccounts"
+        return RedirectResponse(f"{back}&google={found}", status_code=303, headers=PRIVATE)
+
+    @router.post(
+        "/google/accounts/{customer_id}",
+        response_model=GoogleConnected,
+        response_model_by_alias=True,
+    )
+    async def google_turn_on(
+        customer_id: str, request: Request, response: Response
+    ) -> GoogleConnected:
+        """Write Sales Xray's webhook into the account's lead forms; bring in the last 30 days."""
+        cfg = google_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            source = await account_source(desk, customer_id)
+            await desk.db.refresh(source, with_for_update=True)
+            ads = gads.Ads(cfg)
+            await google_pull.ensure_webhooks(source, ads, cfg, app_url=app_url())
+            source.active = True
+            source.updated_at = desk.now
+            counts = await google_pull.pull_source(desk, source, ads, cfg, now=int(time.time()))
+            await desk.db.flush()
+            return GoogleConnected(account=account_view(source), imported=counts.created)
+
+    @router.post(
+        "/google/accounts/{customer_id}/disconnect",
+        response_model=GoogleAccount,
+        response_model_by_alias=True,
+    )
+    async def google_switch_off(
+        customer_id: str, request: Request, response: Response
+    ) -> GoogleAccount:
+        """No new leads from this account. Its forms keep the address; their posts are refused
+        while it is off, and turning it on again brings in what was missed (30 days)."""
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            source = await account_source(desk, customer_id)
+            source.active = False
+            source.updated_at = desk.now
+            await desk.db.flush()
+            return account_view(source)
+
+    @router.post(
+        "/google/accounts/{customer_id}/pull",
+        response_model=GooglePull,
+        response_model_by_alias=True,
+    )
+    async def google_check_now(
+        customer_id: str, request: Request, response: Response
+    ) -> GooglePull:
+        """Fetch this account's new leads now, and point any new lead forms at Sales Xray."""
+        cfg = google_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            source = await account_source(desk, customer_id)
+            if not source.active:
+                raise DeskError(409, "Turn this account on first.")
+            await desk.db.refresh(source, with_for_update=True)
+            ads = gads.Ads(cfg)
+            await google_pull.ensure_webhooks(source, ads, cfg, app_url=app_url())
+            counts = await google_pull.pull_source(desk, source, ads, cfg, now=int(time.time()))
+            source.updated_at = desk.now
+            await desk.db.flush()
+            return GooglePull(account=account_view(source), **asdict(counts))
+
     application.include_router(router)
     meta_pull.attach(application, ctx.sessions, settings.environment)
+    google_pull.attach(application, ctx.sessions, settings.environment)
 
 
 def _epoch_iso(value: object) -> str | None:
