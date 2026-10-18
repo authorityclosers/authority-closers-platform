@@ -17,6 +17,7 @@ from ac_platform.partner_events.quote_facts import (
     load_profile,
     parse_facts,
     prompt_sha256,
+    said_in,
     speaker_label,
 )
 
@@ -203,7 +204,8 @@ def test_validated_facts_follow_the_contract_and_drop_what_was_not_said() -> Non
                 "speaker": "customer",
                 "stated_as": "3.70 lakh",
                 "amount_inr": 370000,
-                "basis": "ex_gst",
+                # "plus GST" is in the segment but not in this price's own words.
+                "basis": None,
                 "use": "flag_only",
             },
             "source": {"segment_id": "s5", "t_start_sec": 420, "t_end_sec": 426,
@@ -275,3 +277,131 @@ def test_a_withheld_segment_left_out_of_the_prompt_can_never_be_cited() -> None:
     facts, dropped = parse_facts({"facts": proposals}, visible, SPEAKERS)
     assert dropped == 1
     assert not any(fact["type"] == "mentioned_price" for fact in facts)
+
+
+@pytest.mark.parametrize(
+    "words,segment,said",
+    [
+        # Review 18 Oct, item 3: a plain substring test let these through.
+        ("3.70 lakh", "My budget is 13.70 lakh.", False),
+        ("5 kW", "We need a 15 kW system.", False),
+        ("five years", "The panels last twenty five years.", False),
+        ("five years", "The panels last twenty-five years.", False),
+        ("70 lakh", "It is 3.70 lakh.", False),
+        ("3", "It is 3.70 lakh.", False),
+        ("50,000", "Total 1,50,000 rupees.", False),
+        ("3 lakh", "3 lakh 70 thousand for the system.", False),
+        ("70 thousand", "3 lakh 70 thousand for the system.", False),
+        ("दो लाख", "सवा दो लाख में हो जाएगा।", False),
+        ("पाच लाख", "पाच लाख पन्नास हजार होतील.", False),
+        ("पन्नास हजार", "पाच लाख पन्नास हजार होतील.", False),
+        ("लाख", "लाखों का खर्च है।", False),
+        ("5 kW", "3-5 kW is fine.", False),
+        ("dongle", "Two dongles please.", False),
+        # Whole words and whole numbers are found.
+        ("3.70 lakh", "My budget is 3.70 lakh plus GST.", True),
+        ("3.70 lakh", "My budget is ₹3.70 lakh.", True),
+        ("5 kW", "I want a 5 kW system.", True),
+        ("5  KW", "I want a 5 kW system.", True),
+        ("seven years", "The warranty is seven years.", True),
+        ("five years", "Someone told me five years warranty.", True),
+        ("सवा दो लाख", "सवा दो लाख में हो जाएगा।", True),
+        ("पाच वर्षे", "वॉरंटी पाच वर्षे आहे.", True),
+        ("today evening", "I will send the quotation today evening.", True),
+        ("", "anything", False),
+    ],
+)
+def test_stated_words_must_be_whole_words_and_whole_numbers(
+    words: str, segment: str, said: bool
+) -> None:
+    assert said_in(words, segment) is said
+
+
+def _one(kind: str, value: dict[str, Any], text: str) -> list[dict[str, Any]]:
+    segments = [{"id": "s1", "speaker_id": "speaker_0", "start_ms": 0, "end_ms": 1_000,
+                 "text": text}]  # fmt: skip
+    facts, _ = parse_facts({"facts": [_fact(kind, value, ["s1"])]}, segments, SPEAKERS)
+    return [fact for fact in facts if fact["type"] == kind and fact["status"] != "unknown"]
+
+
+@pytest.mark.parametrize(
+    "kind,value,text",
+    [
+        ("system_size", {"stated_as": "5 kW"}, "We need a 15 kW system."),
+        ("warranty", {"years": 5, "stated_as": "five years"}, "It lasts twenty five years."),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "3.70 lakh"},
+         "The quote was 13.70 lakh."),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "दो लाख"},
+         "सवा दो लाख में हो जाएगा।"),
+    ],
+)  # fmt: skip
+def test_a_fact_quoted_from_inside_a_longer_number_is_dropped(
+    kind: str, value: dict[str, Any], text: str
+) -> None:
+    assert _one(kind, value, text) == []
+
+
+@pytest.mark.parametrize(
+    "kind,value,text",
+    [
+        # Review 18 Oct, item 4: money words, small amounts and other rupee spellings.
+        ("add_on", {"kind": "packing", "qty": 500, "stated_as": "packing 500"},
+         "Packing 500 extra."),
+        ("add_on", {"kind": "panel", "qty": 150, "stated_as": "150 panels"},
+         "We will put 150 panels."),
+        ("add_on", {"kind": "packing", "stated_as": "packing 500 rupiya"},
+         "Packing 500 rupiya lagega."),
+        ("add_on", {"kind": "packing", "stated_as": "packing ka rupaiya"},
+         "Packing ka rupaiya alag."),
+        ("add_on", {"kind": "packing", "stated_as": "packing charge 50"},
+         "Packing charge 50."),
+        ("load", {"stated_as": "above a lakh"}, "The load is above a lakh."),
+        ("site", {"stated_as": "do lakh"}, "Site do lakh."),
+        ("product_mention", {"stated_as": "sattar hazaar"}, "PuREPower sattar hazaar."),
+        ("product_mention", {"stated_as": "सत्तर हजार"}, "PuREPower सत्तर हजार."),
+        ("warranty", {"years": 5, "stated_as": "5 years for 2 lakh"},
+         "5 years for 2 lakh."),
+        ("promise", {"text": "Send the quote above a lakh"}, "I will send it."),
+        ("objection", {"kind": "price_concern", "text": "Packing charge 50 is high"},
+         "Packing charge 50 is high."),
+    ],
+)  # fmt: skip
+def test_no_fact_but_mentioned_price_carries_a_price(
+    kind: str, value: dict[str, Any], text: str
+) -> None:
+    assert _one(kind, value, text) == []
+
+
+@pytest.mark.parametrize(
+    "value,text,qty",
+    [
+        ({"kind": "dongle", "qty": 2, "stated_as": "2 dongles"}, "Add 2 dongles.", 2),
+        ({"kind": "panel", "qty": 100, "stated_as": "100 panels"}, "We put 100 panels.", 100),
+        ({"kind": "panel", "qty": 12, "stated_as": "twelve panels"}, "twelve panels", 12),
+        ({"kind": "dongle", "qty": 3, "stated_as": "2 dongles"}, "Add 2 dongles.", None),
+    ],
+)
+def test_add_on_counts_are_said_and_at_most_100(
+    value: dict[str, Any], text: str, qty: int | None
+) -> None:
+    (fact,) = _one("add_on", value, text)
+    assert fact["value"]["qty"] == qty
+
+
+@pytest.mark.parametrize(
+    "stated_as,text,basis",
+    [
+        # Review 18 Oct, item 8: GST said about another price no longer attaches.
+        ("5000", "3.70 lakh plus GST, installation 5000.", None),
+        ("3.70 lakh", "3.70 lakh plus GST, installation 5000.", None),
+        ("3.70 lakh plus GST", "3.70 lakh plus GST, installation 5000.", "ex_gst"),
+        ("3.70 lakh including GST", "It is 3.70 lakh including GST.", "incl_gst"),
+        ("3 लाख जीएसटी सहित", "कुल 3 लाख जीएसटी सहित।", "incl_gst"),
+        ("45000 GST extraordinary", "45000 GST extraordinary offer.", None),
+    ],
+)
+def test_gst_basis_comes_from_the_price_words_only(
+    stated_as: str, text: str, basis: str | None
+) -> None:
+    (fact,) = _one("mentioned_price", {"applies_to": "system", "stated_as": stated_as}, text)
+    assert fact["value"]["basis"] == basis

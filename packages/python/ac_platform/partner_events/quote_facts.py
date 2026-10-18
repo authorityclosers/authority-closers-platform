@@ -7,12 +7,16 @@ is never trusted:
 - it cites transcript segment ids only; unknown ids are dropped, and times
   and speakers are copied from the saved transcript;
 - ``stated_as`` (and ``next_step.when_text``) must appear in a cited segment
-  (case-insensitive, whitespace-normalised), else the fact is dropped (a
-  one-per-call type then reads ``unknown``);
+  as whole words (case-insensitive, whitespace-normalised; no letter, digit
+  or decimal point on either side, and no number word running on: "five
+  years" is not in "twenty five years", "3.70 lakh" is not in "13.70 lakh"),
+  else the fact is dropped (a one-per-call type then reads ``unknown``);
 - every enum is checked; a count or a year is kept only when that number was
-  said in ``stated_as``;
+  said in ``stated_as`` (an add-on count at most 100, never a number next to
+  a money or cost word);
 - sizes and rupee amounts come from our own reader (``amounts``), never from
-  the model; ``mentioned_price.use`` is always ``flag_only``;
+  the model; ``mentioned_price.basis`` is read from its own ``stated_as``
+  only; ``mentioned_price.use`` is always ``flag_only``;
 - no other fact type may carry a price.
 
 Withheld (sensitive) segments are never in the prompt, so they can never be
@@ -23,7 +27,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from functools import cache
@@ -31,8 +37,11 @@ from pathlib import Path
 from typing import Any
 
 from ac_platform.partner_events.amounts import (
+    PLAIN_PRICE_FLOOR,
     amount_inr,
+    counts_in,
     gst_basis,
+    is_numeric_word,
     mentions_price,
     numbers_in,
     system_size,
@@ -237,19 +246,89 @@ def _cited(evidence: Any, by_id: dict[str, dict[str, Any]]) -> list[dict[str, An
     return found
 
 
+_PIECE = re.compile(r"[0-9०-९]+(?:[.,][0-9०-९]+)*|[a-z]+|[ऀ-ॣॱ-ॿ]+")
+_JOINING = re.compile(r"[\s\-–]+")
+
+
+def _word_char(char: str) -> bool:
+    """A letter, digit or combining mark (Devanagari vowel signs are marks)."""
+    return char.isalnum() or char == "_" or unicodedata.category(char).startswith("M")
+
+
+def _piece_before(text: str) -> str | None:
+    """The word or number that ``text`` ends with, when only spaces or hyphens follow it."""
+    pieces = list(_PIECE.finditer(text))
+    if not pieces:
+        return None
+    gap = text[pieces[-1].end() :]
+    return pieces[-1].group() if gap and _JOINING.fullmatch(gap) else None
+
+
+def _piece_after(text: str) -> str | None:
+    """The word or number that ``text`` starts with, after only spaces or hyphens."""
+    found = _PIECE.search(text)
+    if found is None:
+        return None
+    gap = text[: found.start()]
+    return found.group() if gap and _JOINING.fullmatch(gap) else None
+
+
+def _whole(haystack: str, start: int, end: int) -> bool:
+    """Whether ``haystack[start:end]`` stands as whole words and as a whole number."""
+    needle, before, after = haystack[start:end], haystack[:start], haystack[end:]
+    if _word_char(needle[0]) and before:
+        last = before[-1]
+        if _word_char(last) or (last in ".," and len(before) > 1 and before[-2].isdigit()):
+            return False
+    if _word_char(needle[-1]) and after:
+        first = after[0]
+        if _word_char(first) or (first in ".," and len(after) > 1 and after[1].isdigit()):
+            return False
+    # A number said in more words than were quoted: "five years" in "twenty five years",
+    # "do lakh" in "sawa do lakh", "3 lakh" in "3 lakh 70 thousand".
+    head = _PIECE.match(needle)
+    tail = list(_PIECE.finditer(needle))
+    if head and is_numeric_word(head.group()) and is_numeric_word(_piece_before(before)):
+        return False
+    return not (
+        tail
+        and tail[-1].end() == len(needle)
+        and is_numeric_word(tail[-1].group())
+        and is_numeric_word(_piece_after(after))
+    )
+
+
+def said_in(words: str, text: str) -> bool:
+    """``words`` said word for word in ``text`` (folded), as whole words and numbers."""
+    needle, haystack = _fold(words), _fold(text)
+    if not needle:
+        return False
+    start = haystack.find(needle)
+    while start != -1:
+        if _whole(haystack, start, start + len(needle)):
+            return True
+        start = haystack.find(needle, start + 1)
+    return False
+
+
 def _containing(words: str, cited: list[dict[str, Any]]) -> dict[str, Any] | None:
-    needle = _fold(words)
     for segment in cited:
-        if needle and needle in _fold(str(segment.get("text") or "")):
+        if said_in(words, str(segment.get("text") or "")):
             return segment
     return None
 
 
-def _counted(value: Any, stated_as: str, *, maximum: int) -> int | None:
+def _counted(
+    value: Any,
+    stated_as: str,
+    *,
+    maximum: int,
+    said: Callable[[str], set[Decimal]] = numbers_in,
+) -> int | None:
     """A count or a year only when it is a whole number said in ``stated_as``."""
     if type(value) is not int or not 1 <= value <= maximum:
         return None
-    return value if Decimal(value) in numbers_in(stated_as) else None
+    return value if Decimal(value) in said(stated_as) else None
 
 
 def _clean(
@@ -294,7 +373,8 @@ def _clean(
             "speaker": speakers.get(str(segment.get("speaker_id")), "unknown"),
             "stated_as": stated_as,
             "amount_inr": amount_inr(stated_as),
-            "basis": gst_basis(stated_as) or gst_basis(str(segment.get("text") or "")),
+            # Only this price's own words: GST said about another price never attaches.
+            "basis": gst_basis(stated_as),
             "use": "flag_only",
         }, segment
     # Product names keep their own digits ("PuREPower 5"); a currency or money unit never.
@@ -306,7 +386,8 @@ def _clean(
     if fact_type == "add_on":
         kind = raw.get("kind")
         kind = kind if kind in VOCABULARIES["add_on.kind"] else "other"
-        qty = _counted(raw.get("qty"), stated_as, maximum=1000)
+        # A count is at most 100 and never a number next to a money or cost word.
+        qty = _counted(raw.get("qty"), stated_as, maximum=PLAIN_PRICE_FLOOR, said=counts_in)
         return {"kind": kind, "qty": qty, "stated_as": stated_as}, segment
     if fact_type == "battery_type":
         kind = raw.get("kind")
