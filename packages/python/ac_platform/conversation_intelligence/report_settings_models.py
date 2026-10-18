@@ -32,10 +32,10 @@ class ReportSettingsVersion(Base):
     __tablename__ = "conversation_report_settings_versions"
     __table_args__ = (
         UniqueConstraint("number", name="uq_report_settings_version_number"),
-        CheckConstraint("number >= 2", name="report_settings_version_number"),
-        CheckConstraint("base_number >= 1 AND base_number < number", name="report_settings_base"),
-        CheckConstraint("origin IN ('admin', 'tuner')", name="report_settings_version_origin"),
-        CheckConstraint("length(settings_sha256) = 64", name="report_settings_version_sha"),
+        CheckConstraint("number >= 2", name="number"),
+        CheckConstraint("base_number >= 1 AND base_number < number", name="base"),
+        CheckConstraint("origin IN ('admin', 'tuner')", name="origin"),
+        CheckConstraint("length(settings_sha256) = 64", name="sha"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -57,25 +57,21 @@ class ReportSettingsEvent(Base):
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_report_settings_event_tenant"),
         UniqueConstraint("sequence", name="uq_report_settings_event_sequence"),
-        CheckConstraint("sequence >= 1", name="report_settings_event_sequence"),
-        CheckConstraint(
-            "kind IN ('version_created', 'assigned')", name="report_settings_event_kind"
-        ),
+        CheckConstraint("sequence >= 1", name="sequence"),
+        CheckConstraint("kind IN ('version_created', 'assigned')", name="kind"),
         CheckConstraint(
             "scope IN ('version', 'organisation', 'industry', 'general')",
-            name="report_settings_event_scope",
+            name="scope",
         ),
         CheckConstraint(
             "(scope = 'organisation') = (tenant_id IS NOT NULL)",
-            name="report_settings_event_tenant",
+            name="tenant",
         ),
         CheckConstraint(
             "(scope = 'industry') = (industry_code IS NOT NULL)",
-            name="report_settings_event_industry",
+            name="industry",
         ),
-        CheckConstraint(
-            "version_number IS NULL OR version_number >= 1", name="report_settings_event_version"
-        ),
+        CheckConstraint("version_number IS NULL OR version_number >= 1", name="version"),
         Index(
             "ix_report_settings_events_scope",
             "scope",

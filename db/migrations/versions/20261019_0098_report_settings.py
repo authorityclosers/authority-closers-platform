@@ -38,12 +38,10 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("number", name="uq_report_settings_version_number"),
-        sa.CheckConstraint("number >= 2", name="report_settings_version_number"),
-        sa.CheckConstraint(
-            "base_number >= 1 AND base_number < number", name="report_settings_base"
-        ),
-        sa.CheckConstraint("origin IN ('admin', 'tuner')", name="report_settings_version_origin"),
-        sa.CheckConstraint("length(settings_sha256) = 64", name="report_settings_version_sha"),
+        sa.CheckConstraint("number >= 2", name="number"),
+        sa.CheckConstraint("base_number >= 1 AND base_number < number", name="base"),
+        sa.CheckConstraint("origin IN ('admin', 'tuner')", name="origin"),
+        sa.CheckConstraint("length(settings_sha256) = 64", name="sha"),
     )
     op.create_table(
         "conversation_report_settings_events",
@@ -63,25 +61,23 @@ def upgrade() -> None:
             ["tenant_id"], ["tenants.id"], name="fk_report_settings_event_tenant"
         ),
         sa.UniqueConstraint("sequence", name="uq_report_settings_event_sequence"),
-        sa.CheckConstraint("sequence >= 1", name="report_settings_event_sequence"),
-        sa.CheckConstraint(
-            "kind IN ('version_created', 'assigned')", name="report_settings_event_kind"
-        ),
+        sa.CheckConstraint("sequence >= 1", name="sequence"),
+        sa.CheckConstraint("kind IN ('version_created', 'assigned')", name="kind"),
         sa.CheckConstraint(
             "scope IN ('version', 'organisation', 'industry', 'general')",
-            name="report_settings_event_scope",
+            name="scope",
         ),
         sa.CheckConstraint(
             "(scope = 'organisation') = (tenant_id IS NOT NULL)",
-            name="report_settings_event_tenant",
+            name="tenant",
         ),
         sa.CheckConstraint(
             "(scope = 'industry') = (industry_code IS NOT NULL)",
-            name="report_settings_event_industry",
+            name="industry",
         ),
         sa.CheckConstraint(
             "version_number IS NULL OR version_number >= 1",
-            name="report_settings_event_version",
+            name="version",
         ),
     )
     op.create_index(
