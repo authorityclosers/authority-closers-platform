@@ -1334,3 +1334,33 @@ def test_a_seller_marks_a_phone_logged_call_private(postgres_harness: Any, tmp_p
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_the_account_sheet_reads_and_sets_taking_new_leads(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """UX study item 8 leftover, 18 Oct: the account sheet reads the seller's own switch
+    (GET /me) and changes it with the same PUT as the desk."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, seller_token)
+                me = await client.get(f"{BASE}/me")
+                assert me.status_code == 200, me.text
+                assert me.json()["taking_leads"] is True and me.json()["paused_until"] is None
+                assert me.headers["cache-control"] == "private, no-store"
+                off = await client.put(f"{BASE}/me/taking", json={"taking": False}, headers=WRITE)
+                assert off.json()["taking_leads"] is False
+                assert (await client.get(f"{BASE}/me")).json()["taking_leads"] is False
+                assert (await client.get(f"{BASE}/me?x=1")).status_code == 422
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

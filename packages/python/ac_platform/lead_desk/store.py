@@ -643,20 +643,9 @@ class LeadDesk:
             )
             or 0
         )
-        rules = await self.db.get(LeadRep, (self.tenant_id, me))
-        hours = work_hours.parse((await self.settings())[1])
         call_back = await self._call_back()
         return Desk(
-            me=Me(
-                person_id=me,
-                name=self.viewer.name,
-                role=self.viewer.role,
-                can_manage=self.viewer.can_manage,
-                taking_leads=rules.available if rules else True,
-                paused_until=work_hours.next_start(hours, self.now)
-                if hours is not None and work_hours.paused(hours, self.now)
-                else None,
-            ),
+            me=await self.me(),
             numbers=Numbers(
                 calls=len(results) + len(dialled),
                 connected=sum(1 for event in [*results, *dialled] if event.data.get("connected")),
@@ -2198,12 +2187,21 @@ class LeadDesk:
             row.updated_by_person_id = me
             row.updated_at = self.now
             await self.db.flush()
+        return await self.me()
+
+    async def me(self) -> Me:
+        """Me on the desk: whether new leads come to me, and until when they wait."""
+        rules = await self.db.get(LeadRep, (self.tenant_id, self.viewer.person_id))
+        hours = work_hours.parse((await self.settings())[1])
         return Me(
-            person_id=me,
+            person_id=self.viewer.person_id,
             name=self.viewer.name,
             role=self.viewer.role,
             can_manage=self.viewer.can_manage,
-            taking_leads=row.available,
+            taking_leads=rules.available if rules else True,
+            paused_until=work_hours.next_start(hours, self.now)
+            if hours is not None and work_hours.paused(hours, self.now)
+            else None,
         )
 
     async def save_settings(self, command: SettingsCommand) -> Team:

@@ -452,6 +452,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.call_report(start, end)
 
+    @router.get("/me", response_model=Me, response_model_by_alias=True)
+    async def me(request: Request, response: Response) -> Me:
+        """Whether new leads come to me: the account sheet's switch (UX study item 8)."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.me()
+
     @router.put("/me/taking", response_model=Me, response_model_by_alias=True)
     async def set_taking(command: TakingLeads, request: Request, response: Response) -> Me:
         no_query(request)

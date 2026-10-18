@@ -620,6 +620,11 @@ export function reassign(
 }
 
 /** The seller's own "Taking new leads" switch. */
+/** Me on the desk: whether new leads come to me (the account sheet's switch). */
+export function readMe(signal?: AbortSignal) {
+  return request<Desk["me"]>("/me", { signal });
+}
+
 export function setTaking(taking: boolean) {
   return request<Desk["me"]>("/me/taking", json("PUT", { taking }));
 }
