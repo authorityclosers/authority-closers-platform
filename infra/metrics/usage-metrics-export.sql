@@ -190,8 +190,31 @@ hold AS (
   GROUP BY 1, 2, 3, 4, 5, 6
 ),
 budget AS (
-  SELECT scope_id, CASE WHEN snapshot ->> 'cap_paise' ~ '^[0-9]{1,12}$' THEN (snapshot ->> 'cap_paise')::bigint END AS cap_paise
-  FROM conversation_budget_accounts
+  SELECT b.scope_id,
+         CASE WHEN b.snapshot ->> 'cap_paise' ~ '^[0-9]{1,12}$' THEN (b.snapshot ->> 'cap_paise')::bigint END AS cap_paise,
+         -- What the ledger counts against the cap: settled at its real cost, open at its quote.
+         (SELECT coalesce(sum(CASE
+                   WHEN r ->> 'state' = 'released' THEN 0
+                   WHEN r ->> 'state' = 'settled' AND r -> 'settlement' ->> 'actual_paise' ~ '^[0-9]{1,12}$'
+                     THEN (r -> 'settlement' ->> 'actual_paise')::bigint
+                   WHEN r -> 'quote' ->> 'max_cost_paise' ~ '^[0-9]{1,12}$'
+                     THEN (r -> 'quote' ->> 'max_cost_paise')::bigint
+                   ELSE 0 END), 0)
+            FROM json_array_elements(b.snapshot -> 'reservations') r) AS committed_paise
+  FROM conversation_budget_accounts b
+),
+waiting AS (
+  -- Calls waiting for AI budget; they continue by themselves once it allows.
+  SELECT count(*) AS n FROM conversation_processing_plans
+  WHERE state = 'active' AND progress ->> 'failure_code' = 'budget_cap_reached'
+),
+ceiling_request AS (
+  SELECT id, occurred_at AS at,
+         CASE WHEN payload ->> 'requested_cap_paise' ~ '^[0-9]{1,12}$' THEN (payload ->> 'requested_cap_paise')::bigint END AS requested_paise,
+         CASE WHEN payload ->> 'sealed_ceiling_paise' ~ '^[0-9]{1,12}$' THEN (payload ->> 'sealed_ceiling_paise')::bigint END AS ceiling_paise,
+         left(payload ->> 'reason', 200) AS reason
+  FROM audit_events
+  WHERE action = 'conversation.budget_ceiling_requested' AND occurred_at >= (SELECT since FROM win)
 ),
 payment AS (
   SELECT a.tenant_id AS company_id, (e.verified_at AT TIME ZONE 'UTC')::date AS day, e.kind,
@@ -251,7 +274,11 @@ SELECT json_build_object(
       'day', day, 'scope', scope_id, 'state', state, 'ref', ref, 'provider', provider, 'kind', kind,
       'n', n, 'held_paise', held_paise, 'settled_paise', settled_paise
     ) ORDER BY day) FROM hold), '[]'::json),
-  'budgets', coalesce((SELECT json_agg(json_build_object('scope', scope_id, 'cap_paise', cap_paise)) FROM budget), '[]'::json),
+  'budgets', coalesce((SELECT json_agg(json_build_object('scope', scope_id, 'cap_paise', cap_paise, 'committed_paise', committed_paise)) FROM budget), '[]'::json),
+  'waiting_calls', (SELECT n FROM waiting),
+  'ceiling_requests', coalesce((SELECT json_agg(json_build_object(
+      'id', id, 'at', at, 'requested_paise', requested_paise, 'ceiling_paise', ceiling_paise, 'reason', reason
+    ) ORDER BY at) FROM ceiling_request), '[]'::json),
   'payments', coalesce((SELECT json_agg(json_build_object(
       'company', company_id, 'day', day, 'kind', kind, 'mode', mode, 'currency', currency,
       'n', n, 'amount_minor', amount_minor

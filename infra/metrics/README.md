@@ -29,6 +29,17 @@ each environment's postgres ──(read-only export, every 15 min)──▶ /srv
 
   Production numbers never flow down.
 
+## AI budget alerts (19 Oct 2026)
+
+After each export, `ac-budget-alerts --apply` reads the store (production only unless
+`AC_BUDGET_ALERT_ENVIRONMENTS` says otherwise) and does three things:
+
+- **Owner task.** It keeps one AC Pulse task for the owner while a budget is at least 80% used or any call is waiting for budget. The task holds the one-click raise link, and it closes itself once usage is back under 80% with nothing waiting. Pulse is written only through `pulse.task_save` and `pulse.task_move`.
+- **Telegram.** It sends the owner one Telegram line when an alert opens or gets worse.
+- **Root card.** It files one AC board card for Root for each Admin request to raise a sealed ceiling.
+
+State lives in `/var/lib/ac-budget-alerts/state.json` and the log in `/var/log/ac-budget-alerts.log`.
+
 ## Install (dev, done 19 Oct 2026)
 
 ```bash

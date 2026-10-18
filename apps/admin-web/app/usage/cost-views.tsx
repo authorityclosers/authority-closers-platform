@@ -1164,17 +1164,29 @@ export function MoneyView({ metrics }: { metrics: Metrics }) {
     );
   return (
     <>
-      <Tiles label="Open budget holds">
+      <Tiles label="AI budget">
         {money.environments.map((row) => (
           <Kpi
             key={row.environment}
-            label={`${ENVIRONMENT_LABEL[row.environment] ?? row.environment} open holds`}
-            value={count(row.open)}
-            note={`${inr(row.openRupees)} held${
-              row.capShare !== null
-                ? ` · ${pct(row.capShare)} of the ${inr(row.cap)} cap`
+            label={`${ENVIRONMENT_LABEL[row.environment] ?? row.environment} AI budget used`}
+            value={pct(row.usedShare)}
+            tone={
+              row.waitingCalls || (row.usedShare ?? 0) >= 0.9
+                ? "bad"
+                : (row.usedShare ?? 0) >= 0.8
+                  ? "warn"
+                  : undefined
+            }
+            note={`${inr(row.usedRupees)} of ${inr(row.cap)} · ${count(row.open)} open holds${
+              row.waitingCalls
+                ? ` · ${count(row.waitingCalls)} calls waiting`
                 : ""
             }`}
+            href={
+              row.environment === metrics.here
+                ? "/sales-xray/execution"
+                : undefined
+            }
           />
         ))}
       </Tiles>

@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+"""AI budget alerts for the owner (orchestrator, 19 Oct 2026: never stuck in production).
+
+Reads the usage metrics store (filled read-only by ac-metrics-collect) and:
+- keeps one AC Pulse task for the owner per environment while its AI budget is at or
+  above 80% used, or any call is waiting for budget. The task names the level and links
+  the one-click raise in Admin. It moves to done once usage is back under 80% and nothing
+  waits. Pulse is written only through pulse.task_save / pulse.task_move, like
+  ac-pulse-gold-bridge;
+- sends the owner one Telegram line when an alert opens or gets worse, never repeats;
+- files one AC board card for Root for each Admin request to raise a sealed ceiling.
+
+Task text carries amounts and links only, never call content.
+
+  ac-budget-alerts            dry run: print the plan
+  ac-budget-alerts --apply    apply it (ac-metrics-collect runs this after each export)
+  ac-budget-alerts --selftest create and close a fake alert in Pulse, rolled back
+
+Environments: AC_BUDGET_ALERT_ENVIRONMENTS (space separated, default "production").
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+import os
+import pathlib
+import subprocess
+import sys
+
+STORE = pathlib.Path(os.environ.get("AC_METRICS_STORE", "/srv/authority-closers/metrics"))
+KIT = "/srv/authority-closers/pulse/kit"
+PULSE_ENV = "/etc/pulse/pulse.env"
+STATE = pathlib.Path("/var/lib/ac-budget-alerts/state.json")
+LOG = pathlib.Path("/var/log/ac-budget-alerts.log")
+NOTIFY = "/usr/local/sbin/ac-notify-owner"
+PAPERCLIP = [
+    "env",
+    "HOME=/root",
+    "PATH=/home/acdev/.local/opt/node/bin:/usr/bin:/bin",
+    "/home/acdev/.local/bin/paperclipai",
+]
+COMPANY = "543c7c03-9779-4c06-b9d2-e67f91197265"
+ROOT_AGENT = "feeff44a-5bb6-49b3-a9e4-8a3fb36dda0e"
+ACTOR = "ac-budget-alerts (Sales X-Ray AI budget, owner order 19 Oct 2026)"
+ADMIN = {
+    "production": "https://admin.authorityclosers.com",
+    "staging": "https://admin-staging.authorityclosers.com",
+    "development": "https://admin-dev.authorityclosers.com",
+}
+NAME = {"production": "production", "staging": "staging", "development": "dev"}
+# Worse first: an alert moves to the worst level that applies.
+LEVELS = ("waiting", "out", "90", "80")
+
+CONTEXT = """
+begin;
+set local role pulse_owner;
+select org_id as org from pulse.install limit 1 \\gset
+select set_config('pulse.org_id', :'org', true) \\g /dev/null
+select person_id as me from pulse.people_profile
+ where org_id = :'org' and username = 'suyash' \\gset
+select set_config('pulse.viewer_id', :'me', true) \\g /dev/null
+select set_config('pulse.actor_account', :'actor', true) \\g /dev/null
+"""
+
+APPLY_SQL = """
+select 'created', count(pulse.task_save(null, jsonb_build_object(
+         'title', s->>'title', 'assigneeId', :'me', 'priority', 'high',
+         'category', pulse.work_category_guess(s->>'title'), 'tags', '[]'::jsonb,
+         'notes', s->>'notes')))
+  from jsonb_array_elements(:'plan'::jsonb->'create') s
+ where not exists (select 1 from pulse.task t
+                    where t.deleted_at is null and t.status not in ('done', 'cancelled')
+                      and position(s->>'marker' in coalesce(t.notes, '')) > 0);
+select 'closed', count(pulse.task_move(t.id, 'done', d->>'note'))
+  from jsonb_array_elements(:'plan'::jsonb->'move') d
+  join pulse.task t on t.deleted_at is null and position(d->>'marker' in coalesce(t.notes, '')) > 0
+ where t.status not in ('done', 'cancelled');
+"""
+
+
+def log(line: str) -> None:
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with LOG.open("a", encoding="utf-8") as handle:
+        handle.write(f"{stamp} {line}\n")
+
+
+def rupees(paise: int) -> str:
+    return f"₹{paise / 100:,.0f}"
+
+
+def level_of(used: float, waiting: int) -> str | None:
+    if waiting:
+        return "waiting"
+    if used >= 1:
+        return "out"
+    if used >= 0.9:
+        return "90"
+    if used >= 0.8:
+        return "80"
+    return None
+
+
+def read_env(env: str) -> dict | None:
+    path = STORE / env / "usage.json"
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    budgets = [row for row in document.get("budgets", []) if isinstance(row, dict)]
+    cap = sum(int(row.get("cap_paise") or 0) for row in budgets)
+    used = sum(int(row.get("committed_paise") or 0) for row in budgets)
+    return {
+        "cap": cap,
+        "used": used,
+        "share": used / cap if cap else (1.0 if budgets else 0.0),
+        "waiting": int(document.get("waiting_calls") or 0),
+        "requests": [row for row in document.get("ceiling_requests", []) if isinstance(row, dict)],
+        "generated_at": document.get("generated_at"),
+    }
+
+
+def alert_text(env: str, level: str, figures: dict) -> tuple[str, str, str]:
+    """(Pulse title, Pulse notes, Telegram line) for one environment's alert."""
+
+    name, share = NAME[env], round(figures["share"] * 100)
+    link = f"{ADMIN[env]}/sales-xray/execution"
+    if level == "waiting":
+        headline = f"{figures['waiting']} Sales X-Ray calls are waiting for AI budget ({name})"
+    elif level == "out":
+        headline = f"Sales X-Ray AI budget is used up ({name})"
+    else:
+        headline = f"Sales X-Ray AI budget {share}% used ({name})"
+    notes = (
+        f"{rupees(figures['used'])} of the {rupees(figures['cap'])} cap is spent or held.\n"
+        f"Raise it in one click: {link} (+₹1,000, +₹2,500 or +₹5,000, up to the sealed ceiling).\n"
+        "Calls waiting for budget continue by themselves within a minute of a raise.\n"
+        "This task closes itself once usage is back under 80% and no call is waiting.\n"
+        f"marker: ac-budget-alerts/{env}/{level}"
+    )
+    return headline, notes, f"{headline}. Raise it: {link}"
+
+
+def plan_alerts(state: dict, figures_by_env: dict[str, dict]) -> tuple[dict, list[str], dict]:
+    plan: dict[str, list] = {"create": [], "move": []}
+    lines: list[str] = []
+    alerts = dict(state.get("alerts", {}))
+    for env, figures in figures_by_env.items():
+        level = level_of(figures["share"], figures["waiting"])
+        current = alerts.get(env)
+        if level == current:
+            continue
+        if current is not None:
+            plan["move"].append(
+                {
+                    "marker": f"ac-budget-alerts/{env}/{current}",
+                    "note": "Back under 80% with no call waiting."
+                    if level is None
+                    else "Replaced by a newer budget alert.",
+                }
+            )
+        if level is not None:
+            title, notes, line = alert_text(env, level, figures)
+            plan["create"].append(
+                {"marker": f"ac-budget-alerts/{env}/{level}", "title": title, "notes": notes}
+            )
+            worse = current is None or LEVELS.index(level) < LEVELS.index(current)
+            if worse:
+                lines.append(line)
+            alerts[env] = level
+        else:
+            alerts.pop(env, None)
+    return plan, lines, alerts
+
+
+def pulse_psql(sql: str, variables: dict[str, str]) -> str:
+    args = [
+        "docker",
+        "compose",
+        "--env-file",
+        PULSE_ENV,
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "pulse_admin",
+        "-d",
+        "pulse",
+        "-At",
+        "-F",
+        "\t",
+        "-v",
+        "ON_ERROR_STOP=1",
+    ]
+    for key, value in variables.items():
+        args += ["-v", f"{key}={value}"]
+    # Fixed argument list, no shell; the SQL goes in on stdin.
+    out = subprocess.run(  # noqa: S603
+        args, cwd=KIT, input=sql, capture_output=True, text=True, check=False
+    )
+    if out.returncode:
+        raise SystemExit(f"pulse psql failed: {out.stderr.strip()[:400]}")
+    return out.stdout
+
+
+def apply_pulse(plan: dict, *, commit: bool) -> str:
+    sql = CONTEXT + APPLY_SQL + ("commit;\n" if commit else "rollback;\n")
+    return pulse_psql(sql, {"actor": ACTOR, "plan": json.dumps(plan, ensure_ascii=False)})
+
+
+def root_card(env: str, request: dict) -> str:
+    requested = int(request.get("requested_paise") or 0)
+    ceiling = int(request.get("ceiling_paise") or 0)
+    title = f"Reseal the {NAME[env]} Sales X-Ray AI budget ceiling to {rupees(requested)}"
+    description = (
+        f"**From ac-budget-alerts** for an Admin request in Sales X-Ray ({env}).\n\n"
+        f"- Requested ceiling: {rupees(requested)} (now {rupees(ceiling)}).\n"
+        f"- Asked at: {request.get('at')}. Reason: {request.get('reason') or 'not given'}.\n"
+        f"- Request id: {request.get('id')}"
+        " (audit action conversation.budget_ceiling_requested).\n\n"
+        "Reseal the release approval's budget ceiling for this environment. The owner approves "
+        "the amount. Admin then raises the working cap in one click."
+    )
+    out = subprocess.run(  # noqa: S603 - fixed argument list, no shell
+        [
+            *PAPERCLIP,
+            "issue",
+            "create",
+            "-C",
+            COMPANY,
+            "--title",
+            title,
+            "--description",
+            description,
+            "--status",
+            "todo",
+            "--priority",
+            "high",
+            "--assignee-agent-id",
+            ROOT_AGENT,
+            "--profile",
+            "ac-watchdog",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if out.returncode:
+        raise SystemExit(f"paperclip issue create failed: {out.stderr.strip()[:300]}")
+    return json.loads(out.stdout).get("identifier") or "created"
+
+
+def main() -> None:
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    if mode == "--selftest":
+        figures = {"cap": 1_000_000, "used": 950_000, "share": 0.95, "waiting": 0}
+        title, notes, _ = alert_text("production", "90", figures)
+        plan = {
+            "create": [
+                {
+                    "marker": "ac-budget-alerts/selftest/90",
+                    "title": title,
+                    "notes": notes.replace("production/90", "selftest/90"),
+                }
+            ],
+            "move": [{"marker": "ac-budget-alerts/selftest/90", "note": "selftest"}],
+        }
+        print(apply_pulse(plan, commit=False).strip())
+        print("rolled back")
+        return
+    envs = os.environ.get("AC_BUDGET_ALERT_ENVIRONMENTS", "production").split()
+    figures_by_env = {env: f for env in envs if env in ADMIN and (f := read_env(env)) is not None}
+    STATE.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    state = json.loads(STATE.read_text()) if STATE.exists() else {}
+    plan, lines, alerts = plan_alerts(state, figures_by_env)
+    known = set(state.get("requests", []))
+    requests = [
+        (env, request)
+        for env, f in figures_by_env.items()
+        for request in f["requests"]
+        if str(request.get("id")) not in known
+    ]
+    summary = {
+        env: {"used": f"{round(f['share'] * 100)}%", "waiting": f["waiting"]}
+        for env, f in figures_by_env.items()
+    }
+    print(
+        json.dumps(
+            {
+                "environments": summary,
+                "pulse": {k: len(v) for k, v in plan.items()},
+                "telegram": lines,
+                "root_cards": len(requests),
+            },
+            ensure_ascii=False,
+        )
+    )
+    if mode != "--apply":
+        if plan["create"] or plan["move"] or requests:
+            print("Dry run only. Add --apply.")
+        return
+    if plan["create"] or plan["move"]:
+        out = apply_pulse(plan, commit=True)
+        log(f"pulse {out.strip()!r}")
+    for line in lines:
+        subprocess.run([NOTIFY, line], check=False, capture_output=True)  # noqa: S603
+        log(f"telegram {line!r}")
+    filed = list(known)
+    for env, request in requests:
+        card = root_card(env, request)
+        filed.append(str(request.get("id")))
+        log(f"root card {card} for {env} request {request.get('id')}")
+    STATE.write_text(json.dumps({"alerts": alerts, "requests": filed[-200:]}, indent=1))
+
+
+if __name__ == "__main__":
+    main()

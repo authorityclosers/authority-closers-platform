@@ -129,6 +129,8 @@ class Export:
     subscriptions: list[dict[str, Any]] = field(default_factory=list)
     companies: dict[str, dict[str, str]] = field(default_factory=dict)
     synthetic: dict[str, int] = field(default_factory=dict)
+    # Calls waiting for AI budget at export time (they resume by themselves).
+    waiting_calls: int = 0
     copies_dropped: int = 0
 
 
@@ -320,6 +322,7 @@ def parse_export(environment: str, document: Mapping[str, Any]) -> Export:
     export.budgets = list(_rows(document, "budgets"))
     export.payments = list(_rows(document, "payments"))
     export.subscriptions = list(_rows(document, "subscriptions"))
+    export.waiting_calls = _int(document.get("waiting_calls"))
     for row in _rows(document, "synthetic_calls"):
         if (day := _text(row.get("day"))) is not None:
             export.synthetic[day] = _int(row.get("n"))
@@ -1059,6 +1062,7 @@ def _money(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
     environments = []
     for export in exports:
         cap = sum(_int(row.get("cap_paise")) for row in export.budgets)
+        used = sum(_int(row.get("committed_paise")) for row in export.budgets)
         open_rows = [row for row in export.holds if row.get("state") == "uncertain"]
         by_ref: Counter[str] = Counter()
         by_ref_paise: Counter[str] = Counter()
@@ -1087,6 +1091,9 @@ def _money(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
                 "open": sum(_int(row.get("n")) for row in open_rows),
                 "open_rupees": _rupees(open_paise),
                 "cap_share": round(open_paise / cap, 3) if cap else None,
+                "used_rupees": _rupees(used),
+                "used_share": round(used / cap, 3) if cap else None,
+                "waiting_calls": export.waiting_calls,
                 "settled": sum(_int(row.get("n")) for row in settled),
                 "settled_rupees": _rupees(sum(_int(row.get("settled_paise")) for row in settled)),
                 "by_reason": [
