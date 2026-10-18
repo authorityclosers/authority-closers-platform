@@ -9,7 +9,7 @@ install -d -m 0755 /usr/local/lib/ac-metrics /srv/authority-closers/metrics
 install -m 0644 "$here/usage-metrics-export.sql" /usr/local/lib/ac-metrics/usage-metrics-export.sql
 sha256sum "$repo"/packages/python/ac_platform/conversation_intelligence/canary_fixture/*.wav \
   | awk '{print $1}' > /usr/local/lib/ac-metrics/canary-fixtures.txt
-git -C "$repo" rev-parse HEAD > /usr/local/lib/ac-metrics/SOURCE_SHA 2>/dev/null || true
+git -c safe.directory="$repo" -C "$repo" rev-parse HEAD > /usr/local/lib/ac-metrics/SOURCE_SHA 2>/dev/null || true
 install -m 0755 "$here/ac-metrics-collect" /usr/local/sbin/ac-metrics-collect
 install -m 0644 "$here/ac-metrics-collect.service" "$here/ac-metrics-collect.timer" /etc/systemd/system/
 if [ "${1:-}" = "--dev-api" ]; then

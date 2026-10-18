@@ -7,7 +7,7 @@ Requires=docker.service
 [Service]
 Type=oneshot
 # Which environments this host exports. Production joins when its Admin mounts the store.
-Environment=AC_METRICS_ENVIRONMENTS=development staging
+Environment="AC_METRICS_ENVIRONMENTS=development staging"
 ExecStart=/usr/local/sbin/ac-metrics-collect
 Nice=10
 IOSchedulingClass=idle
