@@ -152,7 +152,7 @@ export function Sources({ metrics }: { metrics: Metrics }) {
     metrics.sources.map((item) => [item.environment, item]),
   );
   return (
-    <p className={styles.sources} aria-label="Data sources">
+    <div className={styles.sources} role="group" aria-label="Data sources">
       {ENVIRONMENTS.map((name) => {
         const source = byEnv.get(name);
         const problem = metrics.problems.find(
@@ -180,7 +180,7 @@ export function Sources({ metrics }: { metrics: Metrics }) {
         );
       })}
       <Why detail="Every 15 minutes each environment exports usage numbers only (no call content) into a separate metrics store, read-only. Rupees are list prices from the price sheet (₹100 per US dollar), not invoices. Calls copied from one database to another count once, in the environment they ran in. Days are India time." />
-    </p>
+    </div>
   );
 }
 
