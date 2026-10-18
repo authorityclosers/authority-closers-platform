@@ -1,0 +1,13 @@
+# Release-owned capability: only compose_for(production) selects this file.
+# Its absence in an older rollback target means metrics remain unconfigured.
+services:
+  api:
+    environment:
+      AC_METRICS_STORE_ROOT: /srv/authority-closers/metrics
+    volumes:
+      - type: bind
+        source: /srv/authority-closers/metrics
+        target: /srv/authority-closers/metrics
+        read_only: true
+        bind:
+          create_host_path: false
