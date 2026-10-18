@@ -172,6 +172,11 @@ class LeadEventView(Model):
     # which way it went (outgoing, incoming, missed, rejected or blocked).
     via: str | None = None
     direction: str | None = None
+    # A call the phone logged: its id, so its own seller can mark it private
+    # (Salestrail's untracked calls); private ones are shown to that seller only.
+    event_id: UUID | None = None
+    can_hide: bool = False
+    private: bool = False
 
 
 class RepOption(Model):
@@ -442,6 +447,13 @@ class PhoneReport(Command):
         if unknown:
             raise ValueError("Unknown phone check.")
         return {name: checks[name] for name in PHONE_CHECKS if name in checks}
+
+
+class CallPrivacy(Command):
+    """The seller hides a call their phone logged from everyone else, or shows it again."""
+
+    command_id: UUID
+    private: bool
 
 
 class TakingLeads(Command):

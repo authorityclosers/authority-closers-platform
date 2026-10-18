@@ -36,6 +36,7 @@ from ac_platform.lead_desk.contracts import (
     PHONE_CHECKS,
     AlertText,
     Badge,
+    CallPrivacy,
     CallReport,
     Counts,
     DayCalls,
@@ -225,6 +226,10 @@ def hours_view(hours: work_hours.WorkHours | None, now: datetime) -> WorkHoursVi
         inside=inside,
         next_start=None if inside else work_hours.next_start(hours, now),
     )
+
+
+# The marker a seller adds when they hide a phone-logged call (kind "edited").
+PRIVATE_CALL = "private_call"
 
 
 def missed_call(kind: str, data: Any) -> bool:
@@ -618,6 +623,8 @@ class LeadDesk:
                 .limit(5000)
             )
         ).all()
+        hidden = await self._private_calls(day_start)
+        today = [event for event in today if str(event.id) not in hidden]
         results = [event for event in today if event.kind == "result"]
         # Calls the phone logged by itself count too (UX study item 5).
         dialled = [
@@ -683,7 +690,13 @@ class LeadDesk:
         """My leads who called in the last few days and weren't reached since, newest first."""
         rows = (
             await self.db.execute(
-                select(LeadEvent.lead_id, LeadEvent.kind, LeadEvent.data, LeadEvent.created_at)
+                select(
+                    LeadEvent.id,
+                    LeadEvent.lead_id,
+                    LeadEvent.kind,
+                    LeadEvent.data,
+                    LeadEvent.created_at,
+                )
                 .join(
                     Lead,
                     and_(Lead.tenant_id == LeadEvent.tenant_id, Lead.id == LeadEvent.lead_id),
@@ -698,8 +711,11 @@ class LeadDesk:
                 .limit(5000)
             )
         ).all()
+        hidden = await self._private_calls(self.now - timedelta(days=CALL_BACK_DAYS))
         waiting: dict[UUID, tuple[datetime, int]] = {}
-        for lead_id, kind, data, at in rows:
+        for event_id, lead_id, kind, data, at in rows:
+            if str(event_id) in hidden:
+                continue
             if missed_call(kind, data):
                 waiting[lead_id] = (at, waiting.get(lead_id, (at, 0))[1] + 1)
             elif reached(kind, data):
@@ -828,6 +844,7 @@ class LeadDesk:
                         people.add(UUID(value))
         names = await self._names(people)
         day_end = self._day_start() + timedelta(days=1)
+        hidden = await self._private_calls(lead_id=lead.id)
         can_edit = self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id
         reps: tuple[RepOption, ...] = ()
         if self.viewer.can_manage:
@@ -860,7 +877,12 @@ class LeadDesk:
             next_action_note=lead.next_action_note,
             fields=fields,
             source_fields=self._source_fields(lead.payload),
-            events=tuple(self._event_view(event, names) for event in events),
+            events=tuple(
+                self._event_view(event, names, hidden=hidden)
+                for event in events
+                if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
+                and (str(event.id) not in hidden or event.actor_person_id == self.viewer.person_id)
+            ),
             can_edit=can_edit,
             can_assign=self.viewer.can_manage,
             reps=reps,
@@ -889,7 +911,14 @@ class LeadDesk:
         except ValueError:
             return None
 
-    def _event_view(self, event: LeadEvent, names: Mapping[UUID, str]) -> LeadEventView:
+    def _event_view(
+        self,
+        event: LeadEvent,
+        names: Mapping[UUID, str],
+        *,
+        hidden: frozenset[str] = frozenset(),
+    ) -> LeadEventView:
+        phone_call = event.kind == "call" and event.data.get("via") == "phone"
         data = event.data
         to, previous = self._uuid(data.get("to")), self._uuid(data.get("from"))
         stage = data.get("stage") if isinstance(data.get("stage"), str) else None
@@ -926,6 +955,9 @@ class LeadDesk:
             if isinstance(data.get("template"), str)
             else None,
             via="phone" if data.get("via") == "phone" else None,
+            event_id=event.id if phone_call else None,
+            can_hide=phone_call and event.actor_person_id == self.viewer.person_id,
+            private=str(event.id) in hidden,
             direction=data["direction"] if data.get("direction") in PHONE_DIRECTIONS else None,
         )
 
@@ -1796,6 +1828,72 @@ class LeadDesk:
         await self._phone_seen(command.device_id)
         return PhoneLogResult(logged=logged, already=already, skipped=skipped)
 
+    async def _private_calls(
+        self, since: datetime | None = None, *, lead_id: UUID | None = None
+    ) -> frozenset[str]:
+        """Ids of phone-logged calls their sellers marked private (the newest marker wins).
+
+        A marker always comes after its call, so markers since ``since`` cover the
+        calls since then.
+        """
+        query = select(LeadEvent.data).where(
+            LeadEvent.tenant_id == self.tenant_id, LeadEvent.kind == "edited"
+        )
+        if since is not None:
+            query = query.where(LeadEvent.created_at >= since)
+        if lead_id is not None:
+            query = query.where(LeadEvent.lead_id == lead_id)
+        state: dict[str, bool] = {}
+        for data in (await self.db.scalars(query.order_by(LeadEvent.created_at))).all():
+            call = data.get(PRIVATE_CALL) if isinstance(data, dict) else None
+            if isinstance(call, str):
+                state[call] = data.get("private") is True
+        return frozenset(call for call, private in state.items() if private)
+
+    async def set_call_privacy(self, event_id: UUID, command: CallPrivacy) -> LeadDetail:
+        """The seller hides a call their phone logged from everyone else, or shows it again.
+
+        Nothing is removed: a marker is added, the call stays on the lead's history
+        for its seller, and it leaves every count and report while private.
+        """
+        seen = await self._command_seen(command.command_id)
+        if seen is not None:
+            return await self.detail(seen.lead_id)
+        event = await self.db.scalar(
+            select(LeadEvent).where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.id == event_id,
+                LeadEvent.kind == "call",
+            )
+        )
+        if (
+            event is None
+            or event.data.get("via") != "phone"
+            or event.actor_person_id != self.viewer.person_id
+        ):
+            raise DeskError(404, "Only your own calls from your phone can be made private.")
+        lead = await self._lead(event.lead_id, lock=True)
+        private_now = str(event.id) in await self._private_calls(
+            event.created_at, lead_id=event.lead_id
+        )
+        if private_now != command.private:
+            if counted_phone_call(event.data):
+                lead.calls = max(0, lead.calls + (-1 if command.private else 1))
+            lead.updated_at = self.now
+            self._event(
+                lead,
+                "edited",
+                {
+                    "changed": [PRIVATE_CALL],
+                    PRIVATE_CALL: str(event.id),
+                    "private": command.private,
+                },
+                actor=self.viewer.person_id,
+                command_id=command.command_id,
+            )
+            await self.db.flush()
+        return await self.detail(lead.id)
+
     # ----- the phone setup checklist (UX study item 7) -----------------------------
 
     async def _phones(self) -> tuple[LeadDeskSettings, dict[str, Any]]:
@@ -1875,7 +1973,7 @@ class LeadDesk:
         )
         activity = (
             await self.db.execute(
-                select(LeadEvent.actor_person_id, LeadEvent.kind, LeadEvent.data)
+                select(LeadEvent.id, LeadEvent.actor_person_id, LeadEvent.kind, LeadEvent.data)
                 .where(
                     LeadEvent.tenant_id == self.tenant_id,
                     LeadEvent.kind.in_(("result", "call")),
@@ -1884,10 +1982,13 @@ class LeadDesk:
                 .limit(20000)
             )
         ).all()
+        hidden = await self._private_calls(day_start)
         calls: dict[UUID, int] = {}
         connected: dict[UUID, int] = {}
-        for actor, kind, data in activity:
+        for event_id, actor, kind, data in activity:
             if actor is None or (kind == "call" and not counted_phone_call(data)):
+                continue
+            if str(event_id) in hidden:
                 continue
             calls[actor] = calls.get(actor, 0) + 1
             if isinstance(data, dict) and data.get("connected"):
@@ -2006,7 +2107,11 @@ class LeadDesk:
         rows = (
             await self.db.execute(
                 select(
-                    LeadEvent.actor_person_id, LeadEvent.kind, LeadEvent.data, LeadEvent.created_at
+                    LeadEvent.id,
+                    LeadEvent.actor_person_id,
+                    LeadEvent.kind,
+                    LeadEvent.data,
+                    LeadEvent.created_at,
                 ).where(
                     LeadEvent.tenant_id == self.tenant_id,
                     LeadEvent.kind.in_(("call", "result")),
@@ -2018,8 +2123,9 @@ class LeadDesk:
         ).all()
         empty = {"calls": 0, "connected": 0, "talk_seconds": 0, "missed": 0}
         tally: dict[UUID, dict[date, dict[str, int]]] = {}
-        for actor, kind, data, at in rows:
-            if not isinstance(data, dict):
+        hidden = await self._private_calls(begin)
+        for event_id, actor, kind, data, at in rows:
+            if not isinstance(data, dict) or str(event_id) in hidden:
                 continue
             cell = tally.setdefault(actor, {}).setdefault(at.astimezone(IST).date(), dict(empty))
             if kind == "result" or counted_phone_call(data):

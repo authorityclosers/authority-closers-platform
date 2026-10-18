@@ -141,6 +141,10 @@ export type LeadEvent = {
     | "rejected"
     | "blocked"
     | null;
+  /** A phone-logged call: its seller may mark it private (shown to them only). */
+  event_id?: string | null;
+  can_hide?: boolean;
+  private?: boolean;
 };
 
 export type LeadDetail = {
@@ -690,6 +694,18 @@ export type CallReport = {
     missed: number;
   }[];
 };
+
+/** Hides a call the seller's phone logged from everyone else, or shows it again. */
+export function setCallPrivacy(
+  eventId: string,
+  hidden: boolean,
+  command = commandId(),
+) {
+  return request<LeadDetail>(
+    `/calls/${encodeURIComponent(eventId)}/private`,
+    json("POST", { command_id: command, private: hidden }),
+  );
+}
 
 /** Calls by seller by day, India time (managers). */
 export function readCallReport(

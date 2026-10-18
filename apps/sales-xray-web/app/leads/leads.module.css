@@ -682,6 +682,17 @@
   background: var(--lx-closing);
 }
 
+/* Mark private: the seller's own phone-logged call, hidden from the team. */
+.privateTag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--sx-line);
+  color: var(--sx-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 /* A call from the lead that nobody took (phone call log, UX study item 5). */
 .history li[data-missed]::before {
   background: var(--sx-bad);

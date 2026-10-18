@@ -35,6 +35,7 @@ from ac_platform.lead_desk import push, simulation
 from ac_platform.lead_desk.contracts import (
     AlertText,
     Badge,
+    CallPrivacy,
     CallRecord,
     CallReport,
     Desk,
@@ -401,6 +402,17 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.log_phone_calls(command)
+
+    @router.post(
+        "/calls/{event_id}/private", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def call_privacy(
+        event_id: UUID, command: CallPrivacy, request: Request, response: Response
+    ) -> LeadDetail:
+        """Mark private (Salestrail's untracked call): the seller's own phone-logged call only."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.set_call_privacy(event_id, command)
 
     @router.post(
         "/leads/{lead_id}/recordings", response_model=LeadDetail, response_model_by_alias=True

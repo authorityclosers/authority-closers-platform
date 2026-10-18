@@ -43,6 +43,7 @@ import {
   LeadsError,
   localInputValue,
   logPhoneCall,
+  setCallPrivacy,
   minutesLabel,
   nextCallTime,
   peekPendingCall,
@@ -722,7 +723,57 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
   }
 }
 
-function History({ events }: { events: LeadEvent[] }) {
+/** Mark private (Salestrail's untracked call): the seller's own phone-logged call. */
+function PrivacyButton({
+  event,
+  onChanged,
+}: {
+  event: LeadEvent;
+  onChanged: (next: LeadDetail) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  if (!event.can_hide || !event.event_id) return null;
+  const eventId = event.event_id;
+  const flip = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      onChanged(await setCallPrivacy(eventId, !event.private));
+    } catch (reason) {
+      setProblem(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.linkButton}
+        disabled={busy}
+        onClick={() => void flip()}
+      >
+        {event.private ? "Show to my team" : "Make private"}
+      </button>
+      {problem ? (
+        <span className={styles.error} role="alert">
+          {problem}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+export function History({
+  events,
+  onChanged,
+}: {
+  events: LeadEvent[];
+  onChanged?: (next: LeadDetail) => void;
+}) {
   return (
     <ol className={styles.history} aria-label="History">
       {events.map((event, index) => {
@@ -737,9 +788,21 @@ function History({ events }: { events: LeadEvent[] }) {
                 : undefined
             }
           >
-            <span className={styles.historyTitle}>{text.title}</span>
+            <span className={styles.historyTitle}>
+              {text.title}
+              {event.private ? (
+                <span className={styles.privateTag}>Private</span>
+              ) : null}
+            </span>
             {text.detail ? (
-              <span className={styles.historyDetail}>{text.detail}</span>
+              <span className={styles.historyDetail}>
+                {event.private
+                  ? "Only you see this call. It isn't counted."
+                  : text.detail}
+              </span>
+            ) : null}
+            {onChanged ? (
+              <PrivacyButton event={event} onChanged={onChanged} />
             ) : null}
             {event.kind === "call" && event.submission_id ? (
               <Link
@@ -1804,7 +1867,7 @@ function LeadCard({
         {detail.can_edit ? (
           <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
         ) : null}
-        <History events={detail.events} />
+        <History events={detail.events} onChanged={onChanged} />
       </section>
     </div>
   );

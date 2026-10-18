@@ -1217,3 +1217,120 @@ def test_calls_by_seller_by_day(postgres_harness: Any, tmp_path: Path) -> None:
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_a_seller_marks_a_phone_logged_call_private(postgres_harness: Any, tmp_path: Path) -> None:
+    """Salestrail's untracked calls, 18 Oct: the seller hides a call their phone logged.
+    It stays on the lead for them, marked private, and leaves My day, Team, the report
+    and the lead for everyone else; marking it again shows it. Nothing is deleted."""
+    from ac_platform.lead_desk import hours
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            other = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            other_token = await _session(setup, other)
+            today = str(datetime.now(hours.IST).date())
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                as_(seller_token)
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Personal Friend",
+                        "phone": "98765 43333",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                lead_id = added.json()["lead"]["lead_id"]
+                logged = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": str(uuid4()),
+                        "calls": [
+                            {
+                                "log_id": "1",
+                                "number": "9876543333",
+                                "started_at": (
+                                    datetime.now(UTC) - timedelta(minutes=2)
+                                ).isoformat(),
+                                "duration_seconds": 300,
+                                "direction": "outgoing",
+                            }
+                        ],
+                    },
+                    headers=WRITE,
+                )
+                assert logged.json()["logged"] == 1
+                detail = (await client.get(f"{BASE}/leads/{lead_id}")).json()
+                [call] = [event for event in detail["events"] if event.get("via")]
+                assert call["can_hide"] is True and call["private"] is False
+                assert (await client.get(BASE)).json()["numbers"]["calls"] == 1
+
+                as_(other_token)
+                refused = await client.post(
+                    f"{BASE}/calls/{call['event_id']}/private",
+                    json={"command_id": str(uuid4()), "private": True},
+                    headers=WRITE,
+                )
+                assert refused.status_code == 404
+
+                as_(seller_token)
+                hide = {"command_id": str(uuid4()), "private": True}
+                hidden = await client.post(
+                    f"{BASE}/calls/{call['event_id']}/private", json=hide, headers=WRITE
+                )
+                assert hidden.status_code == 200, hidden.text
+                mine = [event for event in hidden.json()["events"] if event.get("via")]
+                assert [event["private"] for event in mine] == [True]
+                assert hidden.json()["lead"]["calls"] == 0
+                # The same request again changes nothing.
+                again = await client.post(
+                    f"{BASE}/calls/{call['event_id']}/private", json=hide, headers=WRITE
+                )
+                assert again.status_code == 200
+                assert (await client.get(BASE)).json()["numbers"]["calls"] == 0
+
+                as_(setup.token)
+                seen = (await client.get(f"{BASE}/leads/{lead_id}")).json()
+                assert not [event for event in seen["events"] if event.get("via")]
+                assert not [event for event in seen["events"] if event["kind"] == "edited"]
+                team = {
+                    rep["person_id"]: rep
+                    for rep in (await client.get(f"{BASE}/team")).json()["reps"]
+                }
+                assert team[str(seller.person_id)]["calls_today"] == 0
+                report = (
+                    await client.get(f"{BASE}/reports/calls", params={"start": today, "end": today})
+                ).json()
+                assert {row["person_id"]: row["calls"] for row in report["sellers"]}[
+                    str(seller.person_id)
+                ] == 0
+
+                as_(seller_token)
+                shown = await client.post(
+                    f"{BASE}/calls/{call['event_id']}/private",
+                    json={"command_id": str(uuid4()), "private": False},
+                    headers=WRITE,
+                )
+                assert shown.json()["lead"]["calls"] == 1
+                assert (await client.get(BASE)).json()["numbers"]["calls"] == 1
+                as_(setup.token)
+                seen = (await client.get(f"{BASE}/leads/{lead_id}")).json()
+                assert [event["direction"] for event in seen["events"] if event.get("via")] == [
+                    "outgoing"
+                ]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
