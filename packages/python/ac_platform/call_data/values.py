@@ -151,6 +151,94 @@ def validate_value(kind_type: ObjectType, value: object) -> dict[str, Any]:
     raise CallValueError("value_kind")
 
 
+ALLOWED_KEYS: dict[str, frozenset[str]] = {
+    "text": frozenset({"text"}),
+    "numeric": frozenset(
+        {
+            "text",
+            "interval_shape",
+            "approximation",
+            "lower",
+            "upper",
+            "lower_inclusive",
+            "upper_inclusive",
+            "currency_code",
+            "unit",
+            "period",
+        }
+    ),
+    "when": frozenset({"text", "date", "time", "purpose"}),
+    "enum": frozenset({"enum"}),
+    "person": frozenset({"name", "role", "relation"}),
+    "commitment": frozenset({"text", "due"}),
+    "objection": frozenset({"text", "kind", "resolved"}),
+    "question": frozenset({"text", "answered"}),
+    "ratio": frozenset({"parts"}),
+}
+
+
+def _present(value: Any) -> bool:
+    return value is not None and not (isinstance(value, str) and not value.strip())
+
+
+def _number_text(value: Any) -> Any:
+    """A JSON number from a model becomes the exact decimal string the contract wants."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    return format(Decimal(str(value)).normalize(), "f")
+
+
+def from_model(kind_type: ObjectType, raw: object) -> dict[str, Any]:
+    """A model's value made tidy, then checked strictly like any other value.
+
+    Empty and unknown keys are dropped (a model fills every property of the
+    schema it was given); numbers become exact decimal strings; a numeric
+    statement's missing flags take the only values its shape allows.
+    """
+    if not isinstance(raw, dict):
+        raise CallValueError("value_shape")
+    allowed = ALLOWED_KEYS[kind_type.kind]
+    value = {k: v for k, v in raw.items() if k in allowed and _present(v)}
+    if kind_type.kind == "commitment" and isinstance(value.get("due"), dict):
+        due = {k: v for k, v in value["due"].items() if k in ALLOWED_KEYS["when"] and _present(v)}
+        if "text" in due:
+            value["due"] = due
+        else:
+            value.pop("due")
+    elif kind_type.kind == "commitment":
+        value.pop("due", None)
+    if kind_type.kind == "numeric":
+        for key in ("lower", "upper"):
+            if key in value:
+                value[key] = _number_text(value[key])
+        shape = value.get("interval_shape")
+        if shape is None and "lower" in value:
+            shape = "point" if value.get("upper", value["lower"]) == value["lower"] else "range"
+            value["interval_shape"] = shape
+        if shape == "point" and "lower" in value:
+            value.setdefault("upper", value["lower"])
+        value.setdefault("approximation", "exact" if shape == "point" else "approximate")
+        if shape in ("point", "range"):
+            value.setdefault("lower_inclusive", True)
+            value.setdefault("upper_inclusive", True)
+        elif shape == "lower_bound":
+            value.setdefault("lower_inclusive", True)
+            value.pop("upper_inclusive", None)
+        elif shape == "upper_bound":
+            value.setdefault("upper_inclusive", True)
+            value.pop("lower_inclusive", None)
+        if "currency_code" in value and "unit" in value:
+            value.pop("unit")
+        if "text" not in value and "lower" in value:
+            upper = value.get("upper", value["lower"])
+            said = value["lower"] if upper == value["lower"] else f"{value['lower']}-{upper}"
+            prefix = "Rs " if value.get("currency_code") == "INR" else ""
+            suffix = f" {value['unit']}" if "unit" in value else ""
+            period = f" a {value['period']}" if value.get("period") in ("month", "year") else ""
+            value["text"] = f"{prefix}{said}{suffix}{period}"
+    return validate_value(kind_type, value)
+
+
 _ENUM_WORDS = {
     "decided_yes": "Said yes",
     "decided_no": "Said no",

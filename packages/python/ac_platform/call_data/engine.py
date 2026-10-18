@@ -128,16 +128,19 @@ WHERE cp.stage = 'C2' AND cp.erased_at IS NULL AND json_typeof(cp.payload) = 'ob
     SELECT max(n.created_at) FROM conversation_checkpoints n
     WHERE n.recording_id = cp.recording_id AND n.stage = 'C2' AND n.erased_at IS NULL
   )
-  AND NOT EXISTS (
-    SELECT 1 FROM call_data_runs r
-    WHERE r.recording_id = cp.recording_id AND r.pipeline = :pipeline
-      AND r.transcript_revision = cp.payload ->> 'revision'
-      AND r.state IN ('succeeded', 'skipped')
-  )
+  {done}
   {only}
 ORDER BY cp.created_at DESC
 LIMIT :limit
 """
+
+
+_NOT_DONE = """AND NOT EXISTS (
+    SELECT 1 FROM call_data_runs r
+    WHERE r.recording_id = cp.recording_id AND r.pipeline = :pipeline
+      AND r.transcript_revision = cp.payload ->> 'revision'
+      AND r.state IN ('succeeded', 'skipped')
+  )"""
 
 
 def candidates(
@@ -148,10 +151,12 @@ def candidates(
     limit: int,
     pipeline: str = "fast",
     recording_id: UUID | None = None,
+    include_done: bool = False,
 ) -> list[Call]:
     only = "AND cp.recording_id = :recording" if recording_id else ""
+    done = "" if include_done and recording_id else _NOT_DONE
     rows = connection.execute(
-        text(_CANDIDATES.format(only=only)),
+        text(_CANDIDATES.format(only=only, done=done)),
         {
             "not_before": not_before,
             "horizon": datetime.now(UTC) - timedelta(hours=hours),

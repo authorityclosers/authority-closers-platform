@@ -21,7 +21,7 @@ from ac_platform.call_data.extraction import (
 )
 from ac_platform.call_data.policy import MAX_QUESTIONS, plan
 from ac_platform.call_data.settings import SettingsError, cost_inr, validate
-from ac_platform.call_data.values import CallValueError, display, validate_value
+from ac_platform.call_data.values import CallValueError, display, from_model, validate_value
 
 SEGMENTS = [
     Segment("s1", "Namaste, main Rohan, Sales Xray se baat kar raha hoon.", 100, 4000, "speaker_0"),
@@ -295,3 +295,29 @@ def test_settings_are_checked_and_cost_is_a_list_price_estimate() -> None:
     assert cost_inr("gemini-3.8-flash", 1_000_000, 0) == Decimal("71.2500")
     assert cost_inr("gemini-3.8-flash", 7000, 1500) == Decimal("1.0331")
     assert cost_inr("unknown", 10, 10) == Decimal("0")
+
+
+def test_model_values_are_tidied_then_checked_strictly() -> None:
+    # A structured-output model fills every property it was given, often with nulls.
+    name = from_model(
+        taxonomy.TYPES["person.name"], {"text": "Amit Sharma", "date": None, "unit": ""}
+    )
+    assert name == {"text": "Amit Sharma"}
+    revenue = from_model(
+        taxonomy.TYPES["company.revenue"],
+        {"lower": 400000, "upper": 500000.0, "currency_code": "INR", "period": "month"},
+    )
+    assert revenue["interval_shape"] == "range" and revenue["approximation"] == "approximate"
+    assert (revenue["lower"], revenue["upper"]) == ("400000", "500000")
+    assert revenue["text"] == "Rs 400000-500000 a month"
+    team = from_model(
+        taxonomy.TYPES["company.team_size"], {"text": "8 people", "lower": "8", "unit": "people"}
+    )
+    assert team["interval_shape"] == "point" and team["upper"] == "8"
+    promise = from_model(
+        taxonomy.TYPES["commitment.seller_promise"],
+        {"text": "Send a case study", "due": {"text": None, "date": None}},
+    )
+    assert promise == {"text": "Send a case study"}
+    with pytest.raises(CallValueError):
+        from_model(taxonomy.TYPES["person.other_party"], {"name": None, "role": ""})

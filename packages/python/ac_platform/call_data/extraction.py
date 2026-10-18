@@ -14,7 +14,7 @@ from typing import Any
 
 from ac_platform.call_data import taxonomy
 from ac_platform.call_data.taxonomy import ObjectType
-from ac_platform.call_data.values import CallValueError, display, validate_value
+from ac_platform.call_data.values import CallValueError, display, from_model
 
 MAX_EVIDENCE = 3
 MAX_QUOTE = 600
@@ -94,7 +94,8 @@ VALUE_SHAPES = """Value shapes by kind:
 - enum: {"enum": "one of the listed values"}
 - person: {"name": ... or null, "role": ... or null,
   "relation": "partner, spouse, boss..." or null}
-- commitment: {"text": "what was promised", "due": a when value or null}
+- commitment: {"text": "what was promised, without its date",
+  "due": a when value or null}
 - objection: {"text": "...",
   "kind": "price|timing|authority|need|trust|competition|other",
   "resolved": true/false}
@@ -113,7 +114,8 @@ def build_prompt(
     """The extraction instruction (system) and the numbered transcript (user)."""
     system = f"""You extract facts from one sales phone call for a CRM.
 The call may be in Hindi, Marathi, English or a mix. Write every value in plain
-English, short, as a salesperson would note it. Keep names as said.
+English, short, as a salesperson would note it. Write names of people, companies
+and places in English letters as they sound (e.g. Ira Kovirakar, not Devanagari).
 
 Rules:
 - Only facts the call states. Each fact cites 1 to 5 segment ids where it is said.
@@ -135,6 +137,38 @@ Types:
     lines = (f"[{s.id}] {s.speaker} {s.start_ms // 1000}s: {s.text}" for s in segments)
     user = "Transcript:\n" + "\n".join(lines)
     return system, user
+
+
+_TEXT = {"type": "string"}
+_FLAG = {"type": "boolean"}
+# Every property any value kind can use, all optional: a structured-output model
+# fills only what it is given a place for (an untyped object comes back empty).
+VALUE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "text": _TEXT,
+        "enum": _TEXT,
+        "name": _TEXT,
+        "role": _TEXT,
+        "relation": _TEXT,
+        "date": _TEXT,
+        "time": _TEXT,
+        "purpose": _TEXT,
+        "due": {"type": "object", "properties": {"text": _TEXT, "date": _TEXT}},
+        "kind": _TEXT,
+        "resolved": _FLAG,
+        "answered": _FLAG,
+        "interval_shape": _TEXT,
+        "approximation": _TEXT,
+        "lower": _TEXT,
+        "upper": _TEXT,
+        "lower_inclusive": _FLAG,
+        "upper_inclusive": _FLAG,
+        "currency_code": _TEXT,
+        "unit": _TEXT,
+        "period": _TEXT,
+    },
+}
 
 
 def response_schema(types: Sequence[ObjectType]) -> dict[str, Any]:
@@ -159,7 +193,7 @@ def response_schema(types: Sequence[ObjectType]) -> dict[str, Any]:
                     "type": "object",
                     "properties": {
                         "type": {"type": "string", "enum": [t.key for t in types]},
-                        "value": {"type": "object"},
+                        "value": VALUE_SCHEMA,
                         "confidence": {"type": "number"},
                         "basis": {"type": "string", "enum": ["observed", "inferred"]},
                         "segments": {"type": "array", "items": {"type": "string"}},
@@ -228,7 +262,7 @@ def validate_response(
             drop("unknown_type")
             continue
         try:
-            value = validate_value(kind_type, item.get("value"))
+            value = from_model(kind_type, item.get("value"))
         except CallValueError as error:
             drop(error.code)
             continue

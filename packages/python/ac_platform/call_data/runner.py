@@ -59,6 +59,11 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--recent-hours", type=int, default=48)
     parser.add_argument("--recording", type=UUID, help="operator mode: this one call")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="operator mode: read this call again even if it was read (new run, supersedes)",
+    )
     parser.add_argument("--limit", type=int, default=5, help="calls per pass")
     parser.add_argument("--loop", action="store_true", help="keep polling")
     parser.add_argument("--interval", type=float, default=4.0, help="seconds between passes")
@@ -75,6 +80,8 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         parser.error("--recent-hours must be 1-168")
     if not 1.0 <= arguments.interval <= 300.0:
         parser.error("--interval must be 1-300 seconds")
+    if arguments.force and (arguments.recording is None or arguments.loop):
+        parser.error("--force is for one call (--recording), never the loop")
     return arguments
 
 
@@ -341,6 +348,7 @@ def run_pass(
             hours=arguments.recent_hours,
             limit=arguments.limit,
             recording_id=arguments.recording,
+            include_done=bool(arguments.force),
         )
         test_sources = engine.test_source_shas(connection) if calls else set()
     lines = []
