@@ -65,9 +65,9 @@ production queue and approved initial delivery scope before releasing the worker
 `AC_LEARNER_CONSENT_VERSION` is release-owned configuration: the installer clears
 ambient and injected values before applying the release profiles. Production
 registration therefore requires the exact approved consent version in its
-reviewed profile contract; adding it only to Infisical is insufficient. This
-email activation retains `ac-learner-terms-privacy-2026-09-30-v1` from the separately
-reviewed consent-profile release.
+reviewed profile contract; adding it only to Infisical is insufficient. The profiles carry `ac-learner-terms-privacy-2026-10-18-v2`
+(wording change recorded in
+`docs/evidence/20261018_AUTHORITY_CLOSERS_ACCOUNT_CONSENT_V2.md`).
 
 `AC_PUBLIC_LEARNER_TENANT_ID` is not authority by itself. It points to the
 canonical active tenant whose persisted membership rows remain the authorization

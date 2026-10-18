@@ -44,6 +44,9 @@ export type LeadRow = {
   test_data: boolean;
   /** Its call is more than an hour late (a new lead counts from its arrival). */
   overdue?: boolean;
+  /** They called, nobody picked up, and nobody has called back yet. */
+  missed_at?: string | null;
+  missed_calls?: number;
 };
 
 export type MessageTemplate = { key: string; label: string; text: string };
@@ -64,6 +67,8 @@ export type Desk = {
     can_manage: boolean;
     /** Off: the lead rules give this seller no new leads (UX study item 8). */
     taking_leads?: boolean;
+    /** Outside work hours with the pause on: new leads wait until then. */
+    paused_until?: string | null;
   };
   numbers: {
     calls: number;
@@ -80,6 +85,7 @@ export type Desk = {
     later_today: number;
     unassigned: number | null;
     overdue?: number;
+    call_back?: number;
   };
   queue: LeadRow[];
   call_mode: "simulated" | "phone";
@@ -88,6 +94,8 @@ export type Desk = {
   /** The next few days, after today. */
   upcoming?: LeadRow[];
   templates?: MessageTemplate[];
+  /** Missed calls from my leads, newest first, until someone calls back. */
+  call_back?: LeadRow[];
 };
 
 export type Badge = { overdue: number; to_call: number };
@@ -124,6 +132,19 @@ export type LeadEvent = {
   changed?: string[] | null;
   channel?: string | null;
   template_label?: string | null;
+  /** "phone": the seller's phone logged this call by itself (UX study item 5). */
+  via?: "phone" | null;
+  direction?:
+    | "outgoing"
+    | "incoming"
+    | "missed"
+    | "rejected"
+    | "blocked"
+    | null;
+  /** A phone-logged call: its seller may mark it private (shown to them only). */
+  event_id?: string | null;
+  can_hide?: boolean;
+  private?: boolean;
 };
 
 export type LeadDetail = {
@@ -168,6 +189,30 @@ export type RepView = {
   calls_today: number;
   connected_today: number;
   first_call_minutes?: number | null;
+  /** The seller's phone as their app last reported it (UX study item 7). */
+  phone?: PhoneHealth | null;
+};
+
+/** The team's work days and hours, India time (0 is Monday). */
+export type WorkHours = {
+  days: number[];
+  start: string;
+  end: string;
+  pause_leads: boolean;
+  inside: boolean;
+  next_start: string | null;
+};
+
+export type PhoneHealth = {
+  reported_at: string;
+  app_version: string | null;
+  family: string | null;
+  checks: Record<string, boolean>;
+  done: number;
+  total: number;
+  call_log_on: boolean;
+  /** When the phone's call history last reached Sales Xray. */
+  synced_at: string | null;
 };
 
 export type Team = {
@@ -177,6 +222,7 @@ export type Team = {
     auto_reassign: boolean;
     reassign_minutes: number;
     default_country: string;
+    work_hours?: WorkHours | null;
   };
   by_stage: Record<string, number>;
   by_source: Record<string, number>;
@@ -574,8 +620,23 @@ export function reassign(
 }
 
 /** The seller's own "Taking new leads" switch. */
+/** Me on the desk: whether new leads come to me (the account sheet's switch). */
+export function readMe(signal?: AbortSignal) {
+  return request<Desk["me"]>("/me", { signal });
+}
+
 export function setTaking(taking: boolean) {
   return request<Desk["me"]>("/me/taking", json("PUT", { taking }));
+}
+
+/** The phone app's setup checklist, for the seller's manager on Team (UX study item 7). */
+export function reportPhone(report: {
+  device_id: string;
+  app_version?: string;
+  family?: string;
+  checks: Record<string, boolean>;
+}) {
+  return request<PhoneHealth>("/me/phone", json("POST", report));
 }
 
 export function readTeam(signal?: AbortSignal) {
@@ -606,6 +667,59 @@ export function saveSettings(
     "/settings",
     json("PUT", { expected_revision: revision, ...settings }),
   );
+}
+
+/** Sets the team's work hours; no days clears them. */
+export function saveWorkHours(
+  revision: number,
+  hours: { days: number[]; start: string; end: string; pause_leads: boolean },
+) {
+  return request<Team>(
+    "/work-hours",
+    json("PUT", { expected_revision: revision, ...hours }),
+  );
+}
+
+export type CallReport = {
+  start: string;
+  end: string;
+  sellers: {
+    person_id: string;
+    name: string;
+    days: {
+      day: string;
+      calls: number;
+      connected: number;
+      talk_seconds: number;
+      missed: number;
+    }[];
+    calls: number;
+    connected: number;
+    talk_seconds: number;
+    missed: number;
+  }[];
+};
+
+/** Hides a call the seller's phone logged from everyone else, or shows it again. */
+export function setCallPrivacy(
+  eventId: string,
+  hidden: boolean,
+  command = commandId(),
+) {
+  return request<LeadDetail>(
+    `/calls/${encodeURIComponent(eventId)}/private`,
+    json("POST", { command_id: command, private: hidden }),
+  );
+}
+
+/** Calls by seller by day, India time (managers). */
+export function readCallReport(
+  start: string,
+  end: string,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ start, end });
+  return request<CallReport>(`/reports/calls?${query}`, { signal });
 }
 
 export function runSweep() {

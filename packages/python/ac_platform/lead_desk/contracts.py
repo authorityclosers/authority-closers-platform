@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -11,6 +11,18 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 from ac_platform.lead_desk.vocabulary import Channel, ConnectedStage, Reason
 
 SCHEMA: Literal["lead-desk/1"] = "lead-desk/1"
+# The phone setup checklist (UX study item 7), in the order the app shows it.
+PHONE_CHECKS: tuple[str, ...] = (
+    "calls",
+    "recordings",
+    "notifications",
+    "recorder",
+    "folder",
+    "battery",
+    "autostart",
+    "testCall",
+    "callLog",
+)
 _Short = Field(default=None, max_length=200)
 
 
@@ -33,6 +45,8 @@ class Me(Model):
     # Off: the lead rules give this seller no new leads; their open leads stay
     # with them (UX study item 8, 18 Oct). Managers set the same switch on Team.
     taking_leads: bool = True
+    # Outside the workspace's work hours with the pause on: new leads wait until then.
+    paused_until: datetime | None = None
 
 
 class Numbers(Model):
@@ -54,6 +68,8 @@ class Counts(Model):
     unassigned: int | None
     # Calls more than an hour late (new leads included): the red badge.
     overdue: int = 0
+    # Leads who called and weren't reached since (the Call back list).
+    call_back: int = 0
 
 
 class LeadRow(Model):
@@ -81,6 +97,10 @@ class LeadRow(Model):
     last_result_label: str | None
     test_data: bool
     overdue: bool = False
+    # They called and nobody picked up, and nobody has called them since
+    # (Salestrail's missed-call queue): the newest such call and how many.
+    missed_at: datetime | None = None
+    missed_calls: int = 0
 
 
 class MessageTemplate(Model):
@@ -101,6 +121,8 @@ class Desk(Model):
     # The next few days, after today ("Coming up").
     upcoming: tuple[LeadRow, ...] = ()
     templates: tuple[MessageTemplate, ...] = ()
+    # Missed calls from my leads, newest first, until someone calls them back.
+    call_back: tuple[LeadRow, ...] = ()
 
 
 class Badge(Model):
@@ -146,6 +168,15 @@ class LeadEventView(Model):
     changed: tuple[str, ...] | None = None
     channel: str | None = None
     template_label: str | None = None
+    # A call the seller's phone logged by itself (UX study item 5): "phone", and
+    # which way it went (outgoing, incoming, missed, rejected or blocked).
+    via: str | None = None
+    direction: str | None = None
+    # A call the phone logged: its id, so its own seller can mark it private
+    # (Salestrail's untracked calls); private ones are shown to that seller only.
+    event_id: UUID | None = None
+    can_hide: bool = False
+    private: bool = False
 
 
 class RepOption(Model):
@@ -172,6 +203,20 @@ class LeadDetail(Model):
     first_call_minutes: int | None = None
 
 
+class PhoneHealth(Model):
+    """A seller's phone as their app last reported it (UX study item 7)."""
+
+    reported_at: datetime
+    app_version: str | None = None
+    family: str | None = None
+    checks: dict[str, bool]
+    done: int
+    total: int
+    call_log_on: bool
+    # When the phone's call history last reached Sales Xray (every 15 minutes while on).
+    synced_at: datetime | None = None
+
+
 class RepView(Model):
     person_id: UUID
     name: str
@@ -187,6 +232,18 @@ class RepView(Model):
     calls_today: int
     connected_today: int
     first_call_minutes: int | None = None
+    phone: PhoneHealth | None = None
+
+
+class WorkHoursView(Model):
+    """The team's work days and hours, India time (0 is Monday)."""
+
+    days: tuple[int, ...]
+    start: str
+    end: str
+    pause_leads: bool
+    inside: bool
+    next_start: datetime | None = None
 
 
 class SettingsView(Model):
@@ -194,6 +251,7 @@ class SettingsView(Model):
     auto_reassign: bool
     reassign_minutes: int
     default_country: str
+    work_hours: WorkHoursView | None = None
 
 
 class Team(Model):
@@ -205,6 +263,33 @@ class Team(Model):
     unassigned: int
     waiting_first_call: int
     first_call_minutes: int | None = None
+
+
+class DayCalls(Model):
+    day: date
+    calls: int
+    connected: int
+    talk_seconds: int
+    missed: int
+
+
+class SellerCalls(Model):
+    person_id: UUID
+    name: str
+    days: tuple[DayCalls, ...]
+    calls: int
+    connected: int
+    talk_seconds: int
+    missed: int
+
+
+class CallReport(Model):
+    """Calls by seller by day, India time (Salestrail's dashboard; NeoDove's user report)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    start: date
+    end: date
+    sellers: tuple[SellerCalls, ...]
 
 
 class ImportPreview(Model):
@@ -347,6 +432,30 @@ class RepRules(Command):
         return tuple(cleaned)
 
 
+class PhoneReport(Command):
+    """The seller's own phone setup checklist, sent by the page inside the phone app."""
+
+    device_id: UUID
+    app_version: str | None = Field(default=None, max_length=40)
+    family: str | None = Field(default=None, max_length=20, pattern=r"^[a-z]+$")
+    checks: dict[str, bool] = Field(max_length=len(PHONE_CHECKS))
+
+    @field_validator("checks")
+    @classmethod
+    def _known(cls, checks: dict[str, bool]) -> dict[str, bool]:
+        unknown = set(checks) - set(PHONE_CHECKS)
+        if unknown:
+            raise ValueError("Unknown phone check.")
+        return {name: checks[name] for name in PHONE_CHECKS if name in checks}
+
+
+class CallPrivacy(Command):
+    """The seller hides a call their phone logged from everyone else, or shows it again."""
+
+    command_id: UUID
+    private: bool
+
+
 class TakingLeads(Command):
     """A seller turns new leads on or off for themselves."""
 
@@ -357,6 +466,23 @@ class SettingsCommand(Command):
     expected_revision: int = Field(ge=0)
     auto_reassign: bool
     reassign_minutes: int = Field(ge=5, le=1440)
+
+
+class WorkHoursCommand(Command):
+    """A manager sets the team's work hours; no days clears them."""
+
+    expected_revision: int = Field(ge=0)
+    days: tuple[int, ...] = Field(default=(), max_length=7)
+    start: str = Field(default="09:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(default="19:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    pause_leads: bool = False
+
+    @field_validator("days")
+    @classmethod
+    def _days(cls, days: tuple[int, ...]) -> tuple[int, ...]:
+        if any(day < 0 or day > 6 for day in days):
+            raise ValueError("Days are 0 (Monday) to 6 (Sunday).")
+        return tuple(sorted(set(days)))
 
 
 class ImportCommand(Command):
@@ -441,9 +567,52 @@ class AlertText(Model):
     url: str
 
 
+class PhoneBook(Model):
+    """The numbers of the leads this person can see: their phone logs calls with these only."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    # Whose book it is: a phone that changes hands starts afresh, so one person's
+    # calls are never logged as another's.
+    person_id: UUID
+    numbers: tuple[str, ...]
+    generated_at: datetime
+    # A call outside these stays on the phone (Salestrail's business hours).
+    work_hours: WorkHoursView | None = None
+
+
+class PhoneLogResult(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    logged: int
+    # Sent before, or already logged by the app's own after-call sheet.
+    already: int
+    # No lead with that number here, too old or not a call worth logging.
+    skipped: int
+
+
 class DeviceView(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     registered: bool
+
+
+class PhoneLogCall(Command):
+    """One row of the phone's call history whose number belongs to a lead."""
+
+    log_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:\-]+$")
+    number: str = Field(min_length=6, max_length=40)
+    started_at: AwareDatetime
+    duration_seconds: int = Field(ge=0, le=14400)
+    direction: Literal["outgoing", "incoming", "missed", "rejected", "blocked"]
+
+
+class PhoneLog(Command):
+    """Work calls the seller's phone logged by itself (UX study item 5).
+
+    The app sends only calls on the work SIM whose number is one of the
+    seller's leads (from the phone book); every other number stays on the phone.
+    """
+
+    device_id: UUID
+    calls: tuple[PhoneLogCall, ...] = Field(max_length=200)
 
 
 class SeedCommand(Command):

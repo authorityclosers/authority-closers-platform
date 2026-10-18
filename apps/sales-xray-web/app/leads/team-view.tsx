@@ -27,10 +27,13 @@ import {
   runSweep,
   saveRep,
   saveSettings,
+  saveWorkHours,
   splitList,
   type RepView,
   type Team,
 } from "./leads-client";
+import { CallsReport } from "./calls-report";
+import { phoneDot } from "./phone-setup-words";
 import styles from "./leads.module.css";
 
 const STAGE_ORDER = [
@@ -58,6 +61,154 @@ const SOURCE_NAMES: Record<string, string> = {
   meta: "Meta lead form",
   synthetic: "Test data",
 };
+
+/** The seller's phone (UX study item 7): a dot, a few words, and what is left in its title. */
+export function PhoneCell({ rep }: { rep: RepView }) {
+  const dot = phoneDot(rep.phone);
+  const missing = dot.missing.length ? `To do: ${dot.missing.join(", ")}` : "";
+  return (
+    <span
+      className={styles.phoneDot}
+      data-tone={dot.tone}
+      title={missing || undefined}
+    >
+      {dot.label}
+      {missing ? <span className={styles.srOnly}>. {missing}</span> : null}
+    </span>
+  );
+}
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** The team's work hours (Salestrail's business hours), India time. */
+export function WorkHoursPanel({
+  team,
+  onSaved,
+}: {
+  team: Team;
+  onSaved: (team: Team) => void;
+}) {
+  const current = team.settings.work_hours ?? null;
+  const [days, setDays] = useState<number[]>(
+    current?.days ?? [0, 1, 2, 3, 4, 5],
+  );
+  const [start, setStart] = useState(current?.start ?? "09:30");
+  const [end, setEnd] = useState(current?.end ?? "19:00");
+  const [pause, setPause] = useState(current?.pause_leads ?? true);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const save = async (clear = false) => {
+    if (!clear && start >= end) {
+      setNote("Work ends after it starts. Pick the hours again.");
+      return;
+    }
+    setBusy(true);
+    setNote(null);
+    try {
+      onSaved(
+        await saveWorkHours(team.settings.revision, {
+          days: clear ? [] : days,
+          start,
+          end,
+          pause_leads: pause,
+        }),
+      );
+    } catch (reason) {
+      setNote(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Panel
+      title="Work hours"
+      sub={
+        current
+          ? current.inside
+            ? "working now"
+            : "after hours now"
+          : "not set"
+      }
+    >
+      <div className={styles.form}>
+        <p className={styles.hint}>
+          India time. Calls outside these hours stay on the seller&apos;s phone
+          and are never logged.
+        </p>
+        <div className={styles.chips} role="group" aria-label="Work days">
+          {DAYS.map((label, day) => (
+            <button
+              key={label}
+              type="button"
+              className={styles.chip}
+              aria-pressed={days.includes(day)}
+              onClick={() =>
+                setDays((now) =>
+                  now.includes(day)
+                    ? now.filter((item) => item !== day)
+                    : [...now, day].sort(),
+                )
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className={styles.row}>
+          <Field label="Starts">
+            <input
+              type="time"
+              value={start}
+              onChange={(event) => setStart(event.target.value)}
+            />
+          </Field>
+          <Field label="Ends">
+            <input
+              type="time"
+              value={end}
+              onChange={(event) => setEnd(event.target.value)}
+            />
+          </Field>
+        </div>
+        <label className={styles.toggle}>
+          <input
+            type="checkbox"
+            checked={pause}
+            onChange={(event) => setPause(event.target.checked)}
+          />
+          New leads wait outside work hours, then go out when work starts
+        </label>
+        <div className={styles.row}>
+          <Button
+            variant="primary"
+            disabled={busy || days.length === 0}
+            onClick={() => void save()}
+          >
+            Save work hours
+          </Button>
+          {current ? (
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => void save(true)}
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
+        {note ? (
+          <p className={styles.hint} role="status">
+            {note}
+          </p>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
 
 function RulesDialog({
   rep,
@@ -299,6 +450,7 @@ export function TeamView({
               <tr>
                 <th>Seller</th>
                 <th>Takes leads</th>
+                <th>Phone</th>
                 <th data-num>Open</th>
                 <th data-num>Due now</th>
                 <th data-num>Calls today</th>
@@ -332,6 +484,9 @@ export function TeamView({
                       <Badge>Away</Badge>
                     )}
                   </td>
+                  <td>
+                    <PhoneCell rep={rep} />
+                  </td>
                   <td data-num>
                     {rep.open_leads}
                     <small>/{rep.max_open}</small>
@@ -361,6 +516,8 @@ export function TeamView({
           </table>
         </div>
       </Panel>
+
+      <CallsReport />
 
       <div className={styles.teamPair}>
         <Panel
@@ -401,6 +558,14 @@ export function TeamView({
             ) : null}
           </div>
         </Panel>
+        <WorkHoursPanel
+          key={`${team.settings.revision}`}
+          team={team}
+          onSaved={(next) => {
+            setTeam(next);
+            onChanged();
+          }}
+        />
         <Panel title="Where leads stand">
           <dl className={styles.bars}>
             {STAGE_ORDER.map((stage) => (

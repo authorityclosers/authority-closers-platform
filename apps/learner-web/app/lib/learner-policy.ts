@@ -1,6 +1,6 @@
 /** Immutable published copy. Change the version when either policy or consent changes. */
-export const LEARNER_POLICY_VERSION = "ac-learner-terms-privacy-2026-09-30-v1";
-export const LEARNER_POLICY_EFFECTIVE_DATE = "30 September 2026";
+export const LEARNER_POLICY_VERSION = "ac-learner-terms-privacy-2026-10-18-v2";
+export const LEARNER_POLICY_EFFECTIVE_DATE = "18 October 2026";
 export const LEARNER_POLICY_CONTACT = "admin@authorityclosers.com";
 export const LEARNER_CONSENT_COPY = {
   beforeTerms: "I am 18 or older and agree to the ",

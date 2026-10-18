@@ -1,0 +1,156 @@
+/* The Terms card for a signed-in person whose consent is not current. It is
+   fixed over the page, so showing it moves nothing; corner cards rise above
+   it while it is open (notice-center.module.css). */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: max(var(--sx-gutter), env(safe-area-inset-top))
+    max(var(--sx-gutter), env(safe-area-inset-right))
+    max(var(--sx-gutter), env(safe-area-inset-bottom))
+    max(var(--sx-gutter), env(safe-area-inset-left));
+  background: var(--sx-scrim);
+  animation: scrim-in 200ms ease both;
+}
+
+.card {
+  display: grid;
+  width: min(420px, 100%);
+  box-sizing: border-box;
+  gap: 12px;
+  margin: auto;
+  padding: 20px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--sx-shadow-float);
+  animation: card-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* showModal-style focus: the card takes focus; its controls show it instead. */
+.card:focus,
+.card:focus-visible {
+  outline: none;
+}
+
+.icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.title {
+  margin: 0;
+  font: var(--sx-text-title);
+}
+
+.lead {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.5;
+}
+
+/* The two documents, as tap-sized buttons that open in a new tab. */
+.links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.link {
+  display: inline-flex;
+  min-width: 0;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.link:hover {
+  background: var(--sx-sunken);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.check input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--sx-accent);
+  cursor: pointer;
+}
+
+.check:has(input:focus-visible) {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+.accept {
+  width: 100%;
+  min-height: max(var(--sx-control-h), 40px);
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .card {
+    animation: none;
+  }
+}

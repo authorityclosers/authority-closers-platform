@@ -16,6 +16,7 @@ from ac_platform.http.auth import (
     install_identity_http,
 )
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.learner_consent import CURRENT_LEARNER_CONSENT_VERSION
 from ac_platform.identity.models import Person, PersonStatus
 from ac_platform.kernel.authz import ActorContext
 
@@ -59,7 +60,7 @@ class _FakeAuditRepository:
         return event
 
 
-def _settings() -> Settings:
+def _settings(version: str = CURRENT_VERSION) -> Settings:
     return Settings(
         environment="test",
         database_url="postgresql+psycopg://unused:unused@localhost/unused",
@@ -69,7 +70,7 @@ def _settings() -> Settings:
         public_app_url="https://app.authorityclosers.test",
         admin_app_url="https://admin.authorityclosers.test",
         api_url="https://api.authorityclosers.test",
-        learner_consent_version=CURRENT_VERSION,
+        learner_consent_version=version,
         public_learner_tenant_id=TENANT_ID,
         operations_tenant_id=UUID("44444444-4444-4444-8444-444444444444"),
     )
@@ -93,6 +94,8 @@ def _person(*, version: str | None, verified: bool = True) -> Person:
 def _client(
     person: Person,
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    version: str = CURRENT_VERSION,
 ) -> tuple[TestClient, _FakeDatabase]:
     database = _FakeDatabase(person)
     monkeypatch.setattr(auth_module, "AuditRepository", _FakeAuditRepository)
@@ -100,7 +103,7 @@ def _client(
     register_problem_handlers(app)
     require_actor = install_identity_http(
         app,
-        settings=_settings(),
+        settings=_settings(version),
         sessions=cast(Any, lambda: None),
     )
 
@@ -315,3 +318,58 @@ def test_renewal_requires_authentication() -> None:
         json={"accepted": True, "expected_version": CURRENT_VERSION},
     )
     assert response.status_code == 401
+
+
+RELEASED_V1 = "ac-learner-terms-privacy-2026-09-30-v1"
+RELEASED_V2 = CURRENT_LEARNER_CONSENT_VERSION
+
+
+@pytest.mark.parametrize(
+    ("version", "ending"),
+    (
+        (RELEASED_V1, "for my learner account."),
+        (RELEASED_V2, "for my Authority Closers account."),
+    ),
+)
+def test_consent_document_serves_the_words_of_the_configured_version(
+    monkeypatch: pytest.MonkeyPatch, version: str, ending: str
+) -> None:
+    client, _ = _client(_person(version=version), monkeypatch, version=version)
+
+    body = client.get("/v1/me/consent").json()
+
+    assert body["status"] == "current"
+    assert body["document"]["version"] == version
+    assert body["document"]["acknowledgement"].endswith(ending)
+
+
+def test_a_v1_learner_is_asked_again_for_v2_and_the_v1_acceptance_stays(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    person = _person(version=RELEASED_V1)
+    client, database = _client(person, monkeypatch, version=RELEASED_V2)
+    v1_event = SimpleNamespace(
+        payload={"consent_version": RELEASED_V1}, occurred_at=person.consented_at
+    )
+    database.audit_events.append(v1_event)
+
+    before = client.get("/v1/me/consent").json()
+    assert before["status"] == "renewal_required"
+    assert before["recorded_version"] == RELEASED_V1
+    assert before["current_version"] == RELEASED_V2
+    assert before["document"]["acknowledgement"].endswith("for my Authority Closers account.")
+
+    renewed = client.post(
+        "/v1/me/consent/renew",
+        headers={"Origin": "https://app.authorityclosers.test"},
+        json={"accepted": True, "expected_version": RELEASED_V2},
+    )
+
+    assert renewed.status_code == 200
+    assert renewed.json()["status"] == "current"
+    assert database.person.consent_version == RELEASED_V2
+    assert database.audit_events[0] is v1_event
+    assert v1_event.payload == {"consent_version": RELEASED_V1}
+    payloads = [cast(SimpleNamespace, event).payload for event in database.audit_events]
+    assert [payload["consent_version"] for payload in payloads] == [RELEASED_V1, RELEASED_V2]
+    assert payloads[1]["previous_consent_version"] == RELEASED_V1

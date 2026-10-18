@@ -24,6 +24,8 @@ export type NativeCallResult =
   | "busy"
   | "rejected"
   | "failed"
+  /** No SIM, no service or airplane mode when the call was placed. */
+  | "no_network"
   | "unknown";
 
 export type NativeCall = {
@@ -156,6 +158,7 @@ const RESULTS = new Set<NativeCallResult>([
   "busy",
   "rejected",
   "failed",
+  "no_network",
   "unknown",
 ]);
 
@@ -283,6 +286,8 @@ export function missedReason(result: NativeCallResult): string | null {
       return "disconnected";
     case "failed":
       return "not_connected";
+    case "no_network":
+      return "out_of_coverage";
     default:
       return null;
   }
@@ -355,10 +360,230 @@ export async function pushEnable(config: {
   }
 }
 
+export type CallLogSim = { id: string; label: string };
+
+/** A work call with a number that isn't a lead yet; it stays on the phone unless saved. */
+export type UnknownCall = {
+  number: string;
+  lastMs: number;
+  direction: "outgoing" | "incoming" | "missed";
+  seconds: number;
+  count: number;
+};
+
+export function parseUnknown(raw: unknown): UnknownCall[] {
+  const items =
+    raw && typeof raw === "object"
+      ? (raw as { items?: unknown }).items
+      : undefined;
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    const direction = text(value.direction);
+    if (
+      !text(value.number) ||
+      !["outgoing", "incoming", "missed"].includes(direction)
+    )
+      return [];
+    return [
+      {
+        number: text(value.number),
+        lastMs: count(value.lastMs),
+        direction: direction as UnknownCall["direction"],
+        seconds: count(value.seconds),
+        count: Math.max(1, count(value.count)),
+      },
+    ];
+  });
+}
+
+/** Work calls with numbers that aren't leads, newest first; [] in a browser or older app. */
+export async function unknownCalls(): Promise<UnknownCall[]> {
+  if (!inPhoneApp()) return [];
+  try {
+    return parseUnknown(await ask("unknownCalls", {}, 5_000));
+  } catch {
+    return [];
+  }
+}
+
+/** "Not a lead": the phone stops offering this number. */
+export async function ignoreNumber(number: string): Promise<UnknownCall[]> {
+  try {
+    return parseUnknown(await ask("ignoreNumber", { number }, 5_000));
+  } catch {
+    return [];
+  }
+}
+
+/** Saved as a lead: the phone drops it from the list. */
+export async function forgetUnknown(number: string): Promise<void> {
+  await ask("forgetUnknown", { number }, 5_000).catch(() => undefined);
+}
+
+/** Work calls the phone logs by itself (UX study item 5). */
+export type CallLogStatus = {
+  on: boolean;
+  /** The phone lets Sales Xray read its call history. */
+  access: boolean;
+  sims: CallLogSim[];
+  /** The work SIM; "" means every SIM. */
+  sim: string;
+  lastSyncMs: number | null;
+  lastLogged: number;
+  /** How the last look went: ok, never, no_access, signed_out, offline or error. */
+  state: string;
+};
+
+export function parseCallLog(raw: unknown): CallLogStatus | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.on !== "boolean") return null;
+  const sims = Array.isArray(value.sims)
+    ? value.sims.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const sim = item as Record<string, unknown>;
+        return text(sim.id)
+          ? [{ id: text(sim.id), label: text(sim.label) }]
+          : [];
+      })
+    : [];
+  return {
+    on: value.on,
+    access: value.access === true,
+    sims,
+    sim: text(value.sim),
+    lastSyncMs:
+      typeof value.lastSyncMs === "number" && value.lastSyncMs > 0
+        ? value.lastSyncMs
+        : null,
+    lastLogged: count(value.lastLogged),
+    state: text(value.state) || "never",
+  };
+}
+
+/** What the phone app says about logging work calls; null in a browser or an older app. */
+export async function callLogStatus(): Promise<CallLogStatus | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    return parseCallLog(await ask("callLogStatus", {}, 5_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Turns call logging on or off for a work SIM; the phone asks for call-history access once. */
+export async function callLogSetup(
+  on: boolean,
+  sim: string,
+): Promise<CallLogStatus | null> {
+  try {
+    return parseCallLog(await ask("callLogSetup", { on, sim }, 120_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Looks at the call history now (the app also does when it opens and every 15 minutes). */
+export async function callLogSyncNow(): Promise<CallLogStatus | null> {
+  try {
+    return parseCallLog(await ask("callLogSync", {}, 60_000));
+  } catch {
+    return null;
+  }
+}
+
+/** The phone setup checklist as the phone sees it (UX study item 7). */
+export type SetupStatus = {
+  checks: Record<string, boolean>;
+  /** xiaomi, samsung, vivo, oppo, realme, oneplus, huawei or other. */
+  family: string;
+  model: string;
+  /** This brand stops apps unless Autostart is allowed. */
+  autostartNeeded: boolean;
+  version: string;
+  /** This install's own id, the same one call logging uses. */
+  device: string;
+};
+
+export function parseSetup(raw: unknown): SetupStatus | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  if (!value.checks || typeof value.checks !== "object") return null;
+  const checks: Record<string, boolean> = {};
+  for (const [key, on] of Object.entries(value.checks as object))
+    if (typeof on === "boolean") checks[key] = on;
+  return {
+    checks,
+    family: text(value.family) || "other",
+    model: text(value.model),
+    autostartNeeded: value.autostartNeeded === true,
+    version: text(value.version),
+    device: text(value.device),
+  };
+}
+
+/** The checklist; null in a browser or in an app without it. */
+export async function setupStatus(): Promise<SetupStatus | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    return parseSetup(await ask("setupStatus", {}, 10_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Opens the phone screen that fixes a line: battery, autostart, recorder or notifications. */
+export async function setupOpen(what: string): Promise<boolean> {
+  try {
+    const raw = await ask<{ opened?: boolean }>("setupOpen", { what }, 10_000);
+    return raw.opened === true;
+  } catch {
+    return false;
+  }
+}
+
+/** The seller ticks what the phone can't tell: "recorder" or "autostart". */
+export async function setupMark(
+  what: string,
+  done: boolean,
+): Promise<SetupStatus | null> {
+  try {
+    return parseSetup(await ask("setupMark", { what, done }, 10_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Asks Android for notifications alone (older phones open the settings). */
+export async function askNotifications(): Promise<SetupStatus | null> {
+  try {
+    return parseSetup(await ask("requestNotifications", {}, 120_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Asks Android to let Sales Xray read the phone's call recordings. */
+export async function askRecordingAccess(): Promise<boolean> {
+  try {
+    const raw = await ask<Record<string, unknown>>(
+      "requestAccess",
+      {},
+      120_000,
+    );
+    return raw.audio === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Signals from the phone app: "resume" when it comes back to the front,
- * "alert" when a lead alert arrives while it is open. Older apps send none;
- * the page also listens for the browser's own visibility change.
+ * "alert" when a lead alert arrives while it is open, "calls" when it logged
+ * new work calls. Older apps send none; the page also listens for the
+ * browser's own visibility change.
  */
 export function onPhoneSignal(listener: (event: string) => void): () => void {
   const handle = (event: Event) => {

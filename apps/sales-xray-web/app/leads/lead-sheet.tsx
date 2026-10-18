@@ -43,6 +43,7 @@ import {
   LeadsError,
   localInputValue,
   logPhoneCall,
+  setCallPrivacy,
   minutesLabel,
   nextCallTime,
   peekPendingCall,
@@ -61,6 +62,7 @@ import {
 import { LastCallBrief } from "./call-brief-card";
 import { sourceText, whyLine } from "./desk-view";
 import { firstCallWords, ownerNote } from "./owner-words";
+import { phoneCallText } from "./phone-call-text";
 import {
   MessageSetup,
   MessageSheet,
@@ -186,6 +188,11 @@ const NEXT: { key: Stage; label: string; sub: string; tone: string }[] = [
   { key: "lost", label: "Not interested", sub: "Close this lead", tone: "bad" },
 ];
 
+/** The stage a lead already has, chosen again after "We talked" (UX study item 6). */
+export function stageAfterTalk(stage: Stage): Stage | null {
+  return stage === "interested" || stage === "follow_up" ? stage : null;
+}
+
 const TIMES: { key: Pick; label: string }[] = [
   { key: "hour", label: "In 1 hour" },
   { key: "evening", label: "This evening" },
@@ -278,7 +285,8 @@ export function CallOutcome({
   const [reason, setReason] = useState<string | null>(
     heard?.connected === false ? missedReason(heard.result) : null,
   );
-  const [stage, setStage] = useState<Stage | null>(null);
+  const lastStage = stageAfterTalk(detail.lead.stage);
+  const [stage, setStage] = useState<Stage | null>(lastStage);
   const [next, setNext] = useState<Pick>("morning");
   const [retry, setRetry] = useState<Pick | null>(null);
   const [custom, setCustom] = useState(() =>
@@ -372,6 +380,7 @@ export function CallOutcome({
             setTalk("talked");
             setReason(null);
             setRetry(null);
+            setStage((current) => current ?? lastStage);
           }}
         >
           <CheckCircle2 size={22} aria-hidden="true" />
@@ -627,6 +636,7 @@ const HEARD_MISSED: Partial<Record<NativeCall["result"], string>> = {
   busy: "the line was busy",
   rejected: "they cut the call",
   failed: "the call didn't go through",
+  no_network: "it had no network",
 };
 
 function heardLine(call: NativeCall): string {
@@ -680,6 +690,7 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
     }
     case "call":
       if (event.recording) return { title: `${who} added the call recording` };
+      if (event.via === "phone") return phoneCallText(event, who);
       return {
         title: `${who} ${event.simulated ? "made a sample call" : "called"}${
           event.duration_seconds
@@ -712,16 +723,86 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
   }
 }
 
-function History({ events }: { events: LeadEvent[] }) {
+/** Mark private (Salestrail's untracked call): the seller's own phone-logged call. */
+function PrivacyButton({
+  event,
+  onChanged,
+}: {
+  event: LeadEvent;
+  onChanged: (next: LeadDetail) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  if (!event.can_hide || !event.event_id) return null;
+  const eventId = event.event_id;
+  const flip = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      onChanged(await setCallPrivacy(eventId, !event.private));
+    } catch (reason) {
+      setProblem(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.linkButton}
+        disabled={busy}
+        onClick={() => void flip()}
+      >
+        {event.private ? "Show to my team" : "Make private"}
+      </button>
+      {problem ? (
+        <span className={styles.error} role="alert">
+          {problem}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+export function History({
+  events,
+  onChanged,
+}: {
+  events: LeadEvent[];
+  onChanged?: (next: LeadDetail) => void;
+}) {
   return (
     <ol className={styles.history} aria-label="History">
       {events.map((event, index) => {
         const text = eventText(event);
         return (
-          <li key={`${event.at}-${index}`} data-kind={event.kind}>
-            <span className={styles.historyTitle}>{text.title}</span>
+          <li
+            key={`${event.at}-${index}`}
+            data-kind={event.kind}
+            data-missed={
+              event.direction === "missed" || event.direction === "rejected"
+                ? true
+                : undefined
+            }
+          >
+            <span className={styles.historyTitle}>
+              {text.title}
+              {event.private ? (
+                <span className={styles.privateTag}>Private</span>
+              ) : null}
+            </span>
             {text.detail ? (
-              <span className={styles.historyDetail}>{text.detail}</span>
+              <span className={styles.historyDetail}>
+                {event.private
+                  ? "Only you see this call. It isn't counted."
+                  : text.detail}
+              </span>
+            ) : null}
+            {onChanged ? (
+              <PrivacyButton event={event} onChanged={onChanged} />
             ) : null}
             {event.kind === "call" && event.submission_id ? (
               <Link
@@ -1786,7 +1867,7 @@ function LeadCard({
         {detail.can_edit ? (
           <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
         ) : null}
-        <History events={detail.events} />
+        <History events={detail.events} onChanged={onChanged} />
       </section>
     </div>
   );

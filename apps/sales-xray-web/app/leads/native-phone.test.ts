@@ -136,6 +136,12 @@ describe("the phone app's channel", () => {
 });
 
 describe("reading the phone's answer", () => {
+  it("keeps a call the phone placed with no network", () => {
+    expect(
+      parseCall({ leadId: "x", result: "no_network", connected: false }),
+    ).toMatchObject({ result: "no_network", connected: false });
+  });
+
   it("keeps only well-formed calls", () => {
     expect(parseCall(null)).toBeNull();
     expect(parseCall({ result: "answered" })).toBeNull();
@@ -155,6 +161,7 @@ describe("reading the phone's answer", () => {
     expect(missedReason("busy")).toBe("busy");
     expect(missedReason("rejected")).toBe("disconnected");
     expect(missedReason("failed")).toBe("not_connected");
+    expect(missedReason("no_network")).toBe("out_of_coverage");
     expect(missedReason("answered")).toBeNull();
   });
 });
