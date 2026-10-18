@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { KIND_BADGE, KIND_HINT, KIND_TONE } from "../lib/workspaces";
 import { Badge, Card, Table, kitStyles } from "../ui/kit";
 import {
   STATUS_LABEL,
@@ -90,8 +91,14 @@ export function CallTable({
                 <span className={kitStyles.muted}> · guest</span>
               ) : null}
             </th>
-            <td className={styles.clip} title={item.organisation.name}>
-              {item.organisation.name}
+            <td
+              className={styles.clip}
+              title={KIND_HINT[item.organisation.kind]}
+            >
+              {item.organisation.name}{" "}
+              <Badge tone={KIND_TONE[item.organisation.kind]}>
+                {KIND_BADGE[item.organisation.kind]}
+              </Badge>
             </td>
             <td>{when(item.uploadedAt)}</td>
             <td data-num="">{clock(item.durationMs)}</td>

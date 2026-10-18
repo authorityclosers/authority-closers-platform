@@ -90,6 +90,13 @@ export default async function ReportSettingsPage() {
                           scope="organisation"
                           tenantId={row.tenantId}
                           current={row.ownVersionNumber}
+                          inherited={
+                            data.industries.find(
+                              (item) => item.industryCode === row.industryCode,
+                            )?.versionNumber ??
+                            data.generalVersionNumber ??
+                            1
+                          }
                           versions={data.versions}
                           label={`Version for ${row.name}`}
                         />
@@ -125,6 +132,7 @@ export default async function ReportSettingsPage() {
                     scope="industry"
                     industryCode={row.industryCode}
                     current={row.versionNumber}
+                    inherited={data.generalVersionNumber ?? 1}
                     versions={data.versions}
                     label={`Version for industry ${row.industryCode}`}
                   />

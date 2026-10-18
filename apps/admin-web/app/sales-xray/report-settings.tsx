@@ -52,6 +52,7 @@ export function ChooseVersion({
   tenantId = null,
   industryCode = null,
   current,
+  inherited = 1,
   versions,
   label,
 }: {
@@ -59,6 +60,8 @@ export function ChooseVersion({
   tenantId?: string | null;
   industryCode?: string | null;
   current: number | null;
+  /** What "" resolves to here: the industry or general default, else version 1. */
+  inherited?: number;
   versions: Version[];
   label: string;
 }) {
@@ -66,6 +69,13 @@ export function ChooseVersion({
   const [reason, setReason] = useState("");
   const { busy, error, send } = useCommand(CHOICES);
   const changed = value !== (current === null ? "" : String(current));
+  // A one-option menu reads as broken: with nothing else saved, say so instead.
+  if (!versions.length && current === null)
+    return (
+      <span className={styles.sub}>
+        Version 1 (built in) · save a new version to choose another
+      </span>
+    );
   return (
     <div className={styles.choose}>
       <select
@@ -75,7 +85,9 @@ export function ChooseVersion({
         disabled={busy}
       >
         <option value="">
-          {scope === "general" ? "Version 1 (built in)" : "Its default"}
+          {scope === "general"
+            ? "Version 1 (built in)"
+            : `Default (Version ${inherited})`}
         </option>
         {versions.map((version) => (
           <option key={version.number} value={String(version.number)}>

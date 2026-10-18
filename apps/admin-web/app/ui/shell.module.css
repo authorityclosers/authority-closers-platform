@@ -80,6 +80,161 @@
   font-size: var(--sx-text-xs);
 }
 
+/* ---------- The signed-in person and every workspace ---------- */
+
+.person {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.personButton {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 6px 0 4px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.personButton:hover,
+.personButton[aria-expanded="true"] {
+  background: var(--sx-sunken);
+}
+
+.personButton:focus-visible,
+.workspaceRow:focus-visible,
+.personFoot:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 1px;
+}
+
+.personChevron {
+  flex: none;
+  margin-left: auto;
+  color: var(--sx-muted);
+}
+
+.personPanel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  gap: 4px;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(70dvh, 560px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: 0 12px 32px color-mix(in oklab, var(--sx-ink) 22%, transparent);
+  scrollbar-width: thin;
+}
+
+.personPanel[hidden] {
+  display: none;
+}
+
+.personHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 10px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.personGroups {
+  display: grid;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+.personTitle {
+  margin: 0;
+  padding: 0 6px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.personGroup {
+  display: grid;
+  gap: 2px;
+}
+
+.personGroup .groupLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0 6px;
+}
+
+.personCount {
+  color: var(--sx-muted);
+  font-weight: 500;
+}
+
+.workspaceRow {
+  display: grid;
+  gap: 1px;
+  padding: 6px;
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink);
+  text-decoration: none;
+  line-height: 1.3;
+}
+
+a.workspaceRow:hover {
+  background: var(--sx-sunken);
+}
+
+.workspaceRow small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.workspaceName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.workspaceName strong {
+  overflow: hidden;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personFoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 8px 6px 4px;
+  border-top: 1px solid var(--sx-line);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-decoration: none;
+}
+
 .nav {
   display: grid;
   align-content: start;
@@ -238,8 +393,18 @@
 .shell[data-collapsed] .brandText,
 .shell[data-collapsed] .groupLabel,
 .shell[data-collapsed] .navLink span,
-.shell[data-collapsed] .accountText {
+.shell[data-collapsed] .accountText,
+.shell[data-collapsed] .personChevron {
   display: none;
+}
+
+.shell[data-collapsed] .personButton {
+  justify-content: center;
+  padding: 0;
+}
+
+.shell[data-collapsed] .person {
+  flex: none;
 }
 
 .shell[data-collapsed] .brandRow {
@@ -356,6 +521,19 @@
     flex-direction: column;
     padding: 10px 0;
   }
+
+  .personChevron {
+    display: none;
+  }
+
+  .person {
+    flex: none;
+  }
+
+  .personButton {
+    justify-content: center;
+    padding: 0;
+  }
 }
 
 /* ---------- Phone: bottom bar and a sheet ---------- */
@@ -414,6 +592,19 @@
   .shell .rail .account {
     flex-direction: row;
     padding: 10px 8px 10px 12px;
+  }
+
+  .shell .rail .person {
+    flex: 1 1 auto;
+  }
+
+  .shell .rail .personButton {
+    justify-content: flex-start;
+    padding: 0 6px 0 4px;
+  }
+
+  .shell .rail .personChevron {
+    display: revert;
   }
 
   .sheetClose {
@@ -480,6 +671,19 @@
   .bottomLink[aria-current="page"] {
     color: var(--sx-accent);
   }
+}
+
+/* The workspace panel keeps its words on an icons-only rail. */
+.shell .personPanel .accountText,
+.shell[data-collapsed] .personPanel .accountText,
+.shell .rail .personPanel .accountText {
+  display: grid;
+}
+
+.shell .personPanel .groupLabel,
+.shell[data-collapsed] .personPanel .groupLabel,
+.shell .rail .personPanel .groupLabel {
+  display: flex;
 }
 
 @media (prefers-reduced-motion: reduce) {

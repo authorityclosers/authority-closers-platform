@@ -50,6 +50,8 @@ import {
   type ConsoleAccess,
   type NavIcon,
 } from "../lib/nav";
+import type { Workspace } from "../lib/workspaces";
+import { AccountMenu } from "./account-menu";
 import { CommandMenu } from "./command-menu";
 import { ThemeToggle } from "./theme";
 import styles from "./shell.module.css";
@@ -94,26 +96,16 @@ export function AcMark({ size = 20 }: { size?: number }) {
   );
 }
 
-function initialsOf(access: ConsoleAccess) {
-  const source = access.displayName || access.email || "?";
-  return (
-    source
-      .split(/[\s@.]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => Array.from(part)[0])
-      .join("")
-      .toUpperCase() || "?"
-  );
-}
-
 export function ConsoleShell({
   access,
   environment,
+  workspaces = null,
   children,
 }: {
   access: ConsoleAccess;
   environment: string | null;
+  /** Every workspace, for people with platform read; else null. */
+  workspaces?: readonly Workspace[] | null;
   children: ReactNode;
 }) {
   const pathname = usePathname() ?? "/";
@@ -162,15 +154,7 @@ export function ConsoleShell({
             }}
           >
             <div className={styles.brandRow}>
-              <Link href="/" className={styles.brand} aria-label="Admin home">
-                <span className={styles.brandMark}>
-                  <AcMark size={18} />
-                </span>
-                <span className={styles.brandText}>
-                  <strong>Authority Closers</strong>
-                  <small>Admin</small>
-                </span>
-              </Link>
+              <AccountMenu access={access} workspaces={workspaces} />
               <button
                 type="button"
                 className={`${styles.iconButton} ${styles.collapseToggle}`}
@@ -227,23 +211,15 @@ export function ConsoleShell({
             </nav>
 
             <div className={styles.account}>
-              <span className={styles.avatar} aria-hidden="true">
-                {initialsOf(access)}
-              </span>
-              <span className={styles.accountText}>
-                <strong>
-                  {access.displayName ||
-                    (access.state === "preview"
-                      ? "Local preview"
-                      : "Your account")}
-                </strong>
-                <small title={access.email ?? undefined}>
-                  {access.email ??
-                    (access.state === "preview"
-                      ? "No session in this preview"
-                      : "Session not confirmed")}
-                </small>
-              </span>
+              <Link href="/" className={styles.brand} aria-label="Admin home">
+                <span className={styles.brandMark}>
+                  <AcMark size={16} />
+                </span>
+                <span className={styles.brandText}>
+                  <strong>AC Admin</strong>
+                  <small>{environment ?? "Back office"}</small>
+                </span>
+              </Link>
               <button
                 type="button"
                 className={styles.iconButton}

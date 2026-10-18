@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import {
   consoleEnvironment,
   loadConsoleAccess,
+  loadConsoleWorkspaces,
 } from "@/app/lib/console-access";
 import { ConsoleShell } from "@/app/ui/shell";
 
@@ -13,8 +14,13 @@ export default async function ConsoleLayout({
   children: ReactNode;
 }) {
   const access = await loadConsoleAccess();
+  const workspaces = await loadConsoleWorkspaces(access);
   return (
-    <ConsoleShell access={access} environment={consoleEnvironment()}>
+    <ConsoleShell
+      access={access}
+      environment={consoleEnvironment()}
+      workspaces={workspaces}
+    >
       {children}
     </ConsoleShell>
   );
