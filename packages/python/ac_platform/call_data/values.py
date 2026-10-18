@@ -11,7 +11,14 @@ from dataclasses import asdict
 from decimal import Decimal
 from typing import Any
 
-from ac_platform.call_data.taxonomy import OBJECTION_KINDS, ObjectType
+from ac_platform.call_data.taxonomy import (
+    OBJECTION_KINDS,
+    SEGMENT_ACTS,
+    SEGMENT_INTENTS,
+    SENTIMENTS,
+    TONES,
+    ObjectType,
+)
 from ac_platform.conversation_intelligence.prospect_fact_contract import (
     NumericFactValue,
     ProspectFactValidationError,
@@ -148,7 +155,79 @@ def validate_value(kind_type: ObjectType, value: object) -> dict[str, Any]:
         ):
             raise CallValueError("ratio_parts")
         return {"parts": {k: round(float(v), 4) for k, v in parts.items()}}
+    if kind == "segment":
+        _keys(value, {"intent", "act", "sentiment", "tone", "topics"}, {"intent", "act"})
+        if value["intent"] not in SEGMENT_INTENTS or value["act"] not in SEGMENT_ACTS:
+            raise CallValueError("segment_labels")
+        label: dict[str, Any] = {"intent": value["intent"], "act": value["act"]}
+        for key, allowed in (("sentiment", SENTIMENTS), ("tone", TONES)):
+            if value.get(key) is not None:
+                if value[key] not in allowed:
+                    raise CallValueError(f"segment_{key}")
+                label[key] = value[key]
+        topics = value.get("topics") or []
+        if not isinstance(topics, list) or len(topics) > 5:
+            raise CallValueError("segment_topics")
+        cleaned = [
+            t for t in (_text(item, "segment_topic", required=False) for item in topics) if t
+        ]
+        if cleaned:
+            label["topics"] = [t[:60] for t in cleaned]
+        return label
+    if kind == "audio":
+        return _audio(value)
     raise CallValueError("value_kind")
+
+
+def _number(value: object, code: str, *, low: float, high: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+        raise CallValueError(code)
+    return round(float(value), 2)
+
+
+def _audio(value: dict[str, Any]) -> dict[str, Any]:
+    """Measured features (audio.py); checked for shape and range, never trusted blindly."""
+    _keys(
+        value,
+        {
+            "duration_ms",
+            "peaks",
+            "loudness_dbfs",
+            "pitch_hz",
+            "speakers",
+            "pauses",
+            "overlap_ms",
+            "segments",
+            "source",
+        },
+        {"duration_ms", "peaks", "speakers", "pauses"},
+    )
+    peaks = value["peaks"]
+    if not isinstance(peaks, list) or len(peaks) > 400:
+        raise CallValueError("audio_peaks")
+    result: dict[str, Any] = {
+        "duration_ms": int(_number(value["duration_ms"], "audio_duration", low=0, high=7.2e6)),
+        "peaks": [_number(p, "audio_peaks", low=0, high=1) for p in peaks],
+    }
+    for key, low, high in (("loudness_dbfs", -160, 0), ("pitch_hz", 0, 2000)):
+        if value.get(key) is not None:
+            result[key] = _number(value[key], f"audio_{key}", low=low, high=high)
+    if value.get("overlap_ms") is not None:
+        result["overlap_ms"] = int(_number(value["overlap_ms"], "audio_overlap", low=0, high=7.2e6))
+    if not isinstance(value["speakers"], dict) or len(value["speakers"]) > 8:
+        raise CallValueError("audio_speakers")
+    if not isinstance(value["pauses"], dict):
+        raise CallValueError("audio_pauses")
+    result["speakers"] = value["speakers"]
+    result["pauses"] = value["pauses"]
+    segments = value.get("segments")
+    if segments is not None:
+        if not isinstance(segments, list) or len(segments) > 2000:
+            raise CallValueError("audio_segments")
+        result["segments"] = segments
+    if isinstance(value.get("source"), str):
+        result["source"] = value["source"][:80]
+    return result
 
 
 ALLOWED_KEYS: dict[str, frozenset[str]] = {
@@ -174,6 +253,8 @@ ALLOWED_KEYS: dict[str, frozenset[str]] = {
     "objection": frozenset({"text", "kind", "resolved"}),
     "question": frozenset({"text", "answered"}),
     "ratio": frozenset({"parts"}),
+    "segment": frozenset({"intent", "act", "sentiment", "tone", "topics"}),
+    "audio": frozenset(),  # measured on the server, never from a model
 }
 
 
@@ -291,4 +372,19 @@ def display(kind_type: ObjectType, value: dict[str, Any]) -> str:
         return f"{value['text']} · {'answered' if value['answered'] else 'not answered'}"
     if kind == "ratio":
         return " · ".join(f"{k} {round(v * 100)}%" for k, v in value["parts"].items())
+    if kind == "segment":
+        words = [value["intent"].replace("_", " ").capitalize(), value["act"]]
+        if value.get("sentiment") and value["sentiment"] != "neutral":
+            words.append(value["sentiment"])
+        if value.get("tone") and value["tone"] != "neutral":
+            words.append(value["tone"])
+        return " · ".join(words)
+    if kind == "audio":
+        shares = [
+            f"{speaker} {round(float(part.get('share', 0)) * 100)}%"
+            for speaker, part in value["speakers"].items()
+            if isinstance(part, dict)
+        ]
+        long_pauses = value["pauses"].get("long", 0) if isinstance(value["pauses"], dict) else 0
+        return " · ".join([*shares, f"{long_pauses} long pauses"])
     return ""

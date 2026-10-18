@@ -14,7 +14,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
-TAXONOMY_VERSION = "call-taxonomy/1"
+TAXONOMY_VERSION = "call-taxonomy/2"
+# /2 (19 Oct, v0.64): the deep pipeline's segment labels and on-server audio
+# features become objects too (conversation.segment, audio.features).
 
 CATEGORIES = MappingProxyType(
     {
@@ -30,6 +32,7 @@ CATEGORIES = MappingProxyType(
         "signal": "AI read",
         "outcome": "Outcome",
         "conversation": "Conversation",
+        "audio": "Voice and audio",
     }
 )
 
@@ -45,8 +48,42 @@ VALUE_KINDS = frozenset(
         "objection",  # {"text", "kind", "resolved"}
         "question",  # {"text", "answered"}
         "ratio",  # {"parts": {speaker: share}} measured, never from a model
+        "segment",  # {"intent", "act", "sentiment", "tone", "topics"} one transcript segment
+        "audio",  # measured voice features per call (audio.py), never from a model
     }
 )
+
+# Segment labels (deep pipeline): semantic intent and syntactic act per segment.
+SEGMENT_INTENTS = (
+    "greeting",
+    "rapport",
+    "discovery",
+    "pain",
+    "goal",
+    "qualification",
+    "pitch",
+    "pricing",
+    "objection",
+    "objection_handling",
+    "decision_process",
+    "next_steps",
+    "closing",
+    "logistics",
+    "small_talk",
+    "other",
+)
+SEGMENT_ACTS = (
+    "question",
+    "answer",
+    "statement",
+    "request",
+    "commitment",
+    "agreement",
+    "disagreement",
+    "filler",
+)
+SENTIMENTS = ("positive", "neutral", "negative")
+TONES = ("warm", "confident", "hesitant", "curious", "frustrated", "rushed", "formal", "neutral")
 
 # A key's first part names its family; each family belongs to one category.
 PREFIX_CATEGORY = MappingProxyType(
@@ -88,6 +125,7 @@ class ObjectType:
     ask: bool = True  # worth a confirmation question when not auto-filled
     enum_values: tuple[str, ...] = ()
     ai_read: bool = False  # an AI judgement, always labelled as the AI's read
+    measured: bool = False  # computed on the server from the call, never from a model
 
     def __post_init__(self) -> None:
         if self.category not in CATEGORIES or self.kind not in VALUE_KINDS:
@@ -480,12 +518,39 @@ _TYPES: tuple[ObjectType, ...] = (
         "Measured share of talking time per speaker (computed, never from a model).",
         fast=False,
         ask=False,
+        measured=True,
+    ),
+    ObjectType(
+        "conversation.segment",
+        "conversation",
+        "Segment",
+        "segment",
+        True,
+        200,
+        "What one transcript segment does: intent, act, sentiment, tone and topics.",
+        fast=False,
+        ask=False,
+    ),
+    ObjectType(
+        "audio.features",
+        "audio",
+        "Voice and audio",
+        "audio",
+        False,
+        210,
+        "Measured voice features: waveform, loudness, pitch, pace, pauses, overlap.",
+        fast=False,
+        ask=False,
+        measured=True,
     ),
 )
 
 TYPES = MappingProxyType({item.key: item for item in _TYPES})
 FAST_TYPES = tuple(item for item in _TYPES if item.fast)
 DEEP_TYPES = _TYPES
+# What the deep pipeline's model extracts in its whole-call read (segments are
+# labelled in their own pass; measured types are computed, never asked of a model).
+DEEP_EXTRACT_TYPES = tuple(item for item in _TYPES if not item.measured and item.kind != "segment")
 
 
 def get(key: str) -> ObjectType | None:
@@ -512,6 +577,7 @@ def registry() -> dict[str, object]:
                 "ask": item.ask,
                 "enum_values": list(item.enum_values),
                 "ai_read": item.ai_read,
+                "measured": item.measured,
             }
             for item in _TYPES
         ],

@@ -129,6 +129,7 @@ WHERE cp.stage = 'C2' AND cp.erased_at IS NULL AND json_typeof(cp.payload) = 'ob
     WHERE n.recording_id = cp.recording_id AND n.stage = 'C2' AND n.erased_at IS NULL
   )
   {done}
+  {after_fast}
   {only}
 ORDER BY cp.created_at DESC
 LIMIT :limit
@@ -140,6 +141,14 @@ _NOT_DONE = """AND NOT EXISTS (
     WHERE r.recording_id = cp.recording_id AND r.pipeline = :pipeline
       AND r.transcript_revision = cp.payload ->> 'revision'
       AND r.state IN ('succeeded', 'skipped')
+  )"""
+
+
+_AFTER_FAST = """AND EXISTS (
+    SELECT 1 FROM call_data_runs f
+    WHERE f.recording_id = cp.recording_id AND f.pipeline = 'fast'
+      AND f.transcript_revision = cp.payload ->> 'revision'
+      AND f.state IN ('succeeded', 'skipped')
   )"""
 
 
@@ -155,11 +164,12 @@ def candidates(
 ) -> list[Call]:
     only = "AND cp.recording_id = :recording" if recording_id else ""
     done = "" if include_done and recording_id else _NOT_DONE
+    after_fast = _AFTER_FAST if pipeline == "deep" else ""
     rows = connection.execute(
-        text(_CANDIDATES.format(only=only, done=done)),
+        text(_CANDIDATES.format(only=only, done=done, after_fast=after_fast)),
         {
             "not_before": not_before,
-            "horizon": datetime.now(UTC) - timedelta(hours=hours),
+            "horizon": datetime.now(UTC) - timedelta(hours=hours),  # backfill: up to a year
             "pipeline": pipeline,
             "limit": limit,
             "recording": recording_id,
@@ -279,6 +289,39 @@ def load(connection: Any, call: Call) -> Call:
     return call
 
 
+@dataclass(slots=True)
+class AudioInputs:
+    display_dbfs: list[float]
+    blob_id: UUID | None
+    feature_sha256: str | None
+
+
+def audio_inputs(connection: Any, call: Call) -> AudioInputs:
+    """The audio check's waveform and feature-file reference for this call (C1)."""
+    row = connection.execute(
+        text(
+            """
+            SELECT payload, feature_blob_id FROM conversation_checkpoints
+            WHERE recording_id = :recording AND stage = 'C1' AND erased_at IS NULL
+            ORDER BY created_at DESC LIMIT 1
+            """
+        ),
+        {"recording": call.recording_id},
+    ).first()
+    if row is None or not isinstance(row.payload, dict):
+        return AudioInputs([], None, None)
+    display = row.payload.get("display")
+    channels = display.get("channels") if isinstance(display, dict) else None
+    first = channels[0] if isinstance(channels, list) and channels else {}
+    dbfs = first.get("dbfs") if isinstance(first, dict) else None
+    digest = row.payload.get("feature_sha256")
+    return AudioInputs(
+        [float(v) for v in dbfs if isinstance(v, (int, float))] if isinstance(dbfs, list) else [],
+        row.feature_blob_id,
+        digest if isinstance(digest, str) else None,
+    )
+
+
 def lead_for_call(connection: Any, tenant_id: UUID, submission_id: UUID) -> UUID | None:
     """The Lead Desk lead this call was made or uploaded on, same workspace only."""
     lead_id: UUID | None = connection.scalar(
@@ -363,6 +406,7 @@ def start_run(
     prompt_sha256: str | None,
     created_by: str,
     now: datetime,
+    version: str = FAST_VERSION,
 ) -> UUID:
     run_id = uuid4()
     connection.execute(
@@ -373,7 +417,7 @@ def start_run(
             submission_id=call.submission_id,
             person_id=call.person_id,
             pipeline=pipeline,
-            pipeline_version=FAST_VERSION,
+            pipeline_version=version,
             taxonomy_version=taxonomy.TAXONOMY_VERSION,
             state="running",
             trigger=trigger,
@@ -405,6 +449,7 @@ def finish_run(
     counts: dict[str, Any] | None,
     created_by: str,
     now: datetime,
+    version: str = FAST_VERSION,
 ) -> UUID:
     run_id = uuid4()
     usage = usage or {}
@@ -416,7 +461,7 @@ def finish_run(
             submission_id=call.submission_id,
             person_id=call.person_id,
             pipeline=pipeline,
-            pipeline_version=FAST_VERSION,
+            pipeline_version=version,
             taxonomy_version=taxonomy.TAXONOMY_VERSION,
             state=state,
             reason_code=reason,
@@ -447,6 +492,7 @@ def skip_run(
     trigger: str,
     created_by: str,
     now: datetime,
+    version: str = FAST_VERSION,
 ) -> None:
     """A call the engine will not process (too long, no speech): recorded once, no cost."""
     connection.execute(
@@ -457,7 +503,7 @@ def skip_run(
             submission_id=call.submission_id,
             person_id=call.person_id,
             pipeline=pipeline,
-            pipeline_version=FAST_VERSION,
+            pipeline_version=version,
             taxonomy_version=taxonomy.TAXONOMY_VERSION,
             state="skipped",
             reason_code=reason,

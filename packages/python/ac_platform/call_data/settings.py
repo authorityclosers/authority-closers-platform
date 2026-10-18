@@ -77,10 +77,18 @@ class SettingsError(ValueError):
 
 def validate(config: object) -> dict[str, Any]:
     """A complete, checked settings document (missing pipelines take the defaults)."""
-    if not isinstance(config, dict) or not set(config) <= set(PIPELINES):
+    from ac_platform.call_data import streaming
+
+    if not isinstance(config, dict) or not set(config) <= {*PIPELINES, "streaming"}:
         raise SettingsError("settings_shape")
     result = copy.deepcopy(DEFAULTS)
+    try:
+        result["streaming"] = streaming.validate(config.get("streaming"))
+    except streaming.StreamingError as error:
+        raise SettingsError(error.code) from None
     for pipeline, values in config.items():
+        if pipeline == "streaming":
+            continue
         if not isinstance(values, dict) or not set(values) <= set(DEFAULTS[pipeline]):
             raise SettingsError("settings_shape")
         merged = {**result[pipeline], **values}
@@ -126,4 +134,11 @@ def public(config: dict[str, Any], *, revision: int | None) -> dict[str, Any]:
             for item in MODELS.values()
         ],
         "usd_to_inr": str(USD_TO_INR),
+        "streaming": streaming_menu(),
     }
+
+
+def streaming_menu() -> dict[str, Any]:
+    from ac_platform.call_data import streaming
+
+    return streaming.public()

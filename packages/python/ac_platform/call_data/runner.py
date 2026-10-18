@@ -40,8 +40,9 @@ from typing import Any
 from uuid import UUID
 
 INNER = "--inner"
-AUTOMATIC = "automatic:call-data-fast"
-OPERATOR = "operator:call-data-fast"
+AUTOMATIC = "automatic:call-data"
+OPERATOR = "operator:call-data"
+BACKFILL = "operator:call-data-backfill"
 RUN_LOCK = "ac.call_data.fast"
 _PROVIDER = "gemini"
 LASTING_REFUSALS = frozenset({"permission_inactive", "account_inactive", "attempts_exhausted"})
@@ -65,6 +66,17 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         help="operator mode: read this call again even if it was read (new run, supersedes)",
     )
     parser.add_argument("--limit", type=int, default=5, help="calls per pass")
+    parser.add_argument(
+        "--pipeline",
+        choices=("fast", "deep", "both"),
+        default="both",
+        help="which pipelines a pass runs (deep only reads calls the fast pipeline finished)",
+    )
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help="operator: read stored older calls once (no loop; up to a year back, up to 200)",
+    )
     parser.add_argument("--loop", action="store_true", help="keep polling")
     parser.add_argument("--interval", type=float, default=4.0, help="seconds between passes")
     parser.add_argument("--apply", action="store_true")
@@ -74,10 +86,12 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     arguments = parser.parse_args(argv)
     if arguments.not_before.tzinfo is None:
         parser.error("--not-before needs a time zone, e.g. 2026-10-19T00:00:00+00:00")
-    if not 1 <= arguments.limit <= 20:
-        parser.error("--limit must be 1-20")
-    if not 1 <= arguments.recent_hours <= 168:
-        parser.error("--recent-hours must be 1-168")
+    if not 1 <= arguments.limit <= (200 if arguments.backfill else 20):
+        parser.error("--limit must be 1-20 (1-200 with --backfill)")
+    if not 1 <= arguments.recent_hours <= (8760 if arguments.backfill else 168):
+        parser.error("--recent-hours must be 1-168 (up to 8760 with --backfill)")
+    if arguments.backfill and arguments.loop:
+        parser.error("--backfill runs once, never in the loop")
     if not 1.0 <= arguments.interval <= 300.0:
         parser.error("--interval must be 1-300 seconds")
     if arguments.force and (arguments.recording is None or arguments.loop):
@@ -329,43 +343,71 @@ def process_call(
 
 
 def run_pass(
-    sessions: Any, arguments: argparse.Namespace, model_client: Any, *, created_by: str
+    sessions: Any,
+    arguments: argparse.Namespace,
+    model_client: Any,
+    *,
+    created_by: str,
+    storage_root: Path | None = None,
 ) -> list[dict[str, Any]]:
     from ac_platform.call_data import engine
+    from ac_platform.call_data.deep_runner import process_deep_call
 
-    with sessions() as session:
-        connection = session.connection()
-        settings, _ = engine.read_settings(connection)
-        if not settings["fast"]["enabled"]:
-            return [{"stopped": "fast_pipeline_off"}]
-        now = datetime.now(UTC)
-        spent = engine.spent_today(connection, "fast", now)
-        if spent >= settings["fast"]["daily_cap_inr"]:
-            return [{"stopped": "daily_cap", "spent_inr": str(spent)}]
-        calls = engine.candidates(
-            connection,
-            not_before=arguments.not_before,
-            hours=arguments.recent_hours,
-            limit=arguments.limit,
-            recording_id=arguments.recording,
-            include_done=bool(arguments.force),
-        )
-        test_sources = engine.test_source_shas(connection) if calls else set()
-    lines = []
-    trigger = "operator" if arguments.recording else "auto"
-    for call in calls:
-        lines.append(
-            process_call(
-                sessions,
-                call,
-                settings=settings,
-                apply=arguments.apply,
-                trigger=trigger,
-                created_by=created_by,
-                model_client=model_client,
-                test_sources=test_sources,
+    pipelines = ("fast", "deep") if arguments.pipeline == "both" else (arguments.pipeline,)
+    trigger = "backfill" if arguments.backfill else "operator" if arguments.recording else "auto"
+    lines: list[dict[str, Any]] = []
+    for pipeline in pipelines:
+        with sessions() as session:
+            connection = session.connection()
+            settings, _ = engine.read_settings(connection)
+            if not settings[pipeline]["enabled"]:
+                lines.append({"stopped": f"{pipeline}_pipeline_off"})
+                continue
+            now = datetime.now(UTC)
+            spent = engine.spent_today(connection, pipeline, now)
+            if spent >= settings[pipeline]["daily_cap_inr"]:
+                lines.append({"stopped": f"{pipeline}_daily_cap", "spent_inr": str(spent)})
+                continue
+            calls = engine.candidates(
+                connection,
+                not_before=arguments.not_before,
+                hours=arguments.recent_hours,
+                limit=arguments.limit,
+                pipeline=pipeline,
+                recording_id=arguments.recording,
+                include_done=bool(arguments.force),
             )
-        )
+            test_sources = engine.test_source_shas(connection) if calls else set()
+        for call in calls:
+            if pipeline == "fast":
+                line = process_call(
+                    sessions,
+                    call,
+                    settings=settings,
+                    apply=arguments.apply,
+                    trigger=trigger,
+                    created_by=created_by,
+                    model_client=model_client,
+                    test_sources=test_sources,
+                )
+            else:
+                line = process_deep_call(
+                    sessions,
+                    call,
+                    settings=settings,
+                    apply=arguments.apply,
+                    trigger=trigger,
+                    created_by=created_by,
+                    model_client=model_client,
+                    test_sources=test_sources,
+                    storage_root=storage_root,
+                )
+            lines.append(line)
+            with sessions() as session:
+                spent = engine.spent_today(session.connection(), pipeline, datetime.now(UTC))
+            if spent >= settings[pipeline]["daily_cap_inr"]:
+                lines.append({"stopped": f"{pipeline}_daily_cap", "spent_inr": str(spent)})
+                break
     return lines
 
 
@@ -381,7 +423,10 @@ def _inner(arguments: argparse.Namespace, model_client: Any = None) -> int:
     url = arguments.database_url_file.read_text().strip()
     database = create_engine(url.replace("+asyncpg", "+psycopg"), pool_pre_ping=True)
     sessions = sessionmaker(database, expire_on_commit=False)
-    created_by = OPERATOR if arguments.recording else AUTOMATIC
+    created_by = BACKFILL if arguments.backfill else OPERATOR if arguments.recording else AUTOMATIC
+    service = json.loads(arguments.service_config.read_text())
+    root = service.get("sales_xray_storage_root")
+    storage_root = Path(root) if isinstance(root, str) and root else None
     try:
         with database.connect() as lock:
             if arguments.apply:
@@ -394,19 +439,22 @@ def _inner(arguments: argparse.Namespace, model_client: Any = None) -> int:
                     print(json.dumps({"stopped": "another_runner"}), flush=True)
                     return 0
             print(json.dumps({"started": created_by, "apply": arguments.apply}), flush=True)
-            last_stop = None
+            said: set[str] = set()
             while True:
-                for line in run_pass(sessions, arguments, client, created_by=created_by):
+                stops: set[str] = set()
+                for line in run_pass(
+                    sessions, arguments, client, created_by=created_by, storage_root=storage_root
+                ):
                     stop = line.get("stopped")
                     if stop is not None:
                         # A pipeline switched off or at its cap is said once, not every pass.
-                        if stop != last_stop:
+                        stops.add(str(stop))
+                        if stop not in said:
                             print(json.dumps(line), flush=True)
-                        last_stop = stop
                         continue
-                    last_stop = None
                     if line.get("skipped") != "in_flight":
                         print(json.dumps(line), flush=True)
+                said = stops
                 if not arguments.loop:
                     return 0
                 time.sleep(arguments.interval)

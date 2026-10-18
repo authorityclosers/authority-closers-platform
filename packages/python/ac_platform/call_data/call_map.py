@@ -202,6 +202,50 @@ def _task_stage(
     )
 
 
+def _run_stage(key: str, label: str, pipeline: str, runs: list[Any]) -> dict[str, Any]:
+    """One pipeline's newest attempt: running, or its outcome with time, cost and model."""
+    mine = [row for row in runs if row["pipeline"] == pipeline]
+    finished = {row["supersedes_id"] for row in mine if row["supersedes_id"] is not None}
+    starts = {row["id"]: row for row in mine if row["state"] == "running"}
+    outcomes = [row for row in mine if row["state"] != "running"]
+    open_runs = [row for row in mine if row["state"] == "running" and row["id"] not in finished]
+    if open_runs and (not outcomes or open_runs[-1]["created_at"] > outcomes[-1]["created_at"]):
+        start = open_runs[-1]
+        return stage(
+            key,
+            label,
+            "running",
+            started=start["created_at"],
+            provider=start["provider"],
+            model=start["model_id"],
+            version=start["pipeline_version"],
+        )
+    if not outcomes:
+        return stage(key, label, "waiting")
+    last = outcomes[-1]
+    begun = starts.get(last["supersedes_id"])
+    counts = last["counts"] if isinstance(last["counts"], dict) else {}
+    return stage(
+        key,
+        label,
+        {"succeeded": "done", "failed": "failed", "skipped": "skipped"}[last["state"]],
+        started=begun["created_at"] if begun else last["created_at"],
+        finished=last["created_at"],
+        cost_inr=last["cost_inr"],
+        provider=last["provider"],
+        model=last["model_id"],
+        version=f"{last['pipeline_version']} · {last['taxonomy_version']}",
+        detail=last["reason_code"],
+        counts={
+            "attempts": len(starts),
+            "tokens_in": last["input_tokens"],
+            "tokens_out": last["output_tokens"],
+            "segments_labelled": counts.get("segments_labelled"),
+            "audio": counts.get("audio"),
+        },
+    )
+
+
 def _engine_stages(connection: Any, recording_id: UUID) -> list[dict[str, Any]]:
     runs = (
         connection.execute(
@@ -218,26 +262,18 @@ def _engine_stages(connection: Any, recording_id: UUID) -> list[dict[str, Any]]:
         .mappings()
         .all()
     )
-    finished = {row["supersedes_id"]: row for row in runs if row["supersedes_id"] is not None}
-    starts = {row["id"]: row for row in runs if row["state"] == "running"}
-    fast_rows = [row for row in runs if row["pipeline"] == "fast" and row["state"] != "running"]
-    open_fast = [
-        row
-        for row in runs
-        if row["pipeline"] == "fast" and row["state"] == "running" and row["id"] not in finished
-    ]
     objects = (
         connection.execute(
             text(
                 """
-            SELECT o.category, o.pipeline, d.decision
+            SELECT o.category, o.pipeline, o.retracted, o.supersedes_id IS NOT NULL AS replaces,
+                   d.decision
             FROM call_objects o
             LEFT JOIN LATERAL (
               SELECT decision FROM call_object_decisions x
               WHERE x.object_id = o.id ORDER BY x.created_at DESC LIMIT 1
             ) d ON true
             WHERE o.recording_id = :recording AND o.erased_at IS NULL
-              AND NOT EXISTS (SELECT 1 FROM call_objects n WHERE n.supersedes_id = o.id)
             """
             ),
             {"recording": recording_id},
@@ -245,84 +281,55 @@ def _engine_stages(connection: Any, recording_id: UUID) -> list[dict[str, Any]]:
         .mappings()
         .all()
     )
-    result = []
-    if open_fast and not fast_rows:
-        start = open_fast[-1]
-        result.append(
-            stage(
-                "fast",
-                "Fast pipeline",
-                "running",
-                started=start["created_at"],
-                provider=start["provider"],
-                model=start["model_id"],
-                version=start["pipeline_version"],
-            )
-        )
-    elif fast_rows:
-        last = fast_rows[-1]
-        begun = starts.get(last["supersedes_id"])
-        status = {"succeeded": "done", "failed": "failed", "skipped": "skipped"}[last["state"]]
-        result.append(
-            stage(
-                "fast",
-                "Fast pipeline",
-                status,
-                started=begun["created_at"] if begun else last["created_at"],
-                finished=last["created_at"],
-                cost_inr=last["cost_inr"],
-                provider=last["provider"],
-                model=last["model_id"],
-                version=f"{last['pipeline_version']} · {last['taxonomy_version']}",
-                detail=last["reason_code"],
-                counts={
-                    "attempts": sum(
-                        1 for r in runs if r["pipeline"] == "fast" and r["state"] == "running"
-                    ),
-                    "tokens_in": last["input_tokens"],
-                    "tokens_out": last["output_tokens"],
-                },
-            )
-        )
-    else:
-        result.append(stage("fast", "Fast pipeline", "waiting"))
-    fast_objects = [o for o in objects if o["pipeline"] == "fast"]
-    decisions = Counter(o["decision"] or "kept" for o in fast_objects)
-    result.append(
+
+    def tally(pipeline: str) -> dict[str, Any]:
+        mine = [o for o in objects if o["pipeline"] == pipeline and not o["retracted"]]
+        decisions = Counter(o["decision"] or "kept" for o in mine)
+        return {
+            "objects": len(mine),
+            "by_category": dict(Counter(o["category"] for o in mine)),
+            "auto_filled": decisions.get("auto_filled", 0),
+            "asked": decisions.get("asked", 0),
+            "accepted": decisions.get("accepted", 0),
+            "edited": decisions.get("edited", 0),
+            "rejected": decisions.get("rejected", 0),
+        }
+
+    fast = _run_stage("fast", "Fast pipeline", "fast", runs)
+    deep_run = _run_stage("deep", "Deep pipeline", "deep", runs)
+    fast_counts = tally("fast")
+    deep_counts = tally("deep")
+    deep_objects = [o for o in objects if o["pipeline"] == "deep"]
+    return [
+        fast,
         stage(
             "objects",
             "Call objects",
-            "done" if fast_objects else ("waiting" if not fast_rows else "skipped"),
-            counts={
-                "objects": len(fast_objects),
-                "by_category": dict(Counter(o["category"] for o in fast_objects)),
-                "auto_filled": decisions.get("auto_filled", 0),
-                "asked": decisions.get("asked", 0),
-                "accepted": decisions.get("accepted", 0),
-                "edited": decisions.get("edited", 0),
-                "rejected": decisions.get("rejected", 0),
-            },
-        )
-    )
-    result.append(
+            "done"
+            if fast_counts["objects"]
+            else ("waiting" if fast["status"] == "waiting" else "skipped"),
+            counts=fast_counts,
+        ),
         stage(
             "better_transcript",
             "Better transcript",
             "skipped",
-            detail="The batch transcript is already the best one; reused.",
-        )
-    )
-    deep_rows = [row for row in runs if row["pipeline"] == "deep"]
-    result.append(
+            detail="The batch transcript is already the best one; the deep read reuses it.",
+        ),
+        deep_run,
         stage(
-            "deep",
-            "Deep pipeline",
-            "not_built" if not deep_rows else "running",
-            detail="Arrives in v0.64" if not deep_rows else None,
-        )
-    )
-    result.append(stage("objects_updated", "Objects updated", "not_built"))
-    return result
+            "objects_updated",
+            "Objects updated",
+            "done"
+            if deep_counts["objects"]
+            else ("waiting" if deep_run["status"] in ("waiting", "running") else "skipped"),
+            counts={
+                **deep_counts,
+                "superseded": sum(1 for o in deep_objects if o["replaces"] and not o["retracted"]),
+                "retracted": sum(1 for o in deep_objects if o["retracted"]),
+            },
+        ),
+    ]
 
 
 def _report_stage(

@@ -52,7 +52,7 @@ def fact(type_key: str, value: object, segments: list[str], confidence: float = 
 
 
 def test_taxonomy_is_versioned_ordered_and_never_extracts_contact_details() -> None:
-    assert taxonomy.TAXONOMY_VERSION == "call-taxonomy/1"
+    assert taxonomy.TAXONOMY_VERSION == "call-taxonomy/2"
     keys = [t.key for t in taxonomy.TYPES.values()]
     assert len(keys) == len(set(keys))
     assert not any("phone" in key or "email" in key for key in keys)

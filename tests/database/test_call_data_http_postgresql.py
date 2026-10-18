@@ -207,7 +207,7 @@ def test_a_call_fills_its_lead_and_asks_the_seller(postgres_harness: Any, tmp_pa
                 edited = [e for e in desk["events"] if e["kind"] == "edited"]
                 assert edited and edited[0]["changed"] == ["city"]
                 taxonomy = await client.get(f"{BASE}/taxonomy")
-                assert taxonomy.json()["version"] == "call-taxonomy/1"
+                assert taxonomy.json()["version"] == "call-taxonomy/2"
                 async with setup.sessions() as db:
                     lead = (await db.execute(select(Lead).where(Lead.id == lead_id))).scalar_one()
                     assert (lead.name, lead.company) == ("Amit Sharma", "XYZ Digital")

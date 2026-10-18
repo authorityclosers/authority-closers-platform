@@ -121,8 +121,11 @@ def _items(connection: Any, where: Any) -> list[Item]:
     marked = _marked(connection, {o.recording_id for o in objects})
     items = []
     for obj in objects:
-        if obj.id in successors or obj.retracted or taxonomy.get(obj.type_key) is None:
+        kind_type = taxonomy.get(obj.type_key)
+        if obj.id in successors or obj.retracted or kind_type is None:
             continue
+        if kind_type.kind in ("segment", "audio"):
+            continue  # analysis data, not facts a seller reads on a lead
         hidden = marked.get(obj.recording_id, set())
         if hidden and any(e.get("segment_id") in hidden for e in obj.evidence or []):
             continue
