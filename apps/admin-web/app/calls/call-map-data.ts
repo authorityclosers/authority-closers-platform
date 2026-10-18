@@ -125,7 +125,7 @@ export function stageCounts(stage: MapStage): string[] {
   const counts = stage.counts;
   const words: string[] = [];
   const number = (key: string) => read.optionalNumber(counts[key]);
-  if (stage.key === "objects") {
+  if (stage.key === "objects" || stage.key === "objects_updated") {
     const objects = number("objects");
     if (objects !== null) words.push(`${objects} facts`);
     for (const [key, label] of [
@@ -134,6 +134,13 @@ export function stageCounts(stage: MapStage): string[] {
       ["accepted", "kept"],
       ["edited", "changed"],
       ["rejected", "rejected"],
+    ] as const) {
+      const value = number(key);
+      if (value) words.push(`${value} ${label}`);
+    }
+    for (const [key, label] of [
+      ["superseded", "superseded"],
+      ["retracted", "retracted"],
     ] as const) {
       const value = number(key);
       if (value) words.push(`${value} ${label}`);
@@ -147,7 +154,16 @@ export function stageCounts(stage: MapStage): string[] {
       .map(([name, count]) => `${name} ${count}`);
     if (top.length) words.push(top.join(", "));
   }
-  if (stage.key === "fast") {
+  if (stage.key === "deep") {
+    const labelled = number("segments_labelled");
+    if (labelled) words.push(`${labelled} segments labelled`);
+    const audio = read.optionalString(counts.audio);
+    if (audio)
+      words.push(
+        audio === "frames" ? "voice from audio frames" : "voice from timings",
+      );
+  }
+  if (stage.key === "fast" || stage.key === "deep") {
     const inTokens = number("tokens_in");
     const outTokens = number("tokens_out");
     if (inTokens !== null && outTokens !== null)

@@ -12,9 +12,35 @@ export type PipelineConfig = {
   maxCallMinutes: number;
 };
 
+export type StreamingConfig = {
+  provider: string;
+  model: string;
+  language: string;
+  mode: string;
+};
+
+export type StreamingProvider = {
+  key: string;
+  label: string;
+  status: string;
+  models: string[];
+  inrPerHour: string;
+  note: string;
+  gateCleared: boolean;
+};
+
 export type CallDataSettings = {
   revision: number | null;
-  config: { fast: PipelineConfig; deep: PipelineConfig };
+  config: {
+    fast: PipelineConfig;
+    deep: PipelineConfig;
+    streaming: StreamingConfig;
+  };
+  streaming: {
+    providers: StreamingProvider[];
+    languages: string[];
+    modes: string[];
+  };
   models: {
     model: string;
     label: string;
@@ -50,9 +76,38 @@ export function normalizeCallData(raw: unknown): CallDataSettings {
   const body = read.object(raw);
   const config = read.object(body.config);
   const spent = read.object(body.spent_today_inr);
+  const live = read.object(config.streaming);
+  const menu = read.object(body.streaming);
+  const gate = read.object(menu.gate);
   return {
     revision: read.optionalNumber(body.revision),
-    config: { fast: pipeline(config.fast), deep: pipeline(config.deep) },
+    config: {
+      fast: pipeline(config.fast),
+      deep: pipeline(config.deep),
+      streaming: {
+        provider: read.string(live.provider, "off"),
+        model: read.string(live.model, "saaras:v3-realtime"),
+        language: read.string(live.language, "auto"),
+        mode: read.string(live.mode, "codemix"),
+      },
+    },
+    streaming: {
+      providers: read.array(menu.providers).map((item) => {
+        const provider = read.object(item);
+        const key = read.string(provider.key);
+        return {
+          key,
+          label: read.string(provider.label, key),
+          status: read.string(provider.status, "planned"),
+          models: read.strings(provider.models),
+          inrPerHour: read.string(provider.inr_per_hour),
+          note: read.string(provider.note),
+          gateCleared: read.boolean(gate[key]),
+        };
+      }),
+      languages: read.strings(menu.languages),
+      modes: read.strings(menu.modes),
+    },
     models: read.array(body.models).map((item) => {
       const model = read.object(item);
       return {
@@ -94,5 +149,9 @@ export function toApi(
     daily_cap_inr: Math.round(value.dailyCapInr),
     max_call_minutes: Math.round(value.maxCallMinutes),
   });
-  return { fast: one(config.fast), deep: one(config.deep) };
+  return {
+    fast: one(config.fast),
+    deep: one(config.deep),
+    streaming: config.streaming,
+  };
 }

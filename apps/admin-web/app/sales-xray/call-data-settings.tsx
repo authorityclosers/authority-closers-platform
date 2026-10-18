@@ -27,7 +27,7 @@ const PIPELINES: { key: "fast" | "deep"; label: string; sub: string }[] = [
   {
     key: "deep",
     label: "Deep pipeline",
-    sub: "Reads the whole call and classifies everything. Arrives in v0.64.",
+    sub: "After the fast read: the whole call, every segment labelled, the voice measured; supersedes earlier facts but never a person’s answer.",
   },
 ];
 
@@ -46,6 +46,15 @@ export function CallDataSettingsForm({
       ...current,
       [key]: { ...current[key], ...patch },
     }));
+  const live = draft.streaming;
+  const setLive = (patch: Partial<CallDataSettings["config"]["streaming"]>) =>
+    setDraft((current) => ({
+      ...current,
+      streaming: { ...current.streaming, ...patch },
+    }));
+  const liveProvider = settings.streaming.providers.find(
+    (p) => p.key === live.provider,
+  );
 
   const save = async () => {
     setBusy(true);
@@ -154,6 +163,93 @@ export function CallDataSettingsForm({
           </fieldset>
         );
       })}
+      <fieldset className={styles.pipeline}>
+        <legend>
+          Live transcription{" "}
+          <Badge
+            tone={
+              live.provider === "off"
+                ? "neutral"
+                : liveProvider?.gateCleared
+                  ? "good"
+                  : "warn"
+            }
+          >
+            {live.provider === "off"
+              ? "Off"
+              : liveProvider?.gateCleared
+                ? "On"
+                : "Waiting for the provider gate"}
+          </Badge>
+        </legend>
+        <p className={styles.sub}>
+          Draft text while the call happens, so the lead can fill sooner. The
+          batch transcript stays the one that counts. Recommended: Sarvam (best
+          published Hindi and Marathi accuracy); fallback: AWS Transcribe,
+          Mumbai. Nothing streams until the provider gate (AC-GOV-AUD-001) is
+          cleared for that provider and its key is in Infisical.
+        </p>
+        <Field label="Provider">
+          <select
+            className={styles.input}
+            value={live.provider}
+            onChange={(event) => {
+              const next = settings.streaming.providers.find(
+                (p) => p.key === event.target.value,
+              );
+              setLive({
+                provider: event.target.value,
+                ...(next ? { model: next.models[0] ?? "" } : {}),
+              });
+            }}
+          >
+            <option value="off">Off</option>
+            {settings.streaming.providers.map((provider) => (
+              <option
+                key={provider.key}
+                value={provider.key}
+                disabled={provider.status !== "implemented"}
+              >
+                {provider.label} · ₹{provider.inrPerHour}/hour
+                {provider.status !== "implemented" ? " (not built yet)" : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {liveProvider ? (
+          <>
+            <Field label="Model">
+              <select
+                className={styles.input}
+                value={live.model}
+                onChange={(event) => setLive({ model: event.target.value })}
+              >
+                {liveProvider.models.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Language">
+              <select
+                className={styles.input}
+                value={live.language}
+                onChange={(event) => setLive({ language: event.target.value })}
+              >
+                {settings.streaming.languages.map((language) => (
+                  <option key={language} value={language}>
+                    {language === "auto"
+                      ? "Detect (Hindi, Marathi, English)"
+                      : language}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <p className={styles.sub}>{liveProvider.note}</p>
+          </>
+        ) : null}
+      </fieldset>
       <div className={styles.actions}>
         <Button variant="primary" disabled={busy} onClick={() => void save()}>
           <Save size={14} aria-hidden="true" />

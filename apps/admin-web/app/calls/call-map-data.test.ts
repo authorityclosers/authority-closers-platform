@@ -39,7 +39,23 @@ const RAW = {
         by_category: { need: 4, people: 3 },
       },
     },
-    { key: "deep", label: "Deep pipeline", status: "not_built" },
+    {
+      key: "deep",
+      label: "Deep pipeline",
+      status: "done",
+      counts: {
+        segments_labelled: 42,
+        audio: "frames",
+        tokens_in: 9000,
+        tokens_out: 3000,
+      },
+    },
+    {
+      key: "objects_updated",
+      label: "Objects updated",
+      status: "done",
+      counts: { objects: 60, superseded: 12, retracted: 2, asked: 3 },
+    },
     { key: "odd", status: "exploded", counts: "nope" },
   ],
 };
@@ -48,8 +64,8 @@ describe("call map data", () => {
   it("gives every stage a safe default", () => {
     const map = normalizeMap(RAW);
     expect(map.workspace).toBe("Authority Closers");
-    expect(map.stages).toHaveLength(4);
-    expect(map.stages[3]).toMatchObject({
+    expect(map.stages).toHaveLength(5);
+    expect(map.stages[4]).toMatchObject({
       label: "Stage",
       status: "waiting",
       counts: {},
@@ -58,7 +74,18 @@ describe("call map data", () => {
   });
 
   it("says each stage's figures in words", () => {
-    const [fast, objects] = normalizeMap(RAW).stages;
+    const [fast, objects, deep, updated] = normalizeMap(RAW).stages;
+    expect(stageCounts(deep)).toEqual([
+      "42 segments labelled",
+      "voice from audio frames",
+      "9,000 in / 3,000 out tokens",
+    ]);
+    expect(stageCounts(updated)).toEqual([
+      "60 facts",
+      "3 asked",
+      "12 superseded",
+      "2 retracted",
+    ]);
     expect(stageMeta(fast)).toBe(
       "gemini · gemini-3.8-flash · fast/1 · call-taxonomy/1",
     );
