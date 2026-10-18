@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 
 import { CallMap } from "@/app/calls/call-map";
 import { normalizeMap } from "@/app/calls/call-map-data";
+import { EngineObjectsView } from "@/app/calls/engine-objects";
+import { normalizeEngineObjects } from "@/app/calls/engine-objects-data";
 import { LiveRefresh } from "@/app/calls/live-refresh";
 import { adminRead } from "@/app/lib/server-api";
 import { Page, PageHeader, Unavailable } from "@/app/ui/kit";
@@ -18,10 +20,16 @@ export default async function CallMapPage({
 }) {
   const { recordingId } = await params;
   if (!UUID.test(recordingId)) notFound();
-  const result = await adminRead(
-    `/v1/admin/conversation/calls/${recordingId}/data-map`,
-    normalizeMap,
-  );
+  const [result, objects] = await Promise.all([
+    adminRead(
+      `/v1/admin/conversation/calls/${recordingId}/data-map`,
+      normalizeMap,
+    ),
+    adminRead(
+      `/v1/admin/conversation/calls/${recordingId}/data-objects`,
+      normalizeEngineObjects,
+    ),
+  ]);
   const back = { href: `/calls/${recordingId}`, label: "Call" };
   if (!result.ok)
     return (
@@ -42,6 +50,11 @@ export default async function CallMapPage({
         active={map.stages.some((stage) => stage.status === "running")}
       />
       <CallMap map={map} />
+      {objects.ok ? (
+        <EngineObjectsView data={objects.data} />
+      ) : (
+        <Unavailable title="What the engine found" reason={objects.error} />
+      )}
     </Page>
   );
 }

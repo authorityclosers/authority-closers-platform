@@ -91,7 +91,7 @@ class Item:
         return str(self.row.basis)
 
 
-def _items(connection: Any, where: Any) -> list[Item]:
+def _items(connection: Any, where: Any, *, analysis: bool = False) -> list[Item]:
     objects = connection.execute(
         select(CallObject.__table__).where(where, CallObject.erased_at.is_(None))
     ).all()
@@ -124,7 +124,7 @@ def _items(connection: Any, where: Any) -> list[Item]:
         kind_type = taxonomy.get(obj.type_key)
         if obj.id in successors or obj.retracted or kind_type is None:
             continue
-        if kind_type.kind in ("segment", "audio"):
+        if kind_type.kind in ("segment", "audio") and not analysis:
             continue  # analysis data, not facts a seller reads on a lead
         hidden = marked.get(obj.recording_id, set())
         if hidden and any(e.get("segment_id") in hidden for e in obj.evidence or []):
@@ -382,3 +382,45 @@ def save_decision(connection: Any, decided: Decided, *, lead_written: bool) -> N
     if decided.row is None:
         return
     connection.execute(insert(CallObjectDecision).values(**decided.row, lead_written=lead_written))
+
+
+OBJECTS_SCHEMA = "call-data-objects/1"
+
+
+def call_objects(connection: Any, recording_id: UUID) -> dict[str, Any]:
+    """Admin: everything the engine currently holds for one call (operations admins only).
+
+    Facts as the seller sees them (a person's answer wins), every segment label
+    in time order, and the measured voice. Objects quoting a segment now marked
+    sensitive are hidden, as everywhere else.
+    """
+    items = _items(connection, CallObject.recording_id == recording_id, analysis=True)
+    segments = sorted(
+        (i for i in items if i.row.type_key == "conversation.segment"),
+        key=lambda i: (i.row.evidence or [{}])[0].get("start_ms", 0),
+    )
+    voice = next((i for i in items if i.row.type_key == "audio.features"), None)
+    facts = [i for i in items if taxonomy.TYPES[i.row.type_key].kind not in ("segment", "audio")]
+    return {
+        "schema": OBJECTS_SCHEMA,
+        "recording_id": str(recording_id),
+        "taxonomy_version": taxonomy.TAXONOMY_VERSION,
+        "categories": dict(taxonomy.CATEGORIES),
+        "facts": [
+            {**_fact(item), "superseded_a_fast_fact": item.row.supersedes_id is not None}
+            for item in _merge(facts)
+        ],
+        "segments": [
+            {
+                "segment_id": (seg.row.evidence or [{}])[0].get("segment_id"),
+                "start_ms": (seg.row.evidence or [{}])[0].get("start_ms"),
+                "end_ms": (seg.row.evidence or [{}])[0].get("end_ms"),
+                "speaker": seg.roles.get(
+                    str((seg.row.evidence or [{}])[0].get("speaker")), "unknown"
+                ),
+                **seg.row.value,
+            }
+            for seg in segments
+        ],
+        "voice": dict(voice.row.value) if voice is not None else None,
+    }

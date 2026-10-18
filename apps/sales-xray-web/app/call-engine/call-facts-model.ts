@@ -26,8 +26,9 @@ export function basisLabel(fact: Fact): string {
   if (fact.ai_read) return "AI read";
   if (fact.basis === "confirmed") return "You confirmed";
   if (fact.basis === "edited") return "You changed";
-  if (fact.status === "auto_filled") return "Filled from the call";
-  return "Heard in the call";
+  const deep = fact.source?.pipeline === "deep" ? " · deep read" : "";
+  if (fact.status === "auto_filled") return `Filled from the call${deep}`;
+  return `Heard in the call${deep}`;
 }
 
 const FIELD: Record<string, string> = {

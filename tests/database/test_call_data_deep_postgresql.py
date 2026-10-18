@@ -209,6 +209,17 @@ def test_deep_waits_for_fast_then_supersedes_labels_and_measures(postgres_harnes
     asked = {q["type"]: q for q in view["questions"]}
     assert asked["need.primary_pain"]["display"] == "Every sale needs Amit himself"
     assert asked["person.name"]["question"] == "replace"
+    # Admin sees everything: facts, every segment label in time order, the voice.
+    with postgres_harness.connect() as connection:
+        everything = facts.call_objects(connection, seeded["recording_id"])
+    assert everything["schema"] == "call-data-objects/1"
+    assert [s["segment_id"] for s in everything["segments"]] == ["s1", "s2", "s3", "s4", "s5"]
+    assert everything["segments"][1]["speaker"] == "prospect"
+    assert everything["segments"][0]["intent"] == "discovery"
+    assert everything["voice"]["source"] == "transcript timings only"
+    assert set(everything["voice"]["speakers"]) == {"salesperson", "prospect"}
+    pain = next(f for f in everything["facts"] if f["type"] == "need.primary_pain")
+    assert pain["superseded_a_fast_fact"] is True
     # Read once: the same transcript is not read again.
     assert _deep(postgres_harness, seeded, DeepModel()) == {"no_candidate": True}
     assert isinstance(UUID(str(follow)), UUID)

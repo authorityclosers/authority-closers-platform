@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Respons
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 
-from ac_platform.call_data import call_map, engine
+from ac_platform.call_data import call_map, engine, facts
 from ac_platform.call_data.settings import SettingsError, public
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -76,6 +76,20 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
         )
         if result is None:
             raise HTTPException(404, "This call is not here.")
+        return result
+
+    @router.get("/v1/admin/conversation/calls/{recording_id}/data-objects")
+    async def data_objects(
+        recording_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """What the engine found in one call: facts, segment labels, voice (content)."""
+        await admit(request, response, auth)
+        result: dict[str, Any] = await auth.database.run_sync(
+            lambda session: facts.call_objects(session.connection(), recording_id)
+        )
         return result
 
     @router.get("/v1/admin/call-data")
