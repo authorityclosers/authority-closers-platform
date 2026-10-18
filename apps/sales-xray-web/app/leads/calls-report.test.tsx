@@ -2,7 +2,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { CallsReport, callsCsv, dayValue } from "./calls-report";
+import {
+  CallsReport,
+  callsCsv,
+  dayValue,
+  idleLine,
+  splitIdle,
+} from "./calls-report";
 import type { CallReport } from "./leads-client";
 
 (
@@ -80,4 +86,30 @@ it("reads the last seven days and shows a column per day", async () => {
   expect(table.textContent).toContain("Asha");
   expect(table.textContent).toContain("12");
   expect(host.textContent).toContain("CSV");
+});
+
+it("names sellers without calls on one line instead of empty rows", () => {
+  const idle = (name: string) => ({
+    ...REPORT.sellers[0],
+    person_id: name,
+    name,
+    calls: 0,
+    connected: 0,
+    talk_seconds: 0,
+    missed: 0,
+  });
+  const report = {
+    ...REPORT,
+    sellers: [
+      REPORT.sellers[0],
+      ...["A", "B", "C", "D", "E", "F", "G", "H"].map(idle),
+    ],
+  };
+  const { active, idle: none } = splitIdle(report);
+  expect(active).toHaveLength(1);
+  expect(idleLine(none.map((seller) => seller.name))).toBe(
+    "A, B, C, D, E, F and 2 more",
+  );
+  // A header, every seller on every day, and the closing newline.
+  expect(callsCsv(report).trimEnd().split(/\r?\n/)).toHaveLength(1 + 9 * 2);
 });

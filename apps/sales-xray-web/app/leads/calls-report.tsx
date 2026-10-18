@@ -21,6 +21,28 @@ import {
 import styles from "./leads.module.css";
 
 const DAY_COLUMNS = 14;
+const IDLE_NAMES = 6;
+
+/** Sellers with any call in the range first; the rest are named on one line. */
+export function splitIdle(report: CallReport): {
+  active: CallReport["sellers"];
+  idle: CallReport["sellers"];
+} {
+  const busy = (seller: CallReport["sellers"][number]) =>
+    seller.calls > 0 || seller.missed > 0 || seller.talk_seconds > 0;
+  return {
+    active: report.sellers.filter(busy),
+    idle: report.sellers.filter((seller) => !busy(seller)),
+  };
+}
+
+/** "Mira A, Nikhil S and 40 more" */
+export function idleLine(names: string[]): string {
+  const shown = names.slice(0, IDLE_NAMES).join(", ");
+  return names.length > IDLE_NAMES
+    ? `${shown} and ${names.length - IDLE_NAMES} more`
+    : shown;
+}
 
 /** YYYY-MM-DD in the viewer's own calendar. */
 export function dayValue(date: Date): string {
@@ -96,6 +118,9 @@ export function CallsReport() {
 
   const days = report?.sellers[0]?.days.map((day) => day.day) ?? [];
   const perDay = days.length <= DAY_COLUMNS;
+  const { active, idle } = report
+    ? splitIdle(report)
+    : { active: [], idle: [] };
 
   return (
     <Panel
@@ -137,6 +162,8 @@ export function CallsReport() {
           </p>
         ) : !report ? (
           <Skeleton height={140} />
+        ) : !active.length ? (
+          <p className={styles.hint}>No calls in these days.</p>
         ) : (
           <div className={styles.tableWrap}>
             <table className={styles.table} aria-label="Calls by seller">
@@ -157,7 +184,7 @@ export function CallsReport() {
                 </tr>
               </thead>
               <tbody>
-                {report.sellers.map((seller) => (
+                {active.map((seller) => (
                   <tr key={seller.person_id}>
                     <th scope="row">{seller.name}</th>
                     {perDay
@@ -185,7 +212,12 @@ export function CallsReport() {
             </table>
           </div>
         )}
-        {report && !perDay ? (
+        {report && idle.length ? (
+          <p className={styles.hint}>
+            No calls: {idleLine(idle.map((seller) => seller.name))}.
+          </p>
+        ) : null}
+        {report && active.length && !perDay ? (
           <p className={styles.hint}>
             Over two weeks, the CSV has each day; the table shows the totals.
           </p>
