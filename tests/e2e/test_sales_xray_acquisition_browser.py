@@ -518,8 +518,10 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                             and response.request.method == "PUT"
                         )
                     ) as profile_response:
+                        # Owner 18 Oct: with a file selected the button says what
+                        # happens next (the upload continues after Save).
                         await page.get_by_role(
-                            "button", name="Save details and check access", exact=True
+                            "button", name="Save and analyse my call", exact=True
                         ).click()
                     saved_profile = await profile_response.value
                     assert saved_profile.status == 200
