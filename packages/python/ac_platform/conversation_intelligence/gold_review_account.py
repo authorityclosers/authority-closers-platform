@@ -302,7 +302,8 @@ async def metrics(
         )
         if payload.get("verdict") in ("agree", "partly", "disagree"):
             entry[payload["verdict"]] += 1
-        ai = payload.get("ai") if isinstance(payload.get("ai"), dict) else {}
+        raw_ai = payload.get("ai")
+        ai: dict[str, Any] = raw_ai if isinstance(raw_ai, dict) else {}
         if type(payload.get("score")) is int:
             entry["scored"] += 1
             if type(ai.get("score")) is int:

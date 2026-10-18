@@ -95,6 +95,7 @@ import {
   type UpdateNotification,
 } from "./updates-client";
 import { LeadsTabIcon } from "../leads/leads-badge";
+import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import styles from "./lightbox-shell.module.css";
 
 export type LightboxShellProps = {
@@ -112,7 +113,8 @@ export type LightboxShellProps = {
     | "organisation"
     | "prospects"
     | "coaching"
-    | "insights";
+    | "insights"
+    | "review";
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
@@ -172,6 +174,7 @@ function resolvePageTitle(
   if (active === "account") return "Account";
   if (active === "organisation") return "Organisation";
   if (active === "insights") return "Insights";
+  if (active === "review") return "Review";
   // The studio names its stage once it loads; until then (and while a route
   // loads) the bar already says where you are, so nothing swaps in later.
   if (active === "analyse") return "New analysis";
@@ -940,6 +943,13 @@ function LightboxShellFrame({
                 <span style={RAIL_NAME_STYLE}>Insights</span>
               </Link>
             ) : null}
+            {/* Gold reviewers (owner, 19 Oct); nothing for anyone else. */}
+            <ReviewRailLink
+              live={leadsBadgeLive}
+              className={styles.stripBtn}
+              activeClassName={styles.stripBtnActive}
+              nameStyle={RAIL_NAME_STYLE}
+            />
           </div>
           <div className={styles.stripBottom}>
             {bell}
@@ -1191,6 +1201,7 @@ function LightboxShellFrame({
           )}
           {/* The account lives under More in the tab bar, not here too. */}
           <div className={styles.barActions}>
+            <ReviewBarChip live={leadsBadgeLive} />
             {bell}
             <MinutesMeter allowance={allowance} variant="pill" />
           </div>
