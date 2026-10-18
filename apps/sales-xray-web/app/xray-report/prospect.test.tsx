@@ -11,6 +11,7 @@ import {
 } from "../review-fixture/report/story/amit-call";
 import { exampleView } from "./example";
 import { readCallProspect } from "../prospect-report-facts";
+import { WorkspaceAccessContext } from "../workspace-access";
 import { ProspectPart } from "./prospect";
 
 vi.mock("../prospect-report-facts", () => ({ readCallProspect: vi.fn() }));
@@ -52,6 +53,17 @@ function data(withProfile: boolean): DocumentReportData {
 }
 
 const view = exampleView("decision_pending");
+const signedIn = {
+  status: "ready",
+  authenticated: true,
+  context: { personId: PROSPECT, sessionId: PROSPECT, tenantId: PROSPECT },
+  retry: () => {},
+} as const;
+const inWorkspace = (node: React.ReactNode) => (
+  <WorkspaceAccessContext.Provider value={signedIn}>
+    {node}
+  </WorkspaceAccessContext.Provider>
+);
 
 it("shows the owner's layout with evidence, AI labels and Unknowns, and saves a confirmation", async () => {
   const puts: unknown[] = [];
@@ -82,12 +94,14 @@ it("shows the owner's layout with evidence, AI labels and Unknowns, and saves a 
   );
   await act(async () =>
     root.render(
-      <ProspectPart
-        data={data(true)}
-        callId={CALL}
-        view={view}
-        onSelect={vi.fn()}
-      />,
+      inWorkspace(
+        <ProspectPart
+          data={data(true)}
+          callId={CALL}
+          view={view}
+          onSelect={vi.fn()}
+        />,
+      ),
     ),
   );
   await flush();
@@ -115,7 +129,11 @@ it("shows the owner's layout with evidence, AI labels and Unknowns, and saves a 
 it("shows a skeleton while reading, then a call-only note without a prospect", async () => {
   vi.mocked(readCallProspect).mockReturnValue(new Promise(() => {}));
   await act(async () =>
-    root.render(<ProspectPart data={data(false)} callId={CALL} view={view} />),
+    root.render(
+      inWorkspace(
+        <ProspectPart data={data(false)} callId={CALL} view={view} />,
+      ),
+    ),
   );
   expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
   await act(async () => root.unmount());
@@ -127,7 +145,11 @@ it("shows a skeleton while reading, then a call-only note without a prospect", a
     vi.fn(async () => new Response(null, { status: 403 })),
   );
   await act(async () =>
-    root.render(<ProspectPart data={data(false)} callId={CALL} view={view} />),
+    root.render(
+      inWorkspace(
+        <ProspectPart data={data(false)} callId={CALL} view={view} />,
+      ),
+    ),
   );
   await flush();
   const text = host.textContent ?? "";
@@ -183,4 +205,18 @@ it("shows a skeleton while reading, then a call-only note without a prospect", a
   await flush();
   expect(calls[0]).toBe(`POST /v1/conversation/prospects/calls/${CALL}/create`);
   expect(calls[1]).toBe(`PUT /v1/conversation/prospects/${PROSPECT}/fields`);
+});
+
+it("reads and saves nothing without a signed-in workspace", async () => {
+  vi.mocked(readCallProspect).mockClear();
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  await act(async () =>
+    root.render(<ProspectPart data={data(true)} callId={CALL} view={view} />),
+  );
+  await flush();
+  expect(readCallProspect).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("Remember Before You Call Again");
+  expect(host.querySelectorAll("button")).toHaveLength(0);
 });

@@ -39,6 +39,7 @@ import {
 import { PROSPECTS_API, editProspectField } from "../prospects-client";
 import type { ProspectSummary } from "../prospects-client";
 import type { DocumentReportData } from "../report-document-data";
+import { useWorkspaceAccess } from "../workspace-access";
 import { PlayChip, type Select } from "../report-visuals/visuals";
 import type { XrayView } from "./model";
 import styles from "./prospect.module.css";
@@ -553,8 +554,11 @@ export function ProspectPart({
 }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Like the outcome read: only a signed-in workspace reads or saves a prospect.
+  const access = useWorkspaceAccess();
+  const signedIn = access?.authenticated === true && Boolean(access.context);
   useEffect(() => {
-    if (!callId) return;
+    if (!callId || !signedIn) return;
     const controller = new AbortController();
     loadProspect(callId, controller.signal)
       .then((prospect) => {
@@ -570,7 +574,7 @@ export function ProspectPart({
           setLoaded({ callId, state: "unavailable" });
       });
     return () => controller.abort();
-  }, [callId, attempt]);
+  }, [callId, attempt, signedIn]);
 
   const current = loaded && loaded.callId === callId ? loaded : null;
   const prospect = current?.state === "linked" ? current.prospect : null;
@@ -594,7 +598,7 @@ export function ProspectPart({
   }, [prospect, data.report, data.transcript, view.outcome]);
 
   if (!data.report) return null;
-  if (callId && !current) return <Skeleton />;
+  if (callId && signedIn && !current) return <Skeleton />;
   const save =
     prospect && prospect.can_edit !== false
       ? async (fact: ProspectFact, value: string) => {
@@ -627,7 +631,7 @@ export function ProspectPart({
           }
         : undefined;
   const note =
-    current?.state === "linked" ? null : (
+    current?.state === "linked" || !signedIn ? null : (
       <p className={styles.note}>
         {current?.state === "unavailable"
           ? "The saved prospect couldn’t be read just now, so this shows what this call established."
