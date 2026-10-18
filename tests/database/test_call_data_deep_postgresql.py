@@ -220,6 +220,26 @@ def test_deep_waits_for_fast_then_supersedes_labels_and_measures(postgres_harnes
     assert set(everything["voice"]["speakers"]) == {"salesperson", "prospect"}
     pain = next(f for f in everything["facts"] if f["type"] == "need.primary_pain")
     assert pain["superseded_a_fast_fact"] is True
+    # The dense Admin call detail: attempts, history, edges.
+    from ac_platform.call_data.detail import detail
+
+    with postgres_harness.connect() as connection:
+        dense = detail(connection, seeded["recording_id"])
+    assert dense is not None and dense["schema"] == "call-data-detail/1"
+    assert [(r["pipeline"], r["state"]) for r in dense["runs"]] == [
+        ("fast", "succeeded"),
+        ("deep", "succeeded"),
+    ]
+    assert dense["runs"][1]["tokens_in"] == 6000 and dense["runs"][1]["cost_inr"] > 0
+    history = list(dense["objects"])
+    assert any(o["retracted"] for o in history)
+    assert any(not o["current"] and not o["retracted"] for o in history)  # superseded
+    follow_up = next(o for o in history if o["type"] == "commitment.follow_up")
+    assert [d["decision"] for d in follow_up["decisions"]] == ["asked", "accepted"]
+    edges = {(e["from"], e["to"]): e for e in dense["edges"]}
+    assert edges[("better_transcript", "deep")]["branch"] == "deep"
+    assert edges[("fast", "objects")]["status"] == "done"
+    assert len(dense["segments"]) == 5 and dense["voice"] is not None
     # Read once: the same transcript is not read again.
     assert _deep(postgres_harness, seeded, DeepModel()) == {"no_candidate": True}
     assert isinstance(UUID(str(follow)), UUID)

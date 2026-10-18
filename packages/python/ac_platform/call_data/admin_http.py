@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
 from ac_platform.audit.service import AuditRepository
-from ac_platform.call_data import call_map, engine, facts
+from ac_platform.call_data import call_map, detail, engine, facts
 from ac_platform.call_data.settings import PIPELINES, SettingsError, public, raise_to
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -109,6 +109,22 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
         result: dict[str, Any] = await auth.database.run_sync(
             lambda session: facts.call_objects(session.connection(), recording_id)
         )
+        return result
+
+    @router.get("/v1/admin/call-data/calls/{recording_id}/detail")
+    async def call_detail(
+        recording_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """The dense call screen: stages and edges, every attempt and object, facts, voice."""
+        await admit(request, response, auth)
+        result = await auth.database.run_sync(
+            lambda session: detail.detail(session.connection(), recording_id)
+        )
+        if result is None:
+            raise HTTPException(404, "This call is not here.")
         return result
 
     @router.get("/v1/admin/call-data")
