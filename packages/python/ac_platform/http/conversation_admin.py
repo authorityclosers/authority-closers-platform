@@ -49,6 +49,7 @@ from ac_platform.http.auth import (
 from ac_platform.http.conversation_call_review import install_call_review_routes
 from ac_platform.http.conversation_cost_metrics import install_cost_metrics_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
+from ac_platform.http.conversation_report_settings import install_report_settings_http
 
 
 class ProviderConfigurationIntent(BaseModel):
@@ -440,3 +441,10 @@ def install_conversation_admin_http(
     # Cost and usage across environments, from the separate metrics store (19 Oct 2026).
     install_cost_metrics_routes(router, settings=settings, require_actor=require_actor)
     app.include_router(router)
+    # Report settings versions for Report, Prospect and Coaching (19 Oct 2026).
+    install_report_settings_http(
+        app,
+        settings=settings,
+        require_actor=require_actor,
+        organisation_ids=recording_tenants,
+    )

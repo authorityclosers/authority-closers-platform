@@ -171,6 +171,12 @@ export const NAVIGATION: readonly NavGroup[] = [
         need: { kind: "salesXray" },
       },
       {
+        href: "/sales-xray/report-settings",
+        label: "Report settings",
+        icon: "analysis",
+        need: { kind: "salesXray" },
+      },
+      {
         href: "/sales-xray/execution",
         label: "Execution & budget",
         icon: "execution",

@@ -174,6 +174,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "call_data_runs",
         "call_objects",
         "call_object_decisions",
+        "conversation_report_settings_versions",
+        "conversation_report_settings_events",
         "conversation_report_minute_events",
         "conversation_canary_submissions",
         "conversation_sensitive_segment_marks",

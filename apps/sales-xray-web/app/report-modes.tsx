@@ -36,6 +36,7 @@ import {
   FixtureCallOutcomeProvider,
 } from "./report-outcome-context";
 import { ReportReadingProvider } from "./report-reading-context";
+import { applyReportSettings, useReportSettings } from "./report-settings";
 import styles from "./report-modes.module.css";
 import { TargetArrow } from "./xray-report/icons";
 import type { XrayView } from "./xray-report/model";
@@ -641,7 +642,7 @@ export function ReportModes({
   /** Told which view shows, so the page header can follow it (owner, 19 Oct). */
   onViewChange?: (view: View) => void;
 }) {
-  const storyPanels =
+  const allStoryPanels =
     // A guest preview gets the Report too when the caller asks for pillars;
     // its locked items show as "more after you sign in".
     documentData?.report &&
@@ -658,8 +659,8 @@ export function ReportModes({
           callId: boundCallId ?? null,
         })
       : null;
-  const prospectPanels: ReportPanel[] = prospect ? [prospect] : [];
-  const coachingPanels: ReportPanel[] =
+  const allProspectPanels: ReportPanel[] = prospect ? [prospect] : [];
+  const allCoachingPanels: ReportPanel[] =
     documentData?.report && !documentData.report.preview
       ? [
           {
@@ -676,6 +677,21 @@ export function ReportModes({
           },
         ]
       : [];
+  // The Report parts and tabs this workspace's report settings version shows
+  // (Admin, 19 Oct 2026). Version 1, an older server or any read failure shows all.
+  const reportSettings = useReportSettings(!fixture);
+  const {
+    story: storyPanels,
+    prospect: prospectPanels,
+    coaching: coachingPanels,
+  } = applyReportSettings(
+    {
+      story: allStoryPanels,
+      prospect: allProspectPanels,
+      coaching: allCoachingPanels,
+    },
+    reportSettings,
+  );
   // The six-pillar Report replaces the old supplements; Details keeps the
   // original sections (transcript, raw data) unchanged.
   const enrichedPanels = suppliedPanels;
