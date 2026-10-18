@@ -45,6 +45,8 @@ class Me(Model):
     # Off: the lead rules give this seller no new leads; their open leads stay
     # with them (UX study item 8, 18 Oct). Managers set the same switch on Team.
     taking_leads: bool = True
+    # Outside the workspace's work hours with the pause on: new leads wait until then.
+    paused_until: datetime | None = None
 
 
 class Numbers(Model):
@@ -220,11 +222,23 @@ class RepView(Model):
     phone: PhoneHealth | None = None
 
 
+class WorkHoursView(Model):
+    """The team's work days and hours, India time (0 is Monday)."""
+
+    days: tuple[int, ...]
+    start: str
+    end: str
+    pause_leads: bool
+    inside: bool
+    next_start: datetime | None = None
+
+
 class SettingsView(Model):
     revision: int
     auto_reassign: bool
     reassign_minutes: int
     default_country: str
+    work_hours: WorkHoursView | None = None
 
 
 class Team(Model):
@@ -407,6 +421,23 @@ class SettingsCommand(Command):
     reassign_minutes: int = Field(ge=5, le=1440)
 
 
+class WorkHoursCommand(Command):
+    """A manager sets the team's work hours; no days clears them."""
+
+    expected_revision: int = Field(ge=0)
+    days: tuple[int, ...] = Field(default=(), max_length=7)
+    start: str = Field(default="09:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(default="19:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    pause_leads: bool = False
+
+    @field_validator("days")
+    @classmethod
+    def _days(cls, days: tuple[int, ...]) -> tuple[int, ...]:
+        if any(day < 0 or day > 6 for day in days):
+            raise ValueError("Days are 0 (Monday) to 6 (Sunday).")
+        return tuple(sorted(set(days)))
+
+
 class ImportCommand(Command):
     command_id: UUID
     file_name: str = Field(min_length=1, max_length=200)
@@ -498,6 +529,8 @@ class PhoneBook(Model):
     person_id: UUID
     numbers: tuple[str, ...]
     generated_at: datetime
+    # A call outside these stays on the phone (Salestrail's business hours).
+    work_hours: WorkHoursView | None = None
 
 
 class PhoneLogResult(Model):

@@ -467,6 +467,7 @@ export function LeadsRoute() {
                     key={`taking-${desk.me.taking_leads !== false}`}
                     initial={desk.me.taking_leads !== false}
                     place="row"
+                    pausedUntil={desk.me.paused_until ?? null}
                     onChanged={refresh}
                   />
                   <PhoneAppBanner onOpen={() => begin("apps", setApps)} />

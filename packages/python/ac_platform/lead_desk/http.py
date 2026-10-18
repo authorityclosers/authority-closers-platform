@@ -68,6 +68,7 @@ from ac_platform.lead_desk.contracts import (
     SourceView,
     TakingLeads,
     Team,
+    WorkHoursCommand,
 )
 from ac_platform.lead_desk.intake import MAX_FILE_BYTES, Intake
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
@@ -445,6 +446,15 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.save_settings(command)
+
+    @router.put("/work-hours", response_model=Team, response_model_by_alias=True)
+    async def save_work_hours(
+        command: WorkHoursCommand, request: Request, response: Response
+    ) -> Team:
+        """The team's work days and hours; outside them calls stay on phones and leads wait."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.save_work_hours(command)
 
     @router.post("/sweep")
     async def sweep(request: Request, response: Response) -> dict[str, int]:

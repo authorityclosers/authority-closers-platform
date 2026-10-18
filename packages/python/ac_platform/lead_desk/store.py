@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk import allocation
+from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk.capture import (
     CaptureError,
     bounded_payload,
@@ -66,6 +67,8 @@ from ac_platform.lead_desk.contracts import (
     SettingsView,
     TakingLeads,
     Team,
+    WorkHoursCommand,
+    WorkHoursView,
 )
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent, LeadRep
 from ac_platform.lead_desk.vocabulary import (
@@ -200,6 +203,20 @@ def phone_health(entry: Any) -> PhoneHealth | None:
         total=len(checks),
         call_log_on=checks.get("callLog", False),
         synced_at=datetime.fromisoformat(synced) if isinstance(synced, str) else None,
+    )
+
+
+def hours_view(hours: work_hours.WorkHours | None, now: datetime) -> WorkHoursView | None:
+    if hours is None:
+        return None
+    inside = work_hours.inside(hours, now)
+    return WorkHoursView(
+        days=hours.days,
+        start=hours.start.strftime("%H:%M"),
+        end=hours.end.strftime("%H:%M"),
+        pause_leads=hours.pause_leads,
+        inside=inside,
+        next_start=None if inside else work_hours.next_start(hours, now),
     )
 
 
@@ -592,6 +609,7 @@ class LeadDesk:
             or 0
         )
         rules = await self.db.get(LeadRep, (self.tenant_id, me))
+        hours = work_hours.parse((await self.settings())[1])
         return Desk(
             me=Me(
                 person_id=me,
@@ -599,6 +617,9 @@ class LeadDesk:
                 role=self.viewer.role,
                 can_manage=self.viewer.can_manage,
                 taking_leads=rules.available if rules else True,
+                paused_until=work_hours.next_start(hours, self.now)
+                if hours is not None and work_hours.paused(hours, self.now)
+                else None,
             ),
             numbers=Numbers(
                 calls=len(results) + len(dialled),
@@ -1052,6 +1073,16 @@ class LeadDesk:
         prefix: str = "",
         command_id: UUID | None = None,
     ) -> allocation.Allocation:
+        hours = work_hours.parse((await self.settings())[1])
+        if hours is not None and work_hours.paused(hours, self.now):
+            reason = (
+                f"{work_hours.HELD} It goes to a seller "
+                f"{work_hours.opening_words(hours, self.now)}."
+            )
+            await self._set_owner(
+                lead, None, reason, "hours", actor=actor, kind=kind, command_id=command_id
+            )
+            return allocation.Allocation(None, reason, "hours")
         team = reps if reps is not None else await self._reps()
         decision = allocation.allocate(
             allocation.LeadFacts(
@@ -1558,6 +1589,7 @@ class LeadDesk:
             )
         ).all()
         return PhoneBook(
+            work_hours=hours_view(work_hours.parse((await self.settings())[1]), self.now),
             person_id=self.viewer.person_id,
             numbers=tuple(dict.fromkeys(number for number in numbers if number)),
             generated_at=self.now,
@@ -1574,13 +1606,19 @@ class LeadDesk:
         """
         _, config = await self.settings()
         country = str(config.get("default_country") or "91")
+        hours = work_hours.parse(config)
         oldest = self.now - timedelta(days=PHONE_LOG_DAYS)
         newest = self.now + timedelta(minutes=5)
         wanted: dict[UUID, tuple[PhoneLogCall, str]] = {}
         skipped = already = 0
         for call in command.calls:
             phone = normalise_phone(call.number, default_country=country)
-            if phone is None or not oldest <= call.started_at <= newest:
+            # Outside work hours a call is the seller's own (Salestrail): never logged.
+            if (
+                phone is None
+                or not oldest <= call.started_at <= newest
+                or not work_hours.inside(hours, call.started_at)
+            ):
                 skipped += 1
                 continue
             key = uuid5(
@@ -1871,6 +1909,7 @@ class LeadDesk:
                 auto_reassign=bool(config["auto_reassign"]),
                 reassign_minutes=int(config["reassign_minutes"]),
                 default_country=str(config["default_country"]),
+                work_hours=hours_view(work_hours.parse(config), self.now),
             ),
             by_stage={stage: int(count) for stage, count in by_stage.items()},
             by_source={source: int(count) for source, count in by_source.items()},
@@ -1953,10 +1992,69 @@ class LeadDesk:
         await self.db.flush()
         return await self.team()
 
+    async def save_work_hours(self, command: WorkHoursCommand) -> Team:
+        """A manager sets the team's work hours (India time); no days clears them."""
+        self._require_manager()
+        start = time.fromisoformat(command.start)
+        end = time.fromisoformat(command.end)
+        if command.days and start >= end:
+            raise DeskError(422, "Work ends after it starts. Pick the hours again.")
+        row = await self.db.get(LeadDeskSettings, self.tenant_id, with_for_update=True)
+        current = row.revision if row else 0
+        if current != command.expected_revision:
+            raise DeskError(409, "Someone changed these settings. Reload and try again.")
+        config = {**DEFAULT_SETTINGS, **(row.config if row else {})}
+        hours = (
+            work_hours.WorkHours(command.days, start, end, command.pause_leads)
+            if command.days
+            else None
+        )
+        config[work_hours.KEY] = work_hours.as_config(hours)
+        if row is None:
+            row = LeadDeskSettings(tenant_id=self.tenant_id, revision=0, config={})
+            self.db.add(row)
+        row.revision = current + 1
+        row.config = config
+        row.updated_by_person_id = self.viewer.person_id
+        row.updated_at = self.now
+        await self.db.flush()
+        if not work_hours.paused(hours, self.now):
+            await self.release_held()
+        return await self.team()
+
+    async def release_held(self, *, limit: int = 500) -> int:
+        """Leads that waited for work hours go out to sellers once work has started."""
+        hours = work_hours.parse((await self.settings())[1])
+        if work_hours.paused(hours, self.now):
+            return 0
+        held = (
+            await self.db.scalars(
+                select(Lead)
+                .where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.owner_person_id.is_(None),
+                    Lead.stage.in_(OPEN_STAGES),
+                    Lead.owner_reason.like(f"{work_hours.HELD}%"),
+                )
+                .order_by(Lead.created_at)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
+            )
+        ).all()
+        if not held:
+            return 0
+        reps = await self._reps()
+        released = 0
+        for lead in held:
+            decision = await self._allocate(lead, reps=reps, prefix="Work hours started. ")
+            released += decision.person_id is not None
+        await self.db.flush()
+        return released
+
     async def sweep(self, *, limit: int = 200) -> int:
         """Move new leads nobody called in time to someone else (when switched on)."""
         _, config = await self.settings()
-        if not config["auto_reassign"]:
+        if not config["auto_reassign"] or work_hours.paused(work_hours.parse(config), self.now):
             return 0
         minutes = int(config["reassign_minutes"])
         stale = (

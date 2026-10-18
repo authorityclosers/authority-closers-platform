@@ -945,3 +945,125 @@ def test_a_sellers_phone_setup_shows_on_team(postgres_harness: Any, tmp_path: Pa
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_work_hours_hold_night_leads_and_keep_calls_on_the_phone(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Salestrail rows and UX study item 8, 18 Oct: a manager sets work hours. Outside
+    them a new lead waits and goes to a seller when work starts, and a call is never
+    logged. Clearing the hours gives out what waited."""
+    from ac_platform.lead_desk import hours
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            today = datetime.now(hours.IST).weekday()
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                as_(setup.token)
+                await client.put(
+                    f"{BASE}/team/{setup.state.person_id}",
+                    json={"expected_revision": 0, "available": False, "max_open": 10},
+                    headers=WRITE,
+                )
+                # Work only tomorrow, so right now is outside work hours.
+                body = {
+                    "expected_revision": 0,
+                    "days": [(today + 1) % 7],
+                    "start": "09:30",
+                    "end": "19:00",
+                    "pause_leads": True,
+                }
+                bad = await client.put(
+                    f"{BASE}/work-hours", json={**body, "end": "08:00"}, headers=WRITE
+                )
+                assert bad.status_code == 422
+                saved = await client.put(f"{BASE}/work-hours", json=body, headers=WRITE)
+                assert saved.status_code == 200, saved.text
+                view = saved.json()["settings"]["work_hours"]
+                assert view["days"] == [(today + 1) % 7] and view["pause_leads"] is True
+                assert view["inside"] is False and view["next_start"] is not None
+                assert saved.json()["settings"]["revision"] == 1
+
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={"command_id": str(uuid4()), "name": "Night Lead", "phone": "98765 40001"},
+                    headers=WRITE,
+                )
+                lead = added.json()
+                assert lead["lead"]["owner_person_id"] is None
+                assert lead["owner_reason"].startswith("Outside work hours. It goes to a seller")
+
+                as_(seller_token)
+                desk = (await client.get(BASE)).json()
+                assert desk["me"]["paused_until"] is not None
+                book = (await client.get(f"{BASE}/phone-book")).json()
+                assert book["work_hours"]["start"] == "09:30"
+                # A call now is outside work hours: it is never logged.
+                seller_lead = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Own Lead",
+                        "phone": "98765 40002",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                assert seller_lead.status_code == 201, seller_lead.text
+                logged = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": str(uuid4()),
+                        "calls": [
+                            {
+                                "log_id": "1",
+                                "number": "9876540002",
+                                "started_at": datetime.now(UTC).isoformat(),
+                                "duration_seconds": 30,
+                                "direction": "outgoing",
+                            }
+                        ],
+                    },
+                    headers=WRITE,
+                )
+                assert (logged.json()["logged"], logged.json()["skipped"]) == (0, 1)
+
+            # Work starts: the waiting lead goes to the seller.
+            async with setup.sessions() as db, db.begin():
+                start = datetime.fromisoformat(view["next_start"].replace("Z", "+00:00"))
+                assert await hours.release_held(db, start + timedelta(minutes=1)) == 1
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                detail = (await client.get(f"{BASE}/leads/{lead['lead']['lead_id']}")).json()
+                assert detail["lead"]["owner_person_id"] == str(seller.person_id)
+                assert detail["owner_reason"].startswith("Work hours started.")
+                # Clearing the hours: nothing waits and every call counts again.
+                cleared = await client.put(
+                    f"{BASE}/work-hours",
+                    json={"expected_revision": 1, "days": []},
+                    headers=WRITE,
+                )
+                assert cleared.status_code == 200, cleared.text
+                assert cleared.json()["settings"]["work_hours"] is None
+                late = await client.post(
+                    f"{BASE}/leads",
+                    json={"command_id": str(uuid4()), "name": "Day Lead", "phone": "98765 40003"},
+                    headers=WRITE,
+                )
+                assert late.json()["lead"]["owner_person_id"] == str(seller.person_id)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

@@ -37,6 +37,7 @@ from fastapi import FastAPI
 from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ac_platform.lead_desk import hours
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.models import Lead, LeadDevice
 from ac_platform.lead_desk.store import LeadDesk, Viewer
@@ -49,6 +50,8 @@ WINDOW = timedelta(hours=2)
 BATCH = 200
 _TICK = 30
 _LOCK = (1802, 1262)  # one sender across API processes and slots
+_HOURS_TICK = 60
+_HOURS_LOCK = (1802, 1263)  # one work-hours release across processes
 
 Kind = Literal["new", "due"]
 
@@ -341,6 +344,31 @@ async def run_push_sender(
                 await asyncio.wait_for(stop.wait(), timeout=_TICK)
 
 
+async def run_hours_release(
+    sessions: async_sessionmaker[AsyncSession],
+    stop: asyncio.Event,
+    *,
+    first_delay: int = _HOURS_TICK,
+) -> None:
+    """Every minute: leads that waited for work hours go out once work starts."""
+    with suppress(TimeoutError):
+        await asyncio.wait_for(stop.wait(), timeout=first_delay)
+    while not stop.is_set():
+        try:
+            async with sessions() as database, database.begin():
+                if await database.scalar(
+                    text("SELECT pg_try_advisory_xact_lock(:a, :b)"),
+                    {"a": _HOURS_LOCK[0], "b": _HOURS_LOCK[1]},
+                ):
+                    released = await hours.release_held(database, datetime.now(UTC))
+                    if released:
+                        log.info("lead desk gave out %d leads at the start of work", released)
+        except Exception:  # noqa: BLE001 - the loop must survive a bad pass
+            log.warning("lead desk work-hours release failed")
+        with suppress(TimeoutError):
+            await asyncio.wait_for(stop.wait(), timeout=_HOURS_TICK)
+
+
 def attach(
     application: FastAPI, sessions: async_sessionmaker[AsyncSession], environment: str
 ) -> None:
@@ -353,13 +381,18 @@ def attach(
     async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
         async with inner(app) as state:
             stop = asyncio.Event()
-            task = asyncio.create_task(run_push_sender(sessions, stop), name="lead-desk-alerts")
+            tasks = [
+                asyncio.create_task(run_push_sender(sessions, stop), name="lead-desk-alerts"),
+                asyncio.create_task(run_hours_release(sessions, stop), name="lead-desk-hours"),
+            ]
             try:
                 yield state
             finally:
                 stop.set()
-                task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await task
+                for task in tasks:
+                    task.cancel()
+                for task in tasks:
+                    with suppress(asyncio.CancelledError):
+                        await task
 
     application.router.lifespan_context = lifespan

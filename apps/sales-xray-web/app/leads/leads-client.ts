@@ -64,6 +64,8 @@ export type Desk = {
     can_manage: boolean;
     /** Off: the lead rules give this seller no new leads (UX study item 8). */
     taking_leads?: boolean;
+    /** Outside work hours with the pause on: new leads wait until then. */
+    paused_until?: string | null;
   };
   numbers: {
     calls: number;
@@ -181,6 +183,16 @@ export type RepView = {
   phone?: PhoneHealth | null;
 };
 
+/** The team's work days and hours, India time (0 is Monday). */
+export type WorkHours = {
+  days: number[];
+  start: string;
+  end: string;
+  pause_leads: boolean;
+  inside: boolean;
+  next_start: string | null;
+};
+
 export type PhoneHealth = {
   reported_at: string;
   app_version: string | null;
@@ -200,6 +212,7 @@ export type Team = {
     auto_reassign: boolean;
     reassign_minutes: number;
     default_country: string;
+    work_hours?: WorkHours | null;
   };
   by_stage: Record<string, number>;
   by_source: Record<string, number>;
@@ -638,6 +651,17 @@ export function saveSettings(
   return request<Team>(
     "/settings",
     json("PUT", { expected_revision: revision, ...settings }),
+  );
+}
+
+/** Sets the team's work hours; no days clears them. */
+export function saveWorkHours(
+  revision: number,
+  hours: { days: number[]; start: string; end: string; pause_leads: boolean },
+) {
+  return request<Team>(
+    "/work-hours",
+    json("PUT", { expected_revision: revision, ...hours }),
   );
 }
 
