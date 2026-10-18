@@ -98,6 +98,11 @@ class ConversationConflict(ConversationError):
     status = 409
 
 
+class BudgetCapReached(ConversationConflict):
+    """The AI budget cap is reached. A scheduled call waits (budget_cap_reached) and
+    continues by itself once the cap is raised or open holds settle (owner, 19 Oct 2026)."""
+
+
 def utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 

@@ -107,6 +107,7 @@ _PLAN_FAILURE_CODES = frozenset(
         "stage_cancelled",
         "processing_authorization_or_input_unavailable",
         "processing_budget_expired",
+        "budget_cap_reached",
         "processing_coordinator_timeout",
         "processing_coordinator_failed",
     }
@@ -173,8 +174,14 @@ def _progress_failure_code(
 ) -> str | None:
     """Project one current-generation failure without reviving superseded work."""
 
-    if has_report or (plan is not None and plan.state == "active"):
+    if has_report:
         return None
+    if plan is not None and plan.state == "active":
+        # Waiting for AI budget is the one state an active call reports (19 Oct 2026).
+        waiting = isinstance(plan.progress, dict) and (
+            plan.progress.get("failure_code") == "budget_cap_reached"
+        )
+        return "budget_cap_reached" if waiting and plan.generation == generation else None
     failure_code = _safe_progress_failure_code(
         plan.progress.get("failure_code")
         if plan is not None and plan.generation == generation and isinstance(plan.progress, dict)

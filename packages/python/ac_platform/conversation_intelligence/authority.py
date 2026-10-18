@@ -32,6 +32,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
     StageApproval,
 )
 from ac_platform.conversation_intelligence.application import (
+    BudgetCapReached,
     ConversationApplication,
     ConversationConflict,
     ConversationDenied,
@@ -48,6 +49,7 @@ from ac_platform.conversation_intelligence.contracts import IntakeIntent
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
     BudgetCapApproval,
+    BudgetExhausted,
     ExecutionPermission,
     MinuteAccount,
     MinuteGrant,
@@ -1738,6 +1740,10 @@ class ConversationAuthority:
                     int(now.timestamp()),
                     release_cap_paise=bundle.budget_cap_paise,
                 )
+            except BudgetExhausted:
+                raise BudgetCapReached(
+                    "The remaining approved processing allowance is unavailable."
+                ) from None
             except ValueError:
                 raise ConversationConflict(
                     "The remaining approved processing allowance is unavailable."

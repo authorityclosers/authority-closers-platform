@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ac_platform.conversation_intelligence.activation_contract import StageApproval
 from ac_platform.conversation_intelligence.analysis_settings import latest_analysis_settings
 from ac_platform.conversation_intelligence.application import (
+    BudgetCapReached,
     ConversationApplication,
     ConversationConflict,
     ConversationDenied,
@@ -121,6 +122,11 @@ _PROCESSING_DIAGNOSTIC_PHASES = frozenset(
     {"approval_evaluation", "quote_usage_reservation", "request_stage"}
 )
 _LOGGER = logging.getLogger(__name__)
+
+
+# A call out of AI budget waits with this code and is rechecked this often.
+BUDGET_WAIT_CODE = "budget_cap_reached"
+BUDGET_RECHECK = timedelta(seconds=60)
 
 
 def _retained_progress(row: ConversationProcessingPlan) -> dict[str, Any]:
@@ -1638,6 +1644,20 @@ class ProcessingPlanScheduler:
                     await ReportMinutes(db).release_plan(row)
                     if row.processing_lease_id is not None and row.state in {"held", "cancelled"}:
                         row.progress = {**row.progress, "minute_outcome_checked": True}
+            except BudgetCapReached:
+                # Out of AI budget (owner, 19 Oct 2026): the call waits instead of being
+                # held, rechecked every minute until its plan expires, and continues by
+                # itself once the cap is raised or open holds settle.
+                row = await db.get(
+                    ConversationProcessingPlan,
+                    identifier,
+                    with_for_update=True,
+                    populate_existing=True,
+                )
+                if row is not None and row.state == "active":
+                    row.progress = {**_retained_progress(row), "failure_code": BUDGET_WAIT_CODE}
+                    row.next_check_at = min(utc(row.expires_at), utc(now) + BUDGET_RECHECK)
+                return True
             except Exception as error:
                 # Roll back partial enqueue/quote work, retain the accepted
                 # intent and a content-free hold. Never retry an uncertain call.
