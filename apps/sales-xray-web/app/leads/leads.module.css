@@ -682,6 +682,11 @@
   background: var(--lx-closing);
 }
 
+/* A call from the lead that nobody took (phone call log, UX study item 5). */
+.history li[data-missed]::before {
+  background: var(--sx-bad);
+}
+
 .history li[data-kind="repeat"]::before,
 .history li[data-kind="reassigned"]::before {
   background: var(--sx-warn);
