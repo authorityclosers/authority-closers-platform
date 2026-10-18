@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { autoCallTitle } from "./call-auto-title";
+import { autoCallTitle, fallbackCallTitle } from "./call-auto-title";
 
 // Summaries in the shape the report writes them (names are fictional).
 it.each([
@@ -71,4 +71,29 @@ it("never exceeds the 80-character title", () => {
     `You met ${"Alpha ".repeat(30)}Services today.`,
   );
   expect(company === null || [...company].length <= 80).toBe(true);
+});
+
+it("falls back to the report's outcome, then the call's time and length", () => {
+  const startedAt = new Date("2026-10-18T10:34:00Z");
+  expect(
+    fallbackCallTitle({
+      outcomeKind: "follow_up",
+      startedAt,
+      durationMs: 237_000,
+    }),
+  ).toBe("Follow-up agreed");
+  expect(fallbackCallTitle({ outcomeKind: "future_date", startedAt })).toBe(
+    "Meeting scheduled",
+  );
+  expect(
+    fallbackCallTitle({
+      outcomeKind: "unclear",
+      startedAt,
+      durationMs: 237_000,
+      timeZone: "Asia/Kolkata",
+    }),
+  ).toBe("Call · 18 Oct, 4:04 pm · 3:57");
+  expect(fallbackCallTitle({ startedAt, timeZone: "Asia/Kolkata" })).toBe(
+    "Call · 18 Oct, 4:04 pm",
+  );
 });

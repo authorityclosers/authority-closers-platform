@@ -50,6 +50,8 @@ export type ReportHeaderProps = {
   onOpenTranscript?: () => void;
   /** Server-confirmed owner call name (C1); null/absent on older servers. */
   label?: CallLabel | null;
+  /** Shown while the call has no saved name (never "Untitled call" when known). */
+  fallbackTitle?: string;
   /** An optional picture of the call (the call map) below the title. */
   visual?: ReactNode;
   /**
@@ -145,6 +147,7 @@ export function ReportHeader({
   onRequestDeletion,
   onOpenTranscript,
   label = null,
+  fallbackTitle,
   rename,
   visual,
   compactVisual,
@@ -158,7 +161,7 @@ export function ReportHeader({
   const [renaming, setRenaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
-  const title = callTitle(label, "Untitled call");
+  const title = callTitle(label, fallbackTitle ?? "Untitled call");
   const canRename = claimed && label !== null && rename !== undefined;
 
   useEffect(() => {
