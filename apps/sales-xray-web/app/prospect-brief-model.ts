@@ -463,14 +463,17 @@ export function prospectBrief(
   const followUp = lineFact("Follow-up", deal?.nextEvent, callId);
   const blocker = lineFact("Current blocker", deal?.blocker, callId);
 
-  const name: BriefFact =
+  // A call not yet saved to a prospect has no name to show: it stays Unknown.
+  const name: BriefFact | null =
     field("name") ??
-    ({
-      label: PROSPECT_FIELD_LABELS.name,
-      value: prospect.name,
-      fact: "Observed",
-      ...(prospect.profile_fields ? { editKey: "name" as const } : {}),
-    } satisfies BriefFact);
+    (prospect.name.trim()
+      ? ({
+          label: PROSPECT_FIELD_LABELS.name,
+          value: prospect.name,
+          fact: "Observed",
+          ...(prospect.profile_fields ? { editKey: "name" as const } : {}),
+        } satisfies BriefFact)
+      : null);
   const now = section(
     fields,
     [
@@ -487,6 +490,7 @@ export function prospectBrief(
       question,
     ],
     [
+      !name && "Name",
       ["Role", "role"],
       ["Company", "business"],
       ["Main problem", "main_pain"],

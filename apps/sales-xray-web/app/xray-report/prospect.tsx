@@ -13,7 +13,7 @@ import styles from "./xray.module.css";
 function callOnlyProspect(callId: string): ProspectSummary {
   return {
     prospect_id: callId,
-    name: "This prospect",
+    name: "",
     revision: 0,
     owner_person_id: "",
     stage: null,
@@ -98,6 +98,11 @@ export function ProspectPart({
       <ProspectInformation
         prospect={linked ?? callOnlyProspect(callId ?? "call")}
         latest={latest}
+        basisNote={
+          linked
+            ? "Saved facts first; the rest comes from this call’s report."
+            : "From this call’s report."
+        }
         {...(linked ? { onSaved: () => setAttempt((value) => value + 1) } : {})}
       />
     </div>

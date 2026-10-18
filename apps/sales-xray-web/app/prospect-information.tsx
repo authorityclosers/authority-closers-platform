@@ -286,6 +286,7 @@ export function ProspectInformation({
   onSaved,
   latest,
   latestState = latest ? "ready" : "none",
+  basisNote,
 }: {
   prospect: ProspectSummary;
   calls?: ProspectCall[];
@@ -293,6 +294,8 @@ export function ProspectInformation({
   /** The latest analysed call's Report, when it could be read. */
   latest?: LatestCall;
   latestState?: BriefState;
+  /** Replaces the "latest analysed call" line, e.g. inside that call's Report. */
+  basisNote?: string;
 }) {
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);
@@ -394,13 +397,15 @@ export function ProspectInformation({
             </div>
           )}
         <p className={styles.briefBasis} data-brief-state={latestState}>
-          {latestState === "ready" && brief.basedOn
-            ? `Call facts from your latest analysed call: ${brief.basedOn.label}.`
-            : latestState === "loading"
-              ? "Reading the latest analysed call…"
-              : latestState === "unavailable"
-                ? "The latest call's report couldn't be read; only saved facts are shown."
-                : "No analysed call yet; only saved facts are shown."}
+          {basisNote
+            ? basisNote
+            : latestState === "ready" && brief.basedOn
+              ? `Call facts from your latest analysed call: ${brief.basedOn.label}.`
+              : latestState === "loading"
+                ? "Reading the latest analysed call…"
+                : latestState === "unavailable"
+                  ? "The latest call's report couldn't be read; only saved facts are shown."
+                  : "No analysed call yet; only saved facts are shown."}
         </p>
         {BRIEF_SECTIONS.map(({ title, subtitle }, index) => {
           const part = brief.sections[index];
