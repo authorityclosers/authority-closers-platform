@@ -1,0 +1,64 @@
+/* Admin → Call data settings. Tokens only. */
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+}
+
+.pipeline legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.sub {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--sx-control-h);
+  font-size: var(--sx-text-sm);
+}
+
+.input {
+  width: 100%;
+  min-height: var(--sx-control-h);
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.message {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
