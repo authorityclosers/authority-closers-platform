@@ -27,7 +27,10 @@ from ac_platform.conversation_intelligence.prospect_models import (
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore
 from ac_platform.db.models import model_metadata
 from ac_platform.tenancy.models import Membership, Organisation
-from tests.database.prospect_legacy_fixtures import legacy_person_projection
+from tests.database.prospect_legacy_fixtures import (
+    legacy_admission_uses,
+    legacy_person_projection,
+)
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import _migration_head, run, seed, wait_blocked
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -568,6 +571,7 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
     try:
         with monkeypatch.context() as patch:
             legacy_person_projection(engine, legacy_registry, patch)
+            legacy_admission_uses(patch)
             patch.setattr(guest_models, "ConversationGuestSubmission", LegacySubmission)
             patch.setattr(guest_ownership, "ConversationGuestSubmission", LegacySubmission)
             # Populate the actual 0076 schema before its journal exists. These
