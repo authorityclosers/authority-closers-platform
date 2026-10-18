@@ -206,3 +206,24 @@ def test_labels_match_by_id_in_any_form_or_by_the_segments_words() -> None:
     assert [d.evidence[0]["segment_id"] for d in drafts] == ["s1", "s2", "s3", "s4"]
     assert dropped == {}
     assert "segment_id" in classifier.response_schema()["properties"]["labels"]["items"]["required"]
+
+
+def test_near_same_wording_is_one_item_across_reads() -> None:
+    from ac_platform.call_data.values import similar
+
+    assert similar(
+        "Send the scope before the decision review",
+        "Send scope before the decision review on Friday",
+    )
+    assert not similar("Send the scope", "Invite the finance signer")
+    old = _current(
+        "commitment.seller_promise", "Send the scope before the decision review", decision="asked"
+    )
+    merge = deep.plan_merge(
+        [_draft("commitment.seller_promise", "Send scope before the decision review meeting")],
+        [old],
+        lead=None,
+        auto_filled={},
+        rejected=frozenset(),
+    )
+    assert merge.supersedes == [old.id] and merge.retract == []

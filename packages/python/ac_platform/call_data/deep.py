@@ -26,6 +26,7 @@ from sqlalchemy import insert, select
 from ac_platform.call_data import engine, policy, taxonomy
 from ac_platform.call_data.extraction import Draft
 from ac_platform.call_data.models import CallObject, CallObjectDecision
+from ac_platform.call_data.values import similar
 
 DEEP_VERSION = "deep/1"
 RETRACT_BELOW = 0.7
@@ -67,6 +68,32 @@ class Merge:
     person_kept: int
 
 
+def _held(
+    draft: Draft,
+    current: Sequence[Current],
+    by_identity: Mapping[tuple[str, str], Current],
+    matched: set[UUID],
+) -> Current | None:
+    """The current object this draft is about: same identity, or for "many" types the
+    same type with near-same wording (two reads rarely word an item alike)."""
+    exact = by_identity.get(identity(draft.type_key, draft.display, draft.evidence))
+    if exact is not None and exact.id not in matched:
+        return exact
+    kind_type = taxonomy.get(draft.type_key)
+    if kind_type is None or not kind_type.many or kind_type.kind == "segment":
+        return None
+    return next(
+        (
+            c
+            for c in current
+            if c.type_key == draft.type_key
+            and c.id not in matched
+            and similar(c.display, draft.display)
+        ),
+        None,
+    )
+
+
 def plan_merge(
     drafts: Sequence[Draft],
     current: Sequence[Current],
@@ -79,11 +106,11 @@ def plan_merge(
     kept: list[Draft] = []
     links: list[UUID | None] = []
     person_kept = 0
-    seen: set[tuple[str, str]] = set()
+    matched: set[UUID] = set()
     for draft in drafts:
-        key = identity(draft.type_key, draft.display, draft.evidence)
-        seen.add(key)
-        held = by_identity.get(key)
+        held = _held(draft, current, by_identity, matched)
+        if held is not None:
+            matched.add(held.id)
         if held is not None and held.decision in PERSON:
             person_kept += 1
             continue
@@ -93,7 +120,7 @@ def plan_merge(
     retract = [
         c
         for c in current
-        if identity(c.type_key, c.display, c.evidence) not in seen
+        if c.id not in matched
         and c.decision not in PERSON
         and c.basis != "person"
         and c.confidence < RETRACT_BELOW

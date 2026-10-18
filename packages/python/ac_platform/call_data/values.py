@@ -320,6 +320,27 @@ def from_model(kind_type: ObjectType, raw: object) -> dict[str, Any]:
     return validate_value(kind_type, value)
 
 
+_WORD = re.compile(r"[\w₹]+", re.UNICODE)
+_SMALL = frozenset({"the", "a", "an", "to", "of", "and", "for", "on", "in", "by", "with", "at"})
+
+
+def _words(text: str) -> frozenset[str]:
+    return frozenset(w for w in _WORD.findall(text.casefold()) if w not in _SMALL)
+
+
+def similar(a: str, b: str) -> bool:
+    """Two short statements of the same thing (two reads rarely word a promise alike)."""
+    left, right = _words(a), _words(b)
+    if not left or not right:
+        return a.strip().casefold() == b.strip().casefold()
+    if left == right:
+        return True
+    small, large = sorted((left, right), key=len)
+    if len(small) >= 3 and small <= large:
+        return True
+    return len(left & right) / len(left | right) >= 0.6
+
+
 _ENUM_WORDS = {
     "decided_yes": "Said yes",
     "decided_no": "Said no",

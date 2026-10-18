@@ -14,7 +14,7 @@ from typing import Any
 
 from ac_platform.call_data import taxonomy
 from ac_platform.call_data.taxonomy import ObjectType
-from ac_platform.call_data.values import CallValueError, display, from_model
+from ac_platform.call_data.values import CallValueError, display, from_model, similar
 
 MAX_EVIDENCE = 3
 MAX_QUOTE = 600
@@ -306,21 +306,26 @@ def validate_response(
 
 
 def _dedupe(drafts: list[Draft], drop: Any) -> list[Draft]:
-    best: dict[tuple[str, str], Draft] = {}
+    """One draft per type (one) or per distinct item (many, near-same wording merged)."""
+    kept: list[Draft] = []
     for draft in drafts:
         kind_type = taxonomy.TYPES[draft.type_key]
-        key = (
-            draft.type_key,
-            "" if not kind_type.many else " ".join(draft.display.casefold().split()),
+        held = next(
+            (
+                k
+                for k in kept
+                if k.type_key == draft.type_key
+                and (not kind_type.many or similar(k.display, draft.display))
+            ),
+            None,
         )
-        held = best.get(key)
         if held is None:
-            best[key] = draft
+            kept.append(draft)
             continue
         drop("duplicate")
         if draft.confidence > held.confidence:
             draft.mentions = max(draft.mentions, held.mentions)
-            best[key] = draft
+            kept[kept.index(held)] = draft
         else:
             held.mentions = max(draft.mentions, held.mentions)
-    return sorted(best.values(), key=lambda d: (taxonomy.TYPES[d.type_key].priority, d.display))
+    return sorted(kept, key=lambda d: (taxonomy.TYPES[d.type_key].priority, d.display))

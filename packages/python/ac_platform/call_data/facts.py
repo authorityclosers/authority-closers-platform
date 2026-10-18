@@ -20,7 +20,7 @@ from sqlalchemy import insert, select, text
 
 from ac_platform.call_data import taxonomy
 from ac_platform.call_data.models import CallDataRun, CallObject, CallObjectDecision
-from ac_platform.call_data.values import CallValueError, display, validate_value
+from ac_platform.call_data.values import CallValueError, display, similar, validate_value
 
 LEAD_SCHEMA = "call-data-lead/1"
 PROSPECT_SCHEMA = "prospect-facts/1"
@@ -172,20 +172,28 @@ def _fact(item: Item) -> dict[str, Any]:
 
 
 def _merge(items: list[Item]) -> list[Item]:
-    """One fact per type (one) or per distinct value (many); a person's word, then newest."""
-    best: dict[tuple[str, str], Item] = {}
+    """One fact per type (one) or per distinct item (many, near-same wording merged);
+    a person's word first, then the newest."""
+    kept: list[Item] = []
     for item in sorted(items, key=lambda i: i.row.created_at):
         if item.status == "rejected":
             continue
         kind_type = taxonomy.TYPES[item.row.type_key]
-        key = (item.row.type_key, _norm(item.shown_display) if kind_type.many else "")
-        held = best.get(key)
+        held = next(
+            (
+                k
+                for k in kept
+                if k.row.type_key == item.row.type_key
+                and (not kind_type.many or similar(k.shown_display, item.shown_display))
+            ),
+            None,
+        )
         person = item.status in ("accepted", "edited")
-        if held is None or person or held.status not in ("accepted", "edited"):
-            best[key] = item
-    return sorted(
-        best.values(), key=lambda i: (taxonomy.TYPES[i.row.type_key].priority, i.shown_display)
-    )
+        if held is None:
+            kept.append(item)
+        elif person or held.status not in ("accepted", "edited"):
+            kept[kept.index(held)] = item
+    return sorted(kept, key=lambda i: (taxonomy.TYPES[i.row.type_key].priority, i.shown_display))
 
 
 def _pipelines(connection: Any, where: Any) -> dict[str, Any]:
