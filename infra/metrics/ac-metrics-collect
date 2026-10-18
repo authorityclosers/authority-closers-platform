@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Sales X-Ray usage metrics collector (owner order, 19 Oct 2026: one Admin shows every
+# environment's real cost and usage).
+#
+# For each environment it runs the fixed export SQL inside that environment's own postgres
+# container, in a read-only session with a statement timeout, and writes the JSON document
+# atomically to the separate metrics store: <store>/<environment>/usage.json.
+#
+# It never writes to an application database, opens no network path between environments and
+# moves no secret: the database login stays inside the container, as in the release scripts.
+# The document holds usage numbers only (opaque ids, dates, labels, counters, company names).
+#
+# Usage: ac-metrics-collect [environment ...]
+#   default environments: $AC_METRICS_ENVIRONMENTS (space separated), else "development staging"
+set -euo pipefail
+
+LIB=${AC_METRICS_LIB:-/usr/local/lib/ac-metrics}
+STORE=${AC_METRICS_STORE:-/srv/authority-closers/metrics}
+DAYS=${AC_METRICS_DAYS:-120}
+SQL=$LIB/usage-metrics-export.sql
+SCHEMA=ac.sales-xray.usage-metrics/1
+
+[ -r "$SQL" ] || { echo "ac-metrics-collect: missing $SQL" >&2; exit 2; }
+fixtures=""
+if [ -r "$LIB/canary-fixtures.txt" ]; then
+  fixtures=$(grep -Eo '^[0-9a-f]{64}' "$LIB/canary-fixtures.txt" | paste -sd, -)
+fi
+
+if [ "$#" -gt 0 ]; then
+  environments=("$@")
+else
+  read -ra environments <<< "${AC_METRICS_ENVIRONMENTS:-development staging}"
+fi
+
+status=0
+for env in "${environments[@]}"; do
+  options="-c default_transaction_read_only=on -c statement_timeout=60000"
+  options="$options -c ac.metrics_environment=$env -c ac.metrics_days=$DAYS"
+  [ -n "$fixtures" ] && options="$options -c ac.metrics_fixtures=$fixtures"
+  case "$env" in
+    development)
+      command=(docker exec -i -e "PGOPTIONS=$options" acdev-live-postgres
+        psql -U ac_owner -d ac_platform -At -v ON_ERROR_STOP=1) ;;
+    staging|production)
+      command=(docker exec -i -e "PGOPTIONS=$options" "ac-application-$env-postgres-1"
+        sh -c 'PGPASSWORD=$POSTGRES_PASSWORD exec psql -U "$POSTGRES_USER" -d ac_platform -At -v ON_ERROR_STOP=1') ;;
+    *)
+      echo "ac-metrics-collect: unknown environment $env" >&2; status=2; continue ;;
+  esac
+  target=$STORE/$env
+  install -d -m 0755 "$STORE" "$target"
+  tmp=$(mktemp "$target/.usage.json.XXXXXX")
+  started=$(date +%s%N)
+  if ! nice -n 10 "${command[@]}" < "$SQL" > "$tmp" 2> "$tmp.err"; then
+    echo "ac-metrics-collect: $env export failed: $(head -c 300 "$tmp.err")" >&2
+    rm -f "$tmp" "$tmp.err"; status=1; continue
+  fi
+  rm -f "$tmp.err"
+  if ! python3 -I -c '
+import json, sys
+document = json.load(open(sys.argv[1], encoding="utf-8"))
+assert document["schema"] == sys.argv[2] and document["environment"] == sys.argv[3]
+' "$tmp" "$SCHEMA" "$env"; then
+    echo "ac-metrics-collect: $env export is not a $SCHEMA document" >&2
+    rm -f "$tmp"; status=1; continue
+  fi
+  chmod 0644 "$tmp"
+  mv -f "$tmp" "$target/usage.json"
+  echo "ac-metrics-collect: $env $(stat -c %s "$target/usage.json") bytes in $(( ($(date +%s%N) - started) / 1000000 )) ms"
+done
+exit "$status"

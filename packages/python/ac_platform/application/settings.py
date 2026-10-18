@@ -185,6 +185,9 @@ class Settings(BaseSettings):
     # Read-only folder of fictional sales-call recordings (catalogue.json + mp3)
     # for Sales Xray CRM simulated calls. Unset means simulated calls are off.
     lead_desk_simulation_root: str | None = None
+    # Read-only folder of the usage metrics store (<env>/usage.json per environment), filled
+    # by the host collector (infra/metrics). Unset means Admin cost and usage is unavailable.
+    metrics_store_root: str | None = None
     # Guest admission is a separate release-owned capability. The file contains
     # only the challenge credential; inference credentials remain broker-only.
     sales_xray_acquisition_enabled: bool = False
