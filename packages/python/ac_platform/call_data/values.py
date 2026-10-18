@@ -320,7 +320,8 @@ def from_model(kind_type: ObjectType, raw: object) -> dict[str, Any]:
     return validate_value(kind_type, value)
 
 
-_WORD = re.compile(r"[\w₹]+", re.UNICODE)
+# Letters and digits apart, so "Rs36,000" and "Rs 36,000" read the same.
+_WORD = re.compile(r"[^\W\d_]+|\d+")
 _SMALL = frozenset({"the", "a", "an", "to", "of", "and", "for", "on", "in", "by", "with", "at"})
 
 
@@ -329,16 +330,17 @@ def _words(text: str) -> frozenset[str]:
 
 
 def similar(a: str, b: str) -> bool:
-    """Two short statements of the same thing (two reads rarely word a promise alike)."""
+    """Two short statements of the same thing (two reads rarely word an item alike)."""
     left, right = _words(a), _words(b)
     if not left or not right:
         return a.strip().casefold() == b.strip().casefold()
     if left == right:
         return True
     small, large = sorted((left, right), key=len)
-    if len(small) >= 3 and small <= large:
+    # "spouse" and "Spouse (decides personal budget)"; longer phrases need 3 words inside.
+    if small <= large and (len(small) >= 3 or len(large) <= 6):
         return True
-    return len(left & right) / len(left | right) >= 0.6
+    return len(left & right) / len(left | right) >= 0.5
 
 
 _ENUM_WORDS = {

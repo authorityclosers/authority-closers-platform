@@ -216,6 +216,13 @@ def test_near_same_wording_is_one_item_across_reads() -> None:
         "Send scope before the decision review on Friday",
     )
     assert not similar("Send the scope", "Invite the finance signer")
+    assert not similar("Send the scope", "Send the invoice")
+    assert similar("Rs 36,000 annual planning fee", "Rs36,000 annual planning fee")
+    assert similar("spouse", "Spouse (decides personal budget)")
+    assert similar(
+        "Distinguish liquidity needs from long term goals without extra administration",
+        "Owner should distinguish liquidity needs from long term goals",
+    )
     old = _current(
         "commitment.seller_promise", "Send the scope before the decision review", decision="asked"
     )
