@@ -9,6 +9,7 @@ import {
   Button,
   Field,
   Kpi,
+  Meter,
   Panel,
   Skeleton,
   Tiles,
@@ -27,7 +28,7 @@ const control = z
 const amount = z.number().int().nonnegative();
 const budgetAccount = z
   .object({
-    cap_paise: amount.max(1_000_000),
+    cap_paise: amount,
     available_paise: z.number().int(),
     committed_paise: amount,
     settled_paise: amount,
@@ -41,9 +42,17 @@ const budgetAccount = z
   .strict();
 const schema = z
   .object({
-    environment: z.enum(["local", "test", "staging", "production"]),
+    environment: z.enum([
+      "local",
+      "test",
+      "development",
+      "staging",
+      "production",
+    ]),
     control,
     budget: budgetAccount.nullable(),
+    /** Calls waiting for AI budget; they resume by themselves (absent on older servers). */
+    waiting_calls: amount.optional(),
     history: z.array(control).max(10),
   })
   .strict();
@@ -52,7 +61,7 @@ const budgetSchema = z
   .object({
     scope_id: z.string().uuid(),
     revision: z.number().int().nonnegative(),
-    approved_cap_paise: amount.max(1_000_000),
+    approved_cap_paise: amount,
     budget: budgetAccount.nullable(),
   })
   .strict();
@@ -82,6 +91,16 @@ async function request(path: string, init: RequestInit = {}) {
     );
   return response.json() as Promise<unknown>;
 }
+
+/** One-click raises (owner, 19 Oct 2026: "just making it 300 or 400" must be one click). */
+const RAISES = [100_000, 250_000, 500_000];
+const rupees = (paise: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(paise / 100);
+const ceilingEndpoint = "/v1/admin/conversation/budget/ceiling-request";
 
 function formatBudgetAmount(paise: number) {
   return (paise / 100).toFixed(2);
@@ -215,21 +234,50 @@ export function ExecutionControlsPanel() {
       setBusy(false);
     }
   }
-  async function changeBudget() {
+  async function askRoot() {
     if (!budgetState || budgetBusy) return;
-    const newCapPaise = parseBudgetAmount(budgetDraft);
-    if (
-      newCapPaise == null ||
-      newCapPaise > budgetState.approved_cap_paise ||
-      newCapPaise > 1_000_000
-    ) {
+    const requested = budgetState.approved_cap_paise * 2 || 1_000_000;
+    setBudgetBusy(true);
+    setBudgetError(null);
+    setBudgetMessage(null);
+    try {
+      await request(ceilingEndpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": newIdempotencyKey(),
+        },
+        body: JSON.stringify({
+          requested_cap_paise: requested,
+          reason:
+            "Asked from Execution & budget: the working cap needs room above the ceiling",
+        }),
+      });
+      setBudgetMessage(
+        `Root is asked to raise the ceiling to ${rupees(requested)}. You can raise the cap up to it once it's sealed.`,
+      );
+    } catch (failure) {
+      setBudgetError(
+        failure instanceof Error
+          ? failure.message
+          : "The request to Root could not be confirmed.",
+      );
+    } finally {
+      setBudgetBusy(false);
+    }
+  }
+  async function changeBudget(override?: { capPaise: number; reason: string }) {
+    if (!budgetState || budgetBusy) return;
+    const newCapPaise = override?.capPaise ?? parseBudgetAmount(budgetDraft);
+    const changeReason = override?.reason ?? budgetReason;
+    if (newCapPaise == null || newCapPaise > budgetState.approved_cap_paise) {
       setBudgetError(
         `Enter a valid amount up to ${money(budgetState.approved_cap_paise)}.`,
       );
       setBudgetMessage(null);
       return;
     }
-    if (!budgetReason.trim()) {
+    if (!changeReason.trim()) {
       setBudgetError("Add a short reason so the budget change is auditable.");
       setBudgetMessage(null);
       return;
@@ -248,7 +296,7 @@ export function ExecutionControlsPanel() {
           body: JSON.stringify({
             expected_revision: budgetState.revision,
             new_cap_paise: newCapPaise,
-            reason: budgetReason.trim(),
+            reason: changeReason.trim(),
           }),
         }),
       );
@@ -256,7 +304,9 @@ export function ExecutionControlsPanel() {
       if (next.budget)
         setBudgetDraft(formatBudgetAmount(next.budget.cap_paise));
       setBudgetMessage(
-        `Saved shared budget limit as revision ${next.revision}.`,
+        override
+          ? `Raised the budget to ${rupees(newCapPaise)}. Waiting calls continue within a minute.`
+          : `Saved shared budget limit as revision ${next.revision}.`,
       );
       const refreshed = schema.parse(await request(endpoint));
       setState(refreshed);
@@ -389,6 +439,73 @@ export function ExecutionControlsPanel() {
                   value={money(budget.settled_paise)}
                 />
               </Tiles>
+              {approvedBudgetCap != null ? (
+                <div
+                  className={styles.quickRaise}
+                  role="group"
+                  aria-label="Raise the budget"
+                >
+                  <span className={styles.used}>
+                    <Meter
+                      value={budget.committed_paise}
+                      max={Math.max(1, budget.cap_paise)}
+                      label="Share of the budget used"
+                    />
+                    <strong>
+                      {budget.cap_paise
+                        ? Math.min(
+                            100,
+                            Math.round(
+                              (budget.committed_paise * 100) / budget.cap_paise,
+                            ),
+                          )
+                        : 100}
+                      % used
+                    </strong>
+                    <small>sealed ceiling {rupees(approvedBudgetCap)}</small>
+                  </span>
+                  {RAISES.map((step) => {
+                    const target = budget.cap_paise + step;
+                    const allowed = target <= approvedBudgetCap;
+                    return (
+                      <Button
+                        key={step}
+                        variant={allowed ? "primary" : "secondary"}
+                        disabled={budgetBusy || !allowed}
+                        title={
+                          allowed
+                            ? `Raise the budget to ${rupees(target)}`
+                            : "Above the sealed ceiling: ask Root to raise it"
+                        }
+                        onClick={() =>
+                          void changeBudget({
+                            capPaise: target,
+                            reason: `Raised by ${rupees(step)} from Execution & budget`,
+                          })
+                        }
+                      >
+                        +{rupees(step)}
+                      </Button>
+                    );
+                  })}
+                  <Button
+                    variant="ghost"
+                    disabled={budgetBusy}
+                    onClick={() => void askRoot()}
+                  >
+                    Ask Root to raise the ceiling
+                  </Button>
+                </div>
+              ) : null}
+              {state?.waiting_calls ? (
+                <p role="alert" className={styles.alert}>
+                  {state.waiting_calls === 1
+                    ? "1 call is"
+                    : `${state.waiting_calls} calls are`}{" "}
+                  waiting for AI budget. They continue by themselves within a
+                  minute of a raise.
+                </p>
+              ) : null}
               <p className={kitStyles.muted}>
                 {money(budget.uncertain_paise)} is held for outcomes awaiting
                 reconciliation. Reservations are cost ceilings, not provider

@@ -39,7 +39,6 @@ from ac_platform.conversation_intelligence.application import (
     utc,
 )
 from ac_platform.conversation_intelligence.budget_admin import (
-    ADMIN_BUDGET_CEILING_PAISE,
     is_admin_budget_approval_ref,
     is_any_admin_budget_approval_ref,
 )
@@ -130,15 +129,12 @@ def _budget_matches_release(previous: BudgetAccount, bundle: HostedApprovalBundl
         previous.cap_approval.approval_ref == bundle.budget_authorization_ref
         and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
     )
-    admin_approval = (
-        is_admin_budget_approval_ref(previous.cap_approval.approval_ref, bundle.digest)
-        and previous.cap_paise <= ADMIN_BUDGET_CEILING_PAISE
-    )
-    carried_admin_approval = (
-        is_any_admin_budget_approval_ref(previous.cap_approval.approval_ref)
-        and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
-        and previous.cap_paise <= ADMIN_BUDGET_CEILING_PAISE
-    )
+    # An Admin cap has no limit of its own (19 Oct 2026): new work is always bounded
+    # by ``effective_budget_cap_paise``, the smaller of it and the sealed ceiling.
+    admin_approval = is_admin_budget_approval_ref(previous.cap_approval.approval_ref, bundle.digest)
+    carried_admin_approval = is_any_admin_budget_approval_ref(
+        previous.cap_approval.approval_ref
+    ) and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
     try:
         effective_budget_cap_paise(bundle.budget_cap_paise, previous.cap_paise)
     except ValueError:
