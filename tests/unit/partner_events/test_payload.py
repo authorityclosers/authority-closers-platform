@@ -8,6 +8,9 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
+import pytest
+
+from ac_platform.partner_events.amounts import mentions_price
 from ac_platform.partner_events.payload import (
     MAX_BODY_BYTES,
     CallContext,
@@ -125,6 +128,44 @@ def test_summary_is_cut_to_1500_characters() -> None:
     payload = build_event(EVENT, long, Extraction("skipped", None), app_url=APP)
     assert len(payload["summary"]) == 1500
     assert payload["summary"].endswith("…")
+    # Amounts are masked before the cut, so a cut never leaves part of an amount.
+    priced = build_event(
+        EVENT,
+        replace(CONTEXT, summary="Quoted ₹3.7L today. " * 200),
+        Extraction("skipped", None),
+        app_url=APP,
+    )
+    assert len(priced["summary"]) == 1500 and "3.7" not in priced["summary"]
+    assert priced["summary"].startswith("Quoted [amount] today. Quoted [amount] today.")
+
+
+@pytest.mark.parametrize(
+    "summary,sent",
+    [
+        # Review 18 Oct, item 1 (blocker): the summary carried prices.
+        (
+            "Customer wants a 5 kW system; quoted 3.70 lakh plus GST, will pay ₹3,40,000.",
+            "Customer wants a 5 kW system; quoted [amount] plus GST, will pay [amount].",
+        ),
+        ("Budget teen lakh sattar hazaar, packing 500 extra.",
+         "Budget [amount], packing [amount] extra."),
+        ("ग्राहक का बजट दो लाख साठ हजार है।", "ग्राहक का बजट [amount] है।"),
+        ("ग्राहकाचे बजेट पाच लाख पन्नास हजार आहे.", "ग्राहकाचे बजेट [amount] आहे."),
+        ("Deal paune teen lakh mein, sawa do lakh nahi.",
+         "Deal [amount] mein, [amount] nahi."),
+        ("सवा दो लाख तक जा सकते हैं।", "[amount] तक जा सकते हैं।"),
+        ("Wants it above a lakh; transport 45k, packing 500 rupiya.",
+         "Wants it above [amount]; transport [amount], packing [amount]."),
+        ("Install a 5 kW system by 2026 on the 1500 sq ft roof.",
+         "Install a 5 kW system by 2026 on the 1500 sq ft roof."),
+    ],
+)  # fmt: skip
+def test_amounts_in_the_summary_are_sent_as_amount(summary: str, sent: str) -> None:
+    payload = build_event(
+        EVENT, replace(CONTEXT, summary=summary), Extraction("skipped", None), app_url=APP
+    )
+    assert payload["summary"] == sent
+    assert not mentions_price(payload["summary"])
 
 
 def test_a_body_over_256_kb_drops_its_facts_and_reads_failed() -> None:

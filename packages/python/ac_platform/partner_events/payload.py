@@ -15,8 +15,9 @@ context from the database for one report draft:
 - the report language from the call's processing plan.
 
 Withheld (sensitive) words never leave: the summary passes the canonical
-privacy projection. The body is UTF-8 JSON of at most 256 KB; the summary is
-cut to 1,500 characters.
+privacy projection. No price leaves in the summary either: every amount in it
+reads "[amount]" (spoken prices arrive only as ``mentioned_price``). The body
+is UTF-8 JSON of at most 256 KB; the summary is cut to 1,500 characters.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
+from ac_platform.partner_events.amounts import mask_amounts
 from ac_platform.partner_events.quote_facts import FACT_TYPES, VOCABULARIES
 
 SCHEMA = "sx.analysis_completed.v1"
@@ -88,7 +90,8 @@ def ref(prefix: str, value: UUID) -> str:
 
 
 def summary_text(value: Any) -> str:
-    text = value.strip() if isinstance(value, str) else ""
+    """The summary as sent: amounts masked, then cut to 1,500 characters."""
+    text = mask_amounts(value).strip() if isinstance(value, str) else ""
     if len(text) <= MAX_SUMMARY_CHARS:
         return text
     return text[: MAX_SUMMARY_CHARS - 1].rstrip() + "…"
