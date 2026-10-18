@@ -193,6 +193,29 @@ def test_tests_stay_apart_from_real_calls_unless_asked() -> None:
     assert {row["kind"] for row in with_tests["calls"]["rows"]} == {"real", "canary"}
 
 
+def test_a_later_backfill_counts_on_the_day_the_call_was_transcribed() -> None:
+    document = _document(
+        calls=[_call("call-real", hours_ago=48)],
+        steps=_steps("call-real", hours_ago=48),
+    )
+    document["pointer_reviews"][0]["at"] = _at(1)  # scored two days later
+    overview = build_metrics([parse_export("staging", document)], _scope())["overview"]
+    daily = {day["day"]: day for day in overview["daily"]}
+    transcribed, scored = daily["2026-10-17"], daily["2026-10-19"]
+    assert transcribed["per_minute"] == 0.412  # all four steps over its 10 minutes
+    assert scored["spend"] == 0.15 and scored["per_minute"] is None
+    assert overview["per_minute"] == 0.412
+    assert overview["environments"][0]["per_minute"] == 0.412
+
+
+def test_individuals_are_named_plainly() -> None:
+    document = _document(
+        companies=[{"id": "co-1", "name": "Authority Closers Public Learners", "kind": "personal"}]
+    )
+    result = build_metrics([parse_export("staging", document)], _scope())
+    assert result["calls"]["rows"][0]["company"] == "Individuals (personal accounts)"
+
+
 def test_a_call_shows_each_stage_its_billed_minutes_and_report_time() -> None:
     row = build_metrics([parse_export("staging", _document())], _scope())["calls"]["rows"][0]
     assert row["company"] == "Wise Life" and row["environment"] == "staging"

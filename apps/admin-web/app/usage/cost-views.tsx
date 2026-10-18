@@ -404,7 +404,7 @@ export function OverviewView({
           title="Cost per audio minute"
           sub="per day"
           tools={
-            <Why detail="All provider spend that day (transcription, facts, report, pointer review) divided by the minutes of audio transcribed that day." />
+            <Why detail="Each call's whole cost (transcription, facts, report, pointer review, repeats) on the day it was first transcribed, divided by its minutes of audio. A later backfill counts on the call's own day." />
           }
         >
           {o.audioMinutes > 0 ? (
@@ -1170,7 +1170,6 @@ export function MoneyView({ metrics }: { metrics: Metrics }) {
             key={row.environment}
             label={`${ENVIRONMENT_LABEL[row.environment] ?? row.environment} open holds`}
             value={count(row.open)}
-            tone={row.open ? "warn" : "good"}
             note={`${inr(row.openRupees)} held${
               row.capShare !== null
                 ? ` · ${pct(row.capShare)} of the ${inr(row.cap)} cap`

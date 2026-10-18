@@ -456,6 +456,8 @@ def _company(
     exports: Mapping[str, Export], environment: str, company: str | None
 ) -> dict[str, str]:
     known = exports[environment].companies.get(company or "") if environment in exports else None
+    if known and known["kind"] == "personal":
+        return {"id": company or "", "name": "Individuals (personal accounts)", "kind": "personal"}
     return {
         "id": company or "",
         "name": known["name"] if known else "Unknown",
@@ -517,7 +519,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         for call in delivered
         if call.report_at and call.report_at >= call.at
     ]
-    environments = []
+    environments: list[dict[str, Any]] = []
     for export in chosen:
         mine = [step for step in steps if step.environment == export.environment]
         mine_month = [step for step in month_steps if step.environment == export.environment]
@@ -545,6 +547,34 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
                 "report_p50_ms": _median(env_turn),
             }
         )
+    # Cost per audio minute by the day each call was first transcribed: every step of
+    # that call counts there (a later pointer-review backfill doesn't spike another
+    # day), and a repeat transcription raises that call's cost, not its minutes.
+    call_cost: Counter[tuple[str, str | None]] = Counter()
+    first_c2: dict[tuple[str, str | None], Step] = {}
+    for step in all_steps:
+        if not counted(kind_of(step)):
+            continue
+        key = (step.environment, step.call)
+        call_cost[key] += step.paise or 0
+        if (
+            step.stage == "C2"
+            and step.status == "succeeded"
+            and (key not in first_c2 or step.at < first_c2[key].at)
+        ):
+            first_c2[key] = step
+    cohort_paise: dict[str, Counter[date]] = defaultdict(Counter)
+    cohort_audio: dict[str, Counter[date]] = defaultdict(Counter)
+    for key, first in first_c2.items():
+        cohort_paise[key[0]][india_day(first.at)] += call_cost[key]
+        cohort_audio[key[0]][india_day(first.at)] += first.audio_ms
+
+    def cohort(environments: Iterable[str], span: Iterable[date]) -> float | None:
+        wanted = list(span)
+        paise = sum(cohort_paise[env][day] for env in environments for day in wanted)
+        audio_ms = sum(cohort_audio[env][day] for env in environments for day in wanted)
+        return _per_minute(paise, audio_ms)
+
     # Daily trend in India time, every day of the window so the bars add up.
     first_day = india_day(scope.since)
     days = [first_day + timedelta(days=offset) for offset in range((today - first_day).days + 1)]
@@ -563,7 +593,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
             "by_environment": {env: _rupees(paise) for env, paise in daily_spend[day].items()},
             "spend": _rupees(sum(daily_spend[day].values())),
             "audio_minutes": _minutes(daily_audio[day]),
-            "per_minute": _per_minute(sum(daily_spend[day].values()), daily_audio[day]),
+            "per_minute": cohort([export.environment for export in chosen], [day]),
             "calls": len(daily_calls[day]),
         }
         for day in days
@@ -572,6 +602,8 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
     for step in steps:
         stage_spend[step.stage] += step.paise or 0
     total = spend(steps)
+    for env_row in environments:
+        env_row["per_minute"] = cohort([env_row["environment"]], days)
     overview = {
         "spend_today": _rupees(spend(today_steps)),
         "spend_month": _rupees(spend(month_steps)),
@@ -581,7 +613,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         "calls": len(window_calls),
         "reports": len(delivered),
         "audio_minutes": _minutes(audio(steps)),
-        "per_minute": _per_minute(total, audio(steps)),
+        "per_minute": cohort([export.environment for export in chosen], days),
         "billed_minutes": _minutes(sum(call.billed_s for call in delivered) * 1000),
         "report_p50_ms": _median(turnaround),
         "report_p90_ms": _p90(turnaround),
