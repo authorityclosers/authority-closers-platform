@@ -19,6 +19,12 @@ import {
 export const NATIVE_CHECK_READS = 40;
 export const NATIVE_CHECK_INTERVAL_MS = 3_000;
 export const NATIVE_CHECK_DEADLINE_MS = 120_000;
+/**
+ * Waits before sending the same quote or acceptance again (same Idempotency-Key)
+ * after a 5xx, a timeout or a dropped connection: a production release restarts
+ * the API for a moment (19 Oct, v0.62.0: the start never landed).
+ */
+export const START_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000];
 
 /** Fixed when the owner clicks Analyse; never re-read from later view state. */
 export type AnalysisStartRequest = Readonly<{
@@ -36,6 +42,7 @@ export type AnalysisStartPhase = "checking" | "starting";
 
 export type AnalysisStartReason =
   | "checks_pending"
+  | "unreachable"
   | "needs_attention"
   | "language_mismatch"
   | "source_mismatch"
@@ -58,6 +65,8 @@ export type AnalysisStartOutcome =
 const COPY: Record<Exclude<AnalysisStartReason, "start_failed">, string> = {
   checks_pending:
     "Your recording is saved. Its file checks are still running, so analysis has not started. Open the call to check again.",
+  unreachable:
+    "Your recording is saved, but Sales Xray couldn't be reached to start the analysis. It may be updating. Tap Retry analysis in a minute.",
   needs_attention:
     "Your recording is saved, but it needs attention before analysis can start. Open the call to review it.",
   language_mismatch:
@@ -125,6 +134,35 @@ async function boundedRequest(
   }
 }
 
+/** A failure a release or a dropped connection causes: the same request may be sent again. */
+export function transient(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (error instanceof DOMException && error.name === "TimeoutError")
+    return true;
+  return (
+    error instanceof AcquisitionError &&
+    (error.status >= 500 || error.status === 408 || error.status === 429) &&
+    error.reason !== "execution_paused"
+  );
+}
+
+/** Sends the same request (same Idempotency-Key) again after a transient failure. */
+async function retrying<T>(
+  work: () => Promise<T>,
+  signal: AbortSignal,
+  delays: readonly number[],
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await work();
+    } catch (error) {
+      if (signal.aborted || !transient(error) || attempt >= delays.length)
+        throw error;
+      await wait(delays[attempt]!, signal);
+    }
+  }
+}
+
 function wait(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     const stop = () => {
@@ -143,18 +181,25 @@ function wait(ms: number, signal: AbortSignal) {
 /**
  * Starts analysis once for a source saved from one intentional Analyse click.
  * It waits on canonical GET progress, adopts work the server already owns, and
- * otherwise quotes and accepts the same plan once. Anything uncertain settles
- * to a visible action; it never retries paid work or restarts a provider.
+ * otherwise quotes and accepts the same plan once. A request a release or a
+ * dropped connection loses is sent again with its same Idempotency-Key (the
+ * server replays it, so it can't start paid work twice). Anything else
+ * uncertain settles to a visible action; it never restarts a provider.
  */
 export async function startAnalysis(
   request: AnalysisStartRequest,
   signal: AbortSignal,
   onPhase: (phase: AnalysisStartPhase) => void,
-  timing: Readonly<{ reads: number; intervalMs: number }> = {
+  timing: Readonly<{
+    reads: number;
+    intervalMs: number;
+    retryDelaysMs?: readonly number[];
+  }> = {
     reads: NATIVE_CHECK_READS,
     intervalMs: NATIVE_CHECK_INTERVAL_MS,
   },
 ): Promise<AnalysisStartOutcome> {
+  const delays = timing.retryDelaysMs ?? START_RETRY_DELAYS_MS;
   const { bound } = request;
   if (!request.policySha256 || bound.sha !== request.sourceSha256)
     return needsAction("source_mismatch");
@@ -162,6 +207,9 @@ export async function startAnalysis(
 
   onPhase("checking");
   let ready = false;
+  // Only say the checks are still running when a read said so. Reads that
+  // fail (a release, a dropped connection) mean the state is unknown.
+  let lastReadFailed = false;
   const checksDeadline = Date.now() + NATIVE_CHECK_DEADLINE_MS;
   for (let read = 0; read < timing.reads && !ready; read++) {
     if (read)
@@ -189,8 +237,10 @@ export async function startAnalysis(
         [401, 403, 404].includes(error.status)
       )
         return needsAction("start_failed", error);
+      lastReadFailed = true;
       continue;
     }
+    lastReadFailed = false;
     if (progress.has_report || progress.automatic_progression)
       return { kind: "accepted", plan: null };
     if (
@@ -201,36 +251,47 @@ export async function startAnalysis(
       return needsAction("needs_attention");
     ready = progress.local_state === "completed";
   }
-  if (!ready) return needsAction("checks_pending");
+  if (!ready)
+    return needsAction(lastReadFailed ? "unreachable" : "checks_pending");
 
   onPhase("starting");
   let shown: ProcessingPlan;
   try {
     shown = parseProcessingPlan(
-      await boundedRequest(`${submissionPath(bound.id)}/plan/quote`, signal, {
-        method: "POST",
+      await retrying(
+        () =>
+          boundedRequest(`${submissionPath(bound.id)}/plan/quote`, signal, {
+            method: "POST",
+            signal,
+            headers: {
+              "Idempotency-Key": reportPlanKey(
+                bound,
+                request.reportLanguage,
+                request.supportsLanguage,
+              ),
+              ...(request.supportsLanguage
+                ? { "Content-Type": "application/json" }
+                : {}),
+            },
+            ...(request.supportsLanguage
+              ? {
+                  body: JSON.stringify({
+                    report_language: request.reportLanguage,
+                  }),
+                }
+              : {}),
+          }),
         signal,
-        headers: {
-          "Idempotency-Key": reportPlanKey(
-            bound,
-            request.reportLanguage,
-            request.supportsLanguage,
-          ),
-          ...(request.supportsLanguage
-            ? { "Content-Type": "application/json" }
-            : {}),
-        },
-        ...(request.supportsLanguage
-          ? {
-              body: JSON.stringify({ report_language: request.reportLanguage }),
-            }
-          : {}),
-      }),
+        delays,
+      ),
       bound.recordingId,
     );
   } catch (error) {
     if (signal.aborted) throw error;
-    return needsAction("start_failed", error);
+    return needsAction(
+      transient(error) ? "unreachable" : "start_failed",
+      error,
+    );
   }
   if (
     request.supportsLanguage &&
@@ -241,14 +302,15 @@ export async function startAnalysis(
   if (shown.expires_at_epoch * 1000 <= Date.now())
     return needsAction("plan_expired");
 
-  let accepted: ProcessingPlan;
-  try {
-    accepted = parseProcessingPlan(
+  const acceptOnce = async () =>
+    parseProcessingPlan(
       await boundedRequest(`${submissionPath(bound.id)}/plan`, signal, {
         method: "POST",
         signal,
         headers: {
           "Content-Type": "application/json",
+          // The server replays this key: a second send reuses the one original
+          // acceptance and cannot make another consent or reservation.
           "Idempotency-Key": `accept-plan:${shown.id}`,
         },
         body: JSON.stringify({
@@ -260,25 +322,32 @@ export async function startAnalysis(
       }),
       bound.recordingId,
     );
-  } catch (error) {
-    if (signal.aborted) throw error;
-    // A failed response can arrive after the server accepted this exact plan.
-    // Reconcile with one owner read; never send the acceptance again.
-    const mayHaveAccepted =
-      error instanceof TypeError ||
-      (error instanceof DOMException && error.name === "TimeoutError") ||
-      (error instanceof AcquisitionError &&
-        error.status >= 500 &&
-        error.reason !== "execution_paused");
-    if (!mayHaveAccepted) return needsAction("start_failed", error);
+  let accepted: ProcessingPlan | null = null;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= delays.length && !accepted; attempt++) {
+    if (attempt) await wait(delays[attempt - 1]!, signal);
     try {
-      accepted = await readProcessingPlan(bound, signal);
-    } catch {
+      accepted = await acceptOnce();
+    } catch (error) {
       if (signal.aborted) throw error;
-      return needsAction("start_failed", error);
+      if (!transient(error)) return needsAction("start_failed", error);
+      lastError = error;
+      // A failed response can arrive after the server accepted this exact plan:
+      // read it first, and send the same acceptance again only if it wasn't.
+      try {
+        const owned = await readProcessingPlan(bound, signal);
+        if (owned.accepted) accepted = owned;
+      } catch (read) {
+        if (signal.aborted) throw read;
+        if (!transient(read)) return needsAction("start_failed", error);
+      }
     }
-    if (!accepted.accepted) return needsAction("start_failed", error);
   }
+  if (!accepted)
+    return needsAction(
+      transient(lastError) ? "unreachable" : "start_failed",
+      lastError,
+    );
   if (
     accepted.id !== shown.id ||
     accepted.plan_fingerprint !== shown.plan_fingerprint

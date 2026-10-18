@@ -1,5 +1,15 @@
 # Settle stuck provider holds (owner-approved, 17 Oct 2026)
 
+## From v0.64: automatic (owner approval, 19 Oct 2026)
+- The owner's words: "Yes: settle AI budget holds automatically at list price when a validated provider receipt lands. Ship it with v0.64."
+- The inference worker now settles each hold in the same transaction that saves the validated receipt (`provider_hold_settlement.settle_on_receipt`). It uses the same rules as this script.
+- Each settlement writes one audit event, `conversation.provider_hold_settled`, which names the approval.
+- A duplicate receipt changes nothing.
+- **What still stays open, for an invoice check, and shows in Admin → Usage & cost → Money health:**
+  - holds whose provider outcome is unknown (`provider-outcome-reconciliation`);
+  - older holds these rules can't price.
+- This script remains for holds opened before v0.64 (for example production's 17–18 Oct holds). Use the same snapshot, dry run, apply and log steps as below.
+
 ## Why
 - Every successful provider call (C2 transcription, C4 facts, C5 coaching) leaves its budget hold "uncertain". The step that turns the provider's usage into a settled cost was never built.
 - Each hold keeps the full quoted maximum, about ₹21, while the call really cost ₹1–5.

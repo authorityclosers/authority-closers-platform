@@ -47,6 +47,7 @@ from ac_platform.http.auth import (
     require_safe_origin,
 )
 from ac_platform.http.conversation_call_review import install_call_review_routes
+from ac_platform.http.conversation_cost_metrics import install_cost_metrics_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 
 
@@ -436,4 +437,6 @@ def install_conversation_admin_http(
         recording_tenant_resolver=recording_tenants,
         storage=recovery_storage,
     )
+    # Cost and usage across environments, from the separate metrics store (19 Oct 2026).
+    install_cost_metrics_routes(router, settings=settings, require_actor=require_actor)
     app.include_router(router)
