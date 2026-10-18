@@ -504,7 +504,19 @@ PARTNER_WEBHOOKS_PARITY_TABLES = LEAD_ALERTS_PARITY_TABLES + (
     "partner_webhook_events",
     "partner_webhook_attempts",
 )
+CALL_DATA_PARITY_MIGRATION_HEAD = "20261019_0097"
+CALL_DATA_PARITY_CONTRACT = "ac-postgres-parity-v64"
+CALL_DATA_PARITY_TABLES = PARTNER_WEBHOOKS_PARITY_TABLES + (
+    "call_data_settings",
+    "call_data_runs",
+    "call_objects",
+    "call_object_decisions",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    CALL_DATA_PARITY_MIGRATION_HEAD: (
+        CALL_DATA_PARITY_CONTRACT,
+        CALL_DATA_PARITY_TABLES,
+    ),
     PARTNER_WEBHOOKS_PARITY_MIGRATION_HEAD: (
         PARTNER_WEBHOOKS_PARITY_CONTRACT,
         PARTNER_WEBHOOKS_PARITY_TABLES,

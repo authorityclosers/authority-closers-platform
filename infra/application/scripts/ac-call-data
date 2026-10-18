@@ -1,0 +1,58 @@
+#!/bin/bash
+# Sales Xray call data engine, fast pipeline (owner direction 19 Oct 2026): every
+# NEW call's transcript becomes typed facts and fills its lead within seconds.
+# Long-running (systemd restarts it); one runner per database (advisory lock).
+#
+# Never backfills: the first start records a moment once
+# (/var/lib/ac-call-data/<env>.since) and only transcripts saved after it are
+# processed. The model, on/off switch and daily rupee cap are in Admin -> Call
+# data. Docs: docs/architecture/CALL_DATA_ENGINE.md
+#
+#   ac-call-data development-live | staging | production
+set -euo pipefail
+
+env_name=${1:?usage: ac-call-data development-live|staging|production}
+module=ac_platform.call_data.runner
+state=/var/lib/ac-call-data
+install -d -m 700 "$state"
+
+since_file=$state/$env_name.since
+[ -s "$since_file" ] || date -u +%Y-%m-%dT%H:%M:%S+00:00 > "$since_file"
+since=$(cat "$since_file")
+common=(--not-before "$since" --loop --apply)
+
+case "$env_name" in
+  development-live)
+    slot=$(cat /var/lib/ac-dev-live-backend/active-slot)
+    python=/srv/authority-closers/development/live-backend/$slot/.venv/bin/python
+    cd /tmp
+    if ! env -i PATH=/usr/bin:/bin "$python" -c "import $module" 2>/dev/null; then
+      echo "call data runner is not in this release yet"
+      sleep 300
+      exit 0
+    fi
+    exec env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 PYTHONUNBUFFERED=1 \
+      "$python" -m "$module" \
+      --service-config /etc/authority-closers/development/service-live.json \
+      --database-url-file /etc/authority-closers/development/database-url-live \
+      --token-file /etc/authority-closers/development/identities/gemini/token \
+      --infisical /usr/local/bin/infisical \
+      "${common[@]}"
+    ;;
+  staging | production)
+    container=ac-application-$env_name-sales-xray-worker-1
+    if ! docker exec "$container" python -c "import $module" 2>/dev/null; then
+      echo "call data runner is not in this release yet"
+      sleep 300
+      exit 0
+    fi
+    exec docker exec "$container" python -m "$module" \
+      --service-config /run/ac-sales-xray/service.json \
+      --database-url-file /run/ac-sales-xray/database-url \
+      "${common[@]}"
+    ;;
+  *)
+    echo "unknown environment: $env_name" >&2
+    exit 2
+    ;;
+esac

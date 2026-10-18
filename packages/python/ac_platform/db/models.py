@@ -20,6 +20,7 @@ from ac_platform.billing import credit_models as billing_credit_models
 from ac_platform.billing import invoice_models as billing_invoice_models
 from ac_platform.billing import models as billing_models
 from ac_platform.billing import order_models as billing_order_models
+from ac_platform.call_data import models as call_data_models
 from ac_platform.catalog import models as catalog_models
 from ac_platform.certificates import models as certificate_models
 from ac_platform.coaching import models as coaching_models
@@ -93,6 +94,7 @@ MODEL_MODULES = (
     prospect_call_outcome_models,
     lead_desk_models,
     partner_event_models,
+    call_data_models,
     authorization_models,
     knowledge_models,
     catalog_models,
