@@ -805,16 +805,20 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     report_view = page.get_by_role("button", name="Report view", exact=True)
                     details_view = page.get_by_role("button", name="Details view", exact=True)
                     # Intended default: a bound report URL without view= opens
-                    # on the three-part Report (15 Oct), whatever the viewport width.
+                    # on the Report parts (15 Oct; four since 18 Oct), whatever the viewport width.
                     # 16 Oct owner: the old Details and Document views are not offered.
                     await expect(report_view).to_have_attribute("aria-pressed", "true")
                     await expect(details_view).to_have_count(0)
                     report_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
                     )
-                    await expect(report_nav.get_by_role("link")).to_have_count(3)
+                    # 18-19 Oct: Prospect’s Information is the fourth part.
+                    await expect(report_nav.get_by_role("link")).to_have_count(4)
                     await expect(
                         report_nav.get_by_role("link", name="Overview & Score", exact=True)
+                    ).to_have_count(1)
+                    await expect(
+                        report_nav.get_by_role("link", name="Prospect’s Information", exact=True)
                     ).to_have_count(1)
                     # An explicit Details link still opens every original section.
                     await page.goto(_with_view(page.url, "tabs"), wait_until="domcontentloaded")
