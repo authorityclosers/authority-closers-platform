@@ -67,8 +67,8 @@ from ac_platform.conversation_intelligence.sensitive_segments import withhold
 from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.organisations.workspace_kinds import Workspace, classify_workspaces
 from ac_platform.outbox.models import Job
-from ac_platform.tenancy.models import Tenant
 
 QUEUE_WINDOW = 500
 MAX_PAGE = 100
@@ -127,10 +127,12 @@ class AdminCallReview:
         operations_tenant_id: UUID,
         *,
         recording_tenant_ids: Sequence[UUID],
+        personal_tenant_id: UUID | None = None,
     ) -> None:
         self.application = application
         self.database: AsyncSession = application.database
         self.operations_tenant_id = operations_tenant_id
+        self.personal_tenant_id = personal_tenant_id
         self.recording_tenant_ids = tuple(
             dict.fromkeys(item for item in recording_tenant_ids if item != operations_tenant_id)
         )
@@ -214,12 +216,14 @@ class AdminCallReview:
             owners[recording.id] = _owner_view(recording, guest, usage, claim, people)
         return owners
 
-    async def _organisations(self, tenant_ids: Iterable[UUID]) -> dict[UUID, str]:
-        ids = list(set(tenant_ids))
-        if not ids:
-            return {}
-        rows = await self.database.execute(select(Tenant.id, Tenant.name).where(Tenant.id.in_(ids)))
-        return {identifier: name for identifier, name in rows.all()}
+    async def _organisations(self, tenant_ids: Iterable[UUID]) -> dict[UUID, Workspace]:
+        """Clear names and kinds: "Personal accounts", "AC Operations", our company."""
+        return await classify_workspaces(
+            self.database,
+            operations_tenant_id=self.operations_tenant_id,
+            personal_tenant_id=self.personal_tenant_id,
+            tenant_ids=tenant_ids,
+        )
 
     async def _runs(self, recording_ids: Sequence[UUID]) -> dict[UUID, list[ConversationRun]]:
         grouped: dict[UUID, list[ConversationRun]] = defaultdict(list)
@@ -413,7 +417,7 @@ class AdminCallReview:
                     "uploaded_at": _iso(recording.created_at),
                     "organisation": {
                         "id": str(recording.tenant_id),
-                        "name": organisations.get(recording.tenant_id, "Unknown organisation"),
+                        **_organisation_view(organisations, recording.tenant_id),
                     },
                     "rep": owners.get(recording.id),
                     "status": _status(latest_run, latest_plan, report_run is not None),
@@ -505,7 +509,7 @@ class AdminCallReview:
             "source_bytes": recording.source_bytes,
             "organisation": {
                 "id": str(recording.tenant_id),
-                "name": organisations.get(recording.tenant_id, "Unknown organisation"),
+                **_organisation_view(organisations, recording.tenant_id),
             },
             "rep": owners.get(recording.id),
             "status": _status(
@@ -621,6 +625,13 @@ class AdminCallReview:
             "source_sha256": recording.source_sha256,
             "content_type": recording.content_type,
         }
+
+
+def _organisation_view(workspaces: dict[UUID, Workspace], tenant_id: UUID) -> dict[str, str]:
+    workspace = workspaces.get(tenant_id)
+    if workspace is None:
+        return {"name": "Unknown organisation", "kind": "other"}
+    return {"name": workspace.name, "kind": workspace.kind}
 
 
 def _facets(items: Sequence[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:

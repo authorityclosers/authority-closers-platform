@@ -94,6 +94,7 @@ def install_call_review_routes(
             ConversationApplication(auth.database),
             settings.operations_tenant_id,
             recording_tenant_ids=await tenant_scope(auth),
+            personal_tenant_id=settings.public_learner_tenant_id,
         )
 
     def scope(request: Request, response: Response, allowed: set[str] | None = None) -> None:
