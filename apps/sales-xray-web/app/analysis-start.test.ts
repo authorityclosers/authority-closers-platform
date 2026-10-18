@@ -26,7 +26,9 @@ const request = {
   supportsLanguage: false,
   paused: false,
 } as const;
-const timing = { reads: 3, intervalMs: 1 };
+// No resends unless a test asks for them (START_RETRY_DELAYS_MS is the live default).
+const timing = { reads: 3, intervalMs: 1, retryDelaysMs: [] as number[] };
+const retrying = { ...timing, retryDelaysMs: [1, 1, 1] };
 const acceptedPlan = { ...plan, accepted: true, state: "active" };
 
 let calls: Array<{ path: string; init: RequestInit }>;
@@ -123,9 +125,10 @@ describe("root-owned analysis start", () => {
       () => {},
     );
     await vi.advanceTimersByTimeAsync(NATIVE_CHECK_DEADLINE_MS + 1);
+    // No read ever answered, so the checks' state is unknown (19 Oct, v0.62.0).
     await expect(running).resolves.toMatchObject({
       kind: "needs_action",
-      reason: "checks_pending",
+      reason: "unreachable",
     });
     expect(calls.length).toBeLessThan(5);
     expect(calls.some(({ init }) => init.method === "POST")).toBe(false);
@@ -157,7 +160,7 @@ describe("root-owned analysis start", () => {
     await vi.advanceTimersByTimeAsync(STATUS_READ_TIMEOUT_MS + 1);
     await expect(running).resolves.toMatchObject({
       kind: "needs_action",
-      reason: "start_failed",
+      reason: "unreachable",
     });
     expect(posts("/plan/quote")).toHaveLength(1);
     expect(posts("/plan")).toHaveLength(0);
@@ -252,7 +255,7 @@ describe("root-owned analysis start", () => {
     ownerPlan = plan;
     await expect(
       startAnalysis(request, new AbortController().signal, () => {}, timing),
-    ).resolves.toMatchObject({ kind: "needs_action", reason: "start_failed" });
+    ).resolves.toMatchObject({ kind: "needs_action", reason: "unreachable" });
 
     ownerPlan = { ...acceptedPlan, plan_fingerprint: "c".repeat(64) };
     await expect(
@@ -315,5 +318,115 @@ describe("root-owned analysis start", () => {
     abort.abort();
     await expect(running).rejects.toBeDefined();
     expect(calls.some(({ init }) => init.method === "POST")).toBe(false);
+  });
+});
+
+describe("starting through a release or a dropped connection (19 Oct)", () => {
+  it("sends a quote a release dropped again with the same key", async () => {
+    let quotes = 0;
+    const original = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init: RequestInit = {}) => {
+        if (path.endsWith("/plan/quote") && quotes++ === 0) {
+          calls.push({ path, init });
+          return response({ detail: "Bad gateway" }, 502);
+        }
+        return original(path, init);
+      }),
+    );
+    const outcome = await startAnalysis(
+      request,
+      new AbortController().signal,
+      () => {},
+      retrying,
+    );
+    expect(outcome).toMatchObject({ kind: "accepted" });
+    const keys = posts("/plan/quote").map(
+      ({ init }) => (init.headers as Record<string, string>)["Idempotency-Key"],
+    );
+    expect(keys).toEqual([
+      reportPlanKey(bound, "en", false),
+      reportPlanKey(bound, "en", false),
+    ]);
+    expect(posts("/plan")).toHaveLength(1);
+  });
+
+  it("recovers a quote lost to a dropped connection", async () => {
+    let quotes = 0;
+    const original = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init: RequestInit = {}) => {
+        if (path.endsWith("/plan/quote") && quotes++ === 0) {
+          calls.push({ path, init });
+          throw new TypeError("Failed to fetch");
+        }
+        return original(path, init);
+      }),
+    );
+    await expect(
+      startAnalysis(request, new AbortController().signal, () => {}, retrying),
+    ).resolves.toMatchObject({ kind: "accepted" });
+    expect(posts("/plan/quote")).toHaveLength(2);
+  });
+
+  it("sends a lost acceptance again with the same key only while the plan is unaccepted", async () => {
+    let sends = 0;
+    accept = () =>
+      sends++ === 0
+        ? response({ detail: "Bad gateway" }, 502)
+        : response(acceptedPlan, 202);
+    ownerPlan = plan;
+    await expect(
+      startAnalysis(request, new AbortController().signal, () => {}, retrying),
+    ).resolves.toMatchObject({ kind: "accepted" });
+    const keys = posts("/plan").map(
+      ({ init }) => (init.headers as Record<string, string>)["Idempotency-Key"],
+    );
+    expect(keys).toEqual([`accept-plan:${plan.id}`, `accept-plan:${plan.id}`]);
+  });
+
+  it("never sends an acceptance again once the server shows it accepted", async () => {
+    accept = () => response({ detail: "Bad gateway" }, 502);
+    ownerPlan = acceptedPlan;
+    await expect(
+      startAnalysis(request, new AbortController().signal, () => {}, retrying),
+    ).resolves.toMatchObject({ kind: "accepted" });
+    expect(posts("/plan")).toHaveLength(1);
+  });
+
+  it("gives up with a clear Retry, not 'file checks are still running', when the server stays away", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init: RequestInit = {}) => {
+        calls.push({ path, init });
+        return response({ detail: "Bad gateway" }, 502);
+      }),
+    );
+    const outcome = await startAnalysis(
+      request,
+      new AbortController().signal,
+      () => {},
+      timing,
+    );
+    expect(outcome).toMatchObject({
+      kind: "needs_action",
+      reason: "unreachable",
+    });
+    if (outcome.kind === "needs_action") {
+      expect(outcome.message).toContain("Retry analysis");
+      expect(outcome.message).not.toContain("file checks");
+    }
+    expect(calls.some(({ init }) => init.method === "POST")).toBe(false);
+  });
+
+  it("does not resend a refusal that isn't transient", async () => {
+    accept = () =>
+      response({ detail: "Approve the exact displayed plan." }, 422);
+    await expect(
+      startAnalysis(request, new AbortController().signal, () => {}, retrying),
+    ).resolves.toMatchObject({ kind: "needs_action", reason: "start_failed" });
+    expect(posts("/plan")).toHaveLength(1);
   });
 });

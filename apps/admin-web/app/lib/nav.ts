@@ -137,7 +137,7 @@ export const NAVIGATION: readonly NavGroup[] = [
       },
       {
         href: "/usage",
-        label: "Usage",
+        label: "Usage & cost",
         icon: "usage",
         need: { kind: "salesXray" },
       },

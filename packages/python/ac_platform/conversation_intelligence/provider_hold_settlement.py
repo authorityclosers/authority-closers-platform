@@ -15,6 +15,13 @@ reconciliation can supersede it. A hold is settled only when its single task's
 job succeeded with a validated receipt for the same provider and model, and the
 estimate fits within the quoted maximum. Customer minutes are untouched: the
 settled seconds equal the quoted entitlement. Everything else stays on hold.
+
+Owner approval, 19 Oct 2026 ("Yes: settle AI budget holds automatically at list
+price when a validated provider receipt lands"): ``settle_on_receipt`` applies
+the same rules inside the worker's receipt transaction, so a hold settles the
+moment its receipt is saved, once, with an audit event naming the approval.
+Holds whose provider outcome is unknown, and older holds these rules can't
+price, stay open for an invoice check.
 """
 
 from __future__ import annotations
@@ -46,6 +53,11 @@ from ac_platform.conversation_intelligence.models import (
 from ac_platform.outbox.models import Job
 
 ACTION = "conversation.provider_holds_settled"
+AUTO_ACTION = "conversation.provider_hold_settled"
+APPROVAL = (
+    "owner 19 Oct 2026: settle AI budget holds automatically at list price "
+    "when a validated provider receipt lands"
+)
 UNCERTAIN_PREFIX = "provider-cost-reconciliation:"
 RECEIPT_PREFIX = "list-price-estimate"
 _RECEIPT_SCHEMA = "ac.sales-xray.provider-receipt/1"
@@ -72,10 +84,64 @@ async def _duration_ms(db: AsyncSession, task: ConversationInferenceTask) -> int
     return value if type(value) is int and value > 0 else None
 
 
+def list_price_receipt(
+    reservation: Reservation,
+    receipt: Any,
+    *,
+    job_id: UUID,
+    job_succeeded: bool,
+    tenant_id: UUID,
+    duration_ms: int | None,
+) -> tuple[SettlementReceipt | None, str]:
+    """The list-price settlement for one open hold, or why it must stay open."""
+
+    quote = reservation.quote
+    if reservation.uncertainty_ref != f"{UNCERTAIN_PREFIX}{reservation.reservation_id}":
+        return None, "other_uncertainty"
+    if (
+        not job_succeeded
+        or not isinstance(receipt, dict)
+        or receipt.get("schema") != _RECEIPT_SCHEMA
+        or receipt.get("validation_state") != "validated"
+        or receipt.get("cost_state") != "reconciliation_required"
+    ):
+        return None, "no_final_receipt"
+    if (receipt.get("provider"), receipt.get("model")) != (
+        quote.provider_id,
+        quote.provider_model,
+    ) or str(tenant_id) != quote.source.tenant_id:
+        return None, "receipt_does_not_match_quote"
+    estimate = estimate_provider_usage(
+        quote.provider_id,
+        quote.provider_model,
+        receipt.get("usage") if isinstance(receipt.get("usage"), dict) else None,
+        duration_ms=duration_ms,
+    )
+    paise = estimate["paise"]
+    if estimate["state"] != "available" or type(paise) is not int:
+        return None, "usage_or_rate_unavailable"
+    if paise > quote.max_cost_paise:
+        return None, "estimate_above_quote"
+    pricing_ref = str((estimate["pricing_snapshot"] or {}).get("pricing_ref") or "unknown")
+    if reservation.attempt_id is None:  # the ledger forbids this; never guess one
+        return None, "attempt_missing"
+    return (
+        SettlementReceipt(
+            reservation_id=reservation.reservation_id,
+            quote_fingerprint=quote.fingerprint,
+            provider_id=quote.provider_id,
+            attempt_id=reservation.attempt_id,
+            actual_seconds=quote.entitlement_seconds,
+            actual_paise=paise,
+            receipt_ref=f"{RECEIPT_PREFIX}:{pricing_ref}:job:{job_id}",
+        ),
+        "planned",
+    )
+
+
 async def _plan(
     db: AsyncSession, reservation: Reservation, skipped: Counter[str]
 ) -> _Planned | None:
-    quote = reservation.quote
     try:
         run_id = UUID(reservation.reservation_id)
     except ValueError:
@@ -94,54 +160,26 @@ async def _plan(
         return None
     task = tasks[0]
     job = await db.get(Job, task.job_id)
-    receipt = job.provider_receipt if job is not None else None
-    if (
-        job is None
-        or job.status != "succeeded"
-        or not isinstance(receipt, dict)
-        or receipt.get("schema") != _RECEIPT_SCHEMA
-        or receipt.get("validation_state") != "validated"
-        or receipt.get("cost_state") != "reconciliation_required"
-    ):
+    if job is None:
         skipped["no_final_receipt"] += 1
         return None
-    if (receipt.get("provider"), receipt.get("model")) != (
-        quote.provider_id,
-        quote.provider_model,
-    ) or str(task.tenant_id) != quote.source.tenant_id:
-        skipped["receipt_does_not_match_quote"] += 1
-        return None
-    estimate = estimate_provider_usage(
-        quote.provider_id,
-        quote.provider_model,
-        receipt.get("usage") if isinstance(receipt.get("usage"), dict) else None,
+    receipt, reason = list_price_receipt(
+        reservation,
+        job.provider_receipt,
+        job_id=job.id,
+        job_succeeded=job.status == "succeeded",
+        tenant_id=task.tenant_id,
         duration_ms=await _duration_ms(db, task),
     )
-    paise = estimate["paise"]
-    if estimate["state"] != "available" or type(paise) is not int:
-        skipped["usage_or_rate_unavailable"] += 1
-        return None
-    if paise > quote.max_cost_paise:
-        skipped["estimate_above_quote"] += 1
-        return None
-    pricing_ref = str((estimate["pricing_snapshot"] or {}).get("pricing_ref") or "unknown")
-    if reservation.attempt_id is None:  # the ledger forbids this; never guess one
-        skipped["attempt_missing"] += 1
+    if receipt is None:
+        skipped[reason] += 1
         return None
     return _Planned(
         reservation_id=reservation.reservation_id,
         tenant_id=task.tenant_id,
         person_id=task.person_id,
-        receipt=SettlementReceipt(
-            reservation_id=reservation.reservation_id,
-            quote_fingerprint=quote.fingerprint,
-            provider_id=quote.provider_id,
-            attempt_id=reservation.attempt_id,
-            actual_seconds=quote.entitlement_seconds,
-            actual_paise=paise,
-            receipt_ref=f"{RECEIPT_PREFIX}:{pricing_ref}:job:{job.id}",
-        ),
-        held_paise=quote.max_cost_paise,
+        receipt=receipt,
+        held_paise=reservation.quote.max_cost_paise,
     )
 
 
@@ -252,3 +290,67 @@ async def settle_provider_holds(
         "scopes": scopes,
         "audit_events": events,
     }
+
+
+async def settle_on_receipt(
+    db: AsyncSession,
+    *,
+    minutes_row: ConversationMinuteAccount,
+    budget_row: ConversationBudgetAccount,
+    task: ConversationInferenceTask,
+    job_id: UUID,
+    receipt: Any,
+    now: datetime,
+) -> bool:
+    """Settle one hold at list price as its validated receipt is saved (owner, 19 Oct).
+
+    Runs inside the worker's receipt transaction, on the account rows it has
+    just updated. Idempotent: a settled hold is left as it is and no second
+    audit event is written. A hold these rules can't price stays open.
+    """
+
+    minutes = MinuteAccount.from_dict(minutes_row.snapshot)
+    budget = BudgetAccount.from_dict(budget_row.snapshot)
+    reservation = next(
+        (r for r in budget.reservations if r.reservation_id == str(task.run_id)), None
+    )
+    if reservation is None or reservation.state != "uncertain":
+        return False
+    settlement, _reason = list_price_receipt(
+        reservation,
+        receipt,
+        job_id=job_id,
+        job_succeeded=True,
+        tenant_id=task.tenant_id,
+        duration_ms=await _duration_ms(db, task),
+    )
+    if settlement is None:
+        return False
+    transition = settle(minutes, budget, reservation.reservation_id, settlement)
+    if not transition.changed:
+        return False
+    minutes_row.snapshot = transition.minutes.as_dict()
+    budget_row.snapshot = transition.budget.as_dict()
+    minutes_row.revision += 1
+    budget_row.revision += 1
+    await AuditRepository(db).append(
+        tenant_id=task.tenant_id,
+        actor_person_id=None,
+        actor_type="system",
+        action=AUTO_ACTION,
+        resource_type="conversation_budget_account",
+        resource_id=budget_row.scope_id,
+        payload={
+            "schema": "ac.sales-xray.provider-hold-settled/1",
+            "basis": RECEIPT_PREFIX,
+            "approval": APPROVAL,
+            "reservation_id": reservation.reservation_id,
+            "job_id": str(job_id),
+            "receipt_ref": settlement.receipt_ref,
+            "settled_paise": settlement.actual_paise,
+            "released_paise": reservation.quote.max_cost_paise - settlement.actual_paise,
+        },
+        reason="Settled at list price when the validated provider receipt was saved.",
+        now=now,
+    )
+    return True

@@ -69,6 +69,7 @@ from ac_platform.conversation_intelligence.processing_actor import ProcessingAct
 from ac_platform.conversation_intelligence.provider_failure_observation import (
     ProviderFailureObservation,
 )
+from ac_platform.conversation_intelligence.provider_hold_settlement import settle_on_receipt
 from ac_platform.conversation_intelligence.provider_retry import assess_provider_retry
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
@@ -1027,6 +1028,17 @@ class ConversationInferenceWorker:
                     f"provider-cost-reconciliation:{scope.task.run_id}",
                 )
                 save_accounts(minutes, budget, transition)
+                # Owner, 19 Oct 2026: the hold settles at list price as its validated
+                # receipt lands, in this same transaction (audited, once).
+                await settle_on_receipt(
+                    db,
+                    minutes_row=minutes,
+                    budget_row=budget,
+                    task=scope.task,
+                    job_id=job.id,
+                    receipt=receipt,
+                    now=self.clock(),
+                )
 
                 from ac_platform.conversation_intelligence.stage_handoff import make_plans_due
 

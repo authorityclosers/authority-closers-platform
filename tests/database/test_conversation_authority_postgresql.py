@@ -745,7 +745,7 @@ def test_authority_claim_is_idempotent_and_quote_waits_for_consent(
     run(exercise())
 
 
-def test_paid_hosted_quote_uses_project_cap_and_preserves_uncertain_hold(
+def test_paid_hosted_quote_uses_project_cap_and_settles_at_list_price(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
     async def exercise() -> None:
@@ -767,9 +767,12 @@ def test_paid_hosted_quote_uses_project_cap_and_preserves_uncertain_hold(
                 assert budget_row is not None
                 budget = BudgetAccount.from_dict(budget_row.snapshot)
                 reservation = budget.reservations[0]
-                assert reservation.state == "uncertain"
-                assert reservation.committed_paise == 50_000
-                assert budget.available_paise == 50_000
+                # Owner, 19 Oct 2026: the hold settles at list price as its validated
+                # receipt lands, giving back what the call didn't cost.
+                assert reservation.state == "settled" and reservation.settlement is not None
+                assert reservation.committed_paise == reservation.settlement.actual_paise
+                assert 0 < reservation.committed_paise < 50_000
+                assert budget.available_paise == 100_000 - reservation.committed_paise
         finally:
             await setup.engine.dispose()
 
@@ -1157,8 +1160,12 @@ def test_provider_request_scope_keeps_budget_and_uncertain_stage_holds(
                 assert budget is not None
                 reservations = BudgetAccount.from_dict(budget.snapshot).reservations
                 assert len(reservations) == 2
-                assert all(item.state == "uncertain" for item in reservations)
-                assert sum(item.committed_paise for item in reservations) == 100_000
+                # The finished call settled at list price (owner, 19 Oct 2026); the
+                # unknown outcome keeps its whole hold, so the cap still refuses a third.
+                settled, held = sorted(reservations, key=lambda item: item.state)
+                assert (settled.state, held.state) == ("settled", "uncertain")
+                assert held.committed_paise == 50_000
+                assert 0 < settled.committed_paise < 50_000
             assert setup.broker.calls == 2
         finally:
             await setup.engine.dispose()
