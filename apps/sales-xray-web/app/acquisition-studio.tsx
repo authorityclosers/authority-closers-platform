@@ -122,7 +122,7 @@ import { startAnalysis } from "./analysis-start";
 import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
 import { scoringPending } from "./xray-report/structure";
-import { autoCallTitle } from "./call-auto-title";
+import { autoCallTitle, fallbackCallTitle } from "./call-auto-title";
 import {
   forgetAnalyseClick,
   pendingAnalyseClick,
@@ -1490,9 +1490,26 @@ export function AcquisitionStudio({
   // (company, person or topic) the first time its owner opens the report.
   // Only an unnamed call (revision 0) is named, once; a cleared name stays.
   const autoTitled = useRef<string | null>(null);
+  // Never "Untitled call" (orchestrator, 18 Oct): the summary, else the
+  // report's outcome, else the call's time and length.
+  const callStartedAt = progress?.stage_progress?.find(
+    (row) => row.stage === "C0",
+  )?.started_at;
+  const computedTitle = useMemo(
+    () =>
+      result
+        ? (autoCallTitle(result.report.summary) ??
+          fallbackCallTitle({
+            outcomeKind: result.report.overview?.outcome?.kind ?? null,
+            startedAt: callStartedAt ? new Date(callStartedAt) : new Date(),
+            durationMs: result.transcript.duration_ms,
+          }))
+        : null,
+    [result, callStartedAt],
+  );
   const autoTitle =
     result && result.claimed && result.label?.revision === 0
-      ? autoCallTitle(result.report.summary)
+      ? computedTitle
       : null;
   useEffect(() => {
     if (!submission || !autoTitle || review.requested) return;
@@ -3578,6 +3595,7 @@ export function AcquisitionStudio({
                 <ReportHeader
                   key={submission?.id ?? "unbound"}
                   label={result.label ?? null}
+                  fallbackTitle={computedTitle ?? undefined}
                   rename={
                     submission
                       ? {

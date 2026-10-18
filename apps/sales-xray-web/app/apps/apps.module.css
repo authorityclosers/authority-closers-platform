@@ -1,0 +1,367 @@
+/* Get the Sales Xray apps: phone-first, the app's own tokens (light and dark). */
+
+.page {
+  box-sizing: border-box;
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: clamp(14px, 4vw, 36px) 16px 24px;
+  background: var(--lx-paper-2);
+  color: var(--lx-ink);
+  font-family: var(--lx-font-ui, "Segoe UI"), sans-serif;
+  line-height: 1.5;
+}
+
+.top,
+.hero,
+.android,
+.soon,
+.footer {
+  box-sizing: border-box;
+  width: min(100%, 720px);
+}
+
+.brand {
+  color: var(--lx-ink);
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--lx-teal);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0;
+  font: 800 clamp(26px, 6vw, 38px) / 1.15
+    var(--lx-font-display, var(--lx-font-ui, sans-serif));
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.lead {
+  margin: 8px 0 0;
+  color: var(--lx-ink-2);
+  font-size: 16px;
+}
+
+.android,
+.soon {
+  padding: clamp(16px, 4vw, 28px);
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-lg, 20px);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.androidHead,
+.soon li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.androidHead > span:nth-child(2),
+.soon li > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.androidHead strong {
+  font-size: 18px;
+}
+
+.androidHead small,
+.soon small {
+  color: var(--lx-ink-3);
+  font-size: 13px;
+}
+
+.icon {
+  display: grid;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.note {
+  margin: 12px 0 0;
+  color: var(--lx-ink-2);
+}
+
+.get {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.download {
+  display: inline-flex;
+  flex: 1 1 240px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 22px;
+  border-radius: var(--lx-radius-lg, 18px);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  box-shadow: var(--lx-shadow-cta, none);
+  font-size: 17px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.download:focus-visible,
+.copy:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.qrBox {
+  display: grid;
+  flex: none;
+  justify-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--lx-ink-3);
+  font-size: 12px;
+}
+
+/* A QR code is for scanning from another screen: phones and tablets skip it. */
+@media (hover: none) and (pointer: coarse) {
+  .qrBox {
+    display: none;
+  }
+}
+
+.qr {
+  border-radius: 10px;
+  background: var(--lx-surface);
+}
+
+.check {
+  margin-top: 14px;
+  color: var(--lx-ink-2);
+  font-size: 13px;
+}
+
+.check summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.check > p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.check code {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--lx-line);
+  border-radius: 999px;
+  background: var(--lx-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.steps li > span {
+  display: grid;
+  gap: 2px;
+  color: var(--lx-ink-2);
+  font-size: 14px;
+}
+
+.steps strong {
+  color: var(--lx-ink);
+  font-size: 15px;
+}
+
+.small {
+  margin: 16px 0 0;
+  color: var(--lx-ink-3);
+  font-size: 13px;
+}
+
+.soon h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.soon ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.soonButton {
+  flex: none;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--lx-paper-2);
+  color: var(--lx-ink-3);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.windowsHelp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.windowsHelp p {
+  flex: 1 1 220px;
+  margin: 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 13px;
+}
+
+.footer a {
+  color: var(--lx-ink-3);
+}
+
+/* Pictures: drawn with the theme's own tokens, so they follow light and dark. */
+.picture {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+}
+
+.windowsHelp .picture {
+  flex: 0 1 220px;
+}
+
+.pPhone {
+  fill: var(--lx-sunken);
+  stroke: var(--lx-line);
+}
+
+.pCard {
+  fill: var(--lx-surface);
+  stroke: var(--lx-line);
+}
+
+.pRow {
+  fill: var(--lx-paper-2);
+}
+
+.pTitle {
+  fill: var(--lx-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pText {
+  fill: var(--lx-ink-2);
+  font-size: 11px;
+}
+
+.pHint {
+  fill: var(--lx-teal);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.pOn {
+  fill: var(--lx-teal);
+}
+
+.pKnob {
+  fill: var(--lx-on-teal);
+}
+
+.pButton {
+  fill: var(--lx-teal);
+}
+
+.pButtonText {
+  fill: var(--lx-on-teal);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pTap {
+  fill: var(--lx-warning-soft);
+  fill-opacity: 0.7;
+  stroke: var(--lx-warning);
+  stroke-width: 1.5;
+}
+
+.pSmart {
+  fill: var(--lx-info);
+}
+
+.pSmartTitle {
+  fill: var(--lx-on-teal);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pSmartText {
+  fill: var(--lx-on-teal);
+  font-size: 10px;
+}
+
+.pSmartLink {
+  fill: var(--lx-on-teal);
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+.pSmartButton {
+  fill: none;
+  stroke: var(--lx-on-teal);
+}
