@@ -158,6 +158,23 @@ def test_summary_is_cut_to_1500_characters() -> None:
          "Wants it above [amount]; transport [amount], packing [amount]."),
         ("Install a 5 kW system by 2026 on the 1500 sq ft roof.",
          "Install a 5 kW system by 2026 on the 1500 sq ft roof."),
+        # Re-review 18 Oct, B1: rupee-signed per-unit prices.
+        ("Salesperson quoted ₹45/W; competitor Rs.45/W, panels ₹55/Wp.",
+         "Salesperson quoted [amount]/W; competitor [amount]/W, panels [amount]/Wp."),
+        ("Price ₹60,000/kW for 5 kW, or 45 per watt.",
+         "Price [amount]/kW for 5 kW, or [amount] per watt."),
+        ("₹45/watt incl GST, ₹ 50/Wp, ₹50Wp, ₨45/W, ₹ 45 /W.",
+         "[amount]/watt incl GST, [amount]/Wp, [amount]Wp, [amount]/W, [amount] /W."),
+        # Re-review 18 Oct, M1: Marathi case endings (report_language mr-Deva+en).
+        ("ग्राहकाचे बजेट साडेतीन लाखांपर्यंत आहे.", "ग्राहकाचे बजेट [amount] आहे."),
+        ("तीन लाखांत 5 kW, सत्तर हजारांचा फरक, पाच लाखांचे बजेट.",
+         "[amount] 5 kW, [amount] फरक, [amount] बजेट."),
+        ("Budget 3 laakh, packing 3 hajaar.", "Budget [amount], packing [amount]."),
+        # Re-review 18 Oct, minor: names, bare decimals, comma amounts, partial masks.
+        ("Rupali 3 baje call karegi; quoted 3.70 for the 5 kW system.",
+         "Rupali 3 baje call karegi; quoted [amount] for the 5 kW system."),
+        ("Dongle 1,999 only; one and a half lakh total; Rs: 50 packing.",
+         "Dongle [amount] only; [amount] total; [amount] packing."),
     ],
 )  # fmt: skip
 def test_amounts_in_the_summary_are_sent_as_amount(summary: str, sent: str) -> None:

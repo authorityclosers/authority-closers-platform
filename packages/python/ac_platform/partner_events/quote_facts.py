@@ -8,9 +8,15 @@ is never trusted:
   and speakers are copied from the saved transcript;
 - ``stated_as`` (and ``next_step.when_text``) must appear in a cited segment
   as whole words (case-insensitive, whitespace-normalised; no letter, digit
-  or decimal point on either side, and no number word running on: "five
-  years" is not in "twenty five years", "3.70 lakh" is not in "13.70 lakh"),
-  else the fact is dropped (a one-per-call type then reads ``unknown``);
+  or decimal point on either side, and no neighbour that makes it part of a
+  longer number: "five years" is not in "twenty five years", "3.70 lakh" is
+  not in "13.70 lakh", "3 lakh" is not in "3 lakh 70 thousand"), else the
+  fact is dropped (a one-per-call type then reads ``unknown``). Ordinary
+  words next to a number ("we can do 5 kW", "one 5 kW inverter", "aap teen
+  lakh do") do not count. A neighbour that may or may not belong to the
+  number ("3 lakh" in "3 lakh 70", "teen lakh" in "do teen lakh") keeps the
+  fact with its number read as null (``amount_inr``, ``quantity``, ``qty``,
+  ``years``);
 - every enum is checked; a count or a year is kept only when that number was
   said in ``stated_as`` (an add-on count at most 100, never a number next to
   a money or cost word);
@@ -34,18 +40,20 @@ from dataclasses import dataclass
 from decimal import Decimal
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ac_platform.partner_events.amounts import (
     PLAIN_PRICE_FLOOR,
     amount_inr,
     counts_in,
     gst_basis,
-    is_numeric_word,
     mentions_price,
+    number_join,
     numbers_in,
     system_size,
 )
+
+Match = Literal["whole", "ambiguous"]
 
 PROFILE_DIR = Path(__file__).with_name("profiles")
 PROFILES = {"wiselife-quote-v1": "wiselife_quote_v1.json"}
@@ -264,58 +272,91 @@ def _piece_before(text: str) -> str | None:
     return pieces[-1].group() if gap and _JOINING.fullmatch(gap) else None
 
 
-def _piece_after(text: str) -> str | None:
-    """The word or number that ``text`` starts with, after only spaces or hyphens."""
-    found = _PIECE.search(text)
-    if found is None:
-        return None
-    gap = text[: found.start()]
-    return found.group() if gap and _JOINING.fullmatch(gap) else None
+def _pieces_after(text: str, limit: int = 2) -> list[str]:
+    """Up to ``limit`` words or numbers that ``text`` starts with: the first after only
+    spaces or hyphens, each next one after spaces, hyphens or nothing ("70k")."""
+    found: list[str] = []
+    rest = text
+    while len(found) < limit:
+        piece = _PIECE.search(rest)
+        if piece is None:
+            break
+        gap = rest[: piece.start()]
+        if not (_JOINING.fullmatch(gap) if gap else found):
+            break
+        found.append(piece.group())
+        rest = rest[piece.end() :]
+    return found
 
 
-def _whole(haystack: str, start: int, end: int) -> bool:
-    """Whether ``haystack[start:end]`` stands as whole words and as a whole number."""
+def _whole(haystack: str, start: int, end: int) -> Match | None:
+    """Whether ``haystack[start:end]`` stands as whole words and as a whole number.
+
+    "whole": yes. "ambiguous": whole words, but a neighbour may belong to the
+    number ("3 lakh" in "3 lakh 70"). None: not whole, or part of a longer
+    number ("five years" in "twenty five years", "do lakh" in "sawa do lakh",
+    "3 lakh" in "3 lakh 70 thousand").
+    """
     needle, before, after = haystack[start:end], haystack[:start], haystack[end:]
     if _word_char(needle[0]) and before:
         last = before[-1]
         if _word_char(last) or (last in ".," and len(before) > 1 and before[-2].isdigit()):
-            return False
+            return None
     if _word_char(needle[-1]) and after:
         first = after[0]
         if _word_char(first) or (first in ".," and len(after) > 1 and after[1].isdigit()):
-            return False
-    # A number said in more words than were quoted: "five years" in "twenty five years",
-    # "do lakh" in "sawa do lakh", "3 lakh" in "3 lakh 70 thousand".
-    head = _PIECE.match(needle)
-    tail = list(_PIECE.finditer(needle))
-    if head and is_numeric_word(head.group()) and is_numeric_word(_piece_before(before)):
-        return False
-    return not (
-        tail
-        and tail[-1].end() == len(needle)
-        and is_numeric_word(tail[-1].group())
-        and is_numeric_word(_piece_after(after))
-    )
+            return None
+    pieces = list(_PIECE.finditer(needle))
+    if not pieces:
+        return "whole"
+    following = _pieces_after(after)
+    first_after = following[0] if following else None
+    second_after = following[1] if len(following) > 1 else None
+    joins = []
+    if pieces[0].start() == 0:  # the word or number before the quote, and its head
+        head_next = pieces[1].group() if len(pieces) > 1 else first_after
+        joins.append(number_join(_piece_before(before), pieces[0].group(), head_next))
+    if pieces[-1].end() == len(needle):  # its tail, and the words after the quote
+        joins.append(number_join(pieces[-1].group(), first_after, second_after))
+    if "hard" in joins:
+        return None
+    return "ambiguous" if "soft" in joins else "whole"
+
+
+def match_in(words: str, text: str) -> Match | None:
+    """How ``words`` are said in ``text`` (folded): "whole" when any occurrence stands
+    as whole words and a whole number, "ambiguous" when the only ones may run on
+    into a neighbouring number, None when they are not said."""
+    needle, haystack = _fold(words), _fold(text)
+    if not needle:
+        return None
+    best: Match | None = None
+    start = haystack.find(needle)
+    while start != -1:
+        found = _whole(haystack, start, start + len(needle))
+        if found == "whole":
+            return found
+        best = best or found
+        start = haystack.find(needle, start + 1)
+    return best
 
 
 def said_in(words: str, text: str) -> bool:
     """``words`` said word for word in ``text`` (folded), as whole words and numbers."""
-    needle, haystack = _fold(words), _fold(text)
-    if not needle:
-        return False
-    start = haystack.find(needle)
-    while start != -1:
-        if _whole(haystack, start, start + len(needle)):
-            return True
-        start = haystack.find(needle, start + 1)
-    return False
+    return match_in(words, text) is not None
 
 
-def _containing(words: str, cited: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _containing(words: str, cited: list[dict[str, Any]]) -> tuple[dict[str, Any], bool] | None:
+    """The first cited segment that says ``words`` whole (else one that says them with an
+    ambiguous neighbour), and whether the number in them is ambiguous."""
+    fallback: dict[str, Any] | None = None
     for segment in cited:
-        if said_in(words, str(segment.get("text") or "")):
-            return segment
-    return None
+        found = match_in(words, str(segment.get("text") or ""))
+        if found == "whole":
+            return segment, False
+        if found == "ambiguous" and fallback is None:
+            fallback = segment
+    return (fallback, True) if fallback is not None else None
 
 
 def _counted(
@@ -355,7 +396,7 @@ def _clean(
         said = _containing(when, cited) if when else None
         if when is None or said is None or mentions_price(when):
             return {"action": action, "when_text": None}, cited[0]
-        return {"action": action, "when_text": when}, said
+        return {"action": action, "when_text": when}, said[0]
 
     stated_as = _words(raw.get("stated_as"), _LIMITS["stated_as"])
     if stated_as is None:
@@ -363,7 +404,8 @@ def _clean(
     found = _containing(stated_as, cited)
     if found is None:
         return None
-    segment = found
+    # An ambiguous neighbour ("3 lakh" in "3 lakh 70"): the fact stays, its number is null.
+    segment, ambiguous = found
     if fact_type == "mentioned_price":
         applies_to = raw.get("applies_to")
         if applies_to not in VOCABULARIES["mentioned_price.applies_to"]:
@@ -372,7 +414,7 @@ def _clean(
             "applies_to": applies_to,
             "speaker": speakers.get(str(segment.get("speaker_id")), "unknown"),
             "stated_as": stated_as,
-            "amount_inr": amount_inr(stated_as),
+            "amount_inr": None if ambiguous else amount_inr(stated_as),
             # Only this price's own words: GST said about another price never attaches.
             "basis": gst_basis(stated_as),
             "use": "flag_only",
@@ -381,20 +423,22 @@ def _clean(
     if mentions_price(stated_as, plain_numbers=fact_type != "product_mention"):
         return None
     if fact_type == "system_size":
-        quantity, unit = system_size(stated_as)
+        quantity, unit = (None, None) if ambiguous else system_size(stated_as)
         return {"stated_as": stated_as, "quantity": quantity, "unit": unit}, segment
     if fact_type == "add_on":
         kind = raw.get("kind")
         kind = kind if kind in VOCABULARIES["add_on.kind"] else "other"
         # A count is at most 100 and never a number next to a money or cost word.
-        qty = _counted(raw.get("qty"), stated_as, maximum=PLAIN_PRICE_FLOOR, said=counts_in)
+        qty = None
+        if not ambiguous:
+            qty = _counted(raw.get("qty"), stated_as, maximum=PLAIN_PRICE_FLOOR, said=counts_in)
         return {"kind": kind, "qty": qty, "stated_as": stated_as}, segment
     if fact_type == "battery_type":
         kind = raw.get("kind")
         kind = kind if kind in VOCABULARIES["battery_type.kind"] else None
         return {"kind": kind, "stated_as": stated_as}, segment
     if fact_type == "warranty":
-        years = _counted(raw.get("years"), stated_as, maximum=50)
+        years = None if ambiguous else _counted(raw.get("years"), stated_as, maximum=50)
         return {"years": years, "stated_as": stated_as}, segment
     if fact_type == "delivery_basis":
         kind = raw.get("kind")

@@ -15,6 +15,7 @@ from ac_platform.partner_events.quote_facts import (
     decode_gemini,
     gemini_body,
     load_profile,
+    match_in,
     parse_facts,
     prompt_sha256,
     said_in,
@@ -405,3 +406,153 @@ def test_gst_basis_comes_from_the_price_words_only(
 ) -> None:
     (fact,) = _one("mentioned_price", {"applies_to": "system", "stated_as": stated_as}, text)
     assert fact["value"]["basis"] == basis
+
+
+# --- Re-review 18 Oct, round 2 (table-driven, the re-review's own phrases) -----------------
+
+
+@pytest.mark.parametrize(
+    "kind,value,text,expected",
+    [
+        # M2: ordinary words next to a number are not part of it (dropped since d835393b).
+        ("system_size", {"stated_as": "5 kW"}, "we can do 5 kW for you",
+         {"stated_as": "5 kW", "quantity": 5, "unit": "kW"}),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "3 lakh"},
+         "I can do 3 lakh final",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "3 lakh",
+          "amount_inr": 300_000, "basis": None, "use": "flag_only"}),
+        ("system_size", {"stated_as": "5 kW"}, "one 5 kW inverter",
+         {"stated_as": "5 kW", "quantity": 5, "unit": "kW"}),
+        ("load", {"stated_as": "1.5 ton"}, "two 1.5 ton ACs", {"stated_as": "1.5 ton"}),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "3 lakh"},
+         "budget 3 lakh 5 kw ka system",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "3 lakh",
+          "amount_inr": 300_000, "basis": None, "use": "flag_only"}),
+        ("system_size", {"stated_as": "5 kw"}, "budget 3 lakh 5 kw ka system",
+         {"stated_as": "5 kw", "quantity": 5, "unit": "kW"}),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "teen lakh"},
+         "aap teen lakh do",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "teen lakh",
+          "amount_inr": 300_000, "basis": None, "use": "flag_only"}),
+        ("system_size", {"stated_as": "five kW"}, "we can do five kW",
+         {"stated_as": "five kW", "quantity": 5, "unit": "kW"}),
+        ("add_on", {"kind": "dongle", "qty": 2, "stated_as": "2 dongles"}, "do 2 dongles",
+         {"kind": "dongle", "qty": 2, "stated_as": "2 dongles"}),
+        # A neighbour that may belong to the number: the fact stays, its number is null.
+        ("mentioned_price", {"applies_to": "system", "stated_as": "3 lakh"},
+         "3 lakh 70 for the system",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "3 lakh",
+          "amount_inr": None, "basis": None, "use": "flag_only"}),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "teen lakh"},
+         "do teen lakh tak ho jayega",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "teen lakh",
+          "amount_inr": None, "basis": None, "use": "flag_only"}),
+        ("warranty", {"years": 5, "stated_as": "five years"}, "four five years warranty",
+         {"years": None, "stated_as": "five years"}),
+        ("system_size", {"stated_as": "five kW"}, "four five kW chahiye",
+         {"stated_as": "five kW", "quantity": None, "unit": None}),
+        ("add_on", {"kind": "dongle", "qty": 2, "stated_as": "two dongles"}, "one two dongles",
+         {"kind": "dongle", "qty": None, "stated_as": "two dongles"}),
+        # m2: a per-unit price or a cap is kept with no total.
+        ("mentioned_price", {"applies_to": "system", "stated_as": "₹60,000 per kW"},
+         "Rate is ₹60,000 per kW.",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "₹60,000 per kW",
+          "amount_inr": None, "basis": None, "use": "flag_only"}),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "4 lakh max"},
+         "4 lakh max denge.",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "4 lakh max",
+          "amount_inr": None, "basis": None, "use": "flag_only"}),
+        # M3 and m1: promises and objections with a number away from the price word, or a
+        # name that starts like "rupee", pass (dropped since d835393b).
+        ("promise", {"text": "Will share revised price in 2 days"}, "x",
+         {"speaker": "salesperson", "text": "Will share revised price in 2 days"}),
+        ("promise", {"text": "Send price list by 6 pm"}, "x",
+         {"speaker": "salesperson", "text": "Send price list by 6 pm"}),
+        ("objection", {"kind": "price_concern", "text": "Price too high; will decide in 2 days"},
+         "x", {"kind": "price_concern", "text": "Price too high; will decide in 2 days"}),
+        ("objection",
+         {"kind": "price_concern", "text": "Compared the price with 2 other vendors"}, "x",
+         {"kind": "price_concern", "text": "Compared the price with 2 other vendors"}),
+        ("promise", {"text": "Rupesh will send the quotation"}, "x",
+         {"speaker": "salesperson", "text": "Rupesh will send the quotation"}),
+        ("promise", {"text": "Will send price for 2 ACs"}, "x",
+         {"speaker": "salesperson", "text": "Will send price for 2 ACs"}),
+        # A time in next_step stays (the summary masks a bare decimal; when_text keeps it).
+        ("next_step", {"action": "call_back", "when_text": "5.30"}, "call at 5.30",
+         {"action": "call_back", "when_text": "5.30"}),
+    ],
+)  # fmt: skip
+def test_ordinary_words_and_far_numbers_keep_the_fact(
+    kind: str, value: dict[str, Any], text: str, expected: dict[str, Any]
+) -> None:
+    (fact,) = _one(kind, value, text)
+    assert fact["value"] == expected
+
+
+@pytest.mark.parametrize(
+    "kind,value,text",
+    [
+        # Still dropped: hard run-ons into a longer number.
+        ("mentioned_price", {"applies_to": "system", "stated_as": "3 lakh"},
+         "3 lakh 70 thousand for the system"),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "teen lakh"},
+         "teen lakh do hazaar"),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "3 lakh"}, "3 lakh 70k"),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "seven lakh"},
+         "three point seven lakh"),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "तीन लाख"}, "साडेतीन लाख"),
+        # Still dropped: a price on a type that is not mentioned_price.
+        ("add_on", {"kind": "packing", "stated_as": "packing ₹45/W"}, "packing ₹45/W"),
+        ("add_on", {"kind": "dongle", "stated_as": "Dongle 1,999 only"}, "Dongle 1,999 only"),
+        ("load", {"stated_as": "पाच लाखांचे"}, "पाच लाखांचे बजेट"),
+        ("site", {"stated_as": "बजेट 3"}, "बजेट 3"),
+        ("promise", {"text": "Will pay 45 per watt"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "ग्राहकाचे बजेट साडेतीन लाखांपर्यंत आहे"},
+         "x"),
+    ],
+)  # fmt: skip
+def test_round_two_still_drops_run_ons_and_prices(
+    kind: str, value: dict[str, Any], text: str
+) -> None:
+    assert _one(kind, value, text) == []
+
+
+@pytest.mark.parametrize(
+    "words,segment,found",
+    [
+        ("5 kW", "we can do 5 kW for you", "whole"),
+        ("3 lakh", "I can do 3 lakh final", "whole"),
+        ("5 kW", "one 5 kW inverter", "whole"),
+        ("1.5 ton", "two 1.5 ton ACs", "whole"),
+        ("3 lakh", "budget 3 lakh 5 kw ka system", "whole"),
+        ("5 kw", "budget 3 lakh 5 kw ka system", "whole"),
+        ("teen lakh", "aap teen lakh do", "whole"),
+        ("3 lakh", "3 lakh, 70 thousand later", "whole"),
+        ("3 lakh", "3 lakh 70 for the system", "ambiguous"),
+        ("teen lakh", "do teen lakh tak", "ambiguous"),
+        ("five years", "four five years", "ambiguous"),
+        ("3 lakh", "3 lakh 70 thousand", None),
+        ("teen lakh", "teen lakh do hazaar", None),
+        ("five years", "twenty five years", None),
+        ("पाच लाख", "पाच लाखांचे बजेट", None),
+    ],
+)
+def test_match_in_tells_whole_from_ambiguous(words: str, segment: str, found: str | None) -> None:
+    assert match_in(words, segment) == found
+    assert said_in(words, segment) is (found is not None)
+
+
+def test_a_whole_occurrence_in_another_cited_segment_wins() -> None:
+    segments = [
+        {"id": "s1", "speaker_id": "speaker_0", "start_ms": 0, "end_ms": 1_000,
+         "text": "3 lakh 70 for the system"},
+        {"id": "s2", "speaker_id": "speaker_1", "start_ms": 2_000, "end_ms": 3_000,
+         "text": "OK, 3 lakh."},
+    ]  # fmt: skip
+    proposal = _fact(
+        "mentioned_price", {"applies_to": "system", "stated_as": "3 lakh"}, ["s1", "s2"]
+    )
+    facts, _ = parse_facts({"facts": [proposal]}, segments, SPEAKERS)
+    (price,) = [fact for fact in facts if fact["type"] == "mentioned_price"]
+    assert price["value"]["amount_inr"] == 300_000
+    assert price["source"]["segment_id"] == "s2" and price["source"]["speaker"] == "customer"
