@@ -88,7 +88,7 @@ def test_the_review_asks_for_buyer_qualification_and_records_its_prompt() -> Non
         "authority",
         "timing",
     }
-    assert review({})["prompt_revision"] == PROMPT_REVISION == "pointer-review-prompt/3"
+    assert review({})["prompt_revision"] == PROMPT_REVISION == "pointer-review-prompt/4"
 
 
 def test_confirmed_or_concern_needs_a_real_segment_and_quotes_come_from_the_transcript() -> None:
@@ -149,3 +149,78 @@ def test_the_review_fills_qualification_the_call_map_did_not_give() -> None:
         merge_into_structure({"pointers": [], "prospect_signals": None}, old)["prospect_signals"]
         is None
     )
+
+
+def profile(value: Any) -> dict[str, Any]:
+    raw = answer()
+    raw["prospect_profile"] = value
+    return parse_review(raw, SEGMENTS)["prospect_profile"]
+
+
+def test_profile_facts_need_evidence_and_names_must_be_said() -> None:
+    result = profile(
+        {
+            "name": {"value": "Priya", "evidence": ["s1"]},
+            "role": {"value": "Owner", "evidence": ["s2"]},
+            "company": {"value": "Made Up Ltd", "evidence": []},
+            "revenue": {"value": "Rs 4 lakh", "evidence": ["s99"]},
+            "biggest_problem": {"value": "Leads are poor quality.", "evidence": ["s2"]},
+            "follow_up": {"when": "Friday", "about": "Review", "evidence": ["s2"]},
+            "insights": [
+                {"kind": "goal", "text": "Wants better leads.", "evidence": ["s2"]},
+                {"kind": "goal", "text": "No evidence.", "evidence": []},
+                {"kind": "gossip", "text": "Bad kind.", "evidence": ["s2"]},
+            ],
+            "quality": {"score": 7, "reason": "Clear problem."},
+            "fit": {"value": "strong", "reason": "Needs leads."},
+            "urgency": {"value": "soon", "reason": "x"},
+        }
+    )
+    # "Priya" is never said in the fictional transcript: no made-up names.
+    assert result["name"] == {"value": None, "evidence": []}
+    assert result["role"]["value"] == "Owner"
+    assert result["role"]["evidence"][0]["segment_id"] == "s2"
+    assert result["company"] == {"value": None, "evidence": []}
+    assert result["revenue"] == {"value": None, "evidence": []}
+    assert result["biggest_problem"]["value"] == "Leads are poor quality."
+    assert result["follow_up"]["when"] == "Friday"
+    assert [item["text"] for item in result["insights"]] == ["Wants better leads."]
+    assert result["quality"] == {"score": 7, "reason": "Clear problem."}
+    assert result["fit"]["value"] == "strong"
+    assert result["urgency"] == {"value": "unknown", "reason": None}
+
+
+def test_profile_name_said_in_the_call_is_kept_and_bad_scores_are_dropped() -> None:
+    said = " ".join(SEGMENTS[0]["text"].split()[3:4]).strip(",.")
+    result = profile(
+        {
+            "name": {"value": said, "evidence": ["s1"]},
+            "quality": {"score": 0, "reason": "x"},
+            "fit": {"value": "possible", "reason": None},
+        }
+    )
+    assert result["name"]["value"] == said
+    assert result["quality"] == {"score": None, "reason": None}
+    assert result["fit"]["value"] == "possible"
+    assert profile(None)["insights"] == []
+
+
+def test_profile_is_projected_into_the_structure_with_short_evidence() -> None:
+    saved = parse_review(
+        {
+            **answer(),
+            "prospect_profile": {
+                "role": {"value": "Owner", "evidence": ["s2"]},
+                "insights": [{"kind": "team", "text": "Small team.", "evidence": ["s2"]}],
+            },
+        },
+        SEGMENTS,
+    )
+    merged = merge_into_structure({"pointers": []}, saved)["prospect_profile"]
+    assert merged["version"] == "prospect-profile/1"
+    assert merged["basis"] == "ai_pointer_review"
+    assert merged["role"]["evidence"] == [
+        {"segment_id": "s2", "quote": " ".join(SEGMENTS[1]["text"].split())}
+    ]
+    assert set(merged["insights"][0]["evidence"][0]) == {"segment_id", "quote"}
+    assert "prospect_profile" in response_schema()["required"]

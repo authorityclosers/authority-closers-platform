@@ -179,6 +179,18 @@ function AnalysisPart(props: PartProps) {
   );
 }
 
+function ProspectSection(props: PartProps) {
+  const view = useXrayView(props.data, props.callId, props.illustration);
+  return (
+    <ProspectPart
+      data={props.data}
+      callId={props.callId}
+      view={view}
+      onSelect={props.onSelect}
+    />
+  );
+}
+
 function AnalysisProgress(props: PartProps) {
   const view = useXrayView(props.data, props.callId, props.illustration);
   return <PointerProgress pointers={view.pointers} />;
@@ -289,7 +301,7 @@ export function xrayReportPanels(
             icon: <UserRound />,
             content: (
               <PartBoundary>
-                <ProspectPart data={data} callId={props.callId} />
+                <ProspectSection {...props} />
               </PartBoundary>
             ),
           },

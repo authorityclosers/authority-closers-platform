@@ -25,9 +25,10 @@ from ac_platform.conversation_intelligence.report_structure import POINTERS as S
 VERSION = "pointer-review/1"
 # /3 (19 Oct): adds buyer_qualification for Prospect's Information. Recorded in
 # every saved payload as prompt_revision so Admin can compare before and after.
-PROMPT_REVISION = "pointer-review-prompt/3"
+# /4 (19 Oct): adds prospect_profile for the redesigned Prospect's Information.
+PROMPT_REVISION = "pointer-review-prompt/4"
 MODEL_ID = "gemini-3.8-flash"
-MAX_OUTPUT_TOKENS = 8000
+MAX_OUTPUT_TOKENS = 10000  # 19 Oct: room for prospect_profile (reviews use ~4-5k)
 
 SCORED = ("excellent", "good", "average", "needs_improvement")
 STAGES = ("Initial Contact", "Discovery", "Solution Presentation", "Negotiation", "Closing")
@@ -37,6 +38,34 @@ STATUSES = SCORED + UNSCORED
 # the transcript shows, with evidence; everything else stays unknown.
 QUALIFICATION = ("need", "budget", "authority", "timing")
 QUALIFICATION_STATES = ("confirmed", "concern", "unknown")
+# Prospect's Information v2 (owner design, 19 Oct). Facts need a transcript
+# segment or stay unknown; quality, fit and urgency are the AI's read.
+PROFILE_FACTS = (
+    "name",
+    "role",
+    "company",
+    "revenue",
+    "team_size",
+    "industry",
+    "biggest_problem",
+    "wants",
+    "stopping",
+    "personal_context",
+)
+INSIGHT_KINDS = (
+    "business",
+    "goal",
+    "team",
+    "investment",
+    "alternative",
+    "timeline",
+    "question",
+    "promise",
+    "other",
+)
+FIT_VALUES = ("strong", "possible", "weak", "unknown")
+URGENCY_VALUES = ("high", "medium", "low", "unknown")
+_PROFILE_LIMITS = {"value": 160, "insight": 200, "reason": 160, "when": 60, "about": 100}
 
 # What each pointer evaluates, in the owner doc's words (image6, image9).
 EVALUATES: dict[str, str] = {
@@ -164,6 +193,28 @@ need, budget, authority and timing:
 - evidence: 1 or 2 segment ids that show it; [] when unknown.
 - note: up to 12 words on what was said, or null when unknown.
 
+And return prospect_profile, to help the salesperson before the next call.
+Every fact must be something said in this call, with 1 or 2 segment ids as
+evidence; when the call does not say it, value is null and evidence is [].
+Never invent a name, company, number or date.
+- name, role, company, revenue (as said, like "Rs 4-5 lakh a month"),
+  team_size, industry: each with value and evidence.
+- biggest_problem: the prospect's main problem, one short sentence.
+- wants: what the prospect wants to achieve, one short sentence.
+- stopping: what is stopping them from saying yes now, one short sentence.
+- personal_context: something personal they shared that helps you connect
+  (a wish, a worry, their situation), one short sentence.
+- follow_up (when, about, evidence): the next agreed contact as said (like
+  "Friday 4 PM") and what it is about; nulls when none was agreed.
+- insights: up to 8 short sentences of key facts about the buyer, each with a
+  kind (business, goal, team, investment, alternative, timeline, question,
+  promise, other) and evidence. Use "question" for the biggest question the
+  prospect still has, and "promise" for something promised to them.
+- quality (score, reason): your read of how good this prospect is for you,
+  a whole number 1-10, and one short reason; score null when you cannot tell.
+- fit (value, reason): strong, possible, weak or unknown, and why.
+- urgency (value, reason): high, medium, low or unknown, and why.
+
 Pointers:
 {rows}
 """
@@ -258,6 +309,7 @@ def response_schema() -> dict[str, Any]:
                 ],
             },
             "pointers": {"type": "array", "items": entry},
+            "prospect_profile": _profile_schema(),
             "buyer_qualification": {
                 "type": "object",
                 "properties": {
@@ -275,7 +327,68 @@ def response_schema() -> dict[str, Any]:
                 "required": list(QUALIFICATION),
             },
         },
-        "required": ["score_line", "pointers", "outcome", "buyer_qualification"],
+        "required": [
+            "score_line",
+            "pointers",
+            "outcome",
+            "buyer_qualification",
+            "prospect_profile",
+        ],
+    }
+
+
+def _profile_schema() -> dict[str, Any]:
+    text = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+    ids = {"type": "array", "items": {"type": "string"}}
+    fact = {
+        "type": "object",
+        "properties": {"value": text, "evidence": ids},
+        "required": ["value", "evidence"],
+    }
+
+    def read(values: tuple[str, ...]) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "value": {"type": "string", "enum": list(values)},
+                "reason": text,
+            },
+            "required": ["value", "reason"],
+        }
+
+    return {
+        "type": "object",
+        "properties": {
+            **{key: fact for key in PROFILE_FACTS},
+            "follow_up": {
+                "type": "object",
+                "properties": {"when": text, "about": text, "evidence": ids},
+                "required": ["when", "about", "evidence"],
+            },
+            "insights": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "kind": {"type": "string", "enum": list(INSIGHT_KINDS)},
+                        "text": {"type": "string"},
+                        "evidence": ids,
+                    },
+                    "required": ["kind", "text", "evidence"],
+                },
+            },
+            "quality": {
+                "type": "object",
+                "properties": {
+                    "score": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+                    "reason": text,
+                },
+                "required": ["score", "reason"],
+            },
+            "fit": read(FIT_VALUES),
+            "urgency": read(URGENCY_VALUES),
+        },
+        "required": [*PROFILE_FACTS, "follow_up", "insights", "quality", "fit", "urgency"],
     }
 
 
@@ -409,6 +522,88 @@ def parse_review(raw: dict[str, Any], segments: list[dict[str, Any]]) -> dict[st
         "pointers": pointers,
         "outcome": _outcome(raw.get("outcome")),
         "buyer_qualification": _qualification(raw.get("buyer_qualification"), by_id),
+        "prospect_profile": _profile(raw.get("prospect_profile"), by_id),
+    }
+
+
+def _refs(value: Any, by_id: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Up to two transcript segments named by the model; its own quotes are never used."""
+    found: list[dict[str, Any]] = []
+    for reference in value if isinstance(value, list) else []:
+        segment = by_id.get(str(reference).strip())
+        quote = " ".join(str((segment or {}).get("text") or "").split())
+        if segment is None or not quote:
+            continue
+        if any(item["segment_id"] == str(segment["id"]) for item in found):
+            continue
+        found.append(
+            {
+                "segment_id": str(segment["id"]),
+                "quote": quote[:600],
+                "start_ms": int(segment["start_ms"]),
+                "end_ms": int(segment["end_ms"]),
+            }
+        )
+        if len(found) == 2:
+            break
+    return found
+
+
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _profile(value: Any, by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Facts only with transcript evidence; a name only when it was actually said."""
+    raw = value if isinstance(value, dict) else {}
+    spoken = " ".join(str(segment.get("text") or "") for segment in by_id.values()).casefold()
+
+    def fact(key: str) -> dict[str, Any]:
+        entry = _dict(raw.get(key))
+        words = _words(entry.get("value"), _PROFILE_LIMITS["value"])
+        evidence = _refs(entry.get("evidence"), by_id)
+        if not words or not evidence:
+            return {"value": None, "evidence": []}
+        if key == "name" and not all(part.casefold() in spoken for part in words.split()[:2]):
+            return {"value": None, "evidence": []}
+        return {"value": words, "evidence": evidence}
+
+    follow = _dict(raw.get("follow_up"))
+    follow_refs = _refs(follow.get("evidence"), by_id)
+    when = _words(follow.get("when"), _PROFILE_LIMITS["when"]) if follow_refs else None
+    insights = []
+    for item in raw.get("insights") or []:
+        if not isinstance(item, dict) or item.get("kind") not in INSIGHT_KINDS:
+            continue
+        words = _words(item.get("text"), _PROFILE_LIMITS["insight"])
+        evidence = _refs(item.get("evidence"), by_id)
+        if words and evidence:
+            insights.append({"kind": item["kind"], "text": words, "evidence": evidence})
+    quality = _dict(raw.get("quality"))
+    score = quality.get("score")
+
+    def read(key: str, values: tuple[str, ...]) -> dict[str, Any]:
+        entry = _dict(raw.get(key))
+        chosen = entry.get("value") if entry.get("value") in values else "unknown"
+        reason = _words(entry.get("reason"), _PROFILE_LIMITS["reason"])
+        return {"value": chosen, "reason": reason if chosen != "unknown" else None}
+
+    return {
+        **{key: fact(key) for key in PROFILE_FACTS},
+        "follow_up": {
+            "when": when,
+            "about": _words(follow.get("about"), _PROFILE_LIMITS["about"]) if when else None,
+            "evidence": follow_refs if when else [],
+        },
+        "insights": insights[:8],
+        "quality": {
+            "score": score if type(score) is int and 1 <= score <= 10 else None,
+            "reason": _words(quality.get("reason"), _PROFILE_LIMITS["reason"])
+            if type(score) is int and 1 <= score <= 10
+            else None,
+        },
+        "fit": read("fit", FIT_VALUES),
+        "urgency": read("urgency", URGENCY_VALUES),
     }
 
 
@@ -551,6 +746,29 @@ def merge_into_structure(structure: dict[str, Any], review: dict[str, Any]) -> d
                 ],
             }
         merged["prospect_signals"] = signals
+    profile = review.get("prospect_profile")
+    if isinstance(profile, dict):
+
+        def short(refs: Any) -> list[dict[str, Any]]:
+            return [
+                {"segment_id": ref["segment_id"], "quote": ref["quote"]}
+                for ref in refs or []
+                if isinstance(ref, dict)
+            ]
+
+        projected = deepcopy(profile)
+        for key in PROFILE_FACTS:
+            if isinstance(projected.get(key), dict):
+                projected[key]["evidence"] = short(projected[key].get("evidence"))
+        if isinstance(projected.get("follow_up"), dict):
+            projected["follow_up"]["evidence"] = short(projected["follow_up"].get("evidence"))
+        for item in projected.get("insights") or []:
+            item["evidence"] = short(item.get("evidence"))
+        merged["prospect_profile"] = {
+            "version": "prospect-profile/1",
+            "basis": "ai_pointer_review",
+            **projected,
+        }
     merged["review_status"] = "ai_draft_not_dipak_reviewed"
     return merged
 
