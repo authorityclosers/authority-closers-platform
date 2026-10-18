@@ -1172,7 +1172,8 @@ function LightboxShellFrame({
                   data-pending={chromePending ? "" : undefined}
                 >
                   <span aria-hidden="true">
-                    {chromePending ? null : (
+                    {/* Until the profile arrives: the circle only, never a stray dot. */}
+                    {chromePending || !profile ? null : (
                       <AccountAvatarImage
                         key={profile?.email ?? ""}
                         photoUrl={profile?.photo_url}

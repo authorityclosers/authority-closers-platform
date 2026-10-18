@@ -3912,7 +3912,8 @@ export function AcquisitionStudio({
         mobileFit
         allowance={allowance}
         pageName={
-          reportReady
+          // A saved call is a Report from its first frame, never "Calls".
+          reportReady || activeRequestedCallId
             ? reportView === "prospect"
               ? "Prospect"
               : reportView === "coaching"
