@@ -2,7 +2,9 @@
 
 Account sessions of standing gold reviewers only, on the Sales Xray host. The
 gold service, rows and audio guards are the Admin reviewer workspace's own; see
-:mod:`conversation_intelligence.gold_review_account` for the admission.
+:mod:`conversation_intelligence.gold_review_account` for the admission. ``/push``
+and ``/devices`` turn on review alerts on the reviewer's phone
+(:mod:`lead_desk.review_push`).
 """
 
 from __future__ import annotations
@@ -26,11 +28,14 @@ from ac_platform.conversation_intelligence.gold_review_account import (
     badge,
     metrics,
     queue,
+    standing_reviewer,
 )
 from ac_platform.conversation_intelligence.gold_review_contracts import GoldSave
 from ac_platform.conversation_intelligence.gold_reviews import GoldReviews
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.kernel.errors import DomainError
+from ac_platform.lead_desk import push, review_push
+from ac_platform.lead_desk.contracts import DeviceCommand, DeviceView, PushConfig
 from ac_platform.telemetry.redaction import sanitize_error
 
 _PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
@@ -88,6 +93,39 @@ def install_sales_xray_review_http(
         return await badge(
             auth.database, settings.operations_tenant_id, auth.resolved.actor.person_id, clock()
         )
+
+    @router.get("/push", response_model=PushConfig, response_model_by_alias=True)
+    async def read_push(
+        request: Request, response: Response, auth: AuthenticatedTransaction = actor_dependency
+    ) -> PushConfig:
+        """The app's Firebase client settings (public, no secrets), for reviewers only."""
+        surface(request, response)
+        if not await standing_reviewer(auth.database, auth.resolved.actor.person_id):
+            return PushConfig(enabled=False)
+        return push.client_config(push.config())
+
+    @router.post("/devices", response_model=DeviceView, response_model_by_alias=True)
+    async def register_phone(
+        body: DeviceCommand,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> DeviceView:
+        """This phone gets my review alerts."""
+        surface(request, response, write=True)
+        actor = auth.resolved.actor
+        try:
+            registered = await review_push.register_phone(
+                auth.database,
+                actor.person_id,
+                body,
+                clock(),
+                quiet=(settings.operations_tenant_id, settings.public_learner_tenant_id),
+                current=actor.tenant_id,
+            )
+        except ConversationError as error:
+            raise failed(error) from None
+        return DeviceView(registered=registered)
 
     @router.get("/queue")
     async def read_queue(

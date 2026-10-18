@@ -756,3 +756,73 @@
     padding: 0;
   }
 }
+
+/* Review alerts on the phone: a one-time offer under the title (app only). */
+.alerts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+}
+
+.alerts > svg {
+  color: var(--sx-accent);
+}
+
+.alertsOn {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font: inherit;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.alertsOn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.alertsClose {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.alertsOn:focus-visible,
+.alertsClose:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (max-width: 560px) {
+  .alerts {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .alertsOn {
+    grid-row: 2;
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .alertsClose {
+    grid-row: 1;
+    grid-column: 3;
+  }
+}

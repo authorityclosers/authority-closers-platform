@@ -8,12 +8,15 @@ import pytest
 from sqlalchemy import select
 
 from ac_platform.audit.models import AuditEvent
+from ac_platform.conversation_intelligence.application import ConversationDenied
 from ac_platform.conversation_intelligence.gold_review_job import assign_saved_reviews
 from ac_platform.conversation_intelligence.gold_review_models import GoldAssignment
 from ac_platform.conversation_intelligence.gold_reviews import GoldReviews
+from ac_platform.lead_desk.contracts import DeviceCommand
 from ac_platform.lead_desk.models import LeadDevice
-from ac_platform.lead_desk.review_push import ACTION, ReviewAlert, tick
+from ac_platform.lead_desk.review_push import ACTION, ReviewAlert, register_phone, tick
 from ac_platform.lead_desk.store import token_digest
+from ac_platform.tenancy.models import Membership
 from tests.database.test_conversation_reviews_postgresql import ReviewCase, _service, run
 from tests.database.test_conversation_reviews_postgresql import (
     postgres_harness as postgres_harness,
@@ -163,5 +166,62 @@ def test_a_revoked_reviewer_gets_no_alert(push_case) -> None:
         async with httpx.AsyncClient() as client:
             assert await tick(case.sessions, fcm, client, now=now + timedelta(seconds=30)) == 0
         assert fcm.sent == [] and len(await _alerts(case)) == before
+
+    run(exercise())
+
+
+def test_a_reviewer_turns_alerts_on_from_review(push_case) -> None:
+    """The /review card: no Leads or organisation workspace needed, never lead alerts."""
+    case, _, _ = push_case
+    reviewer = case.reviewer_actor.person_id
+    calls = case.prepared.state.tenant_id
+    operations = case.operations_tenant_id
+    now = case.prepared.state.now
+    phone = DeviceCommand(token="review-card-phone-" + "a" * 24, app_version="0.3.test")
+
+    async def kept_in() -> set:
+        async with case.sessions() as db:
+            return set(
+                (
+                    await db.scalars(
+                        select(LeadDevice.tenant_id).where(
+                            LeadDevice.token_sha256 == token_digest(phone.token),
+                            LeadDevice.person_id == reviewer,
+                        )
+                    )
+                ).all()
+            )
+
+    async def exercise():
+        async with case.sessions() as db, db.begin():
+            # Someone who is not a standing reviewer keeps no phone here.
+            with pytest.raises(ConversationDenied):
+                await register_phone(
+                    db,
+                    case.source_actor.person_id,
+                    phone,
+                    now,
+                    quiet=(operations, None),
+                    current=calls,
+                )
+        async with case.sessions() as db, db.begin():
+            # Their only workspace is used when no quiet one is theirs.
+            assert await register_phone(
+                db, reviewer, phone, now, quiet=(operations, None), current=None
+            )
+        assert await kept_in() == {calls}
+        async with case.sessions() as db, db.begin():
+            if await db.get(Membership, (operations, reviewer)) is None:
+                db.add(
+                    Membership(
+                        tenant_id=operations, person_id=reviewer, role="learner", status="active"
+                    )
+                )
+        async with case.sessions() as db, db.begin():
+            # A workspace where Leads don't run comes before the current one.
+            assert await register_phone(
+                db, reviewer, phone, now, quiet=(operations, None), current=calls
+            )
+        assert await kept_in() == {calls, operations}
 
     run(exercise())

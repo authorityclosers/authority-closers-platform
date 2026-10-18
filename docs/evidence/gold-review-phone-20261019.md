@@ -155,3 +155,44 @@ Dev proof: `strikes/1801/gold-push-dev-proof-20261019.{py,log}`.
 
 The reviewer's phone must be registered once. Today that happens through
 Leads → "Turn on alerts" in the Android app, inside an organisation workspace.
+
+## Turn on review alerts from /review (19 Oct)
+
+A reviewer can now turn on alerts where they review. Leads and an
+organisation workspace are not needed.
+
+- **Card on /review:** shown only inside the Android app, under the title,
+  once. It says "Know when a new Report is ready" and has a "Turn on alerts"
+  button.
+  - If the phone refuses notifications, it says how to allow them.
+  - "Not now" hides it on this phone.
+  - When alerts are already on, it shows nothing and quietly re-sends the
+    phone's current alert address.
+- **`GET /v1/sales-xray/review/push`:** the app's Firebase client settings
+  (public, no secrets). Standing gold reviewers get them; everyone else gets
+  `enabled: false`, so the card never shows.
+- **`POST /v1/sales-xray/review/devices`** (same-origin, standing reviewers
+  only):
+  - It uses `review_push.register_phone`, which reuses Lead Desk's phone
+    registration (one owner per phone, newest five per person).
+  - The phone is kept under the reviewer's operations or public learner
+    workspace when they have one, so review alerts never turn on lead alerts.
+    Otherwise their current workspace, otherwise any active one.
+  - With no active workspace at all, it refuses with a plain message.
+
+Checks on ac:
+
+- `test_gold_review_push_postgresql`: 4 passed, including a new registration
+  test (a non-reviewer is refused; a quiet workspace comes first).
+  `test_sales_xray_review_postgresql`: 3 passed.
+- The API module imports, and both routes build their OpenAPI.
+- Ruff, format and mypy are clean.
+- Web: vitest `app/review` (with the review fixtures) has 9 files and
+  34 tests, all passed; 6 of them are new card tests. Prettier and ESLint are
+  clean, and `tsc --noEmit` exits 0.
+- Captures: `strikes/1801/shots/2026-10-19/alerts/`.
+  - Real /review on the workbench dev server, inside a stand-in phone app
+    (SXPhone bridge and app user agent), with fictional data.
+  - 390 px, light and dark: the offer, after turning on (the card is gone and
+    one registration was sent), and refused (no registration).
+  - No overflow and no page errors.

@@ -18,11 +18,15 @@ knows what was sent, so no table changes. Assignments made in one reader pass (a
 first designation can make twenty) become one alert, "12 Reports to review", which
 opens the review list. Nothing older than two hours is sent, so a phone that
 registers late is not flooded. Off until the FCM settings exist (``push.config``).
+
+A reviewer turns alerts on from /review (``register_phone``); no Leads or
+organisation workspace is needed.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -34,16 +38,23 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
-from ac_platform.conversation_intelligence.gold_review_account import badge
+from ac_platform.conversation_intelligence.application import ConversationDenied
+from ac_platform.conversation_intelligence.gold_review_account import (
+    NOT_A_REVIEWER,
+    badge,
+    standing_reviewer,
+)
 from ac_platform.conversation_intelligence.gold_review_models import GoldAssignment, GoldReviewer
 from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationReviewAssignment,
     ConversationReviewRevocation,
 )
+from ac_platform.lead_desk.contracts import DeviceCommand
 from ac_platform.lead_desk.models import LeadDevice
 from ac_platform.lead_desk.push import BATCH, WINDOW, Fcm
-from ac_platform.lead_desk.store import token_digest
+from ac_platform.lead_desk.store import LeadDesk, Viewer, token_digest
+from ac_platform.tenancy.models import Membership
 
 ACTION = "conversation.gold_review_alerted"
 RESOURCE = "conversation_review_assignment"
@@ -174,3 +185,43 @@ async def tick(
                 )
             )
     return sent
+
+
+async def register_phone(
+    database: AsyncSession,
+    person_id: UUID,
+    command: DeviceCommand,
+    now: datetime,
+    *,
+    quiet: Sequence[UUID | None],
+    current: UUID | None,
+) -> bool:
+    """A standing gold reviewer's phone gets review alerts (the card on /review).
+
+    The phone is kept under one of the person's active memberships, as Lead Desk
+    phones are (one owner per phone, the newest five per person). A workspace where
+    Leads don't run (``quiet``: AC operations, the public learner one) comes first,
+    so turning on review alerts never turns on lead alerts; then the current one.
+    The sender reads a reviewer's phones in any workspace.
+    """
+    if not await standing_reviewer(database, person_id):
+        raise ConversationDenied(NOT_A_REVIEWER)
+    tenants = (
+        await database.scalars(
+            select(Membership.tenant_id)
+            .where(
+                Membership.person_id == person_id,
+                Membership.status == "active",
+                Membership.ended_at.is_(None),
+            )
+            .order_by(Membership.tenant_id)
+        )
+    ).all()
+    if not tenants:
+        raise ConversationDenied("This account has no workspace to keep the phone in.")
+    preferred = [tenant for tenant in (*quiet, current) if tenant is not None and tenant in tenants]
+    tenant_id = preferred[0] if preferred else tenants[0]
+    desk = LeadDesk(
+        database, Viewer(person_id=person_id, tenant_id=tenant_id, role="member", name=""), now=now
+    )
+    return await desk.register_device(command)
