@@ -239,6 +239,7 @@
 }
 .actions button,
 .edit button {
+  white-space: nowrap;
   padding: 2px 8px;
   border: 1px solid var(--xr-line-2);
   border-radius: 8px;
@@ -337,6 +338,17 @@
   }
   .who h4 {
     font-size: 21px;
+  }
+  /* 390 px: the grid keeps two columns; its icons go so values and actions fit. */
+  .fact {
+    padding: 10px;
+  }
+  .fact > span:first-child {
+    display: none;
+  }
+  .ring figcaption {
+    font-size: 11px;
+    text-align: center;
   }
 }
 
