@@ -49,7 +49,7 @@ INNER = "--inner"
 MODULE = "ac_platform.partner_events.cli"
 _PROVIDER = "gemini"
 MAX_PAGES = 10  # pages of reports read per pass, so waiting reports never hold newer ones
-AGE_OUT_LIMIT = 50
+AGE_OUT_LIMIT = 50  # aged-out reports recorded per page; up to MAX_PAGES pages per run
 
 
 def _bounded(low: int, high: int) -> Callable[[str], int]:
@@ -313,31 +313,44 @@ async def _age_out(
     clock: Callable[[], datetime],
     totals: dict[str, int],
 ) -> None:
-    """Reports that left the recent window without an event row: recorded, owner alerted."""
+    """Reports that left the recent window without an event row: recorded, owner alerted.
+
+    A backlog is recorded a page at a time (up to ``MAX_PAGES`` pages of
+    ``AGE_OUT_LIMIT``) and alerts once per run with the total, not once a
+    minute per page.
+    """
     from ac_platform.partner_events import pipeline
     from ac_platform.partner_events.delivery import notify_owner
 
-    async with sessions() as session:
-        old = await pipeline.aged_out(
-            session,
-            now=clock(),
-            recent_hours=arguments.recent_hours,
-            limit=AGE_OUT_LIMIT,
-            tests=tests,
-        )
-    if not old:
-        return
-    if not arguments.apply:
-        _print({"would_age_out": len(old)})
-        return
     recorded = 0
-    for candidate in old:
-        line = await pipeline.record_final(sessions, candidate, pipeline.AGED_OUT, clock=clock)
-        recorded += "final" in line
+    short_ids: set[str] = set()
+    for _ in range(MAX_PAGES):
+        async with sessions() as session:
+            old = await pipeline.aged_out(
+                session,
+                now=clock(),
+                recent_hours=arguments.recent_hours,
+                limit=AGE_OUT_LIMIT,
+                tests=tests,
+            )
+        if not old:
+            break
+        if not arguments.apply:
+            _print({"would_age_out": len(old)})
+            return
+        page = 0
+        for candidate in old:
+            line = await pipeline.record_final(sessions, candidate, pipeline.AGED_OUT, clock=clock)
+            if "final" in line:
+                page += 1
+                short_ids.add(str(candidate.endpoint_id)[:8])
+        recorded += page
+        if not page or len(old) < AGE_OUT_LIMIT:
+            break  # the backlog is done, or another runner is recording it
     totals["aged_out"] += recorded
     if not recorded:
-        return  # another runner recorded them first
-    endpoints = sorted({str(candidate.endpoint_id)[:8] for candidate in old})
+        return
+    endpoints = sorted(short_ids)
     text = (
         f"Sales X-Ray partner webhooks ({environment}): {recorded} report(s) aged out after "
         f"{arguments.recent_hours} h without an event (endpoint {', '.join(endpoints)}). "

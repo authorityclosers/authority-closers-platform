@@ -355,3 +355,68 @@ def test_only_refusals_that_keep_data_in_are_final(
     line: dict[str, Any], reason: str | None
 ) -> None:
     assert pipeline.final_refusal(line) == reason
+
+
+@pytest.mark.parametrize(
+    "backlog,limit,recorded,alerts",
+    [
+        # Re-review 18 Oct, m10: a backlog over one page alerts once per run, with the total.
+        (5, 2, 5, 1),
+        (2, 2, 2, 1),
+        (1, 50, 1, 1),
+        (0, 2, 0, 0),
+        # More than MAX_PAGES pages: the rest wait for the next run (one alert each run).
+        (25, 2, 20, 1),
+    ],
+)
+def test_an_aged_out_backlog_alerts_once_per_run(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    backlog: int,
+    limit: int,
+    recorded: int,
+    alerts: int,
+) -> None:
+    runner = _Runner({})
+    runner.reports = []
+    runner.install(monkeypatch)
+    old = [
+        SimpleNamespace(endpoint_id=UUID(int=number % 2 + 1), draft_id=UUID(int=500 + number))
+        for number in range(backlog)
+    ]
+    done: list[UUID] = []
+    sent: list[str] = []
+
+    async def aged_out(session: Any, **kwargs: Any) -> list[Any]:
+        return [item for item in old if item.draft_id not in done][: kwargs["limit"]]
+
+    async def record_final(sessions: Any, candidate: Any, reason: str, **kwargs: Any) -> Any:
+        assert reason == pipeline.AGED_OUT
+        done.append(candidate.draft_id)
+        return {"final": reason}
+
+    def notify_owner(text: str) -> str:
+        sent.append(text)
+        return "absent"
+
+    monkeypatch.setattr(pipeline, "aged_out", aged_out)
+    monkeypatch.setattr(pipeline, "record_final", record_final)
+    monkeypatch.setattr(delivery, "notify_owner", notify_owner)
+    monkeypatch.setattr(cli, "AGE_OUT_LIMIT", limit)
+    totals = runner.one_pass()
+    assert totals["aged_out"] == recorded and len(done) == recorded
+    assert len(sent) == alerts
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    alerted = [line for line in lines if line.get("alert") == "reports_aged_out"]
+    assert len(alerted) == alerts
+    if alerts:
+        assert sent[0].startswith(
+            f"Sales X-Ray partner webhooks (test): {recorded} report(s) aged out after 72 h"
+        )
+        expected = sorted({str(item.endpoint_id)[:8] for item in old[:recorded]})
+        assert alerted[0] == {
+            "alert": "reports_aged_out",
+            "count": recorded,
+            "endpoints": expected,
+            "notified": "absent",
+        }
