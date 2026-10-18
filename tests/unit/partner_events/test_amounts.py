@@ -12,7 +12,7 @@ from ac_platform.partner_events.amounts import (
     counts_in,
     gst_basis,
     is_currency,
-    mask_amounts,
+    is_time_word,
     mentions_price,
     normalise,
     number_join,
@@ -289,139 +289,7 @@ def test_gst_basis_needs_gst_and_one_clear_cue(words: str, expected: str | None)
     assert gst_basis(words) == expected
 
 
-@pytest.mark.parametrize(
-    "text,expected",
-    [
-        (
-            "The customer wants a 5 kW system; budget 3.70 lakh plus GST.",
-            "The customer wants a 5 kW system; budget [amount] plus GST.",
-        ),
-        ("Quoted ₹3.7L, customer asked for Rs. 3,40,000.",
-         "Quoted [amount], customer asked for [amount]."),
-        ("Teen lakh sattar hazaar rupaye bola.", "[amount] bola."),
-        ("ग्राहक का बजट दो लाख साठ हजार है।", "ग्राहक का बजट [amount] है।"),
-        ("बजेट पाच लाख पन्नास हजार रुपये.", "बजेट [amount]."),
-        ("Paune teen lakh mein deal hogi.", "[amount] mein deal hogi."),
-        ("सवा दो लाख तक", "[amount] तक"),
-        ("Wants it above a lakh.", "Wants it above [amount]."),
-        ("Spent lakhs on inverters.", "Spent [amount] on inverters."),
-        ("Packing 500 extra, transport 45k.", "Packing [amount] extra, transport [amount]."),
-        ("Packing charge 50, dongle 2.", "Packing charge [amount], dongle 2."),
-        ("500 rupiya packing ka.", "[amount] packing ka."),
-        ("Between 3 to 4 lakh.", "Between [amount]."),
-        ("paanch sau ka packing", "[amount] ka packing"),
-        ("पाचशे रुपये", "[amount]"),
-        # Unit figures, years, small counts and times stay.
-        ("1500 sq ft roof, 5000 watt load, 2 ACs.", "1500 sq ft roof, 5000 watt load, 2 ACs."),
-        ("Install by 2026; warranty 5 years.", "Install by 2026; warranty 5 years."),
-        ("Call back at 5 pm with the quotation.", "Call back at 5 pm with the quotation."),
-        ("Price is too high, compared with an inverter.",
-         "Price is too high, compared with an inverter."),
-        ("in rupees", "in rupees"),
-        ("", ""),
-    ],
-)  # fmt: skip
-def test_mask_amounts_replaces_every_amount(text: str, expected: str) -> None:
-    masked = mask_amounts(text)
-    assert masked == expected
-    assert mask_amounts(masked) == masked  # idempotent
-    assert amount_inr(masked) is None
-
-
-@pytest.mark.parametrize(
-    "phrase",
-    [
-        "do lakh pachas hazaar",
-        "teen lakh sattar hazaar",
-        "दो लाख साठ हजार",
-        "पाच लाख पन्नास हजार",
-        "paune teen lakh",
-        "सवा दो लाख",
-        "above a lakh",
-        "do lakh",
-        "sattar hazaar",
-        "सत्तर हजार",
-        "packing 500",
-        "500 rupiya",
-        "100 rupaiya",
-    ],
-)
-def test_no_review_phrase_survives_the_summary_mask(phrase: str) -> None:
-    masked = mask_amounts(f"Customer said {phrase} today.")
-    assert not mentions_price(masked)
-    assert "[amount]" in masked
-
-
 # --- Re-review 18 Oct, round 2 (table-driven, the re-review's own phrases) -----------------
-
-
-@pytest.mark.parametrize(
-    "text,expected",
-    [
-        # B1: a rupee-signed number is an amount even right before a unit.
-        ("₹60,000/kW", "[amount]/kW"),
-        ("Price ₹60,000/kW for 5 kW", "Price [amount]/kW for 5 kW"),
-        ("₹45/W", "[amount]/W"),
-        ("₹ 45 /W", "[amount] /W"),
-        ("Rs.45/W", "[amount]/W"),
-        ("₹55/Wp", "[amount]/Wp"),
-        ("₹45/watt incl GST", "[amount]/watt incl GST"),
-        ("₹ 50/Wp", "[amount]/Wp"),
-        ("₹50Wp", "[amount]Wp"),
-        ("₨45/W", "[amount]/W"),
-        ("45 per watt", "[amount] per watt"),
-        ("Customer was quoted ₹45/W.", "Customer was quoted [amount]/W."),
-        ("₹2.2 lakh/kW", "[amount]/kW"),
-        ("₹45 प्रति वाट", "[amount] प्रति वाट"),
-        ("rate 8 per unit", "rate [amount] per unit"),
-        # M1: Marathi and Hindi money words with case endings, romanised spellings, बजेट.
-        ("ग्राहकाचे बजेट साडेतीन लाखांपर्यंत आहे.", "ग्राहकाचे बजेट [amount] आहे."),
-        ("तीन लाखांत 5 kW", "[amount] 5 kW"),
-        ("सत्तर हजारांचा फरक", "[amount] फरक"),
-        ("पाच लाखांचे बजेट", "[amount] बजेट"),
-        ("दोन करोडचा प्रकल्प", "[amount] प्रकल्प"),
-        ("पाच कोटींचा", "[amount]"),
-        ("Budget 3 laakh hai.", "Budget [amount] hai."),
-        ("3 hajaar packing", "[amount] packing"),
-        ("बजेट 3", "बजेट [amount]"),
-        ("साडेतीन लाख", "[amount]"),
-        ("सव्वादोन लाख", "[amount]"),
-        ("पावणेतीन लाख", "[amount]"),
-        # m3: a bare decimal that is not a unit figure.
-        ("Quoted 3.70 for the 5 kW system", "Quoted [amount] for the 5 kW system"),
-        ("Will pay 3.5 max", "Will pay [amount] max"),
-        # m4: a number with a digit-group comma is never a year.
-        ("Dongle 1,999 only", "Dongle [amount] only"),
-        # m5: no partial masks.
-        ("one and a half lakh", "[amount]"),
-        ("3 and a half lakh", "[amount]"),
-        ("three point seven lakh", "[amount]"),
-        ("Rs: 50 packing", "[amount] packing"),
-        # m6 (conservative, accepted): a flat or plot number over 100 is masked too.
-        ("flat 402, plot 1203", "flat [amount], plot [amount]"),
-        # m1: names are not rupees; time words keep their numbers.
-        ("Rupali 3 baje call karegi", "Rupali 3 baje call karegi"),
-        ("Rupesh will send the quotation", "Rupesh will send the quotation"),
-        # M3: a number away from the cost word, or a time figure, stays.
-        ("Will share revised price in 2 days", "Will share revised price in 2 days"),
-        ("Send price list by 6 pm", "Send price list by 6 pm"),
-        ("Price too high; will decide in 2 days", "Price too high; will decide in 2 days"),
-        ("Compared the price with 2 other vendors", "Compared the price with 2 other vendors"),
-        ("Will send price for 2 ACs", "Will send price for 2 ACs"),
-        # Still not masked: unit figures, counts, years, places, half on its own.
-        ("2 ACs and 10 panels of 540 W, 150 Ah, 450 units",
-         "2 ACs and 10 panels of 540 W, 150 Ah, 450 units"),
-        ("5 units per day, 24/7 support", "5 units per day, 24/7 support"),
-        ("हजारीबाग site, लाखन will call", "हजारीबाग site, लाखन will call"),
-        ("half price", "half price"),
-        # Still kept (residual): a bare number from 1900 to 2100 may be a year.
-        ("Transport 2000 extra", "Transport 2000 extra"),
-    ],
-)  # fmt: skip
-def test_mask_amounts_round_two(text: str, expected: str) -> None:
-    masked = mask_amounts(text)
-    assert masked == expected
-    assert mask_amounts(masked) == masked
 
 
 @pytest.mark.parametrize(
@@ -561,3 +429,182 @@ def test_number_join(
     left: str | None, right: str, following: str | None, expected: str | None
 ) -> None:
     assert number_join(left, right, following) == expected
+
+
+# --- Check 3, 18 Oct (round 3, table-driven, the check's own phrases) ----------------------
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        # Item 1: Devanagari spellings of "watt".
+        "45 प्रति वॉट",
+        "45 प्रति वॅट",
+        "45 प्रति वॅट जास्त आहे",
+        "45 प्रति किलोवॅट",
+        # Item 2: Devanagari cost words.
+        "रेट 45",
+        "दर ४५",
+        "भाव 45",
+        "खर्च 45",
+        "चार्ज 50",
+        "शुल्क 50",
+        "किंमत 45",
+        "कीमत 45",
+        "kharcha 45",
+        "रेट 45 प्रति वॅट",
+        "प्रति वॅट दर ४५",
+        "दर ४५ प्रति वॉट",
+        "भाव 45 / रेट 45",
+        "45 का रेट",
+        # Item 3: a per-unit phrase or a rupee word before the number.
+        "price per watt is 45",
+        "rate per watt 45",
+        "per watt 45",
+        "price per watt 45 is too high",
+        "Rs per watt 45",
+        "₹/W 45",
+        "per kW 60",
+        "प्रति वॅट 45",
+        "प्रति वॅट आहे ४५",
+        # Item 4: number words.
+        "forty five per watt",
+        "price is twenty five",
+        "पैंतालीस प्रति वॅट",
+        "पैंतालीस रुपये प्रति वाट",
+        "पस्तीस हजार",
+        "pachpan per watt",
+        # Item 5: hedges between the cost word and the number.
+        "rate approx 45",
+        "rate is approx 45",
+        "price around 45",
+        "price is about 45",
+        "दर साधारण ४५",
+        "रेट जवळपास 45",
+        "रेट लगभग 45",
+        # Residual closed: "a" and "prati" before a unit.
+        "45 a watt",
+        "45 prati watt",
+    ],
+)
+def test_check_3_prices_are_prices(words: str) -> None:
+    assert mentions_price(words) is True
+    assert mentions_price(words, plain_numbers=False) is True
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        # Round 2 behaviour that check 3 confirmed: these are not prices.
+        "5 kW",
+        "2 ACs",
+        "we can do 5 kW",
+        "1 dongle",
+        "7 years warranty",
+        "Kothrud",
+        "tomorrow 11 am",
+        "Rupesh will send the quotation",
+        "Lakhan will visit the site",
+        "लाखन साइट पर आएगा",
+        "हजारीबाग से ग्राहक",
+        "5 किलोवॅट सिस्टम",
+        "५ किलोवॉट",
+        "5000 वॅट",
+        "price for 2 ACs is high",
+        "Will share revised price in 2 days",
+        "price is too high",
+        "price is around the same",
+        # "दर" also means "every": a time word after the number keeps it a count.
+        "दर महिना",
+        "दर 2 महिन्यांनी सर्विस",
+        "दर 3 दिवसांनी फोन",
+        "दर सोमवारी कॉल",
+        # Per-unit phrases that are not money units.
+        "5 units per day",
+        "2 kW per AC",
+        "per day 5 units",
+        "the rate at 2 shops",
+    ],
+)
+def test_check_3_keeps_what_is_not_a_price(words: str) -> None:
+    assert mentions_price(words) is False
+
+
+@pytest.mark.parametrize(
+    "words,expected",
+    [
+        ("5 किलोवॅट", (5, "kW")),
+        ("५ किलोवॉट", (5, "kW")),
+        ("5000 वॅट", (5, "kW")),
+        ("5000 वॉट", (5, "kW")),
+        ("पाच किलोवॅट", (5, "kW")),
+    ],
+)
+def test_devanagari_watt_spellings_are_sizes(
+    words: str, expected: tuple[int | float | None, str | None]
+) -> None:
+    assert system_size(words) == expected
+
+
+@pytest.mark.parametrize(
+    "words,expected",
+    [
+        # The complete 1-99 lists are read exactly.
+        ("पैंतालीस हजार", 45_000),
+        ("पस्तीस हजार", 35_000),
+        ("पंचेचाळीस हजार", 45_000),
+        ("pachpan hazaar", 55_000),
+        ("chhattis lakh", 3_600_000),
+        ("सव्वा पस्तीस लाख", 3_525_000),
+        ("निन्यानवे हजार", 99_000),
+        ("नव्याण्णव हजार", 99_000),
+        ("चौऱ्याहत्तर हजार", 74_000),
+        ("चौर्\u200dयाहत्तर हजार", 74_000),  # the same word written with a joiner
+        # Everyday spellings stay unread: the amount is None, never a guess.
+        ("saath hazaar", None),
+        ("tera lakh", None),
+        ("sola hazaar", None),
+        # "das" was read before round 3 and still is (only the summary mask treats it as a
+        # possible surname).
+        ("das lakh", 1_000_000),
+        # Per-unit prices are never totals.
+        ("45 prati watt", None),
+        ("45 a watt", None),
+    ],
+)
+def test_amount_inr_reads_the_complete_lists(words: str, expected: int | None) -> None:
+    assert amount_inr(words) == expected
+
+
+@pytest.mark.parametrize(
+    "left,right",
+    [
+        ("पन्द्रह", "पंद्रह"),
+        ("किम्मत", "किंमत"),
+        ("चौऱ्याहत्तर", "चौर्\u200dयाहत्तर"),
+        ("हज़ार", "हजार"),
+        ("पाँच", "पांच"),
+    ],
+)
+def test_normalise_folds_devanagari_spellings(left: str, right: str) -> None:
+    assert normalise(left) == normalise(right)
+
+
+@pytest.mark.parametrize(
+    "token,expected",
+    [
+        ("महिन्यांनी", True),
+        ("दिवसांत", True),
+        ("वाजेपर्यंत", True),
+        ("सालों", True),
+        ("बजे", True),
+        ("days", True),
+        ("बजेट", False),
+        ("बजाज", False),
+        ("दिनेश", False),
+        ("वाजवी", False),
+        (None, False),
+    ],
+)
+def test_time_words(token: str | None, expected: bool) -> None:
+    assert is_time_word(token) is expected

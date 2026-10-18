@@ -556,3 +556,80 @@ def test_a_whole_occurrence_in_another_cited_segment_wins() -> None:
     (price,) = [fact for fact in facts if fact["type"] == "mentioned_price"]
     assert price["value"]["amount_inr"] == 300_000
     assert price["source"]["segment_id"] == "s2" and price["source"]["speaker"] == "customer"
+
+
+# --- Check 3, 18 Oct (round 3, table-driven, the check's own phrases) ----------------------
+
+
+@pytest.mark.parametrize(
+    "kind,value,text",
+    [
+        # F43, F44 and the other check 3 phrases: a price in a fact that is not a price.
+        ("objection", {"kind": "price_concern", "text": "45 प्रति वॉट जास्त आहे"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "price per watt 45 is too high"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "रेट 45 प्रति वॅट जास्त आहे"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "दर ४५ जास्त आहे"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "भाव 45 जास्त है"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "rate approx 45 is high"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "पैंतालीस प्रति वॅट जास्त आहे"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "forty five per watt is high"}, "x"),
+        ("promise", {"text": "Will give at 45 a watt"}, "x"),
+        ("promise", {"text": "Rs per watt 45 final"}, "x"),
+        ("add_on", {"kind": "packing", "stated_as": "packing खर्च 50"}, "packing खर्च 50"),
+        ("site", {"stated_as": "per watt 45"}, "per watt 45"),
+        ("next_step", {"action": "call_back", "when_text": "rate approx 45"}, "rate approx 45"),
+    ],
+)  # fmt: skip
+def test_check_3_prices_never_reach_other_facts(
+    kind: str, value: dict[str, Any], text: str
+) -> None:
+    facts = _one(kind, value, text)
+    if kind == "next_step":
+        (fact,) = facts
+        assert fact["value"]["when_text"] is None
+    else:
+        assert facts == []
+
+
+@pytest.mark.parametrize(
+    "kind,value,text,expected",
+    [
+        # The facts check 3 confirmed must survive round 3 unchanged.
+        ("system_size", {"stated_as": "5 kW"}, "we can do 5 kW for you",
+         {"stated_as": "5 kW", "quantity": 5, "unit": "kW"}),
+        ("system_size", {"stated_as": "we can do 5 kW"}, "we can do 5 kW for you",
+         {"stated_as": "we can do 5 kW", "quantity": None, "unit": None}),
+        ("load", {"stated_as": "2 ACs"}, "we have 2 ACs and a fridge", {"stated_as": "2 ACs"}),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "3 lakh"},
+         "I can do 3 lakh final",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "3 lakh",
+          "amount_inr": 300_000, "basis": None, "use": "flag_only"}),
+        ("add_on", {"kind": "dongle", "qty": 1, "stated_as": "1 dongle"}, "add 1 dongle",
+         {"kind": "dongle", "qty": 1, "stated_as": "1 dongle"}),
+        ("warranty", {"years": 7, "stated_as": "7 years warranty"}, "7 years warranty on inverter",
+         {"years": 7, "stated_as": "7 years warranty"}),
+        ("site", {"stated_as": "Kothrud"}, "site is in Kothrud", {"stated_as": "Kothrud"}),
+        ("site", {"stated_as": "हजारीबाग"}, "हजारीबाग से ग्राहक", {"stated_as": "हजारीबाग"}),
+        ("next_step", {"action": "send_quotation", "when_text": "tomorrow 11 am"},
+         "send quotation tomorrow 11 am",
+         {"action": "send_quotation", "when_text": "tomorrow 11 am"}),
+        ("next_step", {"action": "call_back", "when_text": "दर सोमवारी"},
+         "दर सोमवारी फोन करू", {"action": "call_back", "when_text": "दर सोमवारी"}),
+        ("promise", {"text": "Rupesh will send the quotation"}, "x",
+         {"speaker": "salesperson", "text": "Rupesh will send the quotation"}),
+        ("promise", {"text": "Lakhan will visit the site on Monday"}, "x",
+         {"speaker": "salesperson", "text": "Lakhan will visit the site on Monday"}),
+        ("objection", {"kind": "price_concern", "text": "price for 2 ACs is high"}, "x",
+         {"kind": "price_concern", "text": "price for 2 ACs is high"}),
+        ("promise", {"text": "दर 2 महिन्यांनी सर्विस करू"}, "x",
+         {"speaker": "salesperson", "text": "दर 2 महिन्यांनी सर्विस करू"}),
+        # Check 3: the Marathi watt spelling now gives the unit.
+        ("system_size", {"stated_as": "5 किलोवॅट"}, "5 किलोवॅट सिस्टम हवी",
+         {"stated_as": "5 किलोवॅट", "quantity": 5, "unit": "kW"}),
+    ],
+)  # fmt: skip
+def test_check_3_facts_that_must_survive(
+    kind: str, value: dict[str, Any], text: str, expected: dict[str, Any]
+) -> None:
+    (fact,) = _one(kind, value, text)
+    assert fact["value"] == expected

@@ -579,7 +579,7 @@ async def enqueue(
         draft = await session.get(ConversationReportDraft, candidate.draft_id)
         assert draft is not None and draft.payload is not None
         raw = draft.payload.get("summary")
-        # Withheld words first (on the words as written), then amounts masked and cut.
+        # Withheld words first (on the words as written), then every number as "[n]", cut.
         summary = summary_text(
             withhold(
                 raw if isinstance(raw, str) else "",

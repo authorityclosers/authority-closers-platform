@@ -1164,7 +1164,7 @@ def test_supersedes_follows_the_endpoint_chain_and_payloads_are_emptied(
                 )
             second_endpoint = UUID(rotated["after"]["endpoint_id"])
 
-            # A re-analysis whose summary names prices: it supersedes A, prices are masked.
+            # A re-analysis whose summary names prices: it supersedes A, every number is masked.
             priced = copy.deepcopy(draft.payload)
             priced["summary"] = (
                 "Customer wants 5 kW; budget teen lakh sattar hazaar, packing 500, "
@@ -1178,8 +1178,7 @@ def test_supersedes_follows_the_endpoint_chain_and_payloads_are_emptied(
             assert event_b.endpoint_id == second_endpoint
             assert event_b.supersedes_event_id == event_a.id
             assert event_b.payload["summary"] == (
-                "Customer wants 5 kW; budget [amount], packing [amount], [amount] quoted, "
-                "[amount] तक."
+                "Customer wants [n] kW; budget [n], packing [n], [n] quoted, [n] तक."
             )
             # Item 9: the missing next secret no longer blocks delivery; the current one signs.
             receiver = Receiver()

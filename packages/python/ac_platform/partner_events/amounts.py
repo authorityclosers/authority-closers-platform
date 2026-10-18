@@ -25,33 +25,71 @@ those words only:
   ``mentioned_price`` ever passes one on.
 - ``gst_basis``: "incl_gst" / "ex_gst" only when GST was said with one clear
   cue, matched on whole words.
-- ``mask_amounts``: the text with every amount replaced by "[amount]" (used
-  for the event summary).
 
-English, romanised Hindi, Devanagari (Hindi and Marathi, with their case
-endings: लाखांत, हजारांचा, कोटींचा) and Devanagari digits are read. Nothing here
-calls a model or the network.
+English, romanised Hindi and Marathi, Devanagari (Hindi and Marathi, with
+their case endings: लाखांत, हजारांचा, कोटींचा) and Devanagari digits are read;
+number words come from the closed 0-99 lists in ``number_words``. The event
+summary does not use this reader: it masks every number (``summary_mask``).
+Nothing here calls a model or the network.
 """
 
 from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from decimal import Decimal, InvalidOperation
 from typing import Literal
 
+from ac_platform.partner_events import number_words
+
 Unit = Literal["kW", "kVA"]
 Join = Literal["hard", "soft"]
-MASK = "[amount]"
 
 _DEVANAGARI_DIGITS = {ord(chr(0x0966 + n)): str(n) for n in range(10)}
+# A nasal half-letter before a stop is written either way (पन्द्रह / पंद्रह, किम्मत / किंमत).
+_HALF_NASAL = re.compile(r"[ङञणनम]्(?=[क-म])")
 _TOKEN = re.compile(r"\d+(?:\.\d+)?|[a-z]+|[ऀ-ॣॱ-ॿ]+|₹|/-|/|[-–~+]")
-# The same token classes on the original text (Devanagari digits, digit-group commas and
-# the old rupee sign included), so a span can be masked in place.
-_RAW_TOKEN = re.compile(r"[0-9०-९]+(?:[.,][0-9०-९]+)*|[ऀ-ॣॱ-ॿ]+|[A-Za-z]+|₹|₨|/-|[-–~+]")
 # Numbers written with digit-group commas ("1,999", "3,70,000"): never a year.
 _GROUPED = re.compile(r"(?<![0-9.,])[0-9]{1,3}(?:,[0-9]{2,3})+(?![0-9])")
+
+
+def normalise(text: str) -> str:
+    """NFKC, case-folded, Devanagari digits as ASCII, nukta and chandrabindu folded, ऱ as
+    र, zero-width joiners dropped, a nasal half-letter before a stop as anusvara,
+    digit-group commas removed and whitespace collapsed."""
+    value = unicodedata.normalize("NFKC", text).casefold().translate(_DEVANAGARI_DIGITS)
+    value = value.replace("़", "").replace("ँ", "ं").replace("ऱ", "र")
+    value = value.replace("\u200c", "").replace("\u200d", "")
+    value = _HALF_NASAL.sub("ं", value)
+    value = re.sub(r"(?<=\d),(?=\d)", "", value)
+    value = re.sub(r"(?<=[a-z])\.(?=[a-z])", "", value)  # k.w. -> kw.
+    return " ".join(value.split())
+
+
+def folded(words: Iterable[str]) -> frozenset[str]:
+    """``words`` as ``normalise`` writes them, so a lookup matches every spelling."""
+    return frozenset(normalise(word) for word in words)
+
+
+def _folded_values(*tables: dict[str, Decimal]) -> dict[str, Decimal]:
+    """One table of folded spellings; a spelling with two values is a list error."""
+    found: dict[str, Decimal] = {}
+    for table in tables:
+        for word, value in table.items():
+            if found.setdefault(normalise(word), value) != value:
+                raise ValueError(f"number word {word!r} has two values")
+    return found
+
+
+def _strong(table: dict[str, int]) -> dict[str, Decimal]:
+    """The 0-99 words the reader reads: never zero, never an everyday word."""
+    return {
+        word: Decimal(value)
+        for word, value in table.items()
+        if value > 0 and word not in number_words.SOFT_WORDS
+    }
+
 
 _ONES_EN: dict[str, Decimal] = {
     "one": Decimal(1),
@@ -189,11 +227,17 @@ _DEVA_NUMBER_WORDS: dict[str, Decimal] = {
     "दीड": Decimal("1.5"),
     "अडीच": Decimal("2.5"),
 }
-NUMBER_WORDS: dict[str, Decimal] = {
-    **_EN_NUMBER_WORDS,
-    **_HI_NUMBER_WORDS,
-    **_DEVA_NUMBER_WORDS,
-}
+# Round 3: the complete closed lists for 1-99 (pachpan, chhattis, पैंतालीस, पस्तीस ...).
+# Everyday words ("saath", "bara", "tera" as romanised words) stay out.
+_HI_NUMBER_WORDS = _folded_values(
+    _HI_NUMBER_WORDS, _strong(number_words.HI_ROMAN), _strong(number_words.MR_ROMAN)
+)
+_DEVA_NUMBER_WORDS = _folded_values(
+    _DEVA_NUMBER_WORDS, _strong(number_words.HI_DEVA), _strong(number_words.MR_DEVA)
+)
+NUMBER_WORDS: dict[str, Decimal] = _folded_values(
+    _EN_NUMBER_WORDS, _HI_NUMBER_WORDS, _DEVA_NUMBER_WORDS
+)
 # Number words that are far more often ordinary words: English "do" and Hindi "do" (give),
 # "one" (the one, one of). They join a neighbour only when they directly form an amount.
 _EVERYDAY_WORDS = frozenset({"do", "one"})
@@ -219,9 +263,6 @@ FRACTION_WORDS: dict[str, tuple[Decimal, int]] = {
 # Hundreds are never read as an amount ("paanch sau" is None), but they mark a price.
 HUNDRED_WORDS = frozenset({"hundred", "hundreds", "sau", "सौ", "शे", "शंभर"})
 _COMPOUND_HUNDREDS = frozenset({"दोनशे", "तीनशे", "चारशे", "पाचशे", "सहाशे", "सातशे", "आठशे", "नऊशे"})
-# Words that make part of a spoken number with "and"/"point" ("one and a half lakh",
-# "three point seven lakh"); masked with the amount they belong to, never alone.
-_PART_WORDS = frozenset({"half", "quarter", "point"})
 MONEY_UNITS: dict[str, int] = {
     "lakh": 100_000,
     "lakhs": 100_000,
@@ -325,18 +366,79 @@ COST_WORDS = frozenset(
         "किंमत",
         "बजट",
         "बजेट",
+        # Round 3 (check 3, item 2): rate, rate/every, price, cost, charge, fee.
+        "रेट",
+        "दर",
+        "भाव",
+        "खर्च",
+        "खर्चा",
+        "चार्ज",
+        "शुल्क",
+        "kharch",
+        "kharcha",
+        "bhav",
+        "bhaav",
+        "shulk",
     }
 )
 _RANGE = {"to", "or", "se", "ya", "से", "ते", "या", "किंवा", "-", "–", "~"}
-_JOINERS = _RANGE | {"and", "aur", "और", "ani", "आणि", "+"}
-# One short word allowed between a cost word and its number ("charges of 50", "50 ka charge").
+# Short words allowed between a cost word, a rupee word or a per-unit phrase and its number
+# ("charges of 50", "50 ka charge", "price per watt is 45"), and hedges ("rate approx 45",
+# "दर साधारण ४५"; check 3, item 5).
 _CONNECTORS = frozenset(
-    {"of", "is", "was", "for", "ka", "ki", "ke", "hai", "का", "की", "के", "है", "चा", "ची", "चे"}
+    {
+        "of",
+        "is",
+        "was",
+        "are",
+        "were",
+        "be",
+        "for",
+        "at",
+        "ka",
+        "ki",
+        "ke",
+        "hai",
+        "का",
+        "की",
+        "के",
+        "है",
+        "हैं",
+        "था",
+        "थी",
+        "चा",
+        "ची",
+        "चे",
+        "आहे",
+        "होता",
+        "होती",
+        "होते",
+        "approx",
+        "approximately",
+        "around",
+        "about",
+        "roughly",
+        "nearly",
+        "almost",
+        "lagbhag",
+        "karib",
+        "kareeb",
+        "लगभग",
+        "करीब",
+        "साधारण",
+        "साधारणतः",
+        "जवळपास",
+        "अंदाजे",
+    }
 )
+# After these, a number followed by the thing it counts is a count ("price for 2 ACs").
+_COUNTED_AFTER = frozenset({"of", "for", "at"})
 # Words after a number that keep it a price after "of"/"for" ("charges of 50 only").
 _PRICE_TAIL = frozenset({"only", "extra", "plus", "final", "fixed", "total", "hi", "ही"})
-# Words after a number that make it a per-unit price ("45 per watt", "₹45/W", "₹45 प्रति वाट").
-_PER_WORDS = frozenset({"per", "प्रति", "/"})
+# Words after a number that make it a per-unit price ("45 per watt", "₹45/W", "₹45 प्रति वाट",
+# "45 prati watt"); "a" too, right before a unit ("45 a watt").
+_PER_WORDS = frozenset({"per", "प्रति", "prati", "/"})
+_PER_ARTICLES = frozenset({"a", "an"})
 # Words that make an amount a per-unit price, a cap or a guess: the amount is not read.
 _NOT_A_TOTAL = _PER_WORDS | {
     "each",
@@ -377,11 +479,15 @@ _SIZE_UNITS: dict[str, tuple[Unit, int]] = {
     "kilowatt": ("kW", 1),
     "kilowatts": ("kW", 1),
     "किलोवाट": ("kW", 1),
+    "किलोवॉट": ("kW", 1),  # Hindi spelling (check 3, item 1)
+    "किलोवॅट": ("kW", 1),  # Marathi spelling
     "kva": ("kVA", 1),
     "w": ("kW", 1000),
     "watt": ("kW", 1000),
     "watts": ("kW", 1000),
     "वाट": ("kW", 1000),
+    "वॉट": ("kW", 1000),
+    "वॅट": ("kW", 1000),
     "va": ("kVA", 1000),
 }
 # Units a price is quoted per ("₹45/W", "60,000 per kW", "8 per unit", "₹55/Wp").
@@ -472,6 +578,13 @@ _TIME_UNITS = frozenset(
         "मिनिटांत",
     }
 )
+# Hindi and Marathi time words with a case ending ("2 महिन्यांनी", "3 दिवसांत", "वाजेपर्यंत",
+# "सालों"): a closed list of stems and endings.
+_DEVA_TIME = re.compile(
+    r"(?:दिवस|दिन|महिन|महीन|वर्ष|साल|आठवड|हफ्त|तास|घंट|मिनिट|मिनट|सेकंद|वाज|बज)"
+    r"(?:ा|ां|े|ें|ों|्या|्यां|ी|ो)?"
+    r"(?:चा|ची|चे|च्या|त|ने|नी|ला|ना|ता|पर्यंत|मध्ये|भर|ही|च|नंतर|पूर्वी|पासून)?"
+)
 # Units that make a number something other than money (power, energy, size, length,
 # years, time).
 _OTHER_UNITS = (
@@ -504,6 +617,22 @@ _OTHER_UNITS = (
         "वर्षे",
     }
 )
+
+
+def is_time_word(token: str | None) -> bool:
+    """A time word or a Hindi/Marathi time word with its ending ("days", "बजे", "महिन्यांनी")."""
+    return token is not None and (token in _TIME_UNITS or bool(_DEVA_TIME.fullmatch(token)))
+
+
+def is_unit_word(token: str | None) -> bool:
+    """A unit that makes the number before it something other than money (power, size,
+    length, years, time: "kW", "sq", "saal", "days", "महिन्यांनी")."""
+    return token is not None and (token in _OTHER_UNITS or bool(_DEVA_TIME.fullmatch(token)))
+
+
+_other_unit = is_unit_word
+
+
 # A number above this with no unit, in a field that is not a price, is taken as a price
 # ("packing 500"); add-on counts are capped at the same number.
 PLAIN_PRICE_FLOOR = 100
@@ -539,16 +668,6 @@ _EXCLUDED = (
 )
 _WORD_CLASS = "0-9a-zऀ-ॿ"
 _MAX_INR = 10_000_000_000
-
-
-def normalise(text: str) -> str:
-    """NFKC, case-folded, Devanagari digits as ASCII, nukta and chandrabindu folded,
-    digit-group commas removed and whitespace collapsed."""
-    value = unicodedata.normalize("NFKC", text).casefold().translate(_DEVANAGARI_DIGITS)
-    value = value.replace("़", "").replace("ँ", "ं")
-    value = re.sub(r"(?<=\d),(?=\d)", "", value)
-    value = re.sub(r"(?<=[a-z])\.(?=[a-z])", "", value)  # k.w. -> kw.
-    return " ".join(value.split())
 
 
 def _tokens(text: str) -> list[str]:
@@ -737,7 +856,7 @@ def number_join(left: str | None, right: str | None, right_next: str | None = No
         next_scale = money_scale(following)
         if next_scale is not None:
             return "hard" if next_scale < scale else None
-        if following in _OTHER_UNITS or right in _EVERYDAY_WORDS:
+        if _other_unit(following) or right in _EVERYDAY_WORDS:
             return None
         return "soft"
     if left_number and right_number:
@@ -800,7 +919,7 @@ def amount_inr(stated_as: str) -> int | None:
         elif (
             value == value.to_integral_value()
             and value >= 1000
-            and following not in _OTHER_UNITS
+            and not _other_unit(following)
             # A bare "2000" may be a year; "Rs 2000" and "2,000" are not.
             and (rupees_said or value in grouped or not _year(value))
         ):
@@ -850,31 +969,51 @@ def _year(value: Decimal) -> bool:
     return value == value.to_integral_value() and 1900 <= value <= 2100
 
 
-def _near_cost(tokens: list[str], start: int, end: int) -> bool:
-    """A cost word within two words of the number ``tokens[start:end]``, with only a
-    connector between ("charges of 50", "50 ka charge"; not "price ... in 2 days").
+def _per_phrase_ends_at(tokens: list[str], index: int) -> bool:
+    """``tokens[index]`` closes a per-unit phrase ("per watt", "प्रति वॅट", "/W")."""
+    return index >= 1 and tokens[index] in _PER_UNITS and tokens[index - 1] in _PER_WORDS
 
-    After "of" or "for", a number followed by the thing it counts is a count
-    ("price for 2 ACs", "cost of 3 panels"), unless a price word follows it
-    ("charges of 50 only").
+
+def _near_cost(tokens: list[str], start: int, end: int) -> bool:
+    """The number ``tokens[start:end]`` reads as money from the words around it.
+
+    Before it, with at most two connecting words between: a cost word ("rate
+    approx 45", "दर ४५", "price is around 45"), a rupee word or sign ("Rs:
+    45"), or a per-unit phrase ("price per watt is 45", "per watt 45", "₹/W
+    45"). After it, within two words with only a connector between: a cost
+    word ("50 ka charge"). Not "price ... in 2 days" (no connector chain).
+
+    After "of", "for" or "at", a number followed by the thing it counts is a
+    count ("price for 2 ACs", "cost of 3 panels"), unless a price word follows
+    it ("charges of 50 only").
     """
     after = tokens[end] if end < len(tokens) else None
     counted = after is not None and after[0].isalpha() and after not in _PRICE_TAIL
-    for other in (start - 2, start - 1, end, end + 1):
-        if not 0 <= other < len(tokens) or tokens[other] not in COST_WORDS:
-            continue
-        between = range(other + 1, start) if other < start else range(end, other)
+    for other in range(start - 1, max(start - 4, -1), -1):
+        between = range(other + 1, start)
         if not all(tokens[step] in _CONNECTORS for step in between):
+            break
+        token = tokens[other]
+        if token in COST_WORDS:
+            if counted and any(tokens[step] in _COUNTED_AFTER for step in between):
+                continue
+            return True
+        if is_currency(token) or _per_phrase_ends_at(tokens, other):
+            return True
+    for other in (end, end + 1):
+        if other >= len(tokens) or tokens[other] not in COST_WORDS:
             continue
-        if other < start and counted and any(tokens[step] in {"of", "for"} for step in between):
-            continue
-        return True
+        if all(tokens[step] in _CONNECTORS for step in range(end, other)):
+            return True
     return False
 
 
 def _per_unit(tokens: list[str], end: int) -> bool:
-    """The number ending before ``end`` is quoted per unit ("45 per watt", "45/W")."""
-    return end + 1 < len(tokens) and tokens[end] in _PER_WORDS and tokens[end + 1] in _PER_UNITS
+    """The number ending before ``end`` is quoted per unit ("45 per watt", "45/W",
+    "45 प्रति वॅट", "45 a watt")."""
+    if end + 1 >= len(tokens) or tokens[end + 1] not in _PER_UNITS:
+        return False
+    return tokens[end] in _PER_WORDS or tokens[end] in _PER_ARTICLES
 
 
 def mentions_price(text: str, *, plain_numbers: bool = True) -> bool:
@@ -884,10 +1023,12 @@ def mentions_price(text: str, *, plain_numbers: bool = True) -> bool:
       crore, thousand, hazaar, लाख, करोड, कोटी, हजार, and their case forms
       such as लाखांत or हजारांचा) anywhere;
     - a number followed by a money unit or a hundred word ("45k", "paanch sau");
-    - a number quoted per unit ("45 per watt", "45/W");
-    - a cost word (price, charge, rate, budget, kimat, कीमत, दाम, किंमत, बजेट ...)
-      within two words of a number that is not a power, size, length or time
-      figure ("rate 40", "charges of 50"; not "price in 2 days");
+    - a number quoted per unit ("45 per watt", "45/W", "45 प्रति वॅट");
+    - a cost word (price, charge, rate, budget, kimat, कीमत, दाम, किंमत, बजेट,
+      रेट, दर, भाव, खर्च, चार्ज, शुल्क ...), a rupee word or a per-unit phrase
+      just before a number that is not a power, size, length or time figure,
+      or a cost word just after it ("rate approx 45", "price per watt is 45",
+      "charges of 50"; not "price in 2 days");
     - with ``plain_numbers``: a number above 100 that is not a year or a unit
       figure ("packing 500", "1,999"), or a Marathi hundred ("पाचशे").
     """
@@ -900,7 +1041,7 @@ def mentions_price(text: str, *, plain_numbers: bool = True) -> bool:
     for start, value, end, unit in _spans(tokens):
         if money_scale(unit) is not None or unit in HUNDRED_WORDS or _per_unit(tokens, end):
             return True
-        if unit in _OTHER_UNITS:
+        if _other_unit(unit):
             continue
         if _near_cost(tokens, start, end):
             return True
@@ -931,146 +1072,3 @@ def gst_basis(text: str) -> Literal["incl_gst", "ex_gst"] | None:
     if included == excluded:
         return None
     return "incl_gst" if included else "ex_gst"
-
-
-# --- masking amounts in free text ---------------------------------------------------------
-
-
-def _currency_gap(gap: str) -> bool:
-    """Only spaces, "." or ":" between a rupee sign or word and its number ("Rs.45", "Rs: 50")."""
-    mark = gap.strip()
-    return len(mark) <= 2 and set(mark) <= {".", ":"}
-
-
-def _kinds(norms: list[str], gaps: list[str]) -> tuple[list[str], set[int]]:
-    """num, unit, cur, part, join, article or other per token, and the numbers quoted
-    per unit; ``gaps[i]`` precedes token i."""
-    kinds: list[str] = []
-    per_unit: set[int] = set()
-    for index, token in enumerate(norms):
-        following = norms[index + 1] if index + 1 < len(norms) else None
-        previous = kinds[index - 1] if index else None
-        spaced = gaps[index].strip() == ""
-        if is_currency(token):
-            kind = "cur"
-        elif _money_word(token):
-            kind = "unit"
-        elif token in _SHORT_UNITS:
-            tight = index > 0 and spaced and len(gaps[index]) <= 1
-            kind = "unit" if tight and _is_digits(norms[index - 1]) else "other"
-        elif token in HUNDRED_WORDS:
-            kind = "unit" if previous == "num" and spaced else "other"
-        elif _numberish(token):
-            # "45/W", "45 per watt", "45 प्रति वाट": a per-unit price.
-            slashed = following in _PER_UNITS and "/" in gaps[index + 1]
-            per = (
-                following in _PER_WORDS
-                and index + 2 < len(norms)
-                and norms[index + 2] in _PER_UNITS
-            )
-            if slashed or per:
-                per_unit.add(index)
-            # A rupee sign or word right before a number makes it money even before a
-            # unit ("₹45/W", "Rs.45 W"); otherwise a number that owns a power, size,
-            # length or time unit is not money ("5 kW", "2 days").
-            priced = previous == "cur" and _currency_gap(gaps[index])
-            mark = priced or index in per_unit or following not in _OTHER_UNITS
-            kind = "num" if mark else "other"
-        elif token in _PART_WORDS:
-            kind = "part"
-        elif token in _JOINERS:
-            kind = "join"
-        elif token in {"a", "an"}:
-            kind = "article"
-        else:
-            kind = "other"
-        kinds.append(kind)
-    return kinds, per_unit
-
-
-def _digits_value(token: str) -> Decimal | None:
-    if not _is_digits(token):
-        return None
-    try:
-        return Decimal(token)
-    except InvalidOperation:
-        return None
-
-
-def mask_amounts(text: str) -> str:
-    """``text`` with every amount replaced by "[amount]" (idempotent).
-
-    Masked: a money word with the numbers that own it ("teen lakh sattar
-    hazaar", "दो लाख साठ हजार", "साडेतीन लाखांपर्यंत", "45k", "one and a half
-    lakh"; "above a lakh" -> "above [amount]"); a currency word or sign with
-    its number, even before a unit ("₹3.7L", "Rs. 3,70,000", "500 rupiya",
-    "₹45/W" -> "[amount]/W"); a number quoted per unit ("45 per watt"); a
-    number above 100 that is not a year or a unit figure ("1,999" is never a
-    year); a decimal that is not a unit figure ("quoted 3.70"); a number next
-    to a cost word ("packing charge 50", "बजेट 3"). Power, size, length and
-    time figures ("5 kW", "1500 sq ft", "5 years", "2 days", "6 pm") and years
-    stay.
-    """
-    found = list(_RAW_TOKEN.finditer(text))
-    if not found:
-        return text
-    count = len(found)
-    norms = [normalise(match.group()) for match in found]
-    gaps = [""] + [text[found[index - 1].end() : found[index].start()] for index in range(1, count)]
-    kinds, per_unit = _kinds(norms, gaps)
-    parts_of_amount = {"num", "unit", "cur", "part", "join", "article"}
-    spans: list[tuple[int, int]] = []
-
-    def joined(left: int, right: int) -> bool:
-        return gaps[right].strip() == "" or (kinds[left] == "cur" and _currency_gap(gaps[right]))
-
-    index = 0
-    while index < count:
-        if kinds[index] not in parts_of_amount:
-            index += 1
-            continue
-        end = index
-        while end + 1 < count and kinds[end + 1] in parts_of_amount and joined(end, end + 1):
-            end += 1
-        run = list(range(index, end + 1))
-        # Joiners only join; an article counts only right before a money word.
-        while run and (
-            kinds[run[0]] == "join"
-            or (kinds[run[0]] == "article" and (len(run) < 2 or kinds[run[1]] != "unit"))
-        ):
-            run.pop(0)
-        while run and kinds[run[-1]] in {"join", "article"}:
-            run.pop()
-        present = {kinds[item] for item in run}
-        if "unit" in present or {"cur", "num"} <= present:
-            spans.append((found[run[0]].start(), found[run[-1]].end()))
-        index = end + 1
-
-    for index, kind in enumerate(kinds):
-        if kind != "num":
-            continue
-        value = _digits_value(norms[index])
-        comma = "," in found[index].group()
-        big = norms[index] in _COMPOUND_HUNDREDS or (
-            value is not None and value > PLAIN_PRICE_FLOOR and (comma or not _year(value))
-        )
-        decimal = value is not None and "." in norms[index]
-        if big or decimal or index in per_unit or _near_cost(norms, index, index + 1):
-            spans.append((found[index].start(), found[index].end()))
-
-    if not spans:
-        return text
-    merged: list[list[int]] = []
-    for start, end in sorted(spans):
-        if merged and start <= merged[-1][1]:
-            merged[-1][1] = max(merged[-1][1], end)
-        else:
-            merged.append([start, end])
-    pieces: list[str] = []
-    cursor = 0
-    for start, end in merged:
-        pieces.append(text[cursor:start])
-        pieces.append(MASK)
-        cursor = end
-    pieces.append(text[cursor:])
-    return "".join(pieces)

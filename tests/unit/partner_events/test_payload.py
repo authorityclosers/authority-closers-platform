@@ -10,7 +10,6 @@ from uuid import UUID
 
 import pytest
 
-from ac_platform.partner_events.amounts import mentions_price
 from ac_platform.partner_events.payload import (
     MAX_BODY_BYTES,
     CallContext,
@@ -21,6 +20,7 @@ from ac_platform.partner_events.payload import (
     body_sha256,
     build_event,
     iso,
+    summary_text,
 )
 from ac_platform.partner_events.quote_facts import FACT_TYPES
 
@@ -87,7 +87,8 @@ def test_golden_event_body() -> None:
             "name": "Customer A",
             "city": "Pune",
         },
-        "summary": "The customer wants a 5 kW system; the salesperson sends a quotation today.",
+        # Every number in the summary reads "[n]"; the size arrives as a fact.
+        "summary": "The customer wants a [n] kW system; the salesperson sends a quotation today.",
         "outcome": {"kind": "follow_up"},
         "extraction": {
             "profile": "wiselife-quote-v1",
@@ -128,7 +129,7 @@ def test_summary_is_cut_to_1500_characters() -> None:
     payload = build_event(EVENT, long, Extraction("skipped", None), app_url=APP)
     assert len(payload["summary"]) == 1500
     assert payload["summary"].endswith("…")
-    # Amounts are masked before the cut, so a cut never leaves part of an amount.
+    # Numbers are masked before the cut, so a cut never leaves part of a number.
     priced = build_event(
         EVENT,
         replace(CONTEXT, summary="Quoted ₹3.7L today. " * 200),
@@ -136,7 +137,7 @@ def test_summary_is_cut_to_1500_characters() -> None:
         app_url=APP,
     )
     assert len(priced["summary"]) == 1500 and "3.7" not in priced["summary"]
-    assert priced["summary"].startswith("Quoted [amount] today. Quoted [amount] today.")
+    assert priced["summary"].startswith("Quoted [n] today. Quoted [n] today.")
 
 
 @pytest.mark.parametrize(
@@ -145,44 +146,53 @@ def test_summary_is_cut_to_1500_characters() -> None:
         # Review 18 Oct, item 1 (blocker): the summary carried prices.
         (
             "Customer wants a 5 kW system; quoted 3.70 lakh plus GST, will pay ₹3,40,000.",
-            "Customer wants a 5 kW system; quoted [amount] plus GST, will pay [amount].",
+            "Customer wants a [n] kW system; quoted [n] plus GST, will pay [n].",
         ),
-        ("Budget teen lakh sattar hazaar, packing 500 extra.",
-         "Budget [amount], packing [amount] extra."),
-        ("ग्राहक का बजट दो लाख साठ हजार है।", "ग्राहक का बजट [amount] है।"),
-        ("ग्राहकाचे बजेट पाच लाख पन्नास हजार आहे.", "ग्राहकाचे बजेट [amount] आहे."),
-        ("Deal paune teen lakh mein, sawa do lakh nahi.",
-         "Deal [amount] mein, [amount] nahi."),
-        ("सवा दो लाख तक जा सकते हैं।", "[amount] तक जा सकते हैं।"),
+        ("Budget teen lakh sattar hazaar, packing 500 extra.", "Budget [n], packing [n] extra."),
+        ("ग्राहक का बजट दो लाख साठ हजार है।", "ग्राहक का बजट [n] है।"),
+        ("ग्राहकाचे बजेट पाच लाख पन्नास हजार आहे.", "ग्राहकाचे बजेट [n] आहे."),
+        ("Deal paune teen lakh mein, sawa do lakh nahi.", "Deal [n] mein, [n] nahi."),
+        ("सवा दो लाख तक जा सकते हैं।", "[n] तक जा सकते हैं।"),
         ("Wants it above a lakh; transport 45k, packing 500 rupiya.",
-         "Wants it above [amount]; transport [amount], packing [amount]."),
+         "Wants it above [n]; transport [n], packing [n]."),
+        # Round 3: sizes, years and areas go too; they arrive as facts.
         ("Install a 5 kW system by 2026 on the 1500 sq ft roof.",
-         "Install a 5 kW system by 2026 on the 1500 sq ft roof."),
-        # Re-review 18 Oct, B1: rupee-signed per-unit prices.
+         "Install a [n] kW system by [n] on the [n] sq ft roof."),
+        # Re-review 18 Oct, B1: rupee-signed per-unit prices (the unit goes with the number).
         ("Salesperson quoted ₹45/W; competitor Rs.45/W, panels ₹55/Wp.",
-         "Salesperson quoted [amount]/W; competitor [amount]/W, panels [amount]/Wp."),
-        ("Price ₹60,000/kW for 5 kW, or 45 per watt.",
-         "Price [amount]/kW for 5 kW, or [amount] per watt."),
+         "Salesperson quoted [n]; competitor [n], panels [n]."),
+        ("Price ₹60,000/kW for 5 kW, or 45 per watt.", "Price [n] for [n] kW, or [n] per watt."),
         ("₹45/watt incl GST, ₹ 50/Wp, ₹50Wp, ₨45/W, ₹ 45 /W.",
-         "[amount]/watt incl GST, [amount]/Wp, [amount]Wp, [amount]/W, [amount] /W."),
+         "[n] incl GST, [n], [n], [n], [n] /W."),
         # Re-review 18 Oct, M1: Marathi case endings (report_language mr-Deva+en).
-        ("ग्राहकाचे बजेट साडेतीन लाखांपर्यंत आहे.", "ग्राहकाचे बजेट [amount] आहे."),
-        ("तीन लाखांत 5 kW, सत्तर हजारांचा फरक, पाच लाखांचे बजेट.",
-         "[amount] 5 kW, [amount] फरक, [amount] बजेट."),
-        ("Budget 3 laakh, packing 3 hajaar.", "Budget [amount], packing [amount]."),
-        # Re-review 18 Oct, minor: names, bare decimals, comma amounts, partial masks.
+        ("ग्राहकाचे बजेट साडेतीन लाखांपर्यंत आहे.", "ग्राहकाचे बजेट [n] आहे."),
+        ("तीन लाखांत 5 kW, सत्तर हजारांचा फरक, पाच लाखांचे बजेट.", "[n] kW, [n] फरक, [n] बजेट."),
+        ("Budget 3 laakh, packing 3 hajaar.", "Budget [n], packing [n]."),
+        # Re-review 18 Oct, minor: names stay; times, decimals and comma amounts go.
         ("Rupali 3 baje call karegi; quoted 3.70 for the 5 kW system.",
-         "Rupali 3 baje call karegi; quoted [amount] for the 5 kW system."),
+         "Rupali [n] baje call karegi; quoted [n] for the [n] kW system."),
         ("Dongle 1,999 only; one and a half lakh total; Rs: 50 packing.",
-         "Dongle [amount] only; [amount] total; [amount] packing."),
+         "Dongle [n] only; [n] total; [n] packing."),
+        # Check 3: per-watt prices in Hindi and Marathi, prices before their unit, number words.
+        ("रेट 45 प्रति वॅट; दर ४५ प्रति वॉट; भाव 45.", "रेट [n] प्रति वॅट; दर [n] प्रति वॉट; भाव [n]."),
+        ("Price per watt is 45; rate approx 45; Rs per watt 45; ₹/W 45.",
+         "Price per watt is [n]; rate approx [n]; Rs per watt [n]; ₹/W [n]."),
+        ("forty five per watt, price is twenty five, पस्तीस हजार, पैंतालीस रुपये प्रति वाट.",
+         "[n] per watt, price is [n], [n], [n] प्रति वाट."),
+        ("Transport 2000 extra; install on 18/10/2026 at 10:30.",
+         "Transport [n] extra; install on [n] at [n]."),
+        # Names and places stay.
+        ("Rupesh and Lakhan from Kothrud; लाखन, हजारीबाग.",
+         "Rupesh and Lakhan from Kothrud; लाखन, हजारीबाग."),
     ],
 )  # fmt: skip
-def test_amounts_in_the_summary_are_sent_as_amount(summary: str, sent: str) -> None:
+def test_every_number_in_the_summary_is_sent_as_n(summary: str, sent: str) -> None:
     payload = build_event(
         EVENT, replace(CONTEXT, summary=summary), Extraction("skipped", None), app_url=APP
     )
     assert payload["summary"] == sent
-    assert not mentions_price(payload["summary"])
+    assert not any(char.isdigit() for char in payload["summary"])
+    assert summary_text(payload["summary"]) == payload["summary"]  # nothing left to mask
 
 
 def test_a_body_over_256_kb_drops_its_facts_and_reads_failed() -> None:
