@@ -137,7 +137,7 @@ export function CallsReport() {
         </Button>
       }
     >
-      <div className={styles.form}>
+      <div className={`${styles.form} ${styles.reportForm}`}>
         <div className={styles.row}>
           <Field label="From">
             <input

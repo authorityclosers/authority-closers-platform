@@ -873,7 +873,8 @@
   gap: var(--sx-gap);
 }
 
-.teamPair .form {
+.teamPair .form,
+.reportForm {
   padding: 12px 14px;
 }
 
