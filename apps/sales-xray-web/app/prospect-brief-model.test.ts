@@ -237,7 +237,7 @@ describe("prospect signals from this call's Report (owner 18 Oct)", () => {
       [],
       withSignals,
     ).sections[2].facts.find((item) => item.label === "Budget discussed");
-    expect(unsaved).toMatchObject({ value: "Concern", fact: "Inferred" });
+    expect(unsaved).toMatchObject({ value: "Concern", fact: "Observed" });
     // Unknown is named once in the still-unknown line, never as a fact.
     expect(fact("Timing")).toBeUndefined();
     const holding = brief.sections[4];
@@ -258,4 +258,41 @@ describe("prospect signals from this call's Report (owner 18 Oct)", () => {
       "Confirmed",
     );
   });
+});
+
+it("never shows a qualification state without its quote, and adds the note", () => {
+  const [first] = amitTranscript.segments;
+  const brief = prospectBrief(
+    { ...syntheticProspect, profile_fields: {} },
+    [],
+    {
+      ...latest,
+      report: {
+        ...amitReport,
+        structure: {
+          prospect_signals: {
+            version: "prospect-signals/1",
+            qualification: {
+              need: {
+                state: "confirmed",
+                note: "Wants the team to close alone",
+                evidence: [
+                  { segment_id: first.id, quote: first.text.slice(0, 20) },
+                ],
+              },
+              budget: { state: "concern", evidence: [] },
+            },
+            pains: [],
+            objections: [],
+            facts: [],
+          },
+        },
+      },
+    },
+  );
+  const buy = brief.sections[2].facts;
+  expect(buy.find((item) => item.label === "Need")?.value).toBe(
+    "Confirmed · Wants the team to close alone",
+  );
+  expect(buy.find((item) => item.label === "Budget discussed")).toBeUndefined();
 });

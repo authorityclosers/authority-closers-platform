@@ -74,27 +74,16 @@ def unavailable_statistics() -> dict[str, Any]:
 
 
 # Prospect's Information (Dipak's priority structure, 9 Oct; owner 18 Oct).
-# Objection kinds that put a qualification item in doubt while unanswered.
-_CONCERN_WORDS = {
-    "budget": ("price", "budget", "cost", "money", "afford", "fee", "invest"),
-    "timeline": ("time", "timing", "later", "delay", "busy", "wait"),
-    "authority": ("partner", "approval", "boss", "spouse", "family", "authority"),
-    "decision_maker": ("partner", "approval", "decision", "boss", "spouse", "family"),
-    "need": ("need", "fit", "not interested", "already have", "no requirement"),
-}
-
-
 def _prospect_signals(report: ReportDraft) -> dict[str, Any] | None:
     """Buyer facts the call map already established; no new extraction or inference.
 
-    Qualification states: ``confirmed`` (said in the call, with evidence),
-    ``concern`` (an unanswered objection points at it), ``unknown`` (the
-    analysis lists it as a gap). Items never discussed are left out.
+    Qualification states: ``confirmed`` (said in the call, with evidence) or
+    ``unknown`` (the analysis lists it as a gap). Items never discussed are left
+    out; the AI pointer review fills the rest (orchestrator, 19 Oct).
     """
     call_map = report.call_map
     if call_map is None:
         return None
-    open_objections = [item for item in call_map.objections if item.handling != "answered"]
     qualification: dict[str, dict[str, Any]] = {}
     for gap in call_map.qualification_gaps:
         qualification[gap] = {"state": "unknown", "evidence": []}
@@ -103,20 +92,6 @@ def _prospect_signals(report: ReportDraft) -> dict[str, Any] | None:
             "state": "confirmed",
             "evidence": [ref.model_dump(mode="json") for ref in confirmed.evidence],
         }
-    for item, words in _CONCERN_WORDS.items():
-        doubt = next(
-            (
-                objection
-                for objection in open_objections
-                if any(word in f"{objection.kind} {objection.text}".lower() for word in words)
-            ),
-            None,
-        )
-        if doubt is not None and qualification.get(item, {}).get("state") != "confirmed":
-            qualification[item] = {
-                "state": "concern",
-                "evidence": [ref.model_dump(mode="json") for ref in doubt.evidence],
-            }
     return {
         "version": "prospect-signals/1",
         "qualification": qualification,

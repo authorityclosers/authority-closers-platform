@@ -211,7 +211,11 @@ type Signals = {
   qualification: Partial<
     Record<
       "need" | "budget" | "authority" | "decision_maker" | "timeline",
-      { state: "confirmed" | "concern" | "unknown"; source?: BriefSource }
+      {
+        state: "confirmed" | "concern" | "unknown";
+        source?: BriefSource;
+        note?: string;
+      }
     >
   >;
   pains: { text: string; source?: BriefSource }[];
@@ -280,6 +284,7 @@ export function prospectSignals(
         signals.qualification[key] = {
           state: item.state,
           source: source(item.evidence),
+          ...(text(item.note) ? { note: text(item.note)! } : {}),
         };
     }
   for (const item of Array.isArray(raw.pains) ? raw.pains.slice(0, 4) : []) {
@@ -323,14 +328,16 @@ function qualificationFact(
   label: string,
   item: Signals["qualification"][keyof Signals["qualification"]],
 ): BriefFact | null {
-  // Unknown stays in the section's "still unknown" line, named once.
-  if (!item || item.state === "unknown") return null;
+  // Orchestrator 19 Oct: Confirmed or Concern only when the call shows it, with
+  // its quote, labelled Observed; anything else is named once as Unknown.
+  if (!item || item.state === "unknown" || !item.source) return null;
+  const word = QUALIFICATION_WORDS[item.state];
   return {
     label,
-    value: QUALIFICATION_WORDS[item.state],
-    fact: item.state === "confirmed" ? "Observed" : "Inferred",
+    value: item.note ? `${word} · ${item.note}` : word,
+    fact: "Observed",
     basis: "call",
-    ...(item.source ? { source: item.source } : {}),
+    source: item.source,
   };
 }
 

@@ -23,7 +23,9 @@ from typing import Any
 from ac_platform.conversation_intelligence.report_structure import POINTERS as STRUCTURE_POINTERS
 
 VERSION = "pointer-review/1"
-PROMPT_REVISION = "pointer-review-prompt/2"
+# /3 (19 Oct): adds buyer_qualification for Prospect's Information. Recorded in
+# every saved payload as prompt_revision so Admin can compare before and after.
+PROMPT_REVISION = "pointer-review-prompt/3"
 MODEL_ID = "gemini-3.8-flash"
 MAX_OUTPUT_TOKENS = 8000
 
@@ -31,6 +33,10 @@ SCORED = ("excellent", "good", "average", "needs_improvement")
 STAGES = ("Initial Contact", "Discovery", "Solution Presentation", "Negotiation", "Closing")
 UNSCORED = ("not_observed", "not_applicable", "insufficient_evidence")
 STATUSES = SCORED + UNSCORED
+# Buyer qualification for Prospect's Information (orchestrator, 19 Oct): only what
+# the transcript shows, with evidence; everything else stays unknown.
+QUALIFICATION = ("need", "budget", "authority", "timing")
+QUALIFICATION_STATES = ("confirmed", "concern", "unknown")
 
 # What each pointer evaluates, in the owner doc's words (image6, image9).
 EVALUATES: dict[str, str] = {
@@ -146,6 +152,18 @@ And return outcome, about where the deal stands after this call:
 - suggested_action: one sentence on the best next move for you.
 Only include what the call says; leave a list empty rather than guess.
 
+And return buyer_qualification, about the prospect, with one entry each for
+need, budget, authority and timing:
+- state: confirmed only when the call clearly shows it (need: the prospect said
+  they have the problem or want the result; budget: the prospect said they can
+  or will spend; authority: it is clear who decides and whether that person is
+  on the call or agreed; timing: the prospect gave a time frame). concern only
+  when the prospect clearly raised a doubt or limit about it (for example "too
+  expensive", "my partner decides", "not this year"). Otherwise unknown. Never
+  guess: if you are not sure, it is unknown.
+- evidence: 1 or 2 segment ids that show it; [] when unknown.
+- note: up to 12 words on what was said, or null when unknown.
+
 Pointers:
 {rows}
 """
@@ -240,8 +258,24 @@ def response_schema() -> dict[str, Any]:
                 ],
             },
             "pointers": {"type": "array", "items": entry},
+            "buyer_qualification": {
+                "type": "object",
+                "properties": {
+                    item: {
+                        "type": "object",
+                        "properties": {
+                            "state": {"type": "string", "enum": list(QUALIFICATION_STATES)},
+                            "evidence": {"type": "array", "items": {"type": "string"}},
+                            "note": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                        },
+                        "required": ["state", "evidence", "note"],
+                    }
+                    for item in QUALIFICATION
+                },
+                "required": list(QUALIFICATION),
+            },
         },
-        "required": ["score_line", "pointers", "outcome"],
+        "required": ["score_line", "pointers", "outcome", "buyer_qualification"],
     }
 
 
@@ -364,6 +398,7 @@ def parse_review(raw: dict[str, Any], segments: list[dict[str, Any]]) -> dict[st
     overall = round(sum(scores) / len(scores)) if scores else None
     return {
         "version": VERSION,
+        "prompt_revision": PROMPT_REVISION,
         "overall": {
             "score": overall,
             "label": BAND_LABEL[band(overall)] if overall is not None else None,
@@ -373,7 +408,43 @@ def parse_review(raw: dict[str, Any], segments: list[dict[str, Any]]) -> dict[st
         },
         "pointers": pointers,
         "outcome": _outcome(raw.get("outcome")),
+        "buyer_qualification": _qualification(raw.get("buyer_qualification"), by_id),
     }
+
+
+def _qualification(value: Any, by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Confirmed or concern only with a real transcript segment; anything else is unknown."""
+    result: dict[str, Any] = {}
+    for item in QUALIFICATION:
+        entry = value.get(item) if isinstance(value, dict) else None
+        state = entry.get("state") if isinstance(entry, dict) else None
+        evidence: list[dict[str, Any]] = []
+        for reference in (entry.get("evidence") or []) if isinstance(entry, dict) else []:
+            segment = by_id.get(str(reference).strip())
+            quote = " ".join(str((segment or {}).get("text") or "").split())
+            if segment is None or not quote:
+                continue
+            if any(found["segment_id"] == str(segment["id"]) for found in evidence):
+                continue
+            evidence.append(
+                {
+                    "segment_id": str(segment["id"]),
+                    "quote": quote[:600],
+                    "start_ms": int(segment["start_ms"]),
+                    "end_ms": int(segment["end_ms"]),
+                }
+            )
+            if len(evidence) == 2:
+                break
+        if state not in ("confirmed", "concern") or not evidence:
+            result[item] = {"state": "unknown", "note": None, "evidence": []}
+            continue
+        result[item] = {
+            "state": state,
+            "note": _words(entry.get("note"), 120) if isinstance(entry, dict) else None,
+            "evidence": evidence,
+        }
+    return result
 
 
 def _outcome(value: Any) -> dict[str, Any] | None:
@@ -455,6 +526,31 @@ def merge_into_structure(structure: dict[str, Any], review: dict[str, Any]) -> d
         )
     if review.get("outcome"):
         merged["call_outcome_details"] = deepcopy(review["outcome"])
+    qualification = review.get("buyer_qualification")
+    if isinstance(qualification, dict):
+        signals = merged.get("prospect_signals") or {
+            "version": "prospect-signals/1",
+            "qualification": {},
+            "pains": [],
+            "objections": [],
+            "facts": [],
+        }
+        known = signals.setdefault("qualification", {})
+        for item, entry in qualification.items():
+            key = "timeline" if item == "timing" else item
+            # The call map, when there is one, keeps precedence.
+            if key in known or not isinstance(entry, dict):
+                continue
+            known[key] = {
+                "state": entry.get("state", "unknown"),
+                "note": entry.get("note"),
+                "basis": "ai_pointer_review",
+                "evidence": [
+                    {"segment_id": ref["segment_id"], "quote": ref["quote"]}
+                    for ref in entry.get("evidence") or []
+                ],
+            }
+        merged["prospect_signals"] = signals
     merged["review_status"] = "ai_draft_not_dipak_reviewed"
     return merged
 
