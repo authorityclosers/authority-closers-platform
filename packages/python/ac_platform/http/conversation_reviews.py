@@ -300,10 +300,22 @@ def install_conversation_review_http(
         auth: ReviewerTransaction = reviewer_request_dependency,
     ) -> StreamingResponse:
         review_scope(request, response)
+        return await stream_source(
+            review_service(auth), auth.database, auth.actor, assignment_id, request
+        )
+
+    async def stream_source(
+        service: ConversationReviewService,
+        database: Any,
+        actor: Any,
+        assignment_id: UUID,
+        request: Request,
+    ) -> StreamingResponse:
+        """Range playback of the assigned call; admission stays with ``service.playback``."""
         if storage is None:
             raise HTTPException(503, "Private conversation storage is not configured.")
         try:
-            recording = await review_service(auth).playback(auth.actor, assignment_id)
+            recording = await service.playback(actor, assignment_id)
         except ConversationError as error:
             raise _raise_conversation(error) from None
         try:
@@ -332,10 +344,10 @@ def install_conversation_review_http(
             ) from None
         iterator = None
         try:
-            row = await auth.database.get(ConversationRecording, recording_id)
+            row = await database.get(ConversationRecording, recording_id)
             if row is None:
                 raise StorageError("storage_object_missing")
-            key = await resolve_source_key(auth.database, row)
+            key = await resolve_source_key(database, row)
             iterator = storage.iter_bytes(key, expected_sha256=source_sha256)
             first = await join_thread(lambda: next(iterator, None))
             if first is None:
@@ -374,6 +386,13 @@ def install_conversation_review_http(
     app.include_router(admin)
     if require_reviewer is not None:
         app.include_router(reviewer)
+    # Phone review in the Sales Xray app (19 Oct): account sessions of standing
+    # gold reviewers, the same gold rows, admission and audio guards.
+    from ac_platform.http.sales_xray_review import install_sales_xray_review_http
+
+    install_sales_xray_review_http(
+        app, settings=settings, require_actor=require_actor, stream_source=stream_source
+    )
     # The legacy /v1/conversation review routes remain absent. Generic learner
     # sessions are never an admission dependency for the reviewer workspace.
 
