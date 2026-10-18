@@ -193,7 +193,7 @@ it("heads the rail with the signed-in person and lists every workspace by kind",
   const person = host.querySelector<HTMLButtonElement>(
     'button[aria-label^="Signed in as Dipak Example"]',
   )!;
-  expect(person.textContent).toContain("Admin · AC Operations");
+  expect(person.textContent).toBe("DEDipak ExampleAdmin");
   const panel = host.querySelector<HTMLElement>(
     `#${CSS.escape(person.getAttribute("aria-controls")!)}`,
   )!;
@@ -201,6 +201,9 @@ it("heads the rail with the signed-in person and lists every workspace by kind",
   await act(async () => person.click());
   expect(panel.hidden).toBe(false);
   expect(panel.textContent).toContain("dipak@authorityclosers.com");
+  expect(panel.textContent).toContain(
+    "Admin · AC Operations · platform access",
+  );
   const groups = [...panel.querySelectorAll("section")].map((section) =>
     section.getAttribute("aria-label"),
   );

@@ -50,6 +50,13 @@ export function personName(access: ConsoleAccess) {
   );
 }
 
+/** The rail's second line: just the role, so the narrow rail never cuts it. */
+export function shortRole(access: ConsoleAccess) {
+  if (access.state === "preview") return "Local preview";
+  if (access.state !== "verified") return "Session not confirmed";
+  return access.role ? (ROLE[access.role] ?? access.role) : "Signed in";
+}
+
 /** "Owner · AC Operations · platform access": what this person can do here. */
 export function roleLine(access: ConsoleAccess) {
   if (access.state === "preview") return "No session in this preview";
@@ -119,7 +126,7 @@ export function AccountMenu({
         </span>
         <span className={styles.accountText}>
           <strong>{personName(access)}</strong>
-          <small>{roleLine(access)}</small>
+          <small>{shortRole(access)}</small>
         </span>
         <ChevronsUpDown
           size={14}
