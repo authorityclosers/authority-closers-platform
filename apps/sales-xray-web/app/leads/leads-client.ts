@@ -177,6 +177,20 @@ export type RepView = {
   calls_today: number;
   connected_today: number;
   first_call_minutes?: number | null;
+  /** The seller's phone as their app last reported it (UX study item 7). */
+  phone?: PhoneHealth | null;
+};
+
+export type PhoneHealth = {
+  reported_at: string;
+  app_version: string | null;
+  family: string | null;
+  checks: Record<string, boolean>;
+  done: number;
+  total: number;
+  call_log_on: boolean;
+  /** When the phone's call history last reached Sales Xray. */
+  synced_at: string | null;
 };
 
 export type Team = {
@@ -585,6 +599,16 @@ export function reassign(
 /** The seller's own "Taking new leads" switch. */
 export function setTaking(taking: boolean) {
   return request<Desk["me"]>("/me/taking", json("PUT", { taking }));
+}
+
+/** The phone app's setup checklist, for the seller's manager on Team (UX study item 7). */
+export function reportPhone(report: {
+  device_id: string;
+  app_version?: string;
+  family?: string;
+  checks: Record<string, boolean>;
+}) {
+  return request<PhoneHealth>("/me/phone", json("POST", report));
 }
 
 export function readTeam(signal?: AbortSignal) {

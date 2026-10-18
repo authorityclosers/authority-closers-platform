@@ -434,6 +434,91 @@ export async function callLogSyncNow(): Promise<CallLogStatus | null> {
   }
 }
 
+/** The phone setup checklist as the phone sees it (UX study item 7). */
+export type SetupStatus = {
+  checks: Record<string, boolean>;
+  /** xiaomi, samsung, vivo, oppo, realme, oneplus, huawei or other. */
+  family: string;
+  model: string;
+  /** This brand stops apps unless Autostart is allowed. */
+  autostartNeeded: boolean;
+  version: string;
+  /** This install's own id, the same one call logging uses. */
+  device: string;
+};
+
+export function parseSetup(raw: unknown): SetupStatus | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  if (!value.checks || typeof value.checks !== "object") return null;
+  const checks: Record<string, boolean> = {};
+  for (const [key, on] of Object.entries(value.checks as object))
+    if (typeof on === "boolean") checks[key] = on;
+  return {
+    checks,
+    family: text(value.family) || "other",
+    model: text(value.model),
+    autostartNeeded: value.autostartNeeded === true,
+    version: text(value.version),
+    device: text(value.device),
+  };
+}
+
+/** The checklist; null in a browser or in an app without it. */
+export async function setupStatus(): Promise<SetupStatus | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    return parseSetup(await ask("setupStatus", {}, 10_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Opens the phone screen that fixes a line: battery, autostart, recorder or notifications. */
+export async function setupOpen(what: string): Promise<boolean> {
+  try {
+    const raw = await ask<{ opened?: boolean }>("setupOpen", { what }, 10_000);
+    return raw.opened === true;
+  } catch {
+    return false;
+  }
+}
+
+/** The seller ticks what the phone can't tell: "recorder" or "autostart". */
+export async function setupMark(
+  what: string,
+  done: boolean,
+): Promise<SetupStatus | null> {
+  try {
+    return parseSetup(await ask("setupMark", { what, done }, 10_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Asks Android for notifications alone (older phones open the settings). */
+export async function askNotifications(): Promise<SetupStatus | null> {
+  try {
+    return parseSetup(await ask("requestNotifications", {}, 120_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Asks Android to let Sales Xray read the phone's call recordings. */
+export async function askRecordingAccess(): Promise<boolean> {
+  try {
+    const raw = await ask<Record<string, unknown>>(
+      "requestAccess",
+      {},
+      120_000,
+    );
+    return raw.audio === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Signals from the phone app: "resume" when it comes back to the front,
  * "alert" when a lead alert arrives while it is open, "calls" when it logged

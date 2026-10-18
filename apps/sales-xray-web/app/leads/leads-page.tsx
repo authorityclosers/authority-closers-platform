@@ -44,6 +44,7 @@ import {
 } from "./capture-dialogs";
 import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
+import { PhoneSetupBar } from "./phone-setup";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { DeskView, dueNow, type DeskLink, type RowActions } from "./desk-view";
@@ -397,6 +398,7 @@ export function LeadsRoute() {
             className={styles.pullSpinner}
             aria-hidden="true"
           />
+          <PhoneSetupBar />
           <div className={styles.wideOnly}>
             <PageHeader
               title="Leads"

@@ -848,3 +848,100 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_a_sellers_phone_setup_shows_on_team(postgres_harness: Any, tmp_path: Path) -> None:
+    """UX study item 7, 18 Oct: the phone app reports its setup checklist; managers
+    see each seller's phone on Team, with when its call history last came in. It is
+    stored beside the workspace's settings without touching their revision."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                device = str(uuid4())
+                checks = {
+                    "calls": True,
+                    "recordings": True,
+                    "notifications": False,
+                    "recorder": True,
+                    "folder": True,
+                    "battery": False,
+                    "autostart": True,
+                    "testCall": False,
+                    "callLog": True,
+                }
+                report = {
+                    "device_id": device,
+                    "app_version": "0.3.20",
+                    "family": "xiaomi",
+                    "checks": checks,
+                }
+                as_(seller_token)
+                assert (await client.post(f"{BASE}/me/phone", json=report)).status_code == 403
+                odd = await client.post(
+                    f"{BASE}/me/phone",
+                    json={**report, "checks": {"wifi": True}},
+                    headers=WRITE,
+                )
+                assert odd.status_code == 422
+                sent = await client.post(f"{BASE}/me/phone", json=report, headers=WRITE)
+                assert sent.status_code == 200, sent.text
+                assert (sent.json()["done"], sent.json()["total"]) == (6, 9)
+                assert sent.json()["synced_at"] is None
+                # The 15-minute call-history look, with no new calls, says the phone is alive.
+                seen = await client.post(
+                    f"{BASE}/phone-log", json={"device_id": device, "calls": []}, headers=WRITE
+                )
+                assert seen.json()["logged"] == 0
+                again = await client.post(
+                    f"{BASE}/me/phone",
+                    json={**report, "checks": {**checks, "battery": True}},
+                    headers=WRITE,
+                )
+                assert again.json()["done"] == 7
+                assert again.json()["synced_at"] is not None
+
+                as_(setup.token)
+                team = (await client.get(f"{BASE}/team")).json()
+                rows = {rep["person_id"]: rep for rep in team["reps"]}
+                phone = rows[str(seller.person_id)]["phone"]
+                assert phone["family"] == "xiaomi" and phone["app_version"] == "0.3.20"
+                assert phone["checks"]["battery"] is True and phone["checks"]["testCall"] is False
+                assert phone["call_log_on"] is True and phone["synced_at"] is not None
+                assert rows[str(setup.state.person_id)]["phone"] is None
+                # A manager's settings save keeps every phone's report.
+                revision = team["settings"]["revision"]
+                saved = await client.put(
+                    f"{BASE}/settings",
+                    json={
+                        "expected_revision": revision,
+                        "auto_reassign": True,
+                        "reassign_minutes": 15,
+                    },
+                    headers=WRITE,
+                )
+                assert saved.status_code == 200, saved.text
+                after = {rep["person_id"]: rep for rep in saved.json()["reps"]}
+                assert after[str(seller.person_id)]["phone"]["done"] == 7
+                assert saved.json()["settings"]["revision"] == revision + 1
+                # A report only moves the revision when it creates the settings row.
+                as_(seller_token)
+                await client.post(f"{BASE}/me/phone", json=report, headers=WRITE)
+                as_(setup.token)
+                assert (await client.get(f"{BASE}/team")).json()["settings"][
+                    "revision"
+                ] == revision + 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

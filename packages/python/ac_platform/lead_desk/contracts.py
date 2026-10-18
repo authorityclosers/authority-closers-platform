@@ -11,6 +11,18 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 from ac_platform.lead_desk.vocabulary import Channel, ConnectedStage, Reason
 
 SCHEMA: Literal["lead-desk/1"] = "lead-desk/1"
+# The phone setup checklist (UX study item 7), in the order the app shows it.
+PHONE_CHECKS: tuple[str, ...] = (
+    "calls",
+    "recordings",
+    "notifications",
+    "recorder",
+    "folder",
+    "battery",
+    "autostart",
+    "testCall",
+    "callLog",
+)
 _Short = Field(default=None, max_length=200)
 
 
@@ -176,6 +188,20 @@ class LeadDetail(Model):
     first_call_minutes: int | None = None
 
 
+class PhoneHealth(Model):
+    """A seller's phone as their app last reported it (UX study item 7)."""
+
+    reported_at: datetime
+    app_version: str | None = None
+    family: str | None = None
+    checks: dict[str, bool]
+    done: int
+    total: int
+    call_log_on: bool
+    # When the phone's call history last reached Sales Xray (every 15 minutes while on).
+    synced_at: datetime | None = None
+
+
 class RepView(Model):
     person_id: UUID
     name: str
@@ -191,6 +217,7 @@ class RepView(Model):
     calls_today: int
     connected_today: int
     first_call_minutes: int | None = None
+    phone: PhoneHealth | None = None
 
 
 class SettingsView(Model):
@@ -349,6 +376,23 @@ class RepRules(Command):
             if text and text.lower() not in {item.lower() for item in cleaned}:
                 cleaned.append(text)
         return tuple(cleaned)
+
+
+class PhoneReport(Command):
+    """The seller's own phone setup checklist, sent by the page inside the phone app."""
+
+    device_id: UUID
+    app_version: str | None = Field(default=None, max_length=40)
+    family: str | None = Field(default=None, max_length=20, pattern=r"^[a-z]+$")
+    checks: dict[str, bool] = Field(max_length=len(PHONE_CHECKS))
+
+    @field_validator("checks")
+    @classmethod
+    def _known(cls, checks: dict[str, bool]) -> dict[str, bool]:
+        unknown = set(checks) - set(PHONE_CHECKS)
+        if unknown:
+            raise ValueError("Unknown phone check.")
+        return {name: checks[name] for name in PHONE_CHECKS if name in checks}
 
 
 class TakingLeads(Command):

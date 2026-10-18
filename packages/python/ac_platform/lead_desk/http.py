@@ -53,8 +53,10 @@ from ac_platform.lead_desk.contracts import (
     NoteCommand,
     PhoneBook,
     PhoneCall,
+    PhoneHealth,
     PhoneLog,
     PhoneLogResult,
+    PhoneReport,
     PushConfig,
     Reassign,
     RecordingCommand,
@@ -428,6 +430,15 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.set_taking(command)
+
+    @router.post("/me/phone", response_model=PhoneHealth, response_model_by_alias=True)
+    async def report_phone(
+        command: PhoneReport, request: Request, response: Response
+    ) -> PhoneHealth:
+        """The seller's phone setup checklist, from the page inside the phone app (item 7)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.report_phone(command)
 
     @router.put("/settings", response_model=Team, response_model_by_alias=True)
     async def save_settings(command: SettingsCommand, request: Request, response: Response) -> Team:

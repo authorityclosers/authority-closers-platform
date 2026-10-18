@@ -32,6 +32,7 @@ from ac_platform.lead_desk.capture import (
     normalise_phone,
 )
 from ac_platform.lead_desk.contracts import (
+    PHONE_CHECKS,
     AlertText,
     Badge,
     Counts,
@@ -52,9 +53,11 @@ from ac_platform.lead_desk.contracts import (
     NoteCommand,
     Numbers,
     PhoneBook,
+    PhoneHealth,
     PhoneLog,
     PhoneLogCall,
     PhoneLogResult,
+    PhoneReport,
     Reassign,
     RepOption,
     RepRules,
@@ -99,6 +102,10 @@ PHONE_BOOK_LIMIT = 20000
 PHONE_LOG_DAYS = 7
 PHONE_LOG_NAMESPACE = UUID("0d0b7c52-6f1e-4c55-9d8e-5a3f2b8e1c47")
 PHONE_DIRECTIONS = frozenset({"outgoing", "incoming", "missed", "rejected", "blocked"})
+# Each seller's phone setup (UX study item 7) lives under this key of the
+# workspace's Lead Desk settings, one entry per person. It is the app's own report,
+# not a manager's setting, so writing it never changes the settings revision.
+PHONES_KEY = "phones"
 # A dialer call this close to a call the app already logged is that same call.
 IN_APP_BEFORE = timedelta(minutes=2)
 IN_APP_AFTER = timedelta(minutes=20)
@@ -172,6 +179,27 @@ def counted_phone_call(data: Any) -> bool:
         return False
     return data.get("direction") == "outgoing" or (
         data.get("direction") == "incoming" and data.get("connected") is True
+    )
+
+
+def phone_health(entry: Any) -> PhoneHealth | None:
+    """A seller's phone from its stored report, or None when it never reported."""
+    if not isinstance(entry, dict) or not isinstance(entry.get("reported_at"), str):
+        return None
+    raw = entry.get("checks")
+    checks = {
+        name: bool(raw[name]) for name in PHONE_CHECKS if isinstance(raw, dict) and name in raw
+    }
+    synced = entry.get("synced_at")
+    return PhoneHealth(
+        reported_at=datetime.fromisoformat(entry["reported_at"]),
+        app_version=entry.get("app_version") if isinstance(entry.get("app_version"), str) else None,
+        family=entry.get("family") if isinstance(entry.get("family"), str) else None,
+        checks=checks,
+        done=sum(checks.values()),
+        total=len(checks),
+        call_log_on=checks.get("callLog", False),
+        synced_at=datetime.fromisoformat(synced) if isinstance(synced, str) else None,
     )
 
 
@@ -1565,6 +1593,7 @@ class LeadDesk:
                 continue
             wanted[key] = (call, phone)
         if not wanted:
+            await self._phone_seen(command.device_id)
             return PhoneLogResult(logged=0, already=already, skipped=skipped)
         seen = set(
             (
@@ -1654,7 +1683,60 @@ class LeadDesk:
             await self.db.flush()
         except IntegrityError:
             raise DeskError(409, "These calls are being logged already. Try again.") from None
+        await self._phone_seen(command.device_id)
         return PhoneLogResult(logged=logged, already=already, skipped=skipped)
+
+    # ----- the phone setup checklist (UX study item 7) -----------------------------
+
+    async def _phones(self) -> tuple[LeadDeskSettings, dict[str, Any]]:
+        """The settings row, locked, and a copy of every seller's phone entry."""
+        row = await self.db.get(LeadDeskSettings, self.tenant_id, with_for_update=True)
+        if row is None:
+            row = LeadDeskSettings(
+                tenant_id=self.tenant_id,
+                revision=1,
+                config={},
+                updated_by_person_id=None,
+                updated_at=self.now,
+            )
+            self.db.add(row)
+        phones = row.config.get(PHONES_KEY)
+        return row, dict(phones) if isinstance(phones, dict) else {}
+
+    async def _save_phone(
+        self, row: LeadDeskSettings, phones: dict[str, Any], entry: dict[str, Any]
+    ) -> None:
+        phones[str(self.viewer.person_id)] = entry
+        # A new dict, so the change is saved; the revision stays (not a manager's edit).
+        row.config = {**row.config, PHONES_KEY: phones}
+        await self.db.flush()
+
+    async def _phone_seen(self, device_id: UUID) -> None:
+        """The phone's call history reached Sales Xray just now (its 15-minute look)."""
+        row, phones = await self._phones()
+        entry = dict(phones.get(str(self.viewer.person_id)) or {})
+        entry.update(device_id=str(device_id), synced_at=self.now.isoformat())
+        await self._save_phone(row, phones, entry)
+
+    async def report_phone(self, command: PhoneReport) -> PhoneHealth:
+        """The seller's phone app reports its setup checklist; managers see it on Team."""
+        row, phones = await self._phones()
+        previous = phones.get(str(self.viewer.person_id))
+        entry = {
+            "device_id": str(command.device_id),
+            "app_version": command.app_version,
+            "family": command.family,
+            "checks": command.checks,
+            "reported_at": self.now.isoformat(),
+        }
+        # The last call-history look stays when it came from this same phone.
+        if isinstance(previous, dict) and previous.get("device_id") == str(command.device_id):
+            entry["synced_at"] = previous.get("synced_at")
+        await self._save_phone(row, phones, entry)
+        health = phone_health(entry)
+        if health is None:  # pragma: no cover - the entry above always has its report time
+            raise DeskError(500, "The phone's report wasn't saved. Try again.")
+        return health
 
     # ----- team, rules and settings ------------------------------------------------
 
@@ -1761,6 +1843,8 @@ class LeadDesk:
             if owner is not None:
                 speeds.setdefault(owner, []).append(minutes)
         revision, config = await self.settings()
+        stored = config.get(PHONES_KEY)
+        phones: dict[str, Any] = stored if isinstance(stored, dict) else {}
         return Team(
             reps=tuple(
                 RepView(
@@ -1778,6 +1862,7 @@ class LeadDesk:
                     calls_today=calls.get(rep.state.person_id, 0),
                     connected_today=connected.get(rep.state.person_id, 0),
                     first_call_minutes=median(speeds.get(rep.state.person_id, [])),
+                    phone=phone_health(phones.get(str(rep.state.person_id))),
                 )
                 for rep in reps
             ),

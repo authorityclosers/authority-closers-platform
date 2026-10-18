@@ -31,6 +31,7 @@ import {
   type RepView,
   type Team,
 } from "./leads-client";
+import { phoneDot } from "./phone-setup-words";
 import styles from "./leads.module.css";
 
 const STAGE_ORDER = [
@@ -58,6 +59,22 @@ const SOURCE_NAMES: Record<string, string> = {
   meta: "Meta lead form",
   synthetic: "Test data",
 };
+
+/** The seller's phone (UX study item 7): a dot, a few words, and what is left in its title. */
+export function PhoneCell({ rep }: { rep: RepView }) {
+  const dot = phoneDot(rep.phone);
+  const missing = dot.missing.length ? `To do: ${dot.missing.join(", ")}` : "";
+  return (
+    <span
+      className={styles.phoneDot}
+      data-tone={dot.tone}
+      title={missing || undefined}
+    >
+      {dot.label}
+      {missing ? <span className={styles.srOnly}>. {missing}</span> : null}
+    </span>
+  );
+}
 
 function RulesDialog({
   rep,
@@ -299,6 +316,7 @@ export function TeamView({
               <tr>
                 <th>Seller</th>
                 <th>Takes leads</th>
+                <th>Phone</th>
                 <th data-num>Open</th>
                 <th data-num>Due now</th>
                 <th data-num>Calls today</th>
@@ -331,6 +349,9 @@ export function TeamView({
                     ) : (
                       <Badge>Away</Badge>
                     )}
+                  </td>
+                  <td>
+                    <PhoneCell rep={rep} />
                   </td>
                   <td data-num>
                     {rep.open_leads}
