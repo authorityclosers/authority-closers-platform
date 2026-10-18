@@ -355,10 +355,85 @@ export async function pushEnable(config: {
   }
 }
 
+export type CallLogSim = { id: string; label: string };
+
+/** Work calls the phone logs by itself (UX study item 5). */
+export type CallLogStatus = {
+  on: boolean;
+  /** The phone lets Sales Xray read its call history. */
+  access: boolean;
+  sims: CallLogSim[];
+  /** The work SIM; "" means every SIM. */
+  sim: string;
+  lastSyncMs: number | null;
+  lastLogged: number;
+  /** How the last look went: ok, never, no_access, signed_out, offline or error. */
+  state: string;
+};
+
+export function parseCallLog(raw: unknown): CallLogStatus | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.on !== "boolean") return null;
+  const sims = Array.isArray(value.sims)
+    ? value.sims.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const sim = item as Record<string, unknown>;
+        return text(sim.id)
+          ? [{ id: text(sim.id), label: text(sim.label) }]
+          : [];
+      })
+    : [];
+  return {
+    on: value.on,
+    access: value.access === true,
+    sims,
+    sim: text(value.sim),
+    lastSyncMs:
+      typeof value.lastSyncMs === "number" && value.lastSyncMs > 0
+        ? value.lastSyncMs
+        : null,
+    lastLogged: count(value.lastLogged),
+    state: text(value.state) || "never",
+  };
+}
+
+/** What the phone app says about logging work calls; null in a browser or an older app. */
+export async function callLogStatus(): Promise<CallLogStatus | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    return parseCallLog(await ask("callLogStatus", {}, 5_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Turns call logging on or off for a work SIM; the phone asks for call-history access once. */
+export async function callLogSetup(
+  on: boolean,
+  sim: string,
+): Promise<CallLogStatus | null> {
+  try {
+    return parseCallLog(await ask("callLogSetup", { on, sim }, 120_000));
+  } catch {
+    return null;
+  }
+}
+
+/** Looks at the call history now (the app also does when it opens and every 15 minutes). */
+export async function callLogSyncNow(): Promise<CallLogStatus | null> {
+  try {
+    return parseCallLog(await ask("callLogSync", {}, 60_000));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Signals from the phone app: "resume" when it comes back to the front,
- * "alert" when a lead alert arrives while it is open. Older apps send none;
- * the page also listens for the browser's own visibility change.
+ * "alert" when a lead alert arrives while it is open, "calls" when it logged
+ * new work calls. Older apps send none; the page also listens for the
+ * browser's own visibility change.
  */
 export function onPhoneSignal(listener: (event: string) => void): () => void {
   const handle = (event: Event) => {

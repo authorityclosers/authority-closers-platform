@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 from typing import Any, Literal
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, delete, func, or_, select
@@ -29,6 +29,7 @@ from ac_platform.lead_desk.capture import (
     display_name,
     extract,
     flatten,
+    normalise_phone,
 )
 from ac_platform.lead_desk.contracts import (
     AlertText,
@@ -50,6 +51,10 @@ from ac_platform.lead_desk.contracts import (
     NewLead,
     NoteCommand,
     Numbers,
+    PhoneBook,
+    PhoneLog,
+    PhoneLogCall,
+    PhoneLogResult,
     Reassign,
     RepOption,
     RepRules,
@@ -88,6 +93,15 @@ UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
 DEVICES_PER_PERSON = 5
 DEFAULT_MAX_OPEN = 50
+# Calls the phone logged by itself (UX study item 5): the phone book is the leads
+# a person can see, newest first; a call older than a week is no longer taken.
+PHONE_BOOK_LIMIT = 20000
+PHONE_LOG_DAYS = 7
+PHONE_LOG_NAMESPACE = UUID("0d0b7c52-6f1e-4c55-9d8e-5a3f2b8e1c47")
+PHONE_DIRECTIONS = frozenset({"outgoing", "incoming", "missed", "rejected", "blocked"})
+# A dialer call this close to a call the app already logged is that same call.
+IN_APP_BEFORE = timedelta(minutes=2)
+IN_APP_AFTER = timedelta(minutes=20)
 DEFAULT_SETTINGS: dict[str, Any] = {
     "auto_reassign": False,
     "reassign_minutes": 10,
@@ -150,6 +164,15 @@ def first_call_minutes(created_at: datetime, first_contact_at: datetime | None) 
     if first_contact_at is None:
         return None
     return max(0, round((first_contact_at - created_at).total_seconds() / 60))
+
+
+def counted_phone_call(data: Any) -> bool:
+    """A call the phone logged by itself that counts in a day: any call out, or one taken."""
+    if not isinstance(data, dict) or data.get("via") != "phone":
+        return False
+    return data.get("direction") == "outgoing" or (
+        data.get("direction") == "incoming" and data.get("connected") is True
+    )
 
 
 def median(values: Sequence[int]) -> int | None:
@@ -315,6 +338,7 @@ class LeadDesk:
         *,
         actor: UUID | None,
         command_id: UUID | None = None,
+        at: datetime | None = None,
     ) -> LeadEvent:
         event = LeadEvent(
             id=uuid4(),
@@ -325,7 +349,7 @@ class LeadDesk:
             command_id=command_id,
             data=json.loads(json.dumps(data, default=str)),
             # One request can add several events; a microsecond apart keeps their order.
-            created_at=self.now + timedelta(microseconds=self._sequence),
+            created_at=(at or self.now) + timedelta(microseconds=self._sequence),
         )
         self._sequence += 1
         self.db.add(event)
@@ -522,6 +546,10 @@ class LeadDesk:
             )
         ).all()
         results = [event for event in today if event.kind == "result"]
+        # Calls the phone logged by itself count too (UX study item 5).
+        dialled = [
+            event for event in today if event.kind == "call" and counted_phone_call(event.data)
+        ]
         talk = sum(
             int(event.data.get("duration_seconds") or 0) for event in today if event.kind == "call"
         )
@@ -545,8 +573,8 @@ class LeadDesk:
                 taking_leads=rules.available if rules else True,
             ),
             numbers=Numbers(
-                calls=len(results),
-                connected=sum(1 for event in results if event.data.get("connected")),
+                calls=len(results) + len(dialled),
+                connected=sum(1 for event in [*results, *dialled] if event.data.get("connected")),
                 talk_seconds=talk,
                 follow_ups_done=sum(1 for event in results if event.data.get("was_due")),
                 new_assigned=new_assigned,
@@ -776,6 +804,8 @@ class LeadDesk:
             template_label=TEMPLATE_LABELS.get(data["template"])
             if isinstance(data.get("template"), str)
             else None,
+            via="phone" if data.get("via") == "phone" else None,
+            direction=data["direction"] if data.get("direction") in PHONE_DIRECTIONS else None,
         )
 
     # ----- capture ---------------------------------------------------------------
@@ -1487,6 +1517,145 @@ class LeadDesk:
         await self.db.flush()
         return await self.detail(lead.id)
 
+    # ----- calls the phone logged by itself (UX study item 5) -----------------------
+
+    async def phone_book(self) -> PhoneBook:
+        """The numbers of the leads I can see, newest first: my phone logs calls with these only."""
+        numbers = (
+            await self.db.scalars(
+                select(Lead.phone)
+                .where(self._visible(), Lead.phone.is_not(None))
+                .order_by(Lead.updated_at.desc())
+                .limit(PHONE_BOOK_LIMIT)
+            )
+        ).all()
+        return PhoneBook(
+            person_id=self.viewer.person_id,
+            numbers=tuple(dict.fromkeys(number for number in numbers if number)),
+            generated_at=self.now,
+        )
+
+    async def log_phone_calls(self, command: PhoneLog) -> PhoneLogResult:
+        """Puts the work calls my phone logged by itself on their leads' history.
+
+        Each call-history row is logged once, at the time the call was made: its
+        command id comes from this person, this phone, the row and its time. A
+        call the app's own after-call sheet already logged is not counted twice.
+        The stage and the next call stay as they are; only the seller's own
+        answer changes those.
+        """
+        _, config = await self.settings()
+        country = str(config.get("default_country") or "91")
+        oldest = self.now - timedelta(days=PHONE_LOG_DAYS)
+        newest = self.now + timedelta(minutes=5)
+        wanted: dict[UUID, tuple[PhoneLogCall, str]] = {}
+        skipped = already = 0
+        for call in command.calls:
+            phone = normalise_phone(call.number, default_country=country)
+            if phone is None or not oldest <= call.started_at <= newest:
+                skipped += 1
+                continue
+            key = uuid5(
+                PHONE_LOG_NAMESPACE,
+                f"{self.tenant_id}:{self.viewer.person_id}:{command.device_id}:"
+                f"{call.log_id}:{int(call.started_at.timestamp())}",
+            )
+            if key in wanted:
+                already += 1
+                continue
+            wanted[key] = (call, phone)
+        if not wanted:
+            return PhoneLogResult(logged=0, already=already, skipped=skipped)
+        seen = set(
+            (
+                await self.db.scalars(
+                    select(LeadEvent.command_id).where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.command_id.in_(list(wanted)),
+                    )
+                )
+            ).all()
+        )
+        already += len(seen)
+        fresh = sorted(
+            ((key, call, phone) for key, (call, phone) in wanted.items() if key not in seen),
+            key=lambda item: item[1].started_at,
+        )
+        phones = {phone for _, _, phone in fresh}
+        leads: dict[str, Lead] = {}
+        if phones:
+            found = (
+                await self.db.scalars(
+                    select(Lead)
+                    .where(self._visible(), Lead.phone.in_(phones))
+                    .order_by(Lead.id)
+                    .with_for_update()
+                )
+            ).all()
+            leads = {lead.phone: lead for lead in found if lead.phone}
+        in_app: dict[UUID, list[datetime]] = {}
+        if leads:
+            starts = [call.started_at for _, call, _ in fresh]
+            rows = (
+                await self.db.execute(
+                    select(LeadEvent.lead_id, LeadEvent.created_at, LeadEvent.data).where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.lead_id.in_([lead.id for lead in leads.values()]),
+                        LeadEvent.actor_person_id == self.viewer.person_id,
+                        LeadEvent.kind == "call",
+                        LeadEvent.created_at >= min(starts) - IN_APP_BEFORE,
+                        LeadEvent.created_at
+                        <= max(starts) + timedelta(seconds=14400) + IN_APP_AFTER,
+                    )
+                )
+            ).all()
+            for lead_id, at, data in rows:
+                if isinstance(data, dict) and not (
+                    data.get("via") == "phone" or data.get("recording") or data.get("simulated")
+                ):
+                    in_app.setdefault(lead_id, []).append(at)
+        logged = 0
+        for key, call, phone in fresh:
+            lead = leads.get(phone)
+            start = call.started_at
+            # No lead of mine has this number, or the call was long before they were a lead.
+            if lead is None or start < lead.created_at - timedelta(hours=1):
+                skipped += 1
+                continue
+            end = start + timedelta(seconds=call.duration_seconds)
+            if call.direction == "outgoing" and any(
+                start - IN_APP_BEFORE <= at <= end + IN_APP_AFTER for at in in_app.get(lead.id, ())
+            ):
+                already += 1
+                continue
+            talked = call.duration_seconds > 0 and call.direction in {"outgoing", "incoming"}
+            if call.direction == "outgoing" or talked:
+                lead.calls += 1
+                contact = max(start, lead.created_at)
+                lead.last_contact_at = max(lead.last_contact_at or contact, contact)
+                lead.first_contact_at = min(lead.first_contact_at or contact, contact)
+                lead.updated_at = self.now
+            self._event(
+                lead,
+                "call",
+                {
+                    "via": "phone",
+                    "direction": call.direction,
+                    "duration_seconds": call.duration_seconds,
+                    "connected": talked,
+                    "device_id": str(command.device_id),
+                },
+                actor=self.viewer.person_id,
+                command_id=key,
+                at=min(start, self.now),
+            )
+            logged += 1
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            raise DeskError(409, "These calls are being logged already. Try again.") from None
+        return PhoneLogResult(logged=logged, already=already, skipped=skipped)
+
     # ----- team, rules and settings ------------------------------------------------
 
     def _require_manager(self) -> None:
@@ -1514,10 +1683,10 @@ class LeadDesk:
         )
         activity = (
             await self.db.execute(
-                select(LeadEvent.actor_person_id, LeadEvent.data)
+                select(LeadEvent.actor_person_id, LeadEvent.kind, LeadEvent.data)
                 .where(
                     LeadEvent.tenant_id == self.tenant_id,
-                    LeadEvent.kind == "result",
+                    LeadEvent.kind.in_(("result", "call")),
                     LeadEvent.created_at >= day_start,
                 )
                 .limit(20000)
@@ -1525,8 +1694,8 @@ class LeadDesk:
         ).all()
         calls: dict[UUID, int] = {}
         connected: dict[UUID, int] = {}
-        for actor, data in activity:
-            if actor is None:
+        for actor, kind, data in activity:
+            if actor is None or (kind == "call" and not counted_phone_call(data)):
                 continue
             calls[actor] = calls.get(actor, 0) + 1
             if isinstance(data, dict) and data.get("connected"):

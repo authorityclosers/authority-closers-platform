@@ -715,3 +715,136 @@ def test_a_seller_turns_new_leads_off_and_on(postgres_harness: Any, tmp_path: Pa
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_calls_the_phone_logged_by_itself_reach_their_leads(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """UX study item 5, 18 Oct: work calls made from the phone dialer, not from a lead
+    in the app, land on the lead's history and in the day's numbers. The phone sends
+    only its leads' numbers; anything else is dropped here too, and nothing twice."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            other = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                as_(setup.token)
+                leads: dict[str, str] = {}
+                for name, phone, owner in (
+                    ("Ravi Kulkarni", "98765 43210", seller.person_id),
+                    ("Meena Shah", "98765 43211", other.person_id),
+                ):
+                    added = await client.post(
+                        f"{BASE}/leads",
+                        json={
+                            "command_id": str(uuid4()),
+                            "name": name,
+                            "phone": phone,
+                            "assign": "person",
+                            "person_id": str(owner),
+                        },
+                        headers=WRITE,
+                    )
+                    assert added.status_code == 201, added.text
+                    leads[name] = added.json()["lead"]["lead_id"]
+
+                as_(seller_token)
+                book = await client.get(f"{BASE}/phone-book")
+                assert book.status_code == 200, book.text
+                # Only the seller's own lead: another seller's lead is not in their book.
+                assert book.json()["numbers"] == ["+919876543210"]
+                assert book.json()["person_id"] == str(seller.person_id)
+                assert book.headers["cache-control"] == "private, no-store"
+
+                now = datetime.now(UTC)
+                device = str(uuid4())
+
+                def row(log_id: str, number: str, minutes: float, **extra: Any) -> dict[str, Any]:
+                    return {
+                        "log_id": log_id,
+                        "number": number,
+                        "started_at": (now - timedelta(minutes=minutes)).isoformat(),
+                        "duration_seconds": 0,
+                        "direction": "outgoing",
+                        **extra,
+                    }
+
+                calls = [
+                    row("101", "098765 43210", 3, duration_seconds=192),
+                    row("102", "+91 98765 43210", 2, direction="missed"),
+                    row("103", "9876543211", 2),  # another seller's lead
+                    row("104", "9123456789", 2),  # nobody's
+                    row("105", "9876543210", 60 * 24 * 8),  # older than a week
+                ]
+                body = {"device_id": device, "calls": calls}
+                refused = await client.post(f"{BASE}/phone-log", json=body)
+                assert refused.status_code == 403
+                sent = await client.post(f"{BASE}/phone-log", json=body, headers=WRITE)
+                assert sent.status_code == 200, sent.text
+                assert sent.json() | {"schema": None} == {
+                    "schema": None,
+                    "logged": 2,
+                    "already": 0,
+                    "skipped": 3,
+                }
+                # The phone sends the same rows again after a dropped connection.
+                again = await client.post(f"{BASE}/phone-log", json=body, headers=WRITE)
+                assert (again.json()["logged"], again.json()["already"]) == (0, 2)
+
+                # A call placed from the lead in the app is logged by its after-call sheet;
+                # the same call found in the call history later is not counted twice.
+                in_app = await client.post(
+                    f"{BASE}/leads/{leads['Ravi Kulkarni']}/calls/phone",
+                    json={"command_id": str(uuid4()), "duration_seconds": 40},
+                    headers=WRITE,
+                )
+                assert in_app.status_code == 200, in_app.text
+                same = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": device,
+                        "calls": [row("106", "9876543210", 1, duration_seconds=31)],
+                    },
+                    headers=WRITE,
+                )
+                assert (same.json()["logged"], same.json()["already"]) == (0, 1)
+
+                detail = (await client.get(f"{BASE}/leads/{leads['Ravi Kulkarni']}")).json()
+                phone_events = [event for event in detail["events"] if event.get("via")]
+                assert [
+                    (e["direction"], e["duration_seconds"], e["connected"]) for e in phone_events
+                ] == [("missed", 0, False), ("outgoing", 192, True)]
+                # Each sits at the time of the call, not the time it was sent.
+                assert datetime.fromisoformat(phone_events[1]["at"]) < now - timedelta(minutes=2)
+                # One call out from the dialer plus the app's own call.
+                assert detail["lead"]["calls"] == 2
+                assert detail["lead"]["stage"] == "new"
+                assert detail["first_call_minutes"] == 0
+
+                desk = (await client.get(BASE)).json()
+                # The dialer call counts in My day; the missed call does not.
+                assert desk["numbers"]["calls"] == 1
+                assert desk["numbers"]["connected"] == 1
+                assert desk["numbers"]["talk_seconds"] == 192 + 40
+
+                as_(setup.token)
+                team = (await client.get(f"{BASE}/team")).json()
+                mine = next(
+                    rep for rep in team["reps"] if rep["person_id"] == str(seller.person_id)
+                )
+                assert (mine["calls_today"], mine["connected_today"]) == (1, 1)
+                assert len((await client.get(f"{BASE}/phone-book")).json()["numbers"]) == 2
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

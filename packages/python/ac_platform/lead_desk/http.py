@@ -51,7 +51,10 @@ from ac_platform.lead_desk.contracts import (
     NewLead,
     NewSource,
     NoteCommand,
+    PhoneBook,
     PhoneCall,
+    PhoneLog,
+    PhoneLogResult,
     PushConfig,
     Reassign,
     RecordingCommand,
@@ -380,6 +383,19 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 simulated=False,
                 duration_seconds=command.duration_seconds,
             )
+
+    @router.get("/phone-book", response_model=PhoneBook, response_model_by_alias=True)
+    async def phone_book(request: Request, response: Response) -> PhoneBook:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.phone_book()
+
+    @router.post("/phone-log", response_model=PhoneLogResult, response_model_by_alias=True)
+    async def phone_log(command: PhoneLog, request: Request, response: Response) -> PhoneLogResult:
+        """Work calls the phone app found in the phone's call history (UX study item 5)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.log_phone_calls(command)
 
     @router.post(
         "/leads/{lead_id}/recordings", response_model=LeadDetail, response_model_by_alias=True

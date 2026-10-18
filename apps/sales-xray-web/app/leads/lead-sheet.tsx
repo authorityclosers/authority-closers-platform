@@ -61,6 +61,7 @@ import {
 import { LastCallBrief } from "./call-brief-card";
 import { sourceText, whyLine } from "./desk-view";
 import { firstCallWords, ownerNote } from "./owner-words";
+import { phoneCallText } from "./phone-call-text";
 import {
   MessageSetup,
   MessageSheet,
@@ -680,6 +681,7 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
     }
     case "call":
       if (event.recording) return { title: `${who} added the call recording` };
+      if (event.via === "phone") return phoneCallText(event, who);
       return {
         title: `${who} ${event.simulated ? "made a sample call" : "called"}${
           event.duration_seconds
@@ -718,7 +720,15 @@ function History({ events }: { events: LeadEvent[] }) {
       {events.map((event, index) => {
         const text = eventText(event);
         return (
-          <li key={`${event.at}-${index}`} data-kind={event.kind}>
+          <li
+            key={`${event.at}-${index}`}
+            data-kind={event.kind}
+            data-missed={
+              event.direction === "missed" || event.direction === "rejected"
+                ? true
+                : undefined
+            }
+          >
             <span className={styles.historyTitle}>{text.title}</span>
             {text.detail ? (
               <span className={styles.historyDetail}>{text.detail}</span>

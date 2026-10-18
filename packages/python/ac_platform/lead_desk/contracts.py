@@ -146,6 +146,10 @@ class LeadEventView(Model):
     changed: tuple[str, ...] | None = None
     channel: str | None = None
     template_label: str | None = None
+    # A call the seller's phone logged by itself (UX study item 5): "phone", and
+    # which way it went (outgoing, incoming, missed, rejected or blocked).
+    via: str | None = None
+    direction: str | None = None
 
 
 class RepOption(Model):
@@ -441,9 +445,50 @@ class AlertText(Model):
     url: str
 
 
+class PhoneBook(Model):
+    """The numbers of the leads this person can see: their phone logs calls with these only."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    # Whose book it is: a phone that changes hands starts afresh, so one person's
+    # calls are never logged as another's.
+    person_id: UUID
+    numbers: tuple[str, ...]
+    generated_at: datetime
+
+
+class PhoneLogResult(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    logged: int
+    # Sent before, or already logged by the app's own after-call sheet.
+    already: int
+    # No lead with that number here, too old or not a call worth logging.
+    skipped: int
+
+
 class DeviceView(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     registered: bool
+
+
+class PhoneLogCall(Command):
+    """One row of the phone's call history whose number belongs to a lead."""
+
+    log_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:\-]+$")
+    number: str = Field(min_length=6, max_length=40)
+    started_at: AwareDatetime
+    duration_seconds: int = Field(ge=0, le=14400)
+    direction: Literal["outgoing", "incoming", "missed", "rejected", "blocked"]
+
+
+class PhoneLog(Command):
+    """Work calls the seller's phone logged by itself (UX study item 5).
+
+    The app sends only calls on the work SIM whose number is one of the
+    seller's leads (from the phone book); every other number stays on the phone.
+    """
+
+    device_id: UUID
+    calls: tuple[PhoneLogCall, ...] = Field(max_length=200)
 
 
 class SeedCommand(Command):

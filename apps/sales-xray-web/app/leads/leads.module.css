@@ -2998,6 +2998,24 @@
   composes: appBanner;
 }
 
+/* Work calls logged by the phone (UX study item 5): the offer, then a slim row. */
+.phoneLogCard {
+  composes: appBanner;
+}
+
+.phoneLogSims {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.phoneLogSims > span {
+  color: var(--sx-muted);
+  font-size: 0.8125rem;
+}
+
 /* The Leads tab badge (rail and phone tab bar). */
 .tabIcon {
   position: relative;

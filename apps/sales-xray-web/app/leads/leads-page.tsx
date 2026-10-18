@@ -43,6 +43,7 @@ import {
   type AddWay,
 } from "./capture-dialogs";
 import { AlertsCard } from "./alerts-card";
+import { PhoneLogCard } from "./phone-log-card";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { DeskView, dueNow, type DeskLink, type RowActions } from "./desk-view";
@@ -227,7 +228,8 @@ export function LeadsRoute() {
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     const stop = onPhoneSignal((event) => {
-      if (event === "resume" || event === "alert") again(event === "alert");
+      if (event === "resume" || event === "alert" || event === "calls")
+        again(event !== "resume");
     });
     return () => {
       window.clearInterval(timer);
@@ -467,6 +469,7 @@ export function LeadsRoute() {
                   />
                   <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
                   <AlertsCard />
+                  <PhoneLogCard />
                 </>
               }
             />

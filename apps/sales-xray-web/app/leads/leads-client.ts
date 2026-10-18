@@ -124,6 +124,15 @@ export type LeadEvent = {
   changed?: string[] | null;
   channel?: string | null;
   template_label?: string | null;
+  /** "phone": the seller's phone logged this call by itself (UX study item 5). */
+  via?: "phone" | null;
+  direction?:
+    | "outgoing"
+    | "incoming"
+    | "missed"
+    | "rejected"
+    | "blocked"
+    | null;
 };
 
 export type LeadDetail = {
