@@ -131,6 +131,7 @@
 }
 .chip {
   display: inline-flex;
+  white-space: nowrap;
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
