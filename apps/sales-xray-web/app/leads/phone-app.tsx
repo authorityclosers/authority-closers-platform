@@ -133,6 +133,10 @@ export function PhoneAppDialog({
                   <CopyLink link={link} />
                 </div>
               </div>
+              <a className={styles.appsLink} href="/apps">
+                Install help with pictures, the file&apos;s SHA-256 and other
+                platforms
+              </a>
               <details className={styles.terms}>
                 <summary>How to install</summary>
                 <ol className={styles.steps}>
