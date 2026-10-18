@@ -121,6 +121,13 @@ import {
 import { startAnalysis } from "./analysis-start";
 import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
+import { scoringPending } from "./xray-report/structure";
+import { autoCallTitle } from "./call-auto-title";
+import {
+  forgetAnalyseClick,
+  pendingAnalyseClick,
+  rememberAnalyseClick,
+} from "./analyse-resume";
 import { openInCallWorkspace } from "./call-workspace";
 import { useTheme } from "./lightbox/theme-provider";
 import { NewAnalysisFooter, NewAnalysisHero } from "./new-analysis-hero";
@@ -331,6 +338,20 @@ export function AcquisitionStudio({
     setConsent(false);
     setConsentedPolicySha(null);
   }, []);
+  // Owner 18 Oct: an "Analyse my call" that stopped for sign-in or the
+  // account details step comes back ticked and continues by itself, once.
+  const resumeIntentId = pending?.selection?.intentId ?? null;
+  const resumePolicySha = policy?.policy_sha256 ?? null;
+  const [resumeArmed, setResumeArmed] = useState(false);
+  useEffect(() => {
+    const agreed = pendingAnalyseClick(resumeIntentId);
+    if (!agreed || agreed !== resumePolicySha) return;
+    queueMicrotask(() => {
+      setConsent(true);
+      setConsentedPolicySha(agreed);
+      setResumeArmed(true);
+    });
+  }, [resumeIntentId, resumePolicySha]);
   const [token, setToken] = useState("");
   const [checkKey, setCheckKey] = useState(0);
   const [submission, setSubmission] = useState<Submission | null>(null);
@@ -1427,14 +1448,88 @@ export function AcquisitionStudio({
     }
   }
 
+  // Owner 18 Oct: pointer scores land a few minutes after the report. While
+  // the server says "scoring", re-read the call quietly and swap the scores in.
+  const scoringRunId =
+    result && scoringPending(result.report.structure) ? result.runId : null;
+  useEffect(() => {
+    if (!submission || !scoringRunId || review.requested) return;
+    const abort = new AbortController();
+    const bound = submission;
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = async () => {
+      tries += 1;
+      try {
+        const observed = await observeSubmission(bound, abort.signal);
+        if (abort.signal.aborted) return;
+        const next = observed.result;
+        if (next && !scoringPending(next.report.structure)) {
+          setResult((current) =>
+            current &&
+            bindingRef.current === bound.id &&
+            current.runId === next.runId
+              ? { ...current, report: next.report }
+              : current,
+          );
+          return;
+        }
+      } catch {
+        if (abort.signal.aborted) return;
+      }
+      if (tries < 20) timer = setTimeout(() => void check(), 45_000);
+    };
+    timer = setTimeout(() => void check(), 45_000);
+    return () => {
+      abort.abort();
+      clearTimeout(timer);
+    };
+  }, [submission, scoringRunId, review.requested]);
+
+  // Owner 18 Oct: a call without a name is named from its report summary
+  // (company, person or topic) the first time its owner opens the report.
+  // Only an unnamed call (revision 0) is named, once; a cleared name stays.
+  const autoTitled = useRef<string | null>(null);
+  const autoTitle =
+    result && result.claimed && result.label?.revision === 0
+      ? autoCallTitle(result.report.summary)
+      : null;
+  useEffect(() => {
+    if (!submission || !autoTitle || review.requested) return;
+    if (autoTitled.current === submission.id) return;
+    autoTitled.current = submission.id;
+    const bound = submission.id;
+    // Not aborted on re-render: the one try finishes and applies only to
+    // the call still on screen.
+    renameCall(bound, autoTitle, 0)
+      .then((label) =>
+        setResult((current) =>
+          current && bindingRef.current === bound
+            ? { ...current, label }
+            : current,
+        ),
+      )
+      .catch(() => {
+        // Best effort: a competing name or a reader who is not the owner
+        // keeps what the server has.
+      });
+  }, [submission, autoTitle, review.requested]);
+
   function chooseEarlierReport(choice: "view" | "analyse" | "dismiss") {
     earlierReportChoice.current?.(choice);
   }
 
-  async function upload() {
+  async function upload(resumed = false) {
     if (analysisWriteBlocked || !file || !policy || !consentCurrent) return;
-    if (access?.requestAnalysisAccess && !access.requestAnalysisAccess())
+    if (access?.requestAnalysisAccess && !access.requestAnalysisAccess()) {
+      // Continue after sign-in or details; a resumed click never re-arms,
+      // so a still-refused account cannot loop.
+      if (!resumed && pending?.selection?.intentId && consentedPolicySha)
+        rememberAnalyseClick(pending.selection.intentId, consentedPolicySha);
+      else forgetAnalyseClick();
       return;
+    }
+    forgetAnalyseClick();
     if (!session && !token) return;
     if (embedded && !session) return;
     const selected = file;
@@ -1616,6 +1711,20 @@ export function AcquisitionStudio({
       await send(signal);
     });
   }
+
+  const uploadRef = useRef(upload);
+  const resumeFired = useRef(false);
+  useEffect(() => {
+    uploadRef.current = upload;
+  });
+  useEffect(() => {
+    if (!resumeArmed || !consentCurrent || !file || busy || submission) return;
+    if (!session && !token) return;
+    if (resumeFired.current) return;
+    resumeFired.current = true;
+    queueMicrotask(() => setResumeArmed(false));
+    void uploadRef.current(true);
+  }, [resumeArmed, consentCurrent, file, busy, submission, session, token]);
 
   function settleStartNotice() {
     if (

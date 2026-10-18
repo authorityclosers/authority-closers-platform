@@ -7,6 +7,7 @@ import {
   type Pointer,
   type PointerQuote,
   type PointerStatus,
+  type Scoring,
   type Stat,
   type XrayView,
 } from "./model";
@@ -84,6 +85,18 @@ function roles(stats: Json | null): StructureRoles {
 
 function statsFrom(value: unknown): XrayView["overview"]["stats"] | null {
   if (!isObject(value) || value.status !== "available") return null;
+  // Owner 18 Oct: roles may be guessed from the call; say so (the speakers
+  // card confirms or changes them).
+  const guessed =
+    Array.isArray(value.speakers) &&
+    value.speakers.some(
+      (row) =>
+        isObject(row) &&
+        (row.role_source === "predicted" || row.role_source === "model"),
+    );
+  const sides = guessed
+    ? "Salesperson : Prospect (guessed)"
+    : "Salesperson : Prospect";
   const duration = num(value.duration_ms);
   const share = isObject(value.talk_share_percent)
     ? value.talk_share_percent
@@ -105,7 +118,7 @@ function statsFrom(value: unknown): XrayView["overview"]["stats"] | null {
   let talk: Stat | null = null;
   if (rep !== null && prospect !== null && rep + prospect > 0) {
     const yours = Math.round((rep / (rep + prospect)) * 100);
-    talk = pair(yours, 100 - yours, "Salesperson : Prospect");
+    talk = pair(yours, 100 - yours, sides);
   }
   return {
     duration:
@@ -114,9 +127,7 @@ function statsFrom(value: unknown): XrayView["overview"]["stats"] | null {
         : null,
     talk,
     questions:
-      repQ !== null && prospectQ !== null
-        ? pair(repQ, prospectQ, "Salesperson : Prospect")
-        : null,
+      repQ !== null && prospectQ !== null ? pair(repQ, prospectQ, sides) : null,
     longest:
       longest && longest > 0
         ? { value: clock(longest), sub: spelled(longest) }
@@ -157,6 +168,8 @@ export type StructureView = {
   > | null;
   /** True when any score came from the analysis (shown as an AI draft). */
   aiDraft: boolean;
+  /** Why no score yet, when the server says (owner, 18 Oct). */
+  scoring: Scoring;
   roles: StructureRoles;
 };
 
@@ -284,8 +297,30 @@ export function readStructure(
     pointers,
     outcome: outcomeDetails(structure.call_outcome_details),
     aiDraft,
+    scoring: aiDraft ? null : scoringFrom(structure.pointer_review),
     roles: apiRoles,
   };
+}
+
+/** True while the server says this report's pointers are still being scored. */
+export function scoringPending(structure: unknown): boolean {
+  return (
+    isObject(structure) &&
+    isObject(structure.pointer_review) &&
+    structure.pointer_review.status === "scoring"
+  );
+}
+
+function scoringFrom(value: unknown): Scoring {
+  if (!isObject(value)) return null;
+  const status = value.status;
+  if (
+    status !== "scoring" &&
+    status !== "before_scores" &&
+    status !== "not_scored"
+  )
+    return null;
+  return { status, reportCreatedAt: text(value.report_created_at, 64) };
 }
 
 const STAGES = [

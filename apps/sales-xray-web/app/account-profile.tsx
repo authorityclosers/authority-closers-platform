@@ -110,6 +110,44 @@ function phoneError(phone: string, country: CountryChoice): string {
   return "";
 }
 
+/** A stored number's country, for a number that is not asked again. */
+function knownCountry(phone: string | null): CountryChoice {
+  return phone?.startsWith("+91") ? "IN" : "OTHER";
+}
+
+function knownName(profile: AccountProfileRecord) {
+  return Boolean(profile.name?.trim());
+}
+
+function knownPhone(profile: AccountProfileRecord) {
+  return Boolean(
+    profile.phone_number_e164 && validE164Phone(profile.phone_number_e164),
+  );
+}
+
+/** A detail the profile already holds: shown, not asked again. */
+function KnownValue({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: () => void;
+}) {
+  return (
+    <div className={styles.field}>
+      <span>{label}</span>
+      <div className={`${styles.readonly} ${styles.known}`}>
+        <span>{value}</span>
+        <button type="button" className={styles.change} onClick={onChange}>
+          Change
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AccountProfile({
   selectedFile,
   onEligible,
@@ -131,6 +169,10 @@ export function AccountProfile({
   const [notice, setNotice] = useState("");
   const [nameIssue, setNameIssue] = useState("");
   const [phoneIssue, setPhoneIssue] = useState("");
+  // Owner 18 Oct: never ask again for what the profile already holds. Known
+  // values show read-only with Change; only missing ones are asked.
+  const [askName, setAskName] = useState(true);
+  const [askPhone, setAskPhone] = useState(true);
   const mounted = useRef(false);
   const requestId = useRef(0);
   const controller = useRef<AbortController | null>(null);
@@ -176,13 +218,20 @@ export function AccountProfile({
           // Keep the easy Indian default for new entries, but ask for an
           // explicit choice when an existing number uses another prefix.
           setCountry(
-            currentProfile.phone_number_e164 &&
-              !currentProfile.phone_number_e164.startsWith("+91")
-              ? ""
-              : "IN",
+            knownPhone(currentProfile)
+              ? knownCountry(currentProfile.phone_number_e164)
+              : currentProfile.phone_number_e164 &&
+                  !currentProfile.phone_number_e164.startsWith("+91")
+                ? ""
+                : "IN",
           );
           setNameIssue("");
           setPhoneIssue("");
+          setAskName(!knownName(currentProfile));
+          setAskPhone(!knownPhone(currentProfile));
+        } else {
+          setAskName(true);
+          setAskPhone(true);
         }
         const eligibility = await readAccountProfileEligibility(
           currentController.signal,
@@ -237,6 +286,8 @@ export function AccountProfile({
         setNotice("");
         setNameIssue("");
         setPhoneIssue("");
+        setAskName(!knownName(fixture));
+        setAskPhone(!knownPhone(fixture));
         setPhase(previewPhase(activePreviewState));
       } else void load();
     });
@@ -259,10 +310,15 @@ export function AccountProfile({
     const nextPhoneIssue = phoneError(normalizedPhone, country);
     setNameIssue(nextNameIssue);
     setPhoneIssue(nextPhoneIssue);
+    if (nextNameIssue) setAskName(true);
+    if (nextPhoneIssue) setAskPhone(true);
     if (nextNameIssue || nextPhoneIssue) {
-      if (nextNameIssue) nameInput.current?.focus();
-      else if (!country) countrySelect.current?.focus();
-      else phoneInput.current?.focus();
+      // The fields may only just have opened; focus after they render.
+      queueMicrotask(() => {
+        if (nextNameIssue) nameInput.current?.focus();
+        else if (!country) countrySelect.current?.focus();
+        else phoneInput.current?.focus();
+      });
       return;
     }
 
@@ -394,91 +450,117 @@ export function AccountProfile({
           noValidate
         >
           <div className={styles.fields}>
-            <label className={styles.field}>
-              <span>Full name</span>
-              <input
-                ref={nameInput}
-                name="full_name"
-                autoComplete="name"
+            {askName ? (
+              <label className={styles.field}>
+                <span>Full name</span>
+                <input
+                  ref={nameInput}
+                  name="full_name"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setNameIssue("");
+                  }}
+                  aria-invalid={Boolean(nameIssue)}
+                  aria-describedby={
+                    nameIssue ? "account-profile-name-error" : undefined
+                  }
+                />
+                {nameIssue ? (
+                  <small
+                    className={styles.fieldError}
+                    id="account-profile-name-error"
+                  >
+                    {nameIssue}
+                  </small>
+                ) : null}
+              </label>
+            ) : (
+              <KnownValue
+                label="Full name"
                 value={name}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setNameIssue("");
+                onChange={() => {
+                  setAskName(true);
+                  queueMicrotask(() => nameInput.current?.focus());
                 }}
-                aria-invalid={Boolean(nameIssue)}
-                aria-describedby={
-                  nameIssue ? "account-profile-name-error" : undefined
-                }
               />
-              {nameIssue ? (
-                <small
-                  className={styles.fieldError}
-                  id="account-profile-name-error"
-                >
-                  {nameIssue}
-                </small>
-              ) : null}
-            </label>
+            )}
             <div className={styles.field}>
               <span>Account email</span>
               <div className={styles.readonly}>{profile.email}</div>
               <small>Confirmed when you signed in to AC.</small>
             </div>
-            <label className={styles.field}>
-              <span>Country or region</span>
-              <select
-                ref={countrySelect}
-                name="phone_country"
-                value={country}
-                onChange={(event) => {
-                  setCountry(event.target.value as CountryChoice);
-                  setPhoneIssue("");
-                }}
-                aria-invalid={Boolean(phoneIssue) && !country}
-                aria-describedby="account-profile-phone-help"
-              >
-                <option value="">Choose a country or region</option>
-                {COUNTRY_CHOICES.map((choice) => (
-                  <option key={choice.value} value={choice.value}>
-                    {choice.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.field}>
-              <span>Mobile number</span>
-              <input
-                ref={phoneInput}
-                name="phone_number_e164"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
+            {askPhone ? (
+              <>
+                <label className={styles.field}>
+                  <span>Country or region</span>
+                  <select
+                    ref={countrySelect}
+                    name="phone_country"
+                    value={country}
+                    onChange={(event) => {
+                      setCountry(event.target.value as CountryChoice);
+                      setPhoneIssue("");
+                    }}
+                    aria-invalid={Boolean(phoneIssue) && !country}
+                    aria-describedby="account-profile-phone-help"
+                  >
+                    <option value="">Choose a country or region</option>
+                    {COUNTRY_CHOICES.map((choice) => (
+                      <option key={choice.value} value={choice.value}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={styles.field}>
+                  <span>Mobile number</span>
+                  <input
+                    ref={phoneInput}
+                    name="phone_number_e164"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={(event) => {
+                      setPhone(event.target.value);
+                      setPhoneIssue("");
+                    }}
+                    aria-invalid={Boolean(phoneIssue)}
+                    aria-describedby={
+                      phoneIssue
+                        ? "account-profile-phone-error account-profile-phone-help"
+                        : "account-profile-phone-help"
+                    }
+                  />
+                  <small id="account-profile-phone-help">
+                    {country === "IN"
+                      ? "Enter a 10-digit Indian mobile number or a full international number. This number is not verified yet."
+                      : "Enter the full international number with + and its country code. This number is not verified yet."}
+                  </small>
+                  {phoneIssue ? (
+                    <small
+                      className={styles.fieldError}
+                      id="account-profile-phone-error"
+                    >
+                      {phoneIssue}
+                    </small>
+                  ) : null}
+                </label>
+              </>
+            ) : (
+              <KnownValue
+                label="Mobile number"
                 value={phone}
-                onChange={(event) => {
-                  setPhone(event.target.value);
-                  setPhoneIssue("");
+                onChange={() => {
+                  // Editing a non-Indian number asks for its country again.
+                  if (!phone.startsWith("+91")) setCountry("");
+                  setAskPhone(true);
+                  queueMicrotask(() => phoneInput.current?.focus());
                 }}
-                aria-invalid={Boolean(phoneIssue)}
-                aria-describedby={
-                  phoneIssue
-                    ? "account-profile-phone-error account-profile-phone-help"
-                    : "account-profile-phone-help"
-                }
               />
-              <small id="account-profile-phone-help">
-                {country === "IN"
-                  ? "Enter a 10-digit Indian mobile number or a full international number. This number is not verified yet."
-                  : "Enter the full international number with + and its country code. This number is not verified yet."}
-              </small>
-              {phoneIssue ? (
-                <small
-                  className={styles.fieldError}
-                  id="account-profile-phone-error"
-                >
-                  {phoneIssue}
-                </small>
-              ) : null}
-            </label>
+            )}
           </div>
           {notice ? (
             <p className={styles.notice} role="alert">
@@ -486,7 +568,9 @@ export function AccountProfile({
             </p>
           ) : null}
           <button className={styles.primary} type="submit">
-            Save details and check access{" "}
+            {selectedFile
+              ? "Save and analyse my call"
+              : "Save details and check access"}{" "}
             <ArrowRight size={18} aria-hidden="true" />
           </button>
           <p className={styles.assurance}>

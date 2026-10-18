@@ -89,6 +89,52 @@ export type NextStep = {
   source: ReportEvidence | null;
 };
 
+/** The server's word on a report without scores (owner, 18 Oct). */
+export type Scoring = {
+  status: "scoring" | "before_scores" | "not_scored";
+  reportCreatedAt: string | null;
+} | null;
+
+/** Scores usually land this long after the report (2-minute runner + review). */
+export const SCORING_MINUTES = 3;
+
+/** What to say while a call has no scores: "Scoring…" for a new call. */
+export function scoringNote(
+  scoring: Scoring | undefined,
+  now = Date.now(),
+): { title: string; body: string; pending: boolean } {
+  if (scoring?.status === "scoring") {
+    const created = scoring.reportCreatedAt
+      ? Date.parse(scoring.reportCreatedAt)
+      : NaN;
+    const elapsed = Number.isNaN(created) ? 0 : (now - created) / 60_000;
+    if (elapsed < 10) {
+      const left = Math.max(1, Math.ceil(SCORING_MINUTES - elapsed));
+      return {
+        title: "Scoring…",
+        body: `Scoring this call’s 27 pointers, about ${left} min. The scores appear here by themselves.`,
+        pending: true,
+      };
+    }
+    return {
+      title: "Scoring…",
+      body: "Scoring is taking longer than usual. The scores appear here as soon as they’re ready.",
+      pending: true,
+    };
+  }
+  if (scoring?.status === "not_scored")
+    return {
+      title: "Not scored",
+      body: "This call has no pointer scores. Its next analysis scores the pointers.",
+      pending: false,
+    };
+  return {
+    title: "Not scored yet",
+    body: "This call was analysed before pointer scores existed. Its next analysis scores this pointer.",
+    pending: false,
+  };
+}
+
 export type XrayView = {
   /** True for the doc's illustrative example; every number is then fictional. */
   illustrative: boolean;
@@ -96,6 +142,8 @@ export type XrayView = {
   guest: boolean;
   /** Scores came from the analysis: shown as an AI draft, not reviewed by Dipak. */
   aiDraft: boolean;
+  /** Why there are no scores yet (server-told); absent from older servers. */
+  scoring?: Scoring;
   overview: {
     summary: Line | null;
     score: { value: number; label: string; line: string } | null;

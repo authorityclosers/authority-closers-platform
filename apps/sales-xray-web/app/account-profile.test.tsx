@@ -274,7 +274,7 @@ it("saves a 10-digit Indian mobile as canonical E.164 under the default +91 choi
   });
 });
 
-it("requires an explicit country choice for a previously stored non-Indian number", async () => {
+it("requires an explicit country choice when a stored non-Indian number is changed", async () => {
   const fetcher = vi.fn(async (path: string) =>
     path === ACCOUNT_PROFILE_PATH
       ? json({
@@ -290,6 +290,13 @@ it("requires an explicit country choice for a previously stored non-Indian numbe
       <AccountProfile selectedFile={selectedFile} onEligible={vi.fn()} />,
     ),
   );
+  await flush();
+  // Known: shown, not asked (owner, 18 Oct).
+  expect(host.querySelector('select[name="phone_country"]')).toBeNull();
+  const change = [...host.querySelectorAll("button")].filter(
+    (button) => button.textContent === "Change",
+  );
+  await act(async () => change[1].click());
   await flush();
   expect(
     host.querySelector<HTMLSelectElement>('select[name="phone_country"]')
@@ -375,4 +382,82 @@ it("ignores the preview prop in a production build", async () => {
   await flush();
   expect(fetcher).toHaveBeenCalledTimes(2);
   expect(host.textContent).not.toContain("local preview");
+});
+
+it("shows what the profile already holds and asks only for what is missing", async () => {
+  const onEligible = vi.fn();
+  const requests: Array<{ path: string; init: RequestInit }> = [];
+  let saved = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string, init: RequestInit) => {
+      requests.push({ path, init });
+      if (path === ACCOUNT_PROFILE_ELIGIBILITY_PATH)
+        return new Response(null, { status: saved ? 204 : 403 });
+      if (init.method === "PUT") {
+        saved = true;
+        return new Response(null, { status: 204 });
+      }
+      return json({
+        ...baseProfile,
+        name: "Morgan Lee",
+        phone_number_e164: saved ? "+14155550123" : null,
+        profile_complete: saved,
+        revision: saved ? 2 : 1,
+      });
+    }),
+  );
+  await act(async () =>
+    root.render(
+      <AccountProfile selectedFile={selectedFile} onEligible={onEligible} />,
+    ),
+  );
+  await flush();
+  // The known name is shown, not asked; the mobile number is asked.
+  expect(host.querySelector('input[name="full_name"]')).toBeNull();
+  expect(host.textContent).toContain("Morgan Lee");
+  expect(host.querySelector('input[name="phone_number_e164"]')).not.toBeNull();
+  expect(host.textContent).toContain("Save and analyse my call");
+  await changeCountry("US");
+  await changeInput("phone_number_e164", "+14155550123");
+  await submit();
+  const put = requests.find((request) => request.init.method === "PUT")!;
+  expect(JSON.parse(String(put.init.body))).toEqual({
+    full_name: "Morgan Lee",
+    phone_number_e164: "+14155550123",
+    expected_revision: 1,
+  });
+  expect(onEligible).toHaveBeenCalledTimes(1);
+});
+
+it("lets a known detail be changed", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) =>
+      path === ACCOUNT_PROFILE_PATH
+        ? json({
+            ...baseProfile,
+            name: "Morgan Lee",
+            phone_number_e164: "+14155550123",
+            revision: 1,
+          })
+        : new Response(null, { status: 403 }),
+    ),
+  );
+  await act(async () =>
+    root.render(
+      <AccountProfile selectedFile={selectedFile} onEligible={vi.fn()} />,
+    ),
+  );
+  await flush();
+  expect(host.querySelector("form input")).toBeNull();
+  const change = [...host.querySelectorAll("button")].filter(
+    (button) => button.textContent === "Change",
+  );
+  expect(change).toHaveLength(2);
+  await act(async () => change[0].click());
+  await flush();
+  expect(
+    host.querySelector<HTMLInputElement>('input[name="full_name"]')?.value,
+  ).toBe("Morgan Lee");
 });

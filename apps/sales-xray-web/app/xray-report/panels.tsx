@@ -80,6 +80,7 @@ export function useXrayView(
       illustrative: false,
       guest: Boolean(data.report?.preview),
       aiDraft: api?.aiDraft ?? false,
+      scoring: api?.scoring ?? null,
       overview: {
         summary:
           story?.picture.summary ??
@@ -167,6 +168,7 @@ function AnalysisPart(props: PartProps) {
       pointers={view.pointers}
       illustrative={view.illustrative}
       aiDraft={view.aiDraft}
+      scoring={view.scoring}
       onSelect={props.onSelect}
     />
   );

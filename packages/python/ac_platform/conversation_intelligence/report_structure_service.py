@@ -14,6 +14,7 @@ from ac_platform.conversation_intelligence.pointer_review import (
     latest_review,
     merge_into_structure,
     project_structure,
+    review_status,
 )
 from ac_platform.conversation_intelligence.prospect_call_outcome_store import CallOutcomeStore
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore
@@ -85,6 +86,8 @@ async def enrich_report_structure(
         return result
     review = await latest_review(database, envelope)
     if review is None:
+        # Owner 18 Oct: the Analysis tab says "Scoring…" for a new call.
+        structure["pointer_review"] = await review_status(database, envelope)
         return result
     # The envelope arrived privacy-projected; the AI review overlay adds call
     # words after that, so the canonical projection runs again at read time with

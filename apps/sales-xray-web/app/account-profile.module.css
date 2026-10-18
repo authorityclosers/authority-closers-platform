@@ -315,3 +315,22 @@
     animation: none;
   }
 }
+
+.known {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.change {
+  flex: none;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--profile-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}

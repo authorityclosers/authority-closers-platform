@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 
 import type { Transcript } from "../report-contract";
-import { readStructure } from "./structure";
+import { scoringNote } from "./model";
+import { readStructure, scoringPending } from "./structure";
 
 const transcript = {
   source_sha256: "a".repeat(64),
@@ -274,4 +275,40 @@ it("drops malformed outcome details instead of failing the report", () => {
   expect(
     readStructure(structure(), transcript, null, null)!.outcome,
   ).toBeNull();
+});
+
+it("says a new call is being scored, and keeps the old words for calls before scores", () => {
+  const scoring = (status: string, at: string | null = null) =>
+    readStructure(
+      {
+        ...structure(),
+        pointer_review: { status, report_created_at: at },
+      },
+      transcript,
+      null,
+      null,
+    )!.scoring;
+  const created = "2026-10-18T10:00:00+00:00";
+  expect(scoring("scoring", created)).toEqual({
+    status: "scoring",
+    reportCreatedAt: created,
+  });
+  const now = Date.parse(created) + 60_000;
+  const soon = scoringNote(scoring("scoring", created), now);
+  expect(soon.pending).toBe(true);
+  expect(soon.title).toBe("Scoring…");
+  expect(soon.body).toContain("about 2 min");
+  expect(soon.body).not.toContain("before pointer scores existed");
+  const late = scoringNote(scoring("scoring", created), now + 30 * 60_000);
+  expect(late.body).toContain("taking longer");
+  expect(scoringNote(scoring("before_scores", created)).body).toContain(
+    "before pointer scores existed",
+  );
+  expect(scoringNote(scoring("not_scored", created)).pending).toBe(false);
+  // An older server sends nothing: the old wording stays.
+  expect(scoringNote(scoring("unknown"))).toEqual(scoringNote(null));
+  expect(
+    scoringPending({ ...structure(), pointer_review: { status: "scoring" } }),
+  ).toBe(true);
+  expect(scoringPending(structure())).toBe(false);
 });
