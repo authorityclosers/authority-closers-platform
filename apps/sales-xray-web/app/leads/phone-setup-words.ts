@@ -5,6 +5,7 @@
  * and the dot a manager sees for each seller's phone on Team.
  */
 
+import type { RecorderProfile } from "./native-phone";
 import { ago, type PhoneHealth } from "./leads-client";
 
 export type PhoneCheck =
@@ -151,6 +152,53 @@ export const RECORDER_STEPS: Record<string, string[]> = {
 
 export function recorderSteps(family: string): string[] {
   return RECORDER_STEPS[family] ?? RECORDER_STEPS.other;
+}
+
+export type RecorderGuide = {
+  /** One line on what the phone does now, or null when the app can't tell. */
+  lead: string | null;
+  steps: string[];
+  /** Google's Phone app: no app can read its recordings, so "It's on" means nothing. */
+  closed: boolean;
+};
+
+/** The recorder steps for this phone, from what the app found on it. */
+export function recorderGuide(
+  recorder: RecorderProfile | null,
+  family: string,
+): RecorderGuide {
+  if (!recorder)
+    return { lead: null, steps: recorderSteps(family), closed: false };
+  if (recorder.kind === "private") {
+    return {
+      lead: `${recorder.dialerLabel} is Google's Phone app. It keeps call recordings inside itself, so no other app, Sales Xray included, can read them.`,
+      steps: recorder.switchTo
+        ? [
+            `Make ${recorder.switchTo} your Phone app (Settings, Apps, Default apps, Phone app).`,
+            `Open ${recorder.switchTo}, then its Settings, and turn on Call recording for all calls.`,
+            "Or record meetings in Sales Xray: Calls on this phone, then Record.",
+          ]
+        : [
+            "This phone has no other Phone app that saves recordings.",
+            "Record meetings and in-person talks in Sales Xray: Calls on this phone, then Record.",
+            "Phone calls can be recorded only by phones whose own Phone app saves them (Samsung, Xiaomi's own dialer, OnePlus, Oppo, Realme, Vivo).",
+          ],
+      closed: true,
+    };
+  }
+  const found = recorder.folders.find((row) => row.state === "found");
+  const where = found ?? recorder.folders[0];
+  const lead =
+    recorder.recording === "on"
+      ? found
+        ? `${recorder.dialerLabel} records your calls. ${found.recordings} found in ${found.path}.`
+        : `${recorder.dialerLabel} records your calls.`
+      : recorder.recording === "off"
+        ? `Call recording is off in ${recorder.dialerLabel}.`
+        : where
+          ? `No call recordings yet in ${where.path}.`
+          : null;
+  return { lead, steps: recorderSteps(family), closed: false };
 }
 
 export type PhoneDot = {

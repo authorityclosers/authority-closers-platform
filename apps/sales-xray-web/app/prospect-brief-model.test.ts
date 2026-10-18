@@ -170,3 +170,129 @@ describe("latestAnalysedCall", () => {
     expect(latestAnalysedCall([newerNoReport])).toBeNull();
   });
 });
+
+describe("prospect signals from this call's Report (owner 18 Oct)", () => {
+  const [first, second] = amitTranscript.segments;
+  const withSignals = {
+    ...latest,
+    report: {
+      ...amitReport,
+      structure: {
+        ...(amitReport.structure as object),
+        prospect_signals: {
+          version: "prospect-signals/1",
+          qualification: {
+            need: {
+              state: "confirmed",
+              evidence: [
+                { segment_id: first.id, quote: first.text.slice(0, 20) },
+              ],
+            },
+            budget: {
+              state: "concern",
+              evidence: [
+                { segment_id: second.id, quote: second.text.slice(0, 20) },
+              ],
+            },
+            timeline: { state: "unknown", evidence: [] },
+          },
+          pains: [
+            {
+              text: "Sales depend on the founder",
+              intensity: "high",
+              evidence: [],
+            },
+            { text: "Leads go cold", intensity: "med", evidence: [] },
+          ],
+          objections: [
+            {
+              text: "The fee feels high",
+              kind: "price_concern",
+              status: "open",
+              evidence: [
+                { segment_id: second.id, quote: second.text.slice(0, 20) },
+              ],
+            },
+          ],
+          facts: [],
+        },
+      },
+    },
+  };
+
+  it("fills Can & Will They Buy with Confirmed and Concern, quoting the call", () => {
+    const brief = prospectBrief(syntheticProspect, [], withSignals);
+    const buy = brief.sections[2];
+    const fact = (label: string) =>
+      buy.facts.find((item) => item.label === label);
+    expect(fact("Need")).toMatchObject({
+      value: "Confirmed",
+      fact: "Observed",
+    });
+    expect(fact("Need")?.source?.start_ms).toBe(first.start_ms);
+    // A saved budget wins over what this call suggests.
+    expect(fact("Budget discussed")?.value).not.toBe("Concern");
+    const unsaved = prospectBrief(
+      { ...syntheticProspect, profile_fields: {} },
+      [],
+      withSignals,
+    ).sections[2].facts.find((item) => item.label === "Budget discussed");
+    expect(unsaved).toMatchObject({ value: "Concern", fact: "Observed" });
+    // Unknown is named once in the still-unknown line, never as a fact.
+    expect(fact("Timing")).toBeUndefined();
+    const holding = brief.sections[4];
+    expect(holding.facts.map((item) => item.label)).toContain(
+      "Objection · open",
+    );
+  });
+
+  it("reads nothing from an older or malformed block", () => {
+    const old = prospectBrief(syntheticProspect, [], {
+      ...latest,
+      report: {
+        ...amitReport,
+        structure: { prospect_signals: { version: "x" } },
+      },
+    });
+    expect(old.sections[2].facts.map((item) => item.value)).not.toContain(
+      "Confirmed",
+    );
+  });
+});
+
+it("never shows a qualification state without its quote, and adds the note", () => {
+  const [first] = amitTranscript.segments;
+  const brief = prospectBrief(
+    { ...syntheticProspect, profile_fields: {} },
+    [],
+    {
+      ...latest,
+      report: {
+        ...amitReport,
+        structure: {
+          prospect_signals: {
+            version: "prospect-signals/1",
+            qualification: {
+              need: {
+                state: "confirmed",
+                note: "Wants the team to close alone",
+                evidence: [
+                  { segment_id: first.id, quote: first.text.slice(0, 20) },
+                ],
+              },
+              budget: { state: "concern", evidence: [] },
+            },
+            pains: [],
+            objections: [],
+            facts: [],
+          },
+        },
+      },
+    },
+  );
+  const buy = brief.sections[2].facts;
+  expect(buy.find((item) => item.label === "Need")?.value).toBe(
+    "Confirmed · Wants the team to close alone",
+  );
+  expect(buy.find((item) => item.label === "Budget discussed")).toBeUndefined();
+});

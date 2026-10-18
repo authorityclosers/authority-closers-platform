@@ -184,6 +184,53 @@ it("renders an initially chosen Coaching view without a processing screen", () =
   expect(html).not.toContain("Working on your call");
 });
 
+it("opens Prospect as its own view between Report and Coaching (owner, 19 Oct)", () => {
+  window.history.replaceState(null, "", `/analysis?call=${call}&view=prospect`);
+  const html = renderToString(
+    <ReportModes
+      panels={panels()}
+      boundCallId={call}
+      structure="pillars"
+      documentData={{ report: syntheticReport }}
+      initialView="prospect"
+    />,
+  );
+  expect(html).toContain('data-view="prospect"');
+  expect(html).toContain("Prospect’s Information");
+  // The view switch reads Report | Prospect | Coaching.
+  const order = [
+    "Report view",
+    "Prospect&#x27;s Information view",
+    "Coaching view",
+  ].map((label) => html.indexOf(`aria-label="${label}"`));
+  expect(order.every((at) => at > 0)).toBe(true);
+  expect([...order].sort((x, y) => x - y)).toEqual(order);
+  // The Report keeps its three parts; Prospect is not one of them.
+  expect(html).not.toContain('data-report-mode-section="prospect"');
+});
+
+it("tells the page which view shows, so the header can follow the tab", async () => {
+  window.history.replaceState(null, "", `/analysis?call=${call}&view=prospect`);
+  const seen = vi.fn();
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        structure="pillars"
+        documentData={{ report: syntheticReport }}
+        onViewChange={seen}
+      />,
+    ),
+  );
+  expect(seen).toHaveBeenLastCalledWith("prospect");
+  await act(async () => root.unmount());
+  host.remove();
+});
+
 it("shows report sections in one continuous reading layout without transcript section", async () => {
   await render();
   expect(mode().dataset.view).toBe("reading");

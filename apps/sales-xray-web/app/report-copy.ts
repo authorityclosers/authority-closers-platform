@@ -500,6 +500,7 @@ export const END_SUMMARY = {
 /** `text` on the toolbar, `hint` for screen readers, `menu` in "More views". */
 export const VIEWS = {
   report: { text: "Report", hint: "Report view" },
+  prospect: { text: "Prospect", hint: "Prospect's Information view" },
   coaching: { text: "Coaching", hint: "Coaching view" },
   details: {
     text: "Details",

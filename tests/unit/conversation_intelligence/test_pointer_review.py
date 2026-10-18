@@ -86,7 +86,7 @@ def test_prompt_lists_every_pointer_and_never_the_raw_ids_as_names() -> None:
         assert f"- {pointer_id}:" in system
     assert "[s2] speaker_1 00:04: Hello. Our leads are poor quality." in user
     body = gemini_body(system, user)
-    assert body["generationConfig"]["maxOutputTokens"] == 8000
+    assert body["generationConfig"]["maxOutputTokens"] == 10000
     assert body["generationConfig"]["responseJsonSchema"] == response_schema()
 
 

@@ -1636,6 +1636,7 @@
             "why_it_matters": null
           }
         ],
+        "prospect_signals": null,
         "version": "report-structure/1"
       },
       "summary": "The draft describes observable conversation behaviour and its uncertainty.",

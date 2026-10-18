@@ -73,6 +73,56 @@ def unavailable_statistics() -> dict[str, Any]:
     }
 
 
+# Prospect's Information (Dipak's priority structure, 9 Oct; owner 18 Oct).
+def _prospect_signals(report: ReportDraft) -> dict[str, Any] | None:
+    """Buyer facts the call map already established; no new extraction or inference.
+
+    Qualification states: ``confirmed`` (said in the call, with evidence) or
+    ``unknown`` (the analysis lists it as a gap). Items never discussed are left
+    out; the AI pointer review fills the rest (orchestrator, 19 Oct).
+    """
+    call_map = report.call_map
+    if call_map is None:
+        return None
+    qualification: dict[str, dict[str, Any]] = {}
+    for gap in call_map.qualification_gaps:
+        qualification[gap] = {"state": "unknown", "evidence": []}
+    for confirmed in call_map.qualification_confirmed:
+        qualification[confirmed.item] = {
+            "state": "confirmed",
+            "evidence": [ref.model_dump(mode="json") for ref in confirmed.evidence],
+        }
+    return {
+        "version": "prospect-signals/1",
+        "qualification": qualification,
+        "pains": [
+            {
+                "text": pain.text,
+                "intensity": pain.prospect_intensity,
+                "evidence": [ref.model_dump(mode="json") for ref in pain.evidence],
+            }
+            for pain in call_map.pains[:4]
+        ],
+        "objections": [
+            {
+                "text": objection.text,
+                "kind": objection.kind,
+                "status": "resolved" if objection.handling == "answered" else "open",
+                "evidence": [ref.model_dump(mode="json") for ref in objection.evidence],
+            }
+            for objection in call_map.objections[:4]
+        ],
+        "facts": [
+            {
+                "key": fact.key,
+                "text": fact.text,
+                "evidence": [ref.model_dump(mode="json") for ref in fact.evidence],
+            }
+            for fact in call_map.prospect_facts
+        ],
+    }
+
+
 def project_report_structure(report: ReportDraft) -> dict[str, Any]:
     """Use canonical evidence before the legacy pillars projection drops some refs."""
     raw = report.model_dump(mode="json")
@@ -200,6 +250,7 @@ def project_report_structure(report: ReportDraft) -> dict[str, Any]:
         },
         "pointers": pointers,
         "final_call_outcome": project_final_outcome(None),
+        "prospect_signals": _prospect_signals(report),
     }
 
 

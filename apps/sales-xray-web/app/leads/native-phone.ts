@@ -505,7 +505,58 @@ export type SetupStatus = {
   version: string;
   /** This install's own id, the same one call logging uses. */
   device: string;
+  /** Which dialer records, where it saves, and whether it's on (app 0.3.40+). */
+  recorder: RecorderProfile | null;
 };
+
+/** This phone's call recorder as the app sees it (owner, 19 Oct: check, don't ask). */
+export type RecorderProfile = {
+  /** "folder": the maker's dialer saves files Sales Xray reads; "private": Google's Phone app; "unknown". */
+  kind: "folder" | "private" | "unknown";
+  maker: string;
+  dialerLabel: string;
+  /** "on", "off", "unknown", or "private" (Google's Phone app). */
+  recording: string;
+  folders: { path: string; state: string; recordings: number }[];
+  /** Another installed Phone app that saves recordings to a folder, if any. */
+  switchTo: string | null;
+};
+
+export function parseRecorder(raw: unknown): RecorderProfile | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  const kind = value.kind;
+  if (kind !== "folder" && kind !== "private" && kind !== "unknown")
+    return null;
+  const folders = Array.isArray(value.folders)
+    ? value.folders
+        .filter(
+          (row): row is Record<string, unknown> =>
+            !!row && typeof row === "object",
+        )
+        .map((row) => ({
+          path: text(row.path),
+          state: text(row.state),
+          recordings: typeof row.recordings === "number" ? row.recordings : 0,
+        }))
+        .filter((row) => row.path)
+    : [];
+  const others = Array.isArray(value.otherDialers) ? value.otherDialers : [];
+  const maker = others.find(
+    (row): row is Record<string, unknown> =>
+      !!row &&
+      typeof row === "object" &&
+      (row as Record<string, unknown>).savesToFolder === true,
+  );
+  return {
+    kind,
+    maker: text(value.maker) || "other",
+    dialerLabel: text(value.dialerLabel) || "your Phone app",
+    recording: text(value.recording) || "unknown",
+    folders,
+    switchTo: maker ? text(maker.label) || null : null,
+  };
+}
 
 export function parseSetup(raw: unknown): SetupStatus | null {
   if (!raw || typeof raw !== "object") return null;
@@ -521,6 +572,7 @@ export function parseSetup(raw: unknown): SetupStatus | null {
     autostartNeeded: value.autostartNeeded === true,
     version: text(value.version),
     device: text(value.device),
+    recorder: parseRecorder(value.recorderProfile),
   };
 }
 
@@ -538,6 +590,22 @@ export async function setupStatus(): Promise<SetupStatus | null> {
 export async function setupOpen(what: string): Promise<boolean> {
   try {
     const raw = await ask<{ opened?: boolean }>("setupOpen", { what }, 10_000);
+    return raw.opened === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Opens a recorder screen: "settings" (call recording) or "defaultDialer" (choose the Phone app). */
+export async function recorderOpen(
+  what: "settings" | "defaultDialer",
+): Promise<boolean> {
+  try {
+    const raw = await ask<{ opened?: boolean }>(
+      "recorderOpen",
+      { what },
+      10_000,
+    );
     return raw.opened === true;
   } catch {
     return false;

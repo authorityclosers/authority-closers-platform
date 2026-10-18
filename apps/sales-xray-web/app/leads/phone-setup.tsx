@@ -27,6 +27,7 @@ import {
   inPhoneApp,
   onPhoneSignal,
   setupMark,
+  recorderOpen,
   setupOpen,
   setupStatus,
   type CallLogStatus,
@@ -37,7 +38,7 @@ import {
   CHECK_ORDER,
   CHECK_TODO,
   EXPLAINERS,
-  recorderSteps,
+  recorderGuide,
   type PhoneCheck,
 } from "./phone-setup-words";
 import styles from "./leads.module.css";
@@ -176,6 +177,7 @@ export function PhoneSetupSheet({
   const [log, setLog] = useState<CallLogStatus | null>(null);
   const [sim, setSim] = useState("");
   const { done, total } = setupProgress(status);
+  const guide = recorderGuide(status.recorder, status.family);
 
   const show = async (key: PhoneCheck) => {
     setNote(null);
@@ -293,11 +295,14 @@ export function PhoneSetupSheet({
               </dl>
             ) : null}
             {view === "recorder" ? (
-              <ol className={styles.setupSteps}>
-                {recorderSteps(status.family).map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
+              <>
+                {guide.lead ? <p>{guide.lead}</p> : null}
+                <ol className={styles.setupSteps}>
+                  {guide.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </>
             ) : null}
             {view === "autostart" ? (
               <p>
@@ -347,23 +352,35 @@ export function PhoneSetupSheet({
                   {explainer.allow}
                 </Button>
               ) : null}
-              {view === "recorder" ? (
+              {view === "recorder" && guide.closed ? (
+                status.recorder?.switchTo ? (
+                  <Button
+                    variant="primary"
+                    disabled={busy}
+                    onClick={() => void recorderOpen("defaultDialer")}
+                  >
+                    Choose the Phone app
+                  </Button>
+                ) : null
+              ) : view === "recorder" ? (
                 <>
                   <Button
                     variant="primary"
                     disabled={busy}
                     onClick={() => void setupOpen("recorder")}
                   >
-                    Open the Phone app
+                    Open call recording settings
                   </Button>
-                  <Button
-                    disabled={busy}
-                    onClick={() =>
-                      void run("recorder", () => setupMark("recorder", true))
-                    }
-                  >
-                    It&apos;s on
-                  </Button>
+                  {status.recorder?.recording === "on" ? null : (
+                    <Button
+                      disabled={busy}
+                      onClick={() =>
+                        void run("recorder", () => setupMark("recorder", true))
+                      }
+                    >
+                      It&apos;s on
+                    </Button>
+                  )}
                 </>
               ) : null}
               {view === "autostart" ? (
