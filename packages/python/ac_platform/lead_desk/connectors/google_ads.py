@@ -11,8 +11,9 @@ form (Google Ads: the lead form asset, "Export leads from Google Ads", webhook):
 
 Every answer is kept. Google's standard columns get the names the desk's
 extractor already reads (full_name, phone_number, email, city, company_name);
-a custom question keeps its own question text. ``lead_id`` stays at the top, so
-a lead Google sends twice is recognised and not added again.
+a custom question keeps its own question text. The lead's reference stays at the
+top as ``lead_id`` (see ``reference``), so a lead Google sends twice, or that the
+connector's pull also reads, is recognised and not added again.
 """
 
 from __future__ import annotations
@@ -65,6 +66,20 @@ def google_key(payload: Mapping[str, Any]) -> str:
     return value.strip()
 
 
+def reference(payload: Mapping[str, Any]) -> str | None:
+    """The lead's reference: Google's click id when there is one, else its lead id.
+
+    The webhook's ``lead_id`` and the API's submission id are not documented to be
+    the same, but both carry the click id, so a lead that arrives by webhook and by
+    the connector's pull is filed once.
+    """
+    for name, prefix in (("gcl_id", "gclid:"), ("lead_id", "")):
+        value = payload.get(name)
+        if isinstance(value, (str, int)) and not isinstance(value, bool) and str(value).strip():
+            return f"{prefix}{str(value).strip()}"[:200]
+    return None
+
+
 def to_record(payload: Mapping[str, Any]) -> dict[str, Any]:
     """One lead record: every answer, Google's ids, and nothing else."""
     columns = payload.get("user_column_data")
@@ -85,14 +100,17 @@ def to_record(payload: Mapping[str, Any]) -> dict[str, Any]:
         record.setdefault(name[:120], str(value)[:MAX_VALUE])
     if not record:
         raise GoogleAdsError("Google Ads sent a lead with no answers.")
-    lead_id = payload.get("lead_id")
-    if isinstance(lead_id, (str, int)) and str(lead_id).strip():
-        record["lead_id"] = str(lead_id).strip()[:200]
+    ref = reference(payload)
+    if ref:
+        record["lead_id"] = ref
     details = {
         name: payload[name]
         for name in _DETAILS
         if isinstance(payload.get(name), (str, int, bool)) and str(payload[name]).strip()
     }
+    lead_id = payload.get("lead_id")
+    if isinstance(lead_id, (str, int)) and str(lead_id).strip():
+        details["lead_id"] = str(lead_id).strip()[:200]
     if details:
         record["google_ads"] = details
     record["lead_source"] = LABEL

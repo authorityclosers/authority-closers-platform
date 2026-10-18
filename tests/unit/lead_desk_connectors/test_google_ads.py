@@ -7,6 +7,7 @@ from ac_platform.lead_desk.connectors.google_ads import (
     LABEL,
     GoogleAdsError,
     google_key,
+    reference,
     to_record,
 )
 
@@ -64,7 +65,8 @@ def test_standard_columns_become_the_fields_the_desk_reads() -> None:
 def test_every_answer_and_googles_ids_are_kept() -> None:
     record = to_record(SAMPLE)
     assert record["What is your monthly budget?"] == "50k-1L"
-    assert record["lead_id"] == SAMPLE["lead_id"]
+    assert record["lead_id"] == "gclid:TeSter-123"
+    assert record["google_ads"]["lead_id"] == SAMPLE["lead_id"]
     assert record["google_ads"]["form_id"] == SAMPLE["form_id"]
     assert record["google_ads"]["is_test"] is True
     assert record["lead_source"] == LABEL
@@ -105,3 +107,14 @@ def test_columns_and_values_are_bounded() -> None:
     answers = [name for name in record if name.startswith("Question ")]
     assert len(answers) == 100
     assert all(len(record[name]) == 2000 for name in answers)
+
+
+def test_the_click_id_is_the_reference_so_webhook_and_pull_file_a_lead_once() -> None:
+    # The webhook's lead_id and the API's submission id may differ; the click id doesn't.
+    assert reference(SAMPLE) == "gclid:TeSter-123"
+    assert reference({**SAMPLE, "lead_id": "api-submission-9"}) == "gclid:TeSter-123"
+    without = {key: value for key, value in SAMPLE.items() if key != "gcl_id"}
+    assert reference(without) == SAMPLE["lead_id"]
+    assert to_record(without)["lead_id"] == SAMPLE["lead_id"]
+    assert reference({"gcl_id": "  ", "lead_id": 7}) == "7"
+    assert reference({}) is None
