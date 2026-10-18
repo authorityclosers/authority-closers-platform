@@ -1251,7 +1251,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   ).toBe("story");
   expect(
     container.querySelectorAll('[aria-label="Explore your sales report"] a'),
-  ).toHaveLength(4);
+  ).toHaveLength(3);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
@@ -3323,7 +3323,6 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     "Overview & Score",
     "Detailed Call Analysis",
     "Final Call Outcome",
-    "Prospect’s Information",
   ]);
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")

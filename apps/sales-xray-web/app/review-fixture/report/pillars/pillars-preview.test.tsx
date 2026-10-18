@@ -55,7 +55,7 @@ it("keeps native v8 as the route default and exposes the revised reader, source 
       [...host.querySelectorAll("[data-report-mode-section]")].map((e) =>
         e.getAttribute("data-report-mode-section"),
       ),
-    ).toEqual(["overview", "analysis", "outcome", "prospect"]);
+    ).toEqual(["overview", "analysis", "outcome"]);
     for (const text of ["Meeting Booked", "Friday", "4 PM"])
       expect(host.textContent).toContain(text);
     expect(host.textContent).not.toContain(

@@ -287,24 +287,36 @@ export function xrayReportPanels(
         </PartBoundary>
       ),
     },
-    // Owner 18 Oct: Prospect's Information in the Report. Illustrations and
-    // guest previews have no saved prospect behind them.
-    ...(options.illustration || data.report.preview
-      ? []
-      : [
-          {
-            id: "prospect",
-            label: "Prospect’s Information",
-            compactLabel: "Prospect",
-            summary:
-              "Who they are, what they want, what’s stopping them and what happens next.",
-            icon: <UserRound />,
-            content: (
-              <PartBoundary>
-                <ProspectSection {...props} />
-              </PartBoundary>
-            ),
-          },
-        ]),
   ];
+}
+
+/**
+ * Prospect's Information as its own top tab (owner, 19 Oct: Report | Prospect |
+ * Coaching), not a part of the Report. Guest previews and illustrations have
+ * no saved prospect behind them.
+ */
+export function prospectPanel(
+  data: DocumentReportData,
+  onSelect?: Select,
+  options: { callId?: string | null } = {},
+): XrayPanel | null {
+  if (!data.report || data.report.preview) return null;
+  return {
+    id: "prospect-information",
+    label: "Prospect’s Information",
+    compactLabel: "Prospect",
+    summary:
+      "Who they are, what they want, what’s stopping them and what happens next.",
+    icon: <UserRound />,
+    content: (
+      <PartBoundary>
+        <ProspectSection
+          data={data}
+          callId={options.callId ?? null}
+          illustration={null}
+          onSelect={onSelect}
+        />
+      </PartBoundary>
+    ),
+  };
 }

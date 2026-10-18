@@ -39,7 +39,11 @@ import { ReportReadingProvider } from "./report-reading-context";
 import styles from "./report-modes.module.css";
 import { TargetArrow } from "./xray-report/icons";
 import type { XrayView } from "./xray-report/model";
-import { PartHead, xrayReportPanels } from "./xray-report/panels";
+import {
+  PartHead,
+  prospectPanel,
+  xrayReportPanels,
+} from "./xray-report/panels";
 
 export type ReportPanel = {
   id: string;
@@ -64,12 +68,13 @@ import type { ContextualSourcePlayback } from "./source-playback-context";
 import { OperationalPanel } from "./ui/operational-panel";
 import { useWorkspaceAccess } from "./workspace-access";
 
-type View = "reading" | "tabs" | "document" | "story" | "coaching";
+type View = "reading" | "tabs" | "document" | "story" | "prospect" | "coaching";
 const VIEWS: readonly View[] = [
   "reading",
   "tabs",
   "document",
   "story",
+  "prospect",
   "coaching",
 ];
 type TextSize = "100" | "112.5" | "125";
@@ -115,6 +120,7 @@ const sectionIcons: Record<string, LucideIcon> = {
   transcript: BookOpen,
   "raw-data": TableProperties,
   "call-coaching": Lightbulb,
+  "prospect-information": UserRound,
 };
 
 /** The Report's parts (15 Oct structure); the six pillars kept their old ids. */
@@ -517,6 +523,17 @@ function renderReportPanels(
               </header>
               {panel.content}
             </>
+          ) : view === "prospect" ? (
+            <>
+              <h2
+                id={`${id}-heading-${panel.id}`}
+                tabIndex={-1}
+                className={styles.visuallyHiddenHeading}
+              >
+                {panel.label}
+              </h2>
+              {panel.content}
+            </>
           ) : view === "coaching" ? (
             <OperationalPanel
               title={
@@ -558,7 +575,7 @@ function renderReportPanels(
               </p>
             </div>
           )}
-          {view !== "story" && view !== "coaching" && (
+          {view !== "story" && view !== "coaching" && view !== "prospect" && (
             <div className={styles.reportContent}>{panel.content}</div>
           )}
         </section>
@@ -625,6 +642,14 @@ export function ReportModes({
           illustration: fixture ? illustration : null,
         })
       : [];
+  // Owner 19 Oct: Prospect's Information is its own top tab, like Coaching.
+  const prospect =
+    documentData && structure === "pillars" && !fixture
+      ? prospectPanel(documentData, onSelectEvidence, {
+          callId: boundCallId ?? null,
+        })
+      : null;
+  const prospectPanels: ReportPanel[] = prospect ? [prospect] : [];
   const coachingPanels: ReportPanel[] =
     documentData?.report && !documentData.report.preview
       ? [
@@ -781,7 +806,12 @@ export function ReportModes({
         documentData?.report &&
           new URLSearchParams(search).get("view") === "document"
           ? DOCUMENT_CHAPTERS.map((chapter) => ({ ...chapter, content: null }))
-          : [...enrichedPanels, ...storyPanels, ...coachingPanels],
+          : [
+              ...enrichedPanels,
+              ...storyPanels,
+              ...prospectPanels,
+              ...coachingPanels,
+            ],
         pathname,
       )
     : null;
@@ -802,11 +832,14 @@ export function ReportModes({
   const view: View = storyPanels.length
     ? requestedView === "coaching" && coachingPanels.length
       ? "coaching"
-      : linkedLegacy
-        ? requestedView
-        : "story"
+      : requestedView === "prospect" && prospectPanels.length
+        ? "prospect"
+        : linkedLegacy
+          ? requestedView
+          : "story"
     : (requestedView === "story" && !storyPanels.length) ||
-        (requestedView === "coaching" && !coachingPanels.length)
+        (requestedView === "coaching" && !coachingPanels.length) ||
+        (requestedView === "prospect" && !prospectPanels.length)
       ? "reading"
       : requestedView;
   const panels =
@@ -814,7 +847,9 @@ export function ReportModes({
       ? storyPanels
       : view === "coaching"
         ? coachingPanels
-        : enrichedPanels;
+        : view === "prospect"
+          ? prospectPanels
+          : enrichedPanels;
 
   const activePanels: ReportPanel[] =
     view === "document" && documentData?.report
@@ -1003,9 +1038,11 @@ export function ReportModes({
         ? storyPanels
         : nextView === "coaching"
           ? coachingPanels
-          : nextView === "document" && documentData?.report
-            ? DOCUMENT_CHAPTERS
-            : enrichedPanels;
+          : nextView === "prospect"
+            ? prospectPanels
+            : nextView === "document" && documentData?.report
+              ? DOCUMENT_CHAPTERS
+              : enrichedPanels;
     if (!destinations.some((panel) => panel.id === section)) return;
     if (boundCallId) {
       if (!UUID.test(boundCallId)) return;
@@ -1122,9 +1159,11 @@ export function ReportModes({
         ? storyPanels
         : nextView === "coaching"
           ? coachingPanels
-          : nextView === "document" && documentData?.report
-            ? DOCUMENT_CHAPTERS
-            : enrichedPanels;
+          : nextView === "prospect"
+            ? prospectPanels
+            : nextView === "document" && documentData?.report
+              ? DOCUMENT_CHAPTERS
+              : enrichedPanels;
     const origin = view !== "tabs" ? currentSection : selected;
     const section = destinations.some((panel) => panel.id === origin)
       ? origin
@@ -1158,6 +1197,16 @@ export function ReportModes({
   const primaryViews: ViewChoice[] = storyPanels.length
     ? [
         ["story", VIEWS_COPY.report.text, VIEWS_COPY.report.hint, FileText],
+        ...(prospectPanels.length
+          ? [
+              [
+                "prospect",
+                VIEWS_COPY.prospect.text,
+                VIEWS_COPY.prospect.hint,
+                UserRound,
+              ] as const,
+            ]
+          : []),
         ...(coachingPanels.length
           ? [
               [
@@ -1395,7 +1444,9 @@ export function ReportModes({
         >
           {/* Coaching is one focused page, and the Report is only its three
               parts (15 Oct doc): the header's call map waits here, hidden. */}
-          {view === "coaching" || (view === "story" && storyPanels.length) ? (
+          {view === "coaching" ||
+          view === "prospect" ||
+          (view === "story" && storyPanels.length) ? (
             <div data-report-map-slot hidden />
           ) : null}
           <div data-reading-panels hidden={view === "document"}>

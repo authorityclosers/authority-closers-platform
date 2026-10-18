@@ -184,6 +184,31 @@ it("renders an initially chosen Coaching view without a processing screen", () =
   expect(html).not.toContain("Working on your call");
 });
 
+it("opens Prospect as its own view between Report and Coaching (owner, 19 Oct)", () => {
+  window.history.replaceState(null, "", `/analysis?call=${call}&view=prospect`);
+  const html = renderToString(
+    <ReportModes
+      panels={panels()}
+      boundCallId={call}
+      structure="pillars"
+      documentData={{ report: syntheticReport }}
+      initialView="prospect"
+    />,
+  );
+  expect(html).toContain('data-view="prospect"');
+  expect(html).toContain("Prospect’s Information");
+  // The view switch reads Report | Prospect | Coaching.
+  const order = [
+    "Report view",
+    "Prospect&#x27;s Information view",
+    "Coaching view",
+  ].map((label) => html.indexOf(`aria-label="${label}"`));
+  expect(order.every((at) => at > 0)).toBe(true);
+  expect([...order].sort((x, y) => x - y)).toEqual(order);
+  // The Report keeps its three parts; Prospect is not one of them.
+  expect(html).not.toContain('data-report-mode-section="prospect"');
+});
+
 it("shows report sections in one continuous reading layout without transcript section", async () => {
   await render();
   expect(mode().dataset.view).toBe("reading");
@@ -1431,14 +1456,13 @@ it("opens on the three-part Report with only Report and Coaching (the old views 
     [...container.querySelectorAll("[data-report-mode-section]")].map((e) =>
       e.getAttribute("data-report-mode-section"),
     ),
-  ).toEqual(["overview", "analysis", "outcome", "prospect"]);
+  ).toEqual(["overview", "analysis", "outcome"]);
   expect(
     [...container.querySelectorAll("h2")].map((h) => h.textContent),
   ).toEqual([
     "1. Overview & Score",
     "2. Detailed Call Analysis",
     "3. Final Call Outcome",
-    "4. Prospect’s Information",
   ]);
   // No score is made up in the browser: the 27 pointers wait for the analysis.
   expect(container.textContent).toContain("Not scored yet");
