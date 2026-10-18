@@ -12,9 +12,9 @@ import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, delete, func, or_, select
@@ -23,17 +23,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk import allocation
+from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk.capture import (
     CaptureError,
     bounded_payload,
     display_name,
     extract,
     flatten,
+    normalise_phone,
 )
 from ac_platform.lead_desk.contracts import (
+    PHONE_CHECKS,
     AlertText,
     Badge,
+    CallPrivacy,
+    CallReport,
     Counts,
+    DayCalls,
     Desk,
     DeviceCommand,
     Disposition,
@@ -50,14 +56,23 @@ from ac_platform.lead_desk.contracts import (
     NewLead,
     NoteCommand,
     Numbers,
+    PhoneBook,
+    PhoneHealth,
+    PhoneLog,
+    PhoneLogCall,
+    PhoneLogResult,
+    PhoneReport,
     Reassign,
     RepOption,
     RepRules,
     RepView,
+    SellerCalls,
     SettingsCommand,
     SettingsView,
     TakingLeads,
     Team,
+    WorkHoursCommand,
+    WorkHoursView,
 )
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent, LeadRep
 from ac_platform.lead_desk.vocabulary import (
@@ -88,6 +103,23 @@ UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
 DEVICES_PER_PERSON = 5
 DEFAULT_MAX_OPEN = 50
+# Calls the phone logged by itself (UX study item 5): the phone book is the leads
+# a person can see, newest first; a call older than a week is no longer taken.
+PHONE_BOOK_LIMIT = 20000
+PHONE_LOG_DAYS = 7
+PHONE_LOG_NAMESPACE = UUID("0d0b7c52-6f1e-4c55-9d8e-5a3f2b8e1c47")
+PHONE_DIRECTIONS = frozenset({"outgoing", "incoming", "missed", "rejected", "blocked"})
+# Each seller's phone setup (UX study item 7) lives under this key of the
+# workspace's Lead Desk settings, one entry per person. It is the app's own report,
+# not a manager's setting, so writing it never changes the settings revision.
+PHONES_KEY = "phones"
+# The calls report covers at most this many days at once.
+REPORT_DAYS = 92
+# A missed call waits on the desk this long for a call back.
+CALL_BACK_DAYS = 3
+# A dialer call this close to a call the app already logged is that same call.
+IN_APP_BEFORE = timedelta(minutes=2)
+IN_APP_AFTER = timedelta(minutes=20)
 DEFAULT_SETTINGS: dict[str, Any] = {
     "auto_reassign": False,
     "reassign_minutes": 10,
@@ -150,6 +182,75 @@ def first_call_minutes(created_at: datetime, first_contact_at: datetime | None) 
     if first_contact_at is None:
         return None
     return max(0, round((first_contact_at - created_at).total_seconds() / 60))
+
+
+def counted_phone_call(data: Any) -> bool:
+    """A call the phone logged by itself that counts in a day: any call out, or one taken."""
+    if not isinstance(data, dict) or data.get("via") != "phone":
+        return False
+    return data.get("direction") == "outgoing" or (
+        data.get("direction") == "incoming" and data.get("connected") is True
+    )
+
+
+def phone_health(entry: Any) -> PhoneHealth | None:
+    """A seller's phone from its stored report, or None when it never reported."""
+    if not isinstance(entry, dict) or not isinstance(entry.get("reported_at"), str):
+        return None
+    raw = entry.get("checks")
+    checks = {
+        name: bool(raw[name]) for name in PHONE_CHECKS if isinstance(raw, dict) and name in raw
+    }
+    synced = entry.get("synced_at")
+    return PhoneHealth(
+        reported_at=datetime.fromisoformat(entry["reported_at"]),
+        app_version=entry.get("app_version") if isinstance(entry.get("app_version"), str) else None,
+        family=entry.get("family") if isinstance(entry.get("family"), str) else None,
+        checks=checks,
+        done=sum(checks.values()),
+        total=len(checks),
+        call_log_on=checks.get("callLog", False),
+        synced_at=datetime.fromisoformat(synced) if isinstance(synced, str) else None,
+    )
+
+
+def hours_view(hours: work_hours.WorkHours | None, now: datetime) -> WorkHoursView | None:
+    if hours is None:
+        return None
+    inside = work_hours.inside(hours, now)
+    return WorkHoursView(
+        days=hours.days,
+        start=hours.start.strftime("%H:%M"),
+        end=hours.end.strftime("%H:%M"),
+        pause_leads=hours.pause_leads,
+        inside=inside,
+        next_start=None if inside else work_hours.next_start(hours, now),
+    )
+
+
+# The marker a seller adds when they hide a phone-logged call (kind "edited").
+PRIVATE_CALL = "private_call"
+
+
+def missed_call(kind: str, data: Any) -> bool:
+    """They called and nobody picked up (or the seller cut it), from the phone's call log."""
+    return (
+        kind == "call"
+        and isinstance(data, dict)
+        and data.get("via") == "phone"
+        and data.get("direction") in {"missed", "rejected"}
+    )
+
+
+def reached(kind: str, data: Any) -> bool:
+    """A later contact that answers a missed call: any call out, a call taken, or a result."""
+    if kind == "result":
+        return True
+    if kind != "call" or not isinstance(data, dict):
+        return False
+    if data.get("via") == "phone":
+        return counted_phone_call(data)
+    return not data.get("recording")
 
 
 def median(values: Sequence[int]) -> int | None:
@@ -315,6 +416,7 @@ class LeadDesk:
         *,
         actor: UUID | None,
         command_id: UUID | None = None,
+        at: datetime | None = None,
     ) -> LeadEvent:
         event = LeadEvent(
             id=uuid4(),
@@ -325,7 +427,7 @@ class LeadDesk:
             command_id=command_id,
             data=json.loads(json.dumps(data, default=str)),
             # One request can add several events; a microsecond apart keeps their order.
-            created_at=self.now + timedelta(microseconds=self._sequence),
+            created_at=(at or self.now) + timedelta(microseconds=self._sequence),
         )
         self._sequence += 1
         self.db.add(event)
@@ -521,7 +623,13 @@ class LeadDesk:
                 .limit(5000)
             )
         ).all()
+        hidden = await self._private_calls(day_start)
+        today = [event for event in today if str(event.id) not in hidden]
         results = [event for event in today if event.kind == "result"]
+        # Calls the phone logged by itself count too (UX study item 5).
+        dialled = [
+            event for event in today if event.kind == "call" and counted_phone_call(event.data)
+        ]
         talk = sum(
             int(event.data.get("duration_seconds") or 0) for event in today if event.kind == "call"
         )
@@ -535,18 +643,12 @@ class LeadDesk:
             )
             or 0
         )
-        rules = await self.db.get(LeadRep, (self.tenant_id, me))
+        call_back = await self._call_back()
         return Desk(
-            me=Me(
-                person_id=me,
-                name=self.viewer.name,
-                role=self.viewer.role,
-                can_manage=self.viewer.can_manage,
-                taking_leads=rules.available if rules else True,
-            ),
+            me=await self.me(),
             numbers=Numbers(
-                calls=len(results),
-                connected=sum(1 for event in results if event.data.get("connected")),
+                calls=len(results) + len(dialled),
+                connected=sum(1 for event in [*results, *dialled] if event.data.get("connected")),
                 talk_seconds=talk,
                 follow_ups_done=sum(1 for event in results if event.data.get("was_due")),
                 new_assigned=new_assigned,
@@ -559,6 +661,7 @@ class LeadDesk:
                 later_today=int(counts_row[4]),
                 unassigned=unassigned,
                 overdue=int(counts_row[5]),
+                call_back=len(call_back),
             ),
             queue=await self._rows(queue),
             call_mode=self.call_mode,
@@ -569,7 +672,58 @@ class LeadDesk:
                 MessageTemplate(key=key, label=label, text=text)
                 for key, label, text in MESSAGE_TEMPLATES
             ),
+            call_back=call_back,
         )
+
+    async def _call_back(self) -> tuple[LeadRow, ...]:
+        """My leads who called in the last few days and weren't reached since, newest first."""
+        rows = (
+            await self.db.execute(
+                select(
+                    LeadEvent.id,
+                    LeadEvent.lead_id,
+                    LeadEvent.kind,
+                    LeadEvent.data,
+                    LeadEvent.created_at,
+                )
+                .join(
+                    Lead,
+                    and_(Lead.tenant_id == LeadEvent.tenant_id, Lead.id == LeadEvent.lead_id),
+                )
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    Lead.owner_person_id == self.viewer.person_id,
+                    LeadEvent.kind.in_(("call", "result")),
+                    LeadEvent.created_at >= self.now - timedelta(days=CALL_BACK_DAYS),
+                )
+                .order_by(LeadEvent.created_at)
+                .limit(5000)
+            )
+        ).all()
+        hidden = await self._private_calls(self.now - timedelta(days=CALL_BACK_DAYS))
+        waiting: dict[UUID, tuple[datetime, int]] = {}
+        for event_id, lead_id, kind, data, at in rows:
+            if str(event_id) in hidden:
+                continue
+            if missed_call(kind, data):
+                waiting[lead_id] = (at, waiting.get(lead_id, (at, 0))[1] + 1)
+            elif reached(kind, data):
+                waiting.pop(lead_id, None)
+        if not waiting:
+            return ()
+        leads = (
+            await self.db.scalars(
+                select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id.in_(list(waiting)))
+            )
+        ).all()
+        found = {row.lead_id: row for row in await self._rows(leads)}
+        return tuple(
+            found[lead_id].model_copy(update={"missed_at": at, "missed_calls": count})
+            for lead_id, (at, count) in sorted(
+                waiting.items(), key=lambda item: item[1][0], reverse=True
+            )
+            if lead_id in found
+        )[:QUEUE_LIMIT]
 
     async def badge(self) -> Badge:
         """What is due for me now: the Leads tab's badge and the phone's icon count."""
@@ -679,6 +833,7 @@ class LeadDesk:
                         people.add(UUID(value))
         names = await self._names(people)
         day_end = self._day_start() + timedelta(days=1)
+        hidden = await self._private_calls(lead_id=lead.id)
         can_edit = self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id
         reps: tuple[RepOption, ...] = ()
         if self.viewer.can_manage:
@@ -711,7 +866,12 @@ class LeadDesk:
             next_action_note=lead.next_action_note,
             fields=fields,
             source_fields=self._source_fields(lead.payload),
-            events=tuple(self._event_view(event, names) for event in events),
+            events=tuple(
+                self._event_view(event, names, hidden=hidden)
+                for event in events
+                if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
+                and (str(event.id) not in hidden or event.actor_person_id == self.viewer.person_id)
+            ),
             can_edit=can_edit,
             can_assign=self.viewer.can_manage,
             reps=reps,
@@ -740,7 +900,14 @@ class LeadDesk:
         except ValueError:
             return None
 
-    def _event_view(self, event: LeadEvent, names: Mapping[UUID, str]) -> LeadEventView:
+    def _event_view(
+        self,
+        event: LeadEvent,
+        names: Mapping[UUID, str],
+        *,
+        hidden: frozenset[str] = frozenset(),
+    ) -> LeadEventView:
+        phone_call = event.kind == "call" and event.data.get("via") == "phone"
         data = event.data
         to, previous = self._uuid(data.get("to")), self._uuid(data.get("from"))
         stage = data.get("stage") if isinstance(data.get("stage"), str) else None
@@ -776,6 +943,11 @@ class LeadDesk:
             template_label=TEMPLATE_LABELS.get(data["template"])
             if isinstance(data.get("template"), str)
             else None,
+            via="phone" if data.get("via") == "phone" else None,
+            event_id=event.id if phone_call else None,
+            can_hide=phone_call and event.actor_person_id == self.viewer.person_id,
+            private=str(event.id) in hidden,
+            direction=data["direction"] if data.get("direction") in PHONE_DIRECTIONS else None,
         )
 
     # ----- capture ---------------------------------------------------------------
@@ -994,6 +1166,16 @@ class LeadDesk:
         prefix: str = "",
         command_id: UUID | None = None,
     ) -> allocation.Allocation:
+        hours = work_hours.parse((await self.settings())[1])
+        if hours is not None and work_hours.paused(hours, self.now):
+            reason = (
+                f"{work_hours.HELD} It goes to a seller "
+                f"{work_hours.opening_words(hours, self.now)}."
+            )
+            await self._set_owner(
+                lead, None, reason, "hours", actor=actor, kind=kind, command_id=command_id
+            )
+            return allocation.Allocation(None, reason, "hours")
         team = reps if reps is not None else await self._reps()
         decision = allocation.allocate(
             allocation.LeadFacts(
@@ -1487,6 +1669,272 @@ class LeadDesk:
         await self.db.flush()
         return await self.detail(lead.id)
 
+    # ----- calls the phone logged by itself (UX study item 5) -----------------------
+
+    async def phone_book(self) -> PhoneBook:
+        """The numbers of the leads I can see, newest first: my phone logs calls with these only."""
+        numbers = (
+            await self.db.scalars(
+                select(Lead.phone)
+                .where(self._visible(), Lead.phone.is_not(None))
+                .order_by(Lead.updated_at.desc())
+                .limit(PHONE_BOOK_LIMIT)
+            )
+        ).all()
+        return PhoneBook(
+            work_hours=hours_view(work_hours.parse((await self.settings())[1]), self.now),
+            person_id=self.viewer.person_id,
+            numbers=tuple(dict.fromkeys(number for number in numbers if number)),
+            generated_at=self.now,
+        )
+
+    async def log_phone_calls(self, command: PhoneLog) -> PhoneLogResult:
+        """Puts the work calls my phone logged by itself on their leads' history.
+
+        Each call-history row is logged once, at the time the call was made: its
+        command id comes from this person, this phone, the row and its time. A
+        call the app's own after-call sheet already logged is not counted twice.
+        The stage and the next call stay as they are; only the seller's own
+        answer changes those.
+        """
+        _, config = await self.settings()
+        country = str(config.get("default_country") or "91")
+        hours = work_hours.parse(config)
+        oldest = self.now - timedelta(days=PHONE_LOG_DAYS)
+        newest = self.now + timedelta(minutes=5)
+        wanted: dict[UUID, tuple[PhoneLogCall, str]] = {}
+        skipped = already = 0
+        for call in command.calls:
+            phone = normalise_phone(call.number, default_country=country)
+            # Outside work hours a call is the seller's own (Salestrail): never logged.
+            if (
+                phone is None
+                or not oldest <= call.started_at <= newest
+                or not work_hours.inside(hours, call.started_at)
+            ):
+                skipped += 1
+                continue
+            key = uuid5(
+                PHONE_LOG_NAMESPACE,
+                f"{self.tenant_id}:{self.viewer.person_id}:{command.device_id}:"
+                f"{call.log_id}:{int(call.started_at.timestamp())}",
+            )
+            if key in wanted:
+                already += 1
+                continue
+            wanted[key] = (call, phone)
+        if not wanted:
+            await self._phone_seen(command.device_id)
+            return PhoneLogResult(logged=0, already=already, skipped=skipped)
+        seen = set(
+            (
+                await self.db.scalars(
+                    select(LeadEvent.command_id).where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.command_id.in_(list(wanted)),
+                    )
+                )
+            ).all()
+        )
+        already += len(seen)
+        fresh = sorted(
+            ((key, call, phone) for key, (call, phone) in wanted.items() if key not in seen),
+            key=lambda item: item[1].started_at,
+        )
+        phones = {phone for _, _, phone in fresh}
+        leads: dict[str, Lead] = {}
+        if phones:
+            found = (
+                await self.db.scalars(
+                    select(Lead)
+                    .where(self._visible(), Lead.phone.in_(phones))
+                    .order_by(Lead.id)
+                    .with_for_update()
+                )
+            ).all()
+            leads = {lead.phone: lead for lead in found if lead.phone}
+        in_app: dict[UUID, list[datetime]] = {}
+        if leads:
+            starts = [call.started_at for _, call, _ in fresh]
+            rows = (
+                await self.db.execute(
+                    select(LeadEvent.lead_id, LeadEvent.created_at, LeadEvent.data).where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.lead_id.in_([lead.id for lead in leads.values()]),
+                        LeadEvent.actor_person_id == self.viewer.person_id,
+                        LeadEvent.kind == "call",
+                        LeadEvent.created_at >= min(starts) - IN_APP_BEFORE,
+                        LeadEvent.created_at
+                        <= max(starts) + timedelta(seconds=14400) + IN_APP_AFTER,
+                    )
+                )
+            ).all()
+            for lead_id, at, data in rows:
+                if isinstance(data, dict) and not (
+                    data.get("via") == "phone" or data.get("recording") or data.get("simulated")
+                ):
+                    in_app.setdefault(lead_id, []).append(at)
+        logged = 0
+        for key, call, phone in fresh:
+            lead = leads.get(phone)
+            start = call.started_at
+            # No lead of mine has this number, or the call was long before they were a lead.
+            if lead is None or start < lead.created_at - timedelta(hours=1):
+                skipped += 1
+                continue
+            end = start + timedelta(seconds=call.duration_seconds)
+            if call.direction == "outgoing" and any(
+                start - IN_APP_BEFORE <= at <= end + IN_APP_AFTER for at in in_app.get(lead.id, ())
+            ):
+                already += 1
+                continue
+            talked = call.duration_seconds > 0 and call.direction in {"outgoing", "incoming"}
+            if call.direction == "outgoing" or talked:
+                lead.calls += 1
+                contact = max(start, lead.created_at)
+                lead.last_contact_at = max(lead.last_contact_at or contact, contact)
+                lead.first_contact_at = min(lead.first_contact_at or contact, contact)
+                lead.updated_at = self.now
+            self._event(
+                lead,
+                "call",
+                {
+                    "via": "phone",
+                    "direction": call.direction,
+                    "duration_seconds": call.duration_seconds,
+                    "connected": talked,
+                    "device_id": str(command.device_id),
+                },
+                actor=self.viewer.person_id,
+                command_id=key,
+                at=min(start, self.now),
+            )
+            logged += 1
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            raise DeskError(409, "These calls are being logged already. Try again.") from None
+        await self._phone_seen(command.device_id)
+        return PhoneLogResult(logged=logged, already=already, skipped=skipped)
+
+    async def _private_calls(
+        self, since: datetime | None = None, *, lead_id: UUID | None = None
+    ) -> frozenset[str]:
+        """Ids of phone-logged calls their sellers marked private (the newest marker wins).
+
+        A marker always comes after its call, so markers since ``since`` cover the
+        calls since then.
+        """
+        query = select(LeadEvent.data).where(
+            LeadEvent.tenant_id == self.tenant_id, LeadEvent.kind == "edited"
+        )
+        if since is not None:
+            query = query.where(LeadEvent.created_at >= since)
+        if lead_id is not None:
+            query = query.where(LeadEvent.lead_id == lead_id)
+        state: dict[str, bool] = {}
+        for data in (await self.db.scalars(query.order_by(LeadEvent.created_at))).all():
+            call = data.get(PRIVATE_CALL) if isinstance(data, dict) else None
+            if isinstance(call, str):
+                state[call] = data.get("private") is True
+        return frozenset(call for call, private in state.items() if private)
+
+    async def set_call_privacy(self, event_id: UUID, command: CallPrivacy) -> LeadDetail:
+        """The seller hides a call their phone logged from everyone else, or shows it again.
+
+        Nothing is removed: a marker is added, the call stays on the lead's history
+        for its seller, and it leaves every count and report while private.
+        """
+        seen = await self._command_seen(command.command_id)
+        if seen is not None:
+            return await self.detail(seen.lead_id)
+        event = await self.db.scalar(
+            select(LeadEvent).where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.id == event_id,
+                LeadEvent.kind == "call",
+            )
+        )
+        if (
+            event is None
+            or event.data.get("via") != "phone"
+            or event.actor_person_id != self.viewer.person_id
+        ):
+            raise DeskError(404, "Only your own calls from your phone can be made private.")
+        lead = await self._lead(event.lead_id, lock=True)
+        private_now = str(event.id) in await self._private_calls(
+            event.created_at, lead_id=event.lead_id
+        )
+        if private_now != command.private:
+            if counted_phone_call(event.data):
+                lead.calls = max(0, lead.calls + (-1 if command.private else 1))
+            lead.updated_at = self.now
+            self._event(
+                lead,
+                "edited",
+                {
+                    "changed": [PRIVATE_CALL],
+                    PRIVATE_CALL: str(event.id),
+                    "private": command.private,
+                },
+                actor=self.viewer.person_id,
+                command_id=command.command_id,
+            )
+            await self.db.flush()
+        return await self.detail(lead.id)
+
+    # ----- the phone setup checklist (UX study item 7) -----------------------------
+
+    async def _phones(self) -> tuple[LeadDeskSettings, dict[str, Any]]:
+        """The settings row, locked, and a copy of every seller's phone entry."""
+        row = await self.db.get(LeadDeskSettings, self.tenant_id, with_for_update=True)
+        if row is None:
+            row = LeadDeskSettings(
+                tenant_id=self.tenant_id,
+                revision=1,
+                config={},
+                updated_by_person_id=None,
+                updated_at=self.now,
+            )
+            self.db.add(row)
+        phones = row.config.get(PHONES_KEY)
+        return row, dict(phones) if isinstance(phones, dict) else {}
+
+    async def _save_phone(
+        self, row: LeadDeskSettings, phones: dict[str, Any], entry: dict[str, Any]
+    ) -> None:
+        phones[str(self.viewer.person_id)] = entry
+        # A new dict, so the change is saved; the revision stays (not a manager's edit).
+        row.config = {**row.config, PHONES_KEY: phones}
+        await self.db.flush()
+
+    async def _phone_seen(self, device_id: UUID) -> None:
+        """The phone's call history reached Sales Xray just now (its 15-minute look)."""
+        row, phones = await self._phones()
+        entry = dict(phones.get(str(self.viewer.person_id)) or {})
+        entry.update(device_id=str(device_id), synced_at=self.now.isoformat())
+        await self._save_phone(row, phones, entry)
+
+    async def report_phone(self, command: PhoneReport) -> PhoneHealth:
+        """The seller's phone app reports its setup checklist; managers see it on Team."""
+        row, phones = await self._phones()
+        previous = phones.get(str(self.viewer.person_id))
+        entry = {
+            "device_id": str(command.device_id),
+            "app_version": command.app_version,
+            "family": command.family,
+            "checks": command.checks,
+            "reported_at": self.now.isoformat(),
+        }
+        # The last call-history look stays when it came from this same phone.
+        if isinstance(previous, dict) and previous.get("device_id") == str(command.device_id):
+            entry["synced_at"] = previous.get("synced_at")
+        await self._save_phone(row, phones, entry)
+        health = phone_health(entry)
+        if health is None:  # pragma: no cover - the entry above always has its report time
+            raise DeskError(500, "The phone's report wasn't saved. Try again.")
+        return health
+
     # ----- team, rules and settings ------------------------------------------------
 
     def _require_manager(self) -> None:
@@ -1514,19 +1962,22 @@ class LeadDesk:
         )
         activity = (
             await self.db.execute(
-                select(LeadEvent.actor_person_id, LeadEvent.data)
+                select(LeadEvent.id, LeadEvent.actor_person_id, LeadEvent.kind, LeadEvent.data)
                 .where(
                     LeadEvent.tenant_id == self.tenant_id,
-                    LeadEvent.kind == "result",
+                    LeadEvent.kind.in_(("result", "call")),
                     LeadEvent.created_at >= day_start,
                 )
                 .limit(20000)
             )
         ).all()
+        hidden = await self._private_calls(day_start)
         calls: dict[UUID, int] = {}
         connected: dict[UUID, int] = {}
-        for actor, data in activity:
-            if actor is None:
+        for event_id, actor, kind, data in activity:
+            if actor is None or (kind == "call" and not counted_phone_call(data)):
+                continue
+            if str(event_id) in hidden:
                 continue
             calls[actor] = calls.get(actor, 0) + 1
             if isinstance(data, dict) and data.get("connected"):
@@ -1592,6 +2043,8 @@ class LeadDesk:
             if owner is not None:
                 speeds.setdefault(owner, []).append(minutes)
         revision, config = await self.settings()
+        stored = config.get(PHONES_KEY)
+        phones: dict[str, Any] = stored if isinstance(stored, dict) else {}
         return Team(
             reps=tuple(
                 RepView(
@@ -1609,6 +2062,7 @@ class LeadDesk:
                     calls_today=calls.get(rep.state.person_id, 0),
                     connected_today=connected.get(rep.state.person_id, 0),
                     first_call_minutes=median(speeds.get(rep.state.person_id, [])),
+                    phone=phone_health(phones.get(str(rep.state.person_id))),
                 )
                 for rep in reps
             ),
@@ -1617,6 +2071,7 @@ class LeadDesk:
                 auto_reassign=bool(config["auto_reassign"]),
                 reassign_minutes=int(config["reassign_minutes"]),
                 default_country=str(config["default_country"]),
+                work_hours=hours_view(work_hours.parse(config), self.now),
             ),
             by_stage={stage: int(count) for stage, count in by_stage.items()},
             by_source={source: int(count) for source, count in by_source.items()},
@@ -1624,6 +2079,67 @@ class LeadDesk:
             waiting_first_call=waiting,
             first_call_minutes=median(everyone),
         )
+
+    async def call_report(self, start: date, end: date) -> CallReport:
+        """Calls, connected calls, talk time and missed calls per seller per day (India time).
+
+        Counted the way My day counts: a saved call result or a call the phone
+        logged by itself (out, or taken); talk time from every call; missed calls
+        are the leads' calls nobody picked up.
+        """
+        self._require_manager()
+        if end < start or (end - start).days >= REPORT_DAYS:
+            raise DeskError(422, f"Pick up to {REPORT_DAYS} days, ending after they start.")
+        days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+        begin = datetime.combine(start, time.min, tzinfo=IST).astimezone(UTC)
+        finish = datetime.combine(end + timedelta(days=1), time.min, tzinfo=IST).astimezone(UTC)
+        rows = (
+            await self.db.execute(
+                select(
+                    LeadEvent.id,
+                    LeadEvent.actor_person_id,
+                    LeadEvent.kind,
+                    LeadEvent.data,
+                    LeadEvent.created_at,
+                ).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind.in_(("call", "result")),
+                    LeadEvent.created_at >= begin,
+                    LeadEvent.created_at < finish,
+                    LeadEvent.actor_person_id.is_not(None),
+                )
+            )
+        ).all()
+        empty = {"calls": 0, "connected": 0, "talk_seconds": 0, "missed": 0}
+        tally: dict[UUID, dict[date, dict[str, int]]] = {}
+        hidden = await self._private_calls(begin)
+        for event_id, actor, kind, data, at in rows:
+            if not isinstance(data, dict) or str(event_id) in hidden:
+                continue
+            cell = tally.setdefault(actor, {}).setdefault(at.astimezone(IST).date(), dict(empty))
+            if kind == "result" or counted_phone_call(data):
+                cell["calls"] += 1
+                cell["connected"] += 1 if data.get("connected") else 0
+            if kind == "call":
+                cell["talk_seconds"] += int(data.get("duration_seconds") or 0)
+                cell["missed"] += 1 if missed_call(kind, data) else 0
+        sellers = []
+        for rep in await self._reps():
+            mine = tally.get(rep.state.person_id, {})
+            cells = [DayCalls(day=day, **mine.get(day, empty)) for day in days]
+            sellers.append(
+                SellerCalls(
+                    person_id=rep.state.person_id,
+                    name=rep.state.name,
+                    days=tuple(cells),
+                    calls=sum(cell.calls for cell in cells),
+                    connected=sum(cell.connected for cell in cells),
+                    talk_seconds=sum(cell.talk_seconds for cell in cells),
+                    missed=sum(cell.missed for cell in cells),
+                )
+            )
+        sellers.sort(key=lambda seller: (-seller.calls, seller.name.lower()))
+        return CallReport(start=start, end=end, sellers=tuple(sellers))
 
     async def save_rep(self, person_id: UUID, command: RepRules) -> Team:
         self._require_manager()
@@ -1671,12 +2187,21 @@ class LeadDesk:
             row.updated_by_person_id = me
             row.updated_at = self.now
             await self.db.flush()
+        return await self.me()
+
+    async def me(self) -> Me:
+        """Me on the desk: whether new leads come to me, and until when they wait."""
+        rules = await self.db.get(LeadRep, (self.tenant_id, self.viewer.person_id))
+        hours = work_hours.parse((await self.settings())[1])
         return Me(
-            person_id=me,
+            person_id=self.viewer.person_id,
             name=self.viewer.name,
             role=self.viewer.role,
             can_manage=self.viewer.can_manage,
-            taking_leads=row.available,
+            taking_leads=rules.available if rules else True,
+            paused_until=work_hours.next_start(hours, self.now)
+            if hours is not None and work_hours.paused(hours, self.now)
+            else None,
         )
 
     async def save_settings(self, command: SettingsCommand) -> Team:
@@ -1699,10 +2224,69 @@ class LeadDesk:
         await self.db.flush()
         return await self.team()
 
+    async def save_work_hours(self, command: WorkHoursCommand) -> Team:
+        """A manager sets the team's work hours (India time); no days clears them."""
+        self._require_manager()
+        start = time.fromisoformat(command.start)
+        end = time.fromisoformat(command.end)
+        if command.days and start >= end:
+            raise DeskError(422, "Work ends after it starts. Pick the hours again.")
+        row = await self.db.get(LeadDeskSettings, self.tenant_id, with_for_update=True)
+        current = row.revision if row else 0
+        if current != command.expected_revision:
+            raise DeskError(409, "Someone changed these settings. Reload and try again.")
+        config = {**DEFAULT_SETTINGS, **(row.config if row else {})}
+        hours = (
+            work_hours.WorkHours(command.days, start, end, command.pause_leads)
+            if command.days
+            else None
+        )
+        config[work_hours.KEY] = work_hours.as_config(hours)
+        if row is None:
+            row = LeadDeskSettings(tenant_id=self.tenant_id, revision=0, config={})
+            self.db.add(row)
+        row.revision = current + 1
+        row.config = config
+        row.updated_by_person_id = self.viewer.person_id
+        row.updated_at = self.now
+        await self.db.flush()
+        if not work_hours.paused(hours, self.now):
+            await self.release_held()
+        return await self.team()
+
+    async def release_held(self, *, limit: int = 500) -> int:
+        """Leads that waited for work hours go out to sellers once work has started."""
+        hours = work_hours.parse((await self.settings())[1])
+        if work_hours.paused(hours, self.now):
+            return 0
+        held = (
+            await self.db.scalars(
+                select(Lead)
+                .where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.owner_person_id.is_(None),
+                    Lead.stage.in_(OPEN_STAGES),
+                    Lead.owner_reason.like(f"{work_hours.HELD}%"),
+                )
+                .order_by(Lead.created_at)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
+            )
+        ).all()
+        if not held:
+            return 0
+        reps = await self._reps()
+        released = 0
+        for lead in held:
+            decision = await self._allocate(lead, reps=reps, prefix="Work hours started. ")
+            released += decision.person_id is not None
+        await self.db.flush()
+        return released
+
     async def sweep(self, *, limit: int = 200) -> int:
         """Move new leads nobody called in time to someone else (when switched on)."""
         _, config = await self.settings()
-        if not config["auto_reassign"]:
+        if not config["auto_reassign"] or work_hours.paused(work_hours.parse(config), self.now):
             return 0
         minutes = int(config["reassign_minutes"])
         stale = (

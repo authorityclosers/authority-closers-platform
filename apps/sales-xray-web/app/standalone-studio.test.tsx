@@ -117,6 +117,8 @@ function deferred<T>() {
 let root: Root;
 let container: HTMLDivElement;
 let fetchMock: ReturnType<typeof vi.fn>;
+// What the signed-in account's consent read answers (see the stub below).
+let consentStatus: "current" | "renewal_required" = "current";
 
 async function flush() {
   await act(async () => {
@@ -139,6 +141,7 @@ async function mount(openingExistingCall = false) {
 beforeEach(() => {
   vi.mocked(readSalesXrayWorkspaces).mockReset();
   pathname = "/";
+  consentStatus = "current";
   authSelectedFile = null;
   authPending = null;
   container = document.createElement("div");
@@ -146,11 +149,25 @@ beforeEach(() => {
   root = createRoot(container);
   fetchMock = vi.fn();
   // The shell's logo read (organisation workspaces) is outside these access
-  // checks; it answers "no logo" and stays out of the recorded calls.
+  // checks; it answers "no logo" and stays out of the recorded calls. So does
+  // the Terms card's consent read (consent-renewal.tsx).
   vi.stubGlobal("fetch", (path: string, init?: RequestInit) =>
     path === "/v1/organisation/branding"
       ? Promise.resolve(response({}, 404))
-      : (fetchMock as unknown as typeof fetch)(path, init),
+      : path === "/v1/me/consent"
+        ? Promise.resolve(
+            Response.json({
+              status: consentStatus,
+              current_version: "synthetic-terms-v1",
+              document: {
+                version: "synthetic-terms-v1",
+                acknowledgement: "I accept the synthetic terms.",
+                terms_path: "/terms",
+                privacy_path: "/privacy",
+              },
+            }),
+          )
+        : (fetchMock as unknown as typeof fetch)(path, init),
   );
 });
 
@@ -187,6 +204,24 @@ afterEach(async () => {
   container.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("asks a signed-in session for the current Terms, and a signed-out one nothing", async () => {
+  consentStatus = "renewal_required";
+  fetchMock.mockResolvedValueOnce(response({}, 401));
+  await mount();
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+
+  await act(async () => root.unmount());
+  container.innerHTML = "";
+  root = createRoot(container);
+  fetchMock.mockClear();
+  fetchMock.mockResolvedValueOnce(response(workspaceChoices(firstTenantId)));
+  await mount();
+  const dialog = container.querySelector('[role="dialog"]');
+  expect(dialog?.textContent).toContain("I accept the synthetic terms.");
+  // The page is still there behind the card.
+  expect(container.querySelector('[data-testid="call-studio"]')).not.toBeNull();
 });
 
 it("passes through unauthenticated sessions and selected sessions without context activation", async () => {

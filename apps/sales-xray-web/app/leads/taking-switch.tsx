@@ -10,17 +10,20 @@
 
 import { useState } from "react";
 
-import { LeadsError, setTaking } from "./leads-client";
+import { LeadsError, setTaking, when } from "./leads-client";
 import styles from "./leads.module.css";
 
 export function TakingSwitch({
   initial,
   place,
   onChanged,
+  pausedUntil = null,
 }: {
   initial: boolean;
   place: "header" | "row";
   onChanged?: () => void;
+  /** Outside the team's work hours, new leads wait until this time. */
+  pausedUntil?: string | null;
 }) {
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -67,9 +70,11 @@ export function TakingSwitch({
           <strong>{on ? "Taking new leads" : "Not taking new leads"}</strong>
           {place === "row" ? (
             <small>
-              {on
-                ? "New leads can come to you"
-                : "New leads go to others. Your open leads stay with you."}
+              {!on
+                ? "New leads go to others. Your open leads stay with you."
+                : pausedUntil
+                  ? `Outside work hours. New leads wait until ${when(pausedUntil)}.`
+                  : "New leads can come to you"}
             </small>
           ) : null}
         </span>

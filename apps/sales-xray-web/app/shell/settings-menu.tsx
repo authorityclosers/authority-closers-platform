@@ -41,10 +41,12 @@ import { useSalesXraySignOut } from "../account-navigation";
 import { formatAnalysisTime } from "../analysis-time";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
+import { when } from "../leads/leads-client";
 import {
   ANDROID_DOWNLOAD_READY,
   PHONE_APP_HREF,
 } from "../leads/phone-app-flag";
+import { useTakingLeads } from "../leads/taking-account";
 import { notify } from "../notice-center";
 import { openSettings } from "../settings-open";
 import { AccountAvatarImage } from "../speaker-avatar";
@@ -189,6 +191,11 @@ export function SettingsMenu({
   );
   const minutes = minutesLine(allowance);
   const guide = useFirstCallGuideSwitch();
+  // The seller's own "Taking new leads", in an organisation only (UX study item 8);
+  // a live read, so not under test (like the Leads tab badge).
+  const taking = useTakingLeads(
+    open && organisation && process.env.NODE_ENV !== "test",
+  );
   const pathname = usePathname();
   const inApp = useInApp();
   const { signOut, signingOut, error: signOutError } = useSalesXraySignOut();
@@ -504,6 +511,21 @@ export function SettingsMenu({
                 </div>
               ) : null}
               <div className={styles.list}>
+                {taking ? (
+                  <Row
+                    icon={<Users size={16} />}
+                    label="Taking new leads"
+                    value={
+                      !taking.taking
+                        ? "Off"
+                        : taking.pausedUntil
+                          ? `Waits until ${when(taking.pausedUntil)}`
+                          : "On"
+                    }
+                    checked={taking.taking}
+                    onClick={taking.toggle}
+                  />
+                ) : null}
                 <Row
                   icon={<Settings2 size={16} />}
                   label="Settings"

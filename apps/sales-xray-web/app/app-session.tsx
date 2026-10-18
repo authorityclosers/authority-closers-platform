@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { callIdFromPath } from "./analysis-routes";
+import { ConsentRenewal } from "./consent-renewal";
 import { UUID_RE } from "./prospects-client";
 import { PurchaseShell } from "./plans/purchase-shell";
 import styles from "./plans/plans.module.css";
@@ -134,6 +135,7 @@ function PurchaseSession({ children }: { children: ReactNode }) {
   return (
     <WorkspaceAccessProvider value={{ ...access, retry }}>
       {children}
+      <ConsentRenewal />
     </WorkspaceAccessProvider>
   );
 }

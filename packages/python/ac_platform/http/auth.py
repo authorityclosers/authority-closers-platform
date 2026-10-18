@@ -66,6 +66,7 @@ from ac_platform.identity.google_profile import (
     save_google_profile_photo,
 )
 from ac_platform.identity.google_profile_photo import fetch_google_profile_photo
+from ac_platform.identity.learner_consent import learner_consent_acknowledgement
 from ac_platform.identity.models import IdentityCommandIdempotency, Person, PersonStatus
 from ac_platform.identity.onboarding import (
     LearnerOnboardingService,
@@ -2227,10 +2228,7 @@ def install_identity_http(
     def _learner_consent_document(version: str) -> LearnerConsentDocumentResponse:
         return LearnerConsentDocumentResponse(
             version=version,
-            acknowledgement=(
-                "I confirm that I am 18 or older and accept the current Authority Closers "
-                "Terms and Privacy notice for my learner account."
-            ),
+            acknowledgement=learner_consent_acknowledgement(version),
         )
 
     async def _record_learner_consent_acceptance(

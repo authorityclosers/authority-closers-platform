@@ -682,6 +682,22 @@
   background: var(--lx-closing);
 }
 
+/* Mark private: the seller's own phone-logged call, hidden from the team. */
+.privateTag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--sx-line);
+  color: var(--sx-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* A call from the lead that nobody took (phone call log, UX study item 5). */
+.history li[data-missed]::before {
+  background: var(--sx-bad);
+}
+
 .history li[data-kind="repeat"]::before,
 .history li[data-kind="reassigned"]::before {
   background: var(--sx-warn);
@@ -868,7 +884,8 @@
   gap: var(--sx-gap);
 }
 
-.teamPair .form {
+.teamPair .form,
+.reportForm {
   padding: 12px 14px;
 }
 
@@ -2996,6 +3013,217 @@
 
 .alertsCard {
   composes: appBanner;
+}
+
+/* Work calls logged by the phone (UX study item 5): the offer, then a slim row. */
+.phoneLogCard {
+  composes: appBanner;
+}
+
+.phoneLogSims {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.phoneLogSims > span {
+  color: var(--sx-muted);
+  font-size: 0.8125rem;
+}
+
+/* Phone setup (UX study item 7): the bar at the top until done, then the checklist. */
+.setupBar {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.setupBarText {
+  display: grid;
+  line-height: 1.2;
+}
+
+.setupBarText small,
+.setupHead p {
+  color: var(--sx-muted);
+  font-size: 0.8125rem;
+}
+
+.setupTrack {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-line);
+}
+
+.setupTrack > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+}
+
+.setupSheet {
+  display: grid;
+  gap: 14px;
+}
+
+.setupHead {
+  display: grid;
+  gap: 6px;
+  padding-right: 40px;
+}
+
+.setupHead h2,
+.setupHead p,
+.setupView h3 {
+  margin: 0;
+}
+
+.setupList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setupList li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.setupList li > svg {
+  color: var(--sx-line-strong);
+}
+
+.setupList li[data-done] > svg {
+  color: var(--sx-accent);
+}
+
+.setupList li > span {
+  display: grid;
+  gap: 2px;
+}
+
+.setupList small {
+  color: var(--sx-muted);
+}
+
+.setupView {
+  display: grid;
+  gap: 12px;
+}
+
+.setupView dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.setupView dt {
+  color: var(--sx-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.setupView dd {
+  margin: 2px 0 0;
+}
+
+.setupSteps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+/* "Save as a lead?" for work calls with unknown numbers (Salestrail row). */
+.unknownCard {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.unknownCard header,
+.unknownCard li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.unknownCard header > span,
+.unknownCard li > span {
+  display: grid;
+  gap: 2px;
+}
+
+.unknownCard small {
+  color: var(--sx-muted);
+}
+
+.unknownCard ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unknownCard li {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding-top: 6px;
+  border-top: 1px solid var(--sx-line);
+}
+
+/* A seller's phone on Team: one dot and a few words. */
+.phoneDot {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.phoneDot::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sx-line-strong);
+}
+
+.phoneDot[data-tone="good"]::before {
+  background: var(--sx-good);
+}
+
+.phoneDot[data-tone="warn"]::before {
+  background: var(--sx-warn);
+}
+
+.phoneDot[data-tone="bad"]::before {
+  background: var(--sx-bad);
 }
 
 /* The Leads tab badge (rail and phone tab bar). */

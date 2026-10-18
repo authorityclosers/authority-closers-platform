@@ -54,6 +54,10 @@ const WHY_TONE: Record<LeadRow["why_kind"], Tone> = {
 
 /** "Why now" plus the time that makes it urgent, in the seller's own clock. */
 export function whyLine(row: LeadRow, now: Date = new Date()): string {
+  if (row.missed_at)
+    return `Missed call ${ago(row.missed_at, now)}${
+      (row.missed_calls ?? 0) > 1 ? ` · ${row.missed_calls} calls` : ""
+    } · call back`;
   if (row.why_kind === "new") return `${row.why} · ${ago(row.created_at, now)}`;
   if (
     row.next_action_at &&
@@ -153,7 +157,9 @@ export function LeadLine({
             {sub ? <span className={styles.leadSub}>{sub}</span> : null}
             <span
               className={styles.leadWhy}
-              data-tone={row.overdue ? "bad" : WHY_TONE[row.why_kind]}
+              data-tone={
+                row.overdue || row.missed_at ? "bad" : WHY_TONE[row.why_kind]
+              }
             >
               {row.overdue ? <b className={styles.lateTag}>Late</b> : null}
               {whyLine(row)}
@@ -356,6 +362,7 @@ export function DeskView({
 }) {
   const { counts, numbers } = desk;
   const upcoming = desk.upcoming ?? [];
+  const callBack = desk.call_back ?? [];
   return (
     <>
       <NextUp desk={desk} onStart={onStart} onAdd={onAdd} />
@@ -393,6 +400,20 @@ export function DeskView({
       </div>
       <div className={styles.deskGrid}>
         <div className={styles.deskMain}>
+          {callBack.length ? (
+            <Panel title="Call back" sub={`${callBack.length}`}>
+              <ul className={styles.leadList} aria-label="Call back">
+                {callBack.map((row) => (
+                  <LeadLine
+                    key={row.lead_id}
+                    row={row}
+                    onOpen={onOpen}
+                    actions={actions}
+                  />
+                ))}
+              </ul>
+            </Panel>
+          ) : null}
           <Panel
             title="Today"
             sub={desk.queue.length ? `${desk.queue.length}` : undefined}

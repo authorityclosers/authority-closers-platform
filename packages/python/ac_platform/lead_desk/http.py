@@ -12,6 +12,7 @@ import json
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import date
 from typing import Any, Literal
 from urllib.parse import parse_qsl
 from uuid import UUID
@@ -34,7 +35,9 @@ from ac_platform.lead_desk import push, simulation
 from ac_platform.lead_desk.contracts import (
     AlertText,
     Badge,
+    CallPrivacy,
     CallRecord,
+    CallReport,
     Desk,
     DeviceCommand,
     DeviceView,
@@ -51,7 +54,12 @@ from ac_platform.lead_desk.contracts import (
     NewLead,
     NewSource,
     NoteCommand,
+    PhoneBook,
     PhoneCall,
+    PhoneHealth,
+    PhoneLog,
+    PhoneLogResult,
+    PhoneReport,
     PushConfig,
     Reassign,
     RecordingCommand,
@@ -63,6 +71,7 @@ from ac_platform.lead_desk.contracts import (
     SourceView,
     TakingLeads,
     Team,
+    WorkHoursCommand,
 )
 from ac_platform.lead_desk.intake import MAX_FILE_BYTES, Intake
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
@@ -381,6 +390,30 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 duration_seconds=command.duration_seconds,
             )
 
+    @router.get("/phone-book", response_model=PhoneBook, response_model_by_alias=True)
+    async def phone_book(request: Request, response: Response) -> PhoneBook:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.phone_book()
+
+    @router.post("/phone-log", response_model=PhoneLogResult, response_model_by_alias=True)
+    async def phone_log(command: PhoneLog, request: Request, response: Response) -> PhoneLogResult:
+        """Work calls the phone app found in the phone's call history (UX study item 5)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.log_phone_calls(command)
+
+    @router.post(
+        "/calls/{event_id}/private", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def call_privacy(
+        event_id: UUID, command: CallPrivacy, request: Request, response: Response
+    ) -> LeadDetail:
+        """Mark private (Salestrail's untracked call): the seller's own phone-logged call only."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.set_call_privacy(event_id, command)
+
     @router.post(
         "/leads/{lead_id}/recordings", response_model=LeadDetail, response_model_by_alias=True
     )
@@ -407,17 +440,54 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.save_rep(person_id, command)
 
+    @router.get("/reports/calls", response_model=CallReport, response_model_by_alias=True)
+    async def call_report(request: Request, response: Response) -> CallReport:
+        """Calls by seller by day for a date range (managers; the page makes the CSV)."""
+        no_query(request, frozenset({"start", "end"}))
+        try:
+            start = date.fromisoformat(request.query_params.get("start", ""))
+            end = date.fromisoformat(request.query_params.get("end", ""))
+        except ValueError:
+            raise HTTPException(422, "Pick a start and an end date.", headers=PRIVATE) from None
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.call_report(start, end)
+
+    @router.get("/me", response_model=Me, response_model_by_alias=True)
+    async def me(request: Request, response: Response) -> Me:
+        """Whether new leads come to me: the account sheet's switch (UX study item 8)."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.me()
+
     @router.put("/me/taking", response_model=Me, response_model_by_alias=True)
     async def set_taking(command: TakingLeads, request: Request, response: Response) -> Me:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.set_taking(command)
 
+    @router.post("/me/phone", response_model=PhoneHealth, response_model_by_alias=True)
+    async def report_phone(
+        command: PhoneReport, request: Request, response: Response
+    ) -> PhoneHealth:
+        """The seller's phone setup checklist, from the page inside the phone app (item 7)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.report_phone(command)
+
     @router.put("/settings", response_model=Team, response_model_by_alias=True)
     async def save_settings(command: SettingsCommand, request: Request, response: Response) -> Team:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.save_settings(command)
+
+    @router.put("/work-hours", response_model=Team, response_model_by_alias=True)
+    async def save_work_hours(
+        command: WorkHoursCommand, request: Request, response: Response
+    ) -> Team:
+        """The team's work days and hours; outside them calls stay on phones and leads wait."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.save_work_hours(command)
 
     @router.post("/sweep")
     async def sweep(request: Request, response: Response) -> dict[str, int]:

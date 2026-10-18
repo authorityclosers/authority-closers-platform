@@ -715,3 +715,652 @@ def test_a_seller_turns_new_leads_off_and_on(postgres_harness: Any, tmp_path: Pa
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_calls_the_phone_logged_by_itself_reach_their_leads(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """UX study item 5, 18 Oct: work calls made from the phone dialer, not from a lead
+    in the app, land on the lead's history and in the day's numbers. The phone sends
+    only its leads' numbers; anything else is dropped here too, and nothing twice."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            other = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                as_(setup.token)
+                leads: dict[str, str] = {}
+                for name, phone, owner in (
+                    ("Ravi Kulkarni", "98765 43210", seller.person_id),
+                    ("Meena Shah", "98765 43211", other.person_id),
+                ):
+                    added = await client.post(
+                        f"{BASE}/leads",
+                        json={
+                            "command_id": str(uuid4()),
+                            "name": name,
+                            "phone": phone,
+                            "assign": "person",
+                            "person_id": str(owner),
+                        },
+                        headers=WRITE,
+                    )
+                    assert added.status_code == 201, added.text
+                    leads[name] = added.json()["lead"]["lead_id"]
+
+                as_(seller_token)
+                book = await client.get(f"{BASE}/phone-book")
+                assert book.status_code == 200, book.text
+                # Only the seller's own lead: another seller's lead is not in their book.
+                assert book.json()["numbers"] == ["+919876543210"]
+                assert book.json()["person_id"] == str(seller.person_id)
+                assert book.headers["cache-control"] == "private, no-store"
+
+                now = datetime.now(UTC)
+                device = str(uuid4())
+
+                def row(log_id: str, number: str, minutes: float, **extra: Any) -> dict[str, Any]:
+                    return {
+                        "log_id": log_id,
+                        "number": number,
+                        "started_at": (now - timedelta(minutes=minutes)).isoformat(),
+                        "duration_seconds": 0,
+                        "direction": "outgoing",
+                        **extra,
+                    }
+
+                calls = [
+                    row("101", "098765 43210", 3, duration_seconds=192),
+                    row("102", "+91 98765 43210", 2, direction="missed"),
+                    row("103", "9876543211", 2),  # another seller's lead
+                    row("104", "9123456789", 2),  # nobody's
+                    row("105", "9876543210", 60 * 24 * 8),  # older than a week
+                ]
+                body = {"device_id": device, "calls": calls}
+                refused = await client.post(f"{BASE}/phone-log", json=body)
+                assert refused.status_code == 403
+                sent = await client.post(f"{BASE}/phone-log", json=body, headers=WRITE)
+                assert sent.status_code == 200, sent.text
+                assert sent.json() | {"schema": None} == {
+                    "schema": None,
+                    "logged": 2,
+                    "already": 0,
+                    "skipped": 3,
+                }
+                # The phone sends the same rows again after a dropped connection.
+                again = await client.post(f"{BASE}/phone-log", json=body, headers=WRITE)
+                assert (again.json()["logged"], again.json()["already"]) == (0, 2)
+
+                # A call placed from the lead in the app is logged by its after-call sheet;
+                # the same call found in the call history later is not counted twice.
+                in_app = await client.post(
+                    f"{BASE}/leads/{leads['Ravi Kulkarni']}/calls/phone",
+                    json={"command_id": str(uuid4()), "duration_seconds": 40},
+                    headers=WRITE,
+                )
+                assert in_app.status_code == 200, in_app.text
+                same = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": device,
+                        "calls": [row("106", "9876543210", 1, duration_seconds=31)],
+                    },
+                    headers=WRITE,
+                )
+                assert (same.json()["logged"], same.json()["already"]) == (0, 1)
+
+                detail = (await client.get(f"{BASE}/leads/{leads['Ravi Kulkarni']}")).json()
+                phone_events = [event for event in detail["events"] if event.get("via")]
+                assert [
+                    (e["direction"], e["duration_seconds"], e["connected"]) for e in phone_events
+                ] == [("missed", 0, False), ("outgoing", 192, True)]
+                # Each sits at the time of the call, not the time it was sent.
+                assert datetime.fromisoformat(phone_events[1]["at"]) < now - timedelta(minutes=2)
+                # One call out from the dialer plus the app's own call.
+                assert detail["lead"]["calls"] == 2
+                assert detail["lead"]["stage"] == "new"
+                assert detail["first_call_minutes"] == 0
+
+                desk = (await client.get(BASE)).json()
+                # The dialer call counts in My day; the missed call does not.
+                assert desk["numbers"]["calls"] == 1
+                assert desk["numbers"]["connected"] == 1
+                assert desk["numbers"]["talk_seconds"] == 192 + 40
+
+                as_(setup.token)
+                team = (await client.get(f"{BASE}/team")).json()
+                mine = next(
+                    rep for rep in team["reps"] if rep["person_id"] == str(seller.person_id)
+                )
+                assert (mine["calls_today"], mine["connected_today"]) == (1, 1)
+                assert len((await client.get(f"{BASE}/phone-book")).json()["numbers"]) == 2
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_sellers_phone_setup_shows_on_team(postgres_harness: Any, tmp_path: Path) -> None:
+    """UX study item 7, 18 Oct: the phone app reports its setup checklist; managers
+    see each seller's phone on Team, with when its call history last came in. It is
+    stored beside the workspace's settings without touching their revision."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                device = str(uuid4())
+                checks = {
+                    "calls": True,
+                    "recordings": True,
+                    "notifications": False,
+                    "recorder": True,
+                    "folder": True,
+                    "battery": False,
+                    "autostart": True,
+                    "testCall": False,
+                    "callLog": True,
+                }
+                report = {
+                    "device_id": device,
+                    "app_version": "0.3.20",
+                    "family": "xiaomi",
+                    "checks": checks,
+                }
+                as_(seller_token)
+                assert (await client.post(f"{BASE}/me/phone", json=report)).status_code == 403
+                odd = await client.post(
+                    f"{BASE}/me/phone",
+                    json={**report, "checks": {"wifi": True}},
+                    headers=WRITE,
+                )
+                assert odd.status_code == 422
+                sent = await client.post(f"{BASE}/me/phone", json=report, headers=WRITE)
+                assert sent.status_code == 200, sent.text
+                assert (sent.json()["done"], sent.json()["total"]) == (6, 9)
+                assert sent.json()["synced_at"] is None
+                # The 15-minute call-history look, with no new calls, says the phone is alive.
+                seen = await client.post(
+                    f"{BASE}/phone-log", json={"device_id": device, "calls": []}, headers=WRITE
+                )
+                assert seen.json()["logged"] == 0
+                again = await client.post(
+                    f"{BASE}/me/phone",
+                    json={**report, "checks": {**checks, "battery": True}},
+                    headers=WRITE,
+                )
+                assert again.json()["done"] == 7
+                assert again.json()["synced_at"] is not None
+
+                as_(setup.token)
+                team = (await client.get(f"{BASE}/team")).json()
+                rows = {rep["person_id"]: rep for rep in team["reps"]}
+                phone = rows[str(seller.person_id)]["phone"]
+                assert phone["family"] == "xiaomi" and phone["app_version"] == "0.3.20"
+                assert phone["checks"]["battery"] is True and phone["checks"]["testCall"] is False
+                assert phone["call_log_on"] is True and phone["synced_at"] is not None
+                assert rows[str(setup.state.person_id)]["phone"] is None
+                # A manager's settings save keeps every phone's report.
+                revision = team["settings"]["revision"]
+                saved = await client.put(
+                    f"{BASE}/settings",
+                    json={
+                        "expected_revision": revision,
+                        "auto_reassign": True,
+                        "reassign_minutes": 15,
+                    },
+                    headers=WRITE,
+                )
+                assert saved.status_code == 200, saved.text
+                after = {rep["person_id"]: rep for rep in saved.json()["reps"]}
+                assert after[str(seller.person_id)]["phone"]["done"] == 7
+                assert saved.json()["settings"]["revision"] == revision + 1
+                # A report only moves the revision when it creates the settings row.
+                as_(seller_token)
+                await client.post(f"{BASE}/me/phone", json=report, headers=WRITE)
+                as_(setup.token)
+                assert (await client.get(f"{BASE}/team")).json()["settings"][
+                    "revision"
+                ] == revision + 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_work_hours_hold_night_leads_and_keep_calls_on_the_phone(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Salestrail rows and UX study item 8, 18 Oct: a manager sets work hours. Outside
+    them a new lead waits and goes to a seller when work starts, and a call is never
+    logged. Clearing the hours gives out what waited."""
+    from ac_platform.lead_desk import hours
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            today = datetime.now(hours.IST).weekday()
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                as_(setup.token)
+                await client.put(
+                    f"{BASE}/team/{setup.state.person_id}",
+                    json={"expected_revision": 0, "available": False, "max_open": 10},
+                    headers=WRITE,
+                )
+                # Work only tomorrow, so right now is outside work hours.
+                body = {
+                    "expected_revision": 0,
+                    "days": [(today + 1) % 7],
+                    "start": "09:30",
+                    "end": "19:00",
+                    "pause_leads": True,
+                }
+                bad = await client.put(
+                    f"{BASE}/work-hours", json={**body, "end": "08:00"}, headers=WRITE
+                )
+                assert bad.status_code == 422
+                saved = await client.put(f"{BASE}/work-hours", json=body, headers=WRITE)
+                assert saved.status_code == 200, saved.text
+                view = saved.json()["settings"]["work_hours"]
+                assert view["days"] == [(today + 1) % 7] and view["pause_leads"] is True
+                assert view["inside"] is False and view["next_start"] is not None
+                assert saved.json()["settings"]["revision"] == 1
+
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={"command_id": str(uuid4()), "name": "Night Lead", "phone": "98765 40001"},
+                    headers=WRITE,
+                )
+                lead = added.json()
+                assert lead["lead"]["owner_person_id"] is None
+                assert lead["owner_reason"].startswith("Outside work hours. It goes to a seller")
+
+                as_(seller_token)
+                desk = (await client.get(BASE)).json()
+                assert desk["me"]["paused_until"] is not None
+                book = (await client.get(f"{BASE}/phone-book")).json()
+                assert book["work_hours"]["start"] == "09:30"
+                # A call now is outside work hours: it is never logged.
+                seller_lead = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Own Lead",
+                        "phone": "98765 40002",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                assert seller_lead.status_code == 201, seller_lead.text
+                logged = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": str(uuid4()),
+                        "calls": [
+                            {
+                                "log_id": "1",
+                                "number": "9876540002",
+                                "started_at": datetime.now(UTC).isoformat(),
+                                "duration_seconds": 30,
+                                "direction": "outgoing",
+                            }
+                        ],
+                    },
+                    headers=WRITE,
+                )
+                assert (logged.json()["logged"], logged.json()["skipped"]) == (0, 1)
+
+            # Work starts: the waiting lead goes to the seller.
+            async with setup.sessions() as db, db.begin():
+                start = datetime.fromisoformat(view["next_start"].replace("Z", "+00:00"))
+                assert await hours.release_held(db, start + timedelta(minutes=1)) == 1
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                detail = (await client.get(f"{BASE}/leads/{lead['lead']['lead_id']}")).json()
+                assert detail["lead"]["owner_person_id"] == str(seller.person_id)
+                assert detail["owner_reason"].startswith("Work hours started.")
+                # Clearing the hours: nothing waits and every call counts again.
+                cleared = await client.put(
+                    f"{BASE}/work-hours",
+                    json={"expected_revision": 1, "days": []},
+                    headers=WRITE,
+                )
+                assert cleared.status_code == 200, cleared.text
+                assert cleared.json()["settings"]["work_hours"] is None
+                late = await client.post(
+                    f"{BASE}/leads",
+                    json={"command_id": str(uuid4()), "name": "Day Lead", "phone": "98765 40003"},
+                    headers=WRITE,
+                )
+                assert late.json()["lead"]["owner_person_id"] == str(seller.person_id)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_missed_call_from_a_lead_waits_on_the_desk_until_called_back(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Salestrail's missed-call queue, 18 Oct: when a lead calls and nobody picks up, the
+    seller's desk shows Call back with how many calls were missed; it clears when the
+    seller calls them (from the app or the phone dialer)."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, seller_token)
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Asha Rao",
+                        "phone": "98765 41111",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                lead_id = added.json()["lead"]["lead_id"]
+                now = datetime.now(UTC)
+                device = str(uuid4())
+
+                async def phone(
+                    log_id: str, minutes: int, direction: str, seconds: int = 0
+                ) -> None:
+                    sent = await client.post(
+                        f"{BASE}/phone-log",
+                        json={
+                            "device_id": device,
+                            "calls": [
+                                {
+                                    "log_id": log_id,
+                                    "number": "9876541111",
+                                    "started_at": (now - timedelta(minutes=minutes)).isoformat(),
+                                    "duration_seconds": seconds,
+                                    "direction": direction,
+                                }
+                            ],
+                        },
+                        headers=WRITE,
+                    )
+                    assert sent.json()["logged"] == 1, sent.text
+
+                await phone("1", 4, "missed")
+                await phone("2", 3, "rejected")
+                desk = (await client.get(BASE)).json()
+                assert desk["counts"]["call_back"] == 1
+                [row] = desk["call_back"]
+                assert row["lead_id"] == lead_id and row["missed_calls"] == 2
+                assert datetime.fromisoformat(row["missed_at"]) < now - timedelta(minutes=2)
+                # The seller calls them back from the phone dialer: the row clears.
+                await phone("3", 1, "outgoing", 45)
+                desk = (await client.get(BASE)).json()
+                assert desk["counts"]["call_back"] == 0 and desk["call_back"] == []
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_calls_by_seller_by_day(postgres_harness: Any, tmp_path: Path) -> None:
+    """Build list row 18, 18 Oct: managers see each seller's calls per day (India time)
+    for a date range, counted the way My day counts them; sellers can't read it."""
+    from ac_platform.lead_desk import hours
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            today = datetime.now(hours.IST).date()
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, seller_token)
+                await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Asha Rao",
+                        "phone": "98765 42222",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                now = datetime.now(UTC)
+                calls = [
+                    ("1", 3, "outgoing", 120),
+                    ("2", 2, "outgoing", 0),
+                    ("3", 1, "missed", 0),
+                ]
+                sent = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": str(uuid4()),
+                        "calls": [
+                            {
+                                "log_id": log_id,
+                                "number": "9876542222",
+                                "started_at": (now - timedelta(minutes=ago)).isoformat(),
+                                "duration_seconds": seconds,
+                                "direction": direction,
+                            }
+                            for log_id, ago, direction, seconds in calls
+                        ],
+                    },
+                    headers=WRITE,
+                )
+                assert sent.json()["logged"] == 3
+                query = {"start": str(today - timedelta(days=1)), "end": str(today)}
+                assert (await client.get(f"{BASE}/reports/calls", params=query)).status_code == 403
+
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                report = await client.get(f"{BASE}/reports/calls", params=query)
+                assert report.status_code == 200, report.text
+                rows = {row["person_id"]: row for row in report.json()["sellers"]}
+                mine = rows[str(seller.person_id)]
+                assert [day["day"] for day in mine["days"]] == [query["start"], query["end"]]
+                assert mine["days"][1] == {
+                    "day": query["end"],
+                    "calls": 2,
+                    "connected": 1,
+                    "talk_seconds": 120,
+                    "missed": 1,
+                }
+                assert (mine["calls"], mine["missed"]) == (2, 1)
+                assert rows[str(setup.state.person_id)]["calls"] == 0
+                too_long = {"start": str(today - timedelta(days=100)), "end": str(today)}
+                assert (
+                    await client.get(f"{BASE}/reports/calls", params=too_long)
+                ).status_code == 422
+                assert (
+                    await client.get(f"{BASE}/reports/calls", params={"start": "soon"})
+                ).status_code == 422
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_seller_marks_a_phone_logged_call_private(postgres_harness: Any, tmp_path: Path) -> None:
+    """Salestrail's untracked calls, 18 Oct: the seller hides a call their phone logged.
+    It stays on the lead for them, marked private, and leaves My day, Team, the report
+    and the lead for everyone else; marking it again shows it. Nothing is deleted."""
+    from ac_platform.lead_desk import hours
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            other = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            other_token = await _session(setup, other)
+            today = str(datetime.now(hours.IST).date())
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                as_(seller_token)
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Personal Friend",
+                        "phone": "98765 43333",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                lead_id = added.json()["lead"]["lead_id"]
+                logged = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": str(uuid4()),
+                        "calls": [
+                            {
+                                "log_id": "1",
+                                "number": "9876543333",
+                                "started_at": (
+                                    datetime.now(UTC) - timedelta(minutes=2)
+                                ).isoformat(),
+                                "duration_seconds": 300,
+                                "direction": "outgoing",
+                            }
+                        ],
+                    },
+                    headers=WRITE,
+                )
+                assert logged.json()["logged"] == 1
+                detail = (await client.get(f"{BASE}/leads/{lead_id}")).json()
+                [call] = [event for event in detail["events"] if event.get("via")]
+                assert call["can_hide"] is True and call["private"] is False
+                assert (await client.get(BASE)).json()["numbers"]["calls"] == 1
+
+                as_(other_token)
+                refused = await client.post(
+                    f"{BASE}/calls/{call['event_id']}/private",
+                    json={"command_id": str(uuid4()), "private": True},
+                    headers=WRITE,
+                )
+                assert refused.status_code == 404
+
+                as_(seller_token)
+                hide = {"command_id": str(uuid4()), "private": True}
+                hidden = await client.post(
+                    f"{BASE}/calls/{call['event_id']}/private", json=hide, headers=WRITE
+                )
+                assert hidden.status_code == 200, hidden.text
+                mine = [event for event in hidden.json()["events"] if event.get("via")]
+                assert [event["private"] for event in mine] == [True]
+                assert hidden.json()["lead"]["calls"] == 0
+                # The same request again changes nothing.
+                again = await client.post(
+                    f"{BASE}/calls/{call['event_id']}/private", json=hide, headers=WRITE
+                )
+                assert again.status_code == 200
+                assert (await client.get(BASE)).json()["numbers"]["calls"] == 0
+
+                as_(setup.token)
+                seen = (await client.get(f"{BASE}/leads/{lead_id}")).json()
+                assert not [event for event in seen["events"] if event.get("via")]
+                assert not [event for event in seen["events"] if event["kind"] == "edited"]
+                team = {
+                    rep["person_id"]: rep
+                    for rep in (await client.get(f"{BASE}/team")).json()["reps"]
+                }
+                assert team[str(seller.person_id)]["calls_today"] == 0
+                report = (
+                    await client.get(f"{BASE}/reports/calls", params={"start": today, "end": today})
+                ).json()
+                assert {row["person_id"]: row["calls"] for row in report["sellers"]}[
+                    str(seller.person_id)
+                ] == 0
+
+                as_(seller_token)
+                shown = await client.post(
+                    f"{BASE}/calls/{call['event_id']}/private",
+                    json={"command_id": str(uuid4()), "private": False},
+                    headers=WRITE,
+                )
+                assert shown.json()["lead"]["calls"] == 1
+                assert (await client.get(BASE)).json()["numbers"]["calls"] == 1
+                as_(setup.token)
+                seen = (await client.get(f"{BASE}/leads/{lead_id}")).json()
+                assert [event["direction"] for event in seen["events"] if event.get("via")] == [
+                    "outgoing"
+                ]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_the_account_sheet_reads_and_sets_taking_new_leads(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """UX study item 8 leftover, 18 Oct: the account sheet reads the seller's own switch
+    (GET /me) and changes it with the same PUT as the desk."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, seller_token)
+                me = await client.get(f"{BASE}/me")
+                assert me.status_code == 200, me.text
+                assert me.json()["taking_leads"] is True and me.json()["paused_until"] is None
+                assert me.headers["cache-control"] == "private, no-store"
+                off = await client.put(f"{BASE}/me/taking", json={"taking": False}, headers=WRITE)
+                assert off.json()["taking_leads"] is False
+                assert (await client.get(f"{BASE}/me")).json()["taking_leads"] is False
+                assert (await client.get(f"{BASE}/me?x=1")).status_code == 422
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
