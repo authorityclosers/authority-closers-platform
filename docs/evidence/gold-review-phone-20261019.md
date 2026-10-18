@@ -96,3 +96,62 @@ opens `/leads…`. A review push needs:
 
 Until then, the alerts are the in-app chip, the corner card, and the Pulse
 subtask per assignment (`ac-pulse-gold-bridge`, Align).
+
+## Push to the phone — built (19 Oct)
+
+Server (`lead_desk/review_push.py`, wired in `lead_desk/push.attach`):
+
+- A separate bounded reader in the API, beside the Lead Desk sender. The gold
+  reader job is unchanged and stays provider-free.
+- Every 30 seconds, under advisory lock 1802/1264, it finds gold assignments
+  from the last two hours that were not alerted yet. It skips revoked
+  reviewers, revoked or expired assignments, and deleted calls. It sends only
+  to reviewers who have a registered phone: the `LeadDevice` tokens of that
+  person in any workspace, with each phone sent once.
+- The FCM data carries ids and a count only:
+  `{type: gold_review, kind: one|many, assignment, alerts, count}`. `count` is
+  the reviewer's waiting number from the review badge.
+- Each alerted assignment gets one append-only audit event,
+  `conversation.gold_review_alerted`, in the call's workspace chain. That is
+  also the "already sent" record, so there are no table changes. Dead phone
+  tokens are forgotten.
+- Assignments from one reader pass become one push, so a first designation
+  buzzes once with "N Reports to review" instead of up to twenty times.
+- It is off until `AC_FCM_*` exist. Dev has them; production does not yet.
+
+Phone app (`authorityclosers/sales-xray-apps`, branch `gold-review-alerts`):
+
+- `type=gold_review` gets its own "Review alerts" channel.
+- The words come from `GET /v1/sales-xray/review/badge` on the reviewer's own
+  session.
+- The alert opens `/review#call=<assignment>`, or `/review` for several.
+- Alerts may only open `/leads` or the review pages.
+- An APK publish needs the owner's `android-release` approval.
+
+Checks on ac:
+
+- `tests/database/test_gold_review_push_postgresql.py`, run with fictional data
+  and a fake FCM transport: 3 passed. They prove one push per new assignment
+  to the reviewer's phones only, never to the seller, never twice, and nothing
+  older than two hours. Dead tokens are dropped, and a revoked reviewer gets
+  nothing.
+- Together with `test_sales_xray_review_postgresql`, `test_gold_reviews_postgresql`
+  and the Lead Desk tests: 45 passed and 1 failed. The failure is
+  `test_empty_gold_migration_downgrade_and_reupgrade`. Its metadata diff
+  includes check constraints on `conversation_report_settings_events` (0098,
+  7df03d79), a table this change does not touch.
+- Ruff, format and mypy are clean.
+
+Dev proof: `strikes/1801/gold-push-dev-proof-20261019.{py,log}`.
+
+- It replays every real dev reader pass through the sender, with a fake phone
+  per standing reviewer and a fake FCM transport, in one transaction that is
+  rolled back.
+- Result: 35 assignments came from 3 passes, which made 3 pushes (19, 15 and
+  1 new Reports). Each assignment was recorded exactly once, and a later pass
+  sent nothing.
+- After the rollback, no proof device or audit row was left.
+- `count` shows today's total in this replay.
+
+The reviewer's phone must be registered once. Today that happens through
+Leads → "Turn on alerts" in the Android app, inside an organisation workspace.
