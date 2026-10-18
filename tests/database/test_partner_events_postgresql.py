@@ -3,7 +3,8 @@
 The real imported-report fixture (synthetic audio and transcript) gives a
 saved report; a fictional guest submission, uploader and lead are added. The
 quote-facts provider is a local fake and every HTTP call goes to an
-``httpx.MockTransport``: no network, no key, no real endpoint.
+``httpx.MockTransport``: no network, no key, no real endpoint. The owner's
+alert command is replaced by a recorder.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk.models import Lead, LeadEvent
-from ac_platform.partner_events import cli, endpoints, pipeline
+from ac_platform.partner_events import cli, delivery, endpoints, pipeline
 from ac_platform.partner_events import extraction as ledger
 from ac_platform.partner_events.delivery import (
     claim_next,
@@ -94,6 +95,19 @@ def webhook_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(SECRET_REF, SECRET)
 
 
+@pytest.fixture(autouse=True)
+def owner_alerts(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Never the host's real alert command: alerts are recorded here instead."""
+    sent: list[str] = []
+
+    def record(text: str) -> str:
+        sent.append(text)
+        return "sent"
+
+    monkeypatch.setattr(delivery, "notify_owner", record)
+    return sent
+
+
 class Clock:
     def __init__(self) -> None:
         self.now = datetime.now(UTC)
@@ -113,8 +127,8 @@ class Receiver:
         self.requests.append(request)
         return httpx.Response(self.statuses.pop(0) if self.statuses else 200)
 
-    def client(self) -> httpx.Client:
-        return httpx.Client(transport=httpx.MockTransport(self), follow_redirects=False)
+    def client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(transport=httpx.MockTransport(self), follow_redirects=False)
 
 
 def answer(body: dict[str, Any]) -> dict[str, Any]:
@@ -147,7 +161,7 @@ def answer(body: dict[str, Any]) -> dict[str, Any]:
 async def _draft(sessions: Any, fixture: ReportFixture) -> ConversationReportDraft:
     await _import_valid(fixture, sessions)
     async with sessions() as session:
-        draft = await session.scalar(
+        draft: ConversationReportDraft | None = await session.scalar(
             select(ConversationReportDraft)
             .where(ConversationReportDraft.run_id == fixture.prepared.run_id)
             .order_by(ConversationReportDraft.created_at.desc())
@@ -412,6 +426,7 @@ def test_finished_report_becomes_one_signed_event_with_validated_quote_facts(
                 "name": "Customer A",
                 "city": "Pune",
             }
+            assert draft.payload is not None
             assert payload["summary"] == draft.payload["summary"]
             assert payload["outcome"] == {"kind": None}
             assert payload["extraction"]["status"] == "complete"
@@ -427,7 +442,7 @@ def test_finished_report_becomes_one_signed_event_with_validated_quote_facts(
             }
 
             receiver = Receiver(202)
-            with receiver.client() as client:
+            async with receiver.client() as client:
                 delivered = await deliver_one(
                     sessions, client, environment="development", clock=clock
                 )
@@ -473,7 +488,7 @@ def test_finished_report_becomes_one_signed_event_with_validated_quote_facts(
 
 
 def test_retries_dead_letter_replay_admission_drop_and_no_double_send(
-    postgres_harness: Any, report_fixture: ReportFixture
+    postgres_harness: Any, report_fixture: ReportFixture, owner_alerts: list[str]
 ) -> None:
     async def exercise() -> None:
         engine = create_async_engine(postgres_harness.url)
@@ -532,7 +547,7 @@ def test_retries_dead_letter_replay_admission_drop_and_no_double_send(
             receiver = Receiver()
 
             async def runner() -> None:
-                with receiver.client() as client:
+                async with receiver.client() as client:
                     for _ in range(10):
                         if not await deliver_one(
                             sessions, client, environment="development", clock=clock
@@ -555,7 +570,7 @@ def test_retries_dead_letter_replay_admission_drop_and_no_double_send(
                     .values(status="pending", delivered_at=None, next_attempt_at=clock())
                 )
             failing = Receiver(500, 500, 500)
-            with failing.client() as client:
+            async with failing.client() as client:
                 line = await deliver_one(sessions, client, environment="development", clock=clock)
                 assert line is not None and line["status"] == "pending"
                 async with sessions() as session:
@@ -575,8 +590,17 @@ def test_retries_dead_letter_replay_admission_drop_and_no_double_send(
                         .where(PartnerWebhookEvent.id == target.id)
                         .values(attempts=24, next_attempt_at=clock())
                     )
+                assert owner_alerts == []
                 line = await deliver_one(sessions, client, environment="development", clock=clock)
                 assert line is not None and line["status"] == "dead_letter"
+                # Review 18 Oct, item 6: the owner is alerted, with ids and a count only.
+                assert line["alert"] == "dead_letter" and line["notified"] == "sent"
+                (alert,) = owner_alerts
+                assert alert == (
+                    "Sales X-Ray partner webhook dead letter (development): endpoint "
+                    f"{str(endpoint_id)[:8]}, event {str(target.id)[:8]}, 25 attempts. "
+                    "Replay it with the partner_events CLI once the endpoint answers."
+                )
                 async with sessions() as session, session.begin():
                     with pytest.raises(endpoints.EndpointError):
                         await endpoints.replay(
@@ -636,7 +660,7 @@ def test_retries_dead_letter_replay_admission_drop_and_no_double_send(
                     .values(next_attempt_at=clock())
                 )
             blocked = Receiver()
-            with blocked.client() as client:
+            async with blocked.client() as client:
                 line = await deliver_one(sessions, client, environment="development", clock=clock)
             assert line is not None and line["dropped"] == "permission_inactive"
             assert blocked.requests == []
@@ -685,7 +709,7 @@ def test_failed_extraction_revision_chain_and_erasure(
                     (2, "failed", "timeout"),
                 ]
             receiver = Receiver()
-            with receiver.client() as client:
+            async with receiver.client() as client:
                 await deliver_one(sessions, client, environment="development", clock=clock)
 
             # A re-analysis: revision 2 supersedes the first event.
@@ -712,9 +736,9 @@ def test_failed_extraction_revision_chain_and_erasure(
                     report_fixture.prepared.recording_id,
                     key="partner-events-erasure",
                 )
-            with receiver.client() as client:
-                line = await deliver_one(sessions, client, environment="development", clock=clock)
-            assert line is not None and line["dropped"] == "call_erased"
+            async with receiver.client() as client:
+                sent = await deliver_one(sessions, client, environment="development", clock=clock)
+            assert sent is not None and sent["dropped"] == "call_erased"
             assert len(receiver.requests) == 1
             async with sessions() as session, session.begin():
                 swept = await erasure_sweep(session, clock())
@@ -851,19 +875,19 @@ def test_cli_dry_runs_change_nothing_and_apply_runs_one_pass(
             async def everything_is_a_test(session: Any) -> set[str]:
                 return {draft.source_sha256}
 
-            pipeline.test_sources = everything_is_a_test  # type: ignore[assignment]
+            pipeline.test_sources = everything_is_a_test
             try:
                 status = await cli._inner_async(
                     arguments("run", "--apply", "--seconds", "1"), call_provider=provider
                 )
             finally:
-                pipeline.test_sources = original  # type: ignore[assignment]
+                pipeline.test_sources = original
             assert status == 0 and calls == []
             assert output()[-1]["totals"]["test_reports_skipped"] == 1
 
             # One applied pass: quote facts, enqueue, signed delivery to the local receiver.
             receiver = Receiver(200)
-            with receiver.client() as client:
+            async with receiver.client() as client:
                 status = await cli._inner_async(
                     arguments("run", "--apply", "--seconds", "1"),
                     call_provider=provider,
@@ -878,7 +902,7 @@ def test_cli_dry_runs_change_nothing_and_apply_runs_one_pass(
 
             # A signed fictional test event, recorded in the audit chain.
             receiver = Receiver(204)
-            with receiver.client() as client:
+            async with receiver.client() as client:
                 status = await cli._inner_async(
                     arguments("test-event", "--endpoint-id", endpoint_id, "--apply"),
                     client=client,

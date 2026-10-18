@@ -403,7 +403,7 @@ async def _run(
                     await release_run_lock(lock)
     finally:
         if own_client:
-            client.close()
+            await client.aclose()
     if any(value for key, value in totals.items() if key != "passes"):
         _print({"totals": totals, "apply": arguments.apply})
     return 1 if totals["errors"] else 0
@@ -453,20 +453,23 @@ async def _test_event(
     if secrets is None:
         _print({**summary, "error": "secret_missing"})
         return 2
+    if endpoint.secret_ref_next and len(secrets) == 1:
+        summary["rotation"] = "next_not_set"  # signed with the current secret only
     own_client = client is None
     client = client or http_client()
     try:
-        outcome = post(
+        outcome = await post(
             client,
             url=endpoint.url,
             event_id=body["event_id"],
             event_type="test",
             body=raw,
             secrets=secrets,
+            environment=environment,
         )
     finally:
         if own_client:
-            client.close()
+            await client.aclose()
     async with sessions() as session, session.begin():
         await record_test_event(
             session,

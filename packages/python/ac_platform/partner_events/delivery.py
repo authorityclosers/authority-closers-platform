@@ -5,26 +5,36 @@
   the same attempt.
 - Before each send the call is admitted again: an erased call, revoked
   consent or an inactive account drops the event and empties its payload.
-- ``POST`` with a 10 s timeout, no redirects. Headers ``X-SX-Event-Id``,
+- ``POST`` with a 10 s timeout per network step and at most about 15 s per
+  send in all, no redirects, and the response body never read. Outside
+  development the host must resolve only to public addresses (no private,
+  loopback, link-local or reserved address). Headers ``X-SX-Event-Id``,
   ``X-SX-Event-Type`` and ``X-SX-Signature: t=<unix>,v1=<hex>[,v1=<hex>]``,
-  where ``v1 = HMAC-SHA256(secret, f"{t}." + raw_body)`` for the current and,
-  during a rotation, the next secret. Secrets are read from the environment
-  variables the endpoint names; their values are never logged or stored.
+  where ``v1 = HMAC-SHA256(secret, f"{t}." + raw_body)`` for the current
+  secret and, when it is set, the next one (a rotation). Secrets are read
+  from the environment variables the endpoint names; their values are never
+  logged or stored.
 - Any 2xx is delivered. Otherwise the same bytes are retried after
-  10 s x 2^(n-1), at most 1 h, 25 attempts, then dead letter.
+  10 s x 2^(n-1), at most 1 h, 25 attempts, then dead letter, and the owner is
+  alerted (ids and counts only).
 - Every attempt is an append-only row: status code and a content-free error
   code only. Payloads, URLs and secrets are never logged.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
+import ipaddress
 import os
+import socket
+import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -36,6 +46,7 @@ MAX_ATTEMPTS = 25
 FIRST_DELAY_SECONDS = 10
 MAX_DELAY_SECONDS = 3600
 TIMEOUT_SECONDS = 10.0
+SEND_BUDGET_SECONDS = 15.0
 LEASE = timedelta(seconds=60)
 USER_AGENT = "AuthorityClosers-SalesXray-Webhooks/1"
 LOCAL_ENVIRONMENTS = frozenset({"development", "local", "test"})
@@ -43,6 +54,10 @@ LOCAL_ENVIRONMENTS = frozenset({"development", "local", "test"})
 DROP_REFUSALS = frozenset(
     {"call_missing", "call_erased", "permission_inactive", "account_inactive"}
 )
+# The owner's alert command on AC hosts (Telegram); absent inside containers.
+NOTIFY_OWNER = "/usr/local/sbin/ac-notify-owner"
+
+Resolver = Callable[[str, int], Awaitable[list[str]]]
 
 
 def signature(secret: bytes, timestamp: int, body: bytes) -> str:
@@ -81,6 +96,47 @@ def url_allowed(url: str, environment: str) -> bool:
     )
 
 
+def public_address(value: str) -> bool:
+    """A globally routable unicast address (not private, loopback, link-local or reserved)."""
+    try:
+        address = ipaddress.ip_address(value.split("%", 1)[0])
+    except ValueError:
+        return False
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        return public_address(str(address.ipv4_mapped))
+    return address.is_global and not address.is_multicast
+
+
+async def resolve_host(host: str, port: int) -> list[str]:
+    infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    return sorted({str(info[4][0]) for info in infos})
+
+
+async def address_refusal(url: str, resolve: Resolver) -> str | None:
+    """None when every address the URL's host resolves to is public, else a code.
+
+    The check runs right before the send; a host that changes its answer
+    between this lookup and the connection is not caught.
+    """
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+    except ValueError:
+        return "url_refused"
+    if not host:
+        return "url_refused"
+    try:
+        addresses = await resolve(host, port)
+    except (OSError, UnicodeError):
+        return "dns_error"
+    if not addresses:
+        return "dns_error"
+    if not all(public_address(address) for address in addresses):
+        return "address_refused"
+    return None
+
+
 def mask_url(url: str) -> str:
     """Scheme, host and port only; paths and queries can carry secrets."""
     try:
@@ -92,11 +148,15 @@ def mask_url(url: str) -> str:
 
 
 def read_secrets(secret_ref: str, secret_ref_next: str | None) -> list[bytes] | None:
-    names = [secret_ref, *([secret_ref_next] if secret_ref_next else [])]
-    values = [os.environ.get(name, "") for name in names]
-    if not all(values):
+    """The current secret (required) and the next one when it is set (a rotation)."""
+    current = os.environ.get(secret_ref, "")
+    if not current:
         return None
-    return [value.encode() for value in values]
+    values = [current.encode()]
+    following = os.environ.get(secret_ref_next, "") if secret_ref_next else ""
+    if following:
+        values.append(following.encode())
+    return values
 
 
 @dataclass(frozen=True)
@@ -110,7 +170,7 @@ class Outcome:
         return self.http_status is not None and 200 <= self.http_status < 300
 
 
-def post(
+async def post(
     client: Any,
     *,
     url: str,
@@ -118,9 +178,16 @@ def post(
     event_type: str,
     body: bytes,
     secrets: list[bytes],
+    environment: str,
     clock: Callable[[], float] = time.time,
+    resolve: Resolver = resolve_host,
+    budget: float = SEND_BUDGET_SECONDS,
 ) -> Outcome:
-    """One signed POST. Never reads or logs the response body."""
+    """One signed POST within ``budget`` seconds in all. Never reads or logs the body.
+
+    Every failure, including one httpx does not class as an HTTP error (an
+    invalid URL), is a content-free outcome, never an exception.
+    """
     import httpx
 
     started = time.monotonic()
@@ -136,15 +203,21 @@ def post(
         return max(0, round((time.monotonic() - started) * 1000))
 
     try:
-        response = client.post(url, content=body, headers=headers)
-    except httpx.TimeoutException:
+        async with asyncio.timeout(budget):
+            if environment not in LOCAL_ENVIRONMENTS:
+                refused = await address_refusal(url, resolve)
+                if refused is not None:
+                    return Outcome(None, refused, elapsed())
+            async with client.stream("POST", url, content=body, headers=headers) as response:
+                status = int(response.status_code)
+    except (TimeoutError, httpx.TimeoutException):
         return Outcome(None, "timeout", elapsed())
     except httpx.ConnectError:
         return Outcome(None, "connect_error", elapsed())
     except httpx.HTTPError:
         return Outcome(None, "transport_error", elapsed())
-    status = int(response.status_code)
-    response.close()
+    except Exception:  # an invalid URL or anything else: never crash the runner
+        return Outcome(None, "client_error", elapsed())
     if not 100 <= status <= 599:
         return Outcome(None, "http_status_invalid", elapsed())
     return Outcome(status, None if 200 <= status < 300 else "http_status", elapsed())
@@ -153,8 +226,42 @@ def post(
 def http_client() -> Any:
     import httpx
 
-    return httpx.Client(
+    return httpx.AsyncClient(
         timeout=httpx.Timeout(TIMEOUT_SECONDS), follow_redirects=False, trust_env=False
+    )
+
+
+def notify_owner(text: str) -> str:
+    """Best effort: send ``text`` with the host's owner alert command, when it exists.
+
+    Returns "sent", "absent" or "failed"; never raises. The child gets no
+    secrets: only PATH, HOME and LANG are passed on.
+    """
+    command = Path(NOTIFY_OWNER)
+    if not (command.is_file() and os.access(command, os.X_OK)):
+        return "absent"
+    environment = {key: os.environ[key] for key in ("PATH", "HOME", "LANG") if key in os.environ}
+    try:
+        subprocess.run(  # noqa: S603 - fixed absolute path, no shell, plain text argument
+            [str(command), text],
+            check=True,
+            timeout=30,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "failed"
+    return "sent"
+
+
+def dead_letter_text(environment: str, endpoint_id: UUID, event_id: UUID, attempts: int) -> str:
+    """The owner's alert: ids shortened, a count, nothing from the payload."""
+    return (
+        f"Sales X-Ray partner webhook dead letter ({environment}): endpoint "
+        f"{str(endpoint_id)[:8]}, event {str(event_id)[:8]}, {attempts} attempts. "
+        "Replay it with the partner_events CLI once the endpoint answers."
     )
 
 
@@ -181,6 +288,7 @@ async def release_run_lock(connection: Any) -> None:
 @dataclass(frozen=True)
 class Claimed:
     event_id: UUID
+    endpoint_id: UUID
     attempt: int
     endpoint_url: str
     secret_ref: str
@@ -230,6 +338,7 @@ async def claim_next(session: Any, now: datetime) -> Claimed | None:
     assert event.payload is not None  # pending events are never emptied
     return Claimed(
         event_id=event.id,
+        endpoint_id=endpoint.id,
         attempt=event.attempts + 1,
         endpoint_url=endpoint.url,
         secret_ref=endpoint.secret_ref,
@@ -370,6 +479,7 @@ async def deliver_one(
     *,
     environment: str,
     clock: Callable[[], datetime],
+    resolve: Resolver = resolve_host,
 ) -> dict[str, Any] | None:
     """Claim, admit, send and record one due event; None when nothing is due."""
     async with sessions() as session, session.begin():
@@ -399,13 +509,17 @@ async def deliver_one(
         if secrets is None:
             outcome = Outcome(None, "secret_missing", 0)
         else:
-            outcome = post(
+            if claimed.secret_ref_next and len(secrets) == 1:
+                line["rotation"] = "next_not_set"  # signed with the current secret only
+            outcome = await post(
                 client,
                 url=claimed.endpoint_url,
                 event_id=str(claimed.event_id),
                 event_type=claimed.event_type,
                 body=body,
                 secrets=secrets,
+                environment=environment,
+                resolve=resolve,
             )
     finished = clock()
     async with sessions() as session, session.begin():
@@ -413,6 +527,13 @@ async def deliver_one(
     line["http_status"] = outcome.http_status
     if outcome.error_code:
         line["error"] = outcome.error_code
+    if line["status"] == "dead_letter":
+        # A structured line for the journal, and the owner's alert where the host has it.
+        line["alert"] = "dead_letter"
+        line["notified"] = await asyncio.to_thread(
+            notify_owner,
+            dead_letter_text(environment, claimed.endpoint_id, claimed.event_id, claimed.attempt),
+        )
     return line
 
 
