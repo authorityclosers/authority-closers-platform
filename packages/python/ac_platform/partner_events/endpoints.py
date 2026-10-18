@@ -234,7 +234,8 @@ async def disable(
     apply: bool,
     now: datetime,
 ) -> dict[str, Any]:
-    """Stop an endpoint. Its undelivered events are dropped (they would never be sent)."""
+    """Stop an endpoint. Its undelivered events are dropped and emptied, like
+    ``delivery.drop``: they would never be sent, so their payloads are not kept."""
     from sqlalchemy import func, select, update
 
     from ac_platform.partner_events.models import PartnerWebhookEndpoint, PartnerWebhookEvent
@@ -275,7 +276,13 @@ async def disable(
             PartnerWebhookEvent.endpoint_id == endpoint_id,
             PartnerWebhookEvent.status.in_(("pending", "dead_letter")),
         )
-        .values(status="dropped", leased_until=None, last_error_code="endpoint_disabled")
+        .values(
+            status="dropped",
+            payload=None,
+            erased_at=now,
+            leased_until=None,
+            last_error_code="endpoint_disabled",
+        )
     )
     await session.flush()
     await _audit(

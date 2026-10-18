@@ -2,20 +2,33 @@
 
 Only workspaces with an active endpoint are read, and only reports finished
 after that endpoint started taking events (``events_since``): nothing is
-backfilled. Each call's newest report gets one event per endpoint. A report
-of one of our own test sources (the canary fixture) is never sent.
+backfilled. Each call's newest report gets one event row per endpoint:
+
+- a frozen event to send (``pending``), or
+- a final ``dropped`` row with a reason code and no payload, when it will
+  never be sent: the call is gone, consent was revoked or the account is
+  inactive (``DROP_REFUSALS``), the report has no transcript revision, or it
+  waited past the recent window (``aged_out``, and the owner is alerted).
+
+Reports of our own test sources (the canary fixture) are filtered out in the
+query and get no row. A report that is waiting (an attempt in flight, the
+daily cap, a call not ready yet) keeps its place; the runner pages past it, so
+it never holds newer reports back.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
 from ac_platform.partner_events import extraction as ledger
+from ac_platform.partner_events.delivery import DROP_REFUSALS
 from ac_platform.partner_events.payload import (
     EVENT_TYPE,
     Extraction,
@@ -38,6 +51,14 @@ from ac_platform.partner_events.quote_facts import (
     unknown,
 )
 
+# Final rows carry no body; their digest is that of an empty body.
+NO_BODY_SHA256 = hashlib.sha256(b"").hexdigest()
+REVISION_MISSING = "transcript_revision_missing"
+AGED_OUT = "aged_out"
+# How far past the recent window an aged-out report is still looked for.
+AGE_OUT_LOOKBACK = timedelta(days=30)
+_START = (datetime(1970, 1, 1, tzinfo=UTC), UUID(int=0))
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -52,6 +73,7 @@ class Candidate:
     transcript_revision: str
     created_at: datetime
     submission_id: UUID
+    skip: str | None = None  # a reason to record a final row without reading the call
 
     @property
     def report(self) -> dict[str, Any]:
@@ -93,7 +115,9 @@ async def active_endpoints(session: Any) -> int:
     return int(count or 0)
 
 
-_CANDIDATES = """
+# Newest live report per call, of a workspace with an active endpoint that takes
+# analysis.completed, not one of our test sources, with no event row yet.
+_REPORTS = """
     SELECT p.id AS endpoint_id, p.events, p.facts_profile,
            d.id AS draft_id, d.tenant_id, d.recording_id, d.run_id, d.source_sha256,
            d.payload ->> 'transcript_revision' AS transcript_revision, d.created_at,
@@ -101,10 +125,14 @@ _CANDIDATES = """
     FROM partner_webhook_endpoints p
     JOIN conversation_report_drafts d
       ON d.tenant_id = p.tenant_id AND d.erased_at IS NULL
-     AND d.created_at > p.events_since AND d.created_at > :since
+     AND d.created_at > p.events_since
+     AND d.created_at > :since AND d.created_at <= :until
     JOIN conversation_guest_submissions s
       ON s.recording_id = d.recording_id AND s.tenant_id = d.tenant_id
     WHERE p.status = 'active'
+      AND CAST(p.events AS jsonb) @> CAST(:event_types AS jsonb)
+      AND NOT (d.source_sha256 = ANY(CAST(:tests AS text[])))
+      AND (d.created_at, d.id) > (:after_created, :after_id)
       AND d.created_at = (
         SELECT max(n.created_at) FROM conversation_report_drafts n
         WHERE n.recording_id = d.recording_id AND n.erased_at IS NULL
@@ -118,22 +146,36 @@ _CANDIDATES = """
 """
 
 
-async def candidates(
-    session: Any, *, now: datetime, recent_hours: int, limit: int
+async def _reports(
+    session: Any,
+    *,
+    since: datetime,
+    until: datetime,
+    tests: set[str] | frozenset[str],
+    after: tuple[datetime, UUID] | None,
+    limit: int,
 ) -> list[Candidate]:
-    """Newest reports without an event, for workspaces with an active endpoint."""
     from sqlalchemy import text
 
+    after_created, after_id = after or _START
     rows = (
         await session.execute(
-            text(_CANDIDATES), {"since": now - timedelta(hours=recent_hours), "limit": limit}
+            text(_REPORTS),
+            {
+                "since": since,
+                "until": until,
+                "event_types": json.dumps([EVENT_TYPE]),
+                "tests": sorted(tests),
+                "after_created": after_created,
+                "after_id": after_id,
+                "limit": limit,
+            },
         )
     ).mappings()
     found = []
     for row in rows:
-        if row["transcript_revision"] is None:
-            continue
         events = row["events"] if isinstance(row["events"], list) else []
+        revision = row["transcript_revision"]
         found.append(
             Candidate(
                 endpoint_id=row["endpoint_id"],
@@ -144,12 +186,53 @@ async def candidates(
                 recording_id=row["recording_id"],
                 run_id=row["run_id"],
                 source_sha256=row["source_sha256"],
-                transcript_revision=row["transcript_revision"],
+                transcript_revision=str(revision or ""),
                 created_at=row["created_at"],
                 submission_id=row["submission_id"],
+                skip=None if revision else REVISION_MISSING,
             )
         )
     return found
+
+
+async def candidates(
+    session: Any,
+    *,
+    now: datetime,
+    recent_hours: int,
+    limit: int,
+    tests: set[str] | frozenset[str] = frozenset(),
+    after: tuple[datetime, UUID] | None = None,
+) -> list[Candidate]:
+    """One page of newest reports without an event row, oldest first, after ``after``."""
+    return await _reports(
+        session,
+        since=now - timedelta(hours=recent_hours),
+        until=now,
+        tests=tests,
+        after=after,
+        limit=limit,
+    )
+
+
+async def aged_out(
+    session: Any,
+    *,
+    now: datetime,
+    recent_hours: int,
+    limit: int,
+    tests: set[str] | frozenset[str] = frozenset(),
+) -> list[Candidate]:
+    """Reports that left the recent window without an event row (looked for 30 days back)."""
+    since = now - timedelta(hours=recent_hours)
+    return await _reports(
+        session,
+        since=since - AGE_OUT_LOOKBACK,
+        until=since,
+        tests=tests,
+        after=None,
+        limit=limit,
+    )
 
 
 async def test_sources(session: Any) -> set[str]:
@@ -158,6 +241,82 @@ async def test_sources(session: Any) -> set[str]:
 
     shas: set[str] = await session.run_sync(lambda sync: _test_source_shas(sync.connection()))
     return shas
+
+
+def final_refusal(line: dict[str, Any]) -> str | None:
+    """The refusal in a candidate's line that means its data must never leave, if any."""
+    for key in ("facts_wait", "enqueue_refused"):
+        value = line.get(key)
+        if value in DROP_REFUSALS:
+            return str(value)
+    outcome = line.get("facts_outcome")
+    if isinstance(outcome, str) and outcome.startswith("refused_"):
+        reason = outcome.removeprefix("refused_")
+        if reason in DROP_REFUSALS:
+            return reason
+    return None
+
+
+async def _revision(session: Any, draft_id: UUID, recording_id: UUID, created: datetime) -> int:
+    from sqlalchemy import text
+
+    count = await session.scalar(
+        text(
+            """
+            SELECT count(*) FROM conversation_report_drafts
+            WHERE recording_id = :recording AND (created_at, id) <= (:created, :id)
+            """
+        ),
+        {"recording": recording_id, "created": created, "id": draft_id},
+    )
+    return max(1, int(count or 1))
+
+
+async def record_final(
+    sessions: Any, candidate: Candidate, reason: str, *, clock: Callable[[], datetime]
+) -> dict[str, Any]:
+    """A final ``dropped`` row for (endpoint, report): never sent, no payload, a reason code.
+
+    Idempotent per endpoint and report; the report is no longer a candidate.
+    """
+    from sqlalchemy.dialects.postgresql import insert
+
+    from ac_platform.partner_events.models import PartnerWebhookEvent
+
+    async with sessions() as session, session.begin():
+        now = clock()
+        revision = await _revision(
+            session, candidate.draft_id, candidate.recording_id, candidate.created_at
+        )
+        inserted = await session.scalar(
+            insert(PartnerWebhookEvent)
+            .values(
+                id=uuid4(),
+                endpoint_id=candidate.endpoint_id,
+                tenant_id=candidate.tenant_id,
+                recording_id=candidate.recording_id,
+                report_draft_id=candidate.draft_id,
+                submission_id=candidate.submission_id,
+                event_type=EVENT_TYPE,
+                analysis_revision=revision,
+                supersedes_event_id=None,
+                payload=None,
+                payload_sha256=NO_BODY_SHA256,
+                status="dropped",
+                attempts=0,
+                replayed_attempts=0,
+                next_attempt_at=now,
+                leased_until=None,
+                delivered_at=None,
+                last_http_status=None,
+                last_error_code=reason[:64],
+                created_at=now,
+                erased_at=now,
+            )
+            .on_conflict_do_nothing(constraint="uq_partner_webhook_event_draft")
+            .returning(PartnerWebhookEvent.id)
+        )
+    return {"final": reason} if inserted is not None else {"event": "exists"}
 
 
 async def transcript_view(session: Any, candidate: Candidate) -> TranscriptView:
@@ -281,7 +440,8 @@ async def extract(
 
     At most one paid provider call per invocation; a failed first attempt is
     retried on a later pass, and a second failure sends the event with
-    extraction ``failed``.
+    extraction ``failed``. Waiting (an attempt in flight, the daily cap) is
+    decided before the transcript is read.
     """
     if not candidate.facts_profile:
         return Extraction("skipped", None), {}
@@ -297,13 +457,15 @@ async def extract(
             return Extraction("complete", profile.name, list(saved.payload["facts"])), {
                 "facts": "saved"
             }
-        view = await transcript_view(session, candidate)
         events = await ledger.history(session, report, profile.name)
-    left = ledger.attempts_left(events, clock())
-    if left == "attempts_exhausted":
-        return Extraction("failed", profile.name), {"facts": "failed"}
-    if left is not None:
-        return None, {"facts_wait": left}
+        left = ledger.attempts_left(events, clock())
+        if left == "attempts_exhausted":
+            return Extraction("failed", profile.name), {"facts": "failed"}
+        if left is not None:
+            return None, {"facts_wait": left}
+        if await ledger.attempts_today(session, clock()) >= daily_cap:
+            return None, {"facts_wait": "daily_cap"}
+        view = await transcript_view(session, candidate)
     try:
         system, user = build_prompt(profile, view.segments, view.speakers)
     except QuoteFactsError:
@@ -370,6 +532,24 @@ async def extract(
     return Extraction("failed", profile.name), line
 
 
+async def endpoint_chain(session: Any, endpoint_id: UUID) -> list[UUID]:
+    """This endpoint and the ones it superseded (a URL change or a secret rotation)."""
+    from sqlalchemy import select
+
+    from ac_platform.partner_events.models import PartnerWebhookEndpoint
+
+    chain: list[UUID] = []
+    current: UUID | None = endpoint_id
+    while current is not None and current not in chain and len(chain) < 64:
+        chain.append(current)
+        current = await session.scalar(
+            select(PartnerWebhookEndpoint.supersedes_endpoint_id).where(
+                PartnerWebhookEndpoint.id == current
+            )
+        )
+    return chain
+
+
 async def enqueue(
     sessions: Any,
     candidate: Candidate,
@@ -398,16 +578,25 @@ async def enqueue(
         view = await transcript_view(session, candidate)
         draft = await session.get(ConversationReportDraft, candidate.draft_id)
         assert draft is not None and draft.payload is not None
-        summary = withhold(
-            summary_text(draft.payload.get("summary")),
-            WithheldPlan(view.withheld_ids, view.withheld_grams),
+        raw = draft.payload.get("summary")
+        # Withheld words first (on the words as written), then amounts masked and cut.
+        summary = summary_text(
+            withhold(
+                raw if isinstance(raw, str) else "",
+                WithheldPlan(view.withheld_ids, view.withheld_grams),
+            )
         )
+        # The newest event this partner may have for the call: same endpoint chain
+        # (a URL change or rotation keeps it), never one that was dropped unsent.
+        chain = await endpoint_chain(session, candidate.endpoint_id)
         previous = await session.scalar(
             select(PartnerWebhookEvent.id)
             .where(
                 PartnerWebhookEvent.tenant_id == candidate.tenant_id,
                 PartnerWebhookEvent.recording_id == candidate.recording_id,
                 PartnerWebhookEvent.report_draft_id != candidate.draft_id,
+                PartnerWebhookEvent.endpoint_id.in_(chain),
+                PartnerWebhookEvent.status != "dropped",
             )
             .order_by(PartnerWebhookEvent.created_at.desc(), PartnerWebhookEvent.id.desc())
             .limit(1)

@@ -574,3 +574,35 @@ async def erasure_sweep(session: Any, now: datetime) -> dict[str, int]:
     facts = await session.execute(text(_SWEEP_FACTS), {"now": now})
     events = await session.execute(text(_SWEEP_EVENTS), {"now": now})
     return {"facts_erased": int(facts.rowcount or 0), "events_erased": int(events.rowcount or 0)}
+
+
+_ERASE_FACTS_FOR = """
+    UPDATE partner_quote_facts SET payload = NULL, erased_at = :now
+    WHERE tenant_id = :tenant AND recording_id = :recording AND erased_at IS NULL
+"""
+_ERASE_EVENTS_FOR = """
+    UPDATE partner_webhook_events
+    SET payload = NULL, erased_at = :now, leased_until = NULL,
+        status = CASE WHEN status IN ('pending', 'dead_letter') THEN 'dropped' ELSE status END,
+        last_error_code = CASE WHEN status IN ('pending', 'dead_letter') THEN 'call_erased'
+                               ELSE last_error_code END
+    WHERE tenant_id = :tenant AND recording_id = :recording AND erased_at IS NULL
+"""
+
+
+async def erase_partner_rows_for_recording(
+    session: Any, *, tenant_id: UUID, recording_id: UUID, now: datetime
+) -> dict[str, int]:
+    """Empty one call's quote facts and partner events in the caller's transaction.
+
+    For the canonical call erasure (``ConversationApplication.finish_erasure``),
+    so nothing of an erased call waits for the runner's sweep. Undelivered
+    events are dropped (``call_erased``); ids, digests and times stay.
+    Repeat-safe.
+    """
+    from sqlalchemy import text
+
+    values = {"now": now, "tenant": tenant_id, "recording": recording_id}
+    facts = await session.execute(text(_ERASE_FACTS_FOR), values)
+    events = await session.execute(text(_ERASE_EVENTS_FOR), values)
+    return {"facts_erased": int(facts.rowcount or 0), "events_erased": int(events.rowcount or 0)}

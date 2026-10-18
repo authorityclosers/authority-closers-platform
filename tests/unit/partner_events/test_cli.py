@@ -1,16 +1,22 @@
-"""Partner events CLI: arguments, dry-run defaults and the Infisical re-exec (no process runs)."""
+"""Partner events CLI: arguments, dry-run defaults, the Infisical re-exec and the runner's
+paging (no process runs, no database: the pipeline is replaced by local fakes)."""
 
 from __future__ import annotations
 
+import asyncio
 import json
+from argparse import Namespace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
-from ac_platform.partner_events import cli
+from ac_platform.partner_events import cli, delivery, pipeline
 from ac_platform.partner_events.endpoints import EndpointError, validate
+from ac_platform.partner_events.payload import Extraction
 
 BASE = ["--service-config", "service.json", "--database-url-file", "database-url"]
 
@@ -129,7 +135,7 @@ def test_apply_reexecs_inside_infisical_with_the_gemini_secret_path(
     async def endpoint_active(*args: Any, **kwargs: Any) -> bool:
         return True
 
-    monkeypatch.setattr(cli.os, "execvpe", fake_exec)
+    monkeypatch.setattr("ac_platform.partner_events.cli.os.execvpe", fake_exec)
     monkeypatch.setattr(cli, "_preflight_async", endpoint_active)
     argv = [
         "--service-config",
@@ -150,3 +156,202 @@ def test_apply_reexecs_inside_infisical_with_the_gemini_secret_path(
     assert tail[4:] == argv
     assert captured["environment"]["INFISICAL_TOKEN"] == "fictional-token"  # noqa: S105
     assert "GEMINI_API_KEY" not in captured["environment"]
+
+
+class _Session:
+    """Stands in for an AsyncSession: the faked pipeline never touches it."""
+
+    def begin(self) -> _Session:
+        return self
+
+    async def __aenter__(self) -> _Session:
+        return self
+
+    async def __aexit__(self, *exc: object) -> bool:
+        return False
+
+    async def scalar(self, *args: Any, **kwargs: Any) -> int:
+        return 0  # the dry run's count of due events
+
+
+class _Runner:
+    """Fake reports and pipeline steps; records what the runner asked for."""
+
+    def __init__(self, waits: dict[int, str], skips: dict[int, str] | None = None) -> None:
+        start = datetime(2026, 10, 18, 4, 0, tzinfo=UTC)
+        self.reports = [
+            SimpleNamespace(
+                endpoint_id=UUID(int=1),
+                draft_id=UUID(int=100 + number),
+                submission_id=UUID(int=200 + number),
+                created_at=start + timedelta(minutes=number),
+                facts_profile="wiselife-quote-v1",
+                skip=(skips or {}).get(number),
+            )
+            for number in range(5)
+        ]
+        self.waits = waits
+        self.pages: list[UUID | None] = []
+        self.enqueued: list[UUID] = []
+        self.final: list[tuple[UUID, str]] = []
+        self.extracted: list[UUID] = []
+
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def active_endpoints(session: Any) -> int:
+            return 1
+
+        async def test_sources(session: Any) -> set[str]:
+            return set()
+
+        async def candidates(session: Any, **kwargs: Any) -> list[Any]:
+            after = kwargs["after"]
+            self.pages.append(after[1] if after else None)
+            left = [r for r in self.reports if after is None or (r.created_at, r.draft_id) > after]
+            return left[: kwargs["limit"]]
+
+        async def extract(sessions: Any, candidate: Any, **kwargs: Any) -> tuple[Any, Any]:
+            self.extracted.append(candidate.draft_id)
+            number = self.reports.index(candidate)
+            if number in self.waits:
+                return None, {"facts_wait": self.waits[number]}
+            return Extraction("skipped", None), {}
+
+        async def enqueue(sessions: Any, candidate: Any, *args: Any, **kwargs: Any) -> Any:
+            self.enqueued.append(candidate.draft_id)
+            return {"event": "fictional", "revision": 1, "extraction": "skipped", "facts": 0}
+
+        async def record_final(sessions: Any, candidate: Any, reason: str, **kwargs: Any) -> Any:
+            self.final.append((candidate.draft_id, reason))
+            return {"final": reason}
+
+        async def aged_out(session: Any, **kwargs: Any) -> list[Any]:
+            return []
+
+        async def deliver_one(*args: Any, **kwargs: Any) -> None:
+            return None
+
+        async def erasure_sweep(*args: Any, **kwargs: Any) -> dict[str, int]:
+            return {"facts_erased": 0, "events_erased": 0}
+
+        for name, value in {
+            "active_endpoints": active_endpoints,
+            "test_sources": test_sources,
+            "candidates": candidates,
+            "extract": extract,
+            "enqueue": enqueue,
+            "record_final": record_final,
+            "aged_out": aged_out,
+        }.items():
+            monkeypatch.setattr(pipeline, name, value)
+        monkeypatch.setattr(delivery, "deliver_one", deliver_one)
+        monkeypatch.setattr(delivery, "erasure_sweep", erasure_sweep)
+
+    def one_pass(self, *, apply: bool = True, limit: int = 2) -> dict[str, int]:
+        totals = dict.fromkeys(
+            ("enqueued", "final", "aged_out", "attempts", "delivered", "dropped",
+             "dead_letters", "errors", "waiting"),
+            0,
+        )  # fmt: skip
+        arguments = Namespace(apply=apply, limit=limit, recent_hours=72, daily_cap=1)
+        active = asyncio.run(
+            cli._one_pass(
+                _Session,
+                arguments,
+                environment="test",
+                app_url="https://salesxray.example.test",
+                client=None,
+                call_provider=lambda body: {},
+                clock=lambda: datetime(2026, 10, 18, 5, 0, tzinfo=UTC),
+                deadline=float("inf"),
+                totals=totals,
+                cache={},
+            )
+        )
+        assert active is True
+        return totals
+
+
+def test_waiting_reports_never_hold_newer_ones_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Review 18 Oct, item 5: the three oldest wait on the daily cap; the pass pages past them.
+    runner = _Runner({0: "daily_cap", 1: "in_flight", 2: "daily_cap"})
+    runner.install(monkeypatch)
+    totals = runner.one_pass(limit=2)
+    assert runner.enqueued == [runner.reports[3].draft_id, runner.reports[4].draft_id]
+    assert totals["waiting"] == 3 and totals["enqueued"] == 2
+    assert runner.pages == [None, runner.reports[1].draft_id, runner.reports[3].draft_id]
+
+
+def test_reports_that_will_never_be_sent_get_a_final_row(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runner = _Runner(
+        {0: "account_inactive", 1: "call_not_ready", 2: "permission_inactive"},
+        skips={3: "transcript_revision_missing"},
+    )
+    runner.install(monkeypatch)
+    totals = runner.one_pass(limit=5)
+    reports = runner.reports
+    assert runner.final == [
+        (reports[0].draft_id, "account_inactive"),
+        (reports[2].draft_id, "permission_inactive"),
+        (reports[3].draft_id, "transcript_revision_missing"),
+    ]
+    # A call not ready yet waits; a skipped report is never read.
+    assert totals["waiting"] == 1 and totals["final"] == 3
+    assert reports[3].draft_id not in runner.extracted
+    assert runner.enqueued == [reports[4].draft_id]
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert [line.get("final") for line in lines if "final" in line] == [
+        "account_inactive",
+        "permission_inactive",
+        "transcript_revision_missing",
+    ]
+
+
+def test_a_dry_run_records_nothing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runner = _Runner({0: "account_inactive"}, skips={1: "transcript_revision_missing"})
+    runner.install(monkeypatch)
+    runner.one_pass(apply=False, limit=5)
+    assert runner.final == [] and runner.enqueued == []
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert [line["would_record"] for line in lines if "would_record" in line] == [
+        "account_inactive",
+        "transcript_revision_missing",
+    ]
+
+
+@pytest.mark.parametrize(
+    "line,waiting",
+    [
+        ({"submission": "s", "facts_wait": "daily_cap"}, True),
+        ({"submission": "s", "facts": "saved", "enqueue_refused": "call_not_ready"}, True),
+        ({"submission": "s", "facts_wait": "account_inactive", "final": "account_inactive"}, False),
+        ({"submission": "s", "facts_attempt": 1, "facts_outcome": "refused_stale_source"}, False),
+        ({"submission": "s", "error": "ValueError"}, False),
+        ({"submission": "s", "event": "e", "revision": 1}, False),
+    ],
+)
+def test_waiting_lines_are_counted_not_logged(line: dict[str, Any], waiting: bool) -> None:
+    assert cli._waiting(line) is waiting
+
+
+@pytest.mark.parametrize(
+    "line,reason",
+    [
+        ({"facts_wait": "account_inactive"}, "account_inactive"),
+        ({"facts_wait": "call_erased"}, "call_erased"),
+        ({"enqueue_refused": "permission_inactive"}, "permission_inactive"),
+        ({"facts_outcome": "refused_call_missing"}, "call_missing"),
+        ({"facts_wait": "daily_cap"}, None),
+        ({"enqueue_refused": "call_not_ready"}, None),
+        ({"enqueue_refused": "stale_source"}, None),
+        ({"facts_outcome": "refused_stale_source"}, None),
+        ({"facts_outcome": "timeout"}, None),
+    ],
+)
+def test_only_refusals_that_keep_data_in_are_final(
+    line: dict[str, Any], reason: str | None
+) -> None:
+    assert pipeline.final_refusal(line) == reason

@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import json
 import re
+import time
 from argparse import Namespace
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -47,6 +48,8 @@ from ac_platform.partner_events import extraction as ledger
 from ac_platform.partner_events.delivery import (
     claim_next,
     deliver_one,
+    drop,
+    erase_partner_rows_for_recording,
     erasure_sweep,
     retry_delay,
 )
@@ -56,7 +59,7 @@ from ac_platform.partner_events.models import (
     PartnerWebhookEndpoint,
     PartnerWebhookEvent,
 )
-from ac_platform.partner_events.payload import body_sha256
+from ac_platform.partner_events.payload import body_sha256, summary_text
 from ac_platform.partner_events.pipeline import ProviderFailure
 from tests.database.test_conversation_postgresql import (
     postgres_harness as _postgres_harness,
@@ -69,6 +72,7 @@ from tests.database.test_conversation_reports_postgresql import (
 )
 
 SECRET_REF = "AC_PARTNER_WEBHOOK_SECRET__FICTIONAL"  # noqa: S105 - a variable name
+NEXT_SECRET_REF = "AC_PARTNER_WEBHOOK_SECRET__FICTIONAL_NEXT"  # noqa: S105 - a name, never set
 SECRET = "whsec-fictional-test-secret"  # noqa: S105 - fictional test value
 URL = "https://hooks.example.test/sx"
 PROFILE = "wiselife-quote-v1"
@@ -296,7 +300,9 @@ async def _register(
     return UUID(result["after"]["endpoint_id"])
 
 
-async def _copy_draft(sessions: Any, draft: Any, created_at: datetime) -> UUID:
+async def _copy_draft(
+    sessions: Any, draft: Any, created_at: datetime, payload: dict[str, Any] | None = None
+) -> UUID:
     """A re-analysis of the same call: a newer report draft with the same transcript."""
     draft_id = uuid4()
     async with sessions() as session, session.begin():
@@ -313,7 +319,7 @@ async def _copy_draft(sessions: Any, draft: Any, created_at: datetime) -> UUID:
                 transcript_sha256=draft.transcript_sha256,
                 profile_sha256=draft.profile_sha256,
                 evidence_receipt_sha256=draft.evidence_receipt_sha256,
-                payload=copy.deepcopy(draft.payload),
+                payload=copy.deepcopy(payload if payload is not None else draft.payload),
                 transcript=copy.deepcopy(draft.transcript),
                 evidence_receipt=copy.deepcopy(draft.evidence_receipt),
                 created_at=created_at,
@@ -427,7 +433,7 @@ def test_finished_report_becomes_one_signed_event_with_validated_quote_facts(
                 "city": "Pune",
             }
             assert draft.payload is not None
-            assert payload["summary"] == draft.payload["summary"]
+            assert payload["summary"] == summary_text(draft.payload["summary"])
             assert payload["outcome"] == {"kind": None}
             assert payload["extraction"]["status"] == "complete"
             product = [fact for fact in payload["facts"] if fact["type"] == "product_mention"]
@@ -869,7 +875,8 @@ def test_cli_dry_runs_change_nothing_and_apply_runs_one_pass(
             (test_dry,) = output()
             assert test_dry["apply"] is False and test_dry["endpoint"] == "http://127.0.0.1:8787/…"
 
-            # Our own test sources (the canary fixture) are never sent.
+            # Our own test sources (the canary fixture) are filtered in the query: never
+            # read, never sent, and no row is written for them.
             original = pipeline.test_sources
 
             async def everything_is_a_test(session: Any) -> set[str]:
@@ -883,7 +890,8 @@ def test_cli_dry_runs_change_nothing_and_apply_runs_one_pass(
             finally:
                 pipeline.test_sources = original
             assert status == 0 and calls == []
-            assert output()[-1]["totals"]["test_reports_skipped"] == 1
+            assert output() == []
+            assert await _events(sessions) == []
 
             # One applied pass: quote facts, enqueue, signed delivery to the local receiver.
             receiver = Receiver(200)
@@ -950,6 +958,300 @@ def test_cli_dry_runs_change_nothing_and_apply_runs_one_pass(
                 "partner_events.endpoint_disabled",
             ]
             assert SECRET not in capsys.readouterr().out
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+async def _runner_pass(
+    sessions: Any,
+    clock: Clock,
+    provider: Callable[[dict[str, Any]], dict[str, Any]],
+    *,
+    receiver: Receiver | None = None,
+) -> dict[str, int]:
+    """One real runner pass (``cli._one_pass``): pages, final rows, age-out, delivery, sweep."""
+    totals = dict.fromkeys(
+        ("enqueued", "final", "aged_out", "attempts", "delivered", "dropped", "dead_letters",
+         "errors", "waiting"),
+        0,
+    )  # fmt: skip
+    arguments = Namespace(apply=True, limit=10, recent_hours=72, daily_cap=50)
+    async with (receiver or Receiver()).client() as client:
+        await cli._one_pass(
+            sessions,
+            arguments,
+            environment="development",
+            app_url="https://salesxray.example.test",
+            client=client,
+            call_provider=provider,
+            clock=clock,
+            deadline=time.monotonic() + 60,
+            totals=totals,
+            cache={},
+        )
+    return totals
+
+
+def test_reports_never_sent_get_a_final_row_and_an_aged_out_report_alerts(
+    postgres_harness: Any,
+    report_fixture: ReportFixture,
+    owner_alerts: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review 18 Oct, item 5: no report blocks newer ones or ages out silently."""
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        clock = Clock()
+        try:
+            draft = await _draft(sessions, report_fixture)
+            await _submission(sessions, report_fixture, draft)
+            endpoint_id = await _register(
+                sessions, draft.tenant_id, draft.created_at - timedelta(minutes=1)
+            )
+            calls: list[str] = []
+
+            def provider(body: dict[str, Any]) -> dict[str, Any]:
+                calls.append("answer")
+                return answer(body)
+
+            # Our own test sources are filtered in the query: no row, never a candidate.
+            original = pipeline.test_sources
+
+            async def everything_is_a_test(session: Any) -> set[str]:
+                return {draft.source_sha256}
+
+            monkeypatch.setattr(pipeline, "test_sources", everything_is_a_test)
+            totals = await _runner_pass(sessions, clock, provider)
+            monkeypatch.setattr(pipeline, "test_sources", original)
+            assert totals["enqueued"] == totals["final"] == totals["waiting"] == 0
+            assert calls == [] and await _events(sessions) == []
+            async with sessions() as session:
+                assert (
+                    await pipeline.candidates(
+                        session,
+                        now=clock(),
+                        recent_hours=72,
+                        limit=10,
+                        tests={draft.source_sha256},
+                    )
+                    == []
+                )
+
+            # A newer report without a transcript revision: a final row; it is never read.
+            assert draft.payload is not None
+            no_revision = copy.deepcopy(draft.payload)
+            no_revision.pop("transcript_revision", None)
+            clock.now += timedelta(seconds=10)
+            second = await _copy_draft(
+                sessions, draft, clock.now - timedelta(seconds=5), payload=no_revision
+            )
+            totals = await _runner_pass(sessions, clock, provider)
+            assert totals["final"] == 1 and calls == []
+            (row,) = await _events(sessions)
+            assert (row.report_draft_id, row.endpoint_id, row.status) == (
+                second,
+                endpoint_id,
+                "dropped",
+            )
+            assert row.last_error_code == "transcript_revision_missing"
+            assert row.payload is None and row.erased_at is not None and row.attempts == 0
+            assert row.payload_sha256 == hashlib.sha256(b"").hexdigest()
+            assert row.analysis_revision >= 2 and row.supersedes_event_id is None
+
+            # Consent revoked before the event is built: a final row; nothing is paid or sent.
+            clock.now += timedelta(seconds=10)
+            third = await _copy_draft(sessions, draft, clock.now - timedelta(seconds=5))
+            async with sessions() as session, session.begin():
+                await session.execute(
+                    update(ConversationPermission)
+                    .where(ConversationPermission.id == report_fixture.prepared.state.permission_id)
+                    .values(revoked_at=clock())
+                )
+            receiver = Receiver()
+            totals = await _runner_pass(sessions, clock, provider, receiver=receiver)
+            assert totals["final"] == 1 and calls == [] and receiver.requests == []
+            events = await _events(sessions)
+            assert [(event.report_draft_id, event.last_error_code) for event in events] == [
+                (second, "transcript_revision_missing"),
+                (third, "permission_inactive"),
+            ]
+            # Final rows are final: the next pass finds nothing to do or wait for.
+            totals = await _runner_pass(sessions, clock, provider)
+            assert totals["final"] == totals["waiting"] == totals["errors"] == 0
+            assert len(await _events(sessions)) == 2
+
+            # A report still without an event after the recent window: recorded, owner alerted.
+            clock.now += timedelta(seconds=10)
+            fourth = await _copy_draft(sessions, draft, clock.now - timedelta(seconds=5))
+            clock.now += timedelta(hours=73)
+            assert owner_alerts == []
+            totals = await _runner_pass(sessions, clock, provider)
+            assert totals["aged_out"] == 1 and totals["final"] == 0 and calls == []
+            last = (await _events(sessions))[-1]
+            assert (last.report_draft_id, last.status, last.last_error_code) == (
+                fourth,
+                "dropped",
+                "aged_out",
+            )
+            assert last.payload is None
+            (alert,) = owner_alerts
+            assert alert.startswith(
+                "Sales X-Ray partner webhooks (development): 1 report(s) aged out after 72 h"
+            )
+            assert f"(endpoint {str(endpoint_id)[:8]})" in alert
+            totals = await _runner_pass(sessions, clock, provider)
+            assert totals["aged_out"] == 0 and len(owner_alerts) == 1
+            async with sessions() as session:
+                (listed,) = await endpoints.list_endpoints(session)
+            assert listed["events"] == {
+                "pending": 0,
+                "delivered": 0,
+                "dead_letter": 0,
+                "dropped": 3,
+            }
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_supersedes_follows_the_endpoint_chain_and_payloads_are_emptied(
+    postgres_harness: Any, report_fixture: ReportFixture
+) -> None:
+    """Review 18 Oct, items 1, 7, 9, 12 and 13."""
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        clock = Clock()
+        try:
+            draft = await _draft(sessions, report_fixture)
+            assert draft.payload is not None
+            await _submission(sessions, report_fixture, draft)
+            first_endpoint = await _register(
+                sessions, draft.tenant_id, draft.created_at - timedelta(minutes=1)
+            )
+            await _process(sessions, clock, answer)
+            (event_a,) = await _events(sessions)
+            receiver = Receiver()
+            async with receiver.client() as client:
+                line = await deliver_one(sessions, client, environment="development", clock=clock)
+            assert line is not None and line["status"] == "delivered"
+
+            # A secret rotation supersedes the endpoint; the next secret is not set yet.
+            async with sessions() as session, session.begin():
+                rotated = await endpoints.register(
+                    session,
+                    tenant_id=draft.tenant_id,
+                    url=URL,
+                    secret_ref=SECRET_REF,
+                    secret_ref_next=NEXT_SECRET_REF,
+                    events=["analysis.completed"],
+                    facts_profile=PROFILE,
+                    reason="fictional rotation",
+                    operator_reference="fictional operator",
+                    supersede=True,
+                    apply=True,
+                    environment="development",
+                    now=clock(),
+                )
+            second_endpoint = UUID(rotated["after"]["endpoint_id"])
+
+            # A re-analysis whose summary names prices: it supersedes A, prices are masked.
+            priced = copy.deepcopy(draft.payload)
+            priced["summary"] = (
+                "Customer wants 5 kW; budget teen lakh sattar hazaar, packing 500, "
+                "₹3,40,000 quoted, सवा दो लाख तक."
+            )
+            clock.now += timedelta(minutes=1)
+            await _copy_draft(sessions, draft, clock.now - timedelta(seconds=5), payload=priced)
+            (line,) = await _process(sessions, clock, answer)
+            event_b = (await _events(sessions))[-1]
+            assert event_b.payload is not None
+            assert event_b.endpoint_id == second_endpoint
+            assert event_b.supersedes_event_id == event_a.id
+            assert event_b.payload["summary"] == (
+                "Customer wants 5 kW; budget [amount], packing [amount], [amount] quoted, "
+                "[amount] तक."
+            )
+            # Item 9: the missing next secret no longer blocks delivery; the current one signs.
+            receiver = Receiver()
+            async with receiver.client() as client:
+                line = await deliver_one(sessions, client, environment="development", clock=clock)
+            assert line is not None and line["status"] == "delivered"
+            assert line["rotation"] == "next_not_set"
+            (request,) = receiver.requests
+            _verify(request)
+
+            # An event dropped unsent is never what a newer event supersedes.
+            clock.now += timedelta(minutes=1)
+            await _copy_draft(sessions, draft, clock.now - timedelta(seconds=5))
+            await _process(sessions, clock, answer)
+            event_c = (await _events(sessions))[-1]
+            async with sessions() as session, session.begin():
+                await drop(session, event_c.id, "call_erased", clock())
+            clock.now += timedelta(minutes=1)
+            await _copy_draft(sessions, draft, clock.now - timedelta(seconds=5))
+            await _process(sessions, clock, answer)
+            event_d = (await _events(sessions))[-1]
+            assert event_d.supersedes_event_id == event_b.id
+
+            # Item 13: disabling drops and empties the undelivered events.
+            async with sessions() as session, session.begin():
+                disabled = await endpoints.disable(
+                    session,
+                    endpoint_id=second_endpoint,
+                    reason="pilot paused",
+                    operator_reference="fictional operator",
+                    apply=True,
+                    now=clock(),
+                )
+            assert disabled["undelivered_events_to_drop"] == 1
+            async with sessions() as session:
+                stored = await session.get(PartnerWebhookEvent, event_d.id)
+                assert stored is not None and stored.status == "dropped"
+                assert stored.payload is None and stored.erased_at is not None
+                assert stored.last_error_code == "endpoint_disabled"
+
+            # A new endpoint (not a supersede) starts its own chain.
+            third_endpoint = await _register(sessions, draft.tenant_id, clock())
+            assert third_endpoint != first_endpoint
+            clock.now += timedelta(minutes=1)
+            await _copy_draft(sessions, draft, clock.now - timedelta(seconds=5))
+            await _process(sessions, clock, answer)
+            event_e = (await _events(sessions))[-1]
+            assert event_e.endpoint_id == third_endpoint
+            assert event_e.supersedes_event_id is None
+
+            # Item 7: the canonical erasure hook empties every partner row of the call at once.
+            async with sessions() as session, session.begin():
+                erased = await erase_partner_rows_for_recording(
+                    session,
+                    tenant_id=draft.tenant_id,
+                    recording_id=draft.recording_id,
+                    now=clock(),
+                )
+            assert erased == {"facts_erased": 5, "events_erased": 3}  # A, B delivered; E pending
+            async with sessions() as session, session.begin():
+                again = await erase_partner_rows_for_recording(
+                    session,
+                    tenant_id=draft.tenant_id,
+                    recording_id=draft.recording_id,
+                    now=clock(),
+                )
+            assert again == {"facts_erased": 0, "events_erased": 0}
+            async with sessions() as session:
+                rows = (await session.scalars(select(PartnerWebhookEvent))).all()
+                assert all(row.payload is None and row.erased_at is not None for row in rows)
+                statuses = {row.id: (row.status, row.last_error_code) for row in rows}
+                assert statuses[event_a.id][0] == statuses[event_b.id][0] == "delivered"
+                assert statuses[event_e.id] == ("dropped", "call_erased")
+                for facts in (await session.scalars(select(PartnerQuoteFacts))).all():
+                    assert facts.payload is None and facts.erased_at is not None
         finally:
             await engine.dispose()
 

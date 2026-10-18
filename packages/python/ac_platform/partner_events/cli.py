@@ -9,7 +9,11 @@ Commands (every change is a dry run without ``--apply``):
 
 - ``run [--apply] [--seconds 55] [--interval 5]``: for about a minute, loop
   quote facts -> enqueue -> deliver -> erasure sweep. A dry run makes one pass
-  and changes nothing (no provider call, no send).
+  and changes nothing (no provider call, no send). Reports are read a page at
+  a time, oldest first; a waiting report is counted and paged past. A report
+  that will never be sent gets a final row with a reason; one that aged out of
+  the recent window is recorded and the owner is alerted (counts and short
+  ids only), like a dead letter.
 - ``register-endpoint --tenant --url --secret-ref [--secret-ref-next]
   --events analysis.completed [--facts-profile wiselife-quote-v1] [--supersede]
   --reason --operator-reference [--apply]``
@@ -44,6 +48,8 @@ from uuid import UUID
 INNER = "--inner"
 MODULE = "ac_platform.partner_events.cli"
 _PROVIDER = "gemini"
+MAX_PAGES = 10  # pages of reports read per pass, so waiting reports never hold newer ones
+AGE_OUT_LIMIT = 50
 
 
 def _bounded(low: int, high: int) -> Callable[[str], int]:
@@ -236,42 +242,32 @@ async def _gemini_needed(sessions: Any) -> bool:
     return found is not None
 
 
-async def _one_pass(
+def _waiting(line: dict[str, Any]) -> bool:
+    """A report that is not ready yet (an attempt in flight, the daily cap, a call not
+    ready): it repeats every pass, so it is counted, not logged."""
+    if {"final", "error", "facts_attempt", "revision", "event"} & set(line):
+        return False
+    return "facts_wait" in line or "enqueue_refused" in line
+
+
+async def _settle(
     sessions: Any,
+    candidate: Any,
     arguments: argparse.Namespace,
     *,
-    environment: str,
     app_url: str,
-    client: Any,
     call_provider: Callable[[dict[str, Any]], dict[str, Any]] | None,
     clock: Callable[[], datetime],
-    deadline: float,
     totals: dict[str, int],
-) -> bool:
-    """One extract -> enqueue -> deliver -> sweep pass; False when no endpoint is active."""
+) -> dict[str, Any]:
+    """Quote facts and enqueue for one report, or its final row; the line to log."""
     from ac_platform.partner_events import pipeline
-    from ac_platform.partner_events.delivery import deliver_one, erasure_sweep
-    from ac_platform.partner_events.payload import EVENT_TYPE
     from ac_platform.partner_events.quote_facts import load_profile
 
-    async with sessions() as session:
-        active = await pipeline.active_endpoints(session)
-        found = (
-            await pipeline.candidates(
-                session, now=clock(), recent_hours=arguments.recent_hours, limit=arguments.limit
-            )
-            if active
-            else []
-        )
-        tests = await pipeline.test_sources(session) if found else set()
-    for candidate in found:
-        line: dict[str, Any] = {"submission": str(candidate.submission_id)}
-        if candidate.source_sha256 in tests:
-            totals["test_reports_skipped"] += 1
-            continue
-        if EVENT_TYPE not in candidate.events:
-            continue
-        try:
+    line: dict[str, Any] = {"submission": str(candidate.submission_id)}
+    try:
+        reason = candidate.skip
+        if reason is None:
             provider = call_provider or _call_gemini_for(
                 load_profile(candidate.facts_profile).model_id
                 if candidate.facts_profile
@@ -295,14 +291,143 @@ async def _one_pass(
                 totals["enqueued"] += "revision" in line
             elif extraction is not None:
                 line["would_enqueue"] = extraction.status
-        except Exception as error:  # one call's failure never stops the others
-            line["error"] = type(error).__name__
-            totals["errors"] += 1
-        if arguments.apply and set(line) <= {"submission", "facts_wait"}:
-            # Waiting (in flight, daily cap) repeats every pass: count it, don't log it.
-            totals["waiting"] += 1
-            continue
-        _print(line)
+            reason = pipeline.final_refusal(line)
+        if reason is not None:
+            if arguments.apply:
+                line.update(await pipeline.record_final(sessions, candidate, reason, clock=clock))
+                totals["final"] += "final" in line
+            else:
+                line["would_record"] = reason
+    except Exception as error:  # one call's failure never stops the others
+        line["error"] = type(error).__name__
+        totals["errors"] += 1
+    return line
+
+
+async def _age_out(
+    sessions: Any,
+    arguments: argparse.Namespace,
+    *,
+    environment: str,
+    tests: set[str],
+    clock: Callable[[], datetime],
+    totals: dict[str, int],
+) -> None:
+    """Reports that left the recent window without an event row: recorded, owner alerted."""
+    from ac_platform.partner_events import pipeline
+    from ac_platform.partner_events.delivery import notify_owner
+
+    async with sessions() as session:
+        old = await pipeline.aged_out(
+            session,
+            now=clock(),
+            recent_hours=arguments.recent_hours,
+            limit=AGE_OUT_LIMIT,
+            tests=tests,
+        )
+    if not old:
+        return
+    if not arguments.apply:
+        _print({"would_age_out": len(old)})
+        return
+    recorded = 0
+    for candidate in old:
+        line = await pipeline.record_final(sessions, candidate, pipeline.AGED_OUT, clock=clock)
+        recorded += "final" in line
+    totals["aged_out"] += recorded
+    if not recorded:
+        return  # another runner recorded them first
+    endpoints = sorted({str(candidate.endpoint_id)[:8] for candidate in old})
+    text = (
+        f"Sales X-Ray partner webhooks ({environment}): {recorded} report(s) aged out after "
+        f"{arguments.recent_hours} h without an event (endpoint {', '.join(endpoints)}). "
+        "Recorded as dropped (aged_out); check the runner and the daily cap."
+    )
+    _print(
+        {
+            "alert": "reports_aged_out",
+            "count": recorded,
+            "endpoints": endpoints,
+            "notified": await asyncio.to_thread(notify_owner, text),
+        }
+    )
+
+
+async def _one_pass(
+    sessions: Any,
+    arguments: argparse.Namespace,
+    *,
+    environment: str,
+    app_url: str,
+    client: Any,
+    call_provider: Callable[[dict[str, Any]], dict[str, Any]] | None,
+    clock: Callable[[], datetime],
+    deadline: float,
+    totals: dict[str, int],
+    cache: dict[str, Any],
+) -> bool:
+    """One extract -> enqueue -> deliver -> sweep pass; False when no endpoint is active.
+
+    Reports are read a page at a time; waiting reports and failures do not use
+    up the pass's ``--limit``, so the pass pages past them (at most
+    ``MAX_PAGES`` pages). Our own test sources are filtered in the query
+    (looked up once per run).
+    """
+    from ac_platform.partner_events import pipeline
+    from ac_platform.partner_events.delivery import deliver_one, erasure_sweep
+
+    async with sessions() as session:
+        active = await pipeline.active_endpoints(session)
+        if active and "tests" not in cache:
+            cache["tests"] = set(await pipeline.test_sources(session))
+    tests: set[str] = cache.get("tests", set())
+    if active:
+        after: tuple[datetime, UUID] | None = None
+        acted = 0
+        for _ in range(MAX_PAGES):
+            async with sessions() as session:
+                page = await pipeline.candidates(
+                    session,
+                    now=clock(),
+                    recent_hours=arguments.recent_hours,
+                    limit=arguments.limit,
+                    tests=tests,
+                    after=after,
+                )
+            for candidate in page:
+                after = (candidate.created_at, candidate.draft_id)
+                line = await _settle(
+                    sessions,
+                    candidate,
+                    arguments,
+                    app_url=app_url,
+                    call_provider=call_provider,
+                    clock=clock,
+                    totals=totals,
+                )
+                if arguments.apply and _waiting(line):
+                    totals["waiting"] += 1
+                    continue
+                _print(line)
+                acted += "error" not in line
+            if len(page) < arguments.limit or acted >= arguments.limit:
+                break
+            if time.monotonic() >= deadline:
+                break
+        if not cache.get("aged_checked"):
+            cache["aged_checked"] = True  # once per run (about a minute)
+            try:
+                await _age_out(
+                    sessions,
+                    arguments,
+                    environment=environment,
+                    tests=tests,
+                    clock=clock,
+                    totals=totals,
+                )
+            except Exception as error:  # never stops delivery
+                totals["errors"] += 1
+                _print({"age_out_error": type(error).__name__})
     if not arguments.apply:
         from sqlalchemy import func, select
 
@@ -326,6 +451,7 @@ async def _one_pass(
         totals["attempts"] += 1
         totals["delivered"] += delivered.get("status") == "delivered"
         totals["dropped"] += "dropped" in delivered
+        totals["dead_letters"] += delivered.get("status") == "dead_letter"
         _print(delivered)
     async with sessions() as session, session.begin():
         swept = await erasure_sweep(session, clock())
@@ -361,15 +487,18 @@ async def _run(
         (
             "passes",
             "enqueued",
+            "final",
+            "aged_out",
             "attempts",
             "delivered",
             "dropped",
+            "dead_letters",
             "errors",
             "waiting",
-            "test_reports_skipped",
         ),
         0,
     )
+    cache: dict[str, Any] = {}
     deadline = time.monotonic() + arguments.seconds
     own_client = client is None and arguments.apply
     client = client or (http_client() if arguments.apply else None)
@@ -390,6 +519,7 @@ async def _run(
                         clock=clock,
                         deadline=deadline,
                         totals=totals,
+                        cache=cache,
                     )
                     totals["passes"] += 1
                     if not active:
