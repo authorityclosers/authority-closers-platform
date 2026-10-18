@@ -3145,6 +3145,48 @@
   padding-left: 20px;
 }
 
+/* "Save as a lead?" for work calls with unknown numbers (Salestrail row). */
+.unknownCard {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.unknownCard header,
+.unknownCard li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.unknownCard header > span,
+.unknownCard li > span {
+  display: grid;
+  gap: 2px;
+}
+
+.unknownCard small {
+  color: var(--sx-muted);
+}
+
+.unknownCard ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unknownCard li {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding-top: 6px;
+  border-top: 1px solid var(--sx-line);
+}
+
 /* A seller's phone on Team: one dot and a few words. */
 .phoneDot {
   display: inline-flex;

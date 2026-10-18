@@ -131,6 +131,7 @@ export function AddLeadDialog({
   onClose,
   onAdded,
   initial = null,
+  initialNote = "From the Sales Xray extension. Check the details, then add the lead.",
 }: {
   open: boolean;
   canManage: boolean;
@@ -138,6 +139,8 @@ export function AddLeadDialog({
   onAdded: (leadId: string) => void;
   /** Details handed over by the Chrome extension; the person still checks and adds. */
   initial?: SharedLead | null;
+  /** Where the filled-in details came from (the extension, or a work call on the phone). */
+  initialNote?: string;
 }) {
   const [form, setForm] = useState(() =>
     initial ? { ...EMPTY, ...initial } : EMPTY,
@@ -217,7 +220,7 @@ export function AddLeadDialog({
       <div className={styles.form}>
         {initial ? (
           <p className={styles.hint} role="status">
-            From the Sales Xray extension. Check the details, then add the lead.
+            {initialNote}
           </p>
         ) : null}
         <div className={styles.pasteBox}>

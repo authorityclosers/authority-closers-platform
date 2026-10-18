@@ -362,6 +362,66 @@ export async function pushEnable(config: {
 
 export type CallLogSim = { id: string; label: string };
 
+/** A work call with a number that isn't a lead yet; it stays on the phone unless saved. */
+export type UnknownCall = {
+  number: string;
+  lastMs: number;
+  direction: "outgoing" | "incoming" | "missed";
+  seconds: number;
+  count: number;
+};
+
+export function parseUnknown(raw: unknown): UnknownCall[] {
+  const items =
+    raw && typeof raw === "object"
+      ? (raw as { items?: unknown }).items
+      : undefined;
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    const direction = text(value.direction);
+    if (
+      !text(value.number) ||
+      !["outgoing", "incoming", "missed"].includes(direction)
+    )
+      return [];
+    return [
+      {
+        number: text(value.number),
+        lastMs: count(value.lastMs),
+        direction: direction as UnknownCall["direction"],
+        seconds: count(value.seconds),
+        count: Math.max(1, count(value.count)),
+      },
+    ];
+  });
+}
+
+/** Work calls with numbers that aren't leads, newest first; [] in a browser or older app. */
+export async function unknownCalls(): Promise<UnknownCall[]> {
+  if (!inPhoneApp()) return [];
+  try {
+    return parseUnknown(await ask("unknownCalls", {}, 5_000));
+  } catch {
+    return [];
+  }
+}
+
+/** "Not a lead": the phone stops offering this number. */
+export async function ignoreNumber(number: string): Promise<UnknownCall[]> {
+  try {
+    return parseUnknown(await ask("ignoreNumber", { number }, 5_000));
+  } catch {
+    return [];
+  }
+}
+
+/** Saved as a lead: the phone drops it from the list. */
+export async function forgetUnknown(number: string): Promise<void> {
+  await ask("forgetUnknown", { number }, 5_000).catch(() => undefined);
+}
+
 /** Work calls the phone logs by itself (UX study item 5). */
 export type CallLogStatus = {
   on: boolean;

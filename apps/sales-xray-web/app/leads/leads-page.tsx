@@ -45,6 +45,7 @@ import {
 import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
 import { PhoneSetupBar } from "./phone-setup";
+import { UnknownCallsCard } from "./unknown-calls-card";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { DeskView, dueNow, type DeskLink, type RowActions } from "./desk-view";
@@ -64,7 +65,7 @@ import {
   type PickedContact,
 } from "./leads-client";
 import { MessageSetup } from "./message-sheet";
-import { onPhoneSignal } from "./native-phone";
+import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { ListView } from "./list-view";
 import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
@@ -153,6 +154,8 @@ export function LeadsRoute() {
     () => ANDROID_DOWNLOAD_READY && params.get("app") === "1",
   );
   const [sharedDone, setSharedDone] = useState(false);
+  // A work call's number the seller chose to save as a lead (from the phone).
+  const [unknownLead, setUnknownLead] = useState<string | null>(null);
   const [contacts, setContacts] = useState(false);
   const [picked, setPicked] = useState<PickedContact[]>([]);
   // Each opening mounts a fresh dialog, so nothing is reset in an effect.
@@ -473,6 +476,7 @@ export function LeadsRoute() {
                   <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
                   <AlertsCard />
                   <PhoneLogCard />
+                  <UnknownCallsCard onSave={setUnknownLead} />
                 </>
               }
             />
@@ -535,6 +539,22 @@ export function LeadsRoute() {
             onClose={closeShared}
             onAdded={(leadId) => {
               closeShared();
+              refresh();
+              setOpenLead(leadId);
+            }}
+          />
+        ) : null}
+        {unknownLead ? (
+          <AddLeadDialog
+            key={`unknown-${unknownLead}`}
+            open
+            canManage={can}
+            initial={{ name: "", phone: unknownLead, email: "", note: "" }}
+            initialNote="A work call on your phone. Add their name, then add the lead."
+            onClose={() => setUnknownLead(null)}
+            onAdded={(leadId) => {
+              void forgetUnknown(unknownLead);
+              setUnknownLead(null);
               refresh();
               setOpenLead(leadId);
             }}
