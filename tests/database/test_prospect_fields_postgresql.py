@@ -34,7 +34,10 @@ from ac_platform.conversation_intelligence.prospect_report_context import previo
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore
 from ac_platform.conversation_intelligence.sensitive_segments_store import SensitiveSegmentsStore
 from ac_platform.db.models import model_metadata
-from tests.database.prospect_legacy_fixtures import legacy_person_projection
+from tests.database.prospect_legacy_fixtures import (
+    legacy_admission_uses,
+    legacy_person_projection,
+)
 from tests.database.test_conversation_postgresql import _migration_head, run, seed
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_submission_http_postgresql import _setup
@@ -514,6 +517,7 @@ def test_populated_0077_upgrade_preserves_prospects_links_tags_and_audit(
     try:
         with monkeypatch.context() as patch:
             legacy_person_projection(engine, legacy_registry, patch)
+            legacy_admission_uses(patch)
             patch.setattr(guest_models, "ConversationGuestSubmission", LegacySubmission)
             patch.setattr(guest_ownership, "ConversationGuestSubmission", LegacySubmission)
             # Seed the real 0077 schema using its pre-journal projections.

@@ -84,8 +84,8 @@ def upload_policy(policy: IntakePolicy) -> dict[str, Any]:
         "description": (
             "Upload only a call you have permission to analyse. AC checks its length, "
             + processing
-            + "The call uses its length from your displayed free allowance once; you will "
-            "not be charged a payment. "
+            + "The call's length comes off your displayed allowance only when its report is "
+            "ready; a call that fails uses none. You will not be charged a payment. "
             + kept
             + "You can request deletion at admin@authorityclosers.com. "
             "Review the privacy details before starting your analysis."

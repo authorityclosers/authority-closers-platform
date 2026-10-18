@@ -19,6 +19,9 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage as Usage,
 )
+from ac_platform.conversation_intelligence.acquisition_models import (
+    ConversationReportMinuteEvent,
+)
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.organisations.invitations import active_pending_invites
@@ -111,6 +114,19 @@ async def organisation_pool(database: AsyncSession, tenant_id: UUID) -> dict[str
     )
 
 
+def _latest_minute_kind() -> Any:
+    """The call's latest minute event; a released call used no minutes."""
+    event = ConversationReportMinuteEvent
+    return (
+        select(event.kind)
+        .where(event.usage_id == Usage.id)
+        .order_by(event.revision.desc())
+        .limit(1)
+        .correlate(Usage)
+        .scalar_subquery()
+    )
+
+
 async def member_usage(
     database: AsyncSession, tenant_id: UUID, since: datetime
 ) -> dict[UUID, tuple[int, int, datetime | None]]:
@@ -121,7 +137,13 @@ async def member_usage(
                 case(
                     (
                         Usage.created_at >= since,
-                        func.coalesce(Settlement.charged_seconds, Usage.reserved_seconds),
+                        func.coalesce(
+                            Settlement.charged_seconds,
+                            case(
+                                (_latest_minute_kind() == "released", 0),
+                                else_=Usage.reserved_seconds,
+                            ),
+                        ),
                     ),
                     else_=0,
                 )
