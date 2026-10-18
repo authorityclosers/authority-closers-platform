@@ -1180,7 +1180,7 @@ export function MoneyView({ metrics }: { metrics: Metrics }) {
       </Tiles>
       <Panel
         title="Why holds stay open"
-        tools={<Badge tone="warn">needs the owner</Badge>}
+        tools={<Badge tone="good">automatic from v0.64</Badge>}
       >
         <p className={styles.note}>{money.finding}</p>
       </Panel>

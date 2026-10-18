@@ -52,8 +52,10 @@ def postgres_harness() -> Any:
 
 
 async def _uncertain_hold(
-    postgres_harness: Any, tmp_path: Path, *, max_cost_paise: int
+    postgres_harness: Any, tmp_path: Path, *, max_cost_paise: int, auto_settle: bool = False
 ) -> tuple[Any, async_sessionmaker[AsyncSession], Any, str]:
+    """A receipted Scribe call. Without ``auto_settle`` its hold is left open, as every
+    hold was before the worker settled them itself (19 Oct 2026)."""
     prepared = await prepare_local(postgres_harness, tmp_path)
     assert await prepared.worker.run_once()
     engine = create_async_engine(postgres_harness.url)
@@ -117,7 +119,19 @@ async def _uncertain_hold(
             state.actor, prepared.recording_id, quote_id, key="settlement-fixture"
         )
     worker = ConversationInferenceWorker(sessions, prepared.storage, FakeBroker(prepared.data))
-    assert await worker.run_once()
+    from ac_platform.conversation_intelligence import inference_worker
+
+    automatic = inference_worker.settle_on_receipt
+
+    async def leave_open(*_args: Any, **_kwargs: Any) -> bool:
+        return False
+
+    if not auto_settle:
+        inference_worker.settle_on_receipt = leave_open  # type: ignore[assignment]
+    try:
+        assert await worker.run_once()
+    finally:
+        inference_worker.settle_on_receipt = automatic  # type: ignore[assignment]
     return engine, sessions, prepared, str(view["id"])
 
 

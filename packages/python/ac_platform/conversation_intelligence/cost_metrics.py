@@ -60,17 +60,19 @@ STAGE_LABELS = {
     "PR": "Pointer review",
 }
 HOLD_REFS = {
-    "provider-cost-reconciliation": "Waiting for cost settlement",
-    "provider-outcome-reconciliation": "Provider outcome unknown",
+    "provider-cost-reconciliation": "Waiting for settlement or an invoice check",
+    "provider-outcome-reconciliation": "Provider outcome unknown: invoice check",
     "list-price-estimate": "Settled at list price",
     "checkpoint": "Local step, no charge",
 }
-# Why open holds pile up; checked read-only on 19 Oct 2026 (see the module doc).
+# Why holds are open, and what settles them (owner approval 19 Oct 2026).
 HOLD_FINDING = (
-    "Nothing settles a provider hold by itself. Each transcription, facts and report step "
-    "leaves its hold open; the 17 Oct fix is a one-time script that was run once per "
-    "environment (production 17 Oct 11:35 UTC). Every hold made since is still open, and "
-    "most of the new ones are release canaries. Settling in the worker needs the owner's yes."
+    "From v0.64 the worker settles each AI budget hold at list price the moment its "
+    "validated provider receipt lands (owner's approval, 19 Oct), once and audited. "
+    "Holds still open are ones these rules can't price (older steps with no audio "
+    "length or an old receipt) and ones whose provider outcome is unknown; they wait for "
+    "an invoice check. Holds opened between 17 Oct and that release can be settled with "
+    "the approved one-time script."
 )
 
 # (coaching prompt, facts prompt, report model, transcription model, settings revision)

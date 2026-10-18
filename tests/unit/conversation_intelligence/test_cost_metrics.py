@@ -295,13 +295,13 @@ def test_money_health_shows_open_holds_and_why() -> None:
     assert staging["by_reason"] == [
         {
             "ref": "provider-cost-reconciliation",
-            "label": "Waiting for cost settlement",
+            "label": "Waiting for settlement or an invoice check",
             "n": 2,
             "rupees": 44.0,
         }
     ]
     assert staging["by_kind"] == {"canary": 2}
-    assert "one-time script" in money["finding"]
+    assert "invoice check" in money["finding"]
 
 
 def test_pipelines_compare_versions_with_gold_agreement() -> None:
