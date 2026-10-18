@@ -168,8 +168,11 @@ class Intake:
                 .order_by(LeadSource.created_at)
             )
         ).all()
+        # Accounts connected with Continue with Google have their own card (connectors/http.py).
         return Sources(
-            sources=tuple(self._view(row) for row in rows),
+            sources=tuple(
+                self._view(row) for row in rows if (row.config or {}).get("connector") is None
+            ),
             meta="ready" if meta_ready else "not_configured",
         )
 
@@ -218,6 +221,11 @@ class Intake:
         source = await self._source(source_id)
         if source.kind != "webhook":
             raise DeskError(422, "Only website form sources have a key.")
+        if (source.config or {}).get("connector") is not None:
+            # Sales Xray wrote this key into the account's lead forms itself.
+            raise DeskError(
+                422, "This account's key is managed by Sales Xray. Reconnect it instead."
+            )
         token = secrets.token_urlsafe(32)
         source.token_sha256 = token_hash(token)
         source.updated_at = self.desk.now

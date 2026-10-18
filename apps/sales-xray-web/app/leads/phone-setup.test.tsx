@@ -215,7 +215,11 @@ describe("a seller's phone on Team", () => {
   });
 
   it("shows the dot in the Phone column", async () => {
-    const rep = { phone: health() } as RepView;
+    // PhoneCell reads the real clock: the phone reported and checked just now.
+    const just = new Date().toISOString();
+    const rep = {
+      phone: health({ reported_at: just, synced_at: just }),
+    } as RepView;
     await act(async () => root.render(<PhoneCell rep={rep} />));
     const cell = host.querySelector("[data-tone]")!;
     expect(cell.getAttribute("data-tone")).toBe("warn");
