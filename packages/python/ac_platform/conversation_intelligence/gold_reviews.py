@@ -70,6 +70,52 @@ def ai_lines(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def gold_payload(intent: GoldSave, ai_payload: dict[str, Any]) -> dict[str, Any]:
+    """The judgement plus the AI status/score it judged (never quotes), for the metrics."""
+    payload: dict[str, Any] = {
+        "verdict": intent.verdict,
+        "score": intent.score,
+        "opinion": intent.opinion,
+    }
+    if intent.status is not None:
+        payload["status"] = intent.status
+    if intent.reasons:
+        payload["reasons"] = list(intent.reasons)
+    if intent.skip is not None:
+        payload["skip"] = intent.skip
+    if intent.seconds is not None:
+        payload["seconds"] = intent.seconds
+    pointers = ai_payload.get("pointers")
+    ai = next(
+        (
+            p
+            for p in (pointers if isinstance(pointers, list) else [])
+            if isinstance(p, dict) and p.get("id") == intent.target
+        ),
+        None,
+    )
+    if ai is not None:
+        payload["ai"] = {
+            "status": ai["status"] if isinstance(ai.get("status"), str) else None,
+            "score": ai["score"] if type(ai.get("score")) is int else None,
+        }
+    return payload
+
+
+def call_context(evidence: Any) -> dict[str, Any]:
+    """What the reviewer needs to place the call: when, how long, and the AI's summary."""
+    draft = evidence.draft.payload if isinstance(evidence.draft.payload, dict) else {}
+    segments = evidence.transcript.get("segments") or []
+    ends = [s.get("end_ms") for s in segments if isinstance(s, dict)]
+    summary = draft.get("summary")
+    return {
+        "recorded_at": evidence.recording.created_at.isoformat(),
+        "duration_ms": max((e for e in ends if type(e) is int), default=None),
+        "summary": summary[:600] if isinstance(summary, str) else None,
+        "verdict": draft.get("verdict") if isinstance(draft.get("verdict"), str) else None,
+    }
+
+
 def row_view(row: GoldRow) -> dict[str, Any]:
     return {
         "id": str(row.id),
@@ -269,6 +315,7 @@ class GoldReviews:
                 "history_count": len(history),
                 "audio_source_url": f"/v1/reviewer/review-assignments/{assignment_id}/source",
                 "transcript": evidence.transcript,
+                "context": call_context(evidence),
             },
             plan,
         )
@@ -314,7 +361,7 @@ class GoldReviews:
             reviewer_id=actor.person_id,
             target=intent.target,
             ai_sha256=review.payload_sha256,
-            payload={"verdict": intent.verdict, "score": intent.score, "opinion": intent.opinion},
+            payload=gold_payload(intent, review.payload or {}),
             supersedes_id=intent.supersedes_id,
             request_key=key,
             request_sha256=fingerprint,
