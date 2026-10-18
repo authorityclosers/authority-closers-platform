@@ -151,6 +151,9 @@ services:
       AC_FCM_APP_ID: ${AC_FCM_APP_ID:-}
       AC_FCM_API_KEY: ${AC_FCM_API_KEY:-}
       AC_FCM_SENDER_ID: ${AC_FCM_SENDER_ID:-}
+      AC_GOOGLE_ADS_CLIENT_ID: ${AC_GOOGLE_ADS_CLIENT_ID:-}
+      AC_GOOGLE_ADS_CLIENT_SECRET: ${AC_GOOGLE_ADS_CLIENT_SECRET:-}
+      AC_GOOGLE_ADS_DEVELOPER_TOKEN: ${AC_GOOGLE_ADS_DEVELOPER_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

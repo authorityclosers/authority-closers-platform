@@ -14,6 +14,9 @@ LEAD_CONNECTOR_SETTINGS = {
     "AC_FCM_APP_ID": "fixture-fcm-app-id",
     "AC_FCM_API_KEY": "fixture-fcm-api-key",
     "AC_FCM_SENDER_ID": "fixture-fcm-sender-id",
+    "AC_GOOGLE_ADS_CLIENT_ID": "fixture-google-ads-client-id",
+    "AC_GOOGLE_ADS_CLIENT_SECRET": "fixture-google-ads-client-secret",
+    "AC_GOOGLE_ADS_DEVELOPER_TOKEN": "fixture-google-ads-developer-token",
 }
 
 
