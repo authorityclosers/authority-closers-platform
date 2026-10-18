@@ -1464,3 +1464,58 @@
     top: calc(var(--report-nav-sticky-top, 0px) - 58px);
   }
 }
+
+/* Phones (owner, 19 Oct: viewport-fit, nothing scrolls sideways). The Report's
+   parts share the width as one segmented bar: icon above a short name, equal
+   widths, the current part filled and underlined. Fits four parts at 360 px. */
+@media (max-width: 540px) {
+  .workspace[data-view="story"]
+    .navRow:not([data-placement="toolbar"])
+    .contents {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 2px;
+    width: 100%;
+    padding: 2px;
+    overflow: visible;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--report-muted) 8%, transparent);
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .workspace[data-view="story"]
+    .navRow:not([data-placement="toolbar"])
+    .contents
+    a {
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 48px;
+    margin: 0;
+    padding: 6px 2px 5px;
+    border-bottom: 2px solid transparent;
+    border-radius: 10px;
+    font-size: 11.5px;
+    line-height: 1.1;
+    text-align: center;
+  }
+  .workspace[data-view="story"]
+    .navRow:not([data-placement="toolbar"])
+    .contents
+    a[aria-current="location"] {
+    border-bottom-color: var(--report-teal);
+    background: color-mix(in srgb, var(--report-teal) 12%, transparent);
+    color: var(--report-active-ink);
+  }
+  .workspace[data-view="story"]
+    .navRow:not([data-placement="toolbar"])
+    .contents
+    .compactLabel {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

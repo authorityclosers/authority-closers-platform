@@ -1,6 +1,10 @@
 "use client";
 
-import { ChartNoAxesColumnIncreasing, ListChecks } from "lucide-react";
+import {
+  ChartNoAxesColumnIncreasing,
+  ListChecks,
+  UserRound,
+} from "lucide-react";
 import { Component, useMemo, type ReactNode } from "react";
 
 import { computeCallMetrics } from "../call-metrics";
@@ -18,6 +22,7 @@ import { OverviewScore } from "./overview";
 import { readStructure } from "./structure";
 import { FinalOutcome } from "./outcome";
 import { CallAnalysis, PointerProgress } from "./pointers";
+import { ProspectPart } from "./prospect";
 import styles from "./xray.module.css";
 
 export type XrayPanel = {
@@ -174,6 +179,18 @@ function AnalysisPart(props: PartProps) {
   );
 }
 
+function ProspectSection(props: PartProps) {
+  const view = useXrayView(props.data, props.callId, props.illustration);
+  return (
+    <ProspectPart
+      data={props.data}
+      callId={props.callId}
+      view={view}
+      onSelect={props.onSelect}
+    />
+  );
+}
+
 function AnalysisProgress(props: PartProps) {
   const view = useXrayView(props.data, props.callId, props.illustration);
   return <PointerProgress pointers={view.pointers} />;
@@ -271,4 +288,35 @@ export function xrayReportPanels(
       ),
     },
   ];
+}
+
+/**
+ * Prospect's Information as its own top tab (owner, 19 Oct: Report | Prospect |
+ * Coaching), not a part of the Report. Guest previews and illustrations have
+ * no saved prospect behind them.
+ */
+export function prospectPanel(
+  data: DocumentReportData,
+  onSelect?: Select,
+  options: { callId?: string | null } = {},
+): XrayPanel | null {
+  if (!data.report || data.report.preview) return null;
+  return {
+    id: "prospect-information",
+    label: "Prospect’s Information",
+    compactLabel: "Prospect",
+    summary:
+      "Who they are, what they want, what’s stopping them and what happens next.",
+    icon: <UserRound />,
+    content: (
+      <PartBoundary>
+        <ProspectSection
+          data={data}
+          callId={options.callId ?? null}
+          illustration={null}
+          onSelect={onSelect}
+        />
+      </PartBoundary>
+    ),
+  };
 }

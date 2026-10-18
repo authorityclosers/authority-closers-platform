@@ -369,6 +369,8 @@ export function AcquisitionStudio({
   const [planRequiresAction, setPlanRequiresAction] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  // The page header follows the report's tab: Report, Prospect or Coaching.
+  const [reportView, setReportView] = useState<string>("story");
   // The analysis this page watched: its report arrives with a short reveal
   // where the progress panel was (one continuous screen, owner 11 Oct).
   const [watchedId, setWatchedId] = useState<string | null>(null);
@@ -3682,6 +3684,7 @@ export function AcquisitionStudio({
                 )}
                 <ReportModes
                   label="Explore your sales report"
+                  onViewChange={setReportView}
                   onSelectEvidence={seek}
                   onSelectContextualPlayback={seekWithContext}
                   structure="pillars"
@@ -3908,7 +3911,15 @@ export function AcquisitionStudio({
         homeHref={homeHref}
         mobileFit
         allowance={allowance}
-        pageName={reportReady ? "Report" : undefined}
+        pageName={
+          reportReady
+            ? reportView === "prospect"
+              ? "Prospect"
+              : reportView === "coaching"
+                ? "Coaching"
+                : "Report"
+            : undefined
+        }
         heroStage={
           !result && !busy && !deletionOnlyId
             ? submission

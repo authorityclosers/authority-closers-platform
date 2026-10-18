@@ -816,6 +816,10 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         report_nav.get_by_role("link", name="Overview & Score", exact=True)
                     ).to_have_count(1)
+                    # 19 Oct owner: Prospect is its own view, next to Report and Coaching.
+                    await expect(
+                        page.get_by_role("button", name="Prospect's Information view", exact=True)
+                    ).to_have_count(1)
                     # An explicit Details link still opens every original section.
                     await page.goto(_with_view(page.url, "tabs"), wait_until="domcontentloaded")
                     assert "view=tabs" in page.url

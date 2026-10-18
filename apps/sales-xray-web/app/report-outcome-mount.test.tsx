@@ -57,6 +57,13 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+/** These tests are about outcome reads; the Report's Prospect part reads its own link. */
+function outcomeReads(fetch: { mock: { calls: unknown[][] } }) {
+  return fetch.mock.calls.filter(([input]) =>
+    String(input).endsWith("/outcome"),
+  );
+}
+
 async function settle() {
   for (let i = 0; i < 6; i += 1) await act(async () => Promise.resolve());
 }
@@ -92,7 +99,7 @@ it("records a person's outcome in one tap and shows it as the call outcome", asy
     host.querySelector<HTMLElement>('[data-xray-part="overview"]')!;
   const outcome = () =>
     host.querySelector<HTMLElement>('[data-xray-part="outcome"]')!;
-  expect(fetch.mock.calls[0][0]).toBe(
+  expect(outcomeReads(fetch)[0][0]).toBe(
     `/v1/conversation/prospects/calls/${call}/outcome`,
   );
   // Until a person records it, the analysis's reading stays labelled as such.
@@ -134,7 +141,7 @@ it("never reads an outcome for a guest preview or without a signed-in workspace"
     ),
   );
   await settle();
-  expect(fetch).not.toHaveBeenCalled();
+  expect(outcomeReads(fetch)).toHaveLength(0);
   expect(host.textContent).not.toContain("Not set yet");
   await act(async () => root.unmount());
 });
@@ -164,7 +171,7 @@ it("stays quiet on a teammate's call the person cannot record", async () => {
     ),
   );
   await settle();
-  expect(fetch).toHaveBeenCalledOnce();
+  expect(outcomeReads(fetch)).toHaveLength(1);
   const report = host.querySelector("[data-report-modes]")!;
   expect(report.textContent).not.toContain("couldn't be read");
   expect(report.textContent).not.toContain("Not set yet");
