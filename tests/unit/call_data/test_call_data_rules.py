@@ -321,3 +321,11 @@ def test_model_values_are_tidied_then_checked_strictly() -> None:
     assert promise == {"text": "Send a case study"}
     with pytest.raises(CallValueError):
         from_model(taxonomy.TYPES["person.other_party"], {"name": None, "role": ""})
+
+
+def test_a_promise_says_its_date_once() -> None:
+    promise = taxonomy.TYPES["commitment.seller_promise"]
+    said = {"text": "Send the scope before July 23rd", "due": {"text": "July 23rd"}}
+    assert display(promise, validate_value(promise, said)) == "Send the scope before July 23rd"
+    other = {"text": "Send the scope", "due": {"text": "Friday"}}
+    assert display(promise, validate_value(promise, other)) == "Send the scope · by Friday"

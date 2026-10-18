@@ -278,7 +278,13 @@ def display(kind_type: ObjectType, value: dict[str, Any]) -> str:
         return f"{name} ({role})" if role else str(name)
     if kind == "commitment":
         due = value.get("due")
-        return f"{value['text']} · by {due['text']}" if due else str(value["text"])
+        text = str(value["text"])
+        # A model often repeats the date inside the promise; say it once.
+        if not due or " ".join(str(due["text"]).casefold().split()) in " ".join(
+            text.casefold().split()
+        ):
+            return text
+        return f"{text} · by {due['text']}"
     if kind == "objection":
         return f"{value['text']} · {'resolved' if value['resolved'] else 'open'}"
     if kind == "question":
