@@ -1,6 +1,7 @@
 """Admin-owned execution control and a public non-sensitive availability read."""
 
-from typing import Annotated, Any
+from datetime import UTC, datetime
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
@@ -15,9 +16,11 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
 )
 from ac_platform.conversation_intelligence.budget_admin import ConversationBudgetAdmin
+from ac_platform.conversation_intelligence.budget_settings import budget_limits
 from ac_platform.conversation_intelligence.entitlements import BudgetAccount
 from ac_platform.conversation_intelligence.execution_control import (
     ExecutionControls,
+    budget_view,
     execution_state,
 )
 from ac_platform.conversation_intelligence.hosted_runtime import load_pinned_approval
@@ -40,13 +43,18 @@ class BudgetCapIntent(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     expected_revision: int = Field(ge=0, lt=2147483647)
     new_cap_paise: int = Field(ge=0, le=2_147_483_647)
-    reason: str = Field(min_length=1, max_length=512)
+    reason: str = Field(min_length=1, max_length=300)
 
 
-class CeilingRequestIntent(BaseModel):
+class BudgetSettingsIntent(BaseModel):
+    """The owner's budget settings: the ceiling, the period and its cap."""
+
     model_config = ConfigDict(extra="forbid", strict=True)
-    requested_cap_paise: int = Field(ge=1, le=2_147_483_647)
-    reason: str = Field(min_length=1, max_length=512)
+    expected_setting_revision: int = Field(ge=0, lt=2147483647)
+    ceiling_paise: int = Field(ge=0, le=2_147_483_647)
+    period: Literal["lifetime", "monthly", "daily"]
+    cap_paise: int = Field(ge=0, le=2_147_483_647)
+    reason: str = Field(min_length=1, max_length=300)
 
 
 def install_execution_control_http(
@@ -87,14 +95,14 @@ def install_execution_control_http(
         except (ValueError, OSError):
             raise HTTPException(503, "The pinned budget approval is unavailable.") from None
 
-    def approved_budget_scope() -> UUID | None:
+    def approved_budget_release() -> HostedApprovalBundle | None:
         try:
             bundle = load_pinned_approval(settings)
             if (
                 bundle.environment == settings.environment
                 and bundle.provider_control_tenant_id == scope()
             ):
-                return bundle.budget_scope_id
+                return bundle
         except (ValueError, OSError):
             pass
         return None
@@ -117,17 +125,24 @@ def install_execution_control_http(
             state = await execution_state(
                 database, environment=settings.environment, operations_tenant_id=scope()
             )
-            budget_scope = approved_budget_scope()
+            release = approved_budget_release()
             exhausted = False
-            if budget_scope is not None:
+            if release is not None:
                 row = await database.scalar(
                     select(ConversationBudgetAccount).where(
-                        ConversationBudgetAccount.scope_id == budget_scope
+                        ConversationBudgetAccount.scope_id == release.budget_scope_id
                     )
                 )
                 if row is not None:
                     budget = BudgetAccount.from_dict(row.snapshot)
-                    exhausted = budget.has_overrun or budget.available_paise <= 0
+                    limits = await budget_limits(
+                        database,
+                        scope_id=release.budget_scope_id,
+                        sealed_ceiling_paise=release.budget_cap_paise,
+                        budget=budget,
+                        now=datetime.now(UTC),
+                    )
+                    exhausted = budget_view(budget, limits)["warning"] == "exhausted"
             return {"paused": state["paused"] or exhausted}
 
     @router.get("/v1/admin/conversation/execution")
@@ -135,10 +150,12 @@ def install_execution_control_http(
         request: Request, response: Response, auth: AuthenticatedTransaction = dependency
     ) -> dict[str, Any]:
         surface(request, response)
-        budget_scope = approved_budget_scope()
+        release = approved_budget_release()
         try:
             return await service(auth.database).current(
-                auth.resolved.actor, budget_scope_id=budget_scope
+                auth.resolved.actor,
+                budget_scope_id=None if release is None else release.budget_scope_id,
+                sealed_ceiling_paise=None if release is None else release.budget_cap_paise,
             )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
@@ -197,23 +214,26 @@ def install_execution_control_http(
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
-    @router.post("/v1/admin/conversation/budget/ceiling-request", status_code=201)
-    async def request_ceiling(
-        intent: CeilingRequestIntent,
+    @router.post("/v1/admin/conversation/budget/settings", status_code=201)
+    async def change_budget_settings(
+        intent: BudgetSettingsIntent,
         request: Request,
         response: Response,
         key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
-        """Ask Root to reseal a higher ceiling (audited; the host bridge files the card)."""
+        """The owner sets the ceiling and the period (confirmed in Admin, audited)."""
 
         surface(request, response)
         require_safe_origin(request, settings)
         try:
-            return await budget_service(auth.database).request_ceiling(
+            return await budget_service(auth.database).save_settings(
                 auth.resolved.actor,
                 bundle=approved_budget_bundle(),
-                requested_cap_paise=intent.requested_cap_paise,
+                ceiling_paise=intent.ceiling_paise,
+                period=intent.period,
+                cap_paise=intent.cap_paise,
+                expected_setting_revision=intent.expected_setting_revision,
                 reason=intent.reason,
                 key=key,
             )

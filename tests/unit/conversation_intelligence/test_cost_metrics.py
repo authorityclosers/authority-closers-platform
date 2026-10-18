@@ -441,10 +441,10 @@ def test_export_sql_is_one_read_only_statement_without_call_content() -> None:
         "verdict",
         "verdict",
         "verdict",
-        # Admin's own budget ceiling request (amounts and the admin's reason), not call content.
-        "requested_cap_paise",
-        "requested_cap_paise",
-        "sealed_ceiling_paise",
-        "sealed_ceiling_paise",
-        "reason",
     ]
+    # Admin budget settings: amounts and periods, never the reason text (19 Oct 2026).
+    assert set(re.findall(r"payload -> '(?:before|after)' ->> '(\w+)'", body)) == {
+        "ceiling_paise",
+        "period",
+        "cap_paise",
+    }

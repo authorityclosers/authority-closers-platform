@@ -186,6 +186,8 @@ export type MoneyEnv = {
   usedRupees: number;
   usedShare: number | null;
   waitingCalls: number;
+  /** lifetime, monthly or daily: what the cap and the spend refer to. */
+  period: string;
   settled: number;
   settledRupees: number;
   byReason: { ref: string; label: string; n: number; rupees: number }[];
@@ -520,6 +522,7 @@ export function normalizeMetrics(raw: unknown): Metrics {
           usedRupees: n(row.used_rupees),
           usedShare: on(row.used_share),
           waitingCalls: n(row.waiting_calls),
+          period: s(row.period) || "lifetime",
           settled: n(row.settled),
           settledRupees: n(row.settled_rupees),
           byReason: read.array(row.by_reason).map((value) => {

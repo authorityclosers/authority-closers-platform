@@ -28,6 +28,7 @@ from ac_platform.conversation_intelligence.application import (
     utc,
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
+from ac_platform.conversation_intelligence.budget_settings import budget_limits
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
 from ac_platform.conversation_intelligence.contracts import (
     C5_REPAIR_FAILURE_CODES,
@@ -37,7 +38,6 @@ from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
     MinuteAccount,
     Quote,
-    effective_budget_cap_paise,
 )
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.inference import (
@@ -998,17 +998,17 @@ class ConversationProcessingPlans:
             if budget_row is None:
                 raise ConversationConflict("The provider budget cannot cover this complete plan.")
             budget = BudgetAccount.from_dict(budget_row.snapshot)
-            try:
-                effective_cap = effective_budget_cap_paise(
-                    bundle.budget_cap_paise, budget.cap_paise
-                )
-            except ValueError:
-                raise ConversationDenied(
-                    "The persisted provider budget exceeds its release approval."
-                ) from None
+            limits = await budget_limits(
+                self.db,
+                scope_id=bundle.budget_scope_id,
+                sealed_ceiling_paise=bundle.budget_cap_paise,
+                budget=budget,
+                now=now,
+            )
+            effective_cap = min(limits.cap_paise, limits.ceiling_paise)
             if maximum_cost > effective_cap:
                 raise ConversationDenied("The complete plan exceeds the effective provider budget.")
-            if budget.available_paise < maximum_cost:
+            if limits.available_paise(budget) < maximum_cost:
                 raise ConversationConflict("The provider budget cannot cover this complete plan.")
         minutes = await self.db.get(
             ConversationMinuteAccount, (recording.tenant_id, recording.person_id)

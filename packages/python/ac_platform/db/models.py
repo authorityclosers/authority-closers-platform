@@ -27,6 +27,7 @@ from ac_platform.coaching import models as coaching_models
 from ac_platform.community import models as community_models
 from ac_platform.conversation_intelligence import (
     acquisition_models,
+    budget_settings_models,
     bulk_import_models,
     call_metrics_models,
     canary_models,
@@ -88,6 +89,7 @@ MODEL_MODULES = (
     execution_control_models,
     recovery_models,
     report_settings_models,
+    budget_settings_models,
     source_object_models,
     sensitive_segment_models,
     review_label_models,

@@ -36,7 +36,7 @@ After each export, `ac-budget-alerts --apply` reads the store (production only u
 
 - **Owner task.** It keeps one AC Pulse task for the owner while a budget is at least 80% used or any call is waiting for budget. The task holds the one-click raise link, and it closes itself once usage is back under 80% with nothing waiting. Pulse is written only through `pulse.task_save` and `pulse.task_move`.
 - **Telegram.** It sends the owner one Telegram line when an alert opens or gets worse.
-- **Root card.** It files one AC board card for Root for each Admin request to raise a sealed ceiling.
+- **Ceiling changes.** It sends the owner one Telegram line (through `ac-notify-owner`) for each change of the AI budget ceiling or period in Admin. Cap raises send nothing.
 
 State lives in `/var/lib/ac-budget-alerts/state.json` and the log in `/var/log/ac-budget-alerts.log`.
 

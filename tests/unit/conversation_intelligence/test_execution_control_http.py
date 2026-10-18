@@ -8,6 +8,9 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from pydantic import ValidationError
 
+from ac_platform.conversation_intelligence.budget_settings_models import (
+    ConversationBudgetSetting,
+)
 from ac_platform.conversation_intelligence.entitlements import (
     SettlementReceipt,
     mark_dispatched,
@@ -17,7 +20,7 @@ from ac_platform.http import conversation_execution_control as module
 from tests.unit.conversation_intelligence.test_entitlements import reserved
 
 
-@pytest.mark.parametrize("case", ["available", "exhausted", "overrun", "paused"])
+@pytest.mark.parametrize("case", ["available", "exhausted", "overrun", "paused", "month_used"])
 async def test_public_availability_is_non_sensitive_and_follows_durable_budget(monkeypatch, case):
     budget = reserved(cap=1000, max_cost_paise=1000 if case == "exhausted" else 100).budget
     if case == "overrun":
@@ -39,9 +42,19 @@ async def test_public_availability_is_non_sensitive_and_follows_durable_budget(m
             ),
         )
         budget = value.budget
-    database = SimpleNamespace(
-        scalar=AsyncMock(return_value=SimpleNamespace(snapshot=budget.as_dict()))
+    ledger = SimpleNamespace(snapshot=budget.as_dict())
+    # A monthly allowance of 100 paise, used by the open hold, while the lifetime cap has room.
+    setting = (
+        SimpleNamespace(revision=1, ceiling_paise=1000, period="monthly", period_cap_paise=100)
+        if case == "month_used"
+        else None
     )
+
+    async def scalar(query):
+        entity = query.column_descriptions[0]["entity"]
+        return setting if entity is ConversationBudgetSetting else ledger
+
+    database = SimpleNamespace(scalar=scalar)
 
     @asynccontextmanager
     async def context():
@@ -64,6 +77,7 @@ async def test_public_availability_is_non_sensitive_and_follows_durable_budget(m
             environment="test",
             provider_control_tenant_id=settings.operations_tenant_id,
             budget_scope_id=uuid4(),
+            budget_cap_paise=1000,
         ),
     )
 

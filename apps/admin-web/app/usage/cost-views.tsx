@@ -1177,7 +1177,13 @@ export function MoneyView({ metrics }: { metrics: Metrics }) {
                   ? "warn"
                   : undefined
             }
-            note={`${inr(row.usedRupees)} of ${inr(row.cap)} · ${count(row.open)} open holds${
+            note={`${inr(row.usedRupees)} of ${inr(row.cap)}${
+              row.period === "monthly"
+                ? " this month"
+                : row.period === "daily"
+                  ? " today"
+                  : ""
+            } · ${count(row.open)} open holds${
               row.waitingCalls
                 ? ` · ${count(row.waitingCalls)} calls waiting`
                 : ""

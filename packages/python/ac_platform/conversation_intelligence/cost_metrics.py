@@ -1063,6 +1063,7 @@ def _money(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
     for export in exports:
         cap = sum(_int(row.get("cap_paise")) for row in export.budgets)
         used = sum(_int(row.get("committed_paise")) for row in export.budgets)
+        periods = {_text(row.get("period")) or "lifetime" for row in export.budgets}
         open_rows = [row for row in export.holds if row.get("state") == "uncertain"]
         by_ref: Counter[str] = Counter()
         by_ref_paise: Counter[str] = Counter()
@@ -1094,6 +1095,7 @@ def _money(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
                 "used_rupees": _rupees(used),
                 "used_share": round(used / cap, 3) if cap else None,
                 "waiting_calls": export.waiting_calls,
+                "period": periods.pop() if len(periods) == 1 else "lifetime",
                 "settled": sum(_int(row.get("n")) for row in settled),
                 "settled_rupees": _rupees(sum(_int(row.get("settled_paise")) for row in settled)),
                 "by_reason": [

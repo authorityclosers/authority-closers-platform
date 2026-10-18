@@ -10,7 +10,7 @@ Type=oneshot
 Environment="AC_METRICS_ENVIRONMENTS=development staging"
 ExecStart=/usr/local/sbin/ac-metrics-collect
 # AI budget alerts from the fresh export: owner's AC Pulse task, one Telegram line,
-# Root cards for ceiling requests. Production only unless set (19 Oct 2026).
+# a Telegram line per ceiling or period change. Production only unless set (19 Oct 2026).
 ExecStartPost=-/usr/local/sbin/ac-budget-alerts --apply
 Nice=10
 IOSchedulingClass=idle

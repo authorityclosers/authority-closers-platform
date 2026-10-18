@@ -6,15 +6,21 @@ from uuid import uuid4
 
 import pytest
 
-from ac_platform.conversation_intelligence.application import ConversationConflict
+from ac_platform.conversation_intelligence.application import (
+    ConversationConflict,
+    ConversationDenied,
+)
 from ac_platform.conversation_intelligence.authority import _budget_matches_release
 from ac_platform.conversation_intelligence.budget_admin import (
     MAX_CAP_PAISE,
+    SETTINGS_ACTION,
     ConversationBudgetAdmin,
     admin_budget_approval_ref,
     is_admin_budget_approval_ref,
     is_any_admin_budget_approval_ref,
 )
+from ac_platform.conversation_intelligence.budget_settings import LEDGER_OPEN_CAP_PAISE
+from ac_platform.conversation_intelligence.budget_settings_models import ConversationBudgetSetting
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
@@ -23,6 +29,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     reserve,
 )
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.tenancy.models import Membership
 
 from .test_entitlements import accounts, permission, quote
 
@@ -39,12 +46,37 @@ def bundle_for(scope_id, *, cap=150_000):
     )
 
 
-def service_for(row, bundle):
-    database = SimpleNamespace(
-        scalar=AsyncMock(return_value=row),
-        get=AsyncMock(return_value=row),
-        flush=AsyncMock(),
-    )
+class FakeDatabase:
+    """The ledger row, the settings revisions and the actor's workspace role."""
+
+    def __init__(self, row, *, role="admin"):
+        self.row, self.role = row, role
+        self.settings: list[ConversationBudgetSetting] = []
+        self.flush = AsyncMock()
+
+    async def scalar(self, query):
+        if query.column_descriptions[0]["entity"] is ConversationBudgetSetting:
+            return max(self.settings, key=lambda item: item.revision, default=None)
+        return self.row
+
+    async def scalars(self, query):
+        newest = sorted(self.settings, key=lambda item: -item.revision)[:10]
+        return SimpleNamespace(all=lambda: newest)
+
+    async def get(self, model, key):
+        if model is Membership:
+            return SimpleNamespace(role=self.role)
+        if model is ConversationBudgetSetting:
+            return next((item for item in self.settings if item.id == key), None)
+        return self.row
+
+    def add(self, item):
+        assert isinstance(item, ConversationBudgetSetting)
+        self.settings.append(item)
+
+
+def service_for(row, bundle, *, role="admin"):
+    database = FakeDatabase(row, role=role)
     application = SimpleNamespace(
         database=database,
         clock=lambda: datetime(2026, 9, 16, tzinfo=UTC),
@@ -129,7 +161,7 @@ async def test_save_requires_release_ceiling_and_optimistic_revision():
             key="budget-cap-stale",
         )
 
-    with pytest.raises(ValueError, match="sealed release ceiling"):
+    with pytest.raises(ValueError, match="cannot exceed the ceiling"):
         await service.save(
             actor,
             bundle=bundle,
@@ -315,59 +347,173 @@ async def test_a_cap_above_ten_thousand_inr_is_saved_when_the_sealed_ceiling_all
     assert value["budget"]["cap_paise"] == 1_500_000 and row.revision == 3
 
 
-@pytest.mark.asyncio
-async def test_asking_root_for_a_higher_ceiling_is_one_audited_request(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    from ac_platform.conversation_intelligence import budget_admin
-
+def test_an_admin_cap_saved_by_any_admin_carries_into_the_next_release():
+    # 19 Oct 2026: a one-click raise by an Admin who is not the release's budget owner
+    # must not block every call once a new release (another digest) is installed.
     scope_id = uuid4()
     bundle = bundle_for(scope_id, cap=1_000_000)
-    row = SimpleNamespace(scope_id=scope_id, revision=0, snapshot={})
-    service, application = service_for(row, bundle)
-    actor = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
-    appended: list[dict] = []
-    event_id = uuid4()
+    budget = held_budget(scope_id).budget
+    raised = replace(
+        budget,
+        cap_paise=400_000,
+        cap_approval=BudgetCapApproval(
+            str(scope_id),
+            admin_budget_approval_ref("c" * 64, uuid4(), "older-release-key"),
+            str(uuid4()),
+            400_000,
+            budget.fingerprint,
+            "Raised by Rs 2,500 from Execution & budget",
+            explicit_above_ceiling=True,
+        ),
+    )
+    assert _budget_matches_release(raised, bundle)
 
-    class _Audit:
-        def __init__(self, _database):
-            pass
 
-        async def append_for_actor(self, _actor, **fields):
-            appended.append(fields)
-            return SimpleNamespace(id=event_id)
+class _Audit:
+    events: list[dict] = []
 
+    def __init__(self, _database):
+        pass
+
+    async def append_for_actor(self, _actor, **fields):
+        _Audit.events.append(fields)
+        return SimpleNamespace(id=uuid4())
+
+
+@pytest.fixture
+def audit(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
+    from ac_platform.conversation_intelligence import budget_admin
+
+    _Audit.events = []
     monkeypatch.setattr(budget_admin, "AuditRepository", _Audit)
-    with pytest.raises(ValueError, match="above the current sealed ceiling"):
-        await service.request_ceiling(
-            actor, bundle=bundle, requested_cap_paise=1_000_000, reason="same", key="k0"
-        )
-    value = await service.request_ceiling(
-        actor,
-        bundle=bundle,
-        requested_cap_paise=2_000_000,
-        reason="Asked from Execution & budget",
-        key="k1",
-    )
-    assert value == {
-        "request_id": str(event_id),
-        "requested_cap_paise": 2_000_000,
-        "sealed_ceiling_paise": 1_000_000,
-        "status": "sent_to_root",
-    }
-    (event,) = appended
-    assert event["action"] == "conversation.budget_ceiling_requested"
-    assert event["payload"]["requested_cap_paise"] == 2_000_000
-    assert event["payload"]["sealed_ceiling_paise"] == 1_000_000
-    application._receipt.assert_awaited_once()
+    return _Audit.events
 
-    # The same key replays the same request without a second audit event.
-    application._replay = AsyncMock(return_value=SimpleNamespace(result_id=event_id))
-    again = await service.request_ceiling(
-        actor,
-        bundle=bundle,
-        requested_cap_paise=2_000_000,
-        reason="Asked from Execution & budget",
-        key="k1",
+
+def settings_for(bundle, **values):
+    return {
+        "bundle": bundle,
+        "ceiling_paise": 1_000_000,
+        "period": "monthly",
+        "cap_paise": 300_000,
+        "expected_setting_revision": 0,
+        "reason": "Owner: Rs 10,000 ceiling, Rs 3,000 a month",
+        "key": "settings-1",
+        **values,
+    }
+
+
+def ledger_row(scope_id):
+    return SimpleNamespace(
+        scope_id=scope_id, revision=2, snapshot=held_budget(scope_id).budget.as_dict()
     )
-    assert again["request_id"] == str(event_id) and len(appended) == 1
+
+
+@pytest.mark.asyncio
+async def test_only_the_owner_changes_the_ceiling_and_the_period(audit):
+    scope_id = uuid4()
+    bundle = bundle_for(scope_id, cap=850_000)
+    row = ledger_row(scope_id)
+    service, _ = service_for(row, bundle, role="admin")
+    actor = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
+    view = await service.current(actor, bundle=bundle)
+    assert view["settings"]["can_change_ceiling"] is False
+    assert view["settings"]["from_release"] is True
+    assert view["settings"]["ceiling_paise"] == 850_000
+    with pytest.raises(ConversationDenied, match="Only the owner"):
+        await service.save_settings(actor, **settings_for(bundle))
+    assert audit == [] and row.revision == 2
+
+
+@pytest.mark.asyncio
+async def test_the_owner_sets_a_monthly_allowance_under_a_new_ceiling(audit):
+    scope_id = uuid4()
+    bundle = bundle_for(scope_id, cap=850_000)
+    row = ledger_row(scope_id)
+    service, application = service_for(row, bundle, role="owner")
+    owner = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
+
+    view = await service.save_settings(owner, **settings_for(bundle))
+
+    # The ledger's own cap is lifted out of the way; the cap per month is the limit.
+    ledger = BudgetAccount.from_dict(row.snapshot)
+    assert ledger.cap_paise == LEDGER_OPEN_CAP_PAISE and row.revision == 3
+    assert ledger.cap_approval.explicit_above_ceiling is True
+    (saved,) = service.database.settings
+    assert (saved.revision, saved.ceiling_paise, saved.period, saved.period_cap_paise) == (
+        1,
+        1_000_000,
+        "monthly",
+        300_000,
+    )
+    assert saved.set_by_person_id == owner.person_id
+    assert view["approved_cap_paise"] == 1_000_000
+    assert view["settings"]["period"] == "monthly" and view["settings"]["cap_paise"] == 300_000
+    assert view["settings"]["can_change_ceiling"] is True
+    # The open hold (2,500 paise) counts against this month.
+    assert view["budget"]["cap_paise"] == 300_000
+    assert view["budget"]["available_paise"] == 297_500
+    (event,) = audit
+    assert event["action"] == SETTINGS_ACTION
+    assert event["payload"]["before"] == {
+        "ceiling_paise": 850_000,
+        "period": "lifetime",
+        "cap_paise": 150_000,
+        "from_release": True,
+    }
+    assert event["payload"]["after"] == {
+        "ceiling_paise": 1_000_000,
+        "period": "monthly",
+        "cap_paise": 300_000,
+    }
+    assert application._receipt.await_args.args[2] == "budget_settings"
+
+    # Any Admin then raises this month's cap in one click: a new settings revision,
+    # the ledger untouched; above the ceiling is refused.
+    admin = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
+    raised = await service.save(
+        admin,
+        bundle=bundle,
+        new_cap_paise=400_000,
+        expected_revision=3,
+        reason="Raised by Rs 1,000 from Execution & budget",
+        key="raise-1",
+    )
+    assert row.revision == 3 and len(service.database.settings) == 2
+    assert raised["settings"]["cap_paise"] == 400_000 and raised["settings"]["revision"] == 2
+    with pytest.raises(ConversationDenied, match="cannot exceed the ceiling"):
+        await service.save(
+            admin,
+            bundle=bundle,
+            new_cap_paise=1_000_001,
+            expected_revision=3,
+            reason="too much",
+            key="raise-2",
+        )
+
+
+@pytest.mark.asyncio
+async def test_settings_refuse_stale_screens_caps_above_the_ceiling_and_lifetime_below_spend(
+    audit,
+):
+    scope_id = uuid4()
+    bundle = bundle_for(scope_id, cap=850_000)
+    row = ledger_row(scope_id)
+    service, _ = service_for(row, bundle, role="owner")
+    owner = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
+    with pytest.raises(ValueError, match="between INR 0 and the ceiling"):
+        await service.save_settings(owner, **settings_for(bundle, cap_paise=1_000_001))
+    with pytest.raises(ConversationConflict, match="Reload before saving"):
+        await service.save_settings(owner, **settings_for(bundle, expected_setting_revision=1))
+    with pytest.raises(ConversationConflict, match="already spent or held"):
+        await service.save_settings(
+            owner, **settings_for(bundle, period="lifetime", cap_paise=2_000)
+        )
+    assert audit == [] and service.database.settings == [] and row.revision == 2
+
+    # Back to lifetime: the ledger's cap becomes the chosen cap.
+    view = await service.save_settings(
+        owner, **settings_for(bundle, period="lifetime", cap_paise=1_000_000)
+    )
+    assert BudgetAccount.from_dict(row.snapshot).cap_paise == 1_000_000
+    assert service.database.settings[0].period_cap_paise is None
+    assert view["budget"]["cap_paise"] == 1_000_000
