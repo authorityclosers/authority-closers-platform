@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
+from ac_platform.partner_events.amounts import clean_text, strip_unsafe
 from ac_platform.partner_events.quote_facts import FACT_TYPES, VOCABULARIES
 from ac_platform.partner_events.summary_mask import mask_numbers
 
@@ -91,8 +92,9 @@ def ref(prefix: str, value: UUID) -> str:
 
 
 def summary_text(value: Any) -> str:
-    """The summary as sent: every number masked as "[n]", then cut to 1,500 characters."""
-    text = mask_numbers(value).strip() if isinstance(value, str) else ""
+    """The summary as sent: cleaned (NFKC; no lone surrogates, control or zero-width
+    characters), every number masked as "[n]", then cut to 1,500 characters."""
+    text = mask_numbers(clean_text(value)).strip() if isinstance(value, str) else ""
     if len(text) <= MAX_SUMMARY_CHARS:
         return text
     return text[: MAX_SUMMARY_CHARS - 1].rstrip() + "…"
@@ -107,6 +109,18 @@ def body_bytes(payload: dict[str, Any]) -> bytes:
 
 def body_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(body_bytes(payload)).hexdigest()
+
+
+def _safe(value: Any) -> Any:
+    """``value`` with every string (keys too) stripped of lone surrogates and control or
+    format characters."""
+    if isinstance(value, str):
+        return strip_unsafe(value)
+    if isinstance(value, dict):
+        return {_safe(key): _safe(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_safe(item) for item in value]
+    return value
 
 
 def build_event(
@@ -158,6 +172,9 @@ def build_event(
         },
         "facts": list(extraction.facts) if extraction.status == "complete" else [],
     }
+    # Round 4: no string may carry a lone surrogate or a control character, so the body
+    # always encodes (names, emails and facts keep their form otherwise).
+    payload = _safe(payload)
     if len(body_bytes(payload)) > MAX_BODY_BYTES:
         payload["extraction"]["status"] = "failed"
         payload["facts"] = []

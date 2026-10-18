@@ -22,7 +22,9 @@ those words only:
 - ``number_join``: whether two words said in a row read as one number, for
   the evidence check ("twenty five", "sawa do", "3 lakh 70 thousand").
 - ``mentions_price``: whether words carry a price, so no fact type other than
-  ``mentioned_price`` ever passes one on.
+  ``mentioned_price`` ever passes one on; ``carries_money``: the stricter rule for
+  the stated words of every other fact (round 4: any rupee, money or cost word, or
+  a number above 100 that is not a unit figure, years included).
 - ``gst_basis``: "incl_gst" / "ex_gst" only when GST was said with one clear
   cue, matched on whole words.
 
@@ -52,6 +54,27 @@ _HALF_NASAL = re.compile(r"[ङञणनम]्(?=[क-म])")
 _TOKEN = re.compile(r"\d+(?:\.\d+)?|[a-z]+|[ऀ-ॣॱ-ॿ]+|₹|/-|/|[-–~+]")
 # Numbers written with digit-group commas ("1,999", "3,70,000"): never a year.
 _GROUPED = re.compile(r"(?<![0-9.,])[0-9]{1,3}(?:,[0-9]{2,3})+(?![0-9])")
+
+
+def clean_text(text: str) -> str:
+    """Model text made safe to read and to send (round 4, check 4 robustness): lone
+    surrogates, NUL and other control characters (tabs and line breaks stay) and format
+    characters (zero-width spaces and joiners, soft hyphens, direction marks, BOM) are
+    removed, then NFKC folds look-alike forms ("⁴⁵" -> "45", "④" -> "4", "４" -> "4")."""
+    return strip_unsafe(unicodedata.normalize("NFKC", strip_unsafe(text)))
+
+
+_UNSAFE_CATEGORIES = frozenset({"Cc", "Cf", "Cs"})
+
+
+def strip_unsafe(text: str) -> str:
+    """``text`` without lone surrogates, control characters (tabs and line breaks stay) or
+    format characters; nothing else changes, so names and addresses keep their form."""
+    return "".join(
+        char
+        for char in text
+        if char in "\t\n\r" or unicodedata.category(char) not in _UNSAFE_CATEGORIES
+    )
 
 
 def normalise(text: str) -> str:
@@ -339,6 +362,8 @@ _CURRENCY_WORDS = frozenset(
         "rupaiyon",
         "rupia",
         "rupies",
+        "buck",  # round 4 (check 4, minor): "45 bucks a watt"
+        "bucks",
     }
 )
 # Devanagari rupee words: रुपये, रुपया, रुपए, रूपये, रुपयों, रुपै ...
@@ -379,6 +404,72 @@ COST_WORDS = frozenset(
         "bhav",
         "bhaav",
         "shulk",
+        # Round 4 (check 4, B1 and the coordinator's decision): discount, EMI, quoted, fee.
+        "discount",
+        "discounts",
+        "discounted",
+        "rebate",
+        "emi",
+        "emis",
+        "quoted",
+        "fee",
+        "fees",
+        "amount",
+        "installment",
+        "installments",
+        "instalment",
+        "instalments",
+        "kist",
+        "kisht",
+        "डिस्काउंट",
+        "डिस्काऊंट",
+        "सूट",
+        "ईएमआई",
+        "हप्ता",
+        "हप्ते",
+        "किस्त",
+        "रक्कम",
+        "रकम",
+    }
+)
+# Things that are paid for (round 4): a number right after one is a price unless the thing
+# it counts follows ("Transport 2000 extra", "packing 50"; not "delivery 3 panels",
+# "installation 2 days"). Not cost words on their own: "transport included" is a delivery
+# basis, not a price.
+CHARGE_NOUNS = folded(
+    {
+        "transport",
+        "transportation",
+        "installation",
+        "install",
+        "installing",
+        "packing",
+        "packaging",
+        "delivery",
+        "labour",
+        "labor",
+        "freight",
+        "fitting",
+        "cartage",
+        "shipping",
+        "wiring",
+        "bhada",
+        "bhaada",
+        "kiraya",
+        "ट्रांसपोर्ट",
+        "ट्रान्सपोर्ट",
+        "इंस्टॉलेशन",
+        "इन्स्टॉलेशन",
+        "इंस्टालेशन",
+        "पैकिंग",
+        "पॅकिंग",
+        "डिलीवरी",
+        "डिलिव्हरी",
+        "वाहतूक",
+        "भाड़ा",
+        "किराया",
+        "मजुरी",
+        "मजदूरी",
     }
 )
 _RANGE = {"to", "or", "se", "ya", "से", "ते", "या", "किंवा", "-", "–", "~"}
@@ -429,6 +520,30 @@ _CONNECTORS = frozenset(
         "साधारणतः",
         "जवळपास",
         "अंदाजे",
+        # Round 4 (check 4, B3 and M4): "rate is only 45", "दर फक्त ४५", "45 wala rate",
+        # "rate - 45", "price ~45".
+        "only",
+        "just",
+        "sirf",
+        "bas",
+        "keval",
+        "फक्त",
+        "सिर्फ",
+        "बस",
+        "केवल",
+        "मात्र",
+        "wala",
+        "wale",
+        "wali",
+        "vala",
+        "vale",
+        "vali",
+        "वाला",
+        "वाले",
+        "वाली",
+        "-",
+        "–",
+        "~",
     }
 )
 # After these, a number followed by the thing it counts is a count ("price for 2 ACs").
@@ -439,6 +554,123 @@ _PRICE_TAIL = frozenset({"only", "extra", "plus", "final", "fixed", "total", "hi
 # "45 prati watt"); "a" too, right before a unit ("45 a watt").
 _PER_WORDS = frozenset({"per", "प्रति", "prati", "/"})
 _PER_ARTICLES = frozenset({"a", "an"})
+# Round 4 (check 4, B2 and minor): words between a number and its per-unit phrase that
+# leave it a per-unit price ("45 plus GST per watt", "45 + GST per watt", "45 ex-GST/W",
+# "45 for each watt", "45 per peak watt").
+_PER_SKIP = folded(
+    {
+        "+",
+        "plus",
+        "gst",
+        "जीएसटी",
+        "incl",
+        "including",
+        "inclusive",
+        "excl",
+        "excluding",
+        "exclusive",
+        "ex",
+        "-",
+        "with",
+        "without",
+        "अधिक",
+        "सहित",
+        "rs",
+        "rupees",
+        "rupaye",
+        "रुपये",
+        "for",
+    }
+)
+_EVERY = folded({"each", "every", "har", "हर", "प्रत्येक", "pratyek", "एका", "ek", "एक"})
+_PEAK = frozenset({"peak"})
+# Things a price is quoted per that are not units of measure ("45 per panel"); never units
+# that make a number something other than money ("150 panels" stays a count).
+_PER_ONLY = frozenset({"panel", "panels", "piece", "pieces", "pc", "pcs", "nos", "plate", "plates"})
+# Hindi and Marathi "per watt" with a case ending ("वॅटला ४५", "एका वॅटचे ४५", "वॉटमागे").
+_DEVA_UNIT_STEM = "(?:वॅट|वाट|वॉट|युनिट|यूनिट)"
+_DEVA_PER_ENDING = "(?:ला|चे|चा|ची|ना|मागे|साठी|ाला|ाचे|ाचा|ाची|ामागे)"
+# Before a number, kilowatt forms too ("किलोवॅटला 60 हजार"); after one, only "per" endings
+# and never a size ("45 वॅटला"; "5 किलोवॅटला" is "for 5 kW", "100 वॅटचे दिवे" are lamps).
+_DEVA_PER_UNIT = re.compile(f"(?:किलो)?{_DEVA_UNIT_STEM}{_DEVA_PER_ENDING}")
+_DEVA_PER_WATT = re.compile(f"{_DEVA_UNIT_STEM}(?:ला|मागे|ाला|ामागे)")
+# Everyday romanised number words the reader leaves out, read as a number in the price
+# check before a per-unit phrase or right after a cost word ("saath per watt is too much",
+# "rate saath hai").
+_SOFT_PRICE_WORDS = frozenset({"saath", "sath", "das", "dus", "bara", "tera", "sola"})
+# A bare 1900-2100 is a year only with a year cue next to it ("installed in 2019", "on
+# 18/10/2026", "सन 2020"); otherwise it is a plain number ("Transport 2000 extra").
+_YEAR_BEFORE = folded(
+    {
+        "in",
+        "since",
+        "year",
+        "years",
+        "saal",
+        "sal",
+        "san",
+        "from",
+        "till",
+        "until",
+        "by",
+        "before",
+        "after",
+        "circa",
+        "fy",
+        "सन",
+        "साल",
+        "साली",
+        "वर्ष",
+        "jan",
+        "january",
+        "feb",
+        "february",
+        "mar",
+        "march",
+        "apr",
+        "april",
+        "may",
+        "jun",
+        "june",
+        "jul",
+        "july",
+        "aug",
+        "august",
+        "sep",
+        "sept",
+        "september",
+        "oct",
+        "october",
+        "nov",
+        "november",
+        "dec",
+        "december",
+        "जनवरी",
+        "जानेवारी",
+        "फरवरी",
+        "फेब्रुवारी",
+        "मार्च",
+        "अप्रैल",
+        "एप्रिल",
+        "मई",
+        "मे",
+        "जून",
+        "जुलाई",
+        "जुलै",
+        "अगस्त",
+        "ऑगस्ट",
+        "सितंबर",
+        "सप्टेंबर",
+        "अक्टूबर",
+        "ऑक्टोबर",
+        "नवंबर",
+        "नोव्हेंबर",
+        "दिसंबर",
+        "डिसेंबर",
+    }
+)
+_YEAR_AFTER = folded({"साली", "साल", "सालात", "saali"})
+_DATE_SIGNS = frozenset({"/", "-", "–"})
 # Words that make an amount a per-unit price, a cap or a guess: the amount is not read.
 _NOT_A_TOTAL = _PER_WORDS | {
     "each",
@@ -476,6 +708,7 @@ _NOT_A_TOTAL = _PER_WORDS | {
 }
 _SIZE_UNITS: dict[str, tuple[Unit, int]] = {
     "kw": ("kW", 1),
+    "kwp": ("kW", 1),  # round 4 (check 4, minor): kWp is the usual solar size unit
     "kilowatt": ("kW", 1),
     "kilowatts": ("kW", 1),
     "किलोवाट": ("kW", 1),
@@ -498,6 +731,8 @@ _PER_UNITS = set(_SIZE_UNITS) | {
     "ah",
     "unit",
     "units",
+    "यूनिट",  # round 4: "हर यूनिट 9", "प्रति युनिट 8"
+    "युनिट",
     "sq",
     "sqft",
     "sqm",
@@ -969,9 +1204,28 @@ def _year(value: Decimal) -> bool:
     return value == value.to_integral_value() and 1900 <= value <= 2100
 
 
+def _year_cue(tokens: list[str], start: int, end: int) -> bool:
+    """A year cue next to the number ``tokens[start:end]``: "in 2019", "सन 2020", "Oct
+    2026", "18/10/2026", "2019 साली"."""
+    before = tokens[start - 1] if start > 0 else None
+    after = tokens[end] if end < len(tokens) else None
+    if before in _YEAR_BEFORE or after in _YEAR_AFTER:
+        return True
+    return before in _DATE_SIGNS and start >= 2 and _is_digits(tokens[start - 2])
+
+
 def _per_phrase_ends_at(tokens: list[str], index: int) -> bool:
-    """``tokens[index]`` closes a per-unit phrase ("per watt", "प्रति वॅट", "/W")."""
-    return index >= 1 and tokens[index] in _PER_UNITS and tokens[index - 1] in _PER_WORDS
+    """``tokens[index]`` closes a per-unit phrase ("per watt", "प्रति वॅट", "/W", "har watt",
+    "हर वॉट", "वॅटला", "एका वॅटचे")."""
+    token = tokens[index]
+    if _DEVA_PER_UNIT.fullmatch(token):
+        return True
+    if index < 1 or token not in _PER_UNITS | _PER_ONLY:
+        return False
+    previous = tokens[index - 1]
+    if previous in _PEAK and index >= 2:
+        previous = tokens[index - 2]
+    return previous in _PER_WORDS or previous in _EVERY
 
 
 def _near_cost(tokens: list[str], start: int, end: int) -> bool:
@@ -998,6 +1252,8 @@ def _near_cost(tokens: list[str], start: int, end: int) -> bool:
             if counted and any(tokens[step] in _COUNTED_AFTER for step in between):
                 continue
             return True
+        if token in CHARGE_NOUNS and not counted:  # "Transport 2000 extra", "packing 50"
+            return True
         if is_currency(token) or _per_phrase_ends_at(tokens, other):
             return True
     for other in (end, end + 1):
@@ -1010,13 +1266,50 @@ def _near_cost(tokens: list[str], start: int, end: int) -> bool:
 
 def _per_unit(tokens: list[str], end: int) -> bool:
     """The number ending before ``end`` is quoted per unit ("45 per watt", "45/W",
-    "45 प्रति वॅट", "45 a watt")."""
-    if end + 1 >= len(tokens) or tokens[end + 1] not in _PER_UNITS:
+    "45 प्रति वॅट", "45 a watt", "45 plus GST per watt", "45 for each watt", "45 per peak
+    watt", "45 per panel", "45 वॅटला")."""
+    index = end
+    while index < len(tokens) and tokens[index] in _PER_SKIP:
+        index += 1
+    if index < len(tokens) and _DEVA_PER_WATT.fullmatch(tokens[index]):
+        return True
+    if index + 1 >= len(tokens):
         return False
-    return tokens[end] in _PER_WORDS or tokens[end] in _PER_ARTICLES
+    per = tokens[index]
+    if not (per in _PER_WORDS or per in _PER_ARTICLES or per in _EVERY):
+        return False
+    unit = index + 1
+    if tokens[unit] in _PEAK and unit + 1 < len(tokens):
+        unit += 1
+    return tokens[unit] in _PER_UNITS or tokens[unit] in _PER_ONLY
 
 
-def mentions_price(text: str, *, plain_numbers: bool = True) -> bool:
+def _soft_price(tokens: list[str]) -> bool:
+    """An everyday number word quoted per unit or right after a cost word ("saath per
+    watt", "saath rupaye", "rate saath hai")."""
+    for index, token in enumerate(tokens):
+        if token not in _SOFT_PRICE_WORDS:
+            continue
+        if _per_unit(tokens, index + 1):
+            return True
+        if index > 0 and tokens[index - 1] in COST_WORDS:
+            return True
+    return False
+
+
+def carries_money(text: str) -> bool:
+    """True when the words of a fact that is not a price must be dropped (round 4, the
+    coordinator's decision): a rupee word or sign, a money word, a cost word anywhere
+    ("packing charge", "EMI option"), any price ``mentions_price`` finds, or a number above
+    100 that is not a unit figure, years included ("dongle 1999", "Transport 2000 extra",
+    "150 panels"; "1500 sq ft" and "150Ah" stay)."""
+    tokens = _tokens(text)
+    if any(token in COST_WORDS or token in HUNDRED_WORDS for token in tokens):
+        return True
+    return mentions_price(text, plain_numbers=True, years=False)
+
+
+def mentions_price(text: str, *, plain_numbers: bool = True, years: bool = True) -> bool:
     """True when words carry a price.
 
     - a currency word or sign (a known rupee spelling) or a money word (lakh,
@@ -1030,12 +1323,19 @@ def mentions_price(text: str, *, plain_numbers: bool = True) -> bool:
       or a cost word just after it ("rate approx 45", "price per watt is 45",
       "charges of 50"; not "price in 2 days");
     - with ``plain_numbers``: a number above 100 that is not a year or a unit
-      figure ("packing 500", "1,999"), or a Marathi hundred ("पाचशे").
+      figure ("packing 500", "1,999"), or a Marathi hundred ("पाचशे"). A bare
+      1900-2100 is a year only with a year cue next to it ("installed in 2019",
+      "18/10/2026", "सन 2020"; not "Transport 2000 extra" or "EMI 2000"), and
+      never with ``years=False``;
+    - an everyday number word quoted per unit or right after a cost word ("saath
+      per watt", "rate saath hai").
     """
     tokens = _tokens(text)
     if any(is_currency(token) or _money_word(token) for token in tokens):
         return True
     if plain_numbers and any(token in _COMPOUND_HUNDREDS for token in tokens):
+        return True
+    if _soft_price(tokens):
         return True
     grouped = _grouped(text)
     for start, value, end, unit in _spans(tokens):
@@ -1045,7 +1345,10 @@ def mentions_price(text: str, *, plain_numbers: bool = True) -> bool:
             continue
         if _near_cost(tokens, start, end):
             return True
-        if plain_numbers and value > PLAIN_PRICE_FLOOR and (value in grouped or not _year(value)):
+        if not plain_numbers or value <= PLAIN_PRICE_FLOOR:
+            continue
+        year = years and value not in grouped and _year(value) and _year_cue(tokens, start, end)
+        if not year:
             return True
     return False
 

@@ -26,6 +26,15 @@ word, a money word or a rupee word ("do lakh", "सवा दो लाख"), an
 own unless it is a pronoun ("no one", "the one", "this one"). "do" is the verb
 after can, will, we ... or before you, the, it ... ("we can do [n] kW").
 
+Round 4 (check 4): an everyday word next to a rupee word or sign ("saath
+rupay", "₹ saath"), right after a cost word ("rate saath hai") or before a
+range word and a number word ("do se teen lakh", "do-do hazaar") is a number;
+any word directly before a rupee or money word is read as a number unless it is
+an ordinary word from a closed list ("pantalis rupaye"; "in rupees", "spent
+lakhs" stay); "Sau." / "सौ." before a name stays. The same mask runs on promise
+and objection text, and on ``next_step.when_text`` when money is said near its
+number. Callers pass model text through ``amounts.clean_text`` first.
+
 Nothing here calls a model or the network.
 """
 
@@ -36,6 +45,8 @@ from collections.abc import Callable, Iterable
 
 from ac_platform.partner_events import number_words as words
 from ac_platform.partner_events.amounts import (
+    CHARGE_NOUNS,
+    COST_WORDS,
     FRACTION_WORDS,
     HUNDRED_WORDS,
     MONEY_UNITS,
@@ -333,6 +344,70 @@ _BEFORE_VERB_DEVA_DO = folded(
 )
 
 
+_COST = folded(COST_WORDS)
+# Between a cost word and an everyday number word ("rate sirf saath").
+_ONLY = folded({"only", "just", "sirf", "bas", "is", "hai", "फक्त", "सिर्फ", "बस", "है", "आहे"})
+# Range words: "do se teen lakh", "saath ya sattar hazaar", "दो या तीन लाख".
+_RANGE_WORDS = folded({"se", "ya", "or", "to", "से", "या", "ते", "किंवा", "va", "व"})
+# The honorific "Sau." / "सौ." before a name (Marathi "Mrs").
+_HONORIFICS = folded({"sau", "सौ"})
+_HONORIFIC_GAP = re.compile(r"\.[\s​﻿]*")
+# Ordinary words that may stand directly before a rupee or money word; any other word
+# there is read as a number we have no spelling for ("pantalis rupaye", round 4 fallback).
+# fmt: off
+_ORDINARY_BEFORE_MONEY = (
+    folded(
+        {
+            # English
+            "n", "a", "an", "the", "of", "in", "on", "at", "by", "for", "from", "to", "into",
+            "with", "without", "and", "or", "but", "than", "then", "per", "only", "just",
+            "about", "around", "approx", "approximately", "nearly", "almost", "roughly",
+            "over", "under", "above", "below", "upto", "up", "within", "more", "less", "extra",
+            "additional", "total", "few", "many", "several", "some", "any", "all", "lots",
+            "lot", "much", "is", "was", "are", "were", "be", "been", "being", "will", "would",
+            "can", "could", "should", "must", "may", "might", "pay", "paid", "pays", "paying",
+            "spend", "spent", "spends", "spending", "save", "saved", "saves", "saving",
+            "savings", "earn", "earned", "earns", "worth", "charged", "offered", "offer",
+            "asked", "said", "says", "told", "gave", "give", "gives", "given", "get", "got",
+            "gets", "take", "took", "takes", "taken", "need", "needs", "needed", "want",
+            "wants", "wanted", "invest", "invested", "investment", "lose", "lost", "waste",
+            "wasted", "his", "her", "their", "our", "my", "your", "its", "these", "those",
+            "this", "that", "what", "which", "how", "no", "not", "never", "also", "even",
+            "still", "too", "so", "very", "each", "every", "plus", "minus", "indian",
+            # romanised Hindi and Marathi
+            "ka", "ki", "ke", "ko", "se", "me", "mein", "main", "par", "pe", "tak", "hi", "bhi",
+            "aur", "ya", "sirf", "bas", "kuch", "kitne", "kitna", "kitni", "kai", "lagbhag",
+            "karib", "kareeb", "hai", "hain", "tha", "thi", "ho", "de", "dena", "denge",
+            "diya", "liya", "lagega", "lagenge", "milega", "kam", "zyada", "jyada", "jada",
+            "upar", "niche", "andar", "bahut", "sab", "saare", "wala", "wale", "vala", "apne",
+            "mere", "hamare", "unke", "kul", "alag", "ani", "kiti", "fakt", "aahe", "ahe",
+            # Devanagari Hindi
+            "का", "की", "के", "को", "से", "में", "पर", "पे", "तक", "ही", "भी", "और", "या",
+            "सिर्फ", "बस", "कुछ", "कितने", "कितना", "कितनी", "कई", "लगभग", "करीब", "है",
+            "हैं", "था", "थी", "थे", "हो", "दे", "देंगे", "दिया", "दिए", "लिया", "लिए", "लगेगा",
+            "लगेंगे", "मिलेगा", "कम", "ज़्यादा", "ज्यादा", "ऊपर", "नीचे", "अंदर", "बहुत", "सब",
+            "वाला", "वाले", "कुल", "अलग", "अतिरिक्त",
+            # Devanagari Marathi
+            "चा", "ची", "चे", "च्या", "ला", "ने", "नी", "त", "मध्ये", "वर", "पर्यंत", "फक्त",
+            "काही", "किती", "कित्येक", "अनेक", "साधारण", "जवळपास", "अंदाजे", "आहे", "आहेत",
+            "होता", "होती", "होते", "द्या", "देऊ", "देईल", "दिले", "घेतले", "लागेल", "लागतील",
+            "मिळेल", "जास्त", "कमी", "खाली", "एकूण", "वेगळे", "अधिक", "आणि", "किंवा", "सुद्धा",
+            "पण", "तर", "हे", "ते", "तो", "त्या", "शिवाय", "सह", "म्हणजे",
+            # Verbs of saying, giving and needing, and the customer
+            "म्हणाला", "म्हणाले", "म्हणाली", "सांगितले", "सांगितला", "बोलला", "बोलले",
+            "बोलली", "बोला", "बोले", "बोली", "कहा", "कहे", "कही", "बताया", "बताए", "बताई",
+            "चाहिए", "हवे", "हवेत", "पाहिजे", "पाहिजेत", "लागले", "लगे", "दिलेत",
+            "ग्राहक", "ग्राहकाने", "ग्राहकाचे", "ग्राहकाला", "ग्राहकने", "customer", "client",
+            "bola", "bole", "boli", "kaha", "bataya", "chahiye", "pahije", "have", "has", "had",
+            "quote", "quotes", "budget",
+        }
+    )
+    | _COST
+    | CHARGE_NOUNS
+)
+# fmt: on
+
+
 def _deva_number(token: str) -> bool:
     """A Devanagari number word, with a Marathi case ending, a Hindi plural, a joined
     fraction ("साडेतीन", "सव्वादोन", "पावणेतीनशे") or a money word's ending."""
@@ -430,6 +505,35 @@ def mask_numbers(text: str) -> str:
     def word_beside(index: int, test: Callable[[int], bool]) -> bool:
         return (tight(index) and test(index - 1)) or (tight(index + 1) and test(index + 1))
 
+    def word_number(index: int) -> bool:
+        """Token ``index`` is a number word already masked (not digits)."""
+        return 0 <= index < count and masked[index] and kinds[index] != "num"
+
+    def after_cost(index: int) -> bool:
+        """Token ``index`` follows a cost word, directly or after "only" ("rate saath")."""
+        if not tight(index):
+            return False
+        if norm_at(index - 1) in _COST:
+            return True
+        return tight(index - 1) and norm_at(index - 1) in _ONLY and norm_at(index - 2) in _COST
+
+    def honorific(index: int) -> bool:
+        """The honorific "Sau." or "सौ." before a name, with no number, rupee or cost word
+        before it."""
+        if index + 1 >= count or kinds[index + 1] != "other":
+            return False
+        if _HONORIFIC_GAP.fullmatch(gaps[index + 1]) is None:
+            return False
+        if money_scale(norms[index + 1]) is not None or norms[index + 1] in _COST:
+            return False
+        return not (
+            tight(index)
+            and (
+                kinds[index - 1] in {"num", "number", "soft", "do", "deva_do", "one", "cur"}
+                or norms[index - 1] in _COST
+            )
+        )
+
     for index, kind in enumerate(kinds):
         if kind == "after_tens":  # "twenty first"
             masked[index] = tight(index) and norms[index - 1] in _TENS
@@ -459,12 +563,33 @@ def mask_numbers(text: str) -> str:
             verb = norm_at(index - 1) in _BEFORE_VERB_DEVA_DO
             last = index + 1 >= count or _SENTENCE_END.search(gaps[index + 1]) is not None
             masked[index] = not (verb or last)
-    # Everyday number words next to a number word ("saath hazaar", "दो अरब").
+        elif kind == "number" and norms[index] in _HONORIFICS:
+            masked[index] = not honorific(index)  # "Sau. Sunita", "सौ. सुनीता"
+    # Everyday number words next to a number word, a money word or a rupee word ("saath
+    # hazaar", "दो अरब", "saath rupay", "₹ saath"; check 4, B4), or right after a cost word
+    # ("rate saath hai", "rate sirf saath"; check 4, M3).
     for index, kind in enumerate(kinds):
         if kind == "soft":
             masked[index] = word_beside(
-                index, lambda other: masked[other] and kinds[other] != "num"
-            )
+                index,
+                lambda other: (masked[other] and kinds[other] != "num") or kinds[other] == "cur",
+            ) or after_cost(index)
+    # Ranges: an everyday word or "do" before a range word and a number word ("do se teen
+    # lakh", "saath se sattar hazaar", "do-do hazaar"; check 4, M2). Right to left, so a
+    # chain of ranges is read whole.
+    for index in range(count - 1, -1, -1):
+        if kinds[index] not in {"soft", "do"} or masked[index]:
+            continue
+        if kinds[index] == "do" and norm_at(index - 1) in _BEFORE_VERB_DO:
+            continue
+        hyphen = tight(index + 1) and gaps[index + 1] in {"-", "–"} and word_number(index + 1)
+        ranged = (
+            norm_at(index + 1) in _RANGE_WORDS
+            and tight(index + 1)
+            and tight(index + 2)
+            and word_number(index + 2)
+        )
+        masked[index] = hyphen or ranged
     # "a lakh", "a half", "a hundred"; not "a half-hearted reply" ("a [n]-hearted").
     for index, kind in enumerate(kinds):
         if kind == "article" and tight(index + 1) and masked[index + 1]:
@@ -472,6 +597,22 @@ def mask_numbers(text: str) -> str:
             masked[index] = norms[index + 1] in _TAKES_ARTICLE and not (
                 compound and not masked[index + 2]
             )
+    # A word we have no spelling for, directly before a rupee word or a money word, is read
+    # as a number ("pantalis rupaye", "chalis-ek hazaar"; check 4, M1 fallback), unless it
+    # is an ordinary word ("in rupees", "spent lakhs", "the lakh"). A rupee word that
+    # already goes with the number after it ("quoted Rs 45") does not count.
+    for index, kind in enumerate(kinds):
+        if kind != "other" or not tight(index + 1) or norms[index] in _ORDINARY_BEFORE_MONEY:
+            continue
+        following = index + 1
+        if kinds[following] == "cur":
+            owned = tight(following + 1) and masked[following + 1]
+            masked[index] = not owned
+        elif masked[following] and (
+            norms[following] in _MONEY_TAILS
+            or (money_scale(norms[following]) is not None and norms[following] not in _SHORT)
+        ):
+            masked[index] = True
     # A rupee word or sign with its number ("Rs 45", "45 rupees", "rupees forty five").
     for index, kind in enumerate(kinds):
         if kind == "cur":

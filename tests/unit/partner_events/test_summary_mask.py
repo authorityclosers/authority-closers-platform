@@ -339,3 +339,81 @@ def test_a_long_summary_masks_everything_and_keeps_the_rest() -> None:
         "ग्राहकाचे बजेट [n] आहे; दर [n] प्रति वॅट जास्त वाटतो. "
         "Lakhan will visit on [n] at [n] am; [n] दिन में कोटेशन भेजेंगे."
     )
+
+
+# --- Check 4, 18 Oct (round 4, table-driven, the check's own phrases) ----------------------
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        # B4: an everyday number word next to a rupee word or sign.
+        ("saath rupay per watt", "[n] per watt"),
+        ("sath rupaye prati watt", "[n] prati watt"),
+        ("Rs saath per watt", "[n] per watt"),
+        ("₹ saath", "[n]"),
+        ("rupees saath only", "[n] only"),
+        ("das rupaye per unit", "[n] per unit"),
+        ("bara rupaye unit", "[n] unit"),
+        ("नव रुपये", "[n]"),
+        # M1: spellings missing from the lists, and the fallback for spellings we lack.
+        ("pantalis rupaye per watt", "[n] per watt"),
+        ("पैतालीस रुपये प्रति वॉट", "[n] प्रति वॉट"),
+        ("पेंतालीस रुपये", "[n]"),
+        ("सैतालीस प्रति वॅट", "[n] प्रति वॅट"),
+        ("पंचावन रुपये प्रति वॅट", "[n] प्रति वॅट"),
+        ("पंचेचाळिस रुपये", "[n]"),
+        ("चालिस हजार", "[n]"),
+        ("तैतालीस हजार", "[n]"),
+        ("पच्चिस हजार", "[n]"),
+        ("पासष्ठ हजार", "[n]"),
+        ("adhai lakh", "[n]"),
+        ("अढ़ाई लाख", "[n]"),
+        ("pachpanne rupaye per watt", "[n] per watt"),
+        ("चौपन्न रुपये", "[n]"),
+        ("trisath hazaar ka budget", "[n] ka budget"),
+        # M2: ranges with "se" and doubled "do".
+        ("do se teen lakh", "[n] se [n]"),
+        ("saath se sattar hazaar", "[n] se [n]"),
+        ("do-do hazaar", "[n]"),
+        ("das ya pandrah hazaar", "[n] ya [n]"),
+        # M3: an everyday number word after a cost word.
+        ("rate saath hai", "rate [n] hai"),
+        ("rate sirf saath", "rate sirf [n]"),
+        # Minor: the honorific stays before a name; "sau" with a number or rupees goes.
+        ("Sau. Sunita Patil will decide", "Sau. Sunita Patil will decide"),
+        ("सौ. सुनीता पाटील निर्णय घेतील", "सौ. सुनीता पाटील निर्णय घेतील"),
+        ("paanch sau. Then the visit", "[n]. Then the visit"),
+        ("सौ रुपये", "[n]"),
+        ("rate sau. Ok", "rate [n]. Ok"),
+        # Ordinary words before a money or rupee word stay.
+        ("Spent lakhs on inverters.", "Spent [n] on inverters."),
+        ("Customer asked in rupees", "Customer asked in rupees"),
+        ("ग्राहक म्हणाला लाख", "ग्राहक म्हणाला [n]"),
+        ("quoted Rs 45 per watt", "quoted [n] per watt"),
+    ],
+)  # fmt: skip
+def test_check_4_phrases(text: str, expected: str) -> None:
+    assert _masked(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Check 4's must-keep names, places and homographs (all passed; they must still pass).
+        "Sathe ji will confirm the roof size", "Mrs Satpute from Sinhagad Road",
+        "Navale Bridge site, Narhe", "Customer lives in Pimple Nilakh",
+        "Panchshil Towers, Kharadi", "Satara Road, Dhankawadi", "सातारा रोड, धनकवडी",
+        "सौर ऊर्जा प्रणाली बसवायची आहे", "सातबारा उतारा पाठवायचा आहे", "एकदा साइट पाहून ठरवू",
+        "आठवड्याभरात कळवतो", "चारचाकी पार्किंगवर छत आहे", "Rupesh and Ekta will visit on Monday",
+        "Lakhani Builders project in Baner", "Hazarika Solar was the other quote",
+        "Do you want the dongle?", "No one at home on weekdays", "Teenage son will decide",
+        "Das sir from Kondhwa", "Mr Das said they will decide", "Saathi app login help",
+        "Ghar ke saath office bhi", "Main bhi saath aaunga", "मैं भी साथ आऊंगा",
+        "उनके साथ बात करेंगे", "कोटेशन भेज दो।", "बता दो कल तक", "Bhai, kal tak bata do",
+        "Customer said do it fast", "Navratna Society, Aundh", "Dasharath Pawar from Bhosari",
+        "Saswad Road site", "GST ke saath milega", "Rate was discussed, will share later",
+    ],
+)  # fmt: skip
+def test_check_4_must_keep(text: str) -> None:
+    assert mask_numbers(text) == text

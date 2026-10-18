@@ -9,6 +9,8 @@ from ac_platform.partner_events.amounts import (
     HUNDRED_WORDS,
     NUMBER_WORDS,
     amount_inr,
+    carries_money,
+    clean_text,
     counts_in,
     gst_basis,
     is_currency,
@@ -608,3 +610,121 @@ def test_normalise_folds_devanagari_spellings(left: str, right: str) -> None:
 )
 def test_time_words(token: str | None, expected: bool) -> None:
     assert is_time_word(token) is expected
+
+
+# --- Check 4, 18 Oct (round 4, table-driven, the check's own phrases) ----------------------
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        # B1: a bare 1900-2100 with no year cue is a plain number.
+        "Will give 2000 discount", "Transport 2000 extra", "Installation 1999 only",
+        "EMI 2000 per month is too high", "Dongle 1999", "Will add dongle at 1999",
+        "monthly bill 2000",
+        # B2: GST between the number and "per watt".
+        "Will give 45 plus GST per watt", "45 + GST per watt is final", "45 ex-GST per watt",
+        # B3: only, just, sirf, फक्त between the cost word and the number.
+        "Rate is only 45", "Other vendor rate is just 42", "दर फक्त ४५ आहे", "रेट सिर्फ 45 है",
+        "rate - 45", "price ~45",
+        # M4: Hindi and Marathi per-unit forms, "wala", everyday words.
+        "वॅटला ४५ पडतात", "एका वॅटचे ४५", "हर वॉट का 45", "45 wala rate", "45 वाला रेट ज़्यादा है",
+        "saath per watt is too much", "rate saath hai",
+        # Minor forms check 4 listed.
+        "Competitor quoted 42", "45 bucks a watt", "45 per panel", "45 for each watt",
+        "45 per peak watt", "packing 50 extra",
+        # The coordinator's cost words.
+        "discount 500", "EMI 999", "transport 50 extra", "हर यूनिट 9", "प्रति युनिट 8",
+    ],
+)  # fmt: skip
+def test_check_4_prices_are_prices(words: str) -> None:
+    assert mentions_price(words) is True
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        # Check 4's must-be-False phrases (all passed; they must still pass).
+        "Customer has 2 BHK flat", "Site visit in 2 days", "Will call at 4:30 pm",
+        "दर 2 महिन्यांनी बिल येते", "दर महिन्याला बिल येते", "2 ACs and 1 fridge",
+        "5 kWp on-grid system", "10 panels of 540 Wp", "Warranty 25 saal", "पाच किलोवॅट सिस्टम",
+        "3 मजली इमारत", "Roof is 1200 sq ft", "Installed in 2019", "Call after 20 Oct",
+        "on 18/10/2026", "Battery 150 Ah tubular", "Customer will decide by Monday",
+        "Rate was discussed, will share later", "Will compare price with 3 vendors",
+        "Price too high for 2 ACs", "18% GST applies", "Subsidy will come in 30 days",
+        "Customer age 45", "1 dongle and 2 MC4 connectors", "Lift up to 4th floor",
+        "Net meter in 15 din", "4 log ka parivar", "chaar log rehte hain", "दोन माळ्यांचे घर",
+        "Rupesh will visit at 11", "The 3 phase meter", "dar 2 mahine", "Will give 10% off",
+        "सन 2020 मध्ये बसवले", "Diwali ke baad", "delivery 3 panels", "installation 2 days",
+        "100 वॅटचे दिवे", "GST ke saath",
+    ],
+)  # fmt: skip
+def test_check_4_keeps_what_is_not_a_price(words: str) -> None:
+    assert mentions_price(words) is False
+
+
+@pytest.mark.parametrize(
+    "words,expected",
+    [
+        # Round 4 rule 2: the stated words of other facts, years included, no cost word.
+        ("dongle 1999", True),
+        ("Transport 2000 extra", True),
+        ("EMI 2000", True),
+        ("150 panels", True),
+        ("Installed in 2019", True),
+        ("Pune 411045", True),
+        ("packing charge", True),
+        ("EMI option", True),
+        ("discount wala dongle", True),
+        ("2 dongles at 500", True),
+        ("Zelio 1100", True),
+        ("paanch sau", True),
+        # Unit figures and small numbers stay.
+        ("5 kW", False),
+        ("5 kWp", False),
+        ("5000 W", False),
+        ("150Ah tubular", False),
+        ("1500 sq ft", False),
+        ("PuREPower 5", False),
+        ("2 BHK", False),
+        ("25 saal", False),
+        ("1.5 ton AC", False),
+        ("ek dongle", False),
+        ("100 panels", False),
+        ("Baner", False),
+        ("site pe delivery", False),
+        ("transport included", False),
+    ],
+)
+def test_carries_money(words: str, expected: bool) -> None:
+    assert carries_money(words) is expected
+
+
+@pytest.mark.parametrize(
+    "words,expected",
+    [("5 kWp", (5, "kW")), ("3.3 kwp", (3.3, "kW")), ("5 kW", (5, "kW"))],
+)
+def test_kwp_reads_as_kw(words: str, expected: tuple[int | float | None, str | None]) -> None:
+    assert system_size(words) == expected
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("⁴⁵ per watt", "45 per watt"),
+        ("₄₅", "45"),
+        ("④⑤", "45"),
+        ("４５", "45"),
+        ("for‍ty five", "forty five"),
+        ("pach​pan", "pachpan"),
+        ("4­5", "45"),
+        ("a\u0000b\u0007c", "abc"),
+        ("bad \ud800 surrogate", "bad  surrogate"),
+        ("line\nbreak\tand tab", "line\nbreak\tand tab"),
+        ("﻿Rupesh", "Rupesh"),
+        ("सातारा रोड", "सातारा रोड"),
+    ],
+)
+def test_clean_text(text: str, expected: str) -> None:
+    assert clean_text(text) == expected
+    assert clean_text(expected) == expected

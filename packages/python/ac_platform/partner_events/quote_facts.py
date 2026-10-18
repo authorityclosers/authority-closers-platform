@@ -45,6 +45,8 @@ from typing import Any, Literal
 from ac_platform.partner_events.amounts import (
     PLAIN_PRICE_FLOOR,
     amount_inr,
+    carries_money,
+    clean_text,
     counts_in,
     gst_basis,
     mentions_price,
@@ -52,6 +54,7 @@ from ac_platform.partner_events.amounts import (
     numbers_in,
     system_size,
 )
+from ac_platform.partner_events.summary_mask import mask_numbers
 
 Match = Literal["whole", "ambiguous"]
 
@@ -221,14 +224,17 @@ def payload_sha256(payload: dict[str, Any]) -> str:
 
 
 def _fold(text: str) -> str:
-    """Case-insensitive, whitespace-normalised comparison form."""
-    return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
+    """Case-insensitive, whitespace-normalised comparison form (NFKC, no control or
+    zero-width characters)."""
+    return " ".join(clean_text(text).casefold().split())
 
 
 def _words(value: Any, limit: int) -> str | None:
+    """Model text as kept: NFKC, without lone surrogates, control or zero-width characters
+    (round 4), whitespace collapsed; None when empty or too long."""
     if not isinstance(value, str):
         return None
-    cleaned = " ".join(value.split())
+    cleaned = " ".join(clean_text(value).split())
     if not cleaned or len(cleaned) > limit:
         return None
     return cleaned
@@ -382,6 +388,8 @@ def _clean(
         text = _words(raw.get("text"), _LIMITS["text"])
         if text is None or mentions_price(text):
             return None
+        # Round 4: every number left reads "[n]", as in the summary, so no price can pass.
+        text = mask_numbers(text)
         segment = cited[0]
         if fact_type == "promise":
             speaker = speakers.get(str(segment.get("speaker_id")), "unknown")
@@ -394,8 +402,12 @@ def _clean(
         action = action if action in VOCABULARIES["next_step.action"] else "other"
         when = _words(raw.get("when_text"), _LIMITS["when_text"])
         said = _containing(when, cited) if when else None
-        if when is None or said is None or mentions_price(when):
+        if when is None or said is None:
             return {"action": action, "when_text": None}, cited[0]
+        # Round 4: dates and times stay ("kal shaam 5 baje", "20 October"); with money said
+        # near a number ("rate approx 45", "₹500 advance by Monday") every number reads "[n]".
+        if mentions_price(when, plain_numbers=False):
+            when = mask_numbers(when)
         return {"action": action, "when_text": when}, said[0]
 
     stated_as = _words(raw.get("stated_as"), _LIMITS["stated_as"])
@@ -419,8 +431,10 @@ def _clean(
             "basis": gst_basis(stated_as),
             "use": "flag_only",
         }, segment
-    # Product names keep their own digits ("PuREPower 5"); a currency or money unit never.
-    if mentions_price(stated_as, plain_numbers=fact_type != "product_mention"):
+    # Round 4 (the coordinator's decision): a rupee, money or cost word, or a number above
+    # 100 that is not a unit figure (years included), drops the fact ("dongle 1999",
+    # "Transport 2000 extra", "150 panels"). Small numbers stay ("PuREPower 5", "2 BHK").
+    if carries_money(stated_as):
         return None
     if fact_type == "system_size":
         quantity, unit = (None, None) if ambiguous else system_size(stated_as)

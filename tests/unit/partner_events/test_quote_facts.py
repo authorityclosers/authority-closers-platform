@@ -254,8 +254,8 @@ def test_single_types_merge_repeated_values_and_cap_list_types() -> None:
         _fact("warranty", {"years": 7, "stated_as": "seven years"}, ["s3"]),
         *[_fact("load", {"stated_as": "inverter"}, ["s7"]) for _ in range(3)],
         *[
-            _fact("objection", {"kind": "stall", "text": f"Concern number {n}"}, ["s7"])
-            for n in range(12)
+            _fact("objection", {"kind": "stall", "text": f"Concern about item {letter}"}, ["s7"])
+            for letter in "bcdefghijklm"
         ],
     ]
     facts, dropped = parse_facts({"facts": proposals}, SEGMENTS, SPEAKERS)
@@ -465,18 +465,18 @@ def test_gst_basis_comes_from_the_price_words_only(
         # M3 and m1: promises and objections with a number away from the price word, or a
         # name that starts like "rupee", pass (dropped since d835393b).
         ("promise", {"text": "Will share revised price in 2 days"}, "x",
-         {"speaker": "salesperson", "text": "Will share revised price in 2 days"}),
+         {"speaker": "salesperson", "text": "Will share revised price in [n] days"}),
         ("promise", {"text": "Send price list by 6 pm"}, "x",
-         {"speaker": "salesperson", "text": "Send price list by 6 pm"}),
+         {"speaker": "salesperson", "text": "Send price list by [n] pm"}),
         ("objection", {"kind": "price_concern", "text": "Price too high; will decide in 2 days"},
-         "x", {"kind": "price_concern", "text": "Price too high; will decide in 2 days"}),
+         "x", {"kind": "price_concern", "text": "Price too high; will decide in [n] days"}),
         ("objection",
          {"kind": "price_concern", "text": "Compared the price with 2 other vendors"}, "x",
-         {"kind": "price_concern", "text": "Compared the price with 2 other vendors"}),
+         {"kind": "price_concern", "text": "Compared the price with [n] other vendors"}),
         ("promise", {"text": "Rupesh will send the quotation"}, "x",
          {"speaker": "salesperson", "text": "Rupesh will send the quotation"}),
         ("promise", {"text": "Will send price for 2 ACs"}, "x",
-         {"speaker": "salesperson", "text": "Will send price for 2 ACs"}),
+         {"speaker": "salesperson", "text": "Will send price for [n] ACs"}),
         # A time in next_step stays (the summary masks a bare decimal; when_text keeps it).
         ("next_step", {"action": "call_back", "when_text": "5.30"}, "call at 5.30",
          {"action": "call_back", "when_text": "5.30"}),
@@ -577,18 +577,12 @@ def test_a_whole_occurrence_in_another_cited_segment_wins() -> None:
         ("promise", {"text": "Rs per watt 45 final"}, "x"),
         ("add_on", {"kind": "packing", "stated_as": "packing खर्च 50"}, "packing खर्च 50"),
         ("site", {"stated_as": "per watt 45"}, "per watt 45"),
-        ("next_step", {"action": "call_back", "when_text": "rate approx 45"}, "rate approx 45"),
     ],
 )  # fmt: skip
 def test_check_3_prices_never_reach_other_facts(
     kind: str, value: dict[str, Any], text: str
 ) -> None:
-    facts = _one(kind, value, text)
-    if kind == "next_step":
-        (fact,) = facts
-        assert fact["value"]["when_text"] is None
-    else:
-        assert facts == []
+    assert _one(kind, value, text) == []
 
 
 @pytest.mark.parametrize(
@@ -620,9 +614,9 @@ def test_check_3_prices_never_reach_other_facts(
         ("promise", {"text": "Lakhan will visit the site on Monday"}, "x",
          {"speaker": "salesperson", "text": "Lakhan will visit the site on Monday"}),
         ("objection", {"kind": "price_concern", "text": "price for 2 ACs is high"}, "x",
-         {"kind": "price_concern", "text": "price for 2 ACs is high"}),
+         {"kind": "price_concern", "text": "price for [n] ACs is high"}),
         ("promise", {"text": "दर 2 महिन्यांनी सर्विस करू"}, "x",
-         {"speaker": "salesperson", "text": "दर 2 महिन्यांनी सर्विस करू"}),
+         {"speaker": "salesperson", "text": "दर [n] महिन्यांनी सर्विस करू"}),
         # Check 3: the Marathi watt spelling now gives the unit.
         ("system_size", {"stated_as": "5 किलोवॅट"}, "5 किलोवॅट सिस्टम हवी",
          {"stated_as": "5 किलोवॅट", "quantity": 5, "unit": "kW"}),
@@ -633,3 +627,155 @@ def test_check_3_facts_that_must_survive(
 ) -> None:
     (fact,) = _one(kind, value, text)
     assert fact["value"] == expected
+
+
+# --- Check 4, 18 Oct (round 4, table-driven, the check's own phrases) ----------------------
+
+
+@pytest.mark.parametrize(
+    "kind,value,text",
+    [
+        # Check 4 blockers: each was kept at 940514dc.
+        ("add_on", {"kind": "dongle", "stated_as": "dongle 1999"}, "dongle 1999 ka hai"),  # FP07
+        ("promise", {"text": "Will give 45 plus GST per watt"},
+         "45 plus GST per watt de denge"),  # FP14
+        ("promise", {"text": "Transport 2000 extra"}, "transport 2000 extra lagega"),  # FP15
+        ("objection", {"kind": "price_concern", "text": "Rate is only 45 elsewhere"},
+         "bahar rate sirf 45 hai"),  # FP17
+        ("objection", {"kind": "price_concern", "text": "दर फक्त ४५ आहे"},
+         "बाहेर दर फक्त ४५ आहे"),  # FP25
+        ("objection", {"kind": "affordability_gap", "text": "Monthly EMI 2000 is too high"},
+         "EMI 2000 mahina zyada hai"),  # FP29
+        ("objection", {"kind": "price_concern", "text": "वॅटला ४५ पडतात"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "हर वॉट का 45 है"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "45 wala rate is high"}, "x"),
+        ("objection", {"kind": "price_concern", "text": "saath per watt is too much"}, "x"),
+        # Rule 2: a number above 100 (years too), a cost, rupee or money word drops the fact.
+        ("add_on", {"kind": "other", "stated_as": "Transport 2000 extra"},
+         "Transport 2000 extra"),
+        ("add_on", {"kind": "other", "stated_as": "EMI 2000"}, "EMI 2000"),
+        ("add_on", {"kind": "panel", "qty": 100, "stated_as": "150 panels"}, "150 panels"),
+        ("add_on", {"kind": "packing", "stated_as": "packing charge"}, "packing charge alag"),
+        ("add_on", {"kind": "dongle", "stated_as": "discount wala dongle"},
+         "discount wala dongle"),
+        ("product_mention", {"stated_as": "Zelio 1100"}, "Zelio 1100 lagao"),
+        ("site", {"stated_as": "Pune 411045"}, "address Pune 411045 hai"),  # FP04, accepted
+        ("load", {"stated_as": "installed in 2019"}, "AC installed in 2019"),
+    ],
+)  # fmt: skip
+def test_check_4_prices_never_reach_other_facts(
+    kind: str, value: dict[str, Any], text: str
+) -> None:
+    assert _one(kind, value, text) == []
+
+
+@pytest.mark.parametrize(
+    "kind,value,text,expected",
+    [
+        # Check 4's passing facts (FP01-FP30) stay; kWp now reads as kW.
+        ("system_size", {"stated_as": "5 kWp"}, "mujhe 5 kWp ka system chahiye",
+         {"stated_as": "5 kWp", "quantity": 5, "unit": "kW"}),
+        ("load", {"stated_as": "2 BHK"}, "humara 2 BHK flat hai Baner mein",
+         {"stated_as": "2 BHK"}),
+        ("site", {"stated_as": "Baner"}, "humara 2 BHK flat hai Baner mein",
+         {"stated_as": "Baner"}),
+        ("product_mention", {"stated_as": "PuREPower 5"}, "PuREPower 5 lagwa dijiye",
+         {"stated_as": "PuREPower 5"}),
+        ("add_on", {"kind": "dongle", "qty": 1, "stated_as": "ek dongle"},
+         "ek dongle bhi chahiye", {"kind": "dongle", "qty": 1, "stated_as": "ek dongle"}),
+        ("warranty", {"years": 25, "stated_as": "25 saal"}, "panel pe 25 saal warranty hai",
+         {"years": 25, "stated_as": "25 saal"}),
+        ("warranty", {"years": 25, "stated_as": "पंचवीस वर्षे"}, "पॅनेलवर पंचवीस वर्षे वॉरंटी आहे",
+         {"years": 25, "stated_as": "पंचवीस वर्षे"}),
+        ("objection",
+         {"kind": "decision_maker_absent", "text": "Customer wants to discuss with his wife"},
+         "wife se baat karke batata hoon",
+         {"kind": "decision_maker_absent", "text": "Customer wants to discuss with his wife"}),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "45 plus GST per watt"},
+         "45 plus GST per watt de denge",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "45 plus GST per watt",
+          "amount_inr": None, "basis": "ex_gst", "use": "flag_only"}),
+        ("mentioned_price", {"applies_to": "system", "stated_as": "saath rupaye per watt"},
+         "saath rupaye per watt hoga",
+         {"applies_to": "system", "speaker": "salesperson", "stated_as": "saath rupaye per watt",
+          "amount_inr": None, "basis": None, "use": "flag_only"}),
+        ("mentioned_price", {"applies_to": "other", "stated_as": "₹2,000 discount"},
+         "₹2,000 discount milega",
+         {"applies_to": "other", "speaker": "salesperson", "stated_as": "₹2,000 discount",
+          "amount_inr": 2000, "basis": None, "use": "flag_only"}),
+        ("battery_type", {"kind": "tubular", "stated_as": "150Ah tubular"},
+         "150Ah tubular battery lenge", {"kind": "tubular", "stated_as": "150Ah tubular"}),
+        ("delivery_basis", {"kind": "delivered_to_site", "stated_as": "site pe delivery"},
+         "site pe delivery hogi", {"kind": "delivered_to_site", "stated_as": "site pe delivery"}),
+        ("load", {"stated_as": "1.5 ton AC"}, "ek 1.5 ton AC chalana hai",
+         {"stated_as": "1.5 ton AC"}),
+        ("add_on", {"kind": "other", "qty": 2, "stated_as": "2 MC4 connectors"},
+         "2 MC4 connectors extra dena",
+         {"kind": "other", "qty": 2, "stated_as": "2 MC4 connectors"}),
+        ("system_size", {"stated_as": "पाच किलोवॅट"}, "आम्हाला पाच किलोवॅट हवे",
+         {"stated_as": "पाच किलोवॅट", "quantity": 5, "unit": "kW"}),
+        # Rule 3: when_text keeps dates and times when no money is said near them.
+        ("next_step", {"action": "send_quotation", "when_text": "kal shaam 5 baje"},
+         "kal shaam 5 baje quotation bhej dunga",
+         {"action": "send_quotation", "when_text": "kal shaam 5 baje"}),
+        ("next_step", {"action": "site_visit", "when_text": "20 October"},
+         "20 October ko site visit karte hain",
+         {"action": "site_visit", "when_text": "20 October"}),
+        ("next_step", {"action": "call_back", "when_text": "परवा सकाळी 10 वाजता"},
+         "परवा सकाळी 10 वाजता फोन करतो",
+         {"action": "call_back", "when_text": "परवा सकाळी 10 वाजता"}),
+        ("next_step", {"action": "meeting", "when_text": "18/10/2026"}, "meeting 18/10/2026 ko",
+         {"action": "meeting", "when_text": "18/10/2026"}),
+        ("next_step", {"action": "call_back", "when_text": "Diwali ke baad"},
+         "Diwali ke baad call karna", {"action": "call_back", "when_text": "Diwali ke baad"}),
+        # Rule 3: money said near the number masks every number in when_text.
+        ("next_step", {"action": "call_back", "when_text": "rate approx 45"}, "rate approx 45",
+         {"action": "call_back", "when_text": "rate approx [n]"}),
+        ("next_step", {"action": "other", "when_text": "after paying 500 rupees on 20 Oct"},
+         "after paying 500 rupees on 20 Oct",
+         {"action": "other", "when_text": "after paying [n] on [n] Oct"}),
+        # Rule 1: promise and objection text show every number as [n].
+        ("promise", {"text": "Will send quotation by tomorrow 11 am"},
+         "kal 11 baje tak quotation bhejta hoon",
+         {"speaker": "salesperson", "text": "Will send quotation by tomorrow [n] am"}),
+        ("promise", {"text": "Installed in 2019, will service it"}, "x",
+         {"speaker": "salesperson", "text": "Installed in [n], will service it"}),
+        ("promise", {"text": "दोन दिवसांत कोटेशन पाठवतो"}, "x",
+         {"speaker": "salesperson", "text": "[n] दिवसांत कोटेशन पाठवतो"}),
+        ("objection", {"kind": "competitor_or_status_quo", "text": "Compared with teen vendors"},
+         "x", {"kind": "competitor_or_status_quo", "text": "Compared with [n] vendors"}),
+        ("promise", {"text": "Will visit with 2 engineers on 20 Oct"}, "x",
+         {"speaker": "salesperson", "text": "Will visit with [n] engineers on [n] Oct"}),
+    ],
+)  # fmt: skip
+def test_check_4_facts_that_must_survive(
+    kind: str, value: dict[str, Any], text: str, expected: dict[str, Any]
+) -> None:
+    (fact,) = _one(kind, value, text)
+    assert fact["value"] == expected
+
+
+def test_hostile_model_text_is_cleaned_before_any_check() -> None:
+    """Rule 4: NUL, control, zero-width and lone surrogates are removed and NFKC applied
+    before any check; the facts always encode as UTF-8."""
+    segments = [{"id": "s1", "speaker_id": "speaker_0", "start_ms": 0, "end_ms": 1_000,
+                 "text": "We need a 5 kW system and one dongle."}]  # fmt: skip
+    proposals = [
+        _fact("promise", {"text": "Send the quote\u0000 today \ud800"}, ["s1"]),
+        _fact("objection", {"kind": "stall", "text": "for‍ty five rupees"}, ["s1"]),
+        _fact("objection", {"kind": "stall", "text": "Wants ⁴⁵ days\u0007"}, ["s1"]),
+        _fact("system_size", {"stated_as": "5​ kW"}, ["s1"]),
+        _fact("add_on", {"kind": "dongle", "qty": 1, "stated_as": "one﻿ dongle"}, ["s1"]),
+        _fact("site", {"stated_as": "\ud83d"}, ["s1"]),
+    ]
+    facts, dropped = parse_facts({"facts": proposals}, segments, SPEAKERS)
+    texts = json.dumps(facts, ensure_ascii=False)
+    assert "\u0000" not in texts and "‍" not in texts and "﻿" not in texts
+    by_type = {fact["type"]: fact for fact in facts if fact["status"] != "unknown"}
+    assert by_type["promise"]["value"]["text"] == "Send the quote today"
+    assert by_type["system_size"]["value"]["quantity"] == 5
+    assert by_type["add_on"]["value"]["qty"] == 1
+    objections = [fact["value"]["text"] for fact in facts if fact["type"] == "objection"]
+    assert objections == ["Wants [n] days"]  # "forty five rupees" is a price: dropped
+    assert dropped == 2  # the price objection and the empty site
+    texts.encode("utf-8")  # no lone surrogate left

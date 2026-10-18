@@ -210,3 +210,52 @@ def test_a_body_over_256_kb_drops_its_facts_and_reads_failed() -> None:
 
 def test_times_are_utc_whole_seconds() -> None:
     assert iso(datetime(2026, 10, 19, 10, 44, 2, 999_999)) == "2026-10-19T10:44:02Z"
+
+
+# --- Check 4, 18 Oct (round 4): robustness and the summary's new cases ----------------------
+
+
+@pytest.mark.parametrize(
+    "summary,sent",
+    [
+        # Theoretical forms check 4 listed, closed by NFKC and zero-width removal.
+        ("⁴⁵ per watt, ₄₅ per watt, ④⑤ per watt", "[n] per watt, [n] per watt, [n] per watt"),
+        ("for‍ty five rupees, pach​pan rupaye", "[n], [n]"),
+        ("Quoted ⁴⁵/W\ud800, NUL\u0000 here", "Quoted [n], NUL here"),
+        # B4 and M1-M3 through the event path.
+        ("Customer said saath rupay per watt; rate saath hai; do se teen lakh.",
+         "Customer said [n] per watt; rate [n] hai; [n] se [n]."),
+        ("Sau. Sunita Patil will decide; budget adhai lakh.",
+         "Sau. Sunita Patil will decide; budget [n]."),
+    ],
+)  # fmt: skip
+def test_check_4_summaries(summary: str, sent: str) -> None:
+    payload = build_event(
+        EVENT, replace(CONTEXT, summary=summary), Extraction("skipped", None), app_url=APP
+    )
+    assert payload["summary"] == sent
+    assert summary_text(payload["summary"]) == payload["summary"]
+
+
+def test_hostile_strings_anywhere_never_break_the_body() -> None:
+    """Rule 4: build_event never raises on a lone surrogate, NUL or control character in
+    the summary, the people or the facts."""
+    hostile_fact = {
+        **FACT,
+        "value": {"stated_as": "5 kW\ud800\u0000", "quantity": 5, "unit": "kW"},
+    }
+    context = replace(
+        CONTEXT,
+        summary="Quoted\ud83d 45\u0000",
+        salesperson=Person(None, "Sales\ud800person", "a\u0007@example.test"),
+        lead=Lead(UUID("66666666-6666-4666-8666-666666666666"), "+91\u0000", "Cust\udfff", "Pune"),
+    )
+    payload = build_event(
+        EVENT, context, Extraction("complete", "wiselife-quote-v1", [hostile_fact]), app_url=APP
+    )
+    body = json.loads(body_bytes(payload))
+    assert body["summary"] == "Quoted [n]"
+    assert body["salesperson"]["name"] == "Salesperson"
+    assert body["salesperson"]["email"] == "a@example.test"
+    assert body["lead"]["name"] == "Cust" and body["lead"]["phone_e164"] == "+91"
+    assert body["facts"][0]["value"]["stated_as"] == "5 kW"
