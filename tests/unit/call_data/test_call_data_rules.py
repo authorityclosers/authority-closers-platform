@@ -282,7 +282,8 @@ def test_questions_are_capped_highest_priority_first_and_no_lead_means_no_fill()
 
 def test_settings_are_checked_and_cost_is_a_list_price_estimate() -> None:
     config = validate({"fast": {"daily_cap_inr": 50}})
-    assert config["fast"]["daily_cap_inr"] == 50 and config["deep"]["enabled"] is False
+    assert config["fast"]["daily_cap_inr"] == 50
+    assert config["deep"]["enabled"] is True and config["deep"]["daily_cap_inr"] == 300
     for bad in (
         {"fast": {"model": "gpt-unknown"}},
         {"fast": {"enabled": "yes"}},

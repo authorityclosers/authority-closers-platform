@@ -62,10 +62,11 @@ DEFAULTS: dict[str, Any] = {
         "daily_cap_inr": 150,
         "max_call_minutes": 60,
     },
+    # Owner, 19 Oct ("yes deep"): the deep pipeline on in every environment at ₹300/day.
     "deep": {
-        "enabled": False,
+        "enabled": True,
         "model": "gemini-3.8-flash",
-        "daily_cap_inr": 150,
+        "daily_cap_inr": 300,
         "max_call_minutes": 60,
     },
 }
