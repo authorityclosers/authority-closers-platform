@@ -22,8 +22,8 @@ def test_gold_save_needs_judgement_and_opinion() -> None:
             GoldSave(**base, **extra)
     assert GoldSave(**base, score=0).score == 0
     assert GoldSave(**base, verdict="partly").verdict == "partly"
-    with pytest.raises(ValidationError):
-        GoldSave(**{**base, "opinion": " "}, verdict="agree")
+    # Phone review (19 Oct): the note is optional; a judgement is still required.
+    assert GoldSave(**{**base, "opinion": " "}, verdict="agree").opinion == ""
 
 
 def test_all_pointer_outcome_and_coaching_lines_keep_the_saved_ai() -> None:

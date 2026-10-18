@@ -12,7 +12,8 @@ export type ShellActive =
   | "organisation"
   | "prospects"
   | "coaching"
-  | "insights";
+  | "insights"
+  | "review";
 
 const FROM_ACTIVE: Record<ShellActive, PhoneTab> = {
   dashboard: "dashboard",
@@ -24,6 +25,7 @@ const FROM_ACTIVE: Record<ShellActive, PhoneTab> = {
   account: "more",
   organisation: "more",
   insights: "more",
+  review: "more",
 };
 
 const under = (pathname: string, root: string) =>
