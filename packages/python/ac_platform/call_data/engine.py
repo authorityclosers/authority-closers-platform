@@ -246,6 +246,64 @@ def spent_today(connection: Any, pipeline: str, now: datetime) -> Decimal:
     return Decimal(finished or 0) + Decimal(2) * int(open_attempts or 0)
 
 
+def waiting_for_budget(connection: Any, pipeline: str, now: datetime, hours: int = 720) -> int:
+    """Calls whose newest transcript has no run of this pipeline yet (last 30 days)."""
+    after_fast = _AFTER_FAST if pipeline == "deep" else ""
+    return int(
+        connection.scalar(
+            text(
+                f"""
+                SELECT count(*) FROM conversation_checkpoints cp
+                JOIN conversation_recordings c ON c.id = cp.recording_id
+                WHERE cp.stage = 'C2' AND cp.erased_at IS NULL
+                  AND json_typeof(cp.payload) = 'object' AND cp.created_at > :horizon
+                  AND c.state = 'ready' AND c.deleted_at IS NULL
+                  AND cp.created_at = (
+                    SELECT max(n.created_at) FROM conversation_checkpoints n
+                    WHERE n.recording_id = cp.recording_id AND n.stage = 'C2'
+                      AND n.erased_at IS NULL
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM call_data_runs r
+                    WHERE r.recording_id = cp.recording_id AND r.pipeline = :pipeline
+                      AND r.transcript_revision = cp.payload ->> 'revision'
+                  )
+                  {after_fast}
+                """  # noqa: S608 - fixed fragments, values bound
+            ),
+            {"pipeline": pipeline, "horizon": now - timedelta(hours=hours)},
+        )
+        or 0
+    )
+
+
+def settings_history(connection: Any, limit: int = 10) -> list[dict[str, Any]]:
+    """Recent settings revisions, newest first: who, when, caps and switches."""
+    rows = connection.execute(
+        select(
+            CallDataSettings.revision,
+            CallDataSettings.config,
+            CallDataSettings.created_by_person_id,
+            CallDataSettings.created_at,
+        )
+        .order_by(CallDataSettings.revision.desc())
+        .limit(limit)
+    ).all()
+    history = []
+    for row in rows:
+        config = row.config if isinstance(row.config, dict) else {}
+        history.append(
+            {
+                "revision": row.revision,
+                "by_person_id": str(row.created_by_person_id) if row.created_by_person_id else None,
+                "at": row.created_at.isoformat(),
+                "fast": dict(config.get("fast") or {}),
+                "deep": dict(config.get("deep") or {}),
+            }
+        )
+    return history
+
+
 # ----- loading one call ------------------------------------------------------------
 
 

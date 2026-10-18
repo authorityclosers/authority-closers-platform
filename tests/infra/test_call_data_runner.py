@@ -1,4 +1,4 @@
-"""The call data engine's host wrapper and systemd unit (fast pipeline runner)."""
+"""The call data engine's host wrapper and systemd unit (runner, cap alerts)."""
 
 import subprocess
 from pathlib import Path
@@ -6,14 +6,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "infra/application/scripts/ac-call-data"
 SERVICE = ROOT / "infra/application/systemd/ac-call-data@.service"
+REAL_NOTIFY = "/usr/local/sbin/ac-notify-owner"
 
 
 def test_wrapper_parses_and_never_backfills() -> None:
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True, timeout=30)  # noqa: S603, S607
     text = SCRIPT.read_text()
-    # Automatic mode: a since-marker recorded once, then only newer transcripts.
-    assert '--not-before "$since" --loop --apply' in text
-    assert "--recording" not in text and "--recent-hours" not in text
+    # Automatic mode: a since-marker recorded once; calls waiting at a cap stay 30 days.
+    assert '--not-before "$since" --recent-hours 720 --loop --apply' in text
+    assert "--recording" not in text and "--backfill" not in text
     # The provider key only ever lives in the runner's own infisical child.
     assert "GEMINI_API_KEY" not in text
 
@@ -22,3 +23,45 @@ def test_service_restarts_and_picks_up_releases() -> None:
     text = SERVICE.read_text()
     assert "ExecStart=/usr/local/sbin/ac-call-data %i" in text
     assert "Restart=always" in text and "RuntimeMaxSec=" in text
+
+
+def test_a_reached_cap_tells_the_owner_once_a_day_per_pipeline(tmp_path: Path) -> None:
+    record = tmp_path / "sent.txt"
+    fake = tmp_path / "notify"
+    fake.write_text(f"#!/bin/bash\nprintf '%s\\n' \"$1\" >> '{record}'\n")
+    fake.chmod(0o755)
+    assert str(fake) != REAL_NOTIFY
+    lines = "\n".join(
+        [
+            '{"started": "automatic:call-data", "apply": true}',
+            '{"stopped": "fast_daily_cap", "spent_inr": "150.1234"}',
+            '{"recording": "x", "outcome": "succeeded"}',
+            '{"stopped": "fast_daily_cap", "spent_inr": "150.1234"}',  # restart: no 2nd alert
+            '{"stopped": "deep_daily_cap", "spent_inr": "300"}',
+            '{"stopped": "deep_pipeline_off"}',
+        ]
+    )
+    for _ in range(2):  # a second process the same day sends nothing new
+        result = subprocess.run(  # noqa: S603
+            ["bash", "-c", 'source "$1"; forward_alerts staging', "test", str(SCRIPT)],  # noqa: S607
+            input=lines + "\n",
+            capture_output=True,
+            text=True,
+            check=True,
+            env={
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+                "NOTIFY": str(fake),
+                "CALL_DATA_STATE": str(tmp_path),
+            },
+            timeout=60,
+        )
+        assert '"outcome": "succeeded"' in result.stdout  # lines pass through unchanged
+    sent = record.read_text().splitlines()
+    assert sent == [
+        "Sales X-Ray call data (staging): the fast pipeline reached its daily cap (Rs 150.1234 "
+        "spent today). New calls wait, nothing is lost and Reports are not affected. "
+        "Admin -> Sales Xray setup -> Call data -> Raise and resume.",
+        "Sales X-Ray call data (staging): the deep pipeline reached its daily cap (Rs 300 spent "
+        "today). New calls wait, nothing is lost and Reports are not affected. "
+        "Admin -> Sales Xray setup -> Call data -> Raise and resume.",
+    ]

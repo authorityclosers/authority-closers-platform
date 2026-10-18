@@ -17,6 +17,8 @@ from typing import Any
 from ac_platform.conversation_intelligence.admin_pricing import PRICING_SNAPSHOTS
 
 PIPELINES = ("fast", "deep")
+# One-click caps in Admin (owner, 19 Oct: "just making it 300 or 400 if it runs out").
+CAP_PRESETS = (150, 300, 400)
 USD_TO_INR = Decimal("95")
 
 
@@ -104,6 +106,14 @@ def validate(config: object) -> dict[str, Any]:
             raise SettingsError("settings_max_minutes")
         result[pipeline] = merged
     return result
+
+
+def raise_to(cap: int) -> int:
+    """The next one-click cap above ``cap``: the next preset, else ₹100 more (max ₹5,000)."""
+    for preset in CAP_PRESETS:
+        if preset > cap:
+            return preset
+    return min(5000, cap + 100)
 
 
 def cost_inr(model: str, input_tokens: int | None, output_tokens: int | None) -> Decimal:

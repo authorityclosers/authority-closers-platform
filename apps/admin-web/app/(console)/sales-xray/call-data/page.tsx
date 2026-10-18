@@ -5,6 +5,7 @@ import { when } from "@/app/calls/call-data";
 import { duration, rupees } from "@/app/calls/call-map-data";
 import { adminRead } from "@/app/lib/server-api";
 import { normalizeCallData } from "@/app/sales-xray/call-data-model";
+import { CallDataBudget } from "@/app/sales-xray/call-data-budget";
 import { CallDataSettingsForm } from "@/app/sales-xray/call-data-settings";
 import {
   Badge,
@@ -46,11 +47,20 @@ export default async function CallDataPage() {
         title="Call data"
         context={[
           `Fast pipeline today ${rupees(data.spentToday.fast) || "₹0.00"} of ₹${fastCap}`,
+          data.status.fast.atCap || data.status.deep.atCap
+            ? "A cap is reached"
+            : "Within caps",
           data.revision
             ? `Settings revision ${data.revision}`
             : "Default settings",
         ]}
       />
+      <Panel
+        title="Today"
+        sub="Spend against each daily cap · list-price estimates"
+      >
+        <CallDataBudget settings={data} />
+      </Panel>
       <Panel
         title="Pipelines"
         sub="Every call becomes typed facts. Keys stay in Infisical."
@@ -98,6 +108,53 @@ export default async function CallDataPage() {
             icon={Database}
             title="No runs yet"
             text="The fast pipeline reads each new call's transcript."
+          />
+        )}
+      </Panel>
+      <Panel
+        title="Changes"
+        sub="Every save is kept: who, when, and the caps it set"
+      >
+        {data.history.length ? (
+          <Table label="Settings changes">
+            <thead>
+              <tr>
+                <th scope="col">When</th>
+                <th scope="col">Revision</th>
+                <th scope="col">Fast</th>
+                <th scope="col">Deep</th>
+                <th scope="col">By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.history.map((change) => (
+                <tr key={change.revision}>
+                  <th scope="row">{when(change.at)}</th>
+                  <td>{change.revision}</td>
+                  <td>
+                    {change.fastOn === false
+                      ? "Off"
+                      : `₹${change.fastCap ?? "—"}`}
+                  </td>
+                  <td>
+                    {change.deepOn === false
+                      ? "Off"
+                      : `₹${change.deepCap ?? "—"}`}
+                  </td>
+                  <td>
+                    {change.byPersonId
+                      ? change.byPersonId.slice(0, 8)
+                      : "Operator"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        ) : (
+          <Empty
+            icon={Database}
+            title="Default settings"
+            text="Nothing saved yet."
           />
         )}
       </Panel>

@@ -12,6 +12,7 @@ import { useState } from "react";
 
 import { Badge, Button, Field } from "../ui/kit";
 import {
+  CAP_PRESETS,
   toApi,
   type CallDataSettings,
   type PipelineConfig,
@@ -133,18 +134,38 @@ export function CallDataSettingsForm({
               </select>
             </Field>
             <Field label="Daily cap (₹, list-price estimate)">
-              <input
-                className={styles.input}
-                type="number"
-                min={0}
-                max={5000}
-                value={config.dailyCapInr}
-                onChange={(event) =>
-                  change(pipeline.key, {
-                    dailyCapInr: Number(event.target.value) || 0,
-                  })
-                }
-              />
+              <span
+                className={styles.presets}
+                role="group"
+                aria-label="Daily cap"
+              >
+                {CAP_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className={styles.preset}
+                    aria-pressed={config.dailyCapInr === preset}
+                    onClick={() =>
+                      change(pipeline.key, { dailyCapInr: preset })
+                    }
+                  >
+                    ₹{preset}
+                  </button>
+                ))}
+                <input
+                  className={styles.custom}
+                  type="number"
+                  min={1}
+                  max={5000}
+                  aria-label="Custom daily cap"
+                  value={config.dailyCapInr}
+                  onChange={(event) =>
+                    change(pipeline.key, {
+                      dailyCapInr: Number(event.target.value) || 0,
+                    })
+                  }
+                />
+              </span>
             </Field>
             <Field label="Longest call it reads (minutes)">
               <input

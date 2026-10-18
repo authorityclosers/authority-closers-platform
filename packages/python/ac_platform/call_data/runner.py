@@ -88,8 +88,8 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         parser.error("--not-before needs a time zone, e.g. 2026-10-19T00:00:00+00:00")
     if not 1 <= arguments.limit <= (200 if arguments.backfill else 20):
         parser.error("--limit must be 1-20 (1-200 with --backfill)")
-    if not 1 <= arguments.recent_hours <= (8760 if arguments.backfill else 168):
-        parser.error("--recent-hours must be 1-168 (up to 8760 with --backfill)")
+    if not 1 <= arguments.recent_hours <= (8760 if arguments.backfill else 720):
+        parser.error("--recent-hours must be 1-720 (up to 8760 with --backfill)")
     if arguments.backfill and arguments.loop:
         parser.error("--backfill runs once, never in the loop")
     if not 1.0 <= arguments.interval <= 300.0:

@@ -566,3 +566,24 @@ def test_lead_facts_questions_and_a_persons_answers(postgres_harness: Engine) ->
     assert prospect["schema"] == "prospect-facts/1"
     assert {f["type"]: f["prospect_field"] for f in prospect["facts"]}["company.name"] == "business"
     assert len(prospect["facts"]) == 4
+
+
+def test_calls_wait_for_budget_and_settings_keep_their_history(postgres_harness: Engine) -> None:
+    seeded = _call(postgres_harness, lead_name=None)
+    now = datetime.now(UTC)
+    with postgres_harness.connect() as connection:
+        assert call_engine.waiting_for_budget(connection, "fast", now) == 1
+        assert call_engine.waiting_for_budget(connection, "deep", now) == 0  # waits for fast
+    assert _process(postgres_harness, seeded, FakeModel())["outcome"] == "succeeded"
+    with postgres_harness.begin() as connection:
+        assert call_engine.waiting_for_budget(connection, "fast", now) == 0
+        assert call_engine.waiting_for_budget(connection, "deep", now) == 1
+        call_engine.save_settings(
+            connection,
+            {"fast": {"daily_cap_inr": 300}},
+            person_id=seeded["owner"].person_id,
+            now=now,
+        )
+        history = call_engine.settings_history(connection)
+    assert history[0]["fast"]["daily_cap_inr"] == 300
+    assert history[0]["by_person_id"] == str(seeded["owner"].person_id)

@@ -29,8 +29,30 @@ export type StreamingProvider = {
   gateCleared: boolean;
 };
 
+export type PipelineStatus = {
+  spentTodayInr: number;
+  dailyCapInr: number;
+  atCap: boolean;
+  waiting: number;
+  raiseToInr: number;
+};
+
+export type SettingsChange = {
+  revision: number;
+  byPersonId: string | null;
+  at: string;
+  fastCap: number | null;
+  deepCap: number | null;
+  fastOn: boolean | null;
+  deepOn: boolean | null;
+};
+
+export const CAP_PRESETS = [150, 300, 400] as const;
+
 export type CallDataSettings = {
   revision: number | null;
+  status: { fast: PipelineStatus; deep: PipelineStatus };
+  history: SettingsChange[];
   config: {
     fast: PipelineConfig;
     deep: PipelineConfig;
@@ -79,8 +101,37 @@ export function normalizeCallData(raw: unknown): CallDataSettings {
   const live = read.object(config.streaming);
   const menu = read.object(body.streaming);
   const gate = read.object(menu.gate);
+  const status = read.object(body.status);
+  const pipelineStatus = (raw: unknown): PipelineStatus => {
+    const value = read.object(raw);
+    return {
+      spentTodayInr: read.number(value.spent_today_inr),
+      dailyCapInr: read.number(value.daily_cap_inr),
+      atCap: read.boolean(value.at_cap),
+      waiting: read.number(value.waiting),
+      raiseToInr: read.number(value.raise_to_inr, 300),
+    };
+  };
   return {
     revision: read.optionalNumber(body.revision),
+    status: {
+      fast: pipelineStatus(status.fast),
+      deep: pipelineStatus(status.deep),
+    },
+    history: read.array(body.history).map((item) => {
+      const change = read.object(item);
+      const fast = read.object(change.fast);
+      const deep = read.object(change.deep);
+      return {
+        revision: read.number(change.revision),
+        byPersonId: read.optionalString(change.by_person_id),
+        at: read.string(change.at),
+        fastCap: read.optionalNumber(fast.daily_cap_inr),
+        deepCap: read.optionalNumber(deep.daily_cap_inr),
+        fastOn: typeof fast.enabled === "boolean" ? fast.enabled : null,
+        deepOn: typeof deep.enabled === "boolean" ? deep.enabled : null,
+      };
+    }),
     config: {
       fast: pipeline(config.fast),
       deep: pipeline(config.deep),

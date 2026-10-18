@@ -329,3 +329,17 @@ def test_a_promise_says_its_date_once() -> None:
     assert display(promise, validate_value(promise, said)) == "Send the scope before July 23rd"
     other = {"text": "Send the scope", "due": {"text": "Friday"}}
     assert display(promise, validate_value(promise, other)) == "Send the scope · by Friday"
+
+
+def test_one_click_caps_step_through_the_presets() -> None:
+    from ac_platform.call_data.settings import CAP_PRESETS, raise_to
+
+    assert CAP_PRESETS == (150, 300, 400)
+    assert [raise_to(cap) for cap in (0, 150, 300, 400, 4950, 5000)] == [
+        150,
+        300,
+        400,
+        500,
+        5000,
+        5000,
+    ]
