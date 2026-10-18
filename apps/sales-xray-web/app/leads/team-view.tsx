@@ -32,6 +32,7 @@ import {
   type RepView,
   type Team,
 } from "./leads-client";
+import { CallsReport } from "./calls-report";
 import { phoneDot } from "./phone-setup-words";
 import styles from "./leads.module.css";
 
@@ -515,6 +516,8 @@ export function TeamView({
           </table>
         </div>
       </Panel>
+
+      <CallsReport />
 
       <div className={styles.teamPair}>
         <Panel

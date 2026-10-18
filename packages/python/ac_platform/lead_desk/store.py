@@ -12,7 +12,7 @@ import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal
 from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
@@ -36,7 +36,9 @@ from ac_platform.lead_desk.contracts import (
     PHONE_CHECKS,
     AlertText,
     Badge,
+    CallReport,
     Counts,
+    DayCalls,
     Desk,
     DeviceCommand,
     Disposition,
@@ -63,6 +65,7 @@ from ac_platform.lead_desk.contracts import (
     RepOption,
     RepRules,
     RepView,
+    SellerCalls,
     SettingsCommand,
     SettingsView,
     TakingLeads,
@@ -109,6 +112,8 @@ PHONE_DIRECTIONS = frozenset({"outgoing", "incoming", "missed", "rejected", "blo
 # workspace's Lead Desk settings, one entry per person. It is the app's own report,
 # not a manager's setting, so writing it never changes the settings revision.
 PHONES_KEY = "phones"
+# The calls report covers at most this many days at once.
+REPORT_DAYS = 92
 # A missed call waits on the desk this long for a call back.
 CALL_BACK_DAYS = 3
 # A dialer call this close to a call the app already logged is that same call.
@@ -1984,6 +1989,62 @@ class LeadDesk:
             waiting_first_call=waiting,
             first_call_minutes=median(everyone),
         )
+
+    async def call_report(self, start: date, end: date) -> CallReport:
+        """Calls, connected calls, talk time and missed calls per seller per day (India time).
+
+        Counted the way My day counts: a saved call result or a call the phone
+        logged by itself (out, or taken); talk time from every call; missed calls
+        are the leads' calls nobody picked up.
+        """
+        self._require_manager()
+        if end < start or (end - start).days >= REPORT_DAYS:
+            raise DeskError(422, f"Pick up to {REPORT_DAYS} days, ending after they start.")
+        days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+        begin = datetime.combine(start, time.min, tzinfo=IST).astimezone(UTC)
+        finish = datetime.combine(end + timedelta(days=1), time.min, tzinfo=IST).astimezone(UTC)
+        rows = (
+            await self.db.execute(
+                select(
+                    LeadEvent.actor_person_id, LeadEvent.kind, LeadEvent.data, LeadEvent.created_at
+                ).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind.in_(("call", "result")),
+                    LeadEvent.created_at >= begin,
+                    LeadEvent.created_at < finish,
+                    LeadEvent.actor_person_id.is_not(None),
+                )
+            )
+        ).all()
+        empty = {"calls": 0, "connected": 0, "talk_seconds": 0, "missed": 0}
+        tally: dict[UUID, dict[date, dict[str, int]]] = {}
+        for actor, kind, data, at in rows:
+            if not isinstance(data, dict):
+                continue
+            cell = tally.setdefault(actor, {}).setdefault(at.astimezone(IST).date(), dict(empty))
+            if kind == "result" or counted_phone_call(data):
+                cell["calls"] += 1
+                cell["connected"] += 1 if data.get("connected") else 0
+            if kind == "call":
+                cell["talk_seconds"] += int(data.get("duration_seconds") or 0)
+                cell["missed"] += 1 if missed_call(kind, data) else 0
+        sellers = []
+        for rep in await self._reps():
+            mine = tally.get(rep.state.person_id, {})
+            cells = [DayCalls(day=day, **mine.get(day, empty)) for day in days]
+            sellers.append(
+                SellerCalls(
+                    person_id=rep.state.person_id,
+                    name=rep.state.name,
+                    days=tuple(cells),
+                    calls=sum(cell.calls for cell in cells),
+                    connected=sum(cell.connected for cell in cells),
+                    talk_seconds=sum(cell.talk_seconds for cell in cells),
+                    missed=sum(cell.missed for cell in cells),
+                )
+            )
+        sellers.sort(key=lambda seller: (-seller.calls, seller.name.lower()))
+        return CallReport(start=start, end=end, sellers=tuple(sellers))
 
     async def save_rep(self, person_id: UUID, command: RepRules) -> Team:
         self._require_manager()

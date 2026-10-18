@@ -671,6 +671,36 @@ export function saveWorkHours(
   );
 }
 
+export type CallReport = {
+  start: string;
+  end: string;
+  sellers: {
+    person_id: string;
+    name: string;
+    days: {
+      day: string;
+      calls: number;
+      connected: number;
+      talk_seconds: number;
+      missed: number;
+    }[];
+    calls: number;
+    connected: number;
+    talk_seconds: number;
+    missed: number;
+  }[];
+};
+
+/** Calls by seller by day, India time (managers). */
+export function readCallReport(
+  start: string,
+  end: string,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ start, end });
+  return request<CallReport>(`/reports/calls?${query}`, { signal });
+}
+
 export function runSweep() {
   return request<{ moved: number }>("/sweep", { method: "POST" });
 }

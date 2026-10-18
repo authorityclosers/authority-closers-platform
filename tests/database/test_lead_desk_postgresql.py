@@ -1136,3 +1136,84 @@ def test_a_missed_call_from_a_lead_waits_on_the_desk_until_called_back(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_calls_by_seller_by_day(postgres_harness: Any, tmp_path: Path) -> None:
+    """Build list row 18, 18 Oct: managers see each seller's calls per day (India time)
+    for a date range, counted the way My day counts them; sellers can't read it."""
+    from ac_platform.lead_desk import hours
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            today = datetime.now(hours.IST).date()
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, seller_token)
+                await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Asha Rao",
+                        "phone": "98765 42222",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                now = datetime.now(UTC)
+                calls = [
+                    ("1", 3, "outgoing", 120),
+                    ("2", 2, "outgoing", 0),
+                    ("3", 1, "missed", 0),
+                ]
+                sent = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": str(uuid4()),
+                        "calls": [
+                            {
+                                "log_id": log_id,
+                                "number": "9876542222",
+                                "started_at": (now - timedelta(minutes=ago)).isoformat(),
+                                "duration_seconds": seconds,
+                                "direction": direction,
+                            }
+                            for log_id, ago, direction, seconds in calls
+                        ],
+                    },
+                    headers=WRITE,
+                )
+                assert sent.json()["logged"] == 3
+                query = {"start": str(today - timedelta(days=1)), "end": str(today)}
+                assert (await client.get(f"{BASE}/reports/calls", params=query)).status_code == 403
+
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                report = await client.get(f"{BASE}/reports/calls", params=query)
+                assert report.status_code == 200, report.text
+                rows = {row["person_id"]: row for row in report.json()["sellers"]}
+                mine = rows[str(seller.person_id)]
+                assert [day["day"] for day in mine["days"]] == [query["start"], query["end"]]
+                assert mine["days"][1] == {
+                    "day": query["end"],
+                    "calls": 2,
+                    "connected": 1,
+                    "talk_seconds": 120,
+                    "missed": 1,
+                }
+                assert (mine["calls"], mine["missed"]) == (2, 1)
+                assert rows[str(setup.state.person_id)]["calls"] == 0
+                too_long = {"start": str(today - timedelta(days=100)), "end": str(today)}
+                assert (
+                    await client.get(f"{BASE}/reports/calls", params=too_long)
+                ).status_code == 422
+                assert (
+                    await client.get(f"{BASE}/reports/calls", params={"start": "soon"})
+                ).status_code == 422
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

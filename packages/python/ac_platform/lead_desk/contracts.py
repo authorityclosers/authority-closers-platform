@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -258,6 +258,33 @@ class Team(Model):
     unassigned: int
     waiting_first_call: int
     first_call_minutes: int | None = None
+
+
+class DayCalls(Model):
+    day: date
+    calls: int
+    connected: int
+    talk_seconds: int
+    missed: int
+
+
+class SellerCalls(Model):
+    person_id: UUID
+    name: str
+    days: tuple[DayCalls, ...]
+    calls: int
+    connected: int
+    talk_seconds: int
+    missed: int
+
+
+class CallReport(Model):
+    """Calls by seller by day, India time (Salestrail's dashboard; NeoDove's user report)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    start: date
+    end: date
+    sellers: tuple[SellerCalls, ...]
 
 
 class ImportPreview(Model):

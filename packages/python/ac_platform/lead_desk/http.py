@@ -12,6 +12,7 @@ import json
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import date
 from typing import Any, Literal
 from urllib.parse import parse_qsl
 from uuid import UUID
@@ -35,6 +36,7 @@ from ac_platform.lead_desk.contracts import (
     AlertText,
     Badge,
     CallRecord,
+    CallReport,
     Desk,
     DeviceCommand,
     DeviceView,
@@ -425,6 +427,18 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.save_rep(person_id, command)
+
+    @router.get("/reports/calls", response_model=CallReport, response_model_by_alias=True)
+    async def call_report(request: Request, response: Response) -> CallReport:
+        """Calls by seller by day for a date range (managers; the page makes the CSV)."""
+        no_query(request, frozenset({"start", "end"}))
+        try:
+            start = date.fromisoformat(request.query_params.get("start", ""))
+            end = date.fromisoformat(request.query_params.get("end", ""))
+        except ValueError:
+            raise HTTPException(422, "Pick a start and an end date.", headers=PRIVATE) from None
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.call_report(start, end)
 
     @router.put("/me/taking", response_model=Me, response_model_by_alias=True)
     async def set_taking(command: TakingLeads, request: Request, response: Response) -> Me:
