@@ -28,10 +28,12 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { readCallProspect } from "../prospect-report-facts";
 import {
+  factsFromCallData,
   factsFromCallReview,
   factsFromReport,
   factsFromSavedProspect,
   prospectFacts,
+  readCallDataFacts,
   type InsightKind,
   type ProspectFact,
   type ProspectFacts,
@@ -576,14 +578,41 @@ export function ProspectPart({
     return () => controller.abort();
   }, [callId, attempt, signedIn]);
 
+  // The call data engine's facts (v0.65+); none when the server has no engine yet.
+  const [callData, setCallData] = useState<{
+    callId: string;
+    payload: unknown;
+  } | null>(null);
+  useEffect(() => {
+    if (!callId || !signedIn) return;
+    const controller = new AbortController();
+    readCallDataFacts(callId, controller.signal)
+      .then((payload) => {
+        if (!controller.signal.aborted) setCallData({ callId, payload });
+      })
+      .catch(() => {
+        // Optional source: the section keeps its other sources.
+      });
+    return () => controller.abort();
+  }, [callId, attempt, signedIn]);
+  const engine =
+    callData && callData.callId === callId ? callData.payload : null;
+
   const current = loaded && loaded.callId === callId ? loaded : null;
   const prospect = current?.state === "linked" ? current.prospect : null;
   const facts = useMemo(() => {
     const step = view.outcome.nextSteps.find((item) => item.date) ?? null;
     const open = view.outcome.objections.find((item) => !item.handled);
+    const { insights: engineInsights, ...engineFacts } = factsFromCallData(
+      engine,
+      data.transcript,
+    );
     return prospectFacts(
       factsFromSavedProspect(prospect, data.transcript),
+      engineFacts,
       factsFromCallReview(data.report?.structure, data.transcript),
+      // The review writes whole sentences; the engine's insights fill in after it.
+      { insights: engineInsights },
       factsFromReport({
         deal: view.outcome.kind
           ? DEAL_WORDS[view.outcome.kind]
@@ -595,7 +624,7 @@ export function ProspectPart({
           : null,
       }),
     );
-  }, [prospect, data.report, data.transcript, view.outcome]);
+  }, [prospect, engine, data.report, data.transcript, view.outcome]);
 
   if (!data.report) return null;
   if (callId && signedIn && !current) return <Skeleton />;

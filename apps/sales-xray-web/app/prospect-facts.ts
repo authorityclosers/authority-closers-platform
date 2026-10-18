@@ -313,3 +313,158 @@ export function prospectFacts(
     reviewed: sources.some((source) => source.reviewed),
   };
 }
+
+/** The call data engine's prospect facts for one call (GET, prospect-facts/1). */
+export const CALL_DATA_FACTS_API = "/v1/sales-xray/call-data/prospect-facts";
+
+/** Engine fact types for each section fact (taxonomy call-taxonomy/2). */
+const CALL_DATA_FACTS: Partial<Record<FactKey, readonly string[]>> = {
+  name: ["person.name"],
+  role: ["person.role"],
+  company: ["company.name"],
+  revenue: ["company.revenue"],
+  teamSize: ["company.team_size"],
+  industry: ["company.industry"],
+  problem: ["need.primary_pain", "need.pain"],
+  wants: ["need.goal"],
+  stopping: ["friction.blocker"],
+  personal: ["person.personal_context"],
+};
+const CALL_DATA_INSIGHTS: Record<string, InsightKind> = {
+  "company.location": "business",
+  "money.investment_discussed": "investment",
+  "money.budget": "investment",
+  "market.alternative": "alternative",
+  "market.competitor": "alternative",
+  "market.past_attempt": "team",
+  "decision.timeline": "timeline",
+  "decision.approver": "other",
+  "friction.question": "question",
+  "commitment.seller_promise": "promise",
+};
+
+/**
+ * Source: the call data engine (prospect-facts/1). A person's accept or edit
+ * there shows as theirs; an inferred fact as the AI's read; the rest as said
+ * on the call. Each fact keeps its quote and time. An older server without
+ * the engine, or a call it has not read, gives nothing.
+ */
+export function factsFromCallData(
+  payload: unknown,
+  transcript: Transcript | undefined,
+): ProspectFactsSource {
+  if (!isRecord(payload) || payload.schema !== "prospect-facts/1") return {};
+  const rows = Array.isArray(payload.facts)
+    ? payload.facts.filter(isRecord)
+    : [];
+  const byId = new Map((transcript?.segments ?? []).map((s) => [s.id, s]));
+  const evidence = (value: unknown): ReportEvidence[] =>
+    (Array.isArray(value) ? value : []).flatMap((ref) => {
+      if (!isRecord(ref)) return [];
+      const quote = text(ref.quote, 600);
+      const segment = byId.get(String(ref.segment_id));
+      const start = segment?.start_ms ?? ref.start_ms;
+      const end = segment?.end_ms ?? ref.end_ms;
+      return quote &&
+        Number.isSafeInteger(start) &&
+        Number.isSafeInteger(end) &&
+        (end as number) >= (start as number)
+        ? [
+            {
+              segment_id: String(ref.segment_id ?? ""),
+              quote,
+              start_ms: start as number,
+              end_ms: end as number,
+            },
+          ]
+        : [];
+    });
+  const basis = (row: Record<string, unknown>): FactBasis =>
+    row.basis === "confirmed" || row.basis === "edited"
+      ? "person"
+      : row.basis === "inferred" || row.ai_read === true
+        ? "ai_read"
+        : "call";
+  const ofType = (types: readonly string[]) =>
+    types
+      .map((type) =>
+        rows.find((row) => row.type === type && text(row.display, 240)),
+      )
+      .find(Boolean);
+  const source: ProspectFactsSource = {};
+  for (const [key, types] of Object.entries(CALL_DATA_FACTS) as [
+    FactKey,
+    readonly string[],
+  ][]) {
+    const row = ofType(types);
+    if (row)
+      source[key] = {
+        value: text(row.display, 240),
+        basis: basis(row),
+        evidence: evidence(row.evidence),
+      };
+  }
+  const follow = ofType(["commitment.follow_up"]);
+  if (follow) {
+    const value = isRecord(follow.value) ? follow.value : {};
+    const when =
+      [friendlyDate(text(value.date, 40)), friendlyTime(text(value.time, 20))]
+        .filter(Boolean)
+        .join(" · ") || text(follow.display, 60);
+    source.followUp = {
+      when,
+      about: text(value.purpose, 120),
+      evidence: evidence(follow.evidence),
+    };
+  }
+  const insights = rows.flatMap((row) => {
+    const kind = CALL_DATA_INSIGHTS[String(row.type)];
+    const words = text(row.display, 240);
+    const refs = evidence(row.evidence);
+    return kind && words && refs.length
+      ? [{ kind, text: words, evidence: refs }]
+      : [];
+  });
+  if (insights.length) source.insights = insights.slice(0, 8);
+  return source;
+}
+
+/** "2026-07-15" → "Wed, 15 Jul"; anything else as written. */
+function friendlyDate(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("en-GB", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      });
+}
+
+/** "16:00" → "4:00 pm"; anything else as written. */
+function friendlyTime(value: string | null) {
+  const match = value ? /^(\d{1,2}):(\d{2})$/.exec(value) : null;
+  if (!match) return value;
+  const hours = Number(match[1]);
+  return `${hours % 12 || 12}:${match[2]} ${hours < 12 ? "am" : "pm"}`;
+}
+
+/** Read the engine's facts for one call; null when the server has no engine yet. */
+export async function readCallDataFacts(
+  callId: string,
+  signal: AbortSignal,
+): Promise<unknown> {
+  const response = await fetch(
+    `${CALL_DATA_FACTS_API}?call_id=${encodeURIComponent(callId)}`,
+    {
+      credentials: "same-origin",
+      redirect: "error",
+      cache: "no-store",
+      headers: { accept: "application/json" },
+      signal,
+    },
+  );
+  if (!response.ok) return null;
+  return response.json();
+}
