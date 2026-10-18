@@ -339,3 +339,8 @@
     font-size: 21px;
   }
 }
+
+.fact dd .unknown {
+  font-size: 13px;
+  font-weight: 500;
+}

@@ -133,5 +133,54 @@ it("shows a skeleton while reading, then a call-only note without a prospect", a
   const text = host.textContent ?? "";
   expect(text).toContain("isn’t saved to a prospect yet");
   expect(text).toContain("Appears once the call is scored");
-  expect(host.querySelectorAll("button")).toHaveLength(0);
+  // Confirm saves this call as a prospect first, then the fact.
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${path}`);
+      return init?.method === "PUT"
+        ? new Response(null, { status: 204 })
+        : Response.json({});
+    }),
+  );
+  vi.mocked(readCallProspect).mockResolvedValue({
+    prospect_id: PROSPECT,
+    name: "Prospect — name not heard",
+    revision: 1,
+    owner_person_id: PROSPECT,
+    stage: null,
+    tags: [],
+    photo_url: null,
+    contact: null,
+    fields: [],
+    buyer_intent: null,
+    next_step: null,
+    last_promise: null,
+    call_count: 1,
+    last_call: null,
+    profile_fields: {},
+    can_edit: true,
+  });
+  const add = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Add",
+  );
+  expect(add).toBeDefined();
+  await act(async () => add!.click());
+  const input = host.querySelector<HTMLInputElement>("form input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "XYZ Digital");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    input.form!.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+  });
+  await flush();
+  expect(calls[0]).toBe(`POST /v1/conversation/prospects/calls/${CALL}/create`);
+  expect(calls[1]).toBe(`PUT /v1/conversation/prospects/${PROSPECT}/fields`);
 });

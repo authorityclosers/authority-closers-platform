@@ -65,6 +65,22 @@ async function loadProspect(callId: string, signal: AbortSignal) {
   return readCallProspect(callId, signal);
 }
 
+const NO_NAME = "Prospect — name not heard";
+
+/** Save this call as a new prospect (the Report's own create step). */
+async function createProspect(callId: string, name: string) {
+  const response = await fetch(`${PROSPECTS_API}/calls/${callId}/create`, {
+    method: "POST",
+    credentials: "same-origin",
+    redirect: "error",
+    cache: "no-store",
+    headers: { accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify({ display_name: name.slice(0, 160) }),
+  });
+  if (!response.ok) return null;
+  return readCallProspect(callId, new AbortController().signal);
+}
+
 const DEAL_TONE: Record<string, string> = {
   Won: xr.green,
   Lost: xr.red,
@@ -591,13 +607,31 @@ export function ProspectPart({
           );
           setAttempt((count) => count + 1);
         }
-      : undefined;
+      : current?.state === "none" && callId
+        ? // The first Confirm or Edit saves this call as a prospect, then the fact.
+          async (fact: ProspectFact, value: string) => {
+            if (!fact.editKey) return;
+            const name =
+              fact.editKey === "name" ? value : (facts.name.value ?? NO_NAME);
+            const created = await createProspect(callId, name);
+            if (!created)
+              throw new Error("Couldn’t save this prospect. Try again.");
+            if (fact.editKey !== "name")
+              await editProspectField(
+                created.prospect_id,
+                created.revision,
+                fact.editKey,
+                value,
+              );
+            setAttempt((count) => count + 1);
+          }
+        : undefined;
   const note =
     current?.state === "linked" ? null : (
       <p className={styles.note}>
         {current?.state === "unavailable"
           ? "The saved prospect couldn’t be read just now, so this shows what this call established."
-          : "This call isn’t saved to a prospect yet, so this shows what this call established."}{" "}
+          : "This call isn’t saved to a prospect yet, so this shows what this call established. Confirm or edit a fact to save it."}{" "}
         <Link href="/prospects">Open Prospects</Link>
       </p>
     );
