@@ -192,6 +192,11 @@ it("restarts the dismissed guide from Help & support", async () => {
     '[role="switch"][aria-label="First call guide"]',
   )!;
   expect(toggle.getAttribute("aria-checked")).toBe("false");
+  // One pane inside a Settings section: the section's title names it, so
+  // the pane draws no second title.
+  expect(
+    host.querySelector('section[aria-label="Help & support"] h2'),
+  ).toBeNull();
   await act(async () => toggle.click());
   await flush();
   expect(new GuideProgressStore("p", FIRST_CALL_GUIDE).getSnapshot()).toEqual({

@@ -151,6 +151,7 @@ it("builds each section from the existing screens, with only its own parts", asy
   expect(
     seen.account.map((props) => (props as { only: string[] }).only),
   ).toEqual([["profile", "general"], ["usage", "billing"], ["security"]]);
+  await render("organisation");
   await render("team");
   await render("apps");
   await render("developers");
@@ -164,6 +165,8 @@ it("builds each section from the existing screens, with only its own parts", asy
   expect(
     organisation.map((props) => [props.sections, props.integrationParts]),
   ).toEqual([
+    // The company's details; the overview stays at /organisation.
+    [["company"], undefined],
     [["members"], undefined],
     [["integrations"], ["keys", "webhook", "handover", "apps"]],
     [["integrations"], ["ai"]],

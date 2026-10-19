@@ -120,7 +120,7 @@ export function SettingsSectionView({ id }: { id: SettingsSectionId }) {
     case "help":
       return <AccountSettings only={["help"]} />;
     case "organisation":
-      return <OrganisationView embedded sections={["company", "overview"]} />;
+      return <OrganisationView embedded sections={["company"]} />;
     case "team":
       return <OrganisationView embedded sections={["members"]} />;
     case "apps":

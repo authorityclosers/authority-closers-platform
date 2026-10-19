@@ -767,6 +767,11 @@ function StandaloneStudioView({
             active={activeFor(pathname)}
             mobileFit={studioPath || callPath}
             heroStage={studioPath ? "welcome" : undefined}
+            pageName={
+              pathname === "/settings" || pathname?.startsWith("/settings/")
+                ? "Settings"
+                : undefined
+            }
           >
             {/* The page's own skeleton where it has one, so nothing moves. */}
             {pathname === "/organisation" ? (

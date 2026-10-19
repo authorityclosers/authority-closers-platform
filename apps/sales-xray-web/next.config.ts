@@ -117,12 +117,12 @@ const config: NextConfig = {
               destination: "/analysis/calls",
               permanent: false,
             },
-            // The organisation's tabs live in Settings (owner, 20 Oct).
+            // The organisation's settings live in Settings (owner, 20 Oct);
+            // its overview stays at /organisation.
             ...(
               [
                 ["members", "/settings/team"],
                 ["company", "/settings/organisation"],
-                ["overview", "/settings/organisation"],
                 ["integrations", "/settings/developers"],
               ] as const
             ).map(([tab, destination]) => ({
@@ -131,12 +131,6 @@ const config: NextConfig = {
               destination,
               permanent: false,
             })),
-            {
-              source: "/organisation",
-              missing: [{ type: "query" as const, key: "tab" }],
-              destination: "/settings/organisation",
-              permanent: false,
-            },
             {
               source: "/",
               has: [

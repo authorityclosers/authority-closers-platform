@@ -499,7 +499,7 @@ export function OrganisationView({
                 memberCount={memberCount}
                 team={canManage}
                 onInvite={() =>
-                  embedded && router
+                  (embedded || sections) && router
                     ? router.push("/settings/team")
                     : setTab("members")
                 }

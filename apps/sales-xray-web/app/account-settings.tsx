@@ -614,20 +614,22 @@ function Pane({
       hidden={only ? !only.includes(id) : active !== id}
       className={styles.pane}
     >
-      <div className={styles.paneHead}>
-        {only ? null : (
-          <button
-            type="button"
-            className={styles.back}
-            aria-label="Back to settings"
-            onClick={onBack}
-          >
-            <ChevronLeft size={20} aria-hidden="true" />
-          </button>
-        )}
-        <h2>{title}</h2>
-        <span className={styles.paneAction}>{action}</span>
-      </div>
+      {only?.length === 1 && !action ? null : (
+        <div className={styles.paneHead}>
+          {only ? null : (
+            <button
+              type="button"
+              className={styles.back}
+              aria-label="Back to settings"
+              onClick={onBack}
+            >
+              <ChevronLeft size={20} aria-hidden="true" />
+            </button>
+          )}
+          <h2>{title}</h2>
+          <span className={styles.paneAction}>{action}</span>
+        </div>
+      )}
       <div className={styles.rows}>{children}</div>
     </section>
   );

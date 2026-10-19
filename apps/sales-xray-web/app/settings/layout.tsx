@@ -14,6 +14,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
       authenticated={access?.authenticated === true}
       homeHref="/"
       active="account"
+      pageName="Settings"
       mobileFit={false}
     >
       <SettingsShell>{children}</SettingsShell>
