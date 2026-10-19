@@ -1,8 +1,8 @@
 [Unit]
-Description=Collect Sales X-Ray usage metrics every 15 minutes
+Description=Collect Sales X-Ray usage metrics every 5 minutes (budget alerts follow)
 
 [Timer]
-OnCalendar=*:2/15
+OnCalendar=*:0/5
 RandomizedDelaySec=60
 Persistent=true
 

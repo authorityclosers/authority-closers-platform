@@ -17,6 +17,7 @@ from sqlalchemy import select
 from ac_platform.conversation_intelligence.application import (
     AUDIOATLAS_HOSTED_RECIPE,
     AUDIOATLAS_RECIPES,
+    BudgetCapReached,
     ConversationApplication,
     ConversationConflict,
     ConversationDenied,
@@ -30,6 +31,7 @@ from ac_platform.conversation_intelligence.checkpoints import (
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
+    BudgetExhausted,
     ExecutionPermission,
     MinuteAccount,
     Quote,
@@ -600,6 +602,10 @@ class ConversationInference:
                 int(now.timestamp()),
                 release_cap_paise=release_cap_paise,
             )
+        except BudgetExhausted:
+            raise BudgetCapReached(
+                "The approved quote or remaining allowance is unavailable."
+            ) from None
         except ValueError:
             raise ConversationConflict(
                 "The approved quote or remaining allowance is unavailable."

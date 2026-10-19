@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
+import { ReviewAlertsCard } from "./review-alerts-card";
 import { markReviewSeen, publishReviewBadge } from "./review-badge";
 import {
   callName,
@@ -187,6 +188,7 @@ export function ReviewRoute() {
                 <BarChart3 size={14} aria-hidden="true" /> Figures
               </Link>
             </div>
+            <ReviewAlertsCard />
             <div className={styles.tiles}>
               <div className={styles.tile} data-tone="accent">
                 <b>{queue.calls_left}</b>

@@ -96,3 +96,103 @@ opens `/leads…`. A review push needs:
 
 Until then, the alerts are the in-app chip, the corner card, and the Pulse
 subtask per assignment (`ac-pulse-gold-bridge`, Align).
+
+## Push to the phone — built (19 Oct)
+
+Server (`lead_desk/review_push.py`, wired in `lead_desk/push.attach`):
+
+- A separate bounded reader in the API, beside the Lead Desk sender. The gold
+  reader job is unchanged and stays provider-free.
+- Every 30 seconds, under advisory lock 1802/1264, it finds gold assignments
+  from the last two hours that were not alerted yet. It skips revoked
+  reviewers, revoked or expired assignments, and deleted calls. It sends only
+  to reviewers who have a registered phone: the `LeadDevice` tokens of that
+  person in any workspace, with each phone sent once.
+- The FCM data carries ids and a count only:
+  `{type: gold_review, kind: one|many, assignment, alerts, count}`. `count` is
+  the reviewer's waiting number from the review badge.
+- Each alerted assignment gets one append-only audit event,
+  `conversation.gold_review_alerted`, in the call's workspace chain. That is
+  also the "already sent" record, so there are no table changes. Dead phone
+  tokens are forgotten.
+- Assignments from one reader pass become one push, so a first designation
+  buzzes once with "N Reports to review" instead of up to twenty times.
+- It is off until `AC_FCM_*` exist. Dev has them; production does not yet.
+
+Phone app (`authorityclosers/sales-xray-apps`, branch `gold-review-alerts`):
+
+- `type=gold_review` gets its own "Review alerts" channel.
+- The words come from `GET /v1/sales-xray/review/badge` on the reviewer's own
+  session.
+- The alert opens `/review#call=<assignment>`, or `/review` for several.
+- Alerts may only open `/leads` or the review pages.
+- An APK publish needs the owner's `android-release` approval.
+
+Checks on ac:
+
+- `tests/database/test_gold_review_push_postgresql.py`, run with fictional data
+  and a fake FCM transport: 3 passed. They prove one push per new assignment
+  to the reviewer's phones only, never to the seller, never twice, and nothing
+  older than two hours. Dead tokens are dropped, and a revoked reviewer gets
+  nothing.
+- Together with `test_sales_xray_review_postgresql`, `test_gold_reviews_postgresql`
+  and the Lead Desk tests: 45 passed and 1 failed. The failure is
+  `test_empty_gold_migration_downgrade_and_reupgrade`. Its metadata diff
+  includes check constraints on `conversation_report_settings_events` (0098,
+  7df03d79), a table this change does not touch.
+- Ruff, format and mypy are clean.
+
+Dev proof: `strikes/1801/gold-push-dev-proof-20261019.{py,log}`.
+
+- It replays every real dev reader pass through the sender, with a fake phone
+  per standing reviewer and a fake FCM transport, in one transaction that is
+  rolled back.
+- Result: 35 assignments came from 3 passes, which made 3 pushes (19, 15 and
+  1 new Reports). Each assignment was recorded exactly once, and a later pass
+  sent nothing.
+- After the rollback, no proof device or audit row was left.
+- `count` shows today's total in this replay.
+
+The reviewer's phone must be registered once. Today that happens through
+Leads → "Turn on alerts" in the Android app, inside an organisation workspace.
+
+## Turn on review alerts from /review (19 Oct)
+
+A reviewer can now turn on alerts where they review. Leads and an
+organisation workspace are not needed.
+
+- **Card on /review:** shown only inside the Android app, under the title,
+  once. It says "Know when a new Report is ready" and has a "Turn on alerts"
+  button.
+  - If the phone refuses notifications, it says how to allow them.
+  - "Not now" hides it on this phone.
+  - When alerts are already on, it shows nothing and quietly re-sends the
+    phone's current alert address.
+- **`GET /v1/sales-xray/review/push`:** the app's Firebase client settings
+  (public, no secrets). Standing gold reviewers get them; everyone else gets
+  `enabled: false`, so the card never shows.
+- **`POST /v1/sales-xray/review/devices`** (same-origin, standing reviewers
+  only):
+  - It uses `review_push.register_phone`, which reuses Lead Desk's phone
+    registration (one owner per phone, newest five per person).
+  - The phone is kept under the reviewer's operations or public learner
+    workspace when they have one, so review alerts never turn on lead alerts.
+    Otherwise their current workspace, otherwise any active one.
+  - With no active workspace at all, it refuses with a plain message.
+
+Checks on ac:
+
+- `test_gold_review_push_postgresql`: 4 passed, including a new registration
+  test (a non-reviewer is refused; a quiet workspace comes first).
+  `test_sales_xray_review_postgresql`: 3 passed.
+- The API module imports, and both routes build their OpenAPI.
+- Ruff, format and mypy are clean.
+- Web: vitest `app/review` (with the review fixtures) has 9 files and
+  34 tests, all passed; 6 of them are new card tests. Prettier and ESLint are
+  clean, and `tsc --noEmit` exits 0.
+- Captures: `strikes/1801/shots/2026-10-19/alerts/`.
+  - Real /review on the workbench dev server, inside a stand-in phone app
+    (SXPhone bridge and app user agent), with fictional data.
+  - 390 px, light and dark: the offer, after turning on (the card is gone and
+    one registration was sent), and refused (no registration).
+  - No overflow and no page errors.
