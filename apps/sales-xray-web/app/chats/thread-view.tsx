@@ -32,6 +32,7 @@ import {
 import { LeadsError } from "../leads/leads-client";
 import { notify } from "../notice-center";
 import { Skeleton } from "../ui/kit";
+import { AiChip, useLeadAiState } from "./ai-chip";
 import { ChatAvatar } from "./channel-mark";
 import {
   attachmentLabel,
@@ -45,6 +46,7 @@ import {
   type ChatThread,
 } from "./chats-client";
 import styles from "./chats.module.css";
+import { OptInBox, TemplateComposer } from "./template-composer";
 import { Ticks } from "./ticks";
 
 const POLL_MS = 8000;
@@ -162,6 +164,7 @@ function Composer({
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const ai = useLeadAiState(leadId);
   const state = composerState(detail);
   const send = async () => {
     const words = text.trim();
@@ -215,6 +218,22 @@ function Composer({
         <p className={styles.windowLine} data-tone={state.tone}>
           {state.line}
         </p>
+      ) : null}
+      {detail.channel === "whatsapp" && !detail.windowOpen ? (
+        detail.optedIn ? (
+          <TemplateComposer detail={detail} leadId={leadId} onSent={onSent} />
+        ) : (
+          <OptInBox leadId={leadId} onSaved={onSent} />
+        )
+      ) : null}
+      {state.canWrite ? (
+        <AiChip
+          ai={ai}
+          leadId={leadId}
+          channel={detail.channel}
+          accountId={detail.accountId}
+          onDraft={setText}
+        />
       ) : null}
       {state.canWrite ? (
         <div className={styles.composeBox}>

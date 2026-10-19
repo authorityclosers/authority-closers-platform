@@ -1447,3 +1447,190 @@
   outline: 2px solid transparent;
   box-shadow: var(--sx-focus-ring);
 }
+
+/* ---------- WhatsApp templates and opt-in ---------- */
+
+.composeNote {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.templateBox {
+  display: grid;
+  gap: 8px;
+}
+
+.templatePick {
+  display: grid;
+  gap: 4px;
+}
+
+.templatePick span,
+.templatePreview span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.templatePick select,
+.templateParts input,
+.optIn input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.templatePick select:focus,
+.templateParts input:focus,
+.optIn input:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.templateParts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.templatePreview {
+  display: grid;
+  gap: 4px;
+  max-height: 132px;
+  padding: 8px 12px;
+  overflow-y: auto;
+  border-radius: 12px 12px 4px 12px;
+  background: color-mix(in oklab, var(--lx-teal) 12%, var(--sx-surface));
+}
+
+.templatePreview p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: 1.42;
+  white-space: pre-wrap;
+}
+
+.templateSend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lx-gradient-primary, var(--sx-accent));
+  color: var(--sx-accent-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.templateSend:disabled {
+  background: var(--sx-sunken);
+  color: var(--sx-muted);
+  cursor: default;
+}
+
+.optIn {
+  display: flex;
+  gap: 8px;
+}
+
+.optIn input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+}
+
+/* ---------- AI suggested reply ---------- */
+
+.aiRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.aiChip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in oklab, var(--lx-missed) 35%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(
+    120deg,
+    color-mix(in oklab, var(--lx-missed) 12%, var(--sx-surface)),
+    color-mix(in oklab, var(--lx-teal) 12%, var(--sx-surface))
+  );
+  color: var(--lx-missed-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.aiChip[aria-busy="true"] {
+  cursor: progress;
+  animation: chats-breathe 1.4s ease-in-out infinite;
+}
+
+.aiNote {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  line-height: 1.4;
+}
+
+.aiNote[data-tone="warn"] {
+  color: var(--lx-focus-ink);
+}
+
+.aiNote[data-tone="accent"] {
+  color: var(--lx-strength-ink);
+}
+
+.templateSend:focus-visible,
+.aiChip:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@keyframes chats-breathe {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aiChip[aria-busy="true"] {
+    animation: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .aiChip {
+    min-height: 40px;
+  }
+
+  .templatePick select,
+  .templateParts input,
+  .optIn input {
+    min-height: 44px;
+  }
+}

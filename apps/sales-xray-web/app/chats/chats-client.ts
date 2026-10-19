@@ -243,6 +243,7 @@ export type ChatDetail = {
   /** WhatsApp only: the approved templates and the person's opt-in. */
   templates: WaTemplate[];
   optedIn: boolean;
+  optInHow?: string | null;
   /** Other conversations with this lead on the same channel (another Page). */
   others: { accountId: string; place: string }[];
 };
@@ -313,6 +314,7 @@ function fromWhatsApp(chat: WaConversation): ChatDetail {
       (template) => template.status === "APPROVED",
     ),
     optedIn: Boolean(chat.optedIn),
+    optInHow: chat.optInHow ?? null,
     others: [],
   };
 }
@@ -358,6 +360,41 @@ export async function sendText(
   return fromSocial(next, detail.channel, detail.accountId);
 }
 
+/** Send an approved WhatsApp template, its parts filled in. */
+export async function sendTemplate(
+  leadId: string,
+  template: Pick<WaTemplate, "name" | "language">,
+  values: string[],
+): Promise<ChatDetail> {
+  return fromWhatsApp(
+    await sendWhatsApp(leadId, {
+      template: template.name,
+      language: template.language,
+      values,
+    }),
+  );
+}
+
+/** They said yes to WhatsApp: note how, so a template may go to them. */
+export async function recordOptIn(
+  leadId: string,
+  how: string,
+): Promise<ChatDetail> {
+  return fromWhatsApp(
+    await waCall<WaConversation>(
+      `/leads/${encodeURIComponent(leadId)}/whatsapp/opt-in`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          commandId: crypto.randomUUID(),
+          agreed: true,
+          how: how.trim() || "Told the seller",
+        }),
+      },
+    ),
+  );
+}
+
 /** Who can write now, and why not when they can't, in plain words. */
 export function composerState(
   detail: ChatDetail,
@@ -380,7 +417,9 @@ export function composerState(
   if (detail.channel === "whatsapp")
     return {
       canWrite: false,
-      line: "Their last message is more than 24 hours old, so WhatsApp only lets you send an approved template until they write again.",
+      line: detail.optedIn
+        ? "Their last message is more than 24 hours old, so WhatsApp only lets you send an approved template until they write again."
+        : "Their last message is more than 24 hours old. WhatsApp lets you send a template only to someone who agreed to hear from you: when they say yes, note how below.",
       tone: "warn",
     };
   if (detail.humanAgent)
