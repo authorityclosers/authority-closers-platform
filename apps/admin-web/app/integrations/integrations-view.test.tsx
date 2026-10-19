@@ -138,6 +138,9 @@ it("shows counts, keys by prefix, webhooks by host and stop actions only on live
   expect(text).toContain("https://hooks.birch.example");
   expect(text).toContain("3 failed in 24 h");
   expect(text).toContain("Dialer One");
+  expect(text).toContain("Never used");
+  expect(text).toContain("not used yet");
+  expect(text).not.toContain("Last used Never");
   expect(text).toContain("Customer");
   expect(text).toContain("Our company");
   const revoke = [...host.querySelectorAll("button")].filter((button) =>

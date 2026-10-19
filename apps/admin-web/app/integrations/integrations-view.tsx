@@ -48,7 +48,7 @@ function keyUse(key: ApiKey): string {
   if (key.state === "revoked")
     return `Revoked ${ago(key.revokedAt, "")}${key.revokedBy ? ` by ${key.revokedBy}` : ""}`;
   if (key.state === "expired") return `Expired ${ago(key.expiresAt, "")}`;
-  return `Last used ${ago(key.lastUsedAt)}`;
+  return key.lastUsedAt ? `Last used ${when(key.lastUsedAt)}` : "Never used";
 }
 
 function delivery(hook: Webhook): string {
@@ -305,7 +305,7 @@ export function IntegrationsView({ data }: { data: Integrations }) {
                         <small className={styles.muted}>
                           {connection.revokedAt
                             ? `Disconnected ${when(connection.revokedAt)}`
-                            : `Connected ${ago(connection.createdAt, "")} · last used ${ago(connection.lastUsedAt)}`}
+                            : `Connected ${ago(connection.createdAt, "")} · ${connection.lastUsedAt ? `last used ${when(connection.lastUsedAt)}` : "not used yet"}`}
                         </small>
                       </li>
                     ))}

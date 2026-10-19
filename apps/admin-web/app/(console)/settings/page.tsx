@@ -5,6 +5,10 @@ import { adminRead } from "@/app/lib/server-api";
 import { normalizeCallData } from "@/app/sales-xray/call-data-model";
 import { normalizeReportSettings } from "@/app/sales-xray/report-settings-data";
 import {
+  normalizePipelineSettings,
+  reviewArea,
+} from "@/app/settings/review-pipelines-data";
+import {
   analysisArea,
   callDataArea,
   executionArea,
@@ -23,7 +27,7 @@ export const dynamic = "force-dynamic";
  * the reads their own pages use, each with its last change and a Change link.
  */
 export default async function SettingsPage() {
-  const [providers, analysis, execution, budget, callData, report] =
+  const [providers, analysis, execution, budget, callData, report, review] =
     await Promise.all([
       adminRead("/v1/admin/conversation/providers", read.object),
       adminRead("/v1/admin/conversation/analysis-settings", read.object),
@@ -34,6 +38,10 @@ export default async function SettingsPage() {
         "/v1/admin/conversation/report-settings",
         normalizeReportSettings,
       ),
+      adminRead(
+        "/v1/admin/conversation/review/pipelines",
+        normalizePipelineSettings,
+      ),
     ]);
   const areas: SettingsArea[] = [
     providerArea(providers),
@@ -41,6 +49,7 @@ export default async function SettingsPage() {
     executionArea(execution, budget),
     callDataArea(callData),
     reportArea(report),
+    reviewArea(review),
   ];
   const settings = areas.reduce((sum, item) => sum + item.rows.length, 0);
   const missing = areas.filter((item) => item.unavailable).length;
