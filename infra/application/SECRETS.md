@@ -115,6 +115,29 @@ Infisical presence reaches a container. Check names and availability only.
 See [the ingress and rollout packet](BILLING_INGRESS.md) for the fixed proposed
 UTC instant, production hold, release checks and rollback boundary.
 
+## Sales Xray sign-in with Facebook and Apple (optional)
+
+The API reads these from the same Infisical `/application` path (dev:
+`/sales-xray-dev`). Each provider shows on the Sales Xray sign-in screen only
+once all its settings exist and are valid; missing or malformed values keep it
+off and never stop the API. No release requires them. Compose forwards them to
+the API only.
+
+| Secret                         | Constraint                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `AC_FACEBOOK_LOGIN_APP_ID`     | numeric App ID of that environment's "Sales Xray Sign-in" app (production the parent, staging and dev test apps) |
+| `AC_FACEBOOK_LOGIN_APP_SECRET` | that same app's App Secret; redirect URI `<Sales Xray URL>/v1/auth/facebook/callback`                       |
+| `AC_APPLE_SIGN_IN_SERVICE_ID`  | the Sign in with Apple Services ID; return URL `<Sales Xray URL>/v1/auth/apple/callback`                    |
+| `AC_APPLE_SIGN_IN_TEAM_ID`     | the 10-character Apple Team ID                                                                               |
+| `AC_APPLE_SIGN_IN_KEY_ID`      | the 10-character ID of the Sign in with Apple key                                                            |
+| `AC_APPLE_SIGN_IN_PRIVATE_KEY` | that key's `.p8` file: PEM, PEM with `\n`, or base64 of the file                                            |
+
+`AC_FACEBOOK_LOGIN_GRAPH_VERSION` is optional and not secret (default `v23.0`).
+Never copy a production value into staging or dev. On hosts behind Cloudflare
+Access (dev, staging), `POST /v1/auth/apple/callback` needs an Access bypass:
+Apple posts it cross-site. Setup: `docs/product/identity/facebook-login-app.md`
+and `docs/product/identity/apple-sign-in.md`.
+
 ## Sales Xray CRM lead sources (optional)
 
 The API reads these from the same Infisical `/application` path. The Meta Lead
