@@ -24,11 +24,18 @@ lead capture (see `meta-apps.md`).
 
 | | App | Type | Where |
 | --- | --- | --- | --- |
-| production | **Sales Xray Messaging** (parent) | Business | Authority Closers portfolio 1027309697060163 |
+| production | **Sales Xray Messaging** (parent), app ID **856472050863115** | Business | Authority Closers portfolio 1027309697060163 |
 | staging | Sales Xray Messaging - staging (test app) | from the parent | same |
 | dev | Sales Xray Messaging - dev (test app) | from the parent | same |
 
 The settings keep their `AC_WHATSAPP_*` names (section 5): they are this app's.
+
+Created by the orchestrator on 19 Oct 2026 with three use cases (WhatsApp, Messenger,
+Instagram), in development mode; basic settings filled (privacy, terms and data-deletion
+URLs, domain salesxray.authorityclosers.com, category Business, contact admin@). Still
+to do there: the icon, the dev and staging test apps, the Embedded Signup and the
+Messenger and Instagram login configurations, the app secret into Infisical, the
+verify token and the webhooks.
 
 Business verification of Authority Closers is done (16 Oct), which the Tech Provider
 steps need.
