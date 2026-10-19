@@ -129,26 +129,28 @@ export function ProcessingStatusCopy({
     projection.current?.state === "running" ? projection.current.stage : null;
   const description = progress?.has_report
     ? "Checking the saved report and its source moments before opening it."
-    : progress?.run_state === "retrying"
-      ? "Retrying your saved call within its accepted analysis plan."
-      : progress?.run_state === "queued"
-        ? "Your saved call is waiting for the next confirmed step."
-        : needsAttention && !progress?.run_state
-          ? (REPORT_FAILURE_COPY[progress?.failure_code ?? ""] ??
-            "This stage needs checking before analysis can continue.")
-          : waitingForApproval
-            ? "Your recording is saved. Start analysis to generate your report."
-            : projection.unknown
-              ? "The latest status needs checking. No completion has been inferred."
-              : progress?.local_state !== "completed"
-                ? "Checking the recording’s format and duration before analysis starts."
-                : current === "C2"
-                  ? "Turning your recording into a transcript."
-                  : current === "C4"
-                    ? "This step links conversation observations to source moments."
-                    : current === "C5"
-                      ? "Bringing your takeaways and next-call plan together."
-                      : "Each step updates when its status is confirmed.";
+    : progress?.failure_code === "budget_cap_reached"
+      ? "Waiting for AI budget. Your call continues by itself as soon as it’s topped up."
+      : progress?.run_state === "retrying"
+        ? "Retrying your saved call within its accepted analysis plan."
+        : progress?.run_state === "queued"
+          ? "Your saved call is waiting for the next confirmed step."
+          : needsAttention && !progress?.run_state
+            ? (REPORT_FAILURE_COPY[progress?.failure_code ?? ""] ??
+              "This stage needs checking before analysis can continue.")
+            : waitingForApproval
+              ? "Your recording is saved. Start analysis to generate your report."
+              : projection.unknown
+                ? "The latest status needs checking. No completion has been inferred."
+                : progress?.local_state !== "completed"
+                  ? "Checking the recording’s format and duration before analysis starts."
+                  : current === "C2"
+                    ? "Turning your recording into a transcript."
+                    : current === "C4"
+                      ? "This step links conversation observations to source moments."
+                      : current === "C5"
+                        ? "Bringing your takeaways and next-call plan together."
+                        : "Each step updates when its status is confirmed.";
   if (needsAttention && !progress?.run_state)
     return (
       <div className={styles.copy}>

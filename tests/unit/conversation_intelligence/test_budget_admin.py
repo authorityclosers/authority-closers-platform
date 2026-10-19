@@ -9,7 +9,7 @@ import pytest
 from ac_platform.conversation_intelligence.application import ConversationConflict
 from ac_platform.conversation_intelligence.authority import _budget_matches_release
 from ac_platform.conversation_intelligence.budget_admin import (
-    ADMIN_BUDGET_CEILING_PAISE,
+    MAX_CAP_PAISE,
     ConversationBudgetAdmin,
     admin_budget_approval_ref,
     is_admin_budget_approval_ref,
@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
     BudgetCapApproval,
+    effective_budget_cap_paise,
     reserve,
 )
 from ac_platform.kernel.authz import ActorContext
@@ -128,7 +129,7 @@ async def test_save_requires_release_ceiling_and_optimistic_revision():
             key="budget-cap-stale",
         )
 
-    with pytest.raises(ValueError, match="pinned release approval"):
+    with pytest.raises(ValueError, match="sealed release ceiling"):
         await service.save(
             actor,
             bundle=bundle,
@@ -218,8 +219,9 @@ async def test_save_retries_same_key_against_the_recorded_receipt_action():
     assert receipts["budget-cap-retry"].action == "budget_cap"
 
 
-def test_admin_ceiling_is_ten_thousand_inr():
-    assert ADMIN_BUDGET_CEILING_PAISE == 10_000_000
+def test_the_sealed_ceiling_not_a_code_constant_bounds_an_admin_cap():
+    # 19 Oct 2026: no limit of its own; the release approval's ceiling decides.
+    assert MAX_CAP_PAISE == 2_147_483_647
 
 
 def test_admin_approval_ref_is_bound_to_the_release_digest():
@@ -278,13 +280,94 @@ def test_authority_carries_an_admin_limit_across_release_refreshes():
         ),
     )
     assert _budget_matches_release(carried_admin_budget, release_bundle)
-    over_ceiling = replace(
+    above_old_limit = replace(
         admin_budget,
-        cap_paise=ADMIN_BUDGET_CEILING_PAISE + 1,
+        cap_paise=10_000_001,
         cap_approval=replace(
             admin_budget.cap_approval,
-            approved_cap_paise=ADMIN_BUDGET_CEILING_PAISE + 1,
+            approved_cap_paise=10_000_001,
             explicit_above_ceiling=True,
         ),
     )
-    assert not _budget_matches_release(over_ceiling, release_bundle)
+    # Kept in the ledger; new work is still bounded by the sealed ceiling.
+    assert _budget_matches_release(above_old_limit, release_bundle)
+    assert effective_budget_cap_paise(release_bundle.budget_cap_paise, 10_000_001) == 200_000
+
+
+@pytest.mark.asyncio
+async def test_a_cap_above_ten_thousand_inr_is_saved_when_the_sealed_ceiling_allows(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    scope_id = uuid4()
+    held = held_budget(scope_id)
+    bundle = bundle_for(scope_id, cap=5_000_000)  # a Rs 50,000 sealed ceiling
+    row = SimpleNamespace(scope_id=scope_id, revision=2, snapshot=held.budget.as_dict())
+    service, _ = service_for(row, bundle)
+    actor = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
+    value = await service.save(
+        actor,
+        bundle=bundle,
+        new_cap_paise=1_500_000,
+        expected_revision=2,
+        reason="Raised by Rs 5,000 from Execution & budget",
+        key="budget-cap-15000",
+    )
+    assert value["budget"]["cap_paise"] == 1_500_000 and row.revision == 3
+
+
+@pytest.mark.asyncio
+async def test_asking_root_for_a_higher_ceiling_is_one_audited_request(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from ac_platform.conversation_intelligence import budget_admin
+
+    scope_id = uuid4()
+    bundle = bundle_for(scope_id, cap=1_000_000)
+    row = SimpleNamespace(scope_id=scope_id, revision=0, snapshot={})
+    service, application = service_for(row, bundle)
+    actor = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
+    appended: list[dict] = []
+    event_id = uuid4()
+
+    class _Audit:
+        def __init__(self, _database):
+            pass
+
+        async def append_for_actor(self, _actor, **fields):
+            appended.append(fields)
+            return SimpleNamespace(id=event_id)
+
+    monkeypatch.setattr(budget_admin, "AuditRepository", _Audit)
+    with pytest.raises(ValueError, match="above the current sealed ceiling"):
+        await service.request_ceiling(
+            actor, bundle=bundle, requested_cap_paise=1_000_000, reason="same", key="k0"
+        )
+    value = await service.request_ceiling(
+        actor,
+        bundle=bundle,
+        requested_cap_paise=2_000_000,
+        reason="Asked from Execution & budget",
+        key="k1",
+    )
+    assert value == {
+        "request_id": str(event_id),
+        "requested_cap_paise": 2_000_000,
+        "sealed_ceiling_paise": 1_000_000,
+        "status": "sent_to_root",
+    }
+    (event,) = appended
+    assert event["action"] == "conversation.budget_ceiling_requested"
+    assert event["payload"]["requested_cap_paise"] == 2_000_000
+    assert event["payload"]["sealed_ceiling_paise"] == 1_000_000
+    application._receipt.assert_awaited_once()
+
+    # The same key replays the same request without a second audit event.
+    application._replay = AsyncMock(return_value=SimpleNamespace(result_id=event_id))
+    again = await service.request_ceiling(
+        actor,
+        bundle=bundle,
+        requested_cap_paise=2_000_000,
+        reason="Asked from Execution & budget",
+        key="k1",
+    )
+    assert again["request_id"] == str(event_id) and len(appended) == 1

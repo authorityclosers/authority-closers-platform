@@ -301,6 +301,36 @@ export function saveLine(
   });
 }
 
+/** The app's Firebase client settings for review alerts; off for non-reviewers. */
+export type ReviewPush = {
+  enabled: boolean;
+  project_id?: string | null;
+  app_id?: string | null;
+  api_key?: string | null;
+  sender_id?: string | null;
+};
+
+export async function readReviewPush(): Promise<ReviewPush | null> {
+  try {
+    return await request<ReviewPush>("/push");
+  } catch {
+    return null;
+  }
+}
+
+/** This phone gets my review alerts (its FCM address). */
+export function registerReviewPhone(token: string, appVersion?: string) {
+  return request<{ registered: boolean }>("/devices", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      token,
+      platform: "android",
+      app_version: appVersion,
+    }),
+  });
+}
+
 /** The newest save per line (a re-save supersedes the one before it). */
 export function headsByTarget(saved: SavedRow[]): Map<string, SavedRow> {
   return new Map(saved.map((row) => [row.target, row]));

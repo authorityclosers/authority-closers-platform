@@ -182,6 +182,10 @@ export type MoneyEnv = {
   open: number;
   openRupees: number;
   capShare: number | null;
+  /** Spent and held against the cap, the share of the cap, calls waiting for budget. */
+  usedRupees: number;
+  usedShare: number | null;
+  waitingCalls: number;
   settled: number;
   settledRupees: number;
   byReason: { ref: string; label: string; n: number; rupees: number }[];
@@ -513,6 +517,9 @@ export function normalizeMetrics(raw: unknown): Metrics {
           open: n(row.open),
           openRupees: n(row.open_rupees),
           capShare: on(row.cap_share),
+          usedRupees: n(row.used_rupees),
+          usedShare: on(row.used_share),
+          waitingCalls: n(row.waiting_calls),
           settled: n(row.settled),
           settledRupees: n(row.settled_rupees),
           byReason: read.array(row.by_reason).map((value) => {

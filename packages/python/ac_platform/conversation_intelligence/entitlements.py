@@ -21,6 +21,10 @@ NORMAL_CAP_PAISE = 150_000
 OWNER_CEILING_PAISE = 200_000
 
 
+class BudgetExhausted(ValueError):
+    """The shared AI budget can't hold this quote; raising the cap lets it continue."""
+
+
 def _integer(value: Any, field: str, minimum: int = 0) -> int:
     if type(value) is not int or value < minimum:
         raise ValueError(f"invalid integer {field}")
@@ -702,12 +706,12 @@ def reserve(
     if not minutes.unlimited and quote.entitlement_seconds > minutes.available_seconds:
         raise ValueError("insufficient explicit minute grant")
     if quote.max_cost_paise > budget.available_paise:
-        raise ValueError("shared project budget exhausted")
+        raise BudgetExhausted("shared project budget exhausted")
     if release_cap_paise is not None:
         effective_cap = effective_budget_cap_paise(release_cap_paise, budget.cap_paise)
         committed_paise = sum(item.committed_paise for item in budget.reservations)
         if quote.max_cost_paise > effective_cap - committed_paise:
-            raise ValueError("current release project budget exhausted")
+            raise BudgetExhausted("current release project budget exhausted")
     reservation = Reservation(reservation_id, quote, permission)
     return LedgerTransition(
         replace(minutes, reservations=(*minutes.reservations, reservation)),

@@ -441,4 +441,10 @@ def test_export_sql_is_one_read_only_statement_without_call_content() -> None:
         "verdict",
         "verdict",
         "verdict",
+        # Admin's own budget ceiling request (amounts and the admin's reason), not call content.
+        "requested_cap_paise",
+        "requested_cap_paise",
+        "sealed_ceiling_paise",
+        "sealed_ceiling_paise",
+        "reason",
     ]

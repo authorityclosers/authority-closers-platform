@@ -1,9 +1,11 @@
 """Verified Admin amendments to the shared provider budget.
 
 The release approval remains the authority for the budget scope and ceiling.
-This service only persists a cap that is already present in that pinned
-approval.  Existing reservations are carried forward by the pure ledger
-transition; no settlement, access grant, or provider call is inferred here.
+This service persists a working cap anywhere up to that sealed ceiling (owner,
+19 Oct 2026: one click, no code limit of its own); above it, Admin files an
+audited request for Root to reseal a higher ceiling. Existing reservations are
+carried forward by the pure ledger transition; no settlement, access grant, or
+provider call is inferred here.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.activation_contract import HostedApprovalBundle
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -33,9 +36,8 @@ from ac_platform.conversation_intelligence.models import ConversationBudgetAccou
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.kernel.authz import ActorContext
 
-# The user-authorized ceiling is INR 10,000.  The pinned release approval must
-# still carry the exact amount before this service can persist it.
-ADMIN_BUDGET_CEILING_PAISE = 10_000_000
+CEILING_REQUEST_ACTION = "conversation.budget_ceiling_requested"
+MAX_CAP_PAISE = 2_147_483_647
 
 
 def admin_budget_approval_ref(bundle_digest: str, actor_id: UUID, key: str) -> str:
@@ -103,11 +105,8 @@ class ConversationBudgetAdmin:
             bundle.current(now_epoch, self.environment)
         except ValueError:
             raise ConversationDenied("The pinned budget approval is unavailable.") from None
-        if (
-            bundle.provider_control_tenant_id != self.operations_tenant_id
-            or bundle.budget_cap_paise > ADMIN_BUDGET_CEILING_PAISE
-        ):
-            raise ConversationDenied("The pinned budget approval is outside the Admin ceiling.")
+        if bundle.provider_control_tenant_id != self.operations_tenant_id:
+            raise ConversationDenied("The pinned budget approval is for another workspace.")
         return bundle.budget_cap_paise
 
     @staticmethod
@@ -151,10 +150,12 @@ class ConversationBudgetAdmin:
         await self.admit(actor)
         now = utc(self.app.clock())
         approved_cap = self._approved_cap(bundle, int(now.timestamp()))
-        if type(new_cap_paise) is not int or not 0 <= new_cap_paise <= ADMIN_BUDGET_CEILING_PAISE:
-            raise ConversationError("The budget cap must be between INR 0 and INR 10,000.")
+        if type(new_cap_paise) is not int or not 0 <= new_cap_paise <= MAX_CAP_PAISE:
+            raise ConversationError("Enter a budget cap of INR 0 or more.")
         if new_cap_paise > approved_cap:
-            raise ConversationDenied("The budget cap cannot exceed the pinned release approval.")
+            raise ConversationDenied(
+                "The budget cap cannot exceed the sealed release ceiling; ask Root to raise it."
+            )
         if type(expected_revision) is not int or not 0 <= expected_revision < 2_147_483_647:
             raise ConversationError("Use the current budget revision.")
         reason = _bounded_reason(reason)
@@ -214,9 +215,75 @@ class ConversationBudgetAdmin:
             )
         return self._view(row, approved_cap_paise=approved_cap)
 
+    async def request_ceiling(
+        self,
+        actor: ActorContext,
+        *,
+        bundle: HostedApprovalBundle,
+        requested_cap_paise: int,
+        reason: str,
+        key: str,
+    ) -> dict[str, Any]:
+        """Ask Root for a higher sealed ceiling: one audited request, idempotent per key.
+
+        The host's budget bridge turns each request into a Root card. Nothing here
+        changes the approval or the ledger.
+        """
+
+        await self.admit(actor)
+        now = utc(self.app.clock())
+        approved_cap = self._approved_cap(bundle, int(now.timestamp()))
+        if (
+            type(requested_cap_paise) is not int
+            or not approved_cap < requested_cap_paise <= MAX_CAP_PAISE
+        ):
+            raise ConversationError("Ask for a ceiling above the current sealed ceiling.")
+        reason = _bounded_reason(reason)
+        intent = {
+            "scope_id": str(bundle.budget_scope_id),
+            "requested_cap_paise": requested_cap_paise,
+            "reason": reason,
+        }
+        replay = await self.app._replay(actor, key, "budget_ceiling_request", intent)
+        if replay is None or replay.result_id is None:
+            event = await AuditRepository(self.database).append_for_actor(
+                actor,
+                action=CEILING_REQUEST_ACTION,
+                resource_type="conversation_budget_account",
+                resource_id=bundle.budget_scope_id,
+                payload={
+                    "schema": "ac.sales-xray.budget-ceiling-request/1",
+                    "environment": self.environment,
+                    "requested_cap_paise": requested_cap_paise,
+                    "sealed_ceiling_paise": approved_cap,
+                    "reason": reason,
+                },
+                reason=reason,
+                now=now,
+            )
+            request_id = event.id
+            await self.app._receipt(
+                actor,
+                key,
+                "budget_ceiling_request",
+                intent,
+                request_id,
+                now,
+                resource_type="conversation_budget_account",
+            )
+        else:
+            request_id = replay.result_id
+        return {
+            "request_id": str(request_id),
+            "requested_cap_paise": requested_cap_paise,
+            "sealed_ceiling_paise": approved_cap,
+            "status": "sent_to_root",
+        }
+
 
 __all__ = [
-    "ADMIN_BUDGET_CEILING_PAISE",
+    "CEILING_REQUEST_ACTION",
+    "MAX_CAP_PAISE",
     "ConversationBudgetAdmin",
     "admin_budget_approval_ref",
     "is_any_admin_budget_approval_ref",

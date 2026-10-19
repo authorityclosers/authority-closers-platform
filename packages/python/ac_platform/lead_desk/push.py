@@ -14,6 +14,8 @@ registers late is not flooded.
 Off until the FCM settings exist (``AC_FCM_SERVICE_ACCOUNT`` and the app's client
 settings ``AC_FCM_APP_ID``, ``AC_FCM_API_KEY``, ``AC_FCM_SENDER_ID``). They live in
 Infisical, never in git.
+
+A second run of the same loop sends gold review alerts to the same phones (``review_push``).
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ import json
 import logging
 import os
 from collections import defaultdict
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -321,8 +323,16 @@ async def tick(
     return sent
 
 
+Pass = Callable[[async_sessionmaker[AsyncSession], Fcm, httpx.AsyncClient], Awaitable[int]]
+
+
 async def run_push_sender(
-    sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event, *, first_delay: int = _TICK
+    sessions: async_sessionmaker[AsyncSession],
+    stop: asyncio.Event,
+    *,
+    first_delay: int = _TICK,
+    send_pass: Pass = tick,
+    what: str = "lead desk",
 ) -> None:
     """Every 30 seconds, send the alerts that are due. Does nothing until FCM is set up."""
     with suppress(TimeoutError):
@@ -335,11 +345,11 @@ async def run_push_sender(
                 try:
                     if fcm is None or fcm.cfg != cfg:
                         fcm = Fcm(cfg)
-                    sent = await tick(sessions, fcm, client)
+                    sent = await send_pass(sessions, fcm, client)
                     if sent:
-                        log.info("lead desk sent %d phone alerts", sent)
+                        log.info("%s sent %d phone alerts", what, sent)
                 except Exception:  # noqa: BLE001 - the loop must survive a bad tick
-                    log.warning("lead desk alert tick failed")
+                    log.warning("%s alert tick failed", what)
             with suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=_TICK)
 
@@ -375,6 +385,8 @@ def attach(
     """Run the sender for the API's lifetime by wrapping the app's own lifespan."""
     if environment in {"local", "test"}:
         return
+    from ac_platform.lead_desk import review_push
+
     inner = application.router.lifespan_context
 
     @asynccontextmanager
@@ -383,6 +395,10 @@ def attach(
             stop = asyncio.Event()
             tasks = [
                 asyncio.create_task(run_push_sender(sessions, stop), name="lead-desk-alerts"),
+                asyncio.create_task(
+                    run_push_sender(sessions, stop, send_pass=review_push.tick, what="gold review"),
+                    name="gold-review-alerts",
+                ),
                 asyncio.create_task(run_hours_release(sessions, stop), name="lead-desk-hours"),
             ]
             try:

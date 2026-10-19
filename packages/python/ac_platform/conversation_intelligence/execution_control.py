@@ -28,7 +28,10 @@ from ac_platform.conversation_intelligence.entitlements import BudgetAccount
 from ac_platform.conversation_intelligence.execution_control_models import (
     ConversationExecutionControl,
 )
-from ac_platform.conversation_intelligence.models import ConversationBudgetAccount
+from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
+    ConversationProcessingPlan,
+)
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.kernel.authz import ActorContext
 
@@ -189,10 +192,21 @@ class ExecutionControls:
                 .limit(10)
             )
         ).all()
+        # Calls waiting for AI budget (budget_cap_reached): they resume by themselves.
+        waiting = await self.database.scalar(
+            select(func.count())
+            .select_from(ConversationProcessingPlan)
+            .where(
+                ConversationProcessingPlan.state == "active",
+                ConversationProcessingPlan.progress["failure_code"].as_string()
+                == "budget_cap_reached",
+            )
+        )
         return {
             "environment": self.environment,
             "control": state,
             "budget": budget,
+            "waiting_calls": int(waiting or 0),
             "history": [
                 {
                     "revision": r.revision,

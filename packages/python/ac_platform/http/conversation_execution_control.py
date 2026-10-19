@@ -39,7 +39,13 @@ class ExecutionControlIntent(BaseModel):
 class BudgetCapIntent(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     expected_revision: int = Field(ge=0, lt=2147483647)
-    new_cap_paise: int = Field(ge=0, le=1_000_000)
+    new_cap_paise: int = Field(ge=0, le=2_147_483_647)
+    reason: str = Field(min_length=1, max_length=512)
+
+
+class CeilingRequestIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    requested_cap_paise: int = Field(ge=1, le=2_147_483_647)
     reason: str = Field(min_length=1, max_length=512)
 
 
@@ -185,6 +191,29 @@ def install_execution_control_http(
                 bundle=approved_budget_bundle(),
                 new_cap_paise=intent.new_cap_paise,
                 expected_revision=intent.expected_revision,
+                reason=intent.reason,
+                key=key,
+            )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.post("/v1/admin/conversation/budget/ceiling-request", status_code=201)
+    async def request_ceiling(
+        intent: CeilingRequestIntent,
+        request: Request,
+        response: Response,
+        key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """Ask Root to reseal a higher ceiling (audited; the host bridge files the card)."""
+
+        surface(request, response)
+        require_safe_origin(request, settings)
+        try:
+            return await budget_service(auth.database).request_ceiling(
+                auth.resolved.actor,
+                bundle=approved_budget_bundle(),
+                requested_cap_paise=intent.requested_cap_paise,
                 reason=intent.reason,
                 key=key,
             )
