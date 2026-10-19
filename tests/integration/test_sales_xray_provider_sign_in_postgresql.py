@@ -28,7 +28,10 @@ from ac_platform.http.identity_provider import IdentityProviderEmailMissing
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person, ProviderIdentity
 from ac_platform.identity.models import Session as IdentitySession
-from ac_platform.identity.provider_link_email import PROVIDER_LINKED_EVENT
+from ac_platform.identity.provider_link_email import (
+    PROVIDER_LINKED_EVENT,
+    SIGN_IN_REFUSED_ACTION,
+)
 from ac_platform.identity.services import VerifiedProviderAssertion
 from ac_platform.outbox.models import OutboxEvent
 from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus, Tenant
@@ -332,6 +335,26 @@ def test_an_email_that_may_not_be_linked_is_refused_and_changes_nothing(
         person = database.get(Person, person_id)
         assert person is not None and person.consent_version == "provider-sign-in-consent-v1"
         assert database.get(Membership, (tenant_id, person_id)) is None
+        # The refusal itself is recorded apart from the rolled-back sign-in.
+        [refusal] = database.scalars(
+            select(AuditEvent).where(
+                AuditEvent.action == SIGN_IN_REFUSED_ACTION,
+                AuditEvent.resource_id == str(person_id),
+            )
+        )
+        expected_reason = (
+            "provider_never_links"
+            if provider_name == "facebook"
+            else "account_email_unverified"
+            if not verified
+            else "platform_staff"
+        )
+        assert refusal.payload == {
+            "provider": provider_name,
+            "reason": expected_reason,
+            "ip_address": "127.0.0.1",
+        }
+        assert refusal.actor_person_id is None and refusal.actor_type == "system"
 
 
 @pytest.mark.parametrize(

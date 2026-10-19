@@ -15,6 +15,9 @@ import pytest
 from ac_platform.audit.models import AuditEvent
 from ac_platform.identity.models import Person
 from ac_platform.identity.provider_link_email import (
+    PROVIDER_CONNECTED_ACTION,
+    PROVIDER_CONNECTED_EVENT,
+    PROVIDER_CONNECTED_JOB,
     PROVIDER_LINKED_ACTION,
     PROVIDER_LINKED_EVENT,
     PROVIDER_LINKED_JOB,
@@ -70,6 +73,7 @@ def test_the_worker_routes_and_dispatches_both_notices() -> None:
     for event, job in (
         (PROVIDER_LINKED_EVENT, PROVIDER_LINKED_JOB),
         (PROVIDER_REMOVED_EVENT, PROVIDER_REMOVED_JOB),
+        (PROVIDER_CONNECTED_EVENT, PROVIDER_CONNECTED_JOB),
     ):
         assert OUTBOX_JOB_ROUTES[event].job_kind == job
         assert job in dispatcher.allowed_kinds
@@ -137,3 +141,14 @@ def test_no_notice_without_its_event_person_provider_or_route() -> None:
     )
     with pytest.raises(PermanentProviderError, match="communication class"):
         render_email(wrong)
+
+
+def test_the_connected_notice_says_it_came_from_settings_for_any_provider() -> None:
+    event = _event(action=PROVIDER_CONNECTED_ACTION, payload={"provider": "facebook"})
+    message = _resolve({AuditEvent: event, Person: PERSON}, kind=PROVIDER_CONNECTED_JOB)
+    assert message.template == "identity-provider-connected"
+    rendered = render_email(message)
+    assert rendered.subject == "Facebook sign-in was added to your Sales Xray account"
+    assert "from Settings in Sales Xray" in rendered.text
+    assert "same verified email" not in rendered.text
+    assert "Not you? Remove Facebook in Settings" in rendered.text

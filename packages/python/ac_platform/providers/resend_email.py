@@ -341,12 +341,17 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
-    if message.template in {"identity-provider-linked", "identity-provider-removed"}:
-        added = message.template == "identity-provider-linked"
+    if message.template in {
+        "identity-provider-linked",
+        "identity-provider-removed",
+        "identity-provider-connected",
+    }:
+        added = message.template != "identity-provider-removed"
         if message.communication_class != "verification_security":
             raise PermanentProviderError("sign-in notice has the wrong communication class")
         provider = _required_text(message.variables, "provider", maximum=20)
-        if provider not in ({"Google", "Apple"} if added else {"Google", "Apple", "Facebook"}):
+        by_email = message.template == "identity-provider-linked"
+        if provider not in ({"Google", "Apple"} if by_email else {"Google", "Apple", "Facebook"}):
             raise PermanentProviderError("sign-in notice names an unsupported provider")
         support = _required_text(message.variables, "support_email", maximum=120)
         try:
@@ -363,9 +368,10 @@ def render_email(message: EmailMessage) -> RenderedEmail:
         safe_support = html.escape(support)
         if added:
             subject = f"{provider} sign-in was added to your Sales Xray account"
-            what = (
-                f"{provider} sign-in was added to your Authority Closers account on {when}, "
+            what = f"{provider} sign-in was added to your Authority Closers account on {when}, " + (
                 f"because that {provider} account uses the same verified email."
+                if by_email
+                else "from Settings in Sales Xray."
             )
             next_line = f"You can now sign in to Sales Xray with {provider}."
             not_you = (

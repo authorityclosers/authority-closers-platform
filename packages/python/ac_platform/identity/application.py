@@ -99,7 +99,22 @@ def _optional_text(value: str | None, field_name: str, maximum: int) -> str | No
 
 
 class ProviderEmailInUseError(IdentityServiceError):
-    """A new provider identity's email belongs to an account it may not be linked to."""
+    """A new provider identity's email belongs to an account it may not be linked to.
+
+    ``person_id`` is that account and ``reason`` says why (for the refusal's audit
+    event only; the person signing in is never told which kind of account it is).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        person_id: UUID | None = None,
+        reason: str = "not_linkable",
+    ) -> None:
+        super().__init__(message)
+        self.person_id = person_id
+        self.reason = reason
 
 
 async def has_platform_staff_membership(session: AsyncSession, person_id: UUID) -> bool:
@@ -875,9 +890,16 @@ class AsyncIdentityApplication:
         if link_existing_email is not None:
             existing = await self._lock_person_by_email(validated.email)
             if existing is not None:
-                if not link_existing_email or not await self._may_link_by_email(existing):
+                refusal = (
+                    "provider_never_links"
+                    if not link_existing_email
+                    else await self._link_refusal(existing)
+                )
+                if refusal is not None:
                     raise ProviderEmailInUseError(
-                        "the provider email belongs to an account it may not be linked to"
+                        "the provider email belongs to an account it may not be linked to",
+                        person_id=existing.id,
+                        reason=refusal,
                     )
                 return await self._register_by_verified_email(
                     existing,
@@ -934,13 +956,19 @@ class AsyncIdentityApplication:
             raise IdentityResolutionError("email resolves to more than one person")
         return _person_snapshot(rows[0]) if rows else None
 
+    async def _link_refusal(self, person: PersonSnapshot) -> str | None:
+        """Why this account may not be joined by its email, or None when it may."""
+
+        if person.status != PersonStatus.ACTIVE.value:
+            return "account_inactive"
+        if person.email is None or person.email_verified_at is None:
+            return "account_email_unverified"
+        if await has_platform_staff_membership(self._session, person.id):
+            return "platform_staff"
+        return None
+
     async def _may_link_by_email(self, person: PersonSnapshot) -> bool:
-        return (
-            person.status == PersonStatus.ACTIVE.value
-            and person.email is not None
-            and person.email_verified_at is not None
-            and not await has_platform_staff_membership(self._session, person.id)
-        )
+        return await self._link_refusal(person) is None
 
     async def _register_by_verified_email(
         self,
@@ -1049,6 +1077,44 @@ class AsyncIdentityApplication:
             user_agent=user_agent,
             ip_address=ip_address,
         )
+
+    async def connect_provider_for_session(
+        self,
+        token: str,
+        transaction_id: UUID,
+        assertion: VerifiedProviderAssertion,
+        *,
+        pkce_verifier: str,
+        now: datetime | None = None,
+    ) -> tuple[ProviderIdentitySnapshot, bool]:
+        """Connect a provider to the signed-in account from Sales Xray Settings.
+
+        The person is already signed in, so no email match is involved: the provider's
+        email may differ from the account's (Facebook included). The provider identity
+        must not belong to another account. Returns the link and whether it is new.
+        """
+
+        self._require_transaction()
+        current_time = _now(now)
+        person, _ = await self._lock_authenticated_session(
+            token,
+            current_time=current_time,
+        )
+        validated = await self._validate_authorization_transaction(
+            transaction_id,
+            assertion,
+            expected_authorization_type=ProviderAuthorizationType.LINK,
+            pkce_verifier=pkce_verifier,
+            expected_person_id=person.id,
+            current_time=current_time,
+        )
+        require_verified_person(person)
+        await self._consume_authorization_callback(
+            transaction_id, validated, current_time=current_time
+        )
+        before = await self._lock_provider_key(validated)
+        linked = await self._link_provider_key(person, validated, current_time=current_time)
+        return linked, not before
 
     async def link_provider_for_session(
         self,

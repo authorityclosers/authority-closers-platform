@@ -24,6 +24,8 @@ from ac_platform.identity.models import (
 )
 from ac_platform.identity.password_auth import encrypt_challenge_token
 from ac_platform.identity.provider_link_email import (
+    PROVIDER_CONNECTED_EVENT,
+    PROVIDER_CONNECTED_JOB,
     PROVIDER_LINKED_EVENT,
     PROVIDER_LINKED_JOB,
     PROVIDER_REMOVED_EVENT,
@@ -206,6 +208,7 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         STAFF_KEY_CREATED_EVENT,
         PROVIDER_LINKED_EVENT,
         PROVIDER_REMOVED_EVENT,
+        PROVIDER_CONNECTED_EVENT,
         ENROLLMENT_WELCOME_EVENT,
         EMAIL_LOGIN_REQUEST_EVENT,
         PASSWORD_EMAIL_VERIFICATION_EVENT,
@@ -855,6 +858,7 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
             STAFF_KEY_CREATED_JOB,
             PROVIDER_LINKED_JOB,
             PROVIDER_REMOVED_JOB,
+            PROVIDER_CONNECTED_JOB,
             EMAIL_LOGIN_REQUEST_JOB,
             PASSWORD_EMAIL_VERIFICATION_JOB,
             PASSWORD_EMAIL_RESET_JOB,

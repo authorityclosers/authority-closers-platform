@@ -1,6 +1,7 @@
 """Settings -> Security -> Sign-in methods on the Sales Xray account session.
 
-- GET  /v1/me/sign-in-methods                     what can sign this account in
+- GET  /v1/me/sign-in-methods                     what can sign this account in, and
+                                                  which providers can be connected
 - POST /v1/me/sign-in-methods/{provider}/remove   remove Google, Apple or Facebook
 
 Removal needs a session started in the last 10 minutes and never takes the last way
@@ -84,6 +85,10 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
             actor = auth.resolved.actor
             methods = await sign_in_methods(auth.database, actor.person_id)
             fresh = await session_is_fresh(auth.database, actor.session_id, datetime.now(UTC))
+            configured: frozenset[str] = getattr(
+                request.app.state, "sign_in_provider_names", frozenset()
+            )
+            linked = {method.kind for method in methods}
             return {
                 "methods": [
                     {
@@ -96,6 +101,14 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                     }
                     for method in methods
                 ],
+                # Settings -> Connect: configured here and not yet on the account.
+                "providers": {
+                    provider: {
+                        "linked": provider in linked,
+                        "can_connect": provider in configured and provider not in linked,
+                    }
+                    for provider in ("google", "apple", "facebook")
+                },
                 "fresh_sign_in": fresh,
                 "fresh_minutes": int(FRESH_SIGN_IN.total_seconds() // 60),
             }

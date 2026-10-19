@@ -39,6 +39,17 @@ PROVIDER_REMOVED_ROUTE = OutboxJobRoute(
     required_payload_keys=frozenset({"audit_event_id"}),
     uuid_payload_keys=frozenset({"audit_event_id"}),
 )
+PROVIDER_CONNECTED_ACTION = "identity.provider_connected.v1"
+PROVIDER_CONNECTED_EVENT = "identity.provider_connected.v1"
+PROVIDER_CONNECTED_JOB = "email.identity_provider_connected.v1"
+PROVIDER_CONNECTED_ROUTE = OutboxJobRoute(
+    job_kind=PROVIDER_CONNECTED_JOB,
+    required_payload_keys=frozenset({"audit_event_id"}),
+    uuid_payload_keys=frozenset({"audit_event_id"}),
+)
+# A provider sign-in refused because its email belongs to an account it may not
+# join (audit only; nobody is emailed).
+SIGN_IN_REFUSED_ACTION = "identity.provider_sign_in_refused.v1"
 PROVIDER_LABELS = {"google": "Google", "apple": "Apple", "facebook": "Facebook"}
 SUPPORT_EMAIL = "admin@authorityclosers.com"
 # Where the person checks and removes sign-in methods (the settings dialog's hash).
@@ -66,6 +77,17 @@ _NOTICES = {
         "identity-provider-removed",
         frozenset(PROVIDER_LABELS),
     ),
+    PROVIDER_CONNECTED_JOB: _Notice(
+        PROVIDER_CONNECTED_ACTION,
+        PROVIDER_CONNECTED_EVENT,
+        "identity-provider-connected",
+        frozenset(PROVIDER_LABELS),
+    ),
+}
+_ROUTES = {
+    PROVIDER_LINKED_JOB: PROVIDER_LINKED_ROUTE,
+    PROVIDER_REMOVED_JOB: PROVIDER_REMOVED_ROUTE,
+    PROVIDER_CONNECTED_JOB: PROVIDER_CONNECTED_ROUTE,
 }
 _JOB_BY_ACTION = {notice.action: job for job, notice in _NOTICES.items()}
 
@@ -100,8 +122,7 @@ async def resolve_provider_notice_message(
     notice = _NOTICES.get(job.kind)
     if notice is None:
         raise PermanentProviderError("provider notice route is unavailable")
-    route = PROVIDER_LINKED_ROUTE if job.kind == PROVIDER_LINKED_JOB else PROVIDER_REMOVED_ROUTE
-    payload = route.normalize_payload(job.payload)
+    payload = _ROUTES[job.kind].normalize_payload(job.payload)
     event = await database.get(AuditEvent, UUID(payload["audit_event_id"]))
     if event is None or event.action != notice.action or event.actor_person_id is None:
         raise PermanentProviderError("provider notice is unavailable")
@@ -133,6 +154,10 @@ resolve_provider_linked_message = resolve_provider_notice_message
 
 
 __all__ = [
+    "PROVIDER_CONNECTED_ACTION",
+    "PROVIDER_CONNECTED_EVENT",
+    "PROVIDER_CONNECTED_JOB",
+    "PROVIDER_CONNECTED_ROUTE",
     "PROVIDER_LINKED_ACTION",
     "PROVIDER_LINKED_EVENT",
     "PROVIDER_LINKED_JOB",
@@ -145,4 +170,5 @@ __all__ = [
     "enqueue_provider_notice",
     "resolve_provider_linked_message",
     "resolve_provider_notice_message",
+    "SIGN_IN_REFUSED_ACTION",
 ]

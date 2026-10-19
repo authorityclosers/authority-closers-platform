@@ -66,6 +66,9 @@ from ac_platform.identity.password_auth import (
     decrypt_challenge_token,
 )
 from ac_platform.identity.provider_link_email import (
+    PROVIDER_CONNECTED_EVENT,
+    PROVIDER_CONNECTED_JOB,
+    PROVIDER_CONNECTED_ROUTE,
     PROVIDER_LINKED_EVENT,
     PROVIDER_LINKED_JOB,
     PROVIDER_LINKED_ROUTE,
@@ -136,6 +139,7 @@ OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
         STAFF_KEY_CREATED_EVENT: STAFF_KEY_CREATED_ROUTE,
         PROVIDER_LINKED_EVENT: PROVIDER_LINKED_ROUTE,
         PROVIDER_REMOVED_EVENT: PROVIDER_REMOVED_ROUTE,
+        PROVIDER_CONNECTED_EVENT: PROVIDER_CONNECTED_ROUTE,
         REVIEWER_AUTH_EVENT: OutboxJobRoute(
             job_kind=REVIEWER_AUTH_JOB,
             required_payload_keys=frozenset({"challenge_id"}),
@@ -537,6 +541,7 @@ def build_default_dispatcher(
             STAFF_KEY_CREATED_JOB: handler,
             PROVIDER_LINKED_JOB: handler,
             PROVIDER_REMOVED_JOB: handler,
+            PROVIDER_CONNECTED_JOB: handler,
             REVIEWER_AUTH_JOB: handler,
             REVIEW_INVITATION_JOB: handler,
             EMAIL_LOGIN_REQUEST_JOB: handler,
@@ -706,6 +711,7 @@ class DurableWorker:
                 STAFF_KEY_CREATED_JOB,
                 PROVIDER_LINKED_JOB,
                 PROVIDER_REMOVED_JOB,
+                PROVIDER_CONNECTED_JOB,
                 REVIEWER_AUTH_JOB,
                 REVIEW_INVITATION_JOB,
                 EMAIL_LOGIN_REQUEST_JOB,
@@ -795,7 +801,7 @@ class DurableWorker:
         *,
         provider_key: str,
     ) -> EmailMessage:
-        if job.kind in {PROVIDER_LINKED_JOB, PROVIDER_REMOVED_JOB}:
+        if job.kind in {PROVIDER_LINKED_JOB, PROVIDER_REMOVED_JOB, PROVIDER_CONNECTED_JOB}:
             from ac_platform.identity.provider_link_email import (
                 resolve_provider_notice_message,
             )
