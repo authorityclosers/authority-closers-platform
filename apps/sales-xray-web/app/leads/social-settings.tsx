@@ -26,9 +26,11 @@ import {
 } from "./social-client";
 import { waCall } from "./whatsapp-client";
 
+// Instagram is named only when a connected Page has an Instagram account.
+const CONNECTED_WITH_INSTAGRAM =
+  "Connected. Messages to your Page and its Instagram account now arrive in Leads.";
 const RETURNED: Record<string, string> = {
-  connected:
-    "Connected. Messages to your Page and its Instagram account now arrive in Leads.",
+  connected: "Connected. Messages to your Page now arrive in Leads.",
   nopages: "No Pages were shared. Connect again and tick your Page.",
   taken: "That Page is connected to another organisation.",
   cancelled: "Connecting was cancelled.",
@@ -283,6 +285,11 @@ export function SocialSettings() {
 
   // Hidden until AC's Messaging app is set up for Sales Xray (nothing to connect yet).
   if (!status || (!status.configured && !status.accounts.length)) return null;
+  const shown =
+    note === RETURNED.connected &&
+    status.accounts.some((account) => account.hasInstagram)
+      ? CONNECTED_WITH_INSTAGRAM
+      : note;
 
   const disconnect = async (page: SocialPage) => {
     setBusy(true);
@@ -350,9 +357,9 @@ export function SocialSettings() {
           <PageForm key={page.id} page={page} onSaved={setStatus} />
         </article>
       ))}
-      {note ? (
+      {shown ? (
         <p className={styles.hint} role="status">
-          {note}
+          {shown}
         </p>
       ) : null}
     </section>

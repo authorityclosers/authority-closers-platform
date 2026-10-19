@@ -65,6 +65,7 @@ App = Literal[
 ]
 State = Literal["ready", "problem", "not_connected", "not_set_up", "off"]
 TestStatus = Literal["waiting", "passed", "failed"]
+Group = Literal["leads", "messaging", "ads", "calls", "automation"]
 
 APPS: Final[tuple[App, ...]] = (
     "meta_leads",
@@ -85,6 +86,32 @@ NAMES: Final[dict[App, str]] = {
     "phone_calls": "Phone call logging (Sales Xray app)",
     "webhook_sources": "Webhooks and sheets",
     "ai_replies": "AI replies",
+}
+GROUPS: Final[dict[App, Group]] = {
+    "meta_leads": "leads",
+    "whatsapp": "messaging",
+    "messenger": "messaging",
+    "instagram": "messaging",
+    "google_ads": "ads",
+    "phone_calls": "calls",
+    "webhook_sources": "leads",
+    "ai_replies": "automation",
+}
+# The existing connect routes (a browser navigation: they go to Meta or Google and come
+# back), and each connection's existing disconnect route.
+CONNECT: Final[dict[App, str]] = {
+    "meta_leads": "/v1/lead-desk/meta/connect",
+    "whatsapp": "/v1/lead-desk/whatsapp/start",
+    "messenger": "/v1/lead-desk/messaging/connect",
+    "instagram": "/v1/lead-desk/messaging/connect",
+    "google_ads": "/v1/lead-desk/google/connect",
+}
+DISCONNECT: Final[dict[App, str]] = {
+    "meta_leads": "/v1/lead-desk/meta/pages/{id}/disconnect",
+    "whatsapp": "/v1/lead-desk/whatsapp/numbers/{id}/disconnect",
+    "messenger": "/v1/lead-desk/messaging/accounts/{id}/disconnect",
+    "instagram": "/v1/lead-desk/messaging/accounts/{id}/disconnect",
+    "google_ads": "/v1/lead-desk/google/accounts/{id}/disconnect",
 }
 NOT_SET_UP: Final[str] = "Not available here yet."
 LEAD_WAIT: Final[timedelta] = timedelta(seconds=60)
@@ -108,12 +135,20 @@ class Problem(_View):
     words: str
 
 
+class Link(_View):
+    """An existing route the Settings card calls as it is (GET: open it in the page)."""
+
+    method: Literal["GET", "POST"]
+    path: str
+
+
 class Connection(_View):
     id: str
     label: str
     detail: str | None = None
     state: State = "ready"
     words: str | None = None
+    disconnect: Link | None = None
 
 
 class TestOffer(_View):
@@ -130,9 +165,12 @@ class Webhook(_View):
 class AppHealth(_View):
     app: App
     name: str
+    group: Group = "leads"
     state: State
     words: str
     configured: bool
+    connect: Link | None = None
+    can_test: bool = False
     connections: list[Connection] = []
     last_event: Event | None = None
     last_error: Problem | None = None
@@ -195,18 +233,41 @@ def _count(n: int, one: str, many: str) -> str:
 
 
 async def health(db: AsyncSession, tenant_id: UUID, *, now: datetime) -> Health:
-    return Health(
-        checked_at=now,
-        apps=[
-            await _meta_leads(db, tenant_id),
-            await _whatsapp(db, tenant_id),
-            await _social(db, tenant_id, "messenger"),
-            await _social(db, tenant_id, "instagram"),
-            await _google(db, tenant_id),
-            await _phones(db, tenant_id),
-            await _webhook_sources(db, tenant_id),
-            await _ai_replies(db, tenant_id, now=now),
-        ],
+    found = [
+        await _meta_leads(db, tenant_id),
+        await _whatsapp(db, tenant_id),
+        await _social(db, tenant_id, "messenger"),
+        await _social(db, tenant_id, "instagram"),
+        await _google(db, tenant_id),
+        await _phones(db, tenant_id),
+        await _webhook_sources(db, tenant_id),
+        await _ai_replies(db, tenant_id, now=now),
+    ]
+    return Health(checked_at=now, apps=[_card(app) for app in found])
+
+
+def _card(app: AppHealth) -> AppHealth:
+    """What a Settings card needs besides the health: its group, the existing connect
+    and disconnect routes, and whether it has a test."""
+    path = DISCONNECT.get(app.app)
+    connections = [
+        item.model_copy(
+            update={
+                "disconnect": Link(method="POST", path=path.format(id=item.id))
+                if path and item.state != "off"
+                else None
+            }
+        )
+        for item in app.connections
+    ]
+    connect = CONNECT.get(app.app)
+    return app.model_copy(
+        update={
+            "group": GROUPS[app.app],
+            "connect": Link(method="GET", path=connect) if connect and app.configured else None,
+            "can_test": bool(app.tests),
+            "connections": connections,
+        }
     )
 
 
@@ -366,6 +427,25 @@ async def _whatsapp(db: AsyncSession, tenant_id: UUID) -> AppHealth:
     )
 
 
+# Why the Page's last comment got no private reply (social.inbox.note_skip).
+SKIP_WORDS: Final[dict[str, str]] = {
+    "no_sender": "Meta didn't say who wrote it, so no private reply could go.",
+    "from_page": "It was written as the Page itself; replies only go to other people.",
+    "not_new": "It was an edit, not a new comment.",
+    "bad_id": "Meta sent it in a form Sales Xray doesn't read.",
+    "no_rule": "None of your comment rules' keywords was in it.",
+}
+
+
+def _skip_words(row: LeadSocialAccount, channel: str) -> str | None:
+    skip = (row.config or {}).get(social_inbox.SKIP_KEY)
+    if not isinstance(skip, dict) or skip.get("channel") != channel:
+        return None
+    why = SKIP_WORDS.get(str(skip.get("why")), "It wasn't one to answer.")
+    at = str(skip.get("at") or "")[:16].replace("T", " ")
+    return f"Last comment not answered ({at} UTC): {why}"
+
+
 def _has_channel(account: LeadSocialAccount, channel: str) -> bool:
     return channel == "messenger" or bool(account.ig_user_id)
 
@@ -382,6 +462,7 @@ async def _social(db: AsyncSession, tenant_id: UUID, channel: App) -> AppHealth:
             if channel == "messenger"
             else f"@{row.ig_username or row.page_name}",
             detail=None if channel == "messenger" else f"via {row.page_name}",
+            words=_skip_words(row, str(channel)),
         )
         for row in accounts
     ]

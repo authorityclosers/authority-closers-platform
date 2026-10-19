@@ -580,6 +580,15 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
             done = await inbox.receive(
                 database, delivery, now=datetime.now(UTC), names=names, app_id=cfg.app_id
             )
+        # Counts and reasons only, never a message, a name or an id.
+        log.info(
+            "messaging webhook: %d messages, %d statuses, %d comments, skipped %s",
+            done.messages,
+            done.statuses,
+            done.comments,
+            [(skip.reason, ",".join(skip.fields)) for skip in delivery.skipped]
+            + [(reason, "") for reason in done.skipped if reason == "no_rule"],
+        )
         return {
             "messages": done.messages,
             "leads": done.leads_created,

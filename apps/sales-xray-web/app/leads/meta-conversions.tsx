@@ -126,6 +126,9 @@ function Chooser({
       .then((data) => {
         setFound(data);
         setAccount(data.adAccounts[0]?.id ?? "");
+        // One dataset: it is the one (nothing to choose).
+        if (data.datasets.length === 1)
+          setPicked((current) => current ?? data.datasets[0]);
       })
       .catch((reason: unknown) => {
         setFound({ adAccounts: [], datasets: [] });
@@ -160,7 +163,17 @@ function Chooser({
   };
 
   const save = async () => {
-    if (!picked) return;
+    // Never a silent button: say what is missing.
+    if (!picked) {
+      setNote(
+        "Pick the dataset that gets your lead stages, or create one above.",
+      );
+      return;
+    }
+    if (Object.values(events).some((name) => name != null && !name.trim())) {
+      setNote("Give each ticked stage a Meta event name, or untick it.");
+      return;
+    }
     setBusy(true);
     setNote(null);
     try {
@@ -293,7 +306,7 @@ function Chooser({
       </details>
       <div className={styles.row}>
         {onCancel ? <Button onClick={onCancel}>Cancel</Button> : null}
-        <Button variant="primary" disabled={busy || !picked} onClick={save}>
+        <Button variant="primary" disabled={busy} onClick={save}>
           Send lead stages to Meta
         </Button>
       </div>

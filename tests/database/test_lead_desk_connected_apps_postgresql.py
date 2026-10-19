@@ -153,7 +153,13 @@ def test_connected_apps_health_and_real_tests(
                     page_name="Fictional Homes",
                     token=graph.seal(social_cfg, "page-token", page_id=PAGE),
                     status="active",
-                    config={},
+                    config={
+                        "last_comment_skip": {
+                            "at": now.isoformat(),
+                            "channel": "messenger",
+                            "why": "no_sender",
+                        }
+                    },
                     connected_by_person_id=me,
                     created_at=now,
                     updated_at=now,
@@ -210,6 +216,27 @@ def test_connected_apps_health_and_real_tests(
                 assert found["google_ads"]["state"] == "not_set_up"
                 assert found["phone_calls"]["state"] == "not_connected"
                 assert found["ai_replies"]["state"] == "off"
+                # What a Settings card needs: group, the existing connect and disconnect
+                # routes, and whether it can be tested.
+                assert (leads["group"], leads["canTest"]) == ("leads", True)
+                assert leads["connect"] == {"method": "GET", "path": "/v1/lead-desk/meta/connect"}
+                assert leads["connections"][0]["disconnect"] == {
+                    "method": "POST",
+                    "path": f"/v1/lead-desk/meta/pages/{PAGE}/disconnect",
+                }
+                assert found["messenger"]["group"] == "messaging"
+                assert (
+                    "Meta didn't say who wrote it"
+                    in (found["messenger"]["connections"][0]["words"])
+                )
+                assert found["messenger"]["connections"][0]["disconnect"]["path"].startswith(
+                    "/v1/lead-desk/messaging/accounts/"
+                )
+                assert found["google_ads"]["connect"] is None  # not set up here
+                assert (found["phone_calls"]["group"], found["phone_calls"]["canTest"]) == (
+                    "calls",
+                    False,
+                )
                 assert "₹" not in answer.text
 
                 # ----- lead ads: a test lead, waited for in Leads -----

@@ -258,10 +258,27 @@ it("puts Messenger and Instagram conversations waiting for a reply on the desk",
   expect(opened).toEqual(["l1"]);
 });
 
+it("names Instagram on connecting only when the Page has an Instagram account", async () => {
+  status = {
+    configured: true,
+    accounts: [{ ...PAGE, hasInstagram: false, igUsername: null }],
+    taken: [],
+  };
+  await render(<SocialSettings />);
+  expect(host.textContent).toContain(
+    "Connected. Messages to your Page now arrive in Leads.",
+  );
+  expect(host.textContent).not.toContain(
+    "Page and its Instagram account now arrive",
+  );
+});
+
 it("connects Pages in Settings and saves a comment rule", async () => {
   await render(<SocialSettings />);
   expect(host.textContent).toContain("Messenger & Instagram");
-  expect(host.textContent).toContain("Connected. Messages to your Page");
+  expect(host.textContent).toContain(
+    "Connected. Messages to your Page and its Instagram account now arrive in Leads.",
+  );
   expect(host.textContent).toContain("@fictional.homes");
   const connect = host.querySelector(
     'a[href="/v1/lead-desk/messaging/connect"]',

@@ -349,6 +349,11 @@ def test_messenger_and_instagram_conversations_and_comment_replies(
                 )
                 assert saved.status_code == 200, saved.text
                 assert (await deliver(_comment("777_100", "Nice view")))["comments"] == 0
+                async with setup.sessions() as db:
+                    noted = await db.scalar(select(LeadSocialAccount))
+                    assert noted is not None
+                    # Settings → Connected apps can say why it got no reply.
+                    assert noted.config[inbox.SKIP_KEY]["why"] == "no_rule"
                 assert (await deliver(_comment("777_101", "PRICE please?"))) == {
                     "messages": 0,
                     "leads": 1,

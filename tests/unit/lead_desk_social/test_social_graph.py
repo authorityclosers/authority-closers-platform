@@ -286,6 +286,45 @@ def test_sending_answers_or_uses_the_human_agent_tag() -> None:
     assert len(seen[1]["message"]["text"]) == 1000  # Instagram's limit
 
 
+def test_a_comment_not_taken_says_why_without_its_content() -> None:
+    def change(**value: object) -> dict[str, object]:
+        return {"field": "feed", "value": {"item": "comment", "comment_id": "777_900", **value}}
+
+    page = graph.parse(
+        {
+            "object": "page",
+            "entry": [
+                {
+                    "id": PAGE,
+                    "changes": [
+                        change(verb="add", message="qatest"),  # Meta sent no from
+                        change(verb="add", **{"from": {"id": PAGE, "name": "The Page"}}),
+                        change(verb="edited", **{"from": {"id": PSID}}),
+                        change(verb="add", **{"from": {"id": "not-an-id"}}),
+                        {"field": "feed", "value": {"item": "reaction", "verb": "add"}},
+                    ],
+                }
+            ],
+        }
+    )
+    assert page.comments == []
+    assert [(s.channel, s.account_id, s.reason) for s in page.skipped] == [
+        ("messenger", PAGE, "no_sender"),
+        ("messenger", PAGE, "from_page"),
+        ("messenger", PAGE, "not_new"),
+        ("messenger", PAGE, "bad_id"),
+    ]
+    # Field names only: never the words or who wrote them.
+    assert page.skipped[0].fields == ("comment_id", "item", "message", "verb")
+    insta = graph.parse(
+        {
+            "object": "instagram",
+            "entry": [{"id": IG, "changes": [{"field": "comments", "value": {"id": "18000002"}}]}],
+        }
+    )
+    assert [s.reason for s in insta.skipped] == ["no_sender"]
+
+
 def test_a_comment_gets_a_private_and_a_public_reply() -> None:
     paths: list[str] = []
 

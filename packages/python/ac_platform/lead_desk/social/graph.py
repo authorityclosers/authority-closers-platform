@@ -209,6 +209,17 @@ class Comment:
     at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class Skipped:
+    """A comment Sales Xray didn't take, and why. No content: the reason, and the names of
+    the fields Meta sent (to see, for instance, that it sent no ``from``)."""
+
+    channel: Channel
+    account_id: str
+    reason: str  # no_sender, from_page, not_new, bad_id
+    fields: tuple[str, ...]
+
+
 @dataclass(slots=True)
 class Delivery:
     inbound: list[Inbound] = field(default_factory=list)
@@ -216,6 +227,7 @@ class Delivery:
     seen: list[Seen] = field(default_factory=list)
     comments: list[Comment] = field(default_factory=list)
     unsent: list[str] = field(default_factory=list)  # message ids the person took back
+    skipped: list[Skipped] = field(default_factory=list)
 
 
 def _time(value: Any) -> datetime:
@@ -334,10 +346,39 @@ def parse(payload: Mapping[str, Any]) -> Delivery:
             if not isinstance(change, Mapping) or not isinstance(change.get("value"), Mapping):
                 continue
             value = change["value"]
-            found = _comment(channel, account, str(change.get("field") or ""), value)
+            name = str(change.get("field") or "")
+            found = _comment(channel, account, name, value)
             if found is not None:
                 out.comments.append(found)
+                continue
+            why = _why_not(channel, account, name, value)
+            if why is not None:
+                fields = tuple(sorted(str(key) for key in value)[:20])
+                out.skipped.append(Skipped(channel, account, why, fields))
     return out
+
+
+def _why_not(channel: Channel, account: str, name: str, value: Mapping[str, Any]) -> str | None:
+    """Why a comment isn't one to answer (None: the change isn't a comment at all)."""
+    if channel == "messenger":
+        if name != "feed" or value.get("item") != "comment":
+            return None  # posts, reactions, likes
+        if value.get("verb") != "add":
+            return "not_new"
+        comment_id = value.get("comment_id")
+    else:
+        if name != "comments":
+            return None
+        comment_id = value.get("id")
+    sender = value.get("from") if isinstance(value.get("from"), Mapping) else {}
+    user = str(sender.get("id") or "") if isinstance(sender, Mapping) else ""
+    if not user:
+        return "no_sender"
+    if user == account:
+        return "from_page"
+    if not COMMENT_ID.fullmatch(str(comment_id or "")) or not SCOPED_ID.fullmatch(user):
+        return "bad_id"
+    return None
 
 
 def _comment(channel: Channel, account: str, name: str, value: Mapping[str, Any]) -> Comment | None:

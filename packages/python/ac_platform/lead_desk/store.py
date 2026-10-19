@@ -776,7 +776,9 @@ class LeadDesk:
         stage: str | None,
         search: str | None,
         offset: int,
+        limit: int = PAGE_SIZE,
     ) -> LeadPage:
+        limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins see the whole team's leads.")
         where: list[Any] = [self._visible()]
@@ -803,14 +805,14 @@ class LeadDesk:
         )
         leads = (
             await self.db.scalars(
-                select(Lead).where(*where).order_by(*order).offset(offset).limit(PAGE_SIZE)
+                select(Lead).where(*where).order_by(*order).offset(offset).limit(limit)
             )
         ).all()
         rows = await self._rows(leads)
         return LeadPage(
             leads=rows,
             total=total,
-            next_offset=offset + PAGE_SIZE if offset + PAGE_SIZE < total else None,
+            next_offset=offset + limit if offset + limit < total else None,
         )
 
     async def detail(self, lead_id: UUID) -> LeadDetail:

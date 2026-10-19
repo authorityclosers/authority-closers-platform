@@ -185,6 +185,48 @@ it("goes straight on to the dataset after Continue with Meta and saves the stage
   expect(host.textContent).toContain("set up your sales funnel");
 });
 
+it("says what is missing instead of doing nothing", async () => {
+  let datasets = [
+    { id: "777000111", name: "Fictional Homes website" },
+    { id: "777000333", name: "Fictional Homes shop" },
+  ];
+  const fetcher = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith("/datasets") && (init?.method ?? "GET") === "GET"
+        ? json({ adAccounts: [], datasets })
+        : fetcher(input, init),
+    ),
+  );
+  await render(true);
+  await act(async () => button("Send lead stages to Meta").click());
+  expect(host.textContent).toContain(
+    "Pick the dataset that gets your lead stages",
+  );
+  expect(calls.some((call) => call.method === "PUT")).toBe(false);
+  const radio = host.querySelector('input[type="radio"]') as HTMLInputElement;
+  await act(async () => radio.click());
+  await type(
+    host.querySelector(
+      'input[aria-label="Meta event for New"]',
+    ) as HTMLInputElement,
+    " ",
+  );
+  await act(async () => button("Send lead stages to Meta").click());
+  expect(host.textContent).toContain(
+    "Give each ticked stage a Meta event name",
+  );
+  expect(calls.some((call) => call.method === "PUT")).toBe(false);
+  // With just one dataset, it is picked for you.
+  datasets = [{ id: "777000111", name: "Fictional Homes website" }];
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await render(true);
+  const one = host.querySelector('input[type="radio"]') as HTMLInputElement;
+  expect(one.checked).toBe(true);
+});
+
 it("makes a new dataset in the customer's ad account", async () => {
   await render(true);
   await act(async () => button("Create").click());

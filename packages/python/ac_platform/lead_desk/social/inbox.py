@@ -227,6 +227,17 @@ class Received:
     statuses: int = 0
     comments: int = 0
     unsent: int = 0
+    skipped: list[str] = field(default_factory=list)  # why comments weren't taken
+
+
+SKIP_KEY = "last_comment_skip"
+
+
+def note_skip(row: LeadSocialAccount, channel: str, reason: str, now: datetime) -> None:
+    """The Page's last comment not taken, and why, for Settings → Connected apps."""
+    config = dict(row.config or {})
+    config[SKIP_KEY] = {"at": now.isoformat(), "channel": channel, "why": reason}
+    row.config = config
 
 
 def chat_key(channel: str, account_id: str, user_id: str) -> tuple[str, str, str]:
@@ -395,7 +406,10 @@ async def receive(
             None,
         )
         if index is None:
-            continue  # only comments a rule asks for are kept
+            # Only comments a rule asks for are kept.
+            note_skip(row, comment.channel, "no_rule", now)
+            out.skipped.append("no_rule")
+            continue
         lead, created = await lead_for(
             db, row, comment.channel, comment.user_id, comment.user_name, now=now, comment=True
         )
@@ -428,6 +442,11 @@ async def receive(
         if inserted.first() is not None:
             out.comments += 1
             out.leads_created += created
+    for skip in delivery.skipped:
+        row = await find(skip.channel, skip.account_id)
+        if row is not None:
+            note_skip(row, skip.channel, skip.reason, now)
+        out.skipped.append(skip.reason)
     if delivery.unsent:
         result = await db.execute(
             update(LeadSocialMessage)

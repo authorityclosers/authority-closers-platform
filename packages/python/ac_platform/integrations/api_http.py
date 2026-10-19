@@ -243,11 +243,17 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
         stage: Literal["open", "new", "not_connected", "follow_up", "interested", "won", "lost"]
         | None = None,
         offset: int = 0,
+        limit: int = 50,
     ) -> JSONResponse:
+        """A page of the team's leads: ``limit`` 1-50 (default 50), ``offset`` for the next."""
         async with keyed(request, "leads:read") as (session, key):
             try:
                 page = await desk(session, key).leads(
-                    scope="team", stage=stage, search=None, offset=max(0, offset)
+                    scope="team",
+                    stage=stage,
+                    search=None,
+                    offset=max(0, offset),
+                    limit=max(1, min(50, limit)),
                 )
             except DeskError as error:
                 raise ApiError(error.status, "lead_desk", str(error)) from None
