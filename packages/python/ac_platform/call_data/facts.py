@@ -420,6 +420,7 @@ def call_objects(connection: Any, recording_id: UUID) -> dict[str, Any]:
         ],
         "segments": [
             {
+                "object_id": str(seg.row.id),
                 "segment_id": (seg.row.evidence or [{}])[0].get("segment_id"),
                 "start_ms": (seg.row.evidence or [{}])[0].get("start_ms"),
                 "end_ms": (seg.row.evidence or [{}])[0].get("end_ms"),
@@ -430,5 +431,7 @@ def call_objects(connection: Any, recording_id: UUID) -> dict[str, Any]:
             }
             for seg in segments
         ],
-        "voice": dict(voice.row.value) if voice is not None else None,
+        "voice": (
+            {"object_id": str(voice.row.id), **dict(voice.row.value)} if voice is not None else None
+        ),
     }

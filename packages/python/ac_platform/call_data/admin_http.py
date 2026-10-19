@@ -1,6 +1,7 @@
 """Admin routes for the call data engine (Admin host, operations control accounts only).
 
-- GET /v1/admin/conversation/calls/{recording_id}/data-map  one call's stage map
+- GET /v1/admin/call-data/calls/{recording_id}/detail   one call: map, runs, objects
+                                                          (audited as call_data.admin_view)
 - GET /v1/admin/call-data                                   settings, spend, recent runs
 - PUT /v1/admin/call-data/settings                          swap the model, switch off, cap
 
@@ -18,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
 from ac_platform.audit.service import AuditRepository
-from ac_platform.call_data import call_map, detail, engine, facts
+from ac_platform.call_data import detail, engine
 from ac_platform.call_data.settings import PIPELINES, SettingsError, public, raise_to
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -83,35 +84,6 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
             raise HTTPException(error.status, str(error)) from None
         return actor
 
-    @router.get("/v1/admin/conversation/calls/{recording_id}/data-map")
-    async def data_map(
-        recording_id: UUID,
-        request: Request,
-        response: Response,
-        auth: AuthenticatedTransaction = dependency,
-    ) -> dict[str, Any]:
-        await admit(request, response, auth)
-        result = await auth.database.run_sync(
-            lambda session: call_map.call_map(session.connection(), recording_id)
-        )
-        if result is None:
-            raise HTTPException(404, "This call is not here.")
-        return result
-
-    @router.get("/v1/admin/conversation/calls/{recording_id}/data-objects")
-    async def data_objects(
-        recording_id: UUID,
-        request: Request,
-        response: Response,
-        auth: AuthenticatedTransaction = dependency,
-    ) -> dict[str, Any]:
-        """What the engine found in one call: facts, segment labels, voice (content)."""
-        await admit(request, response, auth)
-        result: dict[str, Any] = await auth.database.run_sync(
-            lambda session: facts.call_objects(session.connection(), recording_id)
-        )
-        return result
-
     @router.get("/v1/admin/call-data/calls/{recording_id}/detail")
     async def call_detail(
         recording_id: UUID,
@@ -120,13 +92,24 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
         """The dense call screen: stages and edges, every attempt and object, facts, voice."""
-        await admit(request, response, auth)
+        actor = await admit(request, response, auth)
         result = await auth.database.run_sync(
             lambda session: detail.detail(session.connection(), recording_id)
         )
         if result is None:
             raise HTTPException(404, "This call is not here.")
         tenant = result["call"].get("tenant_id")
+        if tenant:
+            # A staff read of a customer's call content, in that customer's own chain.
+            await AuditRepository(auth.database).append(
+                tenant_id=UUID(tenant),
+                actor_person_id=actor.person_id,
+                action="call_data.admin_view",
+                resource_type="conversation_recording",
+                resource_id=str(recording_id),
+                payload={"read": "call-data-detail/1"},
+                session_id=actor.session_id,
+            )
         workspaces = (
             await classify_workspaces(
                 auth.database,
