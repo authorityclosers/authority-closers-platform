@@ -15,8 +15,9 @@ async def test_metrics_route_bounds_its_filters(admin_client, monkeypatch) -> No
     client, _database = admin_client
     seen: dict[str, Any] = {}
 
-    async def summary(service, actor, *, days, environment, tests):
+    async def summary(service, actor, *, days, environment, tests, call_sort, call_steps):
         seen.update(days=days, environment=environment, tests=tests, root=service.store_root)
+        seen.update(call_sort=call_sort, call_steps=call_steps)
         return {"overview": {}}
 
     monkeypatch.setattr(AdminCostMetrics, "summary", summary)
@@ -25,7 +26,14 @@ async def test_metrics_route_bounds_its_filters(admin_client, monkeypatch) -> No
     )
     assert response.status_code == 200
     assert response.headers["cache-control"] == "private, no-store"
-    assert seen == {"days": 90, "environment": "staging", "tests": True, "root": None}
+    assert seen == {
+        "days": 90,
+        "environment": "staging",
+        "tests": True,
+        "root": None,
+        "call_sort": "newest",
+        "call_steps": False,
+    }
     assert (await client.get("/v1/admin/conversation/metrics")).status_code == 200
     assert seen["days"] == 30 and seen["environment"] == "all" and seen["tests"] is False
     for params in (

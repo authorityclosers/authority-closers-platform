@@ -456,3 +456,120 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ---------- Per call: one line per call that opens to its steps (19 Oct 2026) ---------- */
+
+.callList {
+  display: grid;
+}
+
+.callHead,
+.callLine > summary {
+  display: grid;
+  grid-template-columns:
+    minmax(13rem, 2.4fr) repeat(4, minmax(4.5rem, 1fr)) minmax(5.5rem, 1fr)
+    minmax(4.5rem, 0.8fr) minmax(5rem, 0.9fr);
+  gap: 4px 12px;
+  align-items: center;
+  padding: 8px 14px;
+}
+
+.callHead {
+  border-bottom: 1px solid var(--sx-line);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.callHead [data-num],
+.callLine > summary [data-num] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.callLine {
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.callLine > summary {
+  font-size: var(--sx-text-sm);
+  cursor: pointer;
+  list-style: none;
+}
+
+.callLine > summary::-webkit-details-marker {
+  display: none;
+}
+
+.callLine > summary:hover,
+.callLine[open] > summary {
+  background: var(--sx-sunken);
+}
+
+.callLine > summary small {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.callWho {
+  display: grid;
+  min-width: 0;
+}
+
+.callWho > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.callDetail {
+  display: grid;
+  gap: 8px;
+  padding: 4px 14px 14px;
+  background: var(--sx-sunken);
+}
+
+.zeroCalls {
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  font-size: var(--sx-text-sm);
+}
+
+.zeroCalls summary {
+  cursor: pointer;
+}
+
+.zeroCalls ul {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 760px) {
+  .callHead {
+    display: none;
+  }
+
+  .callLine > summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .callWho {
+    grid-column: 1 / -1;
+  }
+
+  .callLine > summary [data-label]::before {
+    display: block;
+    color: var(--sx-muted);
+    font-size: var(--sx-text-xs);
+    content: attr(data-label);
+  }
+
+  .callLine > summary [data-num] {
+    text-align: left;
+  }
+}

@@ -111,7 +111,7 @@ def _document(environment: str = "staging", **overrides: Any) -> dict[str, Any]:
         "generated_at": _at(0.1),
         "window_days": 120,
         "migration": "20261018_0096",
-        "companies": [{"id": "co-1", "name": "Wise Life", "kind": "organisation"}],
+        "companies": [{"id": "co-1", "name": "Sunrise Rooftops", "kind": "organisation"}],
         "calls": [_call("call-real"), _call("call-canary", kind="canary", hours_ago=3)],
         "steps": _steps("call-real") + _steps("call-canary", hours_ago=3),
         "local_steps": [],
@@ -218,7 +218,7 @@ def test_individuals_are_named_plainly() -> None:
 
 def test_a_call_shows_each_stage_its_billed_minutes_and_report_time() -> None:
     row = build_metrics([parse_export("staging", _document())], _scope())["calls"]["rows"][0]
-    assert row["company"] == "Wise Life" and row["environment"] == "staging"
+    assert row["company"] == "Sunrise Rooftops" and row["environment"] == "staging"
     assert row["stages"]["C2"]["rupees"] == 3.67
     assert row["stages"]["C5"] == {
         "input_tokens": 1000,
@@ -369,7 +369,7 @@ def test_revenue_counts_live_money_against_cost() -> None:
     )
     result = build_metrics([parse_export("production", document)], _scope())
     row = result["revenue"]["rows"][0]
-    assert row["company"] == "Wise Life" and row["plan"]["name"] == "Team"
+    assert row["company"] == "Sunrise Rooftops" and row["plan"]["name"] == "Team"
     assert row["revenue"] == 900.0 and row["test_revenue"] == 500.0
     assert row["cost"] == 4.12 and row["margin"] == 895.88
     assert row["billed_minutes"] == 10.0 and row["cost_per_billed_minute"] == 0.41
@@ -448,3 +448,42 @@ def test_export_sql_is_one_read_only_statement_without_call_content() -> None:
         "period",
         "cap_paise",
     }
+
+
+def test_per_call_sorts_keeps_free_calls_apart_and_opens_each_step() -> None:
+    # Owner's review, 19 Oct 2026: Per call needs depth, and the ₹0.00 rows hid it.
+    failed = {**_steps("call-free", hours_ago=1)[0], "status": "dead_letter"}
+    document = _document(
+        calls=[
+            _call("call-real"),
+            _call("call-big", hours_ago=10),
+            _call("call-free", hours_ago=1),
+        ],
+        steps=_steps("call-real")
+        + _steps("call-big", hours_ago=10)
+        + _steps("call-big", hours_ago=9.9)[:1]  # transcribed twice: costs more
+        + [failed],
+    )
+    export = parse_export("staging", document)
+    newest = build_metrics([export], _scope())["calls"]
+    assert [row["id"] for row in newest["rows"]] == ["call-real", "call-big"]
+    assert newest["total"] == 2 and newest["sort"] == "newest"
+    assert newest["zero_total"] == 1
+    (free,) = newest["zero_rows"]
+    assert free["id"] == "call-free" and free["statuses"] == {"dead_letter": 1}
+    assert "steps" not in newest["rows"][0]  # steps only when the Per call tab asks
+
+    by_cost = build_metrics([export], _scope(call_sort="cost", call_steps=True))["calls"]
+    assert [row["id"] for row in by_cost["rows"]] == ["call-big", "call-real"]
+    real = by_cost["rows"][1]
+    assert real["models"] == ["gemini-3.8-flash", "scribe_v2"]
+    assert real["tokens"] >= 2400
+    first = real["steps"][0]
+    assert (first["stage"], first["provider"], first["model"], first["status"]) == (
+        "C2",
+        "elevenlabs",
+        "scribe_v2",
+        "succeeded",
+    )
+    assert first["rupees"] == 3.67 and first["audio_minutes"] == 10.0
+    assert [step["stage"] for step in real["steps"]][:3] == ["C2", "C4", "C5"]

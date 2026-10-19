@@ -9,6 +9,7 @@ import { Coins, Gauge, GitCompare, Landmark, Receipt, X } from "lucide-react";
 
 import {
   ENVIRONMENTS,
+  CALL_SORTS,
   ENVIRONMENT_LABEL,
   KIND_LABEL,
   STAGE_LABEL,
@@ -29,6 +30,8 @@ import {
   toggleChart,
   together,
   tokens,
+  zeroReason,
+  type CallRow,
   type ChartView,
   type Metrics,
   type Pipeline,
@@ -803,9 +806,162 @@ export function ChartBoard({
 
 const STAGE_ORDER = ["C2", "C4", "C5", "PR"];
 
-export function CallsView({ metrics }: { metrics: Metrics }) {
-  const rows = metrics.calls.rows;
-  if (!rows.length)
+const STEP_STATUS: Record<string, string> = {
+  succeeded: "done",
+  dead_letter: "failed",
+  retry_wait: "retrying",
+  leased: "running",
+  queued: "waiting",
+  cancelled: "cancelled",
+};
+
+/** Each provider step of one call: what ran, how, and what it cost. */
+function CallSteps({ row }: { row: CallRow }) {
+  if (!row.steps.length)
+    return <p className={styles.hint}>This read has no step detail.</p>;
+  return (
+    <Table label={`Steps of the ${row.company} call at ${stamp(row.at)}`}>
+      <thead>
+        <tr>
+          <th scope="col">Step</th>
+          <th scope="col">Provider and model</th>
+          <th scope="col">Status</th>
+          <th scope="col" data-num="">
+            Tries
+          </th>
+          <th scope="col" data-num="">
+            Tokens in
+          </th>
+          <th scope="col" data-num="">
+            Tokens out
+          </th>
+          <th scope="col" data-num="">
+            Audio
+          </th>
+          <th scope="col" data-num="">
+            Took
+          </th>
+          <th scope="col" data-num="">
+            Cost
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {row.steps.map((step, index) => (
+          <tr key={`${step.stage}-${step.at}-${index}`}>
+            <th scope="row">
+              {STAGE_LABEL[step.stage] ?? step.stage}
+              <span className={styles.sub}>{stamp(step.at)}</span>
+            </th>
+            <td>
+              {step.provider ?? "–"}
+              <span className={styles.sub}>{step.model ?? "–"}</span>
+            </td>
+            <td>{STEP_STATUS[step.status] ?? step.status}</td>
+            <td data-num="">{count(step.attempts)}</td>
+            <td data-num="">{tokens(step.inputTokens)}</td>
+            <td data-num="">{tokens(step.outputTokens)}</td>
+            <td data-num="">
+              {step.audioMinutes === null ? "–" : minutes(step.audioMinutes)}
+            </td>
+            <td data-num="">{seconds(step.elapsedMs)}</td>
+            <td data-num="">
+              {step.rupees === null ? (
+                <span className={styles.sub}>no price</span>
+              ) : (
+                inr(step.rupees)
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+}
+
+/** One call: a summary line that opens to its steps. */
+function CallLine({ row, here }: { row: CallRow; here: string | null }) {
+  return (
+    <details className={styles.callLine} role="listitem">
+      <summary>
+        <span className={styles.callWho}>
+          <strong>{row.company}</strong>
+          <span className={styles.sub}>
+            <Env name={row.environment} /> · {stamp(row.at)} ·{" "}
+            {minutes(row.audioMinutes)}
+            {row.kind !== "real"
+              ? ` · ${KIND_LABEL[row.kind] ?? row.kind}`
+              : ""}
+          </span>
+          {row.models.length ? (
+            <span className={styles.sub}>{row.models.join(" · ")}</span>
+          ) : null}
+        </span>
+        {STAGE_ORDER.map((stage) => {
+          const cost = row.stages[stage];
+          return (
+            <span key={stage} data-num="" data-label={STAGE_LABEL[stage]}>
+              {cost ? inr(cost.rupees) : "–"}
+              {cost && cost.runs > 1 ? <small>{cost.runs} runs</small> : null}
+              {cost && cost.failed ? <small>{cost.failed} failed</small> : null}
+            </span>
+          );
+        })}
+        <span data-num="" data-label="Total">
+          <strong>{inr(row.rupees)}</strong>
+          <small>{perMin(row.perMinute)}</small>
+        </span>
+        <span data-num="" data-label="Tokens">
+          {tokens(row.tokens)}
+        </span>
+        <span data-num="" data-label="Report in">
+          {row.report ? seconds(row.reportMs) : "no report"}
+        </span>
+      </summary>
+      <div className={styles.callDetail}>
+        <CallSteps row={row} />
+        <p className={styles.hint}>
+          {minutes(row.billedMinutes)} billed ·{" "}
+          {row.margin === null
+            ? "no paid plan, so no margin"
+            : `margin ${inr(row.margin)}`}
+          {row.version ? ` · ${row.version}` : ""}
+          {here === row.environment ? (
+            <>
+              {" · "}
+              <Link href={`/calls/${row.id}`}>Open the call</Link>
+            </>
+          ) : null}
+        </p>
+      </div>
+    </details>
+  );
+}
+
+export function CallsView({
+  metrics,
+  current,
+}: {
+  metrics: Metrics;
+  current: CostFilter;
+}) {
+  const { rows, total, sort, zeroRows, zeroTotal } = metrics.calls;
+  const sorter = (
+    <div className={styles.filters}>
+      <Chips
+        label="Sort"
+        items={CALL_SORTS.map((item) => ({
+          key: item.key,
+          label: item.label,
+          href: costQuery(current, {
+            sort: item.key === "newest" ? undefined : item.key,
+          }),
+          on: sort === item.key,
+        }))}
+      />
+    </div>
+  );
+  if (!rows.length && !zeroTotal)
     return (
       <Panel title="Calls">
         <Empty
@@ -816,107 +972,69 @@ export function CallsView({ metrics }: { metrics: Metrics }) {
       </Panel>
     );
   return (
-    <Panel
-      title="Cost per call"
-      sub={
-        metrics.calls.total > rows.length
-          ? `newest ${count(rows.length)} of ${count(metrics.calls.total)}`
-          : `${count(rows.length)} calls`
-      }
-      tools={
-        <Why detail="Each call's provider steps priced from the price sheet: transcription by audio length, facts, report and pointer review by tokens in and out. Margin needs a paid plan: plan price per included minute times the minutes billed, minus cost." />
-      }
-    >
-      <Table
-        label="Cost per call"
-        cards={rows.map((row) => (
-          <div key={`${row.environment}-${row.id}`} role="listitem">
-            <Env name={row.environment} /> · {row.company} ·{" "}
-            {minutes(row.audioMinutes)} · {inr(row.rupees)} (
-            {perMin(row.perMinute)})
-          </div>
-        ))}
+    <>
+      {sorter}
+      <Panel
+        title="Cost per call"
+        sub={
+          total > rows.length
+            ? `${count(rows.length)} of ${count(total)} calls with a cost`
+            : `${count(total)} ${total === 1 ? "call" : "calls"} with a cost`
+        }
+        tools={
+          <Why detail="Each call's provider steps priced from the price sheet: transcription by audio length, facts, report and pointer review by tokens in and out. Open a call to see every step: provider and model, tries, tokens, audio, time and cost. Margin needs a paid plan. Calls that cost nothing are listed apart below." />
+        }
       >
-        <thead>
-          <tr>
-            <th scope="col">Call</th>
-            {STAGE_ORDER.map((stage) => (
-              <th key={stage} scope="col" data-num="">
-                {STAGE_LABEL[stage]}
-              </th>
+        {rows.length ? (
+          <div className={styles.callList} role="list" aria-label="Calls">
+            <div className={styles.callHead} aria-hidden="true">
+              <span>Call</span>
+              {STAGE_ORDER.map((stage) => (
+                <span key={stage} data-num="">
+                  {STAGE_LABEL[stage]}
+                </span>
+              ))}
+              <span data-num="">Total</span>
+              <span data-num="">Tokens</span>
+              <span data-num="">Report in</span>
+            </div>
+            {rows.map((row) => (
+              <CallLine
+                key={`${row.environment}-${row.id}`}
+                row={row}
+                here={metrics.here}
+              />
             ))}
-            <th scope="col" data-num="">
-              Total
-            </th>
-            <th scope="col" data-num="">
-              Billed
-            </th>
-            <th scope="col" data-num="">
-              Margin
-            </th>
-            <th scope="col" data-num="">
-              Report in
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={`${row.environment}-${row.id}`}>
-              <th scope="row">
-                {metrics.here === row.environment ? (
-                  <Link href={`/calls/${row.id}`}>{row.company}</Link>
-                ) : (
-                  row.company
-                )}
+          </div>
+        ) : (
+          <Empty icon={Receipt} title="No call cost anything in this window" />
+        )}
+      </Panel>
+      {zeroTotal ? (
+        <details className={styles.zeroCalls}>
+          <summary>
+            {count(zeroTotal)} {zeroTotal === 1 ? "call" : "calls"} cost nothing{" "}
+            <span className={styles.sub}>no paid step finished · show</span>
+          </summary>
+          <ul>
+            {zeroRows.map((row) => (
+              <li key={`${row.environment}-${row.id}`}>
+                <strong>{row.company}</strong>{" "}
                 <span className={styles.sub}>
                   <Env name={row.environment} /> · {stamp(row.at)} ·{" "}
-                  {minutes(row.audioMinutes)}
-                  {row.kind !== "real"
-                    ? ` · ${KIND_LABEL[row.kind] ?? row.kind}`
-                    : ""}
+                  {minutes(row.audioMinutes)} · {zeroReason(row.statuses)}
                 </span>
-              </th>
-              {STAGE_ORDER.map((stage) => {
-                const cost = row.stages[stage];
-                return (
-                  <td key={stage} data-num="">
-                    {cost ? inr(cost.rupees) : "–"}
-                    {cost && (cost.inputTokens || cost.outputTokens) ? (
-                      <span className={styles.sub}>
-                        {tokens(cost.inputTokens)} in ·{" "}
-                        {tokens(cost.outputTokens)} out
-                      </span>
-                    ) : null}
-                    {cost && cost.runs > 1 ? (
-                      <span className={styles.sub}>{cost.runs} runs</span>
-                    ) : null}
-                  </td>
-                );
-              })}
-              <td data-num="">
-                <strong>{inr(row.rupees)}</strong>
-                <span className={styles.sub}>{perMin(row.perMinute)}</span>
-              </td>
-              <td data-num="">{minutes(row.billedMinutes)}</td>
-              <td data-num="">
-                {row.margin === null ? (
-                  <span className={styles.sub}>no paid plan</span>
-                ) : (
-                  <span
-                    className={row.margin >= 0 ? styles.better : styles.worse}
-                  >
-                    {inr(row.margin)}
-                  </span>
-                )}
-              </td>
-              <td data-num="">
-                {row.report ? seconds(row.reportMs) : "no report"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-    </Panel>
+              </li>
+            ))}
+          </ul>
+          {zeroTotal > zeroRows.length ? (
+            <p className={styles.hint}>
+              Newest {count(zeroRows.length)} shown.
+            </p>
+          ) : null}
+        </details>
+      ) : null}
+    </>
   );
 }
 

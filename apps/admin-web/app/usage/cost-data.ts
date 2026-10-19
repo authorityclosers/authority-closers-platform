@@ -107,6 +107,21 @@ export type StageCost = {
   failed: number;
 };
 
+/** One provider step of a call (Per call drill-down, 19 Oct 2026). */
+export type CallStep = {
+  stage: string;
+  provider: string | null;
+  model: string | null;
+  status: string;
+  attempts: number;
+  inputTokens: number;
+  outputTokens: number;
+  audioMinutes: number | null;
+  elapsedMs: number | null;
+  rupees: number | null;
+  at: string;
+};
+
 export type CallRow = {
   environment: string;
   id: string;
@@ -124,6 +139,12 @@ export type CallRow = {
   version: string;
   revenue: number | null;
   margin: number | null;
+  tokens: number;
+  models: string[];
+  /** How many of its steps ended in each status. */
+  statuses: Record<string, number>;
+  /** Each step, when the Per call tab asked for them. */
+  steps: CallStep[];
 };
 
 export type RevenueRow = {
@@ -240,7 +261,14 @@ export type Metrics = {
     byStage: StageRow[];
   };
   providers: { models: ModelRow[]; daily: ProviderDay[] };
-  calls: { rows: CallRow[]; total: number };
+  calls: {
+    rows: CallRow[];
+    total: number;
+    sort: string;
+    /** Calls that cost nothing, listed apart. */
+    zeroRows: CallRow[];
+    zeroTotal: number;
+  };
   revenue: {
     rows: RevenueRow[];
     totals: Record<string, { revenue: number; cost: number; margin: number }>;
@@ -271,6 +299,61 @@ const numbers = (value: unknown): Record<string, number> =>
   Object.fromEntries(
     Object.entries(read.object(value)).map(([key, item]) => [key, n(item)]),
   );
+
+function callRow(item: unknown): CallRow {
+  const row = read.object(item);
+  return {
+    environment: env(row.environment),
+    id: s(row.id),
+    company: s(row.company, "Unknown"),
+    companyKind: s(row.company_kind, "other"),
+    kind: s(row.kind, "real"),
+    at: s(row.at),
+    audioMinutes: n(row.audio_minutes),
+    stages: Object.fromEntries(
+      Object.entries(read.object(row.stages)).map(([stage, value]) => {
+        const cost = read.object(value);
+        return [
+          stage,
+          {
+            inputTokens: n(cost.input_tokens),
+            outputTokens: n(cost.output_tokens),
+            rupees: n(cost.rupees),
+            runs: n(cost.runs),
+            failed: n(cost.failed),
+          },
+        ];
+      }),
+    ),
+    rupees: n(row.rupees),
+    perMinute: on(row.per_minute),
+    billedMinutes: n(row.billed_minutes),
+    report: read.boolean(row.report),
+    reportMs: on(row.report_ms),
+    version: s(row.version),
+    revenue: on(row.revenue),
+    margin: on(row.margin),
+    tokens: n(row.tokens),
+    models: read.strings(row.models),
+    statuses: numbers(row.statuses),
+    steps: read.array(row.steps).map((value) => {
+      const step = read.object(value);
+      return {
+        stage: s(step.stage),
+        provider: os(step.provider),
+        model: os(step.model),
+        status: s(step.status),
+        attempts: n(step.attempts),
+        inputTokens: n(step.input_tokens),
+        outputTokens: n(step.output_tokens),
+        audioMinutes: on(step.audio_minutes),
+        elapsedMs: on(step.elapsed_ms),
+        rupees: on(step.rupees),
+        at: s(step.at),
+      };
+    }),
+  };
+}
 
 export function normalizeMetrics(raw: unknown): Metrics {
   const body = read.object(raw);
@@ -390,41 +473,10 @@ export function normalizeMetrics(raw: unknown): Metrics {
     },
     calls: {
       total: n(calls.total),
-      rows: read.array(calls.rows).map((item) => {
-        const row = read.object(item);
-        return {
-          environment: env(row.environment),
-          id: s(row.id),
-          company: s(row.company, "Unknown"),
-          companyKind: s(row.company_kind, "other"),
-          kind: s(row.kind, "real"),
-          at: s(row.at),
-          audioMinutes: n(row.audio_minutes),
-          stages: Object.fromEntries(
-            Object.entries(read.object(row.stages)).map(([stage, value]) => {
-              const cost = read.object(value);
-              return [
-                stage,
-                {
-                  inputTokens: n(cost.input_tokens),
-                  outputTokens: n(cost.output_tokens),
-                  rupees: n(cost.rupees),
-                  runs: n(cost.runs),
-                  failed: n(cost.failed),
-                },
-              ];
-            }),
-          ),
-          rupees: n(row.rupees),
-          perMinute: on(row.per_minute),
-          billedMinutes: n(row.billed_minutes),
-          report: read.boolean(row.report),
-          reportMs: on(row.report_ms),
-          version: s(row.version),
-          revenue: on(row.revenue),
-          margin: on(row.margin),
-        };
-      }),
+      sort: s(calls.sort, "newest"),
+      rows: read.array(calls.rows).map(callRow),
+      zeroTotal: n(calls.zero_total),
+      zeroRows: read.array(calls.zero_rows).map(callRow),
     },
     revenue: {
       paymentsRecorded: n(revenue.payments_recorded),
@@ -680,6 +732,7 @@ export function costQuery(
     params.set("ca", next.ca);
     params.set("cb", next.cb);
   }
+  if (next.sort && next.sort !== "newest") params.set("sort", next.sort);
   for (const [key, value] of Object.entries(extra)) params.set(key, value);
   const text = params.toString();
   return text ? `/usage?${text}` : "/usage";
@@ -868,17 +921,57 @@ export function seriesValue(unit: SeriesUnit, value: number | null): string {
 }
 
 /** The chart view kept in the link: shown charts and the compared pair. */
-export type ChartView = { charts?: string; ca?: string; cb?: string };
+export type ChartView = {
+  charts?: string;
+  ca?: string;
+  cb?: string;
+  /** Per call order: newest unless chosen. */
+  sort?: string;
+};
 
-const VIEW_VALUE = /^[a-zA-Z0-9,-]{1,300}$/;
+/** The orders the Per call tab offers (the API accepts the same keys). */
+export const CALL_SORTS = [
+  { key: "newest", label: "Newest" },
+  { key: "cost", label: "Most expensive" },
+  { key: "per_minute", label: "Highest per minute" },
+  { key: "audio", label: "Longest audio" },
+  { key: "tokens", label: "Most tokens" },
+];
+
+/** Why a call cost nothing, from how its steps ended. */
+export function zeroReason(statuses: Record<string, number>): string {
+  const failed = statuses.dead_letter ?? 0;
+  const done = statuses.succeeded ?? 0;
+  const waiting = Object.entries(statuses)
+    .filter(([status]) => status !== "dead_letter" && status !== "succeeded")
+    .reduce((sum, [, value]) => sum + value, 0);
+  if (failed)
+    return `${count(failed)} ${failed === 1 ? "step" : "steps"} failed before any paid work`;
+  if (waiting)
+    return `${count(waiting)} ${waiting === 1 ? "step hasn't" : "steps haven't"} finished`;
+  if (done) return "its finished steps have no price on the price sheet yet";
+  return "no provider step ran";
+}
+
+const VIEW_VALUE = /^[a-zA-Z0-9_,-]{1,300}$/;
 
 /** Only well-formed view values survive into links. */
 export function chartView(query: {
   charts?: string;
   ca?: string;
   cb?: string;
+  sort?: string;
 }): ChartView {
   const keep = (value: string | undefined) =>
     value !== undefined && VIEW_VALUE.test(value) ? value : undefined;
-  return { charts: keep(query.charts), ca: keep(query.ca), cb: keep(query.cb) };
+  return {
+    charts: keep(query.charts),
+    ca: keep(query.ca),
+    cb: keep(query.cb),
+    sort: CALL_SORTS.some(
+      (item) => item.key === query.sort && item.key !== "newest",
+    )
+      ? query.sort
+      : undefined,
+  };
 }

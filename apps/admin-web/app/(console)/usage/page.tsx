@@ -41,6 +41,7 @@ type Query = {
   charts?: string;
   ca?: string;
   cb?: string;
+  sort?: string;
 };
 
 const pick = (
@@ -82,7 +83,11 @@ export default async function UsagePage({
   const result = events
     ? null
     : await adminRead(
-        `/v1/admin/conversation/metrics?days=${current.days}&env=${current.env}&tests=${current.tests ? 1 : 0}`,
+        `/v1/admin/conversation/metrics?days=${current.days}&env=${current.env}&tests=${current.tests ? 1 : 0}${
+          current.tab === "calls"
+            ? `&sort=${current.sort ?? "newest"}&steps=1`
+            : ""
+        }`,
         normalizeMetrics,
       );
   const metrics = result?.ok ? result.data : null;
@@ -107,7 +112,9 @@ export default async function UsagePage({
           {current.tab === "overview" ? (
             <OverviewView metrics={metrics} current={current} />
           ) : null}
-          {current.tab === "calls" ? <CallsView metrics={metrics} /> : null}
+          {current.tab === "calls" ? (
+            <CallsView metrics={metrics} current={current} />
+          ) : null}
           {current.tab === "revenue" ? <RevenueView metrics={metrics} /> : null}
           {current.tab === "providers" ? (
             <ProvidersView metrics={metrics} />
