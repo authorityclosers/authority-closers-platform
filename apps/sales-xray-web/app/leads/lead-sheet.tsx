@@ -32,6 +32,7 @@ import {
 } from "react";
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
+import { CallFacts } from "../call-engine/call-facts";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
 import {
   addNote,
@@ -1707,6 +1708,10 @@ function LeadCard({
           waiting={phoneCall ? !phoneCall.final : false}
         />
       ) : null}
+
+      {/* Owner, 19 Oct: every call becomes data. What the calls told us, and
+          the few things the engine is unsure of, asked one at a time. */}
+      <CallFacts detail={detail} onChanged={onChanged} />
 
       <section className={styles.panel} aria-label="Details">
         <div className={styles.panelHead}>

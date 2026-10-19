@@ -16,8 +16,12 @@ import type { WaveformEnvelope } from "./source-waveform";
 const DECODE_RATE = 8_000;
 /** At most this many points, like the server's envelope (and its parser). */
 const MAX_POINTS = 1_200;
-/** One point per second of call when the call is short enough. */
-const WINDOW_MS = 1_000;
+/**
+ * One point per 40 ms frame, the server's own frame, so the wave drawn while
+ * sending has the same shape as the one the server measures next (a coarser
+ * local wave visibly changed into another at "Analysing"; owner, 19 Oct).
+ */
+const WINDOW_MS = 40;
 /** Above this the upload limit refuses the file anyway. */
 const MAX_FILE_BYTES = 64 * 1048576;
 
@@ -99,6 +103,23 @@ export function measureFileWave(file: File): Promise<WaveformEnvelope | null> {
     measured.set(file, pending);
   }
   return pending;
+}
+
+/**
+ * The chosen file's wave for the call on screen: only when that file was sent
+ * as this very call. Opening another call while a file is still chosen must
+ * never draw the earlier file's shape over it (owner, 19 Oct: "old waveform
+ * flashes").
+ */
+export function waveForCall(
+  sent: { file: File; callId: string } | null,
+  file: File | null | undefined,
+  callId: string | null | undefined,
+  wave: WaveformEnvelope | null,
+): WaveformEnvelope | null {
+  return sent && file && callId && sent.file === file && sent.callId === callId
+    ? wave
+    : null;
 }
 
 /** The file's measured wave once it is ready; null until then or if none. */

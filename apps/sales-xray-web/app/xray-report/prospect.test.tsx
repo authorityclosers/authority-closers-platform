@@ -128,6 +128,10 @@ it("shows the owner's layout with evidence, AI labels and Unknowns, and saves a 
 
 it("shows a skeleton while reading, then a call-only note without a prospect", async () => {
   vi.mocked(readCallProspect).mockReturnValue(new Promise(() => {}));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 404 })),
+  );
   await act(async () =>
     root.render(
       inWorkspace(

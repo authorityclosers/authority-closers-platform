@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from ac_platform.application.settings import Settings
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
+from ac_platform.conversation_intelligence.models import ConversationRecording
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     RequireActor,
@@ -22,6 +23,11 @@ from ac_platform.http.organisation import MemberResponse, MembersResponse, Owner
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.organisations.usage import member_rows
+from ac_platform.organisations.workspace_kinds import (
+    WorkspaceKind,
+    classify_workspaces,
+    ordered,
+)
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
 READ_CAPABILITY = "platform_tenants_read"
@@ -43,6 +49,21 @@ class PlatformOrganisationResponse(_Strict):
 
 class PlatformOrganisationsResponse(_Strict):
     organisations: list[PlatformOrganisationResponse]
+
+
+class PlatformWorkspaceResponse(_Strict):
+    tenant_id: UUID
+    # The name Admin shows; ``registered_name`` is what the registry holds.
+    name: str
+    registered_name: str
+    kind: WorkspaceKind
+    status: str
+    member_count: int
+    call_count: int
+
+
+class PlatformWorkspacesResponse(_Strict):
+    workspaces: list[PlatformWorkspaceResponse]
 
 
 class ReasonRequest(_Strict):
@@ -251,3 +272,63 @@ def install_platform_organisations_http(
         )
 
     application.include_router(router)
+
+    workspaces_router = APIRouter(
+        prefix="/v1/platform/workspaces",
+        tags=["platform-organisations"],
+        dependencies=[Depends(require_surface)],
+    )
+
+    @workspaces_router.get("", response_model=PlatformWorkspacesResponse)
+    async def workspaces(
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> PlatformWorkspacesResponse:
+        """Every workspace with what it is: our company, customers, Personal, sandbox, staff."""
+        await require_capability(auth, READ_CAPABILITY)
+        kinds = await classify_workspaces(
+            auth.database,
+            operations_tenant_id=settings.operations_tenant_id,
+            personal_tenant_id=settings.public_learner_tenant_id,
+        )
+        members: dict[UUID, int] = dict(
+            (
+                await auth.database.execute(
+                    select(Membership.tenant_id, func.count())
+                    .where(
+                        Membership.role != "processing",
+                        Membership.status == "active",
+                        Membership.ended_at.is_(None),
+                    )
+                    .group_by(Membership.tenant_id)
+                )
+            )
+            .tuples()
+            .all()
+        )
+        calls: dict[UUID, int] = dict(
+            (
+                await auth.database.execute(
+                    select(ConversationRecording.tenant_id, func.count())
+                    .where(ConversationRecording.deleted_at.is_(None))
+                    .group_by(ConversationRecording.tenant_id)
+                )
+            )
+            .tuples()
+            .all()
+        )
+        return PlatformWorkspacesResponse(
+            workspaces=[
+                PlatformWorkspaceResponse(
+                    tenant_id=item.tenant_id,
+                    name=item.name,
+                    registered_name=item.registered_name,
+                    kind=item.kind,
+                    status=item.status,
+                    member_count=members.get(item.tenant_id, 0),
+                    call_count=calls.get(item.tenant_id, 0),
+                )
+                for item in ordered(kinds.values())
+            ]
+        )
+
+    application.include_router(workspaces_router)

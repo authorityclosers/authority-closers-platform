@@ -172,6 +172,11 @@
 
 /* Tinted badges mix their text toward the ink so 12 px text keeps 4.5:1 on
    any surface, in both themes (axe, 11 Oct). */
+.badge[data-tone="info"] {
+  background: color-mix(in oklab, var(--sx-info) 13%, transparent);
+  color: color-mix(in oklab, var(--sx-info) 74%, var(--sx-ink));
+}
+
 .badge[data-tone="good"] {
   background: color-mix(in oklab, var(--sx-good) 12%, transparent);
   color: color-mix(in oklab, var(--sx-good) 78%, var(--sx-ink));
@@ -208,17 +213,20 @@
   color: var(--sx-muted);
 }
 
+/* Any number of bars fits the box: a 30-day spark once spilled into the next tile. */
 .spark {
   display: inline-flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: 1px;
   width: 72px;
+  max-width: 100%;
   height: 24px;
+  overflow: hidden;
 }
 
 .spark i {
-  flex: 1;
-  min-width: 2px;
+  flex: 1 1 0;
+  min-width: 0;
   border-radius: 1px;
   background: color-mix(in oklab, var(--sx-accent) 40%, transparent);
 }
@@ -314,6 +322,7 @@ a.tile:hover {
   display: flex;
   align-items: flex-end;
   gap: 8px;
+  min-width: 0;
   min-height: 32px;
 }
 
@@ -337,15 +346,23 @@ a.tile:hover {
 }
 
 .tileSpark {
+  display: flex;
+  flex: 0 1 72px;
+  justify-content: flex-end;
+  min-width: 0;
   margin-left: auto;
 }
 
+/* Two lines, then an ellipsis: one line cut "Jobs that needed more than …". */
 .tileNote {
+  display: -webkit-box;
   overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 /* ---------- Empty, why, skeleton ---------- */

@@ -24,7 +24,7 @@ import styles from "./kit.module.css";
 
 export { styles as kitStyles };
 
-export type Tone = "neutral" | "accent" | "good" | "warn" | "bad";
+export type Tone = "neutral" | "accent" | "info" | "good" | "warn" | "bad";
 
 export const cx = (...names: (string | false | null | undefined)[]) =>
   names.filter(Boolean).join(" ");

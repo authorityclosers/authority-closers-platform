@@ -1,0 +1,104 @@
+/* Pipeline map: one row per stage, a status rail on the left. Tokens only. */
+
+.map {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid var(--sx-line);
+}
+
+.stage:first-child {
+  border-top: 0;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border: 2px solid var(--sx-line);
+  border-radius: 50%;
+  background: var(--sx-surface);
+}
+
+.stage[data-status="done"] .dot {
+  border-color: var(--sx-good);
+  background: var(--sx-good);
+}
+
+.stage[data-status="running"] .dot {
+  border-color: var(--sx-accent);
+  background: color-mix(in oklab, var(--sx-accent) 35%, transparent);
+}
+
+.stage[data-status="failed"] .dot {
+  border-color: var(--sx-bad);
+  background: var(--sx-bad);
+}
+
+.stage[data-status="not_built"],
+.stage[data-status="waiting"],
+.stage[data-status="skipped"] {
+  color: var(--sx-muted);
+}
+
+.body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--sx-text-sm);
+}
+
+.meta {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  overflow-wrap: anywhere;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(64px, auto));
+  gap: 12px;
+  margin: 0;
+  font-size: var(--sx-text-xs);
+  text-align: right;
+}
+
+.figures dt {
+  color: var(--sx-muted);
+}
+
+.figures dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .stage {
+    grid-template-columns: 14px minmax(0, 1fr);
+  }
+
+  .figures {
+    grid-column: 2;
+    justify-content: start;
+    text-align: left;
+  }
+}

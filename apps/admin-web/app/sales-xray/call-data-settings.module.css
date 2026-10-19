@@ -1,0 +1,138 @@
+/* Admin → Call data settings. Tokens only. */
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+}
+
+.pipeline legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.sub {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--sx-control-h);
+  font-size: var(--sx-text-sm);
+}
+
+.input {
+  width: 100%;
+  min-height: var(--sx-control-h);
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.message {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset {
+  min-height: var(--sx-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  cursor: pointer;
+}
+
+.preset[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-weight: 600;
+}
+
+.custom {
+  width: 96px;
+  min-height: var(--sx-control-h);
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.paused {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in oklab, var(--sx-warn) 45%, var(--sx-line));
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-warn) 8%, transparent);
+}
+
+.pausedLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: var(--sx-text-sm);
+}
+
+.meter {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--sx-sunken);
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  background: var(--sx-accent);
+}
+
+.meter[data-full] span {
+  background: var(--sx-warn);
+}

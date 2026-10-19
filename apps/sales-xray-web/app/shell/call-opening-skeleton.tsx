@@ -33,6 +33,7 @@ export function CallOpeningSkeleton() {
       authenticated={access?.authenticated === true}
       loading={!access}
       active="calls"
+      pageName="Report"
       mobileFit
     >
       <CallOpeningSkeletonContent />

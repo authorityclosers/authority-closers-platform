@@ -208,7 +208,7 @@ export function AnalysisRetryAction({
     <div>
       {plan && (
         <div>
-          <p>Review this retry’s approval: {plan.cost_label}.</p>
+          <p>Review this retry’s approval.</p>
           <p>
             Minutes are reserved now and used only when a report is delivered.
           </p>

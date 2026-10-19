@@ -26,4 +26,13 @@
   .waveform line {
     transition: stroke 160ms ease;
   }
+  /* The measured shape settles in over the flat line instead of snapping. */
+  .waveform {
+    animation: wave-in 240ms ease-out both;
+  }
+}
+@keyframes wave-in {
+  from {
+    opacity: 0;
+  }
 }

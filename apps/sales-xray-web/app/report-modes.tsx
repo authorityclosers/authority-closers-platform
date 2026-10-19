@@ -1181,7 +1181,26 @@ export function ReportModes({
       ? origin
       : destinations[0]?.id;
     if (section && nextView !== view) {
-      navigate(section, nextView, true, "replace");
+      const page = (value: View) =>
+        value === "story" || value === "prospect" || value === "coaching";
+      if (page(nextView) && page(view)) {
+        // Report, Prospect and Coaching are pages (owner, 19 Oct): a switch
+        // opens the new one at its top, title in view, with no glide.
+        navigate(section, nextView, false, "replace");
+        requestAnimationFrame(() => {
+          const workspace = workspaceRef.current;
+          const scroller = workspace ? reportScroller(workspace) : null;
+          scroller?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+          const heading = document.getElementById(`${id}-heading-${section}`);
+          if (
+            heading &&
+            heading.tabIndex < 0 &&
+            !heading.hasAttribute("tabindex")
+          )
+            heading.setAttribute("tabindex", "-1");
+          heading?.focus({ preventScroll: true });
+        });
+      } else navigate(section, nextView, true, "replace");
       if (preferenceKey) {
         try {
           localStorage.setItem(preferenceKey, nextView);

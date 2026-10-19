@@ -1451,10 +1451,6 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
             {quote && !job && !plan && (
               <div className="studio-consent">
                 <h3>Ready to upload privately</h3>
-                <div className="studio-cost">
-                  <span>Private intake</span>
-                  <strong>{quote.cost_label}</strong>
-                </div>
                 <p>{quote.privacy_summary}</p>
                 <label>
                   <input
@@ -1482,10 +1478,6 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
             {plan && !job?.report && !plan.accepted && (
               <div className="studio-consent">
                 <h3>Your approved report plan</h3>
-                <div className="studio-cost">
-                  <span>Processing cost</span>
-                  <strong>{plan.cost_label}</strong>
-                </div>
                 <p>
                   This one approval covers the bounded report run. AC will
                   continue through the listed stages automatically after you
@@ -1514,9 +1506,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                     checked={planConsent}
                     onChange={(e) => setPlanConsent(e.target.checked)}
                   />
-                  {plan.max_cost_paise === 0
-                    ? "I approve this exact zero-cost processing plan and its privacy terms."
-                    : `I approve this processing plan up to ₹${Math.floor(plan.max_cost_paise / 100)}.${String(plan.max_cost_paise % 100).padStart(2, "0")} and its privacy terms.`}
+                  {/* Owner 19 Oct: the person never sees a price. */}I approve
+                  this processing plan and its privacy terms.
                 </label>
                 <button
                   className="primary-button studio-wide"

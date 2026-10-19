@@ -56,7 +56,8 @@ from ac_platform.http.auth import (
 )
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
-from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from ac_platform.organisations.workspace_kinds import classify_workspaces, ordered
+from ac_platform.tenancy.models import Membership, Organisation
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -136,21 +137,36 @@ def tenant_insights(
 
 
 async def insight_organisations(
-    database: AsyncSession, tenant_ids: Iterable[UUID]
+    database: AsyncSession,
+    tenant_ids: Iterable[UUID],
+    *,
+    operations_tenant_id: UUID | None = None,
+    personal_tenant_id: UUID | None = None,
 ) -> list[dict[str, Any]]:
-    """The organisations the Admin company view may open: served ones and sandboxes."""
+    """The organisations the Admin company view may open: served ones and sandboxes.
+
+    Names are the clear ones Admin shows everywhere ("Personal accounts"), with
+    the workspace kind; ours first, sandboxes last.
+    """
     served = set(tenant_ids)
     sandboxes = set(await database.scalars(select(ConversationSandboxOrganisation.tenant_id)))
-    rows = await database.execute(
-        select(Tenant.id, Tenant.name).where(Tenant.id.in_(served | sandboxes))
+    workspaces = await classify_workspaces(
+        database,
+        operations_tenant_id=operations_tenant_id,
+        personal_tenant_id=personal_tenant_id,
+        tenant_ids=served | sandboxes,
     )
-    return sorted(
-        (
-            {"id": str(identifier), "name": name, "sandbox": identifier in sandboxes}
-            for identifier, name in rows
-        ),
-        key=lambda item: (item["sandbox"], str(item["name"]).lower(), item["id"]),
-    )
+    return [
+        {
+            "id": str(item.tenant_id),
+            "name": item.name,
+            "sandbox": item.tenant_id in sandboxes,
+            "kind": item.kind,
+        }
+        for item in sorted(
+            ordered(workspaces.values()), key=lambda item: item.tenant_id in sandboxes
+        )
+    ]
 
 
 async def organisation_reader(database: AsyncSession, actor: ActorContext, operations: Any) -> bool:
@@ -373,7 +389,12 @@ def _install_admin(
             recording_tenant_ids=(),
         )._admit(auth.resolved.actor)
         served = await served_tenants(settings, intake, auth.database)
-        organisations = await insight_organisations(auth.database, served)
+        organisations = await insight_organisations(
+            auth.database,
+            served,
+            operations_tenant_id=settings.operations_tenant_id,
+            personal_tenant_id=settings.public_learner_tenant_id,
+        )
         if organisation is None:
             return organisations, organisations[0] if organisations else None
         chosen = next((item for item in organisations if item["id"] == str(organisation)), None)

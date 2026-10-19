@@ -271,6 +271,13 @@ export function ReviewScreen({
           </p>
         </div>
         <div className={styles.headActions}>
+          <Link
+            href={`/calls/${call.recordingId}/map`}
+            className={kitStyles.button}
+            title="Every stage of this call: status, time, cost, model"
+          >
+            Pipeline map
+          </Link>
           <Badge tone={STATUS_TONE[call.status]}>
             {STATUS_LABEL[call.status]}
           </Badge>

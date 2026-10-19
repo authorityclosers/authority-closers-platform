@@ -46,8 +46,10 @@ async def admin_client(
         assert who == actor
         seen["admitted"] += 1
 
-    async def listed(database: Any, tenant_ids: Any) -> list[dict[str, Any]]:
+    async def listed(database: Any, tenant_ids: Any, **boundaries: Any) -> list[dict[str, Any]]:
         seen["served"] = set(tenant_ids)
+        # The Company picker names Personal and the staff workspace clearly.
+        assert boundaries == {"operations_tenant_id": OPS, "personal_tenant_id": PERSONAL}
         return [
             {"id": str(ORGANISATION), "name": "Fictional Org", "sandbox": False},
             {"id": str(PERSONAL), "name": "Personal", "sandbox": False},
