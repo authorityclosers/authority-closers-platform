@@ -16,8 +16,6 @@ primitives (sample, show, ask, reconcile, measure); this module stores answers
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -29,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from ac_platform.audit.service import AuditRepository
+from ac_platform.call_data.taxonomy import SEGMENT_INTENTS, TONES
 from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationDenied,
@@ -53,13 +52,14 @@ PIPELINE_SAVED_ACTION = "review.pipeline_saved"
 PIPELINE_SCHEMA = "ac.review-pipeline/1"
 TARGET_KINDS = ("object", "fact", "segment", "voice", "coaching")
 QUESTION_KINDS = ("verdict", "pick", "correct", "scale")
-# Objects, facts and coaching points now. Segments need the engine's span-aware
-# digest and their object ids in its reads (after v0.66); voice follows.
-SUPPORTED_TARGETS = ("object", "fact", "coaching")
+# Objects, facts, moments (segment labels) and coaching points. Voice follows once a
+# pipeline asks questions that fit a whole call's measured voice.
+SUPPORTED_TARGETS = ("object", "fact", "segment", "coaching")
 MAX_TEXT = 2000
 # The editor's bounds (Admin -> All settings -> Review pipelines).
 MAX_QUESTIONS = 8
-MAX_OPTIONS = 12
+# Pick lists may carry the engine's own vocabularies (16 moment intents).
+MAX_OPTIONS = 20
 MAX_LABEL = 120
 MAX_SAMPLE = 100
 _SLUG = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
@@ -86,6 +86,54 @@ DEFAULT_PIPELINES: dict[str, dict[str, Any]] = {
                     "key": "fix",
                     "kind": "correct",
                     "label": "What should it say?",
+                    "when": {"correct": "wrong"},
+                },
+            ],
+            "reconcile": {"reviewers": 2},
+            "measure": ["agreement_by_type", "agreement_by_pipeline_version"],
+        },
+    },
+    # Moments, judged in psychology terms with the engine's own vocabularies (design
+    # slice 4): what the moment is about, how the speaker sounds, and how it was handled.
+    "analysis-psychology": {
+        "kind": "analysis",
+        "title": "Analysis: psychology",
+        "definition": {
+            "schema": PIPELINE_SCHEMA,
+            "targets": ["segment"],
+            "sample": {"order": "newest", "limit": 20},
+            "show": ["transcript_window", "voice"],
+            "questions": [
+                {
+                    "key": "correct",
+                    "kind": "verdict",
+                    "label": "Is this reading of the moment right?",
+                    "options": ["correct", "wrong", "unsure"],
+                },
+                {
+                    "key": "intent",
+                    "kind": "pick",
+                    "label": "What is this moment really about?",
+                    "options": list(SEGMENT_INTENTS),
+                    "when": {"correct": "wrong"},
+                },
+                {
+                    "key": "tone",
+                    "kind": "pick",
+                    "label": "How does the speaker sound?",
+                    "options": list(TONES),
+                    "when": {"correct": "wrong"},
+                },
+                {
+                    "key": "handled",
+                    "kind": "pick",
+                    "label": "Did the seller handle this moment well?",
+                    "options": ["well", "partly", "poorly", "not_the_seller"],
+                },
+                {
+                    "key": "fix",
+                    "kind": "correct",
+                    "label": "What is the right reading?",
                     "when": {"correct": "wrong"},
                 },
             ],
@@ -128,21 +176,27 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def value_digest(type_key: str, value: Any) -> str:
-    """The claim a verdict judges, by the call data engine's recipe: type and value.
+def value_digest(type_key: str, value: Any, span: Any = None) -> str:
+    """The claim a verdict judges: the call data engine's own fingerprint.
 
-    Display is made from value, so a wording change never voids a verdict that is
-    still right; nor do confidence, basis or evidence. Stored when the verdict is
+    ``values.value_digest`` (type and value, plus ``[start_ms, end_ms, speaker]`` for
+    a moment). Display, confidence, basis and evidence are left out, so a wording
+    change never voids a verdict that is still right. Stored when the verdict is
     written: after erasure the value is gone and cannot be hashed again.
     """
-    body = json.dumps(
-        {"type": type_key, "value": value},
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        default=str,
-    )
-    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+    from ac_platform.call_data.values import value_digest as engine_digest
+
+    return engine_digest(type_key, value, span)
+
+
+def moment_span(evidence: Any) -> tuple[Any, Any, Any]:
+    """A moment's place in the call, from its first evidence: start, end and speaker.
+
+    The speaker is the transcript's own label (``speaker_0``), as the engine stores it.
+    """
+    first = evidence[0] if isinstance(evidence, list) and evidence else {}
+    first = first if isinstance(first, dict) else {}
+    return (first.get("start_ms"), first.get("end_ms"), first.get("speaker"))
 
 
 def validate_answer(question: dict[str, Any], answer: Any) -> dict[str, Any]:
@@ -630,6 +684,8 @@ class ReviewVerdicts:
         is_segment = found.type_key == "conversation.segment"
         if (kind == "segment") != is_segment:
             raise ConversationError("That item is not a " + kind + ".")
+        if is_segment:
+            return value_digest(found.type_key, found.value, moment_span(found.evidence))
         return value_digest(found.type_key, found.value)
 
     async def save(

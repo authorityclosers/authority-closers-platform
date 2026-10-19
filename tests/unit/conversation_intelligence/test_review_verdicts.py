@@ -111,9 +111,9 @@ def test_edited_questions_keep_known_fields_and_follow_earlier_answers() -> None
         ([VERDICT | {"label": "A", "key": "Bad Key"}], "its key"),
         ([VERDICT | {"label": "A", "kind": "essay"}], "choose a kind"),
         ([VERDICT | {"label": " "}], "write the question"),
-        ([VERDICT | {"label": "A", "options": ["yes"]}], "2 to 12"),
-        ([VERDICT | {"label": "A", "options": ["yes", "yes"]}], "2 to 12"),
-        ([VERDICT | {"label": "A", "options": ["Yes!", "no"]}], "2 to 12"),
+        ([VERDICT | {"label": "A", "options": ["yes"]}], "2 to 20"),
+        ([VERDICT | {"label": "A", "options": ["yes", "yes"]}], "2 to 20"),
+        ([VERDICT | {"label": "A", "options": ["Yes!", "no"]}], "2 to 20"),
         (
             [
                 VERDICT | {"label": "A"},
@@ -141,3 +141,32 @@ def test_edited_questions_keep_known_fields_and_follow_earlier_answers() -> None
 def test_edited_questions_that_review_cannot_run_are_refused(questions: list, says: str) -> None:
     with pytest.raises(ConversationError, match=says):
         validate_questions(questions)
+
+
+def test_the_digest_is_the_engines_own_with_a_moments_span() -> None:
+    from ac_platform.call_data.values import value_digest as engine_digest
+    from ac_platform.conversation_intelligence.review_verdicts import moment_span
+
+    reading = {"intent": "pricing", "tone": "curious"}
+    evidence = [{"segment_id": "s3", "start_ms": 1000, "end_ms": 4000, "speaker": "speaker_1"}]
+    span = moment_span(evidence)
+    assert span == (1000, 4000, "speaker_1")
+    assert value_digest("conversation.segment", reading, span) == engine_digest(
+        "conversation.segment", reading, [1000, 4000, "speaker_1"]
+    )
+    # The same reading at another moment is another claim.
+    assert value_digest("conversation.segment", reading, span) != value_digest(
+        "conversation.segment", reading, (5000, 9000, "speaker_1")
+    )
+    assert moment_span(None) == (None, None, None)
+
+
+def test_psychology_judges_moments_with_the_engines_vocabularies() -> None:
+    from ac_platform.call_data.taxonomy import SEGMENT_INTENTS, TONES
+
+    psychology = DEFAULT_PIPELINES["analysis-psychology"]["definition"]
+    assert psychology["targets"] == ["segment"]
+    questions = {item["key"]: item for item in psychology["questions"]}
+    assert questions["intent"]["options"] == list(SEGMENT_INTENTS)
+    assert questions["tone"]["options"] == list(TONES)
+    assert questions["correct"]["kind"] == "verdict"

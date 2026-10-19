@@ -178,7 +178,9 @@ def test_review_measures_right_share_by_type_version_and_reviewer_agreement() ->
     view = review_measures(verdicts, DEFAULT_PIPELINES, objects, names)
 
     assert (view["answers"], view["calls"]) == (9, 2)
-    sales, coaching = view["pipelines"]
+    pipelines = {item["key"]: item for item in view["pipelines"]}
+    sales, coaching = pipelines["analysis-sales"], pipelines["coaching"]
+    assert pipelines["analysis-psychology"]["answers"] == 0
     assert sales["key"] == "analysis-sales" and sales["title"] == "Analysis: sales"
     assert (sales["answers"], sales["items"], sales["reviewers"]) == (6, 3, 2)
     assert (sales["right"], sales["wrong"], sales["right_share"]) == (3, 1, 0.75)
