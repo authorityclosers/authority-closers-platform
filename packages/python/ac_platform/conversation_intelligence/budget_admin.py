@@ -51,10 +51,14 @@ from ac_platform.conversation_intelligence.entitlements import (
 from ac_platform.conversation_intelligence.execution_control import budget_view
 from ac_platform.conversation_intelligence.models import ConversationBudgetAccount
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
+from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.tenancy.models import Membership
 
 SETTINGS_ACTION = "conversation.budget_settings_changed"
+# Who may change the AI budget ceiling and period: the owner's own accounts, by explicit
+# allowlist (orchestrator, 19 Oct 2026: "owner" means Suyash personally, not every
+# organisation owner). Any verified Admin still raises the working cap up to the ceiling.
+CEILING_OWNER_EMAILS = frozenset({"admin@authorityclosers.com", "suyash@authorityclosers.com"})
 MAX_CAP_PAISE = 2_147_483_647
 
 
@@ -113,9 +117,11 @@ class ConversationBudgetAdmin:
         *,
         environment: str,
         operations_tenant_id: UUID,
+        ceiling_owners: frozenset[str] = CEILING_OWNER_EMAILS,
     ) -> None:
         if environment not in {"local", "test", "development", "staging", "production"}:
             raise ValueError("budget_admin_environment_invalid")
+        self.ceiling_owners = frozenset(email.casefold() for email in ceiling_owners)
         if not isinstance(operations_tenant_id, UUID):
             raise ValueError("budget_admin_scope_required")
         self.app = application
@@ -129,10 +135,14 @@ class ConversationBudgetAdmin:
         await ConversationProviderAdmin(self.app).admit(actor)
 
     async def is_owner(self, actor: ActorContext) -> bool:
-        """The owner role in the AC operations workspace (after ``admit``)."""
+        """The owner's own verified account, on the ceiling allowlist (after ``admit``)."""
 
-        membership = await self.database.get(Membership, (actor.tenant_id, actor.person_id))
-        return membership is not None and membership.role == "owner"
+        person = await self.database.get(Person, actor.person_id)
+        return (
+            person is not None
+            and person.email_verified_at is not None
+            and (person.email or "").casefold() in self.ceiling_owners
+        )
 
     def _sealed_cap(self, bundle: HostedApprovalBundle, now_epoch: int) -> int:
         try:
@@ -405,7 +415,9 @@ class ConversationBudgetAdmin:
 
         await self.admit(actor)
         if not await self.is_owner(actor):
-            raise ConversationDenied("Only the owner can change the budget ceiling and period.")
+            raise ConversationDenied(
+                "Only the owner (Suyash) can change the budget ceiling and period."
+            )
         now = utc(self.app.clock())
         sealed = self._sealed_cap(bundle, int(now.timestamp()))
         ceiling_paise = _amount(ceiling_paise, "Enter a ceiling of INR 0 or more.")
@@ -496,6 +508,7 @@ class ConversationBudgetAdmin:
 
 
 __all__ = [
+    "CEILING_OWNER_EMAILS",
     "MAX_CAP_PAISE",
     "SETTINGS_ACTION",
     "ConversationBudgetAdmin",

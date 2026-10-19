@@ -28,8 +28,8 @@ from ac_platform.conversation_intelligence.entitlements import (
     effective_budget_cap_paise,
     reserve,
 )
+from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.tenancy.models import Membership
 
 from .test_entitlements import accounts, permission, quote
 
@@ -49,8 +49,8 @@ def bundle_for(scope_id, *, cap=150_000):
 class FakeDatabase:
     """The ledger row, the settings revisions and the actor's workspace role."""
 
-    def __init__(self, row, *, role="admin"):
-        self.row, self.role = row, role
+    def __init__(self, row, *, email="dipak@authorityclosers.com"):
+        self.row, self.email = row, email
         self.settings: list[ConversationBudgetSetting] = []
         self.flush = AsyncMock()
 
@@ -64,8 +64,10 @@ class FakeDatabase:
         return SimpleNamespace(all=lambda: newest)
 
     async def get(self, model, key):
-        if model is Membership:
-            return SimpleNamespace(role=self.role)
+        if model is Person:
+            return SimpleNamespace(
+                email=self.email, email_verified_at=datetime(2026, 9, 29, tzinfo=UTC)
+            )
         if model is ConversationBudgetSetting:
             return next((item for item in self.settings if item.id == key), None)
         return self.row
@@ -75,8 +77,8 @@ class FakeDatabase:
         self.settings.append(item)
 
 
-def service_for(row, bundle, *, role="admin"):
-    database = FakeDatabase(row, role=role)
+def service_for(row, bundle, *, email="dipak@authorityclosers.com"):
+    database = FakeDatabase(row, email=email)
     application = SimpleNamespace(
         database=database,
         clock=lambda: datetime(2026, 9, 16, tzinfo=UTC),
@@ -413,7 +415,8 @@ async def test_only_the_owner_changes_the_ceiling_and_the_period(audit):
     scope_id = uuid4()
     bundle = bundle_for(scope_id, cap=850_000)
     row = ledger_row(scope_id)
-    service, _ = service_for(row, bundle, role="admin")
+    # A workspace owner who isn't Suyash (Dipak is one in production) is refused.
+    service, _ = service_for(row, bundle, email="dipak@authorityclosers.com")
     actor = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
     view = await service.current(actor, bundle=bundle)
     assert view["settings"]["can_change_ceiling"] is False
@@ -422,6 +425,9 @@ async def test_only_the_owner_changes_the_ceiling_and_the_period(audit):
     with pytest.raises(ConversationDenied, match="Only the owner"):
         await service.save_settings(actor, **settings_for(bundle))
     assert audit == [] and row.revision == 2
+    # Suyash's second account is on the allowlist too (any letter case).
+    service, _ = service_for(row, bundle, email="Suyash@AuthorityClosers.com")
+    assert (await service.current(actor, bundle=bundle))["settings"]["can_change_ceiling"]
 
 
 @pytest.mark.asyncio
@@ -429,7 +435,7 @@ async def test_the_owner_sets_a_monthly_allowance_under_a_new_ceiling(audit):
     scope_id = uuid4()
     bundle = bundle_for(scope_id, cap=850_000)
     row = ledger_row(scope_id)
-    service, application = service_for(row, bundle, role="owner")
+    service, application = service_for(row, bundle, email="admin@authorityclosers.com")
     owner = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
 
     view = await service.save_settings(owner, **settings_for(bundle))
@@ -498,7 +504,7 @@ async def test_settings_refuse_stale_screens_caps_above_the_ceiling_and_lifetime
     scope_id = uuid4()
     bundle = bundle_for(scope_id, cap=850_000)
     row = ledger_row(scope_id)
-    service, _ = service_for(row, bundle, role="owner")
+    service, _ = service_for(row, bundle, email="admin@authorityclosers.com")
     owner = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
     with pytest.raises(ValueError, match="between INR 0 and the ceiling"):
         await service.save_settings(owner, **settings_for(bundle, cap_paise=1_000_001))
