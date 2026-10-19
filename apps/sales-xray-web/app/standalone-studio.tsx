@@ -18,6 +18,7 @@ import { AccountNavigation } from "./account-navigation";
 import { readAccountProfileEligibility } from "./account-profile-client";
 import { AcquisitionShell } from "./acquisition-shell";
 import { ConsentRenewal } from "./consent-renewal";
+import { PhoneOnboarding } from "./leads/phone-onboarding";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
@@ -277,6 +278,7 @@ function AppFrame({
       <PersistentShell>{children}</PersistentShell>
       <FirstCallGuide />
       <ConsentRenewal />
+      <PhoneOnboarding />
     </>
   );
 }

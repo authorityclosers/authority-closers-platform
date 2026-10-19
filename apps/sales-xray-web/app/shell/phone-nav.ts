@@ -45,7 +45,11 @@ export function phoneTabFor(
     if (under(pathname, "/leads")) return "leads";
     if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
       return "calls";
-    if (under(pathname, NEW_ANALYSIS_PATH)) return "new";
+    // A call analysed here keeps /analysis/new in the router while the
+    // address bar already shows the call: once the page says it is that
+    // call's report, it is under Calls (owner, 19 Oct).
+    if (under(pathname, NEW_ANALYSIS_PATH))
+      return active === "calls" ? "calls" : "new";
     if (
       ["/prospects", "/coaching", "/organisation", "/account", "/plans"].some(
         (root) => under(pathname, root),
@@ -69,7 +73,8 @@ export function shellActiveFor(
     if (under(pathname, "/leads")) return "leads";
     if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
       return "calls";
-    if (under(pathname, NEW_ANALYSIS_PATH)) return "analyse";
+    if (under(pathname, NEW_ANALYSIS_PATH))
+      return active === "calls" ? "calls" : "analyse";
     if (under(pathname, "/prospects")) return "prospects";
     if (under(pathname, "/coaching")) return "coaching";
     if (under(pathname, "/organisation/insights")) return "insights";

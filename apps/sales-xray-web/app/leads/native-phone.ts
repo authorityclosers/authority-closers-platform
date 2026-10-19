@@ -633,6 +633,53 @@ export async function askNotifications(): Promise<SetupStatus | null> {
   }
 }
 
+/** Sales Xray's own call recorder (Accessibility), in builds that have it. */
+export type CallRecorderStatus = {
+  /** This build has the recorder (not the Play build). */
+  available: boolean;
+  /** The seller turned it on in Android's Accessibility settings. */
+  enabled: boolean;
+};
+
+export async function callRecorderStatus(): Promise<CallRecorderStatus | null> {
+  try {
+    const raw = await ask<Record<string, unknown>>(
+      "callRecorderStatus",
+      {},
+      10_000,
+    );
+    return { available: raw.available === true, enabled: raw.enabled === true };
+  } catch {
+    return null;
+  }
+}
+
+/** The seller chose to record calls: note the disclosure was shown and the wish. */
+export async function callRecorderStart(): Promise<void> {
+  try {
+    await ask("callRecorderConsent", {}, 10_000);
+    await ask("callRecorderSet", { on: true }, 10_000);
+  } catch {
+    // An older app: the Accessibility screen still opens below.
+  }
+}
+
+/** Opens Android's Accessibility list, or App info for "Allow restricted settings". */
+export async function callRecorderOpen(
+  what: "accessibility" | "appInfo",
+): Promise<boolean> {
+  try {
+    const raw = await ask<{ opened?: boolean }>(
+      "callRecorderOpen",
+      { what },
+      10_000,
+    );
+    return raw.opened === true;
+  } catch {
+    return false;
+  }
+}
+
 /** Asks Android to let Sales Xray read the phone's call recordings. */
 export async function askRecordingAccess(): Promise<boolean> {
   try {

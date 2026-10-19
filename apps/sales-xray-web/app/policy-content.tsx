@@ -4,6 +4,7 @@ import { PolicyFooter } from "./policy-footer";
 import { PricingCatalogue } from "./pricing-catalogue";
 import type { Plan } from "./billing/contract";
 import styles from "./policy-pages.module.css";
+import { EmailText } from "./email-text";
 
 export type PolicySlug =
   | "pricing"
@@ -287,19 +288,24 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
   ],
 };
 
-// These page paths, written in the text, become links.
-const LINKED = /(\/(?:privacy|data-deletion))(?=[.,\s]|$)/;
+// These page paths and email addresses, written in the text, become links.
+const LINKED =
+  /(\/(?:privacy|data-deletion)(?=[.,\s]|$)|[\w.+-]+@[\w-]+(?:\.[\w-]+)+)/;
 
 function Linked({ text }: { text: string }) {
   return (
     <>
       {text.split(LINKED).map((part, index) =>
-        index % 2 ? (
+        index % 2 === 0 ? (
+          part
+        ) : part.includes("@") ? (
+          <a key={index} href={`mailto:${part}`}>
+            <EmailText address={part} />
+          </a>
+        ) : (
           <a key={index} href={part}>
             {part}
           </a>
-        ) : (
-          part
         ),
       )}
     </>
@@ -358,7 +364,7 @@ function ContactDetails() {
             <dt>Email</dt>
             <dd>
               <a href="mailto:admin@authorityclosers.com">
-                admin@authorityclosers.com
+                <EmailText address="admin@authorityclosers.com" />
               </a>
             </dd>
           </div>

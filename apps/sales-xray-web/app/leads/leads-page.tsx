@@ -25,6 +25,7 @@ import {
 } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
+import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import {
   Badge,
   Button,
@@ -255,10 +256,9 @@ export function LeadsRoute() {
       >
         <div className={styles.root}>
           <PageHeader title="Leads" titleInBar />
-          <Empty
-            icon={PhoneCall}
+          <SignedOutWelcome
             title="Sign in to see your leads"
-            text="Your leads, follow-ups and calls live here once you're signed in to your organisation."
+            text="Your leads, follow-ups and calls, ready the moment you sign in to your organisation."
           />
         </div>
       </AcquisitionShell>

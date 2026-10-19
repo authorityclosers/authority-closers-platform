@@ -215,7 +215,10 @@ function SignInPrompt() {
         className={styles.pRow}
       />
       <text x="36" y="69" className={styles.pText}>
-        you@company.com
+        {/* Two spans: Cloudflare's email obfuscation must not rewrite the
+            example address (its decoder fails on SVG links). */}
+        <tspan>you@</tspan>
+        <tspan>company.com</tspan>
       </text>
       <rect
         x="26"

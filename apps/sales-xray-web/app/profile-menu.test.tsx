@@ -88,6 +88,22 @@ it.each(["header", "rail"] as const)(
     );
   },
 );
+it("keeps the avatar an empty circle until the profile arrives", async () => {
+  // Owner, 19 Oct: a stand-in "AC" that turned into the person's own
+  // initial flickered on every page load.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => new Promise<Response>(() => {})),
+  );
+  await act(async () =>
+    root.render(<ProfileMenu authenticated accountHref="/calls" />),
+  );
+  expect(
+    host.querySelector('button[aria-expanded] > span[aria-hidden="true"]')
+      ?.textContent,
+  ).toBe("");
+});
+
 it("keeps a neutral label when the canonical profile has no name", async () => {
   vi.stubGlobal(
     "fetch",

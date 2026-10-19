@@ -366,8 +366,9 @@ export function DeskView({
   return (
     <>
       <NextUp desk={desk} onStart={onStart} onAdd={onAdd} />
-      {afterHero}
+      {/* Owner, 19 Oct: where the leads stand comes first, the switches after. */}
       <CountStrip desk={desk} />
+      <div className={styles.compactStack}>{afterHero}</div>
       <div className={styles.wideOnly}>
         <Tiles label="My leads">
           <Kpi

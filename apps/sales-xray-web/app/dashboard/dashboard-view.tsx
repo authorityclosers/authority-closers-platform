@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import type { Allowance, LibrarySubmission } from "../acquisition-client";
 import { ConnectionNotice } from "../connection-notice";
 import { LightboxShell } from "../shell/lightbox-shell";
+import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { getShellState } from "../shell/shell-store";
 import { WorkspaceNoAccess } from "../workspace-no-access";
 import { useWorkspaceAccess } from "../workspace-access";
@@ -30,7 +30,6 @@ import { seededDashboard, type ServerDashboard } from "./dashboard-seed";
 import { useServerSeedAllowed } from "../initial-session";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import { PolicyFooter } from "../policy-footer";
-import styles from "./dashboard.module.css";
 
 /**
  * The page waits for its reads (they run together) and then appears whole,
@@ -54,29 +53,11 @@ export function DashboardView({
       authenticated={false}
       homeHref="/dashboard"
     >
-      <section className={styles.emptyCard} aria-labelledby="dashboard-signin">
-        <h2 id="dashboard-signin" className={styles.emptyTitle}>
-          Sign in to see your dashboard
-        </h2>
-        <p className={styles.emptyDescription}>
-          Your saved calls, reports and minutes appear after you sign in.
-        </p>
-        <Link
-          className={styles.primaryAction}
-          href="/login"
-          onClick={(event) => {
-            if (access.requestAccountSignIn) {
-              event.preventDefault();
-              access.requestAccountSignIn();
-            }
-          }}
-        >
-          Sign in
-        </Link>
-        <Link className={styles.guestAction} href="/analysis/new">
-          Or analyse a call without an account
-        </Link>
-      </section>
+      <SignedOutWelcome
+        title="Sign in to see your dashboard"
+        text="Your calls, reports and coaching, waiting where you left them."
+        guestHref="/analysis/new"
+      />
       {/* The public landing ("/" sends visitors here): the site's footer. */}
       <PolicyFooter />
     </LightboxShell>
