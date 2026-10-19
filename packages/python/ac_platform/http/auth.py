@@ -12,7 +12,7 @@ import re
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal, Protocol, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import UUID
 
@@ -232,6 +232,46 @@ class AuthenticatedTransaction:
 
 
 RequireActor = Callable[[Request], AsyncIterator[AuthenticatedTransaction]]
+
+# Staff keys (Admin CLI and MCP, 19 Oct 2026): "Authorization: Bearer ac_<env>_<token>".
+STAFF_KEY_PATTERN = re.compile(r"ac_[a-z]{2,8}_[A-Za-z0-9_-]{43,512}\Z")
+
+
+class StaffKeyHook(Protocol):
+    """Resolves a staff key to its person; installed on app.state.staff_keys by its package.
+
+    ``resolve`` checks the key and returns the actor of the session behind it (and that
+    session's token); ``admit`` then decides whether this request may use the key.
+    """
+
+    async def resolve(
+        self,
+        request: Request,
+        database: AsyncSession,
+        identity: AsyncIdentityApplication,
+        key: str,
+    ) -> tuple[ResolvedActorContext, str]: ...
+
+    async def admit(
+        self, request: Request, database: AsyncSession, resolved: ResolvedActorContext
+    ) -> None: ...
+
+
+def staff_key(request: Request, settings: Settings) -> str | None:
+    """The staff key this request presents, from the Authorization header only.
+
+    A key never rides along with a browser session: a request carrying both is refused.
+    Other bearer credentials (developer API keys) are not this guard's and pass through.
+    """
+
+    scheme, _, value = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not value.startswith("ac_"):
+        return None
+    if request.cookies.get(settings.session_cookie_name) is not None:
+        raise AuthenticationRequired("Use a staff key or a session, not both.")
+    if STAFF_KEY_PATTERN.fullmatch(value) is None:
+        raise AuthenticationRequired("A valid staff key is required.")
+    return value
 
 
 class MeResponse(BaseModel):
@@ -966,8 +1006,16 @@ def require_safe_origin(
     acquisition boundary, where the request is already constrained to the
     exact Sales Xray host by its route guard. All other mutation surfaces stay
     fail-closed when the header is absent.
+
+    A request signed with a staff key and no session cookie needs no Origin: the key sits
+    in the Authorization header, which no other site can make a browser send.
     """
 
+    if (
+        getattr(request.state, "staff_key", False) is True
+        and request.cookies.get(settings.session_cookie_name) is None
+    ):
+        return
     origin = request.headers.get("origin")
     normalized_origin = None if origin is None else origin.rstrip("/")
     sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
@@ -1658,6 +1706,24 @@ def install_identity_http(
         )
 
     async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        key = staff_key(request, settings)
+        if key is not None:
+            hook: StaffKeyHook | None = getattr(request.app.state, "staff_keys", None)
+            if hook is None:
+                raise AuthenticationRequired("Staff keys are not accepted here.")
+            async with sessions() as database, database.begin():
+                identity = _identity(database)
+                found, session_token = await hook.resolve(request, database, identity, key)
+                resolved = await _resolved_with_role_permissions(database, found)
+                await hook.admit(request, database, resolved)
+                request.state.staff_key = True
+                yield AuthenticatedTransaction(
+                    database=database,
+                    identity=identity,
+                    resolved=resolved,
+                    token=session_token,
+                )
+            return
         token = _session_cookie(request, settings)
         if token is None:  # pragma: no cover - required session cookie narrows this value
             raise AuthenticationRequired("A valid Authority Closers session is required.")
@@ -3530,6 +3596,7 @@ __all__ = [
     "PasswordSessionResponse",
     "RequestOriginDenied",
     "RequireActor",
+    "StaffKeyHook",
     "install_identity_http",
     "require_admin_surface",
     "require_safe_origin",
