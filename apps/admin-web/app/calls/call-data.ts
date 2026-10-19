@@ -67,6 +67,8 @@ export type QueueItem = {
   runs: number;
   reportRunId: string | null;
   review: ReviewState;
+  /** The call data engine at a glance: each read's newest run state, current objects. */
+  engine: { fast: string | null; deep: string | null; objects: number };
 };
 export type Facet = { value: string; label: string; count: number };
 export type Queue = {
@@ -106,6 +108,15 @@ const facets = (raw: unknown): Facet[] =>
     };
   });
 
+function engineAtGlance(raw: unknown): QueueItem["engine"] {
+  const engine = read.object(raw);
+  return {
+    fast: read.optionalString(engine.fast),
+    deep: read.optionalString(engine.deep),
+    objects: read.number(engine.objects),
+  };
+}
+
 export function normalizeQueue(raw: unknown): Queue {
   const body = read.object(raw);
   const counts = read.object(body.counts);
@@ -133,6 +144,7 @@ export function normalizeQueue(raw: unknown): Queue {
         runs: read.number(row.runs),
         reportRunId: read.optionalString(row.report_run_id),
         review: asReviewState(row.review),
+        engine: engineAtGlance(row.engine),
       };
     }),
     total: read.number(body.total),
