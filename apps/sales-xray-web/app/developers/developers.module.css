@@ -18,7 +18,7 @@
 .doc :not(pre) > code {
   padding: 1px 5px;
   border-radius: 6px;
-  background: var(--sx-sunken, #eef2f7);
+  background: var(--sx-sunken);
   font-size: 0.9em;
 }
 
@@ -34,16 +34,16 @@
   margin: 12px 0;
   padding: 12px 14px;
   overflow-x: auto;
-  border: 1px solid var(--sx-line, #d8e0e9);
+  border: 1px solid var(--sx-line);
   border-radius: 10px;
-  background: var(--sx-sunken, #f4f6fa);
+  background: var(--sx-sunken);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .code:focus-visible {
   outline: none;
-  box-shadow: var(--sx-focus-ring, 0 0 0 3px #2563eb55);
+  box-shadow: var(--sx-focus-ring);
 }
 
 .table {
@@ -55,7 +55,7 @@
 
 .table caption {
   margin-bottom: 6px;
-  color: var(--sx-ink-2, #4a5a6b);
+  color: var(--sx-ink-2);
   font-weight: 600;
   text-align: left;
 }
@@ -63,7 +63,7 @@
 .table th,
 .table td {
   padding: 6px 8px;
-  border-bottom: 1px solid var(--sx-line, #d8e0e9);
+  border-bottom: 1px solid var(--sx-line);
   text-align: left;
   vertical-align: top;
 }
