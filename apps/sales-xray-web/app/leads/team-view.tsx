@@ -33,6 +33,7 @@ import {
   type Team,
 } from "./leads-client";
 import { CallsReport } from "./calls-report";
+import { AdSpendPanel } from "./ad-spend";
 import { SlaPanel } from "./sla-panel";
 import { phoneDot } from "./phone-setup-words";
 import styles from "./leads.module.css";
@@ -522,6 +523,8 @@ export function TeamView({
       <CallsReport />
 
       <SlaPanel onOpen={onOpen} />
+
+      <AdSpendPanel />
 
       <div className={styles.teamPair}>
         <Panel

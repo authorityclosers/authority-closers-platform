@@ -38,6 +38,7 @@ import {
   type SourceView,
 } from "./leads-client";
 import styles from "./leads.module.css";
+import { SpendSummary } from "./ad-spend";
 import { MetaConversions } from "./meta-conversions";
 
 /* ---------- Meta connector API (lead_desk/connectors) ---------- */
@@ -677,6 +678,7 @@ function MetaTile() {
           {note}
         </p>
       ) : null}
+      {status?.configured && status.pages.length ? <SpendSummary /> : null}
       {status?.configured ? <LeadAccessSteps open={blocked} /> : null}
       {status?.configured && status.pages.length ? (
         <MetaConversions
