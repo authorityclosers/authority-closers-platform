@@ -34,6 +34,7 @@ describe("console navigation", () => {
     expect(isSalesXrayControl({ ...base, permissions: [] })).toBe(false);
     expect(isSalesXrayControl({ ...base, state: "unavailable" })).toBe(false);
     expect(hrefs(base)).toContain("/calls");
+    expect(hrefs(base)).toContain("/integrations");
     expect(hrefs({ ...base, email: "coach@example.com" })).not.toContain(
       "/calls",
     );

@@ -51,6 +51,7 @@ export type NavIcon =
   | "synthetic"
   | "people"
   | "organisations"
+  | "integrations"
   | "billing"
   | "academies"
   | "learning"
@@ -224,6 +225,12 @@ export const NAVIGATION: readonly NavGroup[] = [
         label: "Organisations",
         icon: "organisations",
         need: { kind: "platform", any: ["platform_tenants_read"] },
+      },
+      {
+        href: "/integrations",
+        label: "Integrations",
+        icon: "integrations",
+        need: { kind: "salesXray" },
       },
       {
         // /platform is the only path platform-only operators are admitted to (proxy.ts).
