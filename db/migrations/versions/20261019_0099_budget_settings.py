@@ -23,7 +23,7 @@ TABLE = "conversation_budget_settings"
 
 def upgrade() -> None:
     op.create_table(
-        TABLE,
+        "conversation_budget_settings",  # literal: the migration schema gate reads it
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("scope_id", sa.Uuid(), nullable=False),
         sa.Column("revision", sa.Integer(), nullable=False),
