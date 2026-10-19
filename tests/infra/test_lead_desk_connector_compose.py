@@ -22,6 +22,7 @@ LEAD_CONNECTOR_SETTINGS = {
     "AC_WHATSAPP_CONFIG_ID": "fixture-whatsapp-config-id",
     "AC_WHATSAPP_WEBHOOK_VERIFY_TOKEN": "fixture-whatsapp-webhook-verify-token",
     "AC_WHATSAPP_GRAPH_VERSION": "fixture-whatsapp-graph-version",
+    "AC_MESSAGING_LOGIN_CONFIG_ID": "fixture-messaging-login-config-id",
 }
 
 

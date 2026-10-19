@@ -177,6 +177,15 @@ leads connector's version). Each environment has its own app and values; never
 copy a production value into staging or dev. On dev and staging the webhook path
 needs a Cloudflare Access bypass, like the Meta leads webhook.
 
+Messenger and Instagram conversations (Settings → Integrations → Messenger &
+Instagram) use the same app: its App ID, App Secret and verify token above, plus
+`AC_MESSAGING_LOGIN_CONFIG_ID`, that app's Facebook Login for Business
+configuration for Pages and Instagram accounts (redirect URI
+`<Sales Xray URL>/v1/lead-desk/messaging/callback`; webhook
+`<Sales Xray URL>/v1/lead-desk/messaging/webhook` for the Page and Instagram
+objects). They stay off until it exists; WhatsApp's own configuration isn't needed
+for them. See `docs/product/lead-desk/instagram-messenger-app.md`.
+
 ## Sales Xray CRM push alerts (optional)
 
 The API reads these from the same Infisical `/application` path to send Lead Desk
