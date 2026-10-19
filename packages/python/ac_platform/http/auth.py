@@ -50,6 +50,7 @@ from ac_platform.http.identity_provider import (
 )
 from ac_platform.http.identity_provider_apple import apple_user_name
 from ac_platform.http.problem import problem_response
+from ac_platform.http.rate_limits import client_identity
 from ac_platform.identity.application import (
     AccountDeletionPrivacyHook,
     AsyncIdentityApplication,
@@ -93,6 +94,10 @@ from ac_platform.identity.password_auth import (
     PasswordAuthError,
     PasswordIdentityService,
     PasswordPolicyError,
+)
+from ac_platform.identity.provider_link_email import (
+    PROVIDER_LINKED_ACTION,
+    enqueue_provider_linked_email,
 )
 from ac_platform.identity.sales_xray_profile import (
     get_sales_xray_profile,
@@ -3330,19 +3335,31 @@ def install_identity_http(
                                     ),
                                 )
                             if registered.linked_by_email:
-                                await AuditRepository(database).append(
+                                # Provider, account and time, plus the client address
+                                # (Cloudflare's only through a trusted proxy; IPv6 as /64).
+                                link_event = await AuditRepository(database).append(
                                     tenant_id=tenant_id,
                                     actor_person_id=registered.person.id,
                                     session_id=registered.session.metadata.id,
-                                    action="identity.provider_linked_by_verified_email.v1",
+                                    action=PROVIDER_LINKED_ACTION,
                                     resource_type="person",
                                     resource_id=registered.person.id,
-                                    payload={"provider": provider_name},
+                                    payload={
+                                        "provider": provider_name,
+                                        "ip_address": client_identity(
+                                            request.scope,
+                                            trusted_proxy_addresses=(
+                                                settings.rate_limit_trusted_proxy_addresses
+                                            ),
+                                        ),
+                                    },
                                     reason=(
                                         f"{_provider_label(provider_name)} sign-in was linked "
                                         "to this account because its verified email matched."
                                     ),
                                 )
+                                # The account hears of it by email (orchestrator, 19 Oct).
+                                await enqueue_provider_linked_email(database, link_event)
                             await _prefill_sales_xray_profile_name(
                                 database,
                                 person_id=registered.person.id,

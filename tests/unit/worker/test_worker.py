@@ -23,6 +23,10 @@ from ac_platform.identity.models import (
     PersonStatus,
 )
 from ac_platform.identity.password_auth import encrypt_challenge_token
+from ac_platform.identity.provider_link_email import (
+    PROVIDER_LINKED_EVENT,
+    PROVIDER_LINKED_JOB,
+)
 from ac_platform.identity.reviewer_auth import REVIEWER_AUTH_EVENT, REVIEWER_AUTH_JOB
 from ac_platform.outbox.models import (
     Job,
@@ -198,6 +202,7 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
     assert set(OUTBOX_JOB_ROUTES) == {
         ORGANISATION_INVITATION_EVENT,
         STAFF_KEY_CREATED_EVENT,
+        PROVIDER_LINKED_EVENT,
         ENROLLMENT_WELCOME_EVENT,
         EMAIL_LOGIN_REQUEST_EVENT,
         PASSWORD_EMAIL_VERIFICATION_EVENT,
@@ -845,6 +850,7 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
             ENROLLMENT_WELCOME_JOB,
             ORGANISATION_INVITATION_JOB,
             STAFF_KEY_CREATED_JOB,
+            PROVIDER_LINKED_JOB,
             EMAIL_LOGIN_REQUEST_JOB,
             PASSWORD_EMAIL_VERIFICATION_JOB,
             PASSWORD_EMAIL_RESET_JOB,

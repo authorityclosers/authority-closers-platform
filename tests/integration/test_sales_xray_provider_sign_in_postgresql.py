@@ -28,7 +28,9 @@ from ac_platform.http.identity_provider import IdentityProviderEmailMissing
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person, ProviderIdentity
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.identity.provider_link_email import PROVIDER_LINKED_EVENT
 from ac_platform.identity.services import VerifiedProviderAssertion
+from ac_platform.outbox.models import OutboxEvent
 from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus, Tenant
 from tests.integration.test_password_identity_http_postgresql import _Harness, _run_async
 from tests.integration.test_password_identity_http_postgresql import (
@@ -57,6 +59,7 @@ class _Provider:
         self.name = name
         self.audience = f"postgres-{name}-client"
         self.email: str | None = email
+        self.email_verified = True
         self.subject = subject
         self.transactions: list[AuthTransaction] = []
 
@@ -85,7 +88,7 @@ class _Provider:
             nonce=transaction.nonce,
             authorization_type=transaction.authorization_type,
             email=self.email,
-            email_verified=True,
+            email_verified=self.email_verified,
         )
 
 
@@ -225,6 +228,18 @@ def _people_with_email(harness: _Harness, email: str) -> int:
         )
 
 
+def _link_notices_for(harness: _Harness, person_id: UUID) -> list[OutboxEvent]:
+    with Session(harness.engine) as database:
+        return list(
+            database.scalars(
+                select(OutboxEvent).where(
+                    OutboxEvent.event_type == PROVIDER_LINKED_EVENT,
+                    OutboxEvent.aggregate_id == person_id,
+                )
+            )
+        )
+
+
 def _sessions_of(harness: _Harness, person_id: UUID) -> int:
     with Session(harness.engine) as database:
         return int(
@@ -268,13 +283,20 @@ def test_verified_email_links_a_first_provider_sign_in_to_the_existing_account(
                 AuditEvent.action == LINK_ACTION,
             )
         )
-        assert event.payload == {"provider": provider_name}
+        # Provider, account (actor), time (occurred_at) and the client address.
+        assert event.payload == {"provider": provider_name, "ip_address": "127.0.0.1"}
+        assert event.actor_person_id == person_id and event.occurred_at is not None
+        event_id = event.id
+    # The account is told by email: one notice, carrying only the audit event id.
+    [notice] = _link_notices_for(postgres_harness, person_id)
+    assert notice.payload == {"audit_event_id": str(event_id)}
 
     # The next sign-in uses the link itself and adds nothing.
     again, _ = _run_async(_sign_in(postgres_harness, tenant_id=tenant_id, provider=provider))
     assert again == "success"
     assert len(_identities(postgres_harness, ISSUERS[provider_name], subject)) == 1
     assert _sessions_of(postgres_harness, person_id) == 2
+    assert len(_link_notices_for(postgres_harness, person_id)) == 1
 
 
 @pytest.mark.parametrize(
@@ -305,6 +327,7 @@ def test_an_email_that_may_not_be_linked_is_refused_and_changes_nothing(
     assert _identities(postgres_harness, ISSUERS[provider_name], subject) == []
     assert _people_with_email(postgres_harness, email) == 1
     assert _sessions_of(postgres_harness, person_id) == 0
+    assert _link_notices_for(postgres_harness, person_id) == []
     with Session(postgres_harness.engine) as database:
         person = database.get(Person, person_id)
         assert person is not None and person.consent_version == "provider-sign-in-consent-v1"
@@ -364,3 +387,29 @@ def test_a_provider_that_shares_no_email_writes_nothing(postgres_harness: _Harne
     assert result == "no_email"
     assert "ac_session" not in finished.cookies
     assert _identities(postgres_harness, ISSUERS["facebook"], subject) == []
+
+
+@pytest.mark.parametrize("provider_name", ["google", "apple"])
+def test_a_provider_email_that_is_not_verified_never_links(
+    postgres_harness: _Harness, provider_name: str
+) -> None:
+    email = f"unverified-at-provider-{uuid4().hex}@example.test"
+    tenant_id, person_id = _seed(postgres_harness, email=email)
+    assert person_id is not None
+    subject = f"{provider_name}-subject-{uuid4().hex}"
+    provider = _Provider(provider_name, email=email, subject=subject)
+    provider.email_verified = False
+
+    result, finished = _run_async(
+        _sign_in(postgres_harness, tenant_id=tenant_id, provider=provider)
+    )
+
+    assert result == "failed"
+    assert "ac_session" not in finished.cookies
+    assert _identities(postgres_harness, ISSUERS[provider_name], subject) == []
+    assert _sessions_of(postgres_harness, person_id) == 0
+    assert _link_notices_for(postgres_harness, person_id) == []
+    with Session(postgres_harness.engine) as database:
+        person = database.get(Person, person_id)
+        assert person is not None and person.consent_version == "provider-sign-in-consent-v1"
+        assert database.get(Membership, (tenant_id, person_id)) is None

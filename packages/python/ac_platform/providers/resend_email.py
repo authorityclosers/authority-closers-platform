@@ -341,6 +341,54 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
+    if message.template == "identity-provider-linked":
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError("sign-in notice has the wrong communication class")
+        provider = _required_text(message.variables, "provider", maximum=20)
+        if provider not in {"Google", "Apple"}:
+            raise PermanentProviderError("sign-in notice names an unsupported provider")
+        support = _required_text(message.variables, "support_email", maximum=120)
+        try:
+            linked = datetime.fromisoformat(
+                _required_text(message.variables, "linked_at", maximum=64).replace("Z", "+00:00")
+            )
+        except ValueError as error:
+            raise PermanentProviderError("sign-in notice time must be ISO-8601") from error
+        if linked.tzinfo is None:
+            raise PermanentProviderError("sign-in notice time must include a timezone")
+        when = linked.astimezone(UTC).strftime("%d %b %Y at %H:%M UTC")
+        link = _action_link(message.variables)
+        safe_link = html.escape(link, quote=True)
+        safe_support = html.escape(support)
+        return RenderedEmail(
+            subject=f"{provider} sign-in was added to your Sales Xray account",
+            text=(
+                f"Hi {first_name},\n\n{provider} sign-in was added to your Authority Closers "
+                f"account on {when}, because that {provider} account uses the same verified "
+                f"email. You can now sign in to Sales Xray with {provider}.\n\n"
+                f"Not you? Write to {support} at once and we will remove {provider} sign-in "
+                f"from your account:\n{link}"
+            ),
+            html=_email_layout(
+                preheader=f"{provider} sign-in was added to your account.",
+                eyebrow="Account security",
+                heading=f"{provider} sign-in was added to your account.",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(
+                    f"{provider} sign-in was added to your Authority Closers account on "
+                    f"{html.escape(when)}, because that {provider} account uses the same "
+                    "verified email.",
+                    f"You can now sign in to Sales Xray with {provider}.",
+                ),
+                action_label="Contact us",
+                action_link=safe_link,
+                security_note=(
+                    f"Not you? Write to {safe_support} at once and we will remove "
+                    f"{provider} sign-in from your account."
+                ),
+            ),
+        )
+
     if message.template == "organisation-invitation":
         if message.communication_class != "verification_security":
             raise PermanentProviderError(
