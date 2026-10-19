@@ -122,6 +122,14 @@ DEFAULT_RATE_LIMIT_RULES = (
         refill_seconds=600,
     ),
     RateLimitRule(
+        # Settings -> Connect starts a provider sign-in, like oauth-start.
+        name="sign-in-method-connect",
+        method="POST",
+        path=re.compile(r"^/v1/me/sign-in-methods/(?:google|facebook|apple)/connect$"),
+        capacity=20,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
         name="oauth-app-exchange",
         method="POST",
         path=re.compile(r"^/v1/auth/google/app-exchange$"),

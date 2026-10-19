@@ -3,6 +3,8 @@
 - GET  /v1/me/sign-in-methods                     what can sign this account in, and
                                                   which providers can be connected
 - POST /v1/me/sign-in-methods/{provider}/remove   remove Google, Apple or Facebook
+- POST /v1/me/sign-in-methods/{provider}/connect  connect one (in http/auth.py, which
+                                                  holds the provider sign-in flow)
 
 Removal needs a session started in the last 10 minutes and never takes the last way
 in. It writes identity.provider_removed.v1 (provider, account, time, client address)
@@ -109,6 +111,16 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                     }
                     for provider in ("google", "apple", "facebook")
                 },
+                # The Connect list: the providers offered here, in sign-in order.
+                "available": [
+                    {
+                        "kind": provider,
+                        "label": PROVIDER_LABELS[provider],
+                        "connected": provider in linked,
+                    }
+                    for provider in ("google", "apple", "facebook")
+                    if provider in configured
+                ],
                 "fresh_sign_in": fresh,
                 "fresh_minutes": int(FRESH_SIGN_IN.total_seconds() // 60),
             }

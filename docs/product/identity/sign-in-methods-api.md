@@ -22,6 +22,10 @@ Signed-in Sales Xray session (cookie), Sales Xray host only, `private, no-store`
     "apple": {"linked": false, "can_connect": false},
     "facebook": {"linked": false, "can_connect": true}
   },
+  "available": [
+    {"kind": "google", "label": "Google", "connected": true},
+    {"kind": "facebook", "label": "Facebook", "connected": false}
+  ],
   "fresh_sign_in": true,
   "fresh_minutes": 10
 }
@@ -34,6 +38,9 @@ Signed-in Sales Xray session (cookie), Sales Xray host only, `private, no-store`
 - `removable` is true only for a provider, and only when another way in remains.
 - `providers.*.can_connect` means the provider is configured in this environment
   and not yet on the account. Show a Connect button only when it is true.
+- `available` is the Connect list: only the providers configured here, in sign-in
+  order (Google, Apple, Facebook), with their label and whether this account has
+  one. A provider that is not configured is left out.
 - `fresh_sign_in`: this session started in the last `fresh_minutes`. Remove and
   Connect need it. Otherwise ask the person to sign out and in again first.
 
@@ -48,55 +55,77 @@ Same-origin `fetch` (the browser sends `Origin`). Staff keys are refused.
 | `409 {"detail": {"code": "last_method", "message": …}}` | it is the only way in |
 | `404 {"detail": {"code": "not_found", …}}` | not on this account |
 
-## Connect: a page redirect, not a fetch
+## Connect: `POST /v1/me/sign-in-methods/{google|apple|facebook}/connect`
 
-Use the helper in `app/account-auth-client.ts`:
+Same-origin `fetch` (the browser sends `Origin`), then a full-page redirect to the
+provider. Never a pop-up.
 
 ```ts
-import {
-  connectOutcome,
-  connectProvider,
-  forgetSignInResult,
-  readSignInResult,
-} from "../account-auth-client";
-
-// On the button: the whole page goes to the provider and comes back here.
-connectProvider("facebook");
-
-// When the Settings page mounts (read first, forget once shown: dev runs effects twice):
-const returned = readSignInResult();
-if (returned) {
-  forgetSignInResult();
-  const { tone, message } = connectOutcome(returned.result, returned.provider);
-  // show `message` as a corner card (tone "success" or "error"), then reload the list
+const answer = await fetch(`/v1/me/sign-in-methods/${provider}/connect`, {
+  method: "POST",
+  credentials: "same-origin",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ return_to: "/#settings/security" }),
+});
+if (answer.ok) {
+  const { redirect_url } = await answer.json();
+  window.location.assign(redirect_url); // the answer also set the sign-in cookie
+} else {
+  const { code } = await answer.json(); // see the table
 }
 ```
 
-What happens:
+`return_to` is where the provider sends the person back: a Sales Xray page path
+(`/` or up to six segments of letters, digits, `-` and `_`; not `/v1/…` or
+`/auth/…`; no query), optionally with the Settings dialog's hash, `#settings` or
+`#settings/<section>`. So both `/#settings/security` and `/settings/security` work.
 
-1. `connectProvider` keeps the current page, including a `#settings/…` hash, for
-   this tab. It then goes to `/v1/auth/{provider}/start?action=link&surface=sales_xray&return_path=/auth/complete?flow=<uuid>`.
-2. The server checks the session (fresh, not a staff key) and goes to the provider.
-3. It comes back through `/auth/complete`, which returns to the kept page with one
-   of these results:
-
-| Result | `connectOutcome` says |
+| Answer | Meaning |
 | --- | --- |
-| `linked` | "Facebook is connected. You can now sign in with Facebook." |
-| `already_linked` | "That Facebook account is already used by another Sales Xray account." |
-| `fresh_sign_in` | "For your safety, sign out and sign in again, then connect Facebook within 10 minutes." |
-| `unavailable` / `failed` | try-again wording |
+| `200 {"redirect_url": "https://…"}` | go there with `window.location.assign` |
+| `401 {"detail", "code": "sign_in"}` | not signed in |
+| `403 {"detail", "code": "fresh_sign_in"}` | the session is older than `fresh_minutes`; ask the person to sign out and in again, then connect |
+| `403 {"detail", "code": "origin"}` | not sent from a Sales Xray page |
+| `403 {"detail", "code": "staff_key"}` | staff keys can't connect |
+| `404 {"detail", "code": "not_configured"}` | that provider isn't offered here |
+| `409 {"detail", "code": "already_connected"}` | this account already has it |
+| `409 {"detail", "code": "app_not_supported"}` | from inside the phone app (see below) |
+| `422 {"detail", "code": "return_to"}` | `return_to` is not an allowed page |
+
+`detail` is a sentence to show as it is. Nothing is started when the answer is not 200.
+
+### Coming back
+
+The provider returns to the server, which links and then sends the page back to
+`return_to` with one query value, placed before the hash:
+
+| Back at | Meaning | Suggested corner card |
+| --- | --- | --- |
+| `/?connected=facebook#settings/security` | connected | "Facebook is connected. You can now sign in with Facebook." |
+| `/?connect_error=in_use#settings/security` | that provider account belongs to another Sales Xray account | "That Facebook account is already used by another Sales Xray account." |
+| `/?connect_error=cancelled#settings/security` | the person stopped at the provider | "Facebook wasn't connected." |
+| `/?connect_error=failed#settings/security` | anything else (signed out meanwhile, provider error) | "Couldn't connect Facebook. Try again." |
+
+On mount, read `connected` or `connect_error` from `location.search`, show the card,
+reload the list, then remove the query with `history.replaceState` so a reload does
+not show it again.
 
 Rules the server keeps:
 
 - The provider's email may differ from the account's; Facebook is allowed. No email
   match is involved because the person is already signed in.
+- A provider account already on another Sales Xray account is never moved
+  (`connect_error=in_use`); nothing is written.
 - Each new connection writes `identity.provider_connected.v1` (provider, account,
   time, client address) and emails the account. Connecting the same provider again
   changes nothing and sends nothing.
 - The session stays the same; no new session is issued.
 
 **Not inside the phone app.** The app opens provider pages in the phone's browser,
-which holds no Sales Xray session. In the app (`inPhoneApp()` from
-`app/leads/native-phone.ts`), hide Connect or say "Connect from a computer". The
-server answers `failed` if it is tried from there.
+which holds no Sales Xray session, so the server answers `409 app_not_supported`. In
+the app (`inPhoneApp()` from `app/leads/native-phone.ts`), hide Connect or say
+"Connect from a computer or your phone's browser".
+
+The older client helper `connectProvider()` in `app/account-auth-client.ts`
+(`GET /v1/auth/{provider}/start?action=link`, back through `/auth/complete`) still
+works but is not needed with the POST above.
