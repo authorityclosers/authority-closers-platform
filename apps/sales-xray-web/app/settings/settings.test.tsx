@@ -39,6 +39,7 @@ vi.mock("../organisation/organisation-view", () => ({
 vi.mock("../leads/alerts-card", () => ({ AlertsCard: () => null }));
 
 import { SettingsSectionView } from "./sections";
+import { SettingsSkeleton } from "./settings-skeleton";
 import { AccountRedirect } from "./account-redirect";
 import SettingsPage from "./page";
 import { SettingsShell, currentSection } from "./settings-shell";
@@ -181,4 +182,24 @@ it("sends an old /account address to its section", async () => {
   expect(nav.replace).toHaveBeenCalledWith("/settings/plan");
   expect(host.querySelector('[role="status"]')).not.toBeNull();
   window.history.replaceState(null, "", "/");
+});
+
+it("keeps the Settings frame while the session is checked", async () => {
+  nav.pathname = "/settings/apps";
+  await act(async () => root.render(<SettingsSkeleton />));
+  const status = host.querySelector(
+    '[role="status"][aria-label="Loading settings"]',
+  );
+  expect(status?.getAttribute("aria-busy")).toBe("true");
+  expect(host.querySelector("h1")?.textContent).toBe("Connected apps");
+  expect(
+    host.querySelector("a[aria-current='page']")?.getAttribute("href"),
+  ).toBe("/settings/apps");
+  // The overview needs no data, so it is the page itself.
+  nav.pathname = "/settings";
+  await act(async () => root.render(<SettingsSkeleton />));
+  expect(host.querySelector("h1")?.textContent).toBe("Settings");
+  expect(host.querySelectorAll("a[data-variant='list']")).toHaveLength(
+    SETTINGS_SECTIONS.length,
+  );
 });

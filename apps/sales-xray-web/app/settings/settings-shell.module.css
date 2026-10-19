@@ -182,6 +182,51 @@
   font-size: var(--sx-text-sm);
 }
 
+/* While the session is checked: panels shaped like a section's own. */
+.loading {
+  display: grid;
+  gap: 16px;
+}
+
+.skeletonPanel {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.skeletonHead {
+  display: flex;
+  align-items: center;
+  min-height: var(--sx-panel-head-h);
+  box-sizing: border-box;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.skeletonRow > :first-child {
+  flex: none;
+}
+
+.skeletonRow + .skeletonRow {
+  border-top: 1px solid var(--sx-line);
+}
+
+.skeletonLines {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+
 @media (max-width: 899px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);

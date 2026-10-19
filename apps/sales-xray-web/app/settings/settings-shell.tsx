@@ -103,3 +103,18 @@ export function SettingsShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+/** Every section at a glance: the list on a phone, cards on a computer. */
+export function SettingsOverview() {
+  return (
+    <div className={styles.overview}>
+      <header className={styles.overviewHead}>
+        <h1>Settings</h1>
+        <p>
+          Your account, your organisation, the apps you connect and this device.
+        </p>
+      </header>
+      <SectionList current={null} variant="list" />
+    </div>
+  );
+}

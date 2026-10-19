@@ -38,6 +38,7 @@ import { CoachingSkeleton } from "./coaching/coaching-skeleton";
 import { PersonSkeleton } from "./organisation/people/person-skeleton";
 import { InvitesSkeleton } from "./organisation/invites/invites-view";
 import { InsightsSkeleton } from "./organisation/insights/insights-view";
+import { SettingsSkeleton } from "./settings/settings-skeleton";
 import { ConnectionNotice } from "./connection-notice";
 import {
   WorkspaceAccessProvider,
@@ -336,7 +337,12 @@ function StandaloneStudioView({
       callIdFromPath(path) !== null
     )
       return "calls";
-    if (path === "/account") return "account";
+    if (
+      path === "/account" ||
+      path === "/settings" ||
+      path.startsWith("/settings/")
+    )
+      return "account";
     return "analyse";
   };
   const skeletonVariant = (
@@ -775,6 +781,9 @@ function StandaloneStudioView({
               <DashboardSkeleton />
             ) : pathname === "/coaching" ? (
               <CoachingSkeleton />
+            ) : pathname === "/settings" ||
+              pathname?.startsWith("/settings/") ? (
+              <SettingsSkeleton />
             ) : studioPath ? (
               <NewAnalysisSkeletonContent />
             ) : callPath ? (
