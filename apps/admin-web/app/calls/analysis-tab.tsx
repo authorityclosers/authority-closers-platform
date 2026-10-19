@@ -5,7 +5,8 @@
  * data captured, much, much denser than what the Report and Coaching show"):
  * what the engine found, fact by fact under its category, with confidence,
  * whose word it is, and the moments it heard it (each jumps the player). The
- * whole map, objects and runs are one click away.
+ * whole map, objects and runs are one click away. Moments (the engine's
+ * reading of each stretch of talk) follow, judged in psychology terms.
  */
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -30,6 +31,20 @@ const RUN_TONE: Record<string, Tone> = {
   failed: "bad",
   running: "accent",
   uncertain: "warn",
+};
+
+const SENTIMENT_TONE: Record<string, Tone> = {
+  positive: "good",
+  neutral: "neutral",
+  negative: "bad",
+};
+
+/** Moments shown before "Show all". */
+const FIRST_MOMENTS = 12;
+
+const words = (value: string) => {
+  const spaced = value.replaceAll("_", " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 };
 
 const tokens = (value: number) =>
@@ -63,8 +78,11 @@ export function AnalysisTab({
   }, [detail]);
 
   const [verdicts, setVerdicts] = useState(review?.verdicts ?? []);
+  const [allMoments, setAllMoments] = useState(false);
   const pipeline =
     review?.pipelines.find((item) => item.targets.includes("fact")) ?? null;
+  const psychology =
+    review?.pipelines.find((item) => item.targets.includes("segment")) ?? null;
 
   if (!detail)
     return (
@@ -166,6 +184,77 @@ export function AnalysisTab({
       ) : (
         <p className={styles.empty}>No facts yet for this call.</p>
       )}
+      {detail.engine.segments.length ? (
+        <section className={styles.group} aria-label="Moments">
+          <h3>
+            Moments <span>{detail.engine.segments.length}</span>
+          </h3>
+          <ul>
+            {(allMoments
+              ? detail.engine.segments
+              : detail.engine.segments.slice(0, FIRST_MOMENTS)
+            ).map((moment, index) => {
+              const objectId = detail.momentIds[index] ?? "";
+              return (
+                <li key={objectId || `${moment.segmentId}-${index}`}>
+                  <span className={styles.label}>
+                    <span className={styles.moments}>
+                      <button
+                        type="button"
+                        onClick={() => onSeek(moment.startMs)}
+                        title="Play from here"
+                      >
+                        ▶ {clock(moment.startMs)}
+                      </button>
+                    </span>{" "}
+                    {words(moment.speaker)}
+                  </span>
+                  <span className={styles.value}>
+                    {words(moment.intent)} · {words(moment.act)}
+                    {moment.topics.length
+                      ? ` · ${moment.topics.join(", ")}`
+                      : ""}
+                  </span>
+                  <span className={styles.meta}>
+                    {moment.tone ? <Badge>{words(moment.tone)}</Badge> : null}
+                    {moment.sentiment ? (
+                      <Badge
+                        tone={SENTIMENT_TONE[moment.sentiment] ?? "neutral"}
+                      >
+                        {words(moment.sentiment)}
+                      </Badge>
+                    ) : null}
+                  </span>
+                  {psychology && objectId ? (
+                    <VerdictChips
+                      recordingId={recordingId}
+                      pipeline={psychology}
+                      targetKind="segment"
+                      targetRef={objectId}
+                      mine={myAnswers(verdicts, objectId)}
+                      others={othersOn(verdicts, objectId)}
+                      onSaved={(saved) =>
+                        setVerdicts((current) => withSaved(current, saved))
+                      }
+                    />
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {detail.engine.segments.length > FIRST_MOMENTS ? (
+            <button
+              type="button"
+              className={styles.showAll}
+              onClick={() => setAllMoments((value) => !value)}
+            >
+              {allMoments
+                ? "Show fewer"
+                : `Show all ${detail.engine.segments.length} moments`}
+            </button>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

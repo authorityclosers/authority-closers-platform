@@ -119,6 +119,8 @@ export type CallDetail = {
   engine: EngineObjects;
   /** Each current fact's moments, by object id, earliest first. */
   evidence: Record<string, Evidence[]>;
+  /** Each moment's call object id, in engine.segments' order (what Review 2.0 judges). */
+  momentIds: string[];
   taxonomyVersion: string | null;
 };
 
@@ -282,6 +284,9 @@ export function normalizeCallDetail(raw: unknown): CallDetail {
     },
     engine: normalizeEngineObjects(body),
     evidence: evidenceByFact(body.facts),
+    momentIds: read
+      .array(body.segments)
+      .map((item) => read.string(read.object(item).object_id)),
     taxonomyVersion: s(body.taxonomy_version),
   };
 }

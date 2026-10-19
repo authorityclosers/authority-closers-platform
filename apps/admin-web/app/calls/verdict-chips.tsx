@@ -25,6 +25,9 @@ const OPTION_LABEL: Record<string, string> = {
   false: "False",
 };
 
+/** Pick lists longer than this show as a menu. */
+const LONG_PICK = 6;
+
 const label = (option: string) =>
   OPTION_LABEL[option] ?? option.charAt(0).toUpperCase() + option.slice(1);
 
@@ -84,7 +87,27 @@ export function VerdictChips({
   return (
     <span className={styles.review} aria-label={`Review: ${pipeline.title}`}>
       {shown.map((question) =>
-        question.kind === "verdict" || question.kind === "pick" ? (
+        // A long pick list (the engine's 16 intents) is a menu, not a row of chips.
+        question.kind === "pick" && question.options.length > LONG_PICK ? (
+          <select
+            key={question.key}
+            className={styles.pick}
+            aria-label={question.label}
+            value={String(mine[question.key]?.value ?? "")}
+            disabled={busy !== null}
+            onChange={(event) => {
+              if (event.target.value)
+                void save(question.key, { value: event.target.value });
+            }}
+          >
+            <option value="">{question.label}</option>
+            {question.options.map((option) => (
+              <option key={option} value={option}>
+                {label(option).replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        ) : question.kind === "verdict" || question.kind === "pick" ? (
           <span
             key={question.key}
             className={styles.chips}

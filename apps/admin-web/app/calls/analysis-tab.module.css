@@ -210,3 +210,29 @@
   color: var(--sx-bad);
   font-size: var(--sx-text-xs);
 }
+
+/* A long pick list (moments: the engine's intents and tones) as a menu. */
+.pick {
+  max-width: 220px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+}
+
+.showAll {
+  justify-self: start;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+  cursor: pointer;
+}
