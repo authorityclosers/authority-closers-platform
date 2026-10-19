@@ -623,7 +623,22 @@ PARTNER_LEAD_EVENTS_PARITY_TABLES = REVIEW_PARITY_TABLES + (
     "partner_lead_events",
     "partner_lead_attempts",
 )
+# 0103 adds the developer platform: API keys and sealed integration secrets.
+INTEGRATIONS_PARITY_MIGRATION_HEAD = "20261019_0103"
+INTEGRATIONS_PARITY_CONTRACT = "ac-postgres-parity-v70"
+INTEGRATIONS_PARITY_TABLES = PARTNER_LEAD_EVENTS_PARITY_TABLES + (
+    "integration_api_keys",
+    "integration_secrets",
+    "integration_oauth_clients",
+    "integration_oauth_grants",
+    "integration_oauth_codes",
+    "integration_oauth_tokens",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    INTEGRATIONS_PARITY_MIGRATION_HEAD: (
+        INTEGRATIONS_PARITY_CONTRACT,
+        INTEGRATIONS_PARITY_TABLES,
+    ),
     PARTNER_LEAD_EVENTS_PARITY_MIGRATION_HEAD: (
         PARTNER_LEAD_EVENTS_PARITY_CONTRACT,
         PARTNER_LEAD_EVENTS_PARITY_TABLES,

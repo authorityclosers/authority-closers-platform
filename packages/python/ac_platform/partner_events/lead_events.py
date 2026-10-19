@@ -1047,7 +1047,9 @@ async def deliver_one(
     elif not delivery.url_allowed(claimed.endpoint_url, environment):
         outcome = delivery.Outcome(None, "url_refused", 0)
     else:
-        secrets = delivery.read_secrets(claimed.secret_ref, claimed.secret_ref_next)
+        secrets = await delivery.read_secrets_for(
+            sessions, claimed.tenant_id, claimed.secret_ref, claimed.secret_ref_next
+        )
         if secrets is None:
             outcome = delivery.Outcome(None, "secret_missing", 0)
         elif claimed.kind == "handover":

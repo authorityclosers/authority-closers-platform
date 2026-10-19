@@ -79,6 +79,7 @@ import {
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
 import { TeamPatternsSection } from "./team-patterns-section";
+import { IntegrationsPanel } from "./integrations/integrations-panel";
 
 type Base =
   | { status: "loading" }
@@ -99,7 +100,10 @@ const TABS = [
   { id: "overview", label: "Overview" },
   { id: "members", label: "Members" },
   { id: "company", label: "Company" },
+  // Owners and admins only (owner order 19 Oct: self-serve API keys and webhooks).
+  { id: "integrations", label: "Integrations" },
 ] as const;
+const MEMBER_TABS = TABS.filter((item) => item.id !== "integrations");
 type Tab = (typeof TABS)[number]["id"];
 const isTab = (value: string | null): value is Tab =>
   TABS.some((item) => item.id === value);
@@ -442,7 +446,7 @@ export function OrganisationView({
             </header>
 
             <nav className={styles.tabs} aria-label="Organisation sections">
-              {TABS.map(({ id, label }) => (
+              {(canManage ? TABS : MEMBER_TABS).map(({ id, label }) => (
                 <button
                   key={id}
                   type="button"
@@ -503,6 +507,12 @@ export function OrganisationView({
                     yourPersonId={access?.context?.personId ?? null}
                     onMissing={() => setMissing(true)}
                   />
+                </SectionBoundary>
+              )}
+
+              {tab === "integrations" && canManage && (
+                <SectionBoundary name="Integrations">
+                  <IntegrationsPanel />
                 </SectionBoundary>
               )}
 

@@ -53,6 +53,7 @@ from ac_platform.db.base import Base
 from ac_platform.enrollment import models as enrollment_models
 from ac_platform.identity import google_profile_models, sales_xray_profile_models
 from ac_platform.identity import models as identity_models
+from ac_platform.integrations import models as integration_models
 from ac_platform.knowledge import models as knowledge_models
 from ac_platform.lead_desk import models as lead_desk_models
 from ac_platform.learning import models as learning_models
@@ -101,6 +102,7 @@ MODEL_MODULES = (
     lead_desk_models,
     partner_event_models,
     call_data_models,
+    integration_models,
     authorization_models,
     knowledge_models,
     catalog_models,
