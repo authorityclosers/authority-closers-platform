@@ -22,8 +22,9 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.application import (
@@ -35,7 +36,11 @@ from ac_platform.conversation_intelligence.application import (
 from ac_platform.conversation_intelligence.gold_review_models import GoldReviewer
 from ac_platform.conversation_intelligence.models import ConversationRecording
 from ac_platform.conversation_intelligence.review_models import ReviewPipeline, ReviewVerdict
+from ac_platform.conversation_intelligence.synthetic_import_models import (
+    ConversationSandboxOrganisation,
+)
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.organisations.workspace_kinds import classify_workspaces
 
 SAVED_ACTION = "review.verdict_saved"
 PIPELINE_SCHEMA = "ac.review-pipeline/1"
@@ -152,9 +157,15 @@ async def erase_review_verdicts_for_recording(
 
 
 class ReviewVerdicts:
-    def __init__(self, database: AsyncSession, operations_tenant_id: UUID) -> None:
+    def __init__(
+        self,
+        database: AsyncSession,
+        operations_tenant_id: UUID,
+        personal_tenant_id: UUID | None = None,
+    ) -> None:
         self.database = database
         self.operations_tenant_id = operations_tenant_id
+        self.personal_tenant_id = personal_tenant_id
 
     async def admit(self, actor: ActorContext) -> None:
         """A standing gold reviewer, working in the operations workspace."""
@@ -216,6 +227,134 @@ class ReviewVerdicts:
             "verdicts": [
                 verdict_view(row, actor.person_id) for row in await self._current(recording_id)
             ],
+        }
+
+    async def queue(
+        self,
+        actor: ActorContext,
+        *,
+        pipeline_key: str = "analysis-sales",
+        limit: int | None = None,
+        include_sandbox: bool = False,
+        include_done: bool = False,
+    ) -> dict[str, Any]:
+        """The pipeline's sample: calls with current analysis items, newest first.
+
+        Each call says how many items it has, how many this reviewer answered and how
+        many other reviewers answered. Calls this reviewer finished drop out unless
+        asked for; the fictional sandbox stays out unless asked for.
+        """
+        from ac_platform.call_data.models import CallObject
+
+        await self.admit(actor)
+        pipeline = (await self.pipelines()).get(pipeline_key)
+        if pipeline is None:
+            raise ConversationNotFound("No such review pipeline.")
+        sample = pipeline["definition"].get("sample", {})
+        size = max(1, min(int(limit or sample.get("limit") or 20), 100))
+        successor = aliased(CallObject)
+        current = (
+            select(
+                CallObject.recording_id,
+                func.count().label("items"),
+                func.max(CallObject.created_at).label("analysed_at"),
+            )
+            .join(ConversationRecording, ConversationRecording.id == CallObject.recording_id)
+            .where(
+                CallObject.type_key != "conversation.segment",
+                CallObject.retracted.is_(False),
+                CallObject.erased_at.is_(None),
+                ~exists().where(successor.supersedes_id == CallObject.id),
+                ConversationRecording.deleted_at.is_(None),
+            )
+            .group_by(CallObject.recording_id)
+        )
+        if not include_sandbox:
+            current = current.where(
+                ~ConversationRecording.tenant_id.in_(
+                    select(ConversationSandboxOrganisation.tenant_id)
+                )
+            )
+        rows = (
+            await self.database.execute(
+                current.order_by(func.max(CallObject.created_at).desc()).limit(size * 4)
+            )
+        ).all()
+        ids = [row.recording_id for row in rows]
+        answered: dict[UUID, int] = {}
+        others: dict[UUID, int] = {}
+        if ids:
+            mine_rows = await self.database.execute(
+                select(
+                    ReviewVerdict.recording_id, func.count(func.distinct(ReviewVerdict.target_ref))
+                )
+                .where(
+                    ReviewVerdict.recording_id.in_(ids),
+                    ReviewVerdict.reviewer_id == actor.person_id,
+                    ReviewVerdict.pipeline_key == pipeline_key,
+                    ReviewVerdict.erased_at.is_(None),
+                )
+                .group_by(ReviewVerdict.recording_id)
+            )
+            answered = {recording: int(count) for recording, count in mine_rows.all()}
+            other_rows = await self.database.execute(
+                select(
+                    ReviewVerdict.recording_id, func.count(func.distinct(ReviewVerdict.reviewer_id))
+                )
+                .where(
+                    ReviewVerdict.recording_id.in_(ids),
+                    ReviewVerdict.reviewer_id != actor.person_id,
+                    ReviewVerdict.pipeline_key == pipeline_key,
+                    ReviewVerdict.erased_at.is_(None),
+                )
+                .group_by(ReviewVerdict.recording_id)
+            )
+            others = {recording: int(count) for recording, count in other_rows.all()}
+        recordings = {
+            row.id: row
+            for row in (
+                await self.database.scalars(
+                    select(ConversationRecording).where(ConversationRecording.id.in_(ids))
+                )
+            ).all()
+        }
+        workspaces = await classify_workspaces(
+            self.database,
+            operations_tenant_id=self.operations_tenant_id,
+            personal_tenant_id=self.personal_tenant_id,
+            tenant_ids={recording.tenant_id for recording in recordings.values()},
+        )
+        items = []
+        for row in rows:
+            done = answered.get(row.recording_id, 0)
+            if done >= row.items and not include_done:
+                continue
+            recording = recordings[row.recording_id]
+            workspace = workspaces.get(recording.tenant_id)
+            items.append(
+                {
+                    "recording_id": str(row.recording_id),
+                    "uploaded_at": recording.created_at.isoformat(),
+                    "analysed_at": row.analysed_at.isoformat(),
+                    "organisation": {
+                        "id": str(recording.tenant_id),
+                        "name": workspace.name if workspace else "Unknown organisation",
+                        "kind": workspace.kind if workspace else "other",
+                    },
+                    "items": int(row.items),
+                    "answered": done,
+                    "others": others.get(row.recording_id, 0),
+                }
+            )
+            if len(items) >= size:
+                break
+        return {
+            "pipeline": {
+                "key": pipeline_key,
+                "version": pipeline["version"],
+                "title": pipeline["title"],
+            },
+            "items": items,
         }
 
     async def _target_digest(self, recording_id: UUID, kind: str, ref: str) -> str:

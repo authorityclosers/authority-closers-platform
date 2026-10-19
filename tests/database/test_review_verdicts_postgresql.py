@@ -192,6 +192,39 @@ def test_call_erasure_empties_every_answer(postgres_harness: Engine) -> None:
     assert len(rows) == 2 and all(answer is None and at is not None for answer, at in rows)
 
 
+def test_the_queue_samples_calls_with_items_and_shows_progress(postgres_harness: Engine) -> None:
+    seeded = _seeded_call(postgres_harness)
+    owner, url = seeded["owner"], postgres_harness.url
+    _designate(postgres_harness, owner.person_id)
+
+    async def queue(service: ReviewVerdicts, **options: Any) -> Any:
+        return await service.queue(owner.actor, **options)
+
+    def listed(**options: Any) -> dict[str, Any]:
+        found = _with_service(url, owner.tenant_id, lambda service: queue(service, **options))
+        return {item["recording_id"]: item for item in found["items"]}
+
+    first = listed()[str(seeded["recording_id"])]
+    assert first["items"] >= 1 and first["answered"] == 0 and first["others"] == 0
+    assert first["organisation"]["id"] == str(owner.tenant_id)
+    _with_service(url, owner.tenant_id, _save(seeded))
+    assert listed()[str(seeded["recording_id"])]["answered"] == 1
+    # Once every item is answered the call leaves the queue, unless finished calls are asked for.
+    with postgres_harness.connect() as connection:
+        refs = connection.scalars(
+            select(CallObject.id).where(
+                CallObject.recording_id == seeded["recording_id"],
+                CallObject.type_key != "conversation.segment",
+                CallObject.erased_at.is_(None),
+                CallObject.retracted.is_(False),
+            )
+        ).all()
+    for ref in refs:
+        _with_service(url, owner.tenant_id, _save(seeded, target_ref=str(ref)))
+    assert str(seeded["recording_id"]) not in listed()
+    assert str(seeded["recording_id"]) in listed(include_done=True)
+
+
 def migration() -> Any:
     path = ROOT / "db/migrations/versions/20261019_0101_review_verdicts.py"
     spec = importlib.util.spec_from_file_location("review_verdicts_migration_test", path)

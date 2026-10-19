@@ -1,6 +1,7 @@
 """Review 2.0 routes on the Admin conversation router (admin revamp, 19 Oct 2026).
 
 GET  /review/pipelines                      the active pipelines
+GET  /review/queue                          the pipeline's sample, with progress
 GET  /review/calls/{recording_id}           pipelines and the call's current answers
 POST /review/calls/{recording_id}/verdicts  one answer (Idempotency-Key, append-only)
 
@@ -13,7 +14,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from ac_platform.application.settings import Settings
@@ -49,7 +50,11 @@ def install_review_verdict_routes(
     def service(auth: AuthenticatedTransaction) -> ReviewVerdicts:
         if settings.operations_tenant_id is None:
             raise HTTPException(503, "Review is not configured.")
-        return ReviewVerdicts(auth.database, settings.operations_tenant_id)
+        return ReviewVerdicts(
+            auth.database,
+            settings.operations_tenant_id,
+            personal_tenant_id=settings.public_learner_tenant_id,
+        )
 
     @router.get("/review/pipelines")
     async def pipelines(
@@ -59,6 +64,29 @@ def install_review_verdict_routes(
         scope(request, response)
         try:
             return await service(auth).list_pipelines(auth.resolved.actor)
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.get("/review/queue")
+    async def queue(
+        request: Request,
+        response: Response,
+        pipeline: Annotated[str, Query(min_length=1, max_length=48)] = "analysis-sales",
+        limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+        sandbox: bool = False,
+        done: bool = False,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """Calls the pipeline samples for review, newest first, with progress."""
+        scope(request, response)
+        try:
+            return await service(auth).queue(
+                auth.resolved.actor,
+                pipeline_key=pipeline,
+                limit=limit,
+                include_sandbox=sandbox,
+                include_done=done,
+            )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
