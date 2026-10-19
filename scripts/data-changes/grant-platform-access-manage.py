@@ -2,7 +2,7 @@
 """Grant platform_access_manage to an existing operations owner (owner order, 18 Oct 2026).
 
 The owner (Suyash) ordered that admin@authorityclosers.com manages platform access, so
-minute grants such as the Wise Life pilot's no longer depend on one other person's
+minute grants for a pilot organisation no longer depend on one other person's
 account (AUT-2076). This mirrors ``operator_data_change grant-platform-capability``,
 which only allows platform_release_manage, for the one permission it refuses:
 
@@ -53,7 +53,7 @@ from ac_platform.identity.services import normalize_email
 from ac_platform.tenancy.models import Membership
 
 PERMISSION = "platform_access_manage"
-OPERATOR = "claude-laptop:wiselife-pilot-salesxray"
+OPERATOR = "claude-laptop:platform-access-grant"
 
 
 def _parser() -> argparse.ArgumentParser:

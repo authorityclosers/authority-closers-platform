@@ -615,7 +615,19 @@ REVIEW_PARITY_TABLES = CAPTURE_SOURCE_PARITY_TABLES + (
     "review_pipelines",
     "review_verdicts",
 )
+# 0102 adds partner lead events and customer hand-overs.
+PARTNER_LEAD_EVENTS_PARITY_MIGRATION_HEAD = "20261019_0102"
+PARTNER_LEAD_EVENTS_PARITY_CONTRACT = "ac-postgres-parity-v69"
+PARTNER_LEAD_EVENTS_PARITY_TABLES = REVIEW_PARITY_TABLES + (
+    "partner_handover_recipients",
+    "partner_lead_events",
+    "partner_lead_attempts",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    PARTNER_LEAD_EVENTS_PARITY_MIGRATION_HEAD: (
+        PARTNER_LEAD_EVENTS_PARITY_CONTRACT,
+        PARTNER_LEAD_EVENTS_PARITY_TABLES,
+    ),
     REVIEW_PARITY_MIGRATION_HEAD: (
         REVIEW_PARITY_CONTRACT,
         REVIEW_PARITY_TABLES,

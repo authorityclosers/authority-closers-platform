@@ -75,7 +75,7 @@ SECRET_REF = "AC_PARTNER_WEBHOOK_SECRET__FICTIONAL"  # noqa: S105 - a variable n
 NEXT_SECRET_REF = "AC_PARTNER_WEBHOOK_SECRET__FICTIONAL_NEXT"  # noqa: S105 - a name, never set
 SECRET = "whsec-fictional-test-secret"  # noqa: S105 - fictional test value
 URL = "https://hooks.example.test/sx"
-PROFILE = "wiselife-quote-v1"
+PROFILE = "rooftop-solar-quote-v1"
 
 
 @pytest.fixture

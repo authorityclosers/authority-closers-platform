@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from ac_platform.partner_events import cli, delivery, pipeline
+from ac_platform.partner_events import cli, delivery, lead_events, pipeline
 from ac_platform.partner_events.endpoints import EndpointError, validate
 from ac_platform.partner_events.payload import Extraction
 
@@ -32,11 +32,11 @@ def test_every_change_is_a_dry_run_by_default() -> None:
             "--url",
             "https://hooks.example.test/sx",
             "--secret-ref",
-            "AC_PARTNER_WEBHOOK_SECRET__WISELIFE_DEV",
+            "AC_PARTNER_WEBHOOK_SECRET__FICTIONAL_DEV",
             "--events",
             "analysis.completed",
             "--facts-profile",
-            "wiselife-quote-v1",
+            "rooftop-solar-quote-v1",
             "--reason",
             "fictional",
             "--operator-reference",
@@ -94,7 +94,7 @@ def test_endpoint_validation(changes: dict[str, Any], code: str) -> None:
         "secret_ref": "AC_PARTNER_WEBHOOK_SECRET__A",
         "secret_ref_next": None,
         "events": ["analysis.completed"],
-        "facts_profile": "wiselife-quote-v1",
+        "facts_profile": "rooftop-solar-quote-v1",
         "environment": "development",
     }
     validate(**values)
@@ -185,7 +185,7 @@ class _Runner:
                 draft_id=UUID(int=100 + number),
                 submission_id=UUID(int=200 + number),
                 created_at=start + timedelta(minutes=number),
-                facts_profile="wiselife-quote-v1",
+                facts_profile="rooftop-solar-quote-v1",
                 skip=(skips or {}).get(number),
             )
             for number in range(5)
@@ -245,6 +245,18 @@ class _Runner:
             monkeypatch.setattr(pipeline, name, value)
         monkeypatch.setattr(delivery, "deliver_one", deliver_one)
         monkeypatch.setattr(delivery, "erasure_sweep", erasure_sweep)
+
+        # Lead events and hand-overs (0102) have their own database tests.
+        async def collect_leads(*args: Any, **kwargs: Any) -> list[Any]:
+            return []
+
+        async def lead_sweep(*args: Any, **kwargs: Any) -> int:
+            return 0
+
+        monkeypatch.setattr(lead_events, "collect", collect_leads)
+        monkeypatch.setattr(lead_events, "deliver_one", deliver_one)
+        monkeypatch.setattr(lead_events, "erasure_sweep", lead_sweep)
+        monkeypatch.setattr(lead_events, "due_count", lead_sweep)
 
     def one_pass(self, *, apply: bool = True, limit: int = 2) -> dict[str, int]:
         totals = dict.fromkeys(

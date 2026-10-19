@@ -1,6 +1,6 @@
 """Partner webhooks: signed ``analysis.completed`` events with quote facts (18 Oct 2026).
 
-Sales X-Ray sends a partner (first: Wise Life) one signed event per finished
+Sales X-Ray sends a partner one signed event per finished
 call analysis, at the HTTPS address registered for that workspace. Four new
 tables, nothing else changes:
 

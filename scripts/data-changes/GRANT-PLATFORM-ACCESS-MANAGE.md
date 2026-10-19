@@ -1,6 +1,6 @@
 # Grant platform_access_manage to an operations owner (18 Oct 2026)
 
-Owner order, relayed by Orchestrator 2 on 18 Oct 2026: admin@authorityclosers.com manages platform access, so minute grants (first: the Wise Life pilot, AUT-2076) don't depend on one other account. Approver: suyash.
+Owner order, relayed by Orchestrator 2 on 18 Oct 2026: admin@authorityclosers.com manages platform access, so minute grants (first: a pilot organisation, AUT-2076) don't depend on one other account. Approver: suyash.
 
 Production order:
 1. Snapshot: `sudo /usr/local/sbin/ac-db-snapshot production before-admin-platform-access`.

@@ -6,6 +6,10 @@ operator reference and reason. Secrets are never stored or printed: an
 endpoint keeps only the name of the environment variable that holds its
 secret. URLs are shown as scheme, host and port only.
 
+Customer hand-over recipients (0102, ``partner_handover_recipients``) work the
+same way: ``--kind handover`` registers one, with the optional parts and form
+questions an admin approved for it.
+
 An endpoint's URL or secret is never changed in place. ``supersede`` disables
 the active endpoint and adds a new one in one transaction; the old endpoint's
 undelivered events move to the new one with their frozen bytes, so a URL
@@ -17,14 +21,23 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from ac_platform.partner_events.delivery import mask_url, url_allowed
+from ac_platform.partner_events.lead_events import (
+    HANDOVER_PATH,
+    WEBHOOK_LEAD_EVENTS,
+    LeadFieldsError,
+    validate_lead_fields,
+)
 from ac_platform.partner_events.models import SECRET_REF_PATTERN
 from ac_platform.partner_events.quote_facts import PROFILES
 
-EVENTS = ("analysis.completed",)
+# 0102: a webhook can also take lead events (lead_events).
+EVENTS = ("analysis.completed", *WEBHOOK_LEAD_EVENTS)
 RESOURCE_ENDPOINT = "partner_webhook_endpoint"
+RESOURCE_RECIPIENT = "partner_handover_recipient"
 RESOURCE_EVENT = "partner_webhook_event"
 
 
@@ -112,6 +125,201 @@ async def _audit(
     )
 
 
+def recipient_view(recipient: Any) -> dict[str, Any]:
+    return {
+        "endpoint_id": str(recipient.id),
+        "kind": "handover",
+        "tenant_id": str(recipient.tenant_id),
+        "url": mask_url(recipient.url),
+        "secret_ref": recipient.secret_ref,
+        "lead_fields": recipient.lead_fields,
+        "status": recipient.status,
+        "events_since": recipient.events_since.isoformat(),
+        "supersedes_endpoint_id": (
+            str(recipient.supersedes_recipient_id) if recipient.supersedes_recipient_id else None
+        ),
+        "created_by": recipient.created_by,
+        "created_at": recipient.created_at.isoformat(),
+        "disabled_at": recipient.disabled_at.isoformat() if recipient.disabled_at else None,
+    }
+
+
+async def register_recipient(
+    session: Any,
+    *,
+    tenant_id: UUID,
+    url: str,
+    secret_ref: str,
+    lead_fields: Any,
+    reason: str,
+    operator_reference: str,
+    supersede: bool,
+    apply: bool,
+    environment: str,
+    now: datetime,
+) -> dict[str, Any]:
+    """Approve one exact hand-over recipient for an organisation (0102).
+
+    The URL is the partner's service path; the secret named holds its scoped
+    key; ``lead_fields`` are the optional parts and form questions approved.
+    """
+    from sqlalchemy import select, update
+
+    from ac_platform.partner_events.models import PartnerHandoverRecipient, PartnerLeadEvent
+    from ac_platform.tenancy.models import Tenant
+
+    reason = _text(reason, "reason", 500)
+    operator_reference = _text(operator_reference, "operator_reference", 160)
+    if len(url) > 2048 or not url_allowed(url, environment):
+        raise EndpointError("url_refused")
+    if urlsplit(url).path != HANDOVER_PATH:
+        raise EndpointError("handover_path_invalid")
+    if not re.fullmatch(SECRET_REF_PATTERN, secret_ref):
+        raise EndpointError("secret_ref_invalid")
+    try:
+        approved = validate_lead_fields(lead_fields, "handover")
+    except LeadFieldsError as error:
+        raise EndpointError(str(error)) from None
+    if await session.get(Tenant, tenant_id) is None:
+        raise EndpointError("tenant_missing")
+    active = await session.scalar(
+        select(PartnerHandoverRecipient)
+        .where(
+            PartnerHandoverRecipient.tenant_id == tenant_id,
+            PartnerHandoverRecipient.status == "active",
+        )
+        .with_for_update()
+    )
+    if active is not None and not supersede:
+        raise EndpointError("active_endpoint_exists_use_supersede")
+    if active is None and supersede:
+        raise EndpointError("no_active_endpoint_to_supersede")
+    recipient = PartnerHandoverRecipient(
+        id=uuid4(),
+        tenant_id=tenant_id,
+        url=url,
+        secret_ref=secret_ref,
+        lead_fields=approved,
+        status="active",
+        events_since=active.events_since if active is not None else now,
+        supersedes_recipient_id=active.id if active is not None else None,
+        created_by=operator_reference,
+        reason=reason,
+        created_at=now,
+        disabled_at=None,
+    )
+    result: dict[str, Any] = {
+        "environment": environment,
+        "apply": apply,
+        "before": recipient_view(active) if active is not None else None,
+        "after": recipient_view(recipient),
+        "secret_values_checked": False,
+    }
+    if not apply:
+        return result
+    moved = 0
+    if active is not None:
+        active.status, active.disabled_at = "disabled", now
+        await session.flush()
+    session.add(recipient)
+    await session.flush()
+    if active is not None:
+        moved = (
+            await session.execute(
+                update(PartnerLeadEvent)
+                .where(
+                    PartnerLeadEvent.recipient_id == active.id,
+                    PartnerLeadEvent.status.in_(("pending", "dead_letter")),
+                )
+                .values(recipient_id=recipient.id)
+            )
+        ).rowcount or 0
+    await _audit(
+        session,
+        tenant_id=tenant_id,
+        action="partner_events.handover_recipient_registered",
+        resource_type=RESOURCE_RECIPIENT,
+        resource_id=recipient.id,
+        payload={
+            "recipient_id": str(recipient.id),
+            "supersedes_recipient_id": str(active.id) if active is not None else None,
+            "url_host": mask_url(url),
+            "secret_ref": secret_ref,
+            "lead_fields": approved,
+            "events_moved": int(moved),
+            "operator_reference": operator_reference,
+        },
+        reason=reason,
+        now=now,
+    )
+    result["events_moved"] = int(moved)
+    result["applied"] = True
+    return result
+
+
+async def disable_recipient(
+    session: Any,
+    recipient: Any,
+    *,
+    reason: str,
+    operator_reference: str,
+    apply: bool,
+    now: datetime,
+) -> dict[str, Any]:
+    """Stop a hand-over recipient; its undelivered hand-overs are dropped and emptied."""
+    from sqlalchemy import func, select, update
+
+    from ac_platform.partner_events.models import PartnerLeadEvent
+
+    if recipient.status != "active":
+        raise EndpointError("endpoint_not_active")
+    undelivered = (
+        PartnerLeadEvent.recipient_id == recipient.id,
+        PartnerLeadEvent.status.in_(("pending", "dead_letter")),
+    )
+    pending = int(
+        await session.scalar(select(func.count()).select_from(PartnerLeadEvent).where(*undelivered))
+        or 0
+    )
+    result: dict[str, Any] = {
+        "apply": apply,
+        "before": recipient_view(recipient),
+        "undelivered_events_to_drop": pending,
+    }
+    if not apply:
+        return result
+    recipient.status, recipient.disabled_at = "disabled", now
+    await session.execute(
+        update(PartnerLeadEvent)
+        .where(*undelivered)
+        .values(
+            status="dropped",
+            payload=None,
+            erased_at=now,
+            leased_until=None,
+            last_error_code="endpoint_disabled",
+        )
+    )
+    await session.flush()
+    await _audit(
+        session,
+        tenant_id=recipient.tenant_id,
+        action="partner_events.handover_recipient_disabled",
+        resource_type=RESOURCE_RECIPIENT,
+        resource_id=recipient.id,
+        payload={
+            "recipient_id": str(recipient.id),
+            "events_dropped": pending,
+            "operator_reference": operator_reference,
+        },
+        reason=reason,
+        now=now,
+    )
+    result["after"] = recipient_view(recipient)
+    result["applied"] = True
+    return result
+
+
 async def register(
     session: Any,
     *,
@@ -127,10 +335,37 @@ async def register(
     apply: bool,
     environment: str,
     now: datetime,
+    kind: str = "webhook",
+    lead_fields: Any = None,
 ) -> dict[str, Any]:
     from sqlalchemy import select, update
 
-    from ac_platform.partner_events.models import PartnerWebhookEndpoint, PartnerWebhookEvent
+    from ac_platform.partner_events.models import (
+        PartnerLeadEvent,
+        PartnerWebhookEndpoint,
+        PartnerWebhookEvent,
+    )
+
+    if kind == "handover":
+        if events not in ([], ["lead.handover"]) or facts_profile or secret_ref_next:
+            raise EndpointError("handover_options_invalid")
+        return await register_recipient(
+            session,
+            tenant_id=tenant_id,
+            url=url,
+            secret_ref=secret_ref,
+            lead_fields=lead_fields,
+            reason=reason,
+            operator_reference=operator_reference,
+            supersede=supersede,
+            apply=apply,
+            environment=environment,
+            now=now,
+        )
+    if kind != "webhook":
+        raise EndpointError("kind_invalid")
+    if lead_fields is not None:
+        raise EndpointError("lead_fields_only_for_handover")
     from ac_platform.tenancy.models import Tenant
 
     reason = _text(reason, "reason", 500)
@@ -200,6 +435,16 @@ async def register(
                 .values(endpoint_id=endpoint.id)
             )
         ).rowcount or 0
+        moved += (
+            await session.execute(
+                update(PartnerLeadEvent)
+                .where(
+                    PartnerLeadEvent.endpoint_id == active.id,
+                    PartnerLeadEvent.status.in_(("pending", "dead_letter")),
+                )
+                .values(endpoint_id=endpoint.id)
+            )
+        ).rowcount or 0
     await _audit(
         session,
         tenant_id=tenant_id,
@@ -238,7 +483,12 @@ async def disable(
     ``delivery.drop``: they would never be sent, so their payloads are not kept."""
     from sqlalchemy import func, select, update
 
-    from ac_platform.partner_events.models import PartnerWebhookEndpoint, PartnerWebhookEvent
+    from ac_platform.partner_events.models import (
+        PartnerHandoverRecipient,
+        PartnerLeadEvent,
+        PartnerWebhookEndpoint,
+        PartnerWebhookEvent,
+    )
 
     reason = _text(reason, "reason", 500)
     operator_reference = _text(operator_reference, "operator_reference", 160)
@@ -248,6 +498,20 @@ async def disable(
         .with_for_update()
     )
     if endpoint is None:
+        recipient = await session.scalar(
+            select(PartnerHandoverRecipient)
+            .where(PartnerHandoverRecipient.id == endpoint_id)
+            .with_for_update()
+        )
+        if recipient is not None:
+            return await disable_recipient(
+                session,
+                recipient,
+                reason=reason,
+                operator_reference=operator_reference,
+                apply=apply,
+                now=now,
+            )
         raise EndpointError("endpoint_missing")
     if endpoint.status != "active":
         raise EndpointError("endpoint_not_active")
@@ -275,6 +539,20 @@ async def disable(
         .where(
             PartnerWebhookEvent.endpoint_id == endpoint_id,
             PartnerWebhookEvent.status.in_(("pending", "dead_letter")),
+        )
+        .values(
+            status="dropped",
+            payload=None,
+            erased_at=now,
+            leased_until=None,
+            last_error_code="endpoint_disabled",
+        )
+    )
+    await session.execute(
+        update(PartnerLeadEvent)
+        .where(
+            PartnerLeadEvent.endpoint_id == endpoint_id,
+            PartnerLeadEvent.status.in_(("pending", "dead_letter")),
         )
         .values(
             status="dropped",
@@ -336,6 +614,16 @@ async def list_endpoints(session: Any) -> list[dict[str, Any]]:
             for status in ("pending", "delivered", "dead_letter", "dropped")
         }
         listed.append(item)
+    from ac_platform.partner_events.models import PartnerHandoverRecipient
+
+    for recipient in (
+        await session.scalars(
+            select(PartnerHandoverRecipient).order_by(
+                PartnerHandoverRecipient.tenant_id, PartnerHandoverRecipient.created_at
+            )
+        )
+    ).all():
+        listed.append(recipient_view(recipient))
     return listed
 
 
@@ -351,18 +639,31 @@ async def replay(
     """A dead-lettered event goes back to pending with a fresh 25-attempt budget."""
     from sqlalchemy import select
 
-    from ac_platform.partner_events.models import PartnerWebhookEndpoint, PartnerWebhookEvent
+    from ac_platform.partner_events.models import (
+        PartnerHandoverRecipient,
+        PartnerLeadEvent,
+        PartnerWebhookEndpoint,
+        PartnerWebhookEvent,
+    )
 
     reason = _text(reason, "reason", 500)
     operator_reference = _text(operator_reference, "operator_reference", 160)
-    event = await session.scalar(
+    event: Any = await session.scalar(
         select(PartnerWebhookEvent).where(PartnerWebhookEvent.id == event_id).with_for_update()
     )
+    if event is None:  # a lead event or hand-over (0102) replays the same way
+        event = await session.scalar(
+            select(PartnerLeadEvent).where(PartnerLeadEvent.id == event_id).with_for_update()
+        )
     if event is None:
         raise EndpointError("event_missing")
     if event.status != "dead_letter" or event.payload is None:
         raise EndpointError("event_not_dead_letter")
-    endpoint = await session.get(PartnerWebhookEndpoint, event.endpoint_id)
+    endpoint: Any = (
+        await session.get(PartnerWebhookEndpoint, event.endpoint_id)
+        if event.endpoint_id is not None
+        else await session.get(PartnerHandoverRecipient, event.recipient_id)
+    )
     if endpoint is None or endpoint.status != "active":
         raise EndpointError("endpoint_not_active")
     before = {"status": event.status, "attempts": event.attempts}

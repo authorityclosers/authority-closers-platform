@@ -103,7 +103,7 @@ def test_versions_choices_rollback_and_the_apps_version(
             fixture = await seed(engine)
             operations = fixture.tenant_id
             actor = ActorContext(fixture.person_id, fixture.session_id, operations)
-            wise = await _organisation(sessions, "Wise Life", "68100")
+            wise = await _organisation(sessions, "Sunrise Rooftops", "68100")
             other = await _organisation(sessions, "Other Co", None)
 
             async def admin(database: AsyncSession) -> ReportSettingsAdmin:
@@ -171,7 +171,7 @@ def test_versions_choices_rollback_and_the_apps_version(
                 scope="organisation",
                 tenant_id=wise,
                 version_number=1,
-                reason="Dipak wants the full report for Wise Life",
+                reason="The reviewer wants the full report for Sunrise Rooftops",
             )
             assert (await effective(wise))["version"]["number"] == 1
             assert (await effective(wise))["source"] == "organisation"
@@ -204,11 +204,14 @@ def test_versions_choices_rollback_and_the_apps_version(
             assert overview["general_version_number"] == 2
             assert overview["industries"] == [{"industry_code": "68100", "version_number": 3}]
             names = {row["name"]: row for row in overview["organisations"]}
-            assert names["Wise Life"]["version_number"] == 3
-            assert names["Wise Life"]["own_version_number"] is None
+            assert names["Sunrise Rooftops"]["version_number"] == 3
+            assert names["Sunrise Rooftops"]["own_version_number"] is None
             kinds = [(row["kind"], row["scope"]) for row in overview["history"]]
             assert kinds[0] == ("assigned", "organisation") and len(kinds) == 6
-            assert overview["history"][1]["reason"] == "Dipak wants the full report for Wise Life"
+            assert (
+                overview["history"][1]["reason"]
+                == "The reviewer wants the full report for Sunrise Rooftops"
+            )
 
             async with sessions() as database:
                 versions = await database.scalar(
