@@ -7,6 +7,7 @@ import {
   parseCallPage,
   parseCompany,
 } from "@/app/company/company-data";
+import { normalizeAnalysis, rangeDays } from "@/app/company/analysis-data";
 import { adminRead } from "@/app/lib/server-api";
 import { Empty, Page, PageHeader, Panel, Unavailable } from "@/app/ui/kit";
 
@@ -53,6 +54,14 @@ export default async function CompanyPage({
     result.ok && chosen
       ? await adminRead(`${INSIGHTS_PATH}/calls?${callQuery}`, parseCallPage)
       : null;
+  // Phase 4: what buyers said and skill scores, from the analysis itself.
+  const analysis =
+    result.ok && chosen
+      ? await adminRead(
+          `${INSIGHTS_PATH}/analysis?organisation=${chosen.id}&days=${rangeDays(filters.range)}`,
+          normalizeAnalysis,
+        )
+      : null;
   if (!result.ok)
     return (
       <Page>
@@ -81,6 +90,7 @@ export default async function CompanyPage({
       filters={filters}
       calls={calls?.ok ? calls.data : null}
       callsError={calls && !calls.ok ? calls.error : null}
+      analysis={analysis?.ok ? analysis.data : null}
       offset={offset}
       view={VIEWS.find((item) => item.key === params.view)?.key ?? "overview"}
     />
