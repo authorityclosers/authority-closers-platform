@@ -11,6 +11,7 @@ from ac_platform.conversation_intelligence.review_verdicts import (
     QUESTION_KINDS,
     TARGET_KINDS,
     validate_answer,
+    validate_questions,
     value_digest,
 )
 
@@ -63,3 +64,80 @@ def test_default_pipelines_use_only_known_targets_and_question_kinds() -> None:
         assert definition["schema"] == PIPELINE_SCHEMA
         assert set(definition["targets"]) <= set(TARGET_KINDS)
         assert {question["kind"] for question in definition["questions"]} <= set(QUESTION_KINDS)
+
+
+def test_the_default_pipelines_pass_the_editor_check_unchanged() -> None:
+    for pipeline in DEFAULT_PIPELINES.values():
+        questions = pipeline["definition"]["questions"]
+        assert validate_questions(questions) == questions
+
+
+def test_edited_questions_keep_known_fields_and_follow_earlier_answers() -> None:
+    edited = validate_questions(
+        [
+            {
+                "key": "correct",
+                "kind": "verdict",
+                "label": "  Is this right? ",
+                "options": ["correct", "wrong", "partly"],
+                "note": "dropped",
+            },
+            {
+                "key": "right_type",
+                "kind": "pick",
+                "label": "What is it really?",
+                "options": ["objection", "question"],
+                "when": {"correct": "wrong"},
+            },
+            {"key": "useful", "kind": "scale", "label": "How useful?", "options": []},
+        ]
+    )
+    assert edited[0] == {
+        "key": "correct",
+        "kind": "verdict",
+        "label": "Is this right?",
+        "options": ["correct", "wrong", "partly"],
+    }
+    assert edited[1]["when"] == {"correct": "wrong"}
+    assert edited[2] == {"key": "useful", "kind": "scale", "label": "How useful?"}
+
+
+@pytest.mark.parametrize(
+    ("questions", "says"),
+    [
+        ([], "1 to 8"),
+        ([{"key": "useful", "kind": "scale", "label": "Useful?"}], "first question"),
+        ([VERDICT | {"label": "A"}, VERDICT | {"label": "B"}], "used twice"),
+        ([VERDICT | {"label": "A", "key": "Bad Key"}], "its key"),
+        ([VERDICT | {"label": "A", "kind": "essay"}], "choose a kind"),
+        ([VERDICT | {"label": " "}], "write the question"),
+        ([VERDICT | {"label": "A", "options": ["yes"]}], "2 to 12"),
+        ([VERDICT | {"label": "A", "options": ["yes", "yes"]}], "2 to 12"),
+        ([VERDICT | {"label": "A", "options": ["Yes!", "no"]}], "2 to 12"),
+        (
+            [
+                VERDICT | {"label": "A"},
+                {"key": "s", "kind": "scale", "label": "B", "options": ["a", "b"]},
+            ],
+            "only verdict and pick",
+        ),
+        (
+            [
+                VERDICT | {"label": "A"},
+                {"key": "fix", "kind": "correct", "label": "B", "when": {"correct": "maybe"}},
+            ],
+            "earlier question",
+        ),
+        (
+            [
+                {"key": "fix", "kind": "correct", "label": "B", "when": {"later": "x"}},
+                VERDICT | {"label": "A", "key": "later"},
+            ],
+            "earlier question",
+        ),
+        ([VERDICT | {"label": "A"}] * 9, "1 to 8"),
+    ],
+)
+def test_edited_questions_that_review_cannot_run_are_refused(questions: list, says: str) -> None:
+    with pytest.raises(ConversationError, match=says):
+        validate_questions(questions)

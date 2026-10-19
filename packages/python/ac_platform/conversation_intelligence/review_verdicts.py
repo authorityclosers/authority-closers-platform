@@ -18,11 +18,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import exists, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -47,6 +49,7 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.organisations.workspace_kinds import classify_workspaces
 
 SAVED_ACTION = "review.verdict_saved"
+PIPELINE_SAVED_ACTION = "review.pipeline_saved"
 PIPELINE_SCHEMA = "ac.review-pipeline/1"
 TARGET_KINDS = ("object", "fact", "segment", "voice", "coaching")
 QUESTION_KINDS = ("verdict", "pick", "correct", "scale")
@@ -54,6 +57,12 @@ QUESTION_KINDS = ("verdict", "pick", "correct", "scale")
 # digest and their object ids in its reads (after v0.66); voice follows.
 SUPPORTED_TARGETS = ("object", "fact", "coaching")
 MAX_TEXT = 2000
+# The editor's bounds (Admin -> All settings -> Review pipelines).
+MAX_QUESTIONS = 8
+MAX_OPTIONS = 12
+MAX_LABEL = 120
+MAX_SAMPLE = 100
+_SLUG = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
 # The pipelines Review 2.0 starts with. A saved version with the same key replaces
 # its default; the newest saved version of a key is the active one.
@@ -160,6 +169,69 @@ def validate_answer(question: dict[str, Any], answer: Any) -> dict[str, Any]:
     raise ConversationError("This question cannot be answered yet.")
 
 
+def _options(place: str, options: Any) -> list[str]:
+    if (
+        not isinstance(options, list)
+        or not 2 <= len(options) <= MAX_OPTIONS
+        or not all(isinstance(item, str) and _SLUG.fullmatch(item) for item in options)
+        or len(set(options)) != len(options)
+    ):
+        raise ConversationError(
+            f"{place}: give 2 to {MAX_OPTIONS} different options "
+            "(lower-case letters, digits and _)."
+        )
+    return list(options)
+
+
+def validate_questions(questions: Any) -> list[dict[str, Any]]:
+    """An edited question list, checked against the ask primitive; only known fields kept.
+
+    The first question is a verdict: its first option means right and its second
+    wrong, which Analysis health measures. A later question may follow one earlier
+    answer ("when"), naming an option that earlier question has.
+    """
+    if not isinstance(questions, list) or not 1 <= len(questions) <= MAX_QUESTIONS:
+        raise ConversationError(f"A pipeline asks 1 to {MAX_QUESTIONS} questions.")
+    clean: list[dict[str, Any]] = []
+    for index, raw in enumerate(questions):
+        place = f"Question {index + 1}"
+        if not isinstance(raw, dict):
+            raise ConversationError(f"{place}: not a question.")
+        key, kind, label = raw.get("key"), raw.get("kind"), raw.get("label")
+        if not isinstance(key, str) or not _SLUG.fullmatch(key):
+            raise ConversationError(
+                f"{place}: its key is lower-case letters, digits and _ (up to 32)."
+            )
+        if any(item["key"] == key for item in clean):
+            raise ConversationError(f"{place}: the key '{key}' is used twice.")
+        if kind not in QUESTION_KINDS:
+            raise ConversationError(f"{place}: choose a kind: {', '.join(QUESTION_KINDS)}.")
+        if not isinstance(label, str) or not label.strip() or len(label.strip()) > MAX_LABEL:
+            raise ConversationError(f"{place}: write the question (1 to {MAX_LABEL} characters).")
+        question: dict[str, Any] = {"key": key, "kind": kind, "label": label.strip()}
+        if kind in ("verdict", "pick"):
+            question["options"] = _options(place, raw.get("options"))
+        elif raw.get("options") not in (None, []):
+            raise ConversationError(f"{place}: only verdict and pick questions have options.")
+        when = raw.get("when")
+        if when not in (None, {}):
+            if not isinstance(when, dict) or len(when) != 1:
+                raise ConversationError(f"{place}: it can follow one earlier answer.")
+            ((after, option),) = when.items()
+            earlier = next((item for item in clean if item["key"] == after), None)
+            if earlier is None or option not in earlier.get("options", []):
+                raise ConversationError(
+                    f"{place}: it must follow an option of an earlier question."
+                )
+            question["when"] = {after: option}
+        clean.append(question)
+    if clean[0]["kind"] != "verdict":
+        raise ConversationError(
+            "The first question must be a verdict: Analysis health measures it."
+        )
+    return clean
+
+
 def verdict_view(row: ReviewVerdict, reviewer_id: UUID) -> dict[str, Any]:
     return {
         "id": str(row.id),
@@ -229,9 +301,116 @@ class ReviewVerdicts:
             }
         return active
 
+    async def admit_editor(self, actor: ActorContext) -> None:
+        """Pipelines are set by the verified AC control accounts, as provider settings are."""
+        from ac_platform.conversation_intelligence.application import ConversationApplication
+        from ac_platform.conversation_intelligence.provider_admin import (
+            ConversationProviderAdmin,
+        )
+
+        if actor.tenant_id != self.operations_tenant_id:
+            raise ConversationDenied("Review needs the AC operations workspace.")
+        await ConversationProviderAdmin(ConversationApplication(self.database)).admit(actor)
+
     async def list_pipelines(self, actor: ActorContext) -> dict[str, Any]:
-        await self.admit(actor)
-        return {"pipelines": list((await self.pipelines()).values())}
+        """The active pipelines, for reviewers and for the control accounts that edit them."""
+        try:
+            await self.admit_editor(actor)
+            can_edit = True
+        except ConversationDenied:
+            await self.admit(actor)
+            can_edit = False
+        return {
+            "pipelines": list((await self.pipelines()).values()),
+            "can_edit": can_edit,
+            "limits": {
+                "questions": MAX_QUESTIONS,
+                "options": MAX_OPTIONS,
+                "label": MAX_LABEL,
+                "sample": MAX_SAMPLE,
+                "kinds": list(QUESTION_KINDS),
+            },
+        }
+
+    async def save_pipeline(
+        self,
+        actor: ActorContext,
+        key: str,
+        *,
+        based_on: int,
+        title: Any,
+        sample_limit: Any,
+        questions: Any,
+    ) -> dict[str, Any]:
+        """A new version of one pipeline: its title, sample size and questions.
+
+        What is judged, what is shown, reconcile and measure stay as they are until
+        Review runs more of them. Answers keep the version they were given under; the
+        newest version is the active one. Audited; nothing changes when nothing differs.
+        """
+        await self.admit_editor(actor)
+        active = (await self.pipelines()).get(key)
+        if active is None:
+            raise ConversationNotFound("No such review pipeline.")
+        if based_on != active["version"]:
+            raise ConversationConflict("This pipeline changed meanwhile. Reload and try again.")
+        if not isinstance(title, str) or not title.strip() or len(title.strip()) > MAX_LABEL:
+            raise ConversationError(f"Write a title (1 to {MAX_LABEL} characters).")
+        if (
+            not isinstance(sample_limit, int)
+            or isinstance(sample_limit, bool)
+            or not 1 <= sample_limit <= MAX_SAMPLE
+        ):
+            raise ConversationError(f"Sample 1 to {MAX_SAMPLE} calls at a time.")
+        base = dict(active["definition"])
+        definition = {
+            **base,
+            "sample": {**dict(base.get("sample") or {}), "limit": sample_limit},
+            "questions": validate_questions(questions),
+        }
+        if title.strip() == active["title"] and definition == active["definition"]:
+            return {**active, "changed": False}
+        row = ReviewPipeline(
+            id=uuid4(),
+            key=key,
+            version=int(active["version"]) + 1,
+            kind=active["kind"],
+            title=title.strip(),
+            definition=definition,
+            created_by=actor.person_id,
+            created_at=utc_now(),
+        )
+        try:
+            async with self.database.begin_nested():
+                self.database.add(row)
+                await self.database.flush()
+        except IntegrityError:
+            raise ConversationConflict(
+                "This pipeline changed meanwhile. Reload and try again."
+            ) from None
+        await AuditRepository(self.database).append_for_actor(
+            actor,
+            action=PIPELINE_SAVED_ACTION,
+            resource_type="review_pipeline",
+            resource_id=row.id,
+            payload={
+                "schema": "ac.review-pipeline-saved/1",
+                "key": key,
+                "version": row.version,
+                "based_on": based_on,
+                "questions": [item["key"] for item in definition["questions"]],
+                "sample_limit": sample_limit,
+            },
+        )
+        return {
+            "key": key,
+            "version": row.version,
+            "saved": True,
+            "kind": row.kind,
+            "title": row.title,
+            "definition": definition,
+            "changed": True,
+        }
 
     async def _recording(self, recording_id: UUID) -> ConversationRecording:
         recording = await self.database.get(ConversationRecording, recording_id)

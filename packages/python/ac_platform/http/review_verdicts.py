@@ -1,6 +1,7 @@
 """Review 2.0 routes on the Admin conversation router (admin revamp, 19 Oct 2026).
 
 GET  /review/pipelines                      the active pipelines
+POST /review/pipelines/{key}                a new version of one (control accounts)
 GET  /review/queue                          the pipeline's sample, with progress
 GET  /review/calls/{recording_id}           pipelines and the call's current answers
 GET  /review/calls/{recording_id}/coaching  one run's coaching as points to judge
@@ -15,7 +16,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from ac_platform.application.settings import Settings
@@ -37,6 +38,15 @@ class VerdictRequest(BaseModel):
     target_ref: str = Field(min_length=1, max_length=96)
     question: str = Field(min_length=1, max_length=48)
     answer: dict[str, Any]
+
+
+class PipelineRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    based_on: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=120)
+    sample_limit: int = Field(ge=1, le=100)
+    questions: list[dict[str, Any]] = Field(min_length=1, max_length=8)
 
 
 def install_review_verdict_routes(
@@ -65,6 +75,29 @@ def install_review_verdict_routes(
         scope(request, response)
         try:
             return await service(auth).list_pipelines(auth.resolved.actor)
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.post("/review/pipelines/{key}")
+    async def save_pipeline(
+        key: Annotated[str, Path(min_length=1, max_length=48)],
+        body: PipelineRequest,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """A new version of one review pipeline, from the editor in All settings."""
+        scope(request, response)
+        require_safe_origin(request, settings)
+        try:
+            return await service(auth).save_pipeline(
+                auth.resolved.actor,
+                key,
+                based_on=body.based_on,
+                title=body.title,
+                sample_limit=body.sample_limit,
+                questions=body.questions,
+            )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
