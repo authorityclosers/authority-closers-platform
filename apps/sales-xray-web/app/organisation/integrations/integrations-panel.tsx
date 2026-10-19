@@ -31,6 +31,7 @@ import {
 } from "../../ui/kit";
 import {
   createKey,
+  disableHandover,
   disconnect,
   registerApp,
   removeApp,
@@ -43,11 +44,13 @@ import {
   retryDelivery,
   revokeKey,
   rotateSecret,
+  saveHandover,
   saveWebhook,
   sendTest,
   testWords,
   type ApiKey,
   type Connection,
+  type Handover,
   type OAuthApp,
   type Delivery,
   type Integrations,
@@ -768,6 +771,227 @@ function WebhookSection({
   );
 }
 
+const QUESTION_LABEL: Record<string, string> = {
+  "address.line1": "Address line 1",
+  "address.line2": "Address line 2",
+  "address.city": "City",
+  "address.state": "State",
+  "address.pin_code": "PIN code",
+  "attribution.campaign": "Campaign",
+  "requirement.system_type": "System type",
+  "requirement.capacity_kw": "Capacity (kW)",
+};
+
+function HandoverSection({
+  data,
+  onChange,
+}: {
+  data: Integrations;
+  onChange: (handover: Handover | null) => void;
+}) {
+  const current = data.handover;
+  const menu = data.handoverMenu;
+  const [editing, setEditing] = useState(false);
+  const [address, setAddress] = useState(current?.url ?? "");
+  const [serviceKey, setServiceKey] = useState("");
+  const [parts, setParts] = useState<string[]>(current?.leadFields.send ?? []);
+  const [questions, setQuestions] = useState<Record<string, string>>(
+    current?.leadFields.questions ?? {},
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(false);
+  const open = editing || current === null;
+  if (!data.webhooksReady || menu === null) return null;
+  const save = () => {
+    if (!/^https:\/\/\S+$/.test(address.trim()))
+      return setError("Use your app's https:// address.");
+    if (!current && !serviceKey.trim())
+      return setError("Paste the service key your app gave you.");
+    setBusy(true);
+    setError(null);
+    const asked = Object.fromEntries(
+      Object.entries(questions).filter(
+        ([path, text]) =>
+          text.trim() &&
+          parts.includes(
+            menu.questions.find((q) => q.path === path)?.part ?? "",
+          ),
+      ),
+    );
+    saveHandover({
+      address: address.trim(),
+      serviceKey: serviceKey.trim() || null,
+      leadFields: { send: parts, questions: asked, consents: [] },
+    })
+      .then((saved) => {
+        setServiceKey("");
+        setEditing(false);
+        onChange(saved);
+      })
+      .catch((caught: unknown) =>
+        setError(
+          caught instanceof IntegrationsError
+            ? caught.message
+            : "The hand-over was not saved. Try again.",
+        ),
+      )
+      .finally(() => setBusy(false));
+  };
+  return (
+    <Panel
+      title="Hand-over to your customer app"
+      sub="When a lead is won, Sales X-Ray sends the customer to your app"
+    >
+      {open ? (
+        <div className={styles.form}>
+          <Field
+            label="Your app's address"
+            hint={`Sales X-Ray calls ${menu.path} on it.`}
+            error={error}
+            wide
+          >
+            <input
+              type="url"
+              inputMode="url"
+              value={address}
+              placeholder="https://your-app.example.com"
+              onChange={(event) => setAddress(event.target.value)}
+            />
+          </Field>
+          <Field
+            label="Service key"
+            hint={
+              current
+                ? "Leave empty to keep the current key."
+                : "Paste the key your app issued for Sales X-Ray. It is kept sealed and never shown again."
+            }
+          >
+            <input
+              type="password"
+              autoComplete="off"
+              value={serviceKey}
+              onChange={(event) => setServiceKey(event.target.value)}
+            />
+          </Field>
+          <fieldset className={styles.choices}>
+            <legend>Also send (name and phone always go)</legend>
+            {menu.parts.map((part) => (
+              <label key={part.key} className={styles.choice}>
+                <input
+                  type="checkbox"
+                  checked={parts.includes(part.key)}
+                  onChange={(event) =>
+                    setParts((list) =>
+                      event.target.checked
+                        ? [...list, part.key]
+                        : list.filter((key) => key !== part.key),
+                    )
+                  }
+                />
+                <span>{part.label}</span>
+              </label>
+            ))}
+          </fieldset>
+          {menu.questions
+            .filter((question) => parts.includes(question.part))
+            .map((question) => (
+              <Field
+                key={question.path}
+                label={`Form question for ${QUESTION_LABEL[question.path] ?? question.path}`}
+                hint="Exactly as it appears on your lead form, or leave empty."
+              >
+                <input
+                  value={questions[question.path] ?? ""}
+                  maxLength={200}
+                  onChange={(event) =>
+                    setQuestions((map) => ({
+                      ...map,
+                      [question.path]: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+            ))}
+          <div className={styles.actions}>
+            {current ? (
+              <Button onClick={() => setEditing(false)}>Cancel</Button>
+            ) : null}
+            <Button variant="primary" disabled={busy} onClick={save}>
+              {current ? "Save changes" : "Set up hand-over"}
+            </Button>
+          </div>
+        </div>
+      ) : current ? (
+        <div className={styles.hook}>
+          <dl className={styles.facts}>
+            <div>
+              <dt>Address</dt>
+              <dd>
+                <code>{current.url}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Service key</dt>
+              <dd>
+                {current.managedInApp ? (
+                  <code>…{current.keyHint}</code>
+                ) : (
+                  "Set up by AC. Save it here with your own key."
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Also sends</dt>
+              <dd>
+                {current.leadFields.send.length
+                  ? current.leadFields.send
+                      .map(
+                        (key) =>
+                          menu.parts.find((part) => part.key === key)?.label ??
+                          key,
+                      )
+                      .join(" · ")
+                  : "Name and phone only"}
+              </dd>
+            </div>
+          </dl>
+          <div className={styles.actions}>
+            <Button onClick={() => setEditing(true)}>Change</Button>
+            <Button variant="ghost" onClick={() => setConfirmOff(true)}>
+              Turn off
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      <Dialog
+        open={confirmOff}
+        title="Turn off the hand-over?"
+        description="Won leads stop going to your app. Hand-overs not yet sent are dropped."
+        onClose={() => setConfirmOff(false)}
+        actions={
+          <>
+            <Button onClick={() => setConfirmOff(false)}>Keep it on</Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setConfirmOff(false);
+                disableHandover()
+                  .then(() => onChange(null))
+                  .catch((caught: unknown) =>
+                    problem(caught, "The hand-over was not turned off"),
+                  );
+              }}
+            >
+              Turn off
+            </Button>
+          </>
+        }
+      />
+    </Panel>
+  );
+}
+
 function AppsSection({
   data,
   onApps,
@@ -1022,6 +1246,10 @@ export function IntegrationsPanel() {
       <WebhookSection
         data={data}
         onChange={(webhook) => setData({ ...data, webhook })}
+      />
+      <HandoverSection
+        data={data}
+        onChange={(handover) => setData({ ...data, handover })}
       />
       <AppsSection
         data={data}

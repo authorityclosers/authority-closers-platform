@@ -31,7 +31,7 @@ from sqlalchemy import select
 from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import keys, oauth, scopes, sealed, webhooks
+from ac_platform.integrations import handover, keys, oauth, scopes, sealed, webhooks
 from ac_platform.integrations.errors import IntegrationError
 from ac_platform.integrations.models import IntegrationOAuthGrant
 from ac_platform.kernel.errors import DomainError
@@ -58,6 +58,11 @@ WORDS = {
     ),
     "not_dead_letter": "Only an event that stopped retrying can be sent again.",
     "not_ready": "Webhooks are not switched on here yet.",
+    "lead_fields": "Check the parts and form questions you chose.",
+    "service_key": "Paste the service key your app gave you.",
+    "handover_url": "Use your app's https:// address.",
+    "handover": "Check the hand-over details.",
+    "no_handover": "Set up the hand-over first.",
     "redirect_uris": (
         "Use up to 5 https:// return addresses, or http://127.0.0.1 for an app on your computer."
     ),
@@ -69,6 +74,13 @@ class WebhookCommand(BaseModel):
     url: str = Field(min_length=8, max_length=2048)
     events: list[str] = Field(min_length=1, max_length=8)
     facts_profile: str | None = Field(default=None, max_length=64)
+
+
+class HandoverCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    address: str = Field(min_length=8, max_length=2048)
+    service_key: str | None = Field(default=None, min_length=8, max_length=4096)
+    lead_fields: dict[str, Any] | None = None
 
 
 class AppCommand(BaseModel):
@@ -164,6 +176,10 @@ def install_integrations_http(application: FastAPI, ctx: RouteContext) -> None:
                 "keys": listed,
                 "webhooks_ready": sealed.load_key() is not None,
                 "webhook_menu": webhooks.menu(),
+                "handover": await handover.view(
+                    auth.database, await handover.active(auth.database, tenant_id)
+                ),
+                "handover_menu": handover.menu(),
                 **await webhook_state(auth),
                 "apps": await auth.database.run_sync(
                     lambda session: oauth.tenant_clients(session.connection(), tenant_id)
@@ -442,5 +458,48 @@ def install_integrations_http(application: FastAPI, ctx: RouteContext) -> None:
                     lambda session: oauth.connections(session.connection(), actor.tenant_id)
                 )
             }
+
+    @router.put("/handover")
+    async def save_handover(
+        command: HandoverCommand, request: Request, response: Response
+    ) -> dict[str, Any]:
+        async with manager(request, response, write=True) as auth:
+            actor = auth.resolved.actor
+            await handover.save(
+                auth.database,
+                seal_key(),
+                tenant_id=actor.tenant_id,
+                person_id=actor.person_id,
+                address=command.address,
+                service_key=command.service_key,
+                lead_fields=command.lead_fields,
+                environment=settings.environment,
+                now=datetime.now(UTC),
+            )
+            await AuditRepository(auth.database).append_for_actor(
+                actor,
+                action="integration.handover_saved",
+                resource_type="partner_handover_recipient",
+                payload={"new_key": command.service_key is not None},
+            )
+            current = await handover.active(auth.database, actor.tenant_id)
+            return {"handover": await handover.view(auth.database, current)}
+
+    @router.post("/handover/disable")
+    async def disable_handover(request: Request, response: Response) -> dict[str, Any]:
+        async with manager(request, response, write=True) as auth:
+            actor = auth.resolved.actor
+            await handover.disable(
+                auth.database,
+                tenant_id=actor.tenant_id,
+                person_id=actor.person_id,
+                now=datetime.now(UTC),
+            )
+            await AuditRepository(auth.database).append_for_actor(
+                actor,
+                action="integration.handover_disabled",
+                resource_type="partner_handover_recipient",
+            )
+            return {"handover": None}
 
     application.include_router(router)

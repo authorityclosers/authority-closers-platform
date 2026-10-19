@@ -523,3 +523,99 @@ def test_platform_admins_see_and_stop_every_integration(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_an_admin_sets_up_the_hand_over_with_a_pasted_key(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from ac_platform.partner_events.delivery import read_secrets_for
+    from ac_platform.partner_events.models import PartnerHandoverRecipient
+
+    monkeypatch.setenv(sealed.ENV, base64.urlsafe_b64encode(b"s" * 32).decode())
+    service_key = "psvc_" + "f" * 36 + "_" + "k" * 20
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            install_integrations_http(
+                setup.app, RouteContext(setup.settings, setup.require_actor, setup.sessions)
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                page = (await client.get(PAGE)).json()
+                assert page["handover"] is None
+                assert page["handover_menu"]["path"] == "/api/v1/service/customers/handover"
+                no_key = await client.put(
+                    f"{PAGE}/handover", headers=WRITE, json={"address": "https://app.example.test"}
+                )
+                assert no_key.status_code == 422
+                fields = {
+                    "send": ["email", "address"],
+                    "questions": {"address.city": "Which city is the site in?"},
+                }
+                saved = await client.put(
+                    f"{PAGE}/handover",
+                    headers=WRITE,
+                    json={
+                        "address": "https://app.example.test/",
+                        "service_key": service_key,
+                        "lead_fields": fields,
+                    },
+                )
+                assert saved.status_code == 200, saved.text
+                shown = saved.json()["handover"]
+                assert shown["url"] == "https://app.example.test/api/v1/service/customers/handover"
+                assert shown["managed_in_app"] and shown["key_hint"] == service_key[-4:]
+                assert service_key not in saved.text
+                wrong = await client.put(
+                    f"{PAGE}/handover",
+                    headers=WRITE,
+                    json={
+                        "address": "https://app.example.test",
+                        "lead_fields": {"send": ["email"], "questions": {"address.city": "x"}},
+                    },
+                )
+                assert wrong.status_code == 422  # a question for a part not sent
+                kept = await client.put(
+                    f"{PAGE}/handover",
+                    headers=WRITE,
+                    json={"address": "https://app.example.test", "lead_fields": {"send": []}},
+                )
+                assert kept.status_code == 200 and kept.json()["handover"]["key_hint"] == "kkkk"
+
+                async with setup.sessions() as db:
+                    recipient = await db.scalar(
+                        select(PartnerHandoverRecipient).where(
+                            PartnerHandoverRecipient.tenant_id == setup.state.tenant_id,
+                            PartnerHandoverRecipient.status == "active",
+                        )
+                    )
+                assert recipient is not None and recipient.lead_fields == {
+                    "send": [],
+                    "questions": {},
+                    "consents": [],
+                }
+
+                def sessions() -> AsyncSession:
+                    return setup.sessions()
+
+                assert await read_secrets_for(
+                    sessions, setup.state.tenant_id, recipient.secret_ref, None
+                ) == [service_key.encode()]
+                off = await client.post(f"{PAGE}/handover/disable", headers=WRITE)
+                assert off.status_code == 200 and off.json()["handover"] is None
+                assert (
+                    await read_secrets_for(
+                        sessions, setup.state.tenant_id, recipient.secret_ref, None
+                    )
+                    is None
+                )
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

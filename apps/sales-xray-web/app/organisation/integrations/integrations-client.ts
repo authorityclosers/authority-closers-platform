@@ -43,6 +43,28 @@ export type Delivery = {
   deliveredAt: string | null;
 };
 
+export type LeadFields = {
+  send: string[];
+  questions: Record<string, string>;
+  consents: { question: string; purpose: string; channel: string }[];
+};
+
+export type Handover = {
+  id: string;
+  url: string;
+  host: string;
+  leadFields: LeadFields;
+  managedInApp: boolean;
+  keyHint: string | null;
+  createdAt: string;
+};
+
+export type HandoverMenu = {
+  path: string;
+  parts: { key: string; label: string }[];
+  questions: { path: string; part: string }[];
+};
+
 export type OAuthApp = {
   id: string;
   clientId: string;
@@ -75,6 +97,8 @@ export type Integrations = {
   webhook: Webhook | null;
   apps: OAuthApp[];
   connections: Connection[];
+  handover: Handover | null;
+  handoverMenu: HandoverMenu | null;
 };
 
 export type TestResult = {
@@ -175,6 +199,53 @@ export function normalizeConnection(raw: unknown): Connection {
   };
 }
 
+export function normalizeHandover(raw: unknown): Handover | null {
+  if (!raw || typeof raw !== "object") return null;
+  const item = obj(raw);
+  const fields = obj(item.lead_fields);
+  const questions = obj(fields.questions);
+  return {
+    id: text(item.id),
+    url: text(item.url),
+    host: text(item.host),
+    leadFields: {
+      send: strings(fields.send),
+      questions: Object.fromEntries(
+        Object.entries(questions).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string",
+        ),
+      ),
+      consents: list(fields.consents).map((consent) => {
+        const value = obj(consent);
+        return {
+          question: text(value.question),
+          purpose: text(value.purpose),
+          channel: text(value.channel),
+        };
+      }),
+    },
+    managedInApp: item.managed_in_app === true,
+    keyHint: maybe(item.key_hint),
+    createdAt: text(item.created_at),
+  };
+}
+
+function normalizeHandoverMenu(raw: unknown): HandoverMenu | null {
+  if (!raw || typeof raw !== "object") return null;
+  const menu = obj(raw);
+  return {
+    path: text(menu.path),
+    parts: list(menu.parts).map((item) => {
+      const part = obj(item);
+      return { key: text(part.key), label: text(part.label, text(part.key)) };
+    }),
+    questions: list(menu.questions).map((item) => {
+      const question = obj(item);
+      return { path: text(question.path), part: text(question.part) };
+    }),
+  };
+}
+
 export function normalizeIntegrations(raw: unknown): Integrations {
   const body = obj(raw);
   const menu = obj(body.webhook_menu);
@@ -197,6 +268,8 @@ export function normalizeIntegrations(raw: unknown): Integrations {
     webhook: normalizeWebhook(body.webhook),
     apps: list(body.apps).map(normalizeApp),
     connections: list(body.connections).map(normalizeConnection),
+    handover: normalizeHandover(body.handover),
+    handoverMenu: normalizeHandoverMenu(body.handover_menu),
   };
 }
 
@@ -334,6 +407,28 @@ export async function retryDelivery(id: string) {
     }),
   );
   return list(body.deliveries).map(normalizeDelivery);
+}
+
+export async function saveHandover(input: {
+  address: string;
+  serviceKey: string | null;
+  leadFields: LeadFields;
+}) {
+  const body = obj(
+    await request("/handover", {
+      method: "PUT",
+      body: JSON.stringify({
+        address: input.address,
+        ...(input.serviceKey ? { service_key: input.serviceKey } : {}),
+        lead_fields: input.leadFields,
+      }),
+    }),
+  );
+  return normalizeHandover(body.handover);
+}
+
+export async function disableHandover() {
+  await request("/handover/disable", { method: "POST" });
 }
 
 export async function registerApp(input: {

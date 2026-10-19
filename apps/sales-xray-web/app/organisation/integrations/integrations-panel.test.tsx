@@ -231,3 +231,85 @@ it("adds the webhook, shows its secret once and sends a test", async () => {
   await flush();
   expect(host.textContent).toContain("Delivered · 204 · 120 ms");
 });
+
+it("sets up the hand-over with a pasted key and the form questions", async () => {
+  const puts: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, init?: RequestInit) => {
+      if (url.endsWith("/handover") && init?.method === "PUT") {
+        puts.push(JSON.parse(String(init.body)));
+        return respond({
+          handover: {
+            id: "h1",
+            url: "https://app.example.test/api/v1/service/customers/handover",
+            host: "https://app.example.test",
+            lead_fields: { send: ["address"], questions: {}, consents: [] },
+            managed_in_app: true,
+            key_hint: "abcd",
+            created_at: "2026-10-19T05:00:00Z",
+          },
+        });
+      }
+      if (url.endsWith("/webhook/deliveries"))
+        return respond({ deliveries: [] });
+      return respond({
+        ...OVERVIEW,
+        handover: null,
+        handover_menu: {
+          path: "/api/v1/service/customers/handover",
+          parts: [
+            { key: "email", label: "Email" },
+            { key: "address", label: "Address" },
+          ],
+          questions: [{ path: "address.city", part: "address" }],
+        },
+      });
+    }),
+  );
+  await act(async () => root.render(<IntegrationsPanel />));
+  await flush();
+  expect(host.textContent).toContain("Hand-over to your customer app");
+  const type = async (
+    input: HTMLInputElement | null | undefined,
+    value: string,
+  ) => {
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setter?.call(input, value);
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  const urls = document.querySelectorAll<HTMLInputElement>('input[type="url"]');
+  await type(urls[urls.length - 1], "https://app.example.test");
+  await type(
+    document.querySelector<HTMLInputElement>('input[type="password"]'),
+    "psvc_secret_key",
+  );
+  const address = [...document.querySelectorAll("label")].find(
+    (label) => label.textContent === "Address",
+  );
+  await act(async () => address?.querySelector("input")?.click());
+  const city = [...document.querySelectorAll("label")].find((label) =>
+    label.textContent?.startsWith("Form question for City"),
+  );
+  await type(city?.querySelector("input"), "Which city is the site in?");
+  await act(async () => button("Set up hand-over").click());
+  await flush();
+  expect(puts).toEqual([
+    {
+      address: "https://app.example.test",
+      service_key: "psvc_secret_key",
+      lead_fields: {
+        send: ["address"],
+        questions: { "address.city": "Which city is the site in?" },
+        consents: [],
+      },
+    },
+  ]);
+  expect(host.textContent).toContain("…abcd");
+  expect(host.textContent).not.toContain("psvc_secret_key");
+});
