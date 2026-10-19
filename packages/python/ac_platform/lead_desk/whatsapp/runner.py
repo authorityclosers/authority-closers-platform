@@ -8,7 +8,7 @@
   get a phone alert; breaches answered since get their reply time.
 - Erasure: a lead that leaves Lead Desk takes its WhatsApp words with it.
 
-One pass at a time across API processes (advisory lock 1802/1266).
+One pass at a time across API processes (advisory lock 1802/1267).
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from ac_platform.lead_desk.whatsapp import cloud, inbox
 log = logging.getLogger(__name__)
 
 _TICK = 30
-_LOCK = (1802, 1266)
+_LOCK = (1802, 1267)  # one pass across API processes and slots
 SYNC_EVERY = timedelta(days=1)
 
 
