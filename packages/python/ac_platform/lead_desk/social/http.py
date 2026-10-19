@@ -511,6 +511,9 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
 
     # ----- webhook ------------------------------------------------------------------------
 
+    # Dev reaches these through the Leads webhook's Cloudflare Access bypass
+    # (/v1/lead-desk/meta/webhook/*); staging and production use the canonical path.
+    @router.get("/meta/webhook/messaging", response_class=PlainTextResponse)
     @router.get("/messaging/webhook", response_class=PlainTextResponse)
     async def messaging_verify(request: Request) -> PlainTextResponse:
         """Meta checks the callback address once when the webhook is set up."""
@@ -550,6 +553,7 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
         found = await asyncio.gather(*(one(key, row) for key, row in wanted.items()))
         return dict(zip(wanted, found, strict=True))
 
+    @router.post("/meta/webhook/messaging")
     @router.post("/messaging/webhook")
     async def messaging_webhook(request: Request) -> dict[str, int]:
         """Meta's signed notice of messages, delivery and read receipts, and comments."""

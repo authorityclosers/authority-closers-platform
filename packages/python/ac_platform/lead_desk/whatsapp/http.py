@@ -688,6 +688,9 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 for thread in await inbox.inbox(desk)
             ]
 
+    # Dev reaches these through the Leads webhook's Cloudflare Access bypass
+    # (/v1/lead-desk/meta/webhook/*); staging and production use the canonical path.
+    @router.get("/meta/webhook/whatsapp", response_class=PlainTextResponse)
     @router.get("/whatsapp/webhook", response_class=PlainTextResponse)
     async def whatsapp_verify(request: Request) -> PlainTextResponse:
         """Meta checks the callback address once when the webhook is set up."""
@@ -702,6 +705,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
             return PlainTextResponse(params["hub.challenge"][:200], headers=NO_STORE)
         raise HTTPException(403, "Unknown verify token.", headers=NO_STORE)
 
+    @router.post("/meta/webhook/whatsapp")
     @router.post("/whatsapp/webhook")
     async def whatsapp_webhook(request: Request) -> dict[str, int]:
         """Meta's signed notice of messages, delivery statuses and template reviews."""

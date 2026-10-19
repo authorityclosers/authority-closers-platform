@@ -49,7 +49,8 @@ off the dashboard while setting up.
 ## 1. App and use cases
 
 Same Business app as WhatsApp: **Sales Xray Messaging**, app ID **856472050863115** (parent for production, with
-"- staging" and "- dev" test apps). Add, per app:
+"- staging" 1991172831554212 and "- dev" 1116775534070252 test apps; the Human Agent
+feature is added). Add, per app:
 
 - Use case **Engage with customers on Messenger from Meta** (Messenger Platform).
 - Use case **Manage messaging and content on Instagram** (Instagram API with Facebook
@@ -67,12 +68,17 @@ A second configuration per app, next to the WhatsApp Embedded Signup one:
   - `pages_messaging` (receive and answer Messenger, private replies)
   - `pages_read_engagement` (read the Page's posts and comments that the feed webhook
     names)
-  - `pages_manage_engagement` (the optional public answer under a Facebook comment)
+  - **Not available:** `pages_manage_engagement` (the optional public answer under a
+    Facebook comment) belongs to Meta's separate Page management use case, so that
+    answer is skipped softly: the private reply still goes, and the comment notes the
+    public answer didn't (Instagram public answers use `instagram_manage_comments`).
   - `instagram_basic` (the Instagram account's id and username)
   - `instagram_manage_messages` (receive and answer Instagram messages)
   - `instagram_manage_comments` (Instagram comments webhook, private and public replies)
   - `business_management` (Pages and Instagram accounts held in a business portfolio)
-- Record the **configuration ID** for each environment as
+- Configuration IDs (orchestrator, 19 Oct; General variation, user access token; people
+  pick their Pages in Meta's dialog): dev **1203859631984812**, staging
+  **1144405061877188**, production **964103226246928**, as
   `AC_MESSAGING_LOGIN_CONFIG_ID`.
 - Valid OAuth redirect URI: `https://<Sales Xray host>/v1/lead-desk/messaging/callback`
   (salesxray, salesxray-staging, salesxray-dev, each on its own app). The person's
@@ -82,7 +88,9 @@ A second configuration per app, next to the WhatsApp Embedded Signup one:
 
 App Dashboard → Webhooks, per app, with the same callback for both objects:
 
-- Callback URL: `https://<host>/v1/lead-desk/messaging/webhook`
+- Callback URL: `https://<host>/v1/lead-desk/messaging/webhook` on staging and production;
+  **dev uses the alias `https://salesxray-dev.authorityclosers.com/v1/lead-desk/meta/webhook/messaging`**
+  (the same handler and checks, under the Leads webhook's Access bypass).
 - Verify token: the app's `AC_WHATSAPP_WEBHOOK_VERIFY_TOKEN` (one value per app).
 - Object **Page**, fields: `messages`, `messaging_postbacks`, `message_echoes`,
   `message_deliveries`, `message_reads`, `feed`.

@@ -25,8 +25,8 @@ lead capture (see `meta-apps.md`).
 | | App | Type | Where |
 | --- | --- | --- | --- |
 | production | **Sales Xray Messaging** (parent), app ID **856472050863115** | Business | Authority Closers portfolio 1027309697060163 |
-| staging | Sales Xray Messaging - staging (test app) | from the parent | same |
-| dev | Sales Xray Messaging - dev (test app) | from the parent | same |
+| staging | Sales Xray Messaging - staging (test app), app ID **1991172831554212** | from the parent | same |
+| dev | Sales Xray Messaging - dev (test app), app ID **1116775534070252** | from the parent | same |
 
 The settings keep their `AC_WHATSAPP_*` names (section 5): they are this app's.
 
@@ -61,7 +61,10 @@ One configuration per app (parent, staging, dev):
 - Assets: WhatsApp accounts (and the phone numbers in them).
 - Permissions: `whatsapp_business_management`, `whatsapp_business_messaging`.
   `business_management` only if the dashboard requires it.
-- Record the **configuration ID** for each environment.
+- Configuration IDs (orchestrator, 19 Oct; the "60-day expiry token" template with a
+  system-user token, `whatsapp_business_management` + `whatsapp_business_messaging`):
+  dev **1681184823523717**, staging **1646520163493469**, production
+  **1423452606610966** (`AC_WHATSAPP_CONFIG_ID`).
 
 Sales Xray opens Embedded Signup **by redirect**, the same way as Continue with Meta for
 leads: no Meta JavaScript SDK on our pages, so the site's content-security policy stays
@@ -85,7 +88,10 @@ Facebook Login for Business → Settings, per app:
 
 Products → WhatsApp → Configuration → Webhook, per app:
 
-- Callback URL: `https://<host>/v1/lead-desk/whatsapp/webhook`
+- Callback URL: `https://<host>/v1/lead-desk/whatsapp/webhook` on staging and production.
+  **Dev uses the alias `https://salesxray-dev.authorityclosers.com/v1/lead-desk/meta/webhook/whatsapp`**
+  (the same handler and checks): it sits under the Leads webhook's Cloudflare Access
+  bypass, so it works without a new bypass.
 - Verify token: a new random value, `AC_WHATSAPP_WEBHOOK_VERIFY_TOKEN` in Infisical.
 - Object `whatsapp_business_account`, fields:
   - `messages` (incoming messages and delivery statuses)
@@ -144,11 +150,10 @@ moment the four settings exist; nothing else in Sales Xray changes.
    **Connect WhatsApp**. On the server:
    `curl -s 'http://127.0.0.1:8101/v1/lead-desk/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=<token>&hub.challenge=42'`
    answers `42` (a wrong token answers 403).
-3. **Gap: Cloudflare Access.** On dev, `/v1/lead-desk/whatsapp/webhook` still goes to
-   the Access sign-in (302), so Meta cannot deliver messages or statuses there; the
-   Leads webhook has its bypass (it answers 403 from Sales Xray). The bypass for this
-   path is Align 3's per-environment Root card. Until it exists, sending works and
-   the dev inbox stays empty.
+3. **Webhook on dev:** Meta posts to the alias
+   `/v1/lead-desk/meta/webhook/whatsapp`, which sits under the Leads webhook's
+   Cloudflare Access bypass (the canonical `/v1/lead-desk/whatsapp/webhook` still goes
+   to the Access sign-in on dev). Staging and production use the canonical path.
 4. In the dev test app (Meta dashboard): redirect URI
    `https://salesxray-dev.authorityclosers.com/v1/lead-desk/whatsapp/callback`, the
    webhook above with the verify token and the fields in section 4, and our team
