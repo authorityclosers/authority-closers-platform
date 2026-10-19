@@ -23,12 +23,24 @@
 }
 
 /* A setting changed in place: one click for on/off, a small field with Save otherwise. */
+/* The value, and its control at the right; a control that opens wraps below. */
+.now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+}
+
 .control {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
+}
+
+form.control {
+  flex-basis: 100%;
 }
 
 .control input,

@@ -142,11 +142,15 @@ export default async function SettingsPage() {
                     <tr key={row.label}>
                       <th scope="row">{row.label}</th>
                       <td>
-                        {row.value}
-                        {row.note ? (
-                          <small className={styles.note}>{row.note}</small>
-                        ) : null}
-                        {control(row.id)}
+                        <div className={styles.now}>
+                          <span>
+                            {row.value}
+                            {row.note ? (
+                              <small className={styles.note}>{row.note}</small>
+                            ) : null}
+                          </span>
+                          {control(row.id)}
+                        </div>
                       </td>
                     </tr>
                   ))}
