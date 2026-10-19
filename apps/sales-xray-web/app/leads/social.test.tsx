@@ -308,8 +308,12 @@ it("connects Pages in Settings and saves a comment rule", async () => {
   expect(host.textContent).toContain("Saved.");
 });
 
-it("stays hidden until AC's Messaging app is set up", async () => {
+it("says Coming soon, with nothing to press, until AC's Messaging app is set up", async () => {
   status = { configured: false, accounts: [] };
   await render(<SocialSettings />);
-  expect(host.textContent).toBe("");
+  // The card keeps its place (no jump when the answer arrives).
+  expect(host.textContent).toContain("Messenger & Instagram");
+  expect(host.textContent).toContain("Coming soon");
+  expect(host.querySelector("a")).toBeNull();
+  expect(host.querySelector("button")).toBeNull();
 });

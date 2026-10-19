@@ -414,7 +414,7 @@ export function ChatsRoute() {
                 filter={filter}
                 me={me?.person_id ?? personId}
                 marks={marks}
-                sla={sla}
+                sla={list?.sla ?? sla}
                 activeKey={openThread?.key ?? opened?.key ?? null}
                 showOwner={showScopes}
                 now={now}

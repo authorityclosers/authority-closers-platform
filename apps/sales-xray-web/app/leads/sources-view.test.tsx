@@ -174,7 +174,9 @@ it("in the Sales Xray app, Continue with Google opens in the phone's browser", a
   await act(async () => {
     link.dispatchEvent(click);
   });
-  await settle();
+  // The verifier's hash is worked out off the main thread: wait for it.
+  for (let tries = 0; tries < 50 && !sent.includes("openConnect"); tries += 1)
+    await settle();
 
   expect(click.defaultPrevented).toBe(true);
   expect(sent).toEqual(["status", "openConnect"]);

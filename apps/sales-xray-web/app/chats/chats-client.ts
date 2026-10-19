@@ -64,6 +64,8 @@ export type ChatList = {
   threads: ChatThread[];
   /** The server says who owns each lead, so Mine and Unassigned can filter. */
   owners: boolean;
+  /** The organisation's first-response target, when the list carries it. */
+  sla?: Sla | null;
 };
 
 export type Sla = { on: boolean; minutes: number };
@@ -157,12 +159,61 @@ export function sortThreads(threads: ChatThread[]): ChatThread[] {
   );
 }
 
+function slaOf(value: unknown): Sla | null {
+  const sla = value as Partial<Sla> | null;
+  return sla && typeof sla.minutes === "number" && sla.minutes > 0
+    ? { on: sla.on !== false, minutes: sla.minutes }
+    : null;
+}
+
+/** GET /chats: the three channels in one list, with the reply target. */
+function fromChats(value: unknown): ChatList | null {
+  const body = value as { threads?: unknown; sla?: unknown } | null;
+  if (!body || !Array.isArray(body.threads)) return null;
+  const rows = (body.threads as unknown[]).filter(isRow) as ((
+    | SocialInboxThread
+    | WaThread
+  ) &
+    Extra & { channel?: unknown })[];
+  const threads = rows
+    .filter((row) => CHANNELS.includes(row.channel as ChatChannel))
+    .map((row, index) => toThread(row, row.channel as ChatChannel, index));
+  const seen = new Set<string>();
+  return {
+    threads: sortThreads(threads).filter((thread) => {
+      if (seen.has(thread.key)) return false;
+      seen.add(thread.key);
+      return true;
+    }),
+    owners: rows.some((row) => "ownerId" in row),
+    sla: slaOf(body.sla),
+  };
+}
+
 /**
- * Every conversation of the last month across the three channels. A channel
+ * Every conversation of the last month across the three channels, in one read
+ * (GET /chats). An older server without it answers from the two inboxes.
+ */
+export async function readChats(): Promise<ChatList> {
+  try {
+    const list = fromChats(await waCall<unknown>("/chats"));
+    if (list) return list;
+  } catch (reason) {
+    if (
+      !(reason instanceof LeadsError) ||
+      (reason.status !== 404 && reason.status !== 405)
+    )
+      throw reason;
+  }
+  return readInboxes();
+}
+
+/**
+ * The same from the WhatsApp and the Messenger/Instagram inboxes. A channel
  * the organisation hasn't connected simply adds nothing; only when nothing
  * answers at all is it an error.
  */
-export async function readChats(): Promise<ChatList> {
+async function readInboxes(): Promise<ChatList> {
   const [social, whatsapp] = await Promise.allSettled([
     waCall<unknown>("/social/inbox"),
     waCall<unknown>("/whatsapp/inbox"),
@@ -206,10 +257,7 @@ export async function readChats(): Promise<ChatList> {
 /** The organisation's first-response target, when it has one. */
 export async function readSla(): Promise<Sla | null> {
   try {
-    const value = await waCall<Partial<Sla>>("/sla");
-    return typeof value?.minutes === "number" && value.minutes > 0
-      ? { on: value.on !== false, minutes: value.minutes }
-      : null;
+    return slaOf(await waCall<unknown>("/sla"));
   } catch {
     return null;
   }

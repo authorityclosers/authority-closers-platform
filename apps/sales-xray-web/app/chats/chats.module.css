@@ -1634,3 +1634,18 @@
     min-height: 44px;
   }
 }
+
+/* The marks are the apps' own logos (brand library): a light disc behind them. */
+.channelMark,
+.channelMark[data-channel="whatsapp"],
+.channelMark[data-channel="messenger"],
+.channelMark[data-channel="instagram"] {
+  background: var(--sx-surface);
+  box-shadow: inset 0 0 0 1px var(--sx-line);
+}
+
+.chatAvatar > .channelMark {
+  box-shadow:
+    0 0 0 2px var(--sx-surface),
+    inset 0 0 0 1px var(--sx-line);
+}

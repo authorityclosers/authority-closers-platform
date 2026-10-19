@@ -43,7 +43,9 @@ beforeEach(() => {
     vi.fn(async (input: RequestInfo | URL) =>
       String(input).endsWith("/social/inbox")
         ? json(social)
-        : json({ detail: "WhatsApp isn't set up." }, 409),
+        : String(input).endsWith("/chats")
+          ? json({ detail: "Not here." }, 404)
+          : json({ detail: "WhatsApp isn't set up." }, 409),
     ),
   );
   host = document.createElement("div");

@@ -4039,3 +4039,56 @@
   outline: 2px solid transparent;
   box-shadow: var(--sx-focus-ring);
 }
+
+/* ---------- Lead sources as cards (owner, 20 Oct: "a far better UI") ----------
+   Each source is its own card (app-card.tsx); each Page or account inside it
+   a soft sub-card with its counts as small facts. */
+
+.sourceCards {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.pageList {
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+}
+
+.pageRow {
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-sunken) 55%, var(--sx-surface));
+}
+
+.pageRow + .pageRow {
+  border-top: 1px solid var(--sx-line);
+}
+
+.pageName {
+  gap: 6px;
+}
+
+.pageName strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+.capi {
+  margin-top: 0;
+  padding: 14px 16px;
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-sunken) 55%, var(--sx-surface));
+}
+
+.otherWays {
+  border-radius: var(--lx-radius-lg);
+  box-shadow: var(--lx-shadow-1);
+}

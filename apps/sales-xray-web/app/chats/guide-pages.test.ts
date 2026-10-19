@@ -8,6 +8,7 @@ it("keeps the first-call guide off the CRM's pages (Leads, Chats)", () => {
   expect(firstCallGuideFits("/chats")).toBe(false);
   expect(firstCallGuideFits("/organisation")).toBe(false);
   expect(firstCallGuideFits("/account")).toBe(false);
+  expect(firstCallGuideFits("/settings/apps")).toBe(false);
   // The call-analysis journey keeps it.
   expect(firstCallGuideFits("/analysis/new")).toBe(true);
   expect(firstCallGuideFits("/dashboard")).toBe(true);

@@ -1,15 +1,17 @@
-import { Camera, MessageCircle, MessageSquare } from "lucide-react";
 import type { CSSProperties } from "react";
 
+import { BRANDS, type Brand } from "../brands/brand-registry";
+import { BrandMark } from "../report-entities";
 import { Avatar } from "../ui/kit";
 import { CHANNEL_LABEL, type ChatChannel } from "./chats-client";
 import styles from "./chats.module.css";
 
-const ICONS = {
-  whatsapp: MessageCircle,
-  messenger: MessageSquare,
-  instagram: Camera,
-} as const;
+// The apps' own marks, from the brand library the Lead sources use too.
+const MARKS: Record<ChatChannel, Brand | undefined> = {
+  whatsapp: BRANDS.find((brand) => brand.key === "whatsapp"),
+  messenger: BRANDS.find((brand) => brand.key === "messenger"),
+  instagram: BRANDS.find((brand) => brand.key === "instagram"),
+};
 
 /** The channel's own colour and mark, small: WhatsApp, Messenger, Instagram. */
 export function ChannelMark({
@@ -21,7 +23,7 @@ export function ChannelMark({
   size?: number;
   labelled?: boolean;
 }) {
-  const Icon = ICONS[channel];
+  const brand = MARKS[channel];
   return (
     <span
       className={styles.channelMark}
@@ -31,11 +33,9 @@ export function ChannelMark({
       aria-label={labelled ? CHANNEL_LABEL[channel] : undefined}
       aria-hidden={labelled ? undefined : "true"}
     >
-      <Icon
-        size={Math.round(size * 0.62)}
-        strokeWidth={2.25}
-        aria-hidden="true"
-      />
+      {brand ? (
+        <BrandMark brand={brand} size={Math.round(size * 0.78)} />
+      ) : null}
     </span>
   );
 }

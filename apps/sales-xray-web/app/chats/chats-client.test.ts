@@ -378,3 +378,54 @@ it("links to one chat and finds it with or without the account", () => {
     false,
   );
 });
+
+it("reads all three channels in one request when the server has GET /chats", async () => {
+  routes["/v1/lead-desk/chats"] = () =>
+    json({
+      generatedAt: NOW.toISOString(),
+      sla: { on: true, minutes: 10 },
+      threads: [
+        {
+          key: "whatsapp:n1:abcd",
+          channel: "whatsapp",
+          leadId: LEAD_A,
+          leadName: "Asha Rao",
+          lastText: "Hi",
+          lastAt: "2027-01-15T09:00:00Z",
+          waiting: true,
+          windowOpen: true,
+          accountId: ACCOUNT,
+          place: "WhatsApp · +91 99990 10009",
+          lastKind: "text",
+          lastDirection: "in",
+          lastStatus: "received",
+          waitingSince: "2027-01-15T08:58:00Z",
+          ownerId: null,
+          ownerName: null,
+        },
+        {
+          key: "sms:x",
+          channel: "sms",
+          leadId: LEAD_B,
+          leadName: "Ravi",
+          lastAt: "2027-01-15T09:00:00Z",
+          waiting: false,
+          windowOpen: false,
+        },
+      ],
+    });
+  const list = await readChats();
+  expect(list.sla).toEqual({ on: true, minutes: 10 });
+  expect(list.owners).toBe(true);
+  expect(list.threads).toHaveLength(1);
+  expect(list.threads[0]).toMatchObject({
+    key: `whatsapp:${LEAD_A}:${ACCOUNT}`,
+    place: "WhatsApp · +91 99990 10009",
+    waitingSince: "2027-01-15T08:58:00Z",
+    ownerId: null,
+  });
+  // Only GET /chats was read.
+  expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url))).toEqual([
+    "/v1/lead-desk/chats",
+  ]);
+});
