@@ -59,6 +59,7 @@ import { useFirstCallGuideSwitch } from "./guide-toggle";
 import { notify, dismissNotice } from "./notice-center";
 import { PROFILE_UPDATED_EVENT } from "./profile-menu";
 import { AccountAvatarImage } from "./speaker-avatar";
+import { SignInMethods } from "./sign-in-methods";
 import {
   analysedTrend,
   readCallActivity,
@@ -467,6 +468,7 @@ export function AccountSettings({
             label="Privacy"
             hint="Calls and reports stay private to your account and selected workspace."
           />
+          <SignInMethods active={section === "security"} />
           <Row
             label="Log out of this device"
             hint="End your Sales Xray session in this browser."
