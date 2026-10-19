@@ -22,6 +22,14 @@ def child(code: str) -> list[str]:
     return [sys.executable, "-c", code]
 
 
+def process_stopped(pid: int) -> bool:
+    # /proc can disappear between lookup and read when the child is reaped.
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().split()[2] == "Z"
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+
+
 @pytest.mark.parametrize("file_output", [False, True])
 def test_actual_output_cap_refuses_lying_or_oversized_child(tmp_path, file_output):
     destination = tmp_path / "download" if file_output else None
@@ -160,9 +168,8 @@ def test_owned_descendant_cleanup_and_unrelated_process_survives(tmp_path, failu
         assert time.monotonic() - started < 4
         descendant = int(marker.read_text())
         # Orphans may briefly remain zombies under the container's PID 1.
-        state = Path(f"/proc/{descendant}/stat")
         for _ in range(100):
-            if not state.exists() or state.read_text().split()[2] == "Z":
+            if process_stopped(descendant):
                 break
             time.sleep(0.01)
         else:
@@ -206,3 +213,138 @@ def test_capture_file_input_and_explicit_routing_exclude_other_secrets(tmp_path,
             stdout_limit=0,
             routing={"INFISICAL_TOKEN": "do-not-inherit"},
         )
+
+
+@pytest.fixture
+def holder_harness(tmp_path, monkeypatch):
+    """Exercise the real canonical holder through the Drive I/O adapter."""
+    import os
+    import signal
+    import subprocess
+    from contextlib import suppress
+
+    spec = importlib.util.spec_from_file_location(
+        "drive_holder_regression", ROOT / "scripts/ops/drive_postgres_backup.py"
+    )
+    assert spec and spec.loader
+    drive = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(drive)
+    canonical = drive.canonical()
+    real_popen = subprocess.Popen
+    unrelated = real_popen(child("import time; time.sleep(30)"), start_new_session=True)
+    owned = []
+    marker = tmp_path / "holder-descendant.pid"
+
+    def spawn(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        owned.append(process)
+        return process
+
+    monkeypatch.setattr(canonical.subprocess, "Popen", spawn)
+    monkeypatch.setattr(canonical, "compose_environment", lambda _target: {})
+    token = drive.OPERATION.set(drive.Deadline(5))
+
+    def configure(mode, *, budget=5):
+        drive.OPERATION.set(drive.Deadline(budget))
+        code = (
+            "import os,sys,time; from pathlib import Path; "
+            f"sys.stdin.buffer.read({len(canonical.SNAPSHOT_HOLDER_START_SQL)}); "
+            "pid=os.fork(); "
+            f"Path({str(marker)!r}).write_text(str(pid)) if pid else None; "
+            "os.close(0) if not pid else None; os.close(1) if not pid else None; "
+            "time.sleep(30) if not pid else None; "
+        )
+        if mode == "silent":
+            code += "time.sleep(30)"
+        else:
+            line = b"invalid\n" if mode == "invalid" else b"00000003-0000001B-1\n"
+            code += f"os.write(1, {line!r}); "
+            if mode == "exited":
+                code += "os._exit(0)"
+            elif mode == "success":
+                code += "sys.stdin.buffer.read()"
+            else:
+                code += "time.sleep(30)"
+        monkeypatch.setattr(canonical, "snapshot_holder_command", lambda _target: child(code))
+
+    def assert_cleaned():
+        assert owned and all(process.poll() is not None for process in owned)
+        descendant = int(marker.read_text())
+        for _ in range(100):
+            if process_stopped(descendant):
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("holder descendant survived cleanup")
+        assert unrelated.poll() is None
+        assert all(process.stdin.closed and process.stdout.closed for process in owned)
+
+    try:
+        yield drive, canonical, configure, owned, assert_cleaned
+    finally:
+        drive.OPERATION.reset(token)
+        # Clean fixture groups even when testing an unfixed source fails.
+        for process in owned:
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=2)
+        unrelated.kill()
+        unrelated.wait(timeout=2)
+
+
+@pytest.mark.parametrize("mode", ["exited", "invalid", "silent", "expired_after_line"])
+def test_drive_holder_startup_refusal_cleans_owned_group(holder_harness, monkeypatch, mode):
+    drive, canonical, configure, owned, assert_cleaned = holder_harness
+    configure(
+        "exited" if mode == "exited" else ("stalled" if mode == "expired_after_line" else mode),
+        budget=0.25 if mode == "silent" else 5,
+    )
+    validate = canonical.validate_exported_snapshot_id
+
+    def validated_after_scheduling(value):
+        snapshot_id = validate(value)
+        if mode == "exited":
+            # Force the reviewed scheduling case: valid line, leader already exited.
+            owned[0].wait(timeout=2)
+        elif mode == "expired_after_line":
+            drive.OPERATION.get().expires_at = time.monotonic() - 1
+        return snapshot_id
+
+    monkeypatch.setattr(canonical, "validate_exported_snapshot_id", validated_after_scheduling)
+    started = time.monotonic()
+    with pytest.raises((canonical.BackupError, drive.ProcessRefusal)):
+        drive.BoundedCaptureIO().holder(object())
+    assert time.monotonic() - started < 1.5
+    assert_cleaned()
+
+
+@pytest.mark.parametrize("mode", ["stalled", "expired", "success", "exited"])
+def test_drive_holder_close_uses_shared_budget_and_owned_cleanup(holder_harness, mode):
+    drive, canonical, configure, owned, assert_cleaned = holder_harness
+    configure("success" if mode == "success" else "stalled")
+    holder = drive.BoundedCaptureIO().holder(object())
+    # Consume the operation's original budget; no new deadline on close.
+    drive.OPERATION.get().expires_at = time.monotonic() + (0.2 if mode == "stalled" else 2)
+    if mode == "expired":
+        drive.OPERATION.get().expires_at = time.monotonic() - 1
+    elif mode == "exited":
+        owned[0].kill()
+        owned[0].wait(timeout=2)
+    started = time.monotonic()
+    if mode == "success":
+        holder.close()
+    else:
+        with pytest.raises((canonical.BackupError, drive.ProcessRefusal)):
+            holder.close()
+    assert time.monotonic() - started < 1.5
+    assert_cleaned()
+    holder.close()  # Idempotent cleanup cannot restart a wait or touch another group.
+
+
+def test_drive_holder_expired_before_spawn_has_no_child(holder_harness):
+    drive, _canonical, configure, owned, _assert_cleaned = holder_harness
+    configure("stalled")
+    drive.OPERATION.get().expires_at = time.monotonic() - 1
+    with pytest.raises(drive.ProcessRefusal, match="^operation_deadline_exceeded$"):
+        drive.BoundedCaptureIO().holder(object())
+    assert not owned

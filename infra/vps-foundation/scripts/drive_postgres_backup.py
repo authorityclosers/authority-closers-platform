@@ -483,24 +483,21 @@ class BoundedCaptureIO:
 
     def holder(self, target):
         module = canonical()
-        holder = module.start_exported_snapshot_holder(
+
+        def cleanup(process):
+            try:
+                cleanup_owned(process)
+            finally:
+                for stream in (process.stdin, process.stdout):
+                    if stream is not None:
+                        stream.close()
+
+        return module.start_exported_snapshot_holder(
             target,
-            timeout_seconds=min(self.remaining(), module.SNAPSHOT_HOLDER_START_TIMEOUT_SECONDS),
+            timeout_seconds=module.SNAPSHOT_HOLDER_START_TIMEOUT_SECONDS,
+            remaining=self.remaining,
+            cleanup=cleanup,
         )
-
-        class OwnedHolder:
-            snapshot_id = holder.snapshot_id
-
-            def assert_alive(self):
-                holder.assert_alive()
-
-            def close(self):
-                try:
-                    holder.close()
-                finally:
-                    cleanup_owned(holder.process)
-
-        return OwnedHolder()
 
     def run(self, command, target, *, limit=MAX_CONTROL_BYTES, destination=None, input_path=None):
         return run_process(

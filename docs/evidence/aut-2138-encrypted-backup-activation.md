@@ -30,8 +30,12 @@ owners' parity tables and migration entries remain unchanged.
   GnuPG writes through the same pipe, with a dedicated private home, no autostart,
   stdin-only key, stripped child environment and discarded diagnostics.
 - One 900-second monotonic deadline covers capture, upload/fetch and their
-  subprocesses. Owned process groups are cleaned on failure and success; no
-  shared groups are signaled. Hash/extraction loops check the same deadline.
+  subprocesses, including canonical holder startup and graceful rollback. Both
+  use the remaining budget, with no renewed 30-second termination allowance.
+  Owned groups receive immediate SIGKILL on cleanup, even after their leader
+  exits; reaping has an explicit two-second grace per owned group. At most the
+  current command and holder need cleanup together. No shared groups are
+  signaled. Hash/extraction loops check the same deadline.
 - Keys are required before capture; equal staging/production values refuse.
   Dry-run reads no secrets, runs no subprocess and creates no files.
 - Capture reuses canonical `capture_dump`, exported-snapshot holder and
@@ -277,3 +281,29 @@ then CEO/operator admission of this maintenance package and invocation. No
 current candidate is approved for installation. No historical deletion, new
 provider/account/schedule, budget change, app promotion, hold edit or disk
 encryption is authorized here.
+
+## CTO holder findings corrected — renewed source freeze
+
+This package supersedes the unadmitted d1fed58a candidate. The canonical holder
+accepts optional remaining-budget and owned-cleanup callbacks. Drive supplies
+its existing operation deadline and immediate owned-group cleanup before holder
+startup. Every post-spawn startup refusal cleans that group and reaps the leader;
+ownership transfers only on successful holder return. Close uses the same
+remaining budget and always cleans the group, including expired deadlines,
+rollback errors, successful leader exit and repeated close. R2 callers retain
+the existing default timeout interface and behavior.
+
+Nine real-process fictional regressions exercise BoundedCaptureIO: valid startup
+line with already-exited leader, malformed line, silent startup timeout, budget
+expiry after line validation, stalled rollback, expiry before close, successful
+rollback with surviving descendant, exited leader on close, and expiry before
+spawn. Each spawned case checks owned descendant termination, leader reaping,
+closed pipes and an unrelated process surviving. The first broad check found a
+pre-existing test /proc lookup/read race during successful process reaping; the
+owned test now accepts disappearance during the read as successful cleanup.
+
+The renewed source freeze includes the already committed call-data 0103/v70
+parity additions from 53b4b21a. Those source blocks remain intact. Newly computed
+consumer digests describe that exact freeze, rather than reusing old d1fed58a
+consumer pins. Foreign uncommitted work is excluded. Installation modes, scope,
+rollback guard and admission conditions above remain the same.

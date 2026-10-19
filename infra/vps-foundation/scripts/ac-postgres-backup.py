@@ -983,8 +983,12 @@ class ExportedSnapshotHolder:
     snapshot_id: str
     started_at: float
     closed: bool = False
+    remaining: Callable[[], float] | None = None
+    cleanup: Callable[[subprocess.Popen[bytes]], None] | None = None
 
     def assert_alive(self) -> None:
+        if self.remaining is not None:
+            self.remaining()
         if self.closed or self.process.poll() is not None:
             raise BackupError("The PostgreSQL exported-snapshot holder exited early.")
         if time.monotonic() - self.started_at > SNAPSHOT_HOLDER_MAX_LIFETIME_SECONDS:
@@ -995,6 +999,15 @@ class ExportedSnapshotHolder:
         if self.closed:
             return
         self.closed = True
+        try:
+            self._rollback()
+        finally:
+            if self.cleanup is not None:
+                self.cleanup(self.process)
+
+    def _rollback(self) -> None:
+        if self.remaining is not None:
+            self.remaining()
         rollback_error: OSError | None = None
         if self.process.poll() is None:
             try:
@@ -1006,14 +1019,19 @@ class ExportedSnapshotHolder:
                 rollback_error = error
             if rollback_error is None:
                 try:
-                    self.process.wait(timeout=SNAPSHOT_HOLDER_ROLLBACK_TIMEOUT_SECONDS)
+                    timeout = SNAPSHOT_HOLDER_ROLLBACK_TIMEOUT_SECONDS
+                    if self.remaining is not None:
+                        timeout = min(timeout, self.remaining())
+                    self.process.wait(timeout=timeout)
                 except subprocess.TimeoutExpired as error:
-                    terminate_process(self.process)
+                    if self.cleanup is None:
+                        terminate_process(self.process)
                     raise BackupError(
                         "The PostgreSQL exported-snapshot holder rollback timed out."
                     ) from error
             else:
-                terminate_process(self.process)
+                if self.cleanup is None:
+                    terminate_process(self.process)
                 raise BackupError(
                     "The PostgreSQL exported-snapshot holder rollback failed."
                 ) from rollback_error
@@ -1048,8 +1066,14 @@ def snapshot_holder_command(target: ApplicationTarget) -> list[str]:
 
 
 def start_exported_snapshot_holder(
-    target: ApplicationTarget, *, timeout_seconds: float = SNAPSHOT_HOLDER_START_TIMEOUT_SECONDS
+    target: ApplicationTarget,
+    *,
+    timeout_seconds: float = SNAPSHOT_HOLDER_START_TIMEOUT_SECONDS,
+    remaining: Callable[[], float] | None = None,
+    cleanup: Callable[[subprocess.Popen[bytes]], None] | None = None,
 ) -> ExportedSnapshotHolder:
+    if remaining is not None:
+        remaining()
     try:
         process = subprocess.Popen(  # noqa: S603 - command uses fixed release paths
             snapshot_holder_command(target),
@@ -1061,59 +1085,66 @@ def start_exported_snapshot_holder(
         )
     except OSError as error:
         raise BackupError("The PostgreSQL exported-snapshot holder could not start.") from error
+    handed_off = False
     try:
-        assert process.stdin is not None
-        process.stdin.write(SNAPSHOT_HOLDER_START_SQL)
-        process.stdin.flush()
-    except OSError as error:
         try:
-            terminate_process(process)
-        except OSError as cleanup_error:
-            raise BackupError(
-                "The PostgreSQL exported-snapshot holder startup cleanup failed."
-            ) from cleanup_error
-        raise BackupError("The PostgreSQL exported-snapshot holder protocol failed.") from error
-    assert process.stdout is not None
-    output_queue: queue.Queue[object] = queue.Queue(maxsize=1)
-
-    def read_snapshot_line() -> None:
-        try:
-            output_queue.put(process.stdout.readline(129))
+            assert process.stdin is not None
+            process.stdin.write(SNAPSHOT_HOLDER_START_SQL)
+            process.stdin.flush()
         except OSError as error:
-            output_queue.put(error)
+            raise BackupError("The PostgreSQL exported-snapshot holder protocol failed.") from error
+        assert process.stdout is not None
+        output_queue: queue.Queue[object] = queue.Queue(maxsize=1)
 
-    reader = threading.Thread(target=read_snapshot_line, daemon=True)
-    reader.start()
-    try:
-        line = output_queue.get(timeout=timeout_seconds)
-    except queue.Empty as error:
+        def read_snapshot_line() -> None:
+            try:
+                output_queue.put(process.stdout.readline(129))
+            except OSError as error:
+                output_queue.put(error)
+
+        reader = threading.Thread(target=read_snapshot_line, daemon=True)
+        reader.start()
+        if remaining is not None:
+            timeout_seconds = min(timeout_seconds, remaining())
         try:
-            terminate_process(process)
-        except OSError as cleanup_error:
+            line = output_queue.get(timeout=timeout_seconds)
+        except queue.Empty as error:
             raise BackupError(
-                "The PostgreSQL exported-snapshot holder startup cleanup failed."
-            ) from cleanup_error
-        raise BackupError("The PostgreSQL exported-snapshot holder startup timed out.") from error
-    if isinstance(line, OSError):
-        terminate_process(process)
-        raise BackupError(
-            "The PostgreSQL exported-snapshot holder output was unreadable."
-        ) from line
-    if not isinstance(line, bytes) or len(line) > 128 or not line.endswith(b"\n"):
-        terminate_process(process)
-        raise BackupError("The PostgreSQL exported-snapshot holder returned an invalid identity.")
-    try:
-        snapshot_id = validate_exported_snapshot_id(line.decode("ascii").strip())
-    except (UnicodeDecodeError, BackupError) as error:
-        terminate_process(process)
-        if isinstance(error, BackupError):
-            raise
-        raise BackupError(
-            "The PostgreSQL exported-snapshot holder returned an invalid identity."
-        ) from error
-    if process.poll() is not None:
-        raise BackupError("The PostgreSQL exported-snapshot holder exited before the dump.")
-    return ExportedSnapshotHolder(process, snapshot_id, time.monotonic())
+                "The PostgreSQL exported-snapshot holder startup timed out."
+            ) from error
+        if isinstance(line, OSError):
+            raise BackupError(
+                "The PostgreSQL exported-snapshot holder output was unreadable."
+            ) from line
+        if not isinstance(line, bytes) or len(line) > 128 or not line.endswith(b"\n"):
+            raise BackupError(
+                "The PostgreSQL exported-snapshot holder returned an invalid identity."
+            )
+        try:
+            snapshot_id = validate_exported_snapshot_id(line.decode("ascii").strip())
+        except UnicodeDecodeError as error:
+            raise BackupError(
+                "The PostgreSQL exported-snapshot holder returned an invalid identity."
+            ) from error
+        if remaining is not None:
+            remaining()
+        if process.poll() is not None:
+            raise BackupError("The PostgreSQL exported-snapshot holder exited before the dump.")
+        holder = ExportedSnapshotHolder(
+            process, snapshot_id, time.monotonic(), remaining=remaining, cleanup=cleanup
+        )
+        handed_off = True
+        return holder
+    finally:
+        # Ownership transfers only on successful return. Even an exited leader
+        # can leave live descendants, so every refusal must clean its session.
+        if not handed_off:
+            try:
+                (cleanup or terminate_process)(process)
+            except OSError as error:
+                raise BackupError(
+                    "The PostgreSQL exported-snapshot holder startup cleanup failed."
+                ) from error
 
 
 def utc_now() -> dt.datetime:
