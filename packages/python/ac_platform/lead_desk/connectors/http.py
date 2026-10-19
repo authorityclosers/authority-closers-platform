@@ -25,15 +25,15 @@ import json
 import logging
 import secrets
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import cast, func, select
 from sqlalchemy.dialects.postgresql import JSONB
@@ -48,6 +48,7 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk.connectors import (
+    app_return,
     google_ads,
     google_pull,
     meta,
@@ -56,6 +57,7 @@ from ac_platform.lead_desk.connectors import (
     meta_pull,
 )
 from ac_platform.lead_desk.connectors import google_ads_api as gads
+from ac_platform.lead_desk.connectors.app_return import AppComplete, AppCompleted
 from ac_platform.lead_desk.intake import Intake, token_hash
 from ac_platform.lead_desk.models import LeadDeskSettings, LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
@@ -422,28 +424,80 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 pages=[page_view(source) for source in await meta_sources(desk)],
             )
 
-    @router.get("/meta/connect")
-    async def meta_connect(request: Request, response: Response) -> RedirectResponse:
+    # ----- Connect from the Sales Xray app (system browser; see app_return) ----------
+
+    def app_challenge(value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not app_return.CHALLENGE.fullmatch(value):
+            raise HTTPException(422, "Start again from the Sales Xray app.", headers=PRIVATE)
+        return value
+
+    def started(url: str, reply: str | None) -> Response:
+        """The provider's sign-in: a redirect for a browser, or JSON for the app's page."""
+        if reply == "json":
+            return JSONResponse({"url": url}, headers=PRIVATE)
+        return RedirectResponse(url, status_code=303, headers=PRIVATE)
+
+    def from_app(body: Callable[[], dict[str, Any]]) -> bool:
+        try:
+            return bool(body().get("a"))
+        except (meta.MetaError, gads.GoogleAdsApiError):
+            return False
+
+    def hand_off(provider: app_return.Provider, key: bytes, request: Request) -> Response:
+        """The provider came back in the phone's browser: hand the result to the app."""
+        params = request.query_params
+        if params.get("error"):
+            return app_return.return_page(provider, result="cancelled")
+        code, state = params.get("code", ""), params.get("state", "")
+        if not code:
+            return app_return.return_page(provider, result="failed")
+        return app_return.return_page(
+            provider, handoff=app_return.seal(key, provider=provider, code=code[:2048], state=state)
+        )
+
+    def handed_off(
+        key: bytes, command: AppComplete, provider: app_return.Provider
+    ) -> tuple[str, str]:
+        try:
+            return app_return.open_(key, command.handoff, provider=provider)
+        except app_return.HandoffError as error:
+            raise DeskError(422, str(error)) from None
+
+    def check_verifier(body: dict[str, Any], verifier: str) -> None:
+        if not app_return.answers(body.get("a"), verifier):
+            raise DeskError(403, "That didn't come from this app. Connect again.")
+
+    @router.get("/meta/connect", response_model=None)
+    async def meta_connect(
+        request: Request,
+        response: Response,
+        app_challenge_value: str | None = Query(default=None, alias="app_challenge"),
+        reply: str | None = Query(default=None, alias="format"),
+    ) -> Response:
         cfg = meta_config()
+        challenge = app_challenge(app_challenge_value)
         async with desk_for(request, response) as desk:
             desk._require_manager()
             state = meta.make_state(
-                cfg.app_secret, tenant_id=desk.viewer.tenant_id, person_id=desk.viewer.person_id
+                cfg.app_secret,
+                tenant_id=desk.viewer.tenant_id,
+                person_id=desk.viewer.person_id,
+                app_challenge=challenge,
             )
-        return RedirectResponse(
-            meta.dialog_url(cfg, redirect_uri=callback_url(), state=state),
-            status_code=303,
-            headers=PRIVATE,
-        )
+        return started(meta.dialog_url(cfg, redirect_uri=callback_url(), state=state), reply)
 
-    @router.get("/meta/callback")
-    async def meta_callback(request: Request, response: Response) -> RedirectResponse:
+    @router.get("/meta/callback", response_model=None)
+    async def meta_callback(request: Request, response: Response) -> Response:
         cfg = meta_config()
+        state = request.query_params.get("state", "")
+        if from_app(lambda: meta.peek_state(cfg.app_secret, state)):
+            return hand_off("meta", cfg.token_key, request)
         back = f"{app_url()}/leads?tab=sources"
         if request.query_params.get("error"):
             return RedirectResponse(f"{back}&meta=cancelled", status_code=303, headers=PRIVATE)
         code = request.query_params.get("code", "")
-        state = request.query_params.get("state", "")
         if not code or not state:
             return RedirectResponse(f"{back}&meta=failed", status_code=303, headers=PRIVATE)
         async with desk_for(request, response, write=True, origin=False) as desk:
@@ -454,70 +508,95 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 tenant_id=desk.viewer.tenant_id,
                 person_id=desk.viewer.person_id,
             )
-            graph = meta.Graph(cfg)
-            user = await graph.user_token(code=code, redirect_uri=callback_url())
-            pages = await graph.pages(user.token)
-            # The organisation's own connection, sealed to it: it lists and writes the
-            # datasets that lead stages go back to (Conversions API for CRM).
-            row = await lead_settings(desk)
-            row.config = {
-                **(row.config or {}),
-                meta_capi.CONNECTION: {
-                    "token": meta.seal(
-                        cfg.token_key,
-                        user.token,
-                        page_id=meta_capi.connection_bound(desk.viewer.tenant_id),
-                    ),
-                    "expires_at": user.expires_at,
-                    "by": str(desk.viewer.person_id),
-                    "at": int(time.time()),
-                },
-            }
-            existing = {str((s.config or {}).get("page_id")): s for s in await meta_sources(desk)}
-            count = int(
-                await desk.db.scalar(
-                    select(func.count()).where(LeadSource.tenant_id == desk.viewer.tenant_id)
+            found = await finish_meta(desk, cfg, code)
+        return RedirectResponse(f"{back}&meta={found}", status_code=303, headers=PRIVATE)
+
+    @router.post("/meta/app-complete", response_model=AppCompleted)
+    async def meta_app_complete(
+        command: AppComplete, request: Request, response: Response
+    ) -> AppCompleted:
+        """The app is back from Meta: finish the Connect on this person's own session."""
+        cfg = meta_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            code, state = handed_off(cfg.token_key, command, "meta")
+            try:
+                body = meta.read_state(
+                    cfg.app_secret,
+                    state,
+                    tenant_id=desk.viewer.tenant_id,
+                    person_id=desk.viewer.person_id,
                 )
-                or 0
+            except meta.MetaError as error:
+                raise DeskError(403, str(error)) from None
+            check_verifier(body, command.verifier)
+            return AppCompleted(result=await finish_meta(desk, cfg, code))
+
+    async def finish_meta(desk: LeadDesk, cfg: meta.MetaConfig, code: str) -> str:
+        """Swap Meta's code, keep the organisation's connection and its Pages (off)."""
+        graph = meta.Graph(cfg)
+        user = await graph.user_token(code=code, redirect_uri=callback_url())
+        pages = await graph.pages(user.token)
+        # The organisation's own connection, sealed to it: it lists and writes the
+        # datasets that lead stages go back to (Conversions API for CRM).
+        row = await lead_settings(desk)
+        row.config = {
+            **(row.config or {}),
+            meta_capi.CONNECTION: {
+                "token": meta.seal(
+                    cfg.token_key,
+                    user.token,
+                    page_id=meta_capi.connection_bound(desk.viewer.tenant_id),
+                ),
+                "expires_at": user.expires_at,
+                "by": str(desk.viewer.person_id),
+                "at": int(time.time()),
+            },
+        }
+        existing = {str((s.config or {}).get("page_id")): s for s in await meta_sources(desk)}
+        count = int(
+            await desk.db.scalar(
+                select(func.count()).where(LeadSource.tenant_id == desk.viewer.tenant_id)
             )
-            for page in pages:
-                sealed = meta.seal(cfg.token_key, page["token"], page_id=page["id"])
-                source = existing.get(page["id"])
-                if source is not None:
-                    source.config = {
-                        **(source.config or {}),
+            or 0
+        )
+        for page in pages:
+            sealed = meta.seal(cfg.token_key, page["token"], page_id=page["id"])
+            source = existing.get(page["id"])
+            if source is not None:
+                source.config = {
+                    **(source.config or {}),
+                    "page_name": page["name"],
+                    "token": sealed,
+                }
+                source.label = f"Meta · {page['name']}"[:120]
+                source.updated_at = desk.now
+                continue
+            if count >= _MAX_SOURCES:
+                break
+            count += 1
+            desk.db.add(
+                LeadSource(
+                    id=uuid4(),
+                    tenant_id=desk.viewer.tenant_id,
+                    kind="meta",
+                    label=f"Meta · {page['name']}"[:120],
+                    token_sha256=None,
+                    config={
+                        "page_id": page["id"],
                         "page_name": page["name"],
                         "token": sealed,
-                    }
-                    source.label = f"Meta · {page['name']}"[:120]
-                    source.updated_at = desk.now
-                    continue
-                if count >= _MAX_SOURCES:
-                    break
-                count += 1
-                desk.db.add(
-                    LeadSource(
-                        id=uuid4(),
-                        tenant_id=desk.viewer.tenant_id,
-                        kind="meta",
-                        label=f"Meta · {page['name']}"[:120],
-                        token_sha256=None,
-                        config={
-                            "page_id": page["id"],
-                            "page_name": page["name"],
-                            "token": sealed,
-                            "forms": "all",
-                        },
-                        active=False,
-                        received=0,
-                        created_by_person_id=desk.viewer.person_id,
-                        created_at=desk.now,
-                        updated_at=desk.now,
-                    )
+                        "forms": "all",
+                    },
+                    active=False,
+                    received=0,
+                    created_by_person_id=desk.viewer.person_id,
+                    created_at=desk.now,
+                    updated_at=desk.now,
                 )
-            await desk.db.flush()
-        found = "connected" if pages else "nopages"
-        return RedirectResponse(f"{back}&meta={found}", status_code=303, headers=PRIVATE)
+            )
+        await desk.db.flush()
+        return "connected" if pages else "nopages"
 
     # ----- lead stages back to Meta (Conversions API for CRM) -------------------------
 
@@ -925,28 +1004,37 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 accounts=[account_view(source) for source in await google_sources(desk)],
             )
 
-    @router.get("/google/connect")
-    async def google_connect(request: Request, response: Response) -> RedirectResponse:
+    @router.get("/google/connect", response_model=None)
+    async def google_connect(
+        request: Request,
+        response: Response,
+        app_challenge_value: str | None = Query(default=None, alias="app_challenge"),
+        reply: str | None = Query(default=None, alias="format"),
+    ) -> Response:
         cfg = google_config()
+        challenge = app_challenge(app_challenge_value)
         async with desk_for(request, response) as desk:
             desk._require_manager()
             state = gads.make_state(
-                cfg, tenant_id=desk.viewer.tenant_id, person_id=desk.viewer.person_id
+                cfg,
+                tenant_id=desk.viewer.tenant_id,
+                person_id=desk.viewer.person_id,
+                app_challenge=challenge,
             )
-        return RedirectResponse(
-            gads.consent_url(cfg, redirect_uri=google_callback_url(), state=state),
-            status_code=303,
-            headers=PRIVATE,
+        return started(
+            gads.consent_url(cfg, redirect_uri=google_callback_url(), state=state), reply
         )
 
-    @router.get("/google/callback")
-    async def google_callback(request: Request, response: Response) -> RedirectResponse:
+    @router.get("/google/callback", response_model=None)
+    async def google_callback(request: Request, response: Response) -> Response:
         cfg = google_config()
+        state = request.query_params.get("state", "")
+        if from_app(lambda: gads.peek_state(cfg, state)):
+            return hand_off("google", cfg.token_key, request)
         back = f"{app_url()}/leads?tab=sources"
         if request.query_params.get("error"):
             return RedirectResponse(f"{back}&google=cancelled", status_code=303, headers=PRIVATE)
         code = request.query_params.get("code", "")
-        state = request.query_params.get("state", "")
         if not code or not state:
             return RedirectResponse(f"{back}&google=failed", status_code=303, headers=PRIVATE)
         async with desk_for(request, response, write=True, origin=False) as desk:
@@ -954,67 +1042,87 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             gads.read_state(
                 cfg, state, tenant_id=desk.viewer.tenant_id, person_id=desk.viewer.person_id
             )
-            ads = gads.Ads(cfg)
-            try:
-                refresh = await ads.refresh_token(code=code, redirect_uri=google_callback_url())
-                accounts = await ads.accounts(await ads.access_token(refresh))
-            except gads.GoogleAdsApiError as error:
-                log.warning("google ads connect failed: %s", error)
-                return RedirectResponse(f"{back}&google=failed", status_code=303, headers=PRIVATE)
-            existing = {
-                str((s.config or {}).get("customer_id")): s for s in await google_sources(desk)
-            }
-            count = int(
-                await desk.db.scalar(
-                    select(func.count()).where(LeadSource.tenant_id == desk.viewer.tenant_id)
-                )
-                or 0
-            )
-            for account in accounts:
-                details = {
-                    "account_name": account.name,
-                    "login_customer_id": account.login_customer_id,
-                    "test": account.test,
-                    "token": gads.seal(
-                        cfg.token_key, refresh, customer_id=account.customer_id, what="token"
-                    ),
-                }
-                source = existing.get(account.customer_id)
-                if source is not None:
-                    source.config = {**(source.config or {}), **details}
-                    source.label = f"Google Ads · {account.name}"[:120]
-                    source.updated_at = desk.now
-                    continue
-                if count >= _MAX_SOURCES:
-                    break
-                count += 1
-                key = secrets.token_urlsafe(32)
-                desk.db.add(
-                    LeadSource(
-                        id=uuid4(),
-                        tenant_id=desk.viewer.tenant_id,
-                        kind="webhook",
-                        label=f"Google Ads · {account.name}"[:120],
-                        token_sha256=token_hash(key),
-                        config={
-                            "connector": gads.CONNECTOR,
-                            "customer_id": account.customer_id,
-                            **details,
-                            "key": gads.seal(
-                                cfg.token_key, key, customer_id=account.customer_id, what="key"
-                            ),
-                            "forms": "all",
-                        },
-                        active=False,
-                        received=0,
-                        created_by_person_id=desk.viewer.person_id,
-                        created_at=desk.now,
-                        updated_at=desk.now,
-                    )
-                )
-            await desk.db.flush()
-        found = "connected" if accounts else "noaccounts"
+            found = await finish_google(desk, cfg, code)
         return RedirectResponse(f"{back}&google={found}", status_code=303, headers=PRIVATE)
+
+    @router.post("/google/app-complete", response_model=AppCompleted)
+    async def google_app_complete(
+        command: AppComplete, request: Request, response: Response
+    ) -> AppCompleted:
+        """The app is back from Google: finish the Connect on this person's own session."""
+        cfg = google_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            code, state = handed_off(cfg.token_key, command, "google")
+            try:
+                body = gads.read_state(
+                    cfg, state, tenant_id=desk.viewer.tenant_id, person_id=desk.viewer.person_id
+                )
+            except gads.GoogleAdsApiError as error:
+                raise DeskError(403, str(error)) from None
+            check_verifier(body, command.verifier)
+            return AppCompleted(result=await finish_google(desk, cfg, code))
+
+    async def finish_google(desk: LeadDesk, cfg: gads.GoogleAdsConfig, code: str) -> str:
+        """Swap Google's code and keep each Ads account it can see (off until turned on)."""
+        ads = gads.Ads(cfg)
+        try:
+            refresh = await ads.refresh_token(code=code, redirect_uri=google_callback_url())
+            accounts = await ads.accounts(await ads.access_token(refresh))
+        except gads.GoogleAdsApiError as error:
+            log.warning("google ads connect failed: %s", error)
+            return "failed"
+        existing = {str((s.config or {}).get("customer_id")): s for s in await google_sources(desk)}
+        count = int(
+            await desk.db.scalar(
+                select(func.count()).where(LeadSource.tenant_id == desk.viewer.tenant_id)
+            )
+            or 0
+        )
+        for account in accounts:
+            details = {
+                "account_name": account.name,
+                "login_customer_id": account.login_customer_id,
+                "test": account.test,
+                "token": gads.seal(
+                    cfg.token_key, refresh, customer_id=account.customer_id, what="token"
+                ),
+            }
+            source = existing.get(account.customer_id)
+            if source is not None:
+                source.config = {**(source.config or {}), **details}
+                source.label = f"Google Ads · {account.name}"[:120]
+                source.updated_at = desk.now
+                continue
+            if count >= _MAX_SOURCES:
+                break
+            count += 1
+            key = secrets.token_urlsafe(32)
+            desk.db.add(
+                LeadSource(
+                    id=uuid4(),
+                    tenant_id=desk.viewer.tenant_id,
+                    kind="webhook",
+                    label=f"Google Ads · {account.name}"[:120],
+                    token_sha256=token_hash(key),
+                    config={
+                        "connector": gads.CONNECTOR,
+                        "customer_id": account.customer_id,
+                        **details,
+                        "key": gads.seal(
+                            cfg.token_key, key, customer_id=account.customer_id, what="key"
+                        ),
+                        "forms": "all",
+                    },
+                    active=False,
+                    received=0,
+                    created_by_person_id=desk.viewer.person_id,
+                    created_at=desk.now,
+                    updated_at=desk.now,
+                )
+            )
+        await desk.db.flush()
+        return "connected" if accounts else "noaccounts"
 
     @router.post(
         "/google/accounts/{customer_id}",

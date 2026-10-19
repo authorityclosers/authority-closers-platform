@@ -160,34 +160,54 @@ def unseal(key: bytes, box: Mapping[str, Any], *, page_id: str) -> str:
 # ----- OAuth state -------------------------------------------------------------------
 
 
-def make_state(secret: str, *, tenant_id: UUID, person_id: UUID, now: float | None = None) -> str:
+def make_state(
+    secret: str,
+    *,
+    tenant_id: UUID,
+    person_id: UUID,
+    now: float | None = None,
+    app_challenge: str | None = None,
+) -> str:
+    """Signed state for a provider sign-in. ``app_challenge`` marks a Connect started
+    in the Sales Xray app, which finishes there (see ``app_return``)."""
     body = {
         "t": str(tenant_id),
         "p": str(person_id),
         "x": int((now or time.time()) + STATE_SECONDS),
         "n": secrets.token_urlsafe(12),
     }
+    if app_challenge is not None:
+        body["a"] = app_challenge
     raw = _b64(json.dumps(body, separators=(",", ":")).encode())
     mac = hmac.new(secret.encode(), raw.encode(), hashlib.sha256).digest()
     return f"{raw}.{_b64(mac)}"
 
 
-def read_state(
-    secret: str, state: str, *, tenant_id: UUID, person_id: UUID, now: float | None = None
-) -> None:
-    """The state must be ours, unexpired, and from the same person in the same workspace."""
+def peek_state(secret: str, state: str, *, now: float | None = None) -> dict[str, Any]:
+    """The state's body when it is ours and unexpired, whoever holds it."""
     try:
         raw, mac = state.split(".", 1)
         expected = hmac.new(secret.encode(), raw.encode(), hashlib.sha256).digest()
         if not hmac.compare_digest(expected, _unb64(mac)):
             raise ValueError("mac")
         body = json.loads(_unb64(raw))
+        if not isinstance(body, dict):
+            raise ValueError("shape")
     except (ValueError, TypeError, json.JSONDecodeError):
         raise MetaError("That Meta sign-in didn't come from this page. Start again.") from None
     if int(body.get("x", 0)) < (now or time.time()):
         raise MetaError("That Meta sign-in took too long. Start again.")
+    return body
+
+
+def read_state(
+    secret: str, state: str, *, tenant_id: UUID, person_id: UUID, now: float | None = None
+) -> dict[str, Any]:
+    """The state must be ours, unexpired, and from the same person in the same workspace."""
+    body = peek_state(secret, state, now=now)
     if body.get("t") != str(tenant_id) or body.get("p") != str(person_id):
         raise MetaError("Finish the Meta sign-in in the workspace where you started it.")
+    return body
 
 
 def dialog_url(cfg: MetaConfig, *, redirect_uri: str, state: str) -> str:

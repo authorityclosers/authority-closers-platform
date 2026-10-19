@@ -20,8 +20,8 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
@@ -31,7 +31,8 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import sla
-from ac_platform.lead_desk.connectors import meta
+from ac_platform.lead_desk.connectors import app_return, meta
+from ac_platform.lead_desk.connectors.app_return import AppComplete, AppCompleted
 from ac_platform.lead_desk.models import LeadDeskSettings, LeadWhatsAppNumber, LeadWhatsAppTemplate
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.lead_desk.whatsapp import cloud, inbox, runner
@@ -362,25 +363,90 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
     def callback_url() -> str:
         return f"{app_url()}/v1/lead-desk/whatsapp/callback"
 
-    @router.get("/whatsapp/start")
-    async def whatsapp_start(request: Request, response: Response) -> RedirectResponse:
-        """Connect WhatsApp: off to Meta's Embedded Signup, back to the callback."""
+    @router.get("/whatsapp/start", response_model=None)
+    async def whatsapp_start(
+        request: Request,
+        response: Response,
+        app_challenge: str | None = Query(default=None),
+        reply: str | None = Query(default=None, alias="format"),
+    ) -> Response:
+        """Connect WhatsApp: off to Meta's Embedded Signup, back to the callback. From
+        the Sales Xray app, with ``app_challenge``, it finishes in the app (app_return)."""
         cfg = whatsapp_config()
+        if app_challenge is not None and not app_return.CHALLENGE.fullmatch(app_challenge):
+            raise HTTPException(422, "Start again from the Sales Xray app.", headers=PRIVATE)
         async with desk_for(request, response) as desk:
             desk._require_manager()
             state = meta.make_state(
-                cfg.app_secret, tenant_id=desk.tenant_id, person_id=desk.viewer.person_id
+                cfg.app_secret,
+                tenant_id=desk.tenant_id,
+                person_id=desk.viewer.person_id,
+                app_challenge=app_challenge,
             )
-        return RedirectResponse(
-            cloud.dialog_url(cfg, redirect_uri=callback_url(), state=state),
-            status_code=303,
-            headers=PRIVATE,
-        )
+        url = cloud.dialog_url(cfg, redirect_uri=callback_url(), state=state)
+        if reply == "json":
+            return JSONResponse({"url": url}, headers=PRIVATE)
+        return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
-    @router.get("/whatsapp/callback")
-    async def whatsapp_callback(request: Request, response: Response) -> RedirectResponse:
+    async def finish_whatsapp(desk: LeadDesk, cfg: cloud.WhatsAppConfig, code: str) -> str:
+        """Swap Embedded Signup's code and connect every number the customer shared."""
+        api = cloud.Cloud(cfg)
+        token = await api.exchange(code, redirect_uri=callback_url())
+        rows = await inbox.connect_shared(desk, cfg, api, token)
+        for row in rows:
+            try:
+                await inbox.sync_templates(desk.db, cfg, api, row, now=desk.now)
+            except cloud.WhatsAppError as error:
+                log.warning("whatsapp templates not synced on connect: %s", error)
+        return "connected" if rows else "nonumbers"
+
+    @router.post("/whatsapp/app-complete", response_model=AppCompleted)
+    async def whatsapp_app_complete(
+        command: AppComplete, request: Request, response: Response
+    ) -> AppCompleted:
+        """The app is back from Meta: finish connecting WhatsApp on this person's session."""
+        cfg = whatsapp_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            try:
+                code, state = app_return.open_(cfg.token_key, command.handoff, provider="whatsapp")
+            except app_return.HandoffError as error:
+                raise DeskError(422, str(error)) from None
+            try:
+                body = meta.read_state(
+                    cfg.app_secret, state, tenant_id=desk.tenant_id, person_id=desk.viewer.person_id
+                )
+            except meta.MetaError as error:
+                raise DeskError(403, str(error)) from None
+            if not app_return.answers(body.get("a"), command.verifier):
+                raise DeskError(403, "That didn't come from this app. Connect again.")
+            return AppCompleted(result=await finish_whatsapp(desk, cfg, code))
+
+    @router.get("/whatsapp/callback", response_model=None)
+    async def whatsapp_callback(request: Request, response: Response) -> Response:
         """Meta's Embedded Signup came back: connect every number the customer shared."""
         cfg = whatsapp_config()
+        state_value = request.query_params.get("state", "")
+        try:
+            app_started = bool(meta.peek_state(cfg.app_secret, state_value).get("a"))
+        except meta.MetaError:
+            app_started = False
+        if app_started:
+            # In the phone's browser, with no Sales Xray session: hand back to the app.
+            params = request.query_params
+            if params.get("error"):
+                return app_return.return_page("whatsapp", result="cancelled")
+            if not params.get("code"):
+                return app_return.return_page("whatsapp", result="failed")
+            return app_return.return_page(
+                "whatsapp",
+                handoff=app_return.seal(
+                    cfg.token_key,
+                    provider="whatsapp",
+                    code=params["code"][:2048],
+                    state=state_value,
+                ),
+            )
         back = f"{app_url()}/organisation?tab=integrations"
         if request.query_params.get("error"):
             return RedirectResponse(f"{back}&whatsapp=cancelled", status_code=303, headers=PRIVATE)
@@ -388,7 +454,6 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         state = request.query_params.get("state", "")
         if not code or not state:
             return RedirectResponse(f"{back}&whatsapp=failed", status_code=303, headers=PRIVATE)
-        found = 0
         try:
             async with desk_for(request, response, write=True, origin=False) as desk:
                 desk._require_manager()
@@ -403,21 +468,12 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     return RedirectResponse(
                         f"{back}&whatsapp=failed", status_code=303, headers=PRIVATE
                     )
-                api = cloud.Cloud(cfg)
-                token = await api.exchange(code, redirect_uri=callback_url())
-                rows = await inbox.connect_shared(desk, cfg, api, token)
-                found = len(rows)
-                for row in rows:
-                    try:
-                        await inbox.sync_templates(desk.db, cfg, api, row, now=desk.now)
-                    except cloud.WhatsAppError as error:
-                        log.warning("whatsapp templates not synced on connect: %s", error)
+                outcome = await finish_whatsapp(desk, cfg, code)
         except HTTPException as error:
             if error.status_code in (401, 403):
                 raise
             log.warning("whatsapp connect failed: %s", error.detail)
             return RedirectResponse(f"{back}&whatsapp=failed", status_code=303, headers=PRIVATE)
-        outcome = "connected" if found else "nonumbers"
         return RedirectResponse(f"{back}&whatsapp={outcome}", status_code=303, headers=PRIVATE)
 
     @router.post("/whatsapp/connect", response_model=WhatsAppStatus, response_model_by_alias=True)
