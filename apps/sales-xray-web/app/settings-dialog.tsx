@@ -42,7 +42,15 @@ export function SettingsDialogHost() {
       const section = hash.startsWith(`#${SETTINGS_HASH_PREFIX}`)
         ? hash.slice(SETTINGS_HASH_PREFIX.length + 1)
         : "";
-      const path = settingsPath(section);
+      // A provider's way back (?connected= or ?connect_error=) comes along,
+      // so the section can say how it went.
+      const back = new URLSearchParams();
+      const current = new URLSearchParams(window.location.search);
+      for (const key of ["connected", "connect_error"]) {
+        const value = current.get(key);
+        if (value) back.set(key, value);
+      }
+      const path = settingsPath(section) + (back.size ? `?${back}` : "");
       if (router) router.replace(path);
       else window.location.replace(path);
     };

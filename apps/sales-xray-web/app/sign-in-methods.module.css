@@ -1,0 +1,35 @@
+/* Sign-in methods: a logo beside each way in, and the rows' outline while they load. Tokens only. */
+
+.lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.placeholderTile {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--sx-sunken);
+}
+
+.placeholderText {
+  display: grid;
+  gap: 7px;
+}
+
+.placeholderText i {
+  display: block;
+  width: 168px;
+  max-width: 50vw;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--sx-sunken);
+}
+
+.placeholderText i:first-child {
+  width: 88px;
+  height: 12px;
+}

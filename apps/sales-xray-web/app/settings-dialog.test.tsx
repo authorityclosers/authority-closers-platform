@@ -162,6 +162,18 @@ it("follows an old #settings link to its section", async () => {
   expect(router.replace).toHaveBeenLastCalledWith("/settings/security");
 });
 
+it("keeps a sign-in provider's way back when it follows an old link", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/?connect_error=in_use&other=1#settings/security",
+  );
+  await render(true);
+  expect(router.replace).toHaveBeenLastCalledWith(
+    "/settings/security?connect_error=in_use",
+  );
+});
+
 it("never sends a signed-out visitor to Settings", async () => {
   await render(false);
   await act(async () => openSettings());
