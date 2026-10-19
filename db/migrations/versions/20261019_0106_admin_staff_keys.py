@@ -2,7 +2,8 @@
 
 One table, admin_staff_keys: a verified control account's key, tied to its own session
 in the operations workspace. Only the SHA-256 of the key is kept. Rows are never
-deleted; only last use and revocation change. A new, empty table may be rolled back.
+deleted; only last use and revocation change. A new, empty table may be rolled back;
+once any key exists, history requires forward recovery.
 
 Chain: after 20261019_0105.
 """
@@ -46,5 +47,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Fence inserts before the history check, then remove only an empty table.
+    op.execute("LOCK TABLE admin_staff_keys IN ACCESS EXCLUSIVE MODE")
+    if op.get_bind().scalar(sa.select(sa.exists().select_from(sa.table("admin_staff_keys")))):
+        raise RuntimeError("Staff key history requires forward recovery.")
     op.drop_index("ix_admin_staff_key_person", table_name="admin_staff_keys")
     op.drop_table("admin_staff_keys")
