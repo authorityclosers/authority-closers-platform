@@ -46,7 +46,13 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.connectors import google_ads, google_pull, meta, meta_pull
+from ac_platform.lead_desk.connectors import (
+    google_ads,
+    google_pull,
+    meta,
+    meta_backfill,
+    meta_pull,
+)
 from ac_platform.lead_desk.connectors import google_ads_api as gads
 from ac_platform.lead_desk.intake import Intake, token_hash
 from ac_platform.lead_desk.models import LeadSource
@@ -61,6 +67,33 @@ _MAX_WEBHOOK = 256 * 1024
 _MAX_SOURCES = 20
 
 
+class MetaForm(BaseModel):
+    id: str
+    name: str
+    status: str
+
+
+class MetaBackfill(BaseModel):
+    """Bringing in the older leads Meta still keeps (90 days) for one Page."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    state: Literal["running", "done", "blocked"]
+    created: int
+    seen: int
+    since: str | None = None
+    started_at: str | None = Field(default=None, alias="startedAt")
+    finished_at: str | None = Field(default=None, alias="finishedAt")
+    error: str | None = None
+
+
+class MetaProblem(BaseModel):
+    """Why Meta last refused this Page, and what kind of fix it needs."""
+
+    kind: Literal["token", "permission", "lead_access", "other"]
+    text: str
+    at: str | None = None
+
+
 class MetaPage(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     page_id: str = Field(alias="pageId")
@@ -70,6 +103,10 @@ class MetaPage(BaseModel):
     received: int
     last_received_at: str | None = Field(default=None, alias="lastReceivedAt")
     last_pulled_at: str | None = Field(default=None, alias="lastPulledAt")
+    # The forms whose leads come in: every form on the Page for "all" (new ones too).
+    forms_covered: list[MetaForm] = Field(default_factory=list, alias="formsCovered")
+    backfill: MetaBackfill | None = None
+    problem: MetaProblem | None = None
 
 
 class MetaStatus(BaseModel):
@@ -78,18 +115,20 @@ class MetaStatus(BaseModel):
     pages: list[MetaPage]
 
 
-class MetaForm(BaseModel):
-    id: str
-    name: str
-    status: str
-
-
 class ConnectPage(BaseModel):
     model_config = ConfigDict(extra="forbid")
     forms: Literal["all"] | list[str] = "all"
 
 
 class Connected(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    page: MetaPage
+    imported: int
+
+
+class BackfillStarted(BaseModel):
+    """The first slice of older leads filed now; the rest follow in the background."""
+
     model_config = ConfigDict(populate_by_name=True)
     page: MetaPage
     imported: int
@@ -285,16 +324,20 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
     def page_view(source: LeadSource) -> MetaPage:
         config = source.config or {}
         forms = config.get("forms", "all")
+        forms = forms if forms == "all" or isinstance(forms, list) else "all"
         return MetaPage(
             page_id=str(config.get("page_id", "")),
             name=str(config.get("page_name") or source.label),
             active=bool(source.active),
-            forms=forms if forms == "all" or isinstance(forms, list) else "all",
+            forms=forms,
             received=int(source.received or 0),
             last_received_at=source.last_received_at.isoformat()
             if source.last_received_at
             else None,
             last_pulled_at=_epoch_iso(config.get("last_pulled_at")),
+            forms_covered=_covered(config.get("form_list"), forms),
+            backfill=_backfill_view(meta_backfill.state(config)),
+            problem=_problem_view(config.get("last_error")),
         )
 
     async def page_source(desk: LeadDesk, page_id: str) -> LeadSource:
@@ -412,38 +455,79 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response, write=True) as desk:
             desk._require_manager()
             source = await page_source(desk, page_id)
+            await desk.db.refresh(source, with_for_update=True)
             token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
             graph = meta.Graph(cfg)
+            await graph.require_lead_access(page_id, token)
             await graph.subscribe(page_id, token)
+            # "all" (the default) reads every form on the Page each time, so a form made
+            # later comes in by itself; a list keeps to the forms picked.
             forms = (
                 command.forms
                 if command.forms == "all"
                 else [str(f)[:40] for f in command.forms][:100]
             )
-            source.config = {**source.config, "forms": forms}
+            listed = await graph.forms(page_id, token)
+            form_ids = [form["id"] for form in listed] if forms == "all" else forms
+            now = int(time.time())
+            source.config = meta_backfill.begin(
+                meta_backfill.remember_forms({**source.config, "forms": forms}, listed),
+                form_ids=form_ids,
+                now=now,
+            )
             source.active = True
             source.updated_at = desk.now
-            form_ids = (
-                [form["id"] for form in await graph.forms(page_id, token)]
-                if forms == "all"
-                else forms
-            )
-            since = int(time.time()) - meta.BACKFILL_DAYS * 86400
+            # The last week comes in now; the rest Meta keeps (90 days) follows in the
+            # background, a slice a minute (meta_backfill).
             imported = 0
-            for lead in await graph.recent_leads(form_ids, token, since=since):
-                _, outcome = await desk.ingest(
-                    meta.lead_record(lead, page_name=str(source.config.get("page_name") or "")),
-                    source="meta",
-                    source_label=source.label,
-                    source_ref=str(lead.get("id") or "")[:200] or None,
-                    actor=None,
-                )
-                if outcome == "created":
-                    imported += 1
-                    source.received += 1
-                    source.last_received_at = desk.now
+            page_name = str(source.config.get("page_name") or "")
+            for lead in await graph.recent_leads(
+                form_ids, token, since=now - meta.PULL_DAYS * 86400
+            ):
+                outcome = await meta_backfill.file_lead(desk, source, lead, page_name=page_name)
+                imported += outcome == "created"
+            source.config = {
+                **{k: v for k, v in source.config.items() if k != "last_error"},
+                "last_pulled_at": now,
+            }
             await desk.db.flush()
             return Connected(page=page_view(source), imported=imported)
+
+    @router.post(
+        "/meta/pages/{page_id}/backfill",
+        response_model=BackfillStarted,
+        response_model_by_alias=True,
+    )
+    async def meta_backfill_page(
+        page_id: str, request: Request, response: Response
+    ) -> BackfillStarted:
+        """Bring in every lead Meta still keeps for this Page (90 days). Leads already
+        here are skipped; the first slice is filed now and the rest in the background."""
+        cfg = meta_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            source = await page_source(desk, page_id)
+            if not source.active:
+                raise DeskError(409, "Turn this Page on first.")
+            await desk.db.refresh(source, with_for_update=True)
+            token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
+            graph = meta.Graph(cfg)
+            await graph.require_lead_access(page_id, token)
+            forms = source.config.get("forms", "all")
+            listed = await graph.forms(page_id, token)
+            form_ids = (
+                [form["id"] for form in listed]
+                if forms == "all" or not isinstance(forms, list)
+                else [str(form) for form in forms]
+            )
+            now = int(time.time())
+            source.config = meta_backfill.begin(
+                meta_backfill.remember_forms(source.config, listed), form_ids=form_ids, now=now
+            )
+            imported = await meta_backfill.step(desk, source, graph, cfg, now=now)
+            source.updated_at = desk.now
+            await desk.db.flush()
+            return BackfillStarted(page=page_view(source), imported=imported)
 
     @router.post(
         "/meta/pages/{page_id}/disconnect", response_model=MetaPage, response_model_by_alias=True
@@ -781,6 +865,48 @@ def _epoch_iso(value: object) -> str | None:
     if isinstance(value, int) and not isinstance(value, bool) and value > 0:
         return datetime.fromtimestamp(value, UTC).isoformat()
     return None
+
+
+def _covered(form_list: object, forms: object) -> list[MetaForm]:
+    """The forms whose leads come in, from the Page's last known list of forms."""
+    known = [
+        MetaForm(
+            id=str(item["id"]),
+            name=str(item.get("name") or item["id"]),
+            status=str(item.get("status") or ""),
+        )
+        for item in (form_list if isinstance(form_list, list) else [])
+        if isinstance(item, dict) and item.get("id")
+    ]
+    if forms == "all" or not isinstance(forms, list):
+        return known
+    picked = {str(form) for form in forms}
+    return [form for form in known if form.id in picked]
+
+
+def _backfill_view(state: dict[str, Any] | None) -> MetaBackfill | None:
+    if state is None or state.get("state") not in ("running", "done", "blocked"):
+        return None
+    return MetaBackfill(
+        state=state["state"],
+        created=int(state.get("created") or 0),
+        seen=int(state.get("seen") or 0),
+        since=_epoch_iso(state.get("since")),
+        started_at=_epoch_iso(state.get("started_at")),
+        finished_at=_epoch_iso(state.get("finished_at")),
+        error=str(state["error"])[:300] if state.get("error") else None,
+    )
+
+
+def _problem_view(value: object) -> MetaProblem | None:
+    if not isinstance(value, dict) or not value.get("text"):
+        return None
+    kind = value.get("kind")
+    return MetaProblem(
+        kind=kind if kind in ("token", "permission", "lead_access") else "other",
+        text=str(value["text"])[:300],
+        at=_epoch_iso(value.get("at")),
+    )
 
 
 async def _body(request: Request, limit: int) -> bytes:

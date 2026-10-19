@@ -7,6 +7,10 @@ leads with its sealed token and files them through the same ``LeadDesk.ingest`` 
 as the webhook. The Meta lead id is the source reference, so a lead that arrives by
 webhook and by pull is filed once. On production the pull is the safety net for a
 webhook Meta drops.
+
+The same tick moves each Page's "Bring in older leads" along (``meta_backfill``), and
+keeps the Page's list of forms fresh, so the page can say which forms are covered. A
+pull that Meta refuses leaves its reason on the Page (``last_error``) for the manager.
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ from fastapi import FastAPI
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.lead_desk.connectors import meta
+from ac_platform.lead_desk.connectors import meta, meta_backfill
 from ac_platform.lead_desk.models import LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
 
@@ -43,6 +47,10 @@ class _Graph(Protocol):
         self, form_ids: list[str], page_token: str, *, since: int
     ) -> list[dict[str, Any]]: ...
 
+    async def leads_page(
+        self, form_id: str, page_token: str, *, since: int, after: str | None = None
+    ) -> tuple[list[dict[str, Any]], str | None]: ...
+
 
 @dataclass(slots=True)
 class Pulled:
@@ -59,10 +67,16 @@ def _last(config: Mapping[str, Any]) -> int | None:
 
 
 def since(config: Mapping[str, Any], now: int) -> int:
-    """From the last pull minus an hour, never further back than the connect backfill."""
-    floor = now - meta.BACKFILL_DAYS * 86400
+    """From the last pull minus an hour, never further back than a week (older leads come
+    in through the backfill)."""
+    floor = now - meta.PULL_DAYS * 86400
     last = _last(config)
     return floor if last is None else max(floor, last - OVERLAP)
+
+
+def failed(config: Mapping[str, Any], error: meta.MetaError, now: int) -> dict[str, Any]:
+    """The source config with Meta's refusal kept for the manager to see."""
+    return {**config, "last_error": {"at": now, "kind": error.kind, "text": str(error)[:300]}}
 
 
 def due(config: Mapping[str, Any], now: int, every: int = PULL_EVERY) -> bool:
@@ -78,28 +92,22 @@ async def pull_source(
     page_id = str(config.get("page_id") or "")
     token = meta.unseal(cfg.token_key, config["token"], page_id=page_id)
     forms = config.get("forms", "all")
-    form_ids = (
-        [str(form["id"]) for form in await graph.forms(page_id, token)]
-        if forms == "all"
-        else [str(form) for form in forms or []]
-    )
+    if forms == "all":
+        # Every form on the Page, read afresh each time, so a new form comes in by itself.
+        listed = await graph.forms(page_id, token)
+        config = meta_backfill.remember_forms(config, listed)
+        form_ids = [str(form["id"]) for form in listed]
+    else:
+        form_ids = [str(form) for form in forms or []]
     result = Pulled()
     page_name = str(config.get("page_name") or "")
     for lead in await graph.recent_leads(form_ids, token, since=since(config, now)):
         result.fetched += 1
-        _, outcome = await desk.ingest(
-            meta.lead_record(lead, page_name=page_name),
-            source="meta",
-            source_label=source.label,
-            source_ref=str(lead.get("id") or "")[:200] or None,
-            actor=None,
-        )
+        outcome = await meta_backfill.file_lead(desk, source, lead, page_name=page_name)
         key = outcome if outcome in _OUTCOMES else "skipped"
         setattr(result, key, getattr(result, key) + 1)
-        if outcome in {"created", "repeat"}:
-            source.received = int(source.received or 0) + 1
-            source.last_received_at = desk.now
     config["last_pulled_at"] = now
+    config.pop("last_error", None)
     source.config = config
     return result
 
@@ -123,7 +131,9 @@ async def pull_due(
             )
         ).all()
         for source in sources:
-            if not due(source.config or {}, now):
+            pull = due(source.config or {}, now)
+            backfill = meta_backfill.running(source.config or {})
+            if not (pull or backfill):
                 continue
             desk = LeadDesk(
                 database,
@@ -134,12 +144,26 @@ async def pull_due(
                     name=source.label,
                 ),
             )
+            if backfill:
+                try:
+                    async with database.begin_nested():
+                        await meta_backfill.step(desk, source, graph, cfg, now=now)
+                except (DeskError, KeyError, ValueError) as error:
+                    log.warning("meta backfill for lead source %s failed: %s", source.id, error)
+                    await database.refresh(source)
+            if not pull:
+                continue
             try:
                 async with database.begin_nested():
                     counts = await pull_source(desk, source, graph, cfg, now=now)
             except (meta.MetaError, DeskError, KeyError, ValueError) as error:
                 # One Page's failure must not stop the others; it is retried next tick.
                 log.warning("meta pull for lead source %s failed: %s", source.id, error)
+                await database.refresh(source)
+                if isinstance(error, meta.MetaError):
+                    source.config = failed(
+                        {**(source.config or {}), "last_pulled_at": now}, error, now
+                    )
                 continue
             pulled += 1
             if counts.created or counts.repeat:

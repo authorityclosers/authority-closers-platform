@@ -104,7 +104,8 @@ variable explicitly, so these five must be added there (and to
    `/v1/lead-desk/meta/webhook` (and `/v1/lead-desk/capture/*` for Google Ads
    and website forms). The Meta return address needs no bypass: the signed-in
    person's browser makes that request. Until then, connecting a Page still
-   pulls its last 7 days of leads.
+   files its last week of leads at once and the rest Meta keeps (90 days) in
+   the background, and the 10-minute pull reads new ones.
 
 ## Order
 

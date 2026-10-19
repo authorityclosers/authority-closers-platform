@@ -21,7 +21,7 @@ ENV = {
     "AC_LEAD_DESK_TOKEN_KEY": KEY,
 }
 NOW = 1_800_000_000
-WEEK = meta.BACKFILL_DAYS * 86400
+WEEK = meta.PULL_DAYS * 86400
 
 
 def cfg() -> meta.MetaConfig:
@@ -112,6 +112,27 @@ def test_a_pull_files_each_lead_like_the_webhook_and_records_the_time() -> None:
     assert all(f["source"] == "meta" and f["actor"] is None for f in desk.filed)
     assert src.received == 2 and src.last_received_at == desk.now
     assert src.config["last_pulled_at"] == NOW and src.config["token"]
+
+
+def test_every_pull_keeps_the_pages_forms_so_the_page_can_show_them() -> None:
+    src = source()
+    asyncio.run(meta_pull.pull_source(Desk([]), src, Graph([]), cfg(), now=NOW))
+    assert src.config["form_list"] == [
+        {"id": "f1", "name": "A", "status": "ACTIVE"},
+        {"id": "f2", "name": "B", "status": "ACTIVE"},
+    ]
+
+
+def test_a_good_pull_clears_metas_last_refusal() -> None:
+    src = source(last_error={"at": NOW - 600, "kind": "other", "text": "Meta didn't answer."})
+    asyncio.run(meta_pull.pull_source(Desk([]), src, Graph([]), cfg(), now=NOW))
+    assert "last_error" not in src.config
+
+
+def test_a_refused_pull_is_kept_for_the_manager() -> None:
+    error = meta.MetaError(meta.LEAD_ACCESS_TEXT, "lead_access")
+    kept = meta_pull.failed({"page_id": "p1"}, error, NOW)
+    assert kept["last_error"] == {"at": NOW, "kind": "lead_access", "text": meta.LEAD_ACCESS_TEXT}
 
 
 def test_picked_forms_are_read_without_listing_the_page() -> None:

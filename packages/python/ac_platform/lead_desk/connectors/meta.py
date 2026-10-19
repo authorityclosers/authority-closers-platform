@@ -8,7 +8,9 @@ How it works:
    sealed by AES-GCM (``AC_LEAD_DESK_TOKEN_KEY``); it stays off until the manager
    connects it.
 3. Connecting a Page subscribes AC's app to the Page's ``leadgen`` field and pulls
-   the last week's leads, so the manager sees leads straight away.
+   the last week's leads, so the manager sees leads straight away; the rest of what
+   Meta still keeps (90 days) follows in the background (``meta_backfill``). Every
+   form on the Page is read, so a form made later comes in by itself.
 4. For every new lead Meta posts a signed webhook (``X-Hub-Signature-256``, keyed by
    the app secret). The CRM fetches that lead with the Page token and files it through
    ``LeadDesk.ingest``; ``leadgen_id`` is the reference, so a lead is never added twice.
@@ -26,9 +28,9 @@ import json
 import os
 import secrets
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import AsyncIterator, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Any, Final, Literal
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -43,12 +45,28 @@ LEAD_FIELDS: Final[str] = (
     "campaign_name,form_id,platform,is_organic"
 )
 MAX_PAGES: Final[int] = 50
-BACKFILL_DAYS: Final[int] = 7
-BACKFILL_MAX: Final[int] = 200
+# Meta keeps a form's leads for 90 days; "Bring in older leads" reads all of them.
+BACKFILL_DAYS: Final[int] = 90
+# Connecting and the scheduled pull read the last week straight away.
+PULL_DAYS: Final[int] = 7
+PULL_MAX: Final[int] = 1000
+PAGE_SIZE: Final[int] = 100
+MAX_FORMS: Final[int] = 500
+
+ErrorKind = Literal["token", "permission", "lead_access", "other"]
 
 
 class MetaError(ValueError):
-    """Something about Meta failed; the message is safe to show a manager."""
+    """Something about Meta failed; the message is safe to show a manager.
+
+    ``kind`` says what the manager can do about it: connect again (``token``), allow
+    the permission (``permission``), let Sales Xray read the Page's leads in Meta's
+    Leads Access Manager (``lead_access``), or try again later (``other``).
+    """
+
+    def __init__(self, message: str, kind: ErrorKind = "other") -> None:
+        super().__init__(message)
+        self.kind: ErrorKind = kind
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,7 +138,7 @@ def unseal(key: bytes, box: Mapping[str, Any], *, page_id: str) -> str:
             .decode()
         )
     except Exception:  # noqa: BLE001 - any failure means the token can't be used
-        raise MetaError("Connect this Page with Meta again.") from None
+        raise MetaError("Connect this Page with Meta again.", "token") from None
 
 
 # ----- OAuth state -------------------------------------------------------------------
@@ -249,6 +267,32 @@ def lead_record(lead: Mapping[str, Any], *, page_name: str) -> dict[str, Any]:
 
 # ----- Graph API -----------------------------------------------------------------------
 
+# Meta's Leads Access Manager lets a business choose which CRMs may read a Page's
+# leads. Once it is in use, an app that isn't on the list gets a permission error that
+# talks about lead access; the manager fixes it in Meta, not here.
+LEAD_ACCESS_WORDS: Final[tuple[str, ...]] = ("lead access", "leads access", "leads_access")
+LEAD_ACCESS_TEXT: Final[str] = (
+    "Your business limits which apps can read this Page's leads (Meta's Leads Access "
+    "Manager). Allow Sales Xray there, then press Check now."
+)
+
+
+def graph_error(error: Mapping[str, Any], status: int) -> MetaError:
+    """A Graph error as a plain message, with what the manager can do about it."""
+    code = error.get("code")
+    message = str(error.get("message") or "").casefold()
+    if code in (190, 102):
+        return MetaError("Meta ended this connection. Connect the Page again.", "token")
+    if any(words in message for words in LEAD_ACCESS_WORDS):
+        return MetaError(LEAD_ACCESS_TEXT, "lead_access")
+    if code in (10, 200, 3, 294) or status == 403:
+        return MetaError(
+            "Meta didn't give permission for this. Continue with Meta again and allow "
+            "the Page and its leads.",
+            "permission",
+        )
+    return MetaError("Meta refused the request. Try again, or connect the Page again.")
+
 
 class Graph:
     """The few Graph calls the connector needs. Errors become plain MetaError messages."""
@@ -278,16 +322,38 @@ class Graph:
             body = {}
         if response.status_code >= 400 or (isinstance(body, dict) and "error" in body):
             error = body.get("error", {}) if isinstance(body, dict) else {}
-            code = error.get("code") if isinstance(error, dict) else None
-            if code in (190, 102):
-                raise MetaError("Meta ended this connection. Connect the Page again.")
-            if code in (10, 200, 3, 294) or response.status_code == 403:
-                raise MetaError(
-                    "Meta didn't give permission for this. Continue with Meta again and allow "
-                    "the Page and its leads."
-                )
-            raise MetaError("Meta refused the request. Try again, or connect the Page again.")
+            raise graph_error(error if isinstance(error, dict) else {}, response.status_code)
         return body if isinstance(body, dict) else {}
+
+    async def _page(
+        self, path: str, *, limit: int, after: str | None = None, **params: Any
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """One page of a Graph list: its rows, and the cursor for the next page (or None)."""
+        body = await self._call(
+            "GET", path, limit=limit, **params, **({"after": after} if after else {})
+        )
+        rows = [dict(row) for row in body.get("data") or [] if isinstance(row, Mapping)]
+        paging = body.get("paging")
+        paging = paging if isinstance(paging, Mapping) else {}
+        cursors = paging.get("cursors")
+        cursors = cursors if isinstance(cursors, Mapping) else {}
+        more = paging.get("next") and rows and cursors.get("after")
+        return rows, str(cursors["after"]) if more else None
+
+    async def _pages(
+        self, path: str, *, limit: int, **params: Any
+    ) -> AsyncIterator[list[dict[str, Any]]]:
+        """A whole Graph list, page by page, at most ``limit`` rows."""
+        after: str | None = None
+        seen = 0
+        while seen < limit:
+            rows, after = await self._page(
+                path, limit=min(PAGE_SIZE, limit - seen), after=after, **params
+            )
+            seen += len(rows)
+            yield rows
+            if after is None:
+                return
 
     async def user_token(self, *, code: str, redirect_uri: str) -> str:
         short = await self._call(
@@ -332,22 +398,47 @@ class Graph:
         return out[:MAX_PAGES]
 
     async def forms(self, page_id: str, page_token: str) -> list[dict[str, str]]:
-        body = await self._call(
-            "GET",
+        """Every Instant Form on the Page, archived ones too (their leads stay readable)."""
+        out: list[dict[str, str]] = []
+        async for rows in self._pages(
             f"{page_id}/leadgen_forms",
+            limit=MAX_FORMS,
             fields="id,name,status",
-            limit=100,
             access_token=page_token,
-        )
-        return [
-            {
-                "id": str(row["id"]),
-                "name": str(row.get("name") or row["id"])[:120],
-                "status": str(row.get("status") or ""),
-            }
-            for row in body.get("data") or []
-            if isinstance(row, Mapping) and row.get("id")
-        ]
+        ):
+            out.extend(
+                {
+                    "id": str(row["id"]),
+                    "name": str(row.get("name") or row["id"])[:120],
+                    "status": str(row.get("status") or "")[:20],
+                }
+                for row in rows
+                if row.get("id")
+            )
+        return out[:MAX_FORMS]
+
+    async def require_lead_access(self, page_id: str, page_token: str) -> None:
+        """Refuse in plain words when the Page's business uses Meta's Leads Access Manager
+        and hasn't allowed this app. When Meta doesn't say, carry on: reading the leads
+        will tell."""
+        try:
+            body = await self._call(
+                "GET",
+                page_id,
+                fields=f"has_lead_access.app_id({self.cfg.app_id})",
+                access_token=page_token,
+            )
+        except MetaError as error:
+            if error.kind in ("token", "lead_access"):
+                raise
+            return
+        access = body.get("has_lead_access")
+        if (
+            isinstance(access, Mapping)
+            and access.get("enabled_lead_access_manager") is True
+            and access.get("can_access_lead") is False
+        ):
+            raise MetaError(LEAD_ACCESS_TEXT, "lead_access")
 
     async def subscribe(self, page_id: str, page_token: str) -> None:
         body = await self._call(
@@ -365,23 +456,37 @@ class Graph:
     async def lead(self, leadgen_id: str, page_token: str) -> dict[str, Any]:
         return await self._call("GET", leadgen_id, fields=LEAD_FIELDS, access_token=page_token)
 
-    async def recent_leads(
-        self, form_ids: Iterable[str], page_token: str, *, since: int
-    ) -> list[dict[str, Any]]:
-        out: list[dict[str, Any]] = []
-        filtering = json.dumps(
-            [{"field": "time_created", "operator": "GREATER_THAN", "value": since}]
+    async def leads_page(
+        self, form_id: str, page_token: str, *, since: int, after: str | None = None
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """One page (up to 100) of a form's leads since ``since``, and the next cursor."""
+        return await self._page(
+            f"{form_id}/leads",
+            limit=PAGE_SIZE,
+            after=after,
+            fields=LEAD_FIELDS,
+            filtering=_since(since),
+            access_token=page_token,
         )
+
+    async def recent_leads(
+        self, form_ids: Iterable[str], page_token: str, *, since: int, limit: int = PULL_MAX
+    ) -> list[dict[str, Any]]:
+        """Every form's leads since ``since``, page by page, at most ``limit`` in all."""
+        out: list[dict[str, Any]] = []
         for form_id in form_ids:
-            body = await self._call(
-                "GET",
+            async for rows in self._pages(
                 f"{form_id}/leads",
+                limit=limit - len(out),
                 fields=LEAD_FIELDS,
-                limit=100,
-                filtering=filtering,
+                filtering=_since(since),
                 access_token=page_token,
-            )
-            out.extend(dict(row) for row in body.get("data") or [] if isinstance(row, Mapping))
-            if len(out) >= BACKFILL_MAX:
+            ):
+                out.extend(rows)
+            if len(out) >= limit:
                 break
-        return out[:BACKFILL_MAX]
+        return out[:limit]
+
+
+def _since(since: int) -> str:
+    return json.dumps([{"field": "time_created", "operator": "GREATER_THAN", "value": since}])

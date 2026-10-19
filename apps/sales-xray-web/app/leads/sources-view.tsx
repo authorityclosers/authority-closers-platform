@@ -15,6 +15,7 @@ import {
   Copy,
   FileSpreadsheet,
   FlaskConical,
+  History,
   Plus,
   RefreshCw,
 } from "lucide-react";
@@ -39,14 +40,62 @@ import styles from "./leads.module.css";
 
 /* ---------- Meta connector API (lead_desk/connectors) ---------- */
 
-type MetaPage = {
+export type MetaForm = { id: string; name: string; status: string };
+export type MetaBackfill = {
+  state: "running" | "done" | "blocked";
+  created: number;
+  seen: number;
+  finishedAt?: string | null;
+  error?: string | null;
+};
+export type MetaProblem = {
+  kind: "token" | "permission" | "lead_access" | "other";
+  text: string;
+};
+export type MetaPage = {
   pageId: string;
   name: string;
   active: boolean;
   received: number;
   /** When Sales Xray last asked Meta for this Page's leads (every 10 minutes). */
   lastPulledAt?: string | null;
+  /** "all" takes every form on the Page, ones made later too. */
+  forms?: "all" | string[];
+  formsCovered?: MetaForm[];
+  /** Bringing in the older leads Meta still keeps (90 days). */
+  backfill?: MetaBackfill | null;
+  /** Why Meta last refused this Page. */
+  problem?: MetaProblem | null;
 };
+
+/** Which forms bring leads in, in a few words. */
+export function formsLine(page: MetaPage): string {
+  const names = (page.formsCovered ?? []).map((form) =>
+    form.status && form.status !== "ACTIVE"
+      ? `${form.name} (${form.status.toLowerCase()})`
+      : form.name,
+  );
+  const all = !page.forms || page.forms === "all";
+  if (!names.length)
+    return all
+      ? "All forms on this Page, new ones too"
+      : "The forms you picked";
+  return all
+    ? `All forms, new ones too: ${names.join(", ")}`
+    : `Forms: ${names.join(", ")}`;
+}
+
+/** Where bringing in older leads has got to, or null when it never ran. */
+export function backfillLine(backfill?: MetaBackfill | null): string | null {
+  if (!backfill) return null;
+  const leads = (count: number) => `${count} lead${count === 1 ? "" : "s"}`;
+  if (backfill.state === "running")
+    return `Bringing in older leads… ${leads(backfill.created)} so far`;
+  if (backfill.state === "blocked") return "Older leads stopped: see below";
+  return backfill.created
+    ? `Older leads: ${leads(backfill.created)} from the last 90 days`
+    : "Older leads: none missing from the last 90 days";
+}
 type MetaPull = {
   page: MetaPage;
   fetched: number;
@@ -351,6 +400,41 @@ function SourceRow({
   );
 }
 
+/**
+ * Meta's Leads Access Manager: a business can choose which CRMs read its Pages'
+ * leads. Once it is in use, Sales Xray must be on that list.
+ */
+export function LeadAccessSteps({ open }: { open?: boolean }) {
+  return (
+    <details className={styles.metaHelp} open={open}>
+      <summary>Does your business use Leads Access Manager?</summary>
+      <p>
+        If your business chooses which apps can read leads, allow Sales Xray
+        there, or leads won&apos;t arrive:
+      </p>
+      <ol>
+        <li>
+          Open{" "}
+          <a
+            href="https://business.facebook.com/settings/leads-accesses"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Meta Business settings → Integrations → Leads access
+          </a>
+          .
+        </li>
+        <li>Pick the Page your lead ads run on.</li>
+        <li>
+          On the CRMs tab, press Assign CRMs and choose Sales Xray Leads, then
+          save.
+        </li>
+        <li>Come back here and press Check now on the Page.</li>
+      </ol>
+    </details>
+  );
+}
+
 function MetaTile() {
   const params = useSearchParams();
   const [status, setStatus] = useState<MetaStatus | null>(null);
@@ -366,6 +450,15 @@ function MetaTile() {
   useEffect(() => {
     void load();
   }, []);
+  // While older leads come in (a slice a minute), keep the count moving.
+  const filling = status?.pages.some(
+    (page) => page.active && page.backfill?.state === "running",
+  );
+  useEffect(() => {
+    if (!filling) return;
+    const timer = setInterval(() => void load(), 20000);
+    return () => clearInterval(timer);
+  }, [filling]);
 
   const toggle = async (page: MetaPage) => {
     setBusy(page.pageId);
@@ -384,10 +477,9 @@ function MetaTile() {
             body: JSON.stringify({ forms: "all" }),
           },
         );
-        if (result.imported)
-          setNote(
-            `${result.imported} recent lead${result.imported === 1 ? "" : "s"} came in.`,
-          );
+        setNote(
+          `${result.imported ? `${result.imported} lead${result.imported === 1 ? "" : "s"} from the last week came in. ` : ""}Older leads, up to 90 days, follow in the next few minutes.`,
+        );
       }
       await load();
     } catch (reason) {
@@ -425,7 +517,36 @@ function MetaTile() {
     }
   };
 
+  // Every lead Meta still keeps (90 days); leads already here are skipped.
+  const older = async (page: MetaPage) => {
+    setBusy(page.pageId);
+    setNote(null);
+    try {
+      const result = await metaCall<{ imported: number; page: MetaPage }>(
+        `/pages/${encodeURIComponent(page.pageId)}/backfill`,
+        { method: "POST" },
+      );
+      const more = result.page.backfill?.state === "running";
+      setNote(
+        `${result.imported} older lead${result.imported === 1 ? "" : "s"} came in${more ? "; the rest follow in the next few minutes" : ""}.`,
+      );
+      await load();
+    } catch (reason) {
+      setNote(
+        reason instanceof LeadsError ? reason.message : "That didn't work.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const live = status?.pages.filter((page) => page.active).length ?? 0;
+  const blocked = status?.pages.some(
+    (page) =>
+      page.active &&
+      (page.problem?.kind === "lead_access" ||
+        page.backfill?.error?.includes("Leads Access Manager")),
+  );
   return (
     <SourceRow
       kind="meta"
@@ -483,6 +604,22 @@ function MetaTile() {
                         .join(" · ")
                     : "Switched off: no new leads come in"}
                 </small>
+                {page.active ? (
+                  <small className={styles.pageForms}>{formsLine(page)}</small>
+                ) : null}
+                {page.active && backfillLine(page.backfill) ? (
+                  <small
+                    className={styles.pageForms}
+                    data-state={page.backfill?.state}
+                  >
+                    {backfillLine(page.backfill)}
+                  </small>
+                ) : null}
+                {page.active && (page.problem || page.backfill?.error) ? (
+                  <small className={styles.pageProblem} role="alert">
+                    {page.problem?.text ?? page.backfill?.error}
+                  </small>
+                ) : null}
               </span>
               <span className={styles.pageActions}>
                 {page.active ? (
@@ -493,6 +630,16 @@ function MetaTile() {
                   >
                     <RefreshCw size={14} aria-hidden="true" />
                     Check now
+                  </Button>
+                ) : null}
+                {page.active && page.backfill?.state !== "running" ? (
+                  <Button
+                    variant="ghost"
+                    disabled={busy === page.pageId}
+                    onClick={() => older(page)}
+                  >
+                    <History size={14} aria-hidden="true" />
+                    Bring in older leads
                   </Button>
                 ) : null}
                 <Button
@@ -512,6 +659,7 @@ function MetaTile() {
           {note}
         </p>
       ) : null}
+      {status?.configured ? <LeadAccessSteps open={blocked} /> : null}
     </SourceRow>
   );
 }

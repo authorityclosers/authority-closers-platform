@@ -1510,6 +1510,47 @@
   gap: 4px;
 }
 
+/* Which forms a Page brings in, older leads coming in, and Meta's refusals. */
+.pageName small.pageForms {
+  overflow-wrap: anywhere;
+}
+
+.pageName small.pageForms[data-state="running"] {
+  color: var(--sx-accent);
+}
+
+.pageName small.pageProblem {
+  color: var(--sx-bad);
+  font-weight: 600;
+}
+
+.metaHelp {
+  margin-top: 8px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.metaHelp summary {
+  cursor: pointer;
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.metaHelp p,
+.metaHelp ol {
+  margin: 6px 0 0;
+}
+
+.metaHelp ol {
+  display: grid;
+  gap: 2px;
+  padding-left: 18px;
+}
+
+.metaHelp a {
+  color: var(--sx-accent);
+}
+
 /* ---------- Other ways (collapsed) ---------- */
 
 .otherWays {
