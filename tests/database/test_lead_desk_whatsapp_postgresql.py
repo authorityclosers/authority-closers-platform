@@ -556,6 +556,12 @@ def test_whatsapp_conversations_from_connect_to_sla(
                 }
             assert waiting == {"Kiran Rao", "Meera Shah"}
             assert all(b.tokens == ["fcm-token-1"] for b in breaches)
+            # Managers on a screen see the same two, the longest late first.
+            async with setup.sessions() as db:
+                late = await sla.late_now(db, tenant, now=later)
+            assert {item.lead_name for item in late} == {"Kiran Rao", "Meera Shah"}
+            assert all(item.minutes_late >= 1 for item in late)
+            assert all(item.owner_person_id == setup.state.person_id for item in late)
             async with setup.sessions() as db, db.begin():
                 assert await sla.find_breaches(db, now=later + timedelta(minutes=1)) == []
             async with httpx.AsyncClient(
@@ -564,6 +570,7 @@ def test_whatsapp_conversations_from_connect_to_sla(
                 client.cookies.set(setup.settings.session_cookie_name, setup.token)
                 report = (await client.get(f"{BASE}/reports/sla")).json()
                 assert report["settings"]["minutes"] == 5
+                assert report["late"] == []  # seen right now, nobody is past 5 minutes yet
                 (seller,) = report["sellers"]
                 # Seen right now, Meera and Kiran are still inside their 5 minutes.
                 assert (

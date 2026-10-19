@@ -321,6 +321,7 @@ function RulesDialog({
 
 export function TeamView({
   onChanged,
+  onOpen,
 }: {
   onChanged: () => void;
   onOpen: (leadId: string) => void;
@@ -520,7 +521,7 @@ export function TeamView({
 
       <CallsReport />
 
-      <SlaPanel />
+      <SlaPanel onOpen={onOpen} />
 
       <div className={styles.teamPair}>
         <Panel

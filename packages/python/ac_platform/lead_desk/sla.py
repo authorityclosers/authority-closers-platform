@@ -147,14 +147,15 @@ async def find_breaches(db: AsyncSession, *, now: datetime) -> list[Breached]:
     return out
 
 
-async def _tenant_breaches(
+async def overdue(
     db: AsyncSession,
     tenant_id: UUID,
     settings: SlaSettings,
     config: Mapping[str, Any],
     *,
     now: datetime,
-) -> list[Breached]:
+) -> list[Clock]:
+    """Open leads of the last two days still waiting for a person past the target."""
     hours = work_hours.parse(config)
     target = timedelta(minutes=settings.minutes)
     events = (
@@ -170,11 +171,70 @@ async def _tenant_breaches(
             )
         )
     ).all()
-    waiting = [
+    return [
         clock
         for clock in clocks(events, hours)
         if clock.responded_at is None and clock.started_at + target <= now
     ]
+
+
+@dataclass(frozen=True, slots=True)
+class Late:
+    """A lead waiting for a person past the target right now (for managers on a screen)."""
+
+    lead_id: UUID
+    lead_name: str
+    owner_person_id: UUID | None
+    started_at: datetime
+    minutes_late: int
+
+
+async def late_now(
+    db: AsyncSession, tenant_id: UUID, *, now: datetime, limit: int = 20
+) -> list[Late]:
+    """The leads past the target now, the longest late first; none while the target is off."""
+    row = await db.get(LeadDeskSettings, tenant_id)
+    config = (row.config if row else None) or {}
+    settings = read(config)
+    if not settings.on:
+        return []
+    waiting = await overdue(db, tenant_id, settings, config, now=now)
+    leads = {
+        lead.id: lead
+        for lead in (
+            await db.scalars(
+                select(Lead).where(
+                    Lead.tenant_id == tenant_id, Lead.id.in_([c.lead_id for c in waiting])
+                )
+            )
+        ).all()
+    }
+    target = timedelta(minutes=settings.minutes)
+    out = [
+        Late(
+            lead_id=clock.lead_id,
+            lead_name=leads[clock.lead_id].name,
+            owner_person_id=leads[clock.lead_id].owner_person_id,
+            started_at=clock.started_at,
+            minutes_late=max(0, round((now - clock.started_at - target).total_seconds() / 60)),
+        )
+        for clock in waiting
+        if clock.lead_id in leads
+    ]
+    out.sort(key=lambda late: -late.minutes_late)
+    return out[:limit]
+
+
+async def _tenant_breaches(
+    db: AsyncSession,
+    tenant_id: UUID,
+    settings: SlaSettings,
+    config: Mapping[str, Any],
+    *,
+    now: datetime,
+) -> list[Breached]:
+    target = timedelta(minutes=settings.minutes)
+    waiting = await overdue(db, tenant_id, settings, config, now=now)
     if not waiting:
         return []
     leads = {

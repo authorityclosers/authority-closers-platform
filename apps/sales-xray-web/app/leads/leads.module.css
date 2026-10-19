@@ -1735,6 +1735,48 @@
   font-weight: 600;
 }
 
+.slaLate {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-bad-soft);
+  font-size: var(--sx-text-sm);
+}
+
+.slaLate ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.slaLate button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.slaLate button span {
+  display: grid;
+  min-width: 0;
+}
+
+.slaLate small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
 .slaField {
   display: flex;
   align-items: center;

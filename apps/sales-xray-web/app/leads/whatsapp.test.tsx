@@ -72,6 +72,12 @@ let root: Root;
 let host: HTMLDivElement;
 let calls: { url: string; method: string; body?: Record<string, unknown> }[];
 let current: WaConversation;
+let late: {
+  leadId: string;
+  leadName: string;
+  seller: string;
+  minutesLate: number;
+}[];
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -82,6 +88,7 @@ const json = (body: unknown, status = 200) =>
 beforeEach(() => {
   calls = [];
   current = chat();
+  late = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -154,6 +161,7 @@ beforeEach(() => {
               medianMinutes: 4,
             },
           ],
+          late,
         });
       if (url.endsWith("/sla") && method === "PUT")
         return json({ ...body, targets: [5, 10, 15, 30, 60, 120] });
@@ -324,4 +332,18 @@ it("sets the first-response target and shows each seller's week", async () => {
     alertManagers: false,
   });
   expect(host.textContent).toContain("Target saved: 5 minutes.");
+});
+
+it("shows managers who is waiting past the target now and opens that lead", async () => {
+  late = [
+    { leadId: "l9", leadName: "Kiran Rao", seller: "Asha", minutesLate: 12 },
+  ];
+  const opened: string[] = [];
+  await act(async () =>
+    root.render(<SlaPanel onOpen={(leadId) => opened.push(leadId)} />),
+  );
+  expect(host.textContent).toContain("Waiting past the target now: 1 lead");
+  expect(host.textContent).toContain("12 min late");
+  await act(async () => button("Kiran Rao").click());
+  expect(opened).toEqual(["l9"]);
 });

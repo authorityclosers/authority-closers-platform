@@ -19,7 +19,7 @@ import {
   type SlaReport,
 } from "./whatsapp-client";
 
-export function SlaPanel() {
+export function SlaPanel({ onOpen }: { onOpen?: (leadId: string) => void }) {
   const [report, setReport] = useState<SlaReport | null>(null);
   const [draft, setDraft] = useState<Sla | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -129,6 +129,27 @@ export function SlaPanel() {
         <p className={styles.hint} role="status">
           {note}
         </p>
+      ) : null}
+      {report.late?.length ? (
+        <div className={styles.slaLate} role="status">
+          <strong>
+            Waiting past the target now: {report.late.length} lead
+            {report.late.length === 1 ? "" : "s"}
+          </strong>
+          <ul>
+            {report.late.map((item) => (
+              <li key={item.leadId}>
+                <button type="button" onClick={() => onOpen?.(item.leadId)}>
+                  <span>
+                    <strong>{item.leadName}</strong>
+                    <small>{item.seller}</small>
+                  </span>
+                  <small>{item.minutesLate} min late</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {report.sellers.length ? (
         <table className={styles.slaTable}>

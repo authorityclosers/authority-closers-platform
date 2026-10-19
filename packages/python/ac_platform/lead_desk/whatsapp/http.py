@@ -185,12 +185,23 @@ class SellerSlaView(BaseModel):
     median_minutes: int | None = Field(default=None, alias="medianMinutes")
 
 
+class LateView(BaseModel):
+    """A lead waiting for a person past the target right now."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    lead_id: UUID = Field(alias="leadId")
+    lead_name: str = Field(alias="leadName")
+    seller: str
+    minutes_late: int = Field(alias="minutesLate")
+
+
 class SlaReport(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     settings: SlaView
     start: date
     end: date
     sellers: list[SellerSlaView]
+    late: list[LateView] = Field(default_factory=list)
 
 
 def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -722,8 +733,22 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 end=datetime.combine(last + timedelta(days=1), time.min, tzinfo=UTC),
                 now=desk.now,
             )
-            names = await desk._names(seller.person_id for seller in sellers)
+            late = await sla.late_now(desk.db, desk.tenant_id, now=desk.now)
+            names = await desk._names(
+                [seller.person_id for seller in sellers] + [item.owner_person_id for item in late]
+            )
             return SlaReport(
+                late=[
+                    LateView(
+                        lead_id=item.lead_id,
+                        lead_name=item.lead_name,
+                        seller=names.get(item.owner_person_id, "Not shared out yet")
+                        if item.owner_person_id
+                        else "Not shared out yet",
+                        minutes_late=item.minutes_late,
+                    )
+                    for item in late
+                ],
                 settings=sla_view(settings_value),
                 start=first,
                 end=last,

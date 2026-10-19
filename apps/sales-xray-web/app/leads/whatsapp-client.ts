@@ -84,11 +84,19 @@ export type SellerSla = {
   waiting: number;
   medianMinutes?: number | null;
 };
+export type LateLead = {
+  leadId: string;
+  leadName: string;
+  seller: string;
+  minutesLate: number;
+};
 export type SlaReport = {
   settings: Sla;
   start: string;
   end: string;
   sellers: SellerSla[];
+  /** Leads waiting for a person past the target right now, the longest late first. */
+  late?: LateLead[];
 };
 
 export async function waCall<T>(
