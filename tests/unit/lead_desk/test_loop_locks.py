@@ -4,6 +4,7 @@ sender did, so two loops skipped each other's ticks)."""
 
 from ac_platform.lead_desk import push, review_push
 from ac_platform.lead_desk.connectors import google_pull, meta_capi
+from ac_platform.lead_desk.social import runner as social_runner
 from ac_platform.lead_desk.whatsapp import runner
 
 
@@ -15,6 +16,7 @@ def test_every_lead_desk_loop_has_its_own_lock() -> None:
         "google ads puller": google_pull._LOCK,
         "meta conversions sender": meta_capi._LOCK,
         "whatsapp and sla runner": runner._LOCK,
+        "messenger and instagram runner": social_runner._LOCK,
     }
     pairs = list(locks.values())
     assert len(set(pairs)) == len(pairs), locks

@@ -39,7 +39,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-Provider = Literal["meta", "google", "whatsapp"]
+Provider = Literal["meta", "google", "whatsapp", "messaging"]
 APP_RETURN: Final[str] = "com.authorityclosers.salesxray:/connect/return"
 HANDOFF_SECONDS: Final[int] = 10 * 60
 CHALLENGE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{43}$")
@@ -51,6 +51,7 @@ RETURN_PATHS: Final[dict[str, str]] = {
     "meta": "/leads?tab=sources",
     "google": "/leads?tab=sources",
     "whatsapp": "/organisation?tab=integrations",
+    "messaging": "/organisation?tab=integrations",
 }
 
 

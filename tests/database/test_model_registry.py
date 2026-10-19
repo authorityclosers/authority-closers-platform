@@ -172,6 +172,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "lead_desk_whatsapp_messages",
         "lead_desk_whatsapp_templates",
         "lead_desk_sla_breaches",
+        "lead_desk_social_accounts",
+        "lead_desk_social_messages",
         "partner_webhook_endpoints",
         "partner_quote_facts",
         "partner_webhook_events",
