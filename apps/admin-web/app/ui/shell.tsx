@@ -53,6 +53,7 @@ import {
 import type { Workspace } from "../lib/workspaces";
 import { AccountMenu } from "./account-menu";
 import { CommandMenu } from "./command-menu";
+import { EnvironmentSwitch, isEnvironment } from "./environment-switch";
 import { ThemeToggle } from "./theme";
 import styles from "./shell.module.css";
 
@@ -263,7 +264,9 @@ export function ConsoleShell({
               </button>
               <span className={styles.where}>{currentLabel}</span>
               <span className={styles.topTools}>
-                {environment ? (
+                {isEnvironment(environment) ? (
+                  <EnvironmentSwitch environment={environment} />
+                ) : environment ? (
                   <span className={styles.env} data-env={environment}>
                     {environment}
                   </span>

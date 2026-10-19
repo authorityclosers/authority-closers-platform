@@ -110,7 +110,7 @@ it("lists only the sections the account can use and marks the current one", asyn
     host.querySelector('a[href="/calls"][aria-current="page"]'),
   ).not.toBeNull();
   expect(host.textContent).toContain("Page body");
-  expect(host.textContent).toContain("staging");
+  expect(host.textContent).toContain("Staging");
 });
 
 it("hides Sales Xray review from accounts outside the control list", async () => {
@@ -241,4 +241,31 @@ it("shows only the person, with no workspace list, without platform read", async
   expect(host.textContent).toContain("Dipak Example");
   expect(host.textContent).not.toContain("Organisations and accounts");
   expect(host.textContent).not.toContain("Authority Closers");
+});
+
+it("opens the same page in another environment's Admin from the top bar", async () => {
+  await render();
+  const toggle = button("Environment: Staging. Switch environment");
+  const panel = host.querySelector<HTMLElement>(
+    `#${CSS.escape(toggle.getAttribute("aria-controls")!)}`,
+  )!;
+  expect(panel.hidden).toBe(true);
+  await act(async () => toggle.click());
+  expect(panel.hidden).toBe(false);
+  const links = [...panel.querySelectorAll("a")].map((a) =>
+    a.getAttribute("href"),
+  );
+  expect(links).toEqual([
+    "https://admin.authorityclosers.com/calls",
+    "https://admin-dev.authorityclosers.com/calls",
+    "/usage?env=all",
+  ]);
+  expect(panel.querySelector('[aria-current="true"]')?.textContent).toContain(
+    "You are here",
+  );
+  await act(async () =>
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })),
+  );
+  expect(panel.hidden).toBe(true);
+  expect(document.activeElement).toBe(toggle);
 });

@@ -8,7 +8,6 @@
  */
 import Link from "next/link";
 import { ChevronsUpDown, Settings2 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
 
 import type { ConsoleAccess } from "../lib/nav";
 import {
@@ -21,6 +20,7 @@ import {
 } from "../lib/workspaces";
 import { Badge } from "./kit";
 import styles from "./shell.module.css";
+import { usePopover } from "./use-popover";
 
 const ROLE: Record<string, string> = {
   owner: "Owner",
@@ -83,29 +83,14 @@ export function AccountMenu({
   access: ConsoleAccess;
   workspaces: readonly Workspace[] | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
-  const box = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const away = (event: PointerEvent) => {
-      if (!box.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const key = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      setOpen(false);
-      trigger.current?.focus();
-    };
-    document.addEventListener("pointerdown", away);
-    document.addEventListener("keydown", key, true);
-    return () => {
-      document.removeEventListener("pointerdown", away);
-      document.removeEventListener("keydown", key, true);
-    };
-  }, [open]);
+  const {
+    open,
+    toggle,
+    close: closeMenu,
+    panelId,
+    box,
+    trigger,
+  } = usePopover();
 
   const groups = workspaces ? groupWorkspaces(workspaces) : [];
 
@@ -119,7 +104,7 @@ export function AccountMenu({
         aria-controls={panelId}
         aria-label={`Signed in as ${personName(access)}. Organisations and accounts`}
         title={access.email ?? undefined}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
       >
         <span className={styles.avatar} aria-hidden="true">
           {initialsOf(access)}
@@ -203,7 +188,7 @@ export function AccountMenu({
                       className={styles.workspaceRow}
                       title={`${KIND_HINT[item.kind]}. Open its calls`}
                       prefetch={false}
-                      onClick={() => setOpen(false)}
+                      onClick={closeMenu}
                     >
                       {body}
                     </Link>
@@ -219,7 +204,7 @@ export function AccountMenu({
             href="/platform/organisations"
             className={styles.personFoot}
             prefetch={false}
-            onClick={() => setOpen(false)}
+            onClick={closeMenu}
           >
             <Settings2 size={14} aria-hidden="true" />
             Manage organisations and members
