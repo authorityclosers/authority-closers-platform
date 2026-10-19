@@ -709,10 +709,38 @@
   opacity: 0.5;
   box-shadow: none;
 }
-.googleMark {
+.providerMark {
   width: 20px;
   height: 20px;
   flex: none;
+}
+.providers {
+  display: grid;
+  gap: 10px;
+}
+/* Apple's and Facebook's own button colours (their sign-in guidelines). */
+.google[data-provider="apple"] {
+  border-color: #000;
+  background: #000;
+  color: #fff;
+}
+.google[data-provider="apple"]:hover:not(:disabled) {
+  border-color: #000;
+  background: #1d1d1f;
+}
+.google[data-provider="facebook"] {
+  border-color: #1877f2;
+  background: #1877f2;
+  color: #fff;
+}
+.google[data-provider="facebook"]:hover:not(:disabled) {
+  border-color: #166fe5;
+  background: #166fe5;
+}
+:global(html[data-theme="dark"]) .google[data-provider="apple"] {
+  border-color: #fff;
+  background: #fff;
+  color: #000;
 }
 .divider {
   display: flex;

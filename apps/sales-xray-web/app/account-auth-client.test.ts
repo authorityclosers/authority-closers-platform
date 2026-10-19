@@ -17,6 +17,7 @@ import {
   validAuthFlow,
   keepSignInResult,
   popupHostileBrowser,
+  providerEnabled,
   rememberRedirectSignIn,
   safeReturnPath,
   takeRedirectSignIn,
@@ -28,6 +29,8 @@ const config = {
   enabled: true,
   consent_version: "test-v1",
   google_enabled: true,
+  apple_enabled: false,
+  facebook_enabled: false,
   expires_in_seconds: 600,
   resend_after_seconds: 60,
 };
@@ -334,4 +337,33 @@ it("hands a full-page sign-in back once, for its own flow and not too late", () 
     JSON.stringify({ result: "success", provider: "google", at: 1 }),
   );
   expect(takeSignInResult()).toBeNull();
+});
+
+it("reads the Apple and Facebook flags, hidden when an older server sends none", () => {
+  const { apple_enabled, facebook_enabled, ...older } = config;
+  void apple_enabled;
+  void facebook_enabled;
+  expect(parseEmailCodeConfig(older)).toEqual(config);
+  const both = parseEmailCodeConfig({
+    ...config,
+    apple_enabled: true,
+    facebook_enabled: true,
+  });
+  expect(providerEnabled(both, "google")).toBe(true);
+  expect(providerEnabled(both, "apple")).toBe(true);
+  expect(providerEnabled(both, "facebook")).toBe(true);
+  expect(providerEnabled(parseEmailCodeConfig(config), "apple")).toBe(false);
+  expect(providerEnabled(null, "google")).toBe(false);
+  expect(() =>
+    parseEmailCodeConfig({ ...config, apple_enabled: "yes" }),
+  ).toThrow();
+  expect(() =>
+    parseEmailCodeConfig({
+      ...config,
+      enabled: false,
+      google_enabled: false,
+      facebook_enabled: true,
+      consent_version: null,
+    }),
+  ).toThrow();
 });

@@ -53,6 +53,8 @@ export type NativeStatus = {
   audio: boolean;
   /** The app can open a provider's sign-in in the phone's browser (app-connect.ts). */
   connect: boolean;
+  /** The app signs in with Apple and Facebook through the phone's browser too. */
+  signIn: boolean;
 };
 
 type Channel = {
@@ -203,6 +205,7 @@ export async function phoneStatus(): Promise<NativeStatus | null> {
       callAccess: raw.callAccess === true,
       audio: raw.audio === true,
       connect: raw.connect === true,
+      signIn: raw.signIn === true,
     };
   } catch {
     return null;

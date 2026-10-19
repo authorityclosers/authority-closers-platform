@@ -2,6 +2,9 @@ export type EmailCodeConfig = {
   enabled: boolean;
   consent_version: string | null;
   google_enabled: boolean;
+  /** Each provider shows only once its settings exist on the server. */
+  apple_enabled: boolean;
+  facebook_enabled: boolean;
   expires_in_seconds: number;
   resend_after_seconds: number;
 };
@@ -31,8 +34,18 @@ export function parseCodeTiming(value: unknown) {
   };
 }
 
+function optionalFlag(value: unknown) {
+  if (value === undefined) return false;
+  if (typeof value !== "boolean")
+    throw new Error("Invalid sign-in configuration");
+  return value;
+}
+
 export function parseEmailCodeConfig(value: unknown): EmailCodeConfig {
   const item = object(value);
+  // Older servers send no Apple or Facebook flag: both stay hidden.
+  const apple = optionalFlag(item.apple_enabled);
+  const facebook = optionalFlag(item.facebook_enabled);
   if (
     typeof item.enabled !== "boolean" ||
     typeof item.google_enabled !== "boolean" ||
@@ -40,7 +53,8 @@ export function parseEmailCodeConfig(value: unknown): EmailCodeConfig {
       (typeof item.consent_version !== "string" ||
         !item.consent_version.trim() ||
         item.consent_version.length > 64)) ||
-    ((item.enabled || item.google_enabled) && item.consent_version === null)
+    ((item.enabled || item.google_enabled || apple || facebook) &&
+      item.consent_version === null)
   )
     throw new Error("Invalid sign-in configuration");
   return {
@@ -48,6 +62,8 @@ export function parseEmailCodeConfig(value: unknown): EmailCodeConfig {
     enabled: item.enabled,
     consent_version: item.consent_version,
     google_enabled: item.google_enabled,
+    apple_enabled: apple,
+    facebook_enabled: facebook,
   };
 }
 
@@ -103,13 +119,19 @@ export type AuthCompletionResult =
   | "success"
   | "failed"
   | "review_terms"
-  | "unavailable";
+  | "unavailable"
+  /** The email already has an account this provider may not join. */
+  | "account_exists"
+  /** The provider shared no (verified) email address. */
+  | "no_email";
 
 const AUTH_COMPLETION_RESULTS = new Set<AuthCompletionResult>([
   "success",
   "failed",
   "review_terms",
   "unavailable",
+  "account_exists",
+  "no_email",
 ]);
 
 export function parseAuthCompletionQuery(
@@ -290,6 +312,18 @@ export function providerLabel(provider: SignInProvider) {
       : "Facebook";
 }
 
+export function providerEnabled(
+  config: EmailCodeConfig | null | undefined,
+  provider: SignInProvider,
+) {
+  if (!config?.consent_version) return false;
+  return provider === "google"
+    ? config.google_enabled
+    : provider === "apple"
+      ? config.apple_enabled
+      : config.facebook_enabled;
+}
+
 const REDIRECT_KEY = "sx.signIn.redirect";
 const RESULT_KEY = "sx.signIn.result";
 /** As long as the server keeps the sign-in transaction. */
@@ -359,14 +393,12 @@ export function rememberRedirectSignIn(
   }
 }
 
-/** The page a full-page sign-in started from, once, for this exact flow. */
-export function takeRedirectSignIn(
+/** The page a full-page sign-in started from, for this exact flow. */
+export function readRedirectSignIn(
   flow: string,
 ): { provider: SignInProvider; returnTo: string } | null {
-  const store = sessionStore();
   try {
-    const raw = store?.getItem(REDIRECT_KEY);
-    store?.removeItem(REDIRECT_KEY);
+    const raw = sessionStore()?.getItem(REDIRECT_KEY);
     const kept = JSON.parse(raw ?? "null") as {
       flow?: unknown;
       provider?: unknown;
@@ -392,6 +424,21 @@ export function takeRedirectSignIn(
   }
 }
 
+export function forgetRedirectSignIn() {
+  try {
+    sessionStore()?.removeItem(REDIRECT_KEY);
+  } catch {
+    // Nothing kept, nothing to forget.
+  }
+}
+
+/** The page a full-page sign-in started from, once, for this exact flow. */
+export function takeRedirectSignIn(flow: string) {
+  const started = readRedirectSignIn(flow);
+  forgetRedirectSignIn();
+  return started;
+}
+
 export function keepSignInResult(
   result: AuthCompletionResult,
   provider: SignInProvider,
@@ -406,16 +453,14 @@ export function keepSignInResult(
   }
 }
 
-/** The outcome of a full-page sign-in this tab just came back from, once. */
-export function takeSignInResult(): {
+/** The outcome of a full-page sign-in this tab just came back from. */
+export function readSignInResult(): {
   result: AuthCompletionResult;
   provider: SignInProvider;
 } | null {
-  const store = sessionStore();
   try {
-    const raw = store?.getItem(RESULT_KEY);
+    const raw = sessionStore()?.getItem(RESULT_KEY);
     if (raw === null || raw === undefined) return null;
-    store?.removeItem(RESULT_KEY);
     const kept = JSON.parse(raw) as {
       result?: unknown;
       provider?: unknown;
@@ -438,4 +483,19 @@ export function takeSignInResult(): {
   } catch {
     return null;
   }
+}
+
+export function forgetSignInResult() {
+  try {
+    sessionStore()?.removeItem(RESULT_KEY);
+  } catch {
+    // Nothing kept, nothing to forget.
+  }
+}
+
+/** The outcome of a full-page sign-in this tab just came back from, once. */
+export function takeSignInResult() {
+  const returned = readSignInResult();
+  forgetSignInResult();
+  return returned;
 }

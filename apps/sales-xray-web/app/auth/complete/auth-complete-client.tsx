@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import {
   AUTH_COMPLETE_MESSAGE,
+  forgetRedirectSignIn,
   keepSignInResult,
   readCanonicalSession,
   readGoogleCompletion,
-  takeRedirectSignIn,
+  readRedirectSignIn,
   validAuthFlow,
   type AuthCompletionResult,
 } from "../../account-auth-client";
@@ -36,11 +37,13 @@ export function AuthCompleteClient({
     // A full-page sign-in (the sign-in window was blocked): go back to the
     // page it started from. Only a receipt for this flow and this session
     // counts as signed in; the sign-in screen there reads the session again.
-    const started = takeRedirectSignIn(flow);
+    // Read now, forget once used: development runs this effect twice.
+    const started = readRedirectSignIn(flow);
     if (!started && result !== "success") return;
     const returnTo = started?.returnTo ?? "/";
     const provider = started?.provider ?? "google";
     if (result !== "success") {
+      forgetRedirectSignIn();
       keepSignInResult(result, provider);
       window.location.replace(returnTo);
       return;
@@ -50,11 +53,17 @@ export function AuthCompleteClient({
     readGoogleCompletion(flow, request.signal)
       .then(() => readCanonicalSession(request.signal))
       .then(
-        () => keepSignInResult("success", provider),
-        () => keepSignInResult("failed", provider),
+        () => {
+          if (!request.signal.aborted) keepSignInResult("success", provider);
+        },
+        () => {
+          if (!request.signal.aborted) keepSignInResult("failed", provider);
+        },
       )
       .finally(() => {
-        if (!request.signal.aborted) window.location.replace(returnTo);
+        if (request.signal.aborted) return;
+        forgetRedirectSignIn();
+        window.location.replace(returnTo);
       });
     return () => request.abort();
   }, [flow, result]);

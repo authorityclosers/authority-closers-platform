@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AUTH_COMPLETE_MESSAGE } from "../../account-auth-client";
@@ -135,6 +135,31 @@ describe("after a full-page sign-in (no sign-in window)", () => {
     ).toMatchObject({ result: "success", provider: "google" });
     expect(window.sessionStorage.getItem("sx.signIn.redirect")).toBeNull();
     expect(host.textContent).toContain("Signing you in");
+  });
+
+  it("keeps the starting page through React's double effect run in development", async () => {
+    started("/login?next=/calls");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url === "/v1/auth/google/completion"
+          ? Response.json({ matched: true })
+          : Response.json(session),
+      ),
+    );
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <AuthCompleteClient flow={flow} result="success" />
+        </StrictMode>,
+      ),
+    );
+    await settle();
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith("/login?next=/calls");
+    expect(
+      JSON.parse(window.sessionStorage.getItem("sx.signIn.result")!),
+    ).toMatchObject({ result: "success" });
   });
 
   it("an unmatched receipt goes back as a failure, never as signed in", async () => {
