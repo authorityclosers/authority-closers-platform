@@ -227,10 +227,17 @@ def test_deep_waits_for_fast_then_supersedes_labels_and_measures(postgres_harnes
         dense = detail(connection, seeded["recording_id"])
     assert dense is not None and dense["schema"] == "call-data-detail/1"
     assert [(r["pipeline"], r["state"]) for r in dense["runs"]] == [
-        ("fast", "succeeded"),
         ("deep", "succeeded"),
-    ]
-    assert dense["runs"][1]["tokens_in"] == 6000 and dense["runs"][1]["cost_inr"] > 0
+        ("fast", "succeeded"),
+    ]  # newest first
+    assert dense["runs"][0]["tokens_in"] == 6000 and dense["runs"][0]["cost_inr"] > 0
+    assert dense["totals"]["deep"]["tokens_in"] == 6000
+    assert dense["totals"]["call"]["cost_inr"] >= dense["totals"]["fast"]["cost_inr"] > 0
+    assert dense["call"]["tenant_id"] == str(seeded["owner"].tenant_id)
+    types = [o["type"] for o in dense["objects"]]
+    assert types == sorted(types)
+    assert all("duration_ms" in e for e in dense["edges"])
+    assert dense["facts"][0]["evidence"] == [] or "start_ms" in dense["facts"][0]["evidence"][0]
     history = list(dense["objects"])
     assert any(o["retracted"] for o in history)
     assert any(not o["current"] and not o["retracted"] for o in history)  # superseded

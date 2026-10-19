@@ -13,7 +13,7 @@ from collections import defaultdict
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from ac_platform.call_data import call_map, facts
 from ac_platform.call_data.models import CallDataRun, CallObject, CallObjectDecision
@@ -76,7 +76,7 @@ def _runs(connection: Any, recording_id: UUID) -> list[dict[str, Any]]:
                 "attempt": attempts[row.pipeline],
             }
         )
-    return result
+    return sorted(result, key=lambda run: run["started_at"] or "", reverse=True)
 
 
 def _objects(connection: Any, recording_id: UUID) -> list[dict[str, Any]]:
@@ -121,7 +121,7 @@ def _objects(connection: Any, recording_id: UUID) -> list[dict[str, Any]]:
             "created_at": _iso(row.created_at),
             "decisions": decisions.get(row.id, []),
         }
-        for row in rows
+        for row in sorted(rows, key=lambda r: (r.type_key, r.created_at))
         if row.type_key != "conversation.segment"  # segments come in their own list
     ]
 
@@ -149,24 +149,71 @@ def detail(connection: Any, recording_id: UUID) -> dict[str, Any] | None:
             "branch": branch,
             "status": by_key[target]["status"],
             "cost_inr": by_key[target]["cost_inr"],
+            "duration_ms": by_key[target]["duration_ms"],
         }
         for source, target, branch in EDGES
         if source in by_key and target in by_key
     ]
     found = facts.call_objects(connection, recording_id)
+    who = connection.execute(
+        text(
+            """
+            SELECT c.tenant_id, u.person_id, p.display_name, p.email,
+                   (SELECT pl.manifest ->> 'report_language' FROM conversation_processing_plans pl
+                    WHERE pl.recording_id = c.id ORDER BY pl.created_at DESC LIMIT 1) AS language
+            FROM conversation_recordings c
+            LEFT JOIN LATERAL (
+              SELECT s.usage_id FROM conversation_guest_submissions s
+              WHERE s.recording_id = c.id ORDER BY s.created_at DESC LIMIT 1
+            ) s ON true
+            LEFT JOIN conversation_acquisition_usage u ON u.id = s.usage_id
+            LEFT JOIN persons p ON p.id = u.person_id
+            WHERE c.id = :recording
+            """
+        ),
+        {"recording": recording_id},
+    ).first()
+    branches = {
+        "main": ("received", "audio_check", "transcription"),
+        "fast": ("fast", "objects"),
+        "deep": ("better_transcript", "deep", "objects_updated"),
+        "report": ("report", "pointer_review", "prospect"),
+    }
+
+    def total(keys: tuple[str, ...]) -> dict[str, Any]:
+        chosen = [by_key[k] for k in keys if k in by_key]
+        return {
+            "cost_inr": round(sum(s["cost_inr"] or 0 for s in chosen), 4),
+            "tokens_in": sum(s["tokens_in"] or 0 for s in chosen),
+            "tokens_out": sum(s["tokens_out"] or 0 for s in chosen),
+        }
+
+    totals = {name: total(keys) for name, keys in branches.items()}
+    totals["call"] = total(tuple(by_key))
+    known = who is not None and who.person_id is not None
     return {
         "schema": SCHEMA,
         "call": {
-            key: the_map[key]
-            for key in (
-                "recording_id",
-                "submission_id",
-                "workspace",
-                "state",
-                "media_ms",
-                "cost_inr",
-            )
+            **{
+                key: the_map[key]
+                for key in (
+                    "recording_id",
+                    "submission_id",
+                    "workspace",
+                    "state",
+                    "media_ms",
+                    "cost_inr",
+                )
+            },
+            "tenant_id": str(who.tenant_id) if who is not None else None,
+            "rep": {
+                "person_id": str(who.person_id) if known else None,
+                "label": (who.display_name or who.email or "Unknown") if known else "Guest",
+                "email": who.email if known else None,
+            },
+            "language": who.language if who is not None else None,
         },
+        "totals": totals,
         "stages": stages,
         "edges": edges,
         "runs": _runs(connection, recording_id),

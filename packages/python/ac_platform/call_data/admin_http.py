@@ -32,6 +32,7 @@ from ac_platform.http.auth import (
 )
 from ac_platform.http.routes import RouteContext
 from ac_platform.kernel.errors import DomainError
+from ac_platform.organisations.workspace_kinds import classify_workspaces
 
 PRIVATE = {"Cache-Control": "private, no-store"}
 
@@ -125,6 +126,24 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
         )
         if result is None:
             raise HTTPException(404, "This call is not here.")
+        tenant = result["call"].get("tenant_id")
+        workspaces = (
+            await classify_workspaces(
+                auth.database,
+                operations_tenant_id=settings.operations_tenant_id,
+                personal_tenant_id=settings.public_learner_tenant_id,
+                tenant_ids=[UUID(tenant)],
+            )
+            if tenant
+            else {}
+        )
+        workspace = workspaces.get(UUID(tenant)) if tenant else None
+        result["call"]["organisation"] = (
+            {"id": tenant, "name": workspace.name, "kind": workspace.kind}
+            if workspace is not None
+            else {"id": tenant, "name": result["call"]["workspace"], "kind": "other"}
+        )
+        result["call"]["environment"] = settings.environment
         return result
 
     @router.get("/v1/admin/call-data")
