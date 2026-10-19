@@ -36,6 +36,13 @@ const ACTIONS = {
     path: (id: string) => `/v1/admin/integrations/connections/${id}/revoke`,
     warn: "The app loses access at once and all its tokens stop working. The organisation can connect it again.",
   },
+  staff: {
+    button: "Revoke",
+    busy: "Revoking…",
+    done: "Revoked",
+    path: (id: string) => `/v1/admin/staff-keys/${id}/revoke`,
+    warn: "The key and its session stop at once. Make a new one when you need it.",
+  },
 } as const;
 
 export function IntegrationAction({
