@@ -38,6 +38,7 @@ export type NavIcon =
   | "calls"
   | "gold"
   | "reviewers"
+  | "review"
   | "health"
   | "usage"
   | "company"
@@ -109,6 +110,12 @@ export const NAVIGATION: readonly NavGroup[] = [
         icon: "gold",
         need: { kind: "salesXray" },
         phone: true,
+      },
+      {
+        href: "/analysis-review",
+        label: "Analysis review",
+        icon: "review",
+        need: { kind: "salesXray" },
       },
       {
         href: "/reviewers",

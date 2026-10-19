@@ -203,6 +203,7 @@ export default async function CallReviewPage({
       analysis={analysis.ok ? analysis.data : null}
       review={review.ok ? review.data : null}
       startMs={startAt(one(query.at))}
+      initialTab={one(query.tab) === "analysis" ? "analysis" : null}
       neighbours={{
         previous: at > 0 ? (ids[at - 1] ?? null) : null,
         next: at >= 0 ? (ids[at + 1] ?? null) : null,

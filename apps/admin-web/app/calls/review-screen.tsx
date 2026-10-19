@@ -85,6 +85,7 @@ export function ReviewScreen({
   safety = false,
   labels = null,
   startMs = null,
+  initialTab = null,
   analysis = null,
   review = null,
 }: {
@@ -98,6 +99,8 @@ export function ReviewScreen({
   safety?: boolean;
   /** Where a shared link (?at=) opens the call, in ms. */
   startMs?: number | null;
+  /** The tab a link opens on (?tab=analysis from the review queue). */
+  initialTab?: ReviewTab | null;
   call: Call;
   bundle: Bundle;
   compare: string | null;
@@ -107,7 +110,9 @@ export function ReviewScreen({
 }) {
   const router = useRouter();
   const audio = useRef<HTMLAudioElement | null>(null);
-  const [tab, setTab] = useState<ReviewTab>(compare ? "runs" : "report");
+  const [tab, setTab] = useState<ReviewTab>(
+    initialTab ?? (compare ? "runs" : "report"),
+  );
   const [currentMs, setCurrentMs] = useState(startMs ?? 0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
