@@ -218,6 +218,7 @@ class SpendView(BaseModel):
     synced_at: datetime | None = Field(default=None, alias="syncedAt")
     error: str | None = None
     accounts: int | None = None
+    needs_ads_read: bool = Field(default=False, alias="needsAdsRead")
     start: date
     end: date
     totals: list[SpendTotalView]
@@ -716,6 +717,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             synced_at=state["synced_at"],
             error=state["error"],
             accounts=state["accounts"],
+            needs_ads_read=state["needs_ads_read"],
             start=start,
             end=end,
             totals=[

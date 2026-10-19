@@ -195,6 +195,8 @@ async def sync_tenant(
     since = until - timedelta(days=(LOOK_BACK_DAYS if full else RECENT_DAYS) - 1)
     rows: list[SpendRow] = []
     error: str | None = None
+    # A connection made before ads_read was in the login, or without it: no spend, quietly.
+    needs_ads_read = False
     accounts = 0
     if token is None:
         error = "Continue with Meta again to read your ad spend."
@@ -205,7 +207,10 @@ async def sync_tenant(
             for account in shared:
                 rows.extend(await insights(graph, token, account["id"], since=since, until=until))
         except meta.MetaError as error_found:
-            error = str(error_found)
+            if error_found.kind == "permission":
+                needs_ads_read = True
+            else:
+                error = str(error_found)
     async with sessions() as db, db.begin():
         for row in rows[:MAX_ROWS]:
             values = {
@@ -240,6 +245,7 @@ async def sync_tenant(
                 synced_at=now.isoformat() if error is None else state.get("synced_at"),
                 full_at=now.isoformat() if full and error is None else state.get("full_at"),
                 error=error,
+                needs_ads_read=needs_ads_read,
                 accounts=accounts if error is None else state.get("accounts"),
             )
             settings.config = {**config, KEY: state}
@@ -432,4 +438,5 @@ def sync_state(config: Mapping[str, Any]) -> dict[str, Any]:
         "synced_at": _when(state.get("synced_at")),
         "error": state.get("error") if isinstance(state.get("error"), str) else None,
         "accounts": state.get("accounts") if isinstance(state.get("accounts"), int) else None,
+        "needs_ads_read": state.get("needs_ads_read") is True,
     }

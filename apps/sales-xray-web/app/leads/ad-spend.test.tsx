@@ -125,3 +125,22 @@ it("stays hidden until the organisation has connected Meta", async () => {
   await act(async () => root.render(<AdSpendPanel />));
   expect(host.textContent).toBe("");
 });
+
+it("shows nothing, and no warning, when the Meta connection has no ads_read", async () => {
+  report = {
+    ...REPORT,
+    needsAdsRead: true,
+    error: null,
+    campaigns: [],
+    totals: [],
+  };
+  await act(async () =>
+    root.render(
+      <>
+        <AdSpendPanel />
+        <SpendSummary />
+      </>,
+    ),
+  );
+  expect(host.textContent).toBe("");
+});

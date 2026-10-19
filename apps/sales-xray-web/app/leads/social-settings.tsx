@@ -76,7 +76,10 @@ function RuleEditor({
           onChange={(event) => onChange({ ...rule, reply: event.target.value })}
         />
       </Field>
-      <Field label="Public answer under the comment (optional)">
+      <Field
+        label="Public answer under the comment (optional)"
+        hint="On Instagram for now; on Facebook only the private message goes."
+      >
         <input
           value={rule.publicReply ?? ""}
           maxLength={300}

@@ -42,6 +42,8 @@ export type SpendReport = {
   syncedAt?: string | null;
   error?: string | null;
   accounts?: number | null;
+  /** The connection has no ads_read yet: show nothing, quietly. */
+  needsAdsRead?: boolean;
   start: string;
   end: string;
   totals: SpendTotal[];
@@ -109,7 +111,10 @@ export function AdSpendPanel() {
   const [report, setReport] = useSpend();
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  if (!report?.configured || (!report.connected && !report.campaigns.length))
+  if (
+    !report?.configured ||
+    (!report.campaigns.length && (!report.connected || report.needsAdsRead))
+  )
     return null;
 
   const refresh = async () => {

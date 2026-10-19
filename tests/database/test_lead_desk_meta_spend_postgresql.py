@@ -44,6 +44,9 @@ def handler_for(spend: dict[str, str], *, refused: list[bool]) -> Any:
 
     def handler(request: httpx.Request) -> httpx.Response:
         if refused[0]:
+            if len(refused) > 1 and refused[1]:
+                # The login gave no ads_read: Meta refuses the ad accounts (code 200).
+                return httpx.Response(403, json={"error": {"code": 200, "message": "no ads_read"}})
             return httpx.Response(400, json={"error": {"code": 190, "message": "expired"}})
         query = {key: values[0] for key, values in parse_qs(request.url.query.decode()).items()}
         assert query["access_token"] == "org-user-token"  # noqa: S105 - the fake's own token
@@ -195,6 +198,11 @@ def test_spend_per_campaign_and_cost_per_lead(
                 assert now.status_code == 200, now.text
                 assert now.json()["error"] and now.json()["syncedAt"] == view["syncedAt"]
                 assert len(now.json()["campaigns"]) == 2
+                # A connection without ads_read: no error and no warning, the page
+                # simply has nothing new to show.
+                refused.append(True)
+                quiet = (await http.post(f"{META}/spend/refresh", headers=WRITE)).json()
+                assert quiet["needsAdsRead"] is True and quiet["error"] is None
 
                 # A seller doesn't see the organisation's ad spend.
                 async with setup.sessions() as db, db.begin():
