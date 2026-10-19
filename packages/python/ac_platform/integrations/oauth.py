@@ -436,6 +436,19 @@ def revoke_token(connection: Any, *, token: str, client_id: str, now: datetime) 
         )
 
 
+def _connection_view(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "app": row.name,
+        "client_id": row.client_id,
+        "scopes": list(row.scopes),
+        "granted_by_person_id": str(row.person_id),
+        "created_at": row.created_at.isoformat(),
+        "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
+        "revoked_at": row.revoked_at.isoformat() if row.revoked_at else None,
+    }
+
+
 def connections(connection: Any, tenant_id: UUID) -> list[dict[str, Any]]:
     """The organisation's connected apps, newest first, with the app's name."""
     rows = connection.execute(
@@ -444,19 +457,18 @@ def connections(connection: Any, tenant_id: UUID) -> list[dict[str, Any]]:
         .where(GRANTS.c.tenant_id == tenant_id)
         .order_by(GRANTS.c.created_at.desc())
     ).all()
-    return [
-        {
-            "id": str(row.id),
-            "app": row.name,
-            "client_id": row.client_id,
-            "scopes": list(row.scopes),
-            "granted_by_person_id": str(row.person_id),
-            "created_at": row.created_at.isoformat(),
-            "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
-            "revoked_at": row.revoked_at.isoformat() if row.revoked_at else None,
-        }
-        for row in rows
-    ]
+    return [_connection_view(row) for row in rows]
+
+
+def all_connections(connection: Any, limit: int = 2000) -> list[dict[str, Any]]:
+    """Every organisation's connected apps, for platform admins."""
+    rows = connection.execute(
+        select(GRANTS, CLIENTS.c.name)
+        .join(CLIENTS, CLIENTS.c.client_id == GRANTS.c.client_id)
+        .order_by(GRANTS.c.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [{**_connection_view(row), "tenant_id": str(row.tenant_id)} for row in rows]
 
 
 def tenant_clients(connection: Any, tenant_id: UUID) -> list[dict[str, Any]]:

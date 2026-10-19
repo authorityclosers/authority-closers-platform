@@ -9,10 +9,11 @@ organisation and not once retired. Disposable loopback PostgreSQL, fictional row
 from __future__ import annotations
 
 import base64
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -406,6 +407,118 @@ def test_the_runner_reads_sealed_and_environment_secrets(
             assert await read_secrets_for(
                 sessions, tenant, "AC_PARTNER_WEBHOOK_SECRET__OLD", None
             ) == [b"from-the-environment"]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_platform_admins_see_and_stop_every_integration(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+
+    from ac_platform.integrations import admin_http, webhooks
+
+    monkeypatch.setenv(sealed.ENV, base64.urlsafe_b64encode(b"s" * 32).decode())
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            assert SEAL is not None
+            tenant, person = setup.state.tenant_id, setup.state.person_id
+            now = datetime.now(UTC)
+            async with setup.sessions() as db, db.begin():
+                _, fresh = await db.run_sync(
+                    lambda sync: keys.create(
+                        sync.connection(),
+                        tenant_id=tenant,
+                        person_id=person,
+                        name="Fresh",
+                        scopes=["calls:read"],
+                        expires_days=None,
+                        environment="test",
+                        now=now,
+                    )
+                )
+                await db.run_sync(
+                    lambda sync: keys.create(
+                        sync.connection(),
+                        tenant_id=tenant,
+                        person_id=person,
+                        name="Old and idle",
+                        scopes=["leads:read"],
+                        expires_days=None,
+                        environment="test",
+                        now=now - timedelta(days=45),
+                    )
+                )
+                await webhooks.save(
+                    db,
+                    SEAL,
+                    tenant_id=tenant,
+                    person_id=person,
+                    url="https://partner.example.test/hooks",
+                    events=["analysis.completed"],
+                    facts_profile=None,
+                    environment="test",
+                    now=now,
+                )
+            admin = setup.state.actor  # a real session, as the Admin sign-in gives
+            async with setup.sessions() as db:
+                seen = await admin_http.overview(
+                    db,
+                    operations_tenant_id=None,
+                    personal_tenant_id=None,
+                    environment="test",
+                    now=now,
+                )
+            assert seen["schema"] == "sx-integrations-admin/2"
+            assert seen["counts"] == {
+                "active_keys": 2,
+                "keys_unused_30d": 1,
+                "active_webhooks": 1,
+                "webhooks_failing": 0,
+                "connected_apps": 0,
+            }
+            [organisation] = seen["organisations"]
+            assert organisation["id"] == str(tenant) and organisation["kind"]
+            by_name = {key["name"]: key for key in organisation["keys"]}
+            assert by_name["Old and idle"]["unused_30d"] and not by_name["Fresh"]["unused_30d"]
+            assert by_name["Fresh"]["created_by"]["person_id"] == str(person)
+            [hook] = organisation["webhooks"]
+            assert hook["host"] == "https://partner.example.test" and hook["managed_in_app"]
+            assert hook["failures_24h"] == 0 and hook["last_status"] is None
+            shown = str(seen)
+            # Keys by prefix only, secrets never.
+            assert "whsec_" not in shown
+            assert re.search(r"sxk_(test|live)_[A-Za-z0-9]{40}", shown) is None
+
+            async with setup.sessions() as db, db.begin():
+                revoked = await admin_http.revoke_key(
+                    db, key_id=UUID(fresh["id"]), actor=admin, now=now
+                )
+                stopped = await admin_http.disable_webhook(
+                    db, endpoint_id=UUID(hook["id"]), actor=admin, now=now
+                )
+            assert revoked["state"] == "revoked"
+            assert revoked["revoked_by"]["person_id"] == str(person)
+            assert stopped["status"] == "disabled" and stopped["disabled_at"]
+            async with setup.sessions() as db:
+                actions = (
+                    await db.scalars(
+                        select(AuditEvent.action).where(
+                            AuditEvent.tenant_id == tenant,
+                            AuditEvent.action.in_(
+                                ["integration.api_key_revoked", "integration.webhook_disabled"]
+                            ),
+                        )
+                    )
+                ).all()
+            assert sorted(actions) == [
+                "integration.api_key_revoked",
+                "integration.webhook_disabled",
+            ]
         finally:
             await setup.engine.dispose()
 
