@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.admin_settings.models import AdminStaffKey
 from ac_platform.admin_settings.registry import SETTINGS
+from ac_platform.admin_settings.staff_key_email import enqueue_staff_key_email
 from ac_platform.application.settings import Settings
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.application import (
@@ -184,6 +185,9 @@ class StaffKeys:
                 "environment": self.settings.environment,
             },
         )
+        if self.settings.environment == "production":
+            # The control account hears of every production key (orchestrator, 19 Oct).
+            await enqueue_staff_key_email(self.database, row)
         # The key itself, once; it is never stored or shown again.
         return {**row.view(now), "key": key}
 

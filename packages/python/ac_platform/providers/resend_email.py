@@ -305,6 +305,42 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
+    if message.template == "admin-staff-key-created":
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError("staff key notice has the wrong communication class")
+        prefix = _required_text(message.variables, "key_prefix", maximum=24)
+        key_name = _required_text(message.variables, "key_name", maximum=80)
+        link = _action_link(message.variables)
+        safe_link = html.escape(link, quote=True)
+        return RenderedEmail(
+            subject="A staff key was created for you — Authority Closers Admin",
+            text=(
+                f'Hi {first_name},\n\nA staff key {prefix}… ("{key_name}") was created for '
+                "your Authority Closers Admin account. It lets the Admin command line or an AI "
+                "assistant read and change Admin settings for 30 days. The key itself is never "
+                f"sent by email.\n\nIf this wasn't you, revoke it at once:\n{link}"
+            ),
+            html=_email_layout(
+                preheader=f"A staff key {html.escape(prefix)}… was created for you.",
+                eyebrow="Admin security",
+                heading="A staff key was created for you.",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(
+                    f"A staff key <strong>{html.escape(prefix)}…</strong> "
+                    f"(&ldquo;{html.escape(key_name)}&rdquo;) was created for your Authority "
+                    "Closers Admin account.",
+                    "It lets the Admin command line or an AI assistant read and change Admin "
+                    "settings for 30 days. The key itself is never sent by email.",
+                ),
+                action_label="Review your staff keys",
+                action_link=safe_link,
+                security_note=(
+                    "If you did not make this key, revoke it at once in Admin → Integrations "
+                    "and tell the owner."
+                ),
+            ),
+        )
+
     if message.template == "organisation-invitation":
         if message.communication_class != "verification_security":
             raise PermanentProviderError(
