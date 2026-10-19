@@ -52,6 +52,7 @@ PULL_DAYS: Final[int] = 7
 PULL_MAX: Final[int] = 1000
 PAGE_SIZE: Final[int] = 100
 MAX_FORMS: Final[int] = 500
+MAX_AD_ACCOUNTS: Final[int] = 50
 
 ErrorKind = Literal["token", "permission", "lead_access", "other"]
 
@@ -64,9 +65,10 @@ class MetaError(ValueError):
     Leads Access Manager (``lead_access``), or try again later (``other``).
     """
 
-    def __init__(self, message: str, kind: ErrorKind = "other") -> None:
+    def __init__(self, message: str, kind: ErrorKind = "other", code: int | None = None) -> None:
         super().__init__(message)
         self.kind: ErrorKind = kind
+        self.code = code
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +83,14 @@ class MetaConfig:
     @property
     def graph(self) -> str:
         return f"{GRAPH}/{self.graph_version}"
+
+
+@dataclass(frozen=True, slots=True)
+class UserToken:
+    """The token of one Continue with Meta, and when it stops working (None: never)."""
+
+    token: str
+    expires_at: int | None
 
 
 def config(env: Mapping[str, str] | None = None) -> MetaConfig | None:
@@ -279,19 +289,21 @@ LEAD_ACCESS_TEXT: Final[str] = (
 
 def graph_error(error: Mapping[str, Any], status: int) -> MetaError:
     """A Graph error as a plain message, with what the manager can do about it."""
-    code = error.get("code")
+    raw = error.get("code")
+    code = raw if isinstance(raw, int) and not isinstance(raw, bool) else None
     message = str(error.get("message") or "").casefold()
     if code in (190, 102):
-        return MetaError("Meta ended this connection. Connect the Page again.", "token")
+        return MetaError("Meta ended this connection. Connect the Page again.", "token", code)
     if any(words in message for words in LEAD_ACCESS_WORDS):
-        return MetaError(LEAD_ACCESS_TEXT, "lead_access")
+        return MetaError(LEAD_ACCESS_TEXT, "lead_access", code)
     if code in (10, 200, 3, 294) or status == 403:
         return MetaError(
             "Meta didn't give permission for this. Continue with Meta again and allow "
             "the Page and its leads.",
             "permission",
+            code,
         )
-    return MetaError("Meta refused the request. Try again, or connect the Page again.")
+    return MetaError("Meta refused the request. Try again, or connect the Page again.", code=code)
 
 
 class Graph:
@@ -355,7 +367,9 @@ class Graph:
             if after is None:
                 return
 
-    async def user_token(self, *, code: str, redirect_uri: str) -> str:
+    async def user_token(self, *, code: str, redirect_uri: str) -> UserToken:
+        """The sign-in's token, made long-lived where Meta allows it. A business
+        integration (system user) token from Login for Business never expires."""
         short = await self._call(
             "GET",
             "oauth/access_token",
@@ -367,15 +381,90 @@ class Graph:
         token = str(short.get("access_token") or "")
         if not token:
             raise MetaError("Meta didn't finish the sign-in. Start again.")
-        long = await self._call(
-            "GET",
-            "oauth/access_token",
-            grant_type="fb_exchange_token",
-            client_id=self.cfg.app_id,
-            client_secret=self.cfg.app_secret,
-            fb_exchange_token=token,
+        try:
+            long = await self._call(
+                "GET",
+                "oauth/access_token",
+                grant_type="fb_exchange_token",
+                client_id=self.cfg.app_id,
+                client_secret=self.cfg.app_secret,
+                fb_exchange_token=token,
+            )
+        except MetaError:
+            long = {}  # a token that can't be exchanged is already long-lived
+        chosen = long if long.get("access_token") else short
+        expires = chosen.get("expires_in")
+        return UserToken(
+            token=str(chosen.get("access_token") or token),
+            expires_at=int(time.time()) + expires
+            if isinstance(expires, int) and not isinstance(expires, bool) and expires > 0
+            else None,
         )
-        return str(long.get("access_token") or token)
+
+    async def ad_accounts(self, user_token: str) -> list[dict[str, str]]:
+        """The ad accounts the person shared with Sales Xray (id ``act_…``, name)."""
+        out: list[dict[str, str]] = []
+        async for rows in self._pages(
+            "me/adaccounts", limit=MAX_AD_ACCOUNTS, fields="id,name", access_token=user_token
+        ):
+            out.extend(
+                {"id": str(row["id"]), "name": str(row.get("name") or row["id"])[:120]}
+                for row in rows
+                if str(row.get("id") or "").startswith("act_")
+            )
+        return out
+
+    async def datasets(self, user_token: str) -> list[dict[str, str]]:
+        """The Meta datasets (pixels) of the shared ad accounts and businesses. An
+        account or business Meta won't show is left out, not an error."""
+        found: dict[str, dict[str, str]] = {}
+        sources = [f"{account['id']}/adspixels" for account in await self.ad_accounts(user_token)]
+        try:
+            async for rows in self._pages(
+                "me/businesses", limit=MAX_AD_ACCOUNTS, fields="id", access_token=user_token
+            ):
+                sources.extend(f"{row['id']}/owned_pixels" for row in rows if row.get("id"))
+        except MetaError as error:
+            if error.kind == "token":
+                raise
+        for path in sources[: MAX_AD_ACCOUNTS * 2]:
+            try:
+                async for rows in self._pages(
+                    path, limit=MAX_AD_ACCOUNTS, fields="id,name", access_token=user_token
+                ):
+                    for row in rows:
+                        if row.get("id"):
+                            found.setdefault(
+                                str(row["id"]),
+                                {
+                                    "id": str(row["id"]),
+                                    "name": str(row.get("name") or row["id"])[:120],
+                                },
+                            )
+            except MetaError as error:
+                if error.kind == "token":
+                    raise
+        return sorted(found.values(), key=lambda item: item["name"].casefold())
+
+    async def create_dataset(
+        self, user_token: str, *, ad_account_id: str, name: str
+    ) -> dict[str, str]:
+        """A new dataset in the ad account, for the CRM's lead stages."""
+        try:
+            body = await self._call(
+                "POST", f"{ad_account_id}/adspixels", name=name, access_token=user_token
+            )
+        except MetaError as error:
+            if error.code in (6200, 6202):
+                raise MetaError(
+                    "That ad account already has a dataset Meta won't add to. Pick it from "
+                    "the list instead.",
+                    code=error.code,
+                ) from None
+            raise
+        if not body.get("id"):
+            raise MetaError("Meta didn't make the dataset. Try again.")
+        return {"id": str(body["id"]), "name": name}
 
     async def pages(self, user_token: str) -> list[dict[str, str]]:
         body = await self._call(

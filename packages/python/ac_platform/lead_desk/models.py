@@ -217,6 +217,104 @@ class LeadDeskSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LeadMetaConversion(Base):
+    """One lead stage sent back to the organisation's Meta dataset (Conversions API for
+    CRM). Built once from a Lead Desk event and frozen, so a retry sends the same event.
+    The payload holds Meta's lead id and hashed identifiers only; it is emptied after
+    90 days. Lead Desk's own history stays the record of the lead's stage."""
+
+    __tablename__ = "lead_desk_meta_conversions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_meta_conversion_tenant"
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'delivered', 'rejected', 'dead_letter', 'dropped')",
+            name="status",
+        ),
+        CheckConstraint(
+            "stage IN ('new', 'not_connected', 'follow_up', 'interested', 'won', 'lost')",
+            name="stage",
+        ),
+        # A PostgreSQL regular expression; the SQLite registry checks skip it.
+        CheckConstraint("dataset_id ~ '^[0-9]{5,20}$'", name="dataset").ddl_if(
+            dialect="postgresql"
+        ),
+        CheckConstraint("length(trim(event_name)) > 0", name="event_name"),
+        CheckConstraint("(payload IS NULL) = (erased_at IS NOT NULL)", name="erasure"),
+        CheckConstraint("(status = 'delivered') = (delivered_at IS NOT NULL)", name="delivered"),
+        CheckConstraint("attempts >= 0", name="attempts"),
+        CheckConstraint("length(payload_sha256) = 64", name="digest"),
+        CheckConstraint(
+            "last_http_status IS NULL OR last_http_status BETWEEN 100 AND 599",
+            name="http_status",
+        ),
+        Index(
+            "uq_lead_desk_meta_conversion_stage",
+            "tenant_id",
+            "dataset_id",
+            "lead_id",
+            "event_name",
+            unique=True,
+        ),
+        Index(
+            "ix_lead_desk_meta_conversion_due",
+            "next_attempt_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_lead_desk_meta_conversion_recent", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    source_event_id: Mapped[UUID] = mapped_column(Uuid)
+    dataset_id: Mapped[str] = mapped_column(String(20))
+    stage: Mapped[str] = mapped_column(String(16))
+    event_name: Mapped[str] = mapped_column(String(50))
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    payload_sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))
+    attempts: Mapped[int] = mapped_column(Integer)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fbtrace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadMetaConversionAttempt(Base):
+    """One send of a lead stage to Meta; only ever added."""
+
+    __tablename__ = "lead_desk_meta_conversion_attempts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["conversion_id"],
+            ["lead_desk_meta_conversions.id"],
+            name="fk_lead_desk_meta_conversion_attempt_conversion",
+        ),
+        CheckConstraint("attempt >= 1", name="number"),
+        CheckConstraint("duration_ms >= 0 AND finished_at >= started_at", name="timing"),
+        CheckConstraint(
+            "http_status IS NULL OR http_status BETWEEN 100 AND 599", name="http_status"
+        ),
+        CheckConstraint("http_status IS NOT NULL OR error_code IS NOT NULL", name="outcome"),
+    )
+
+    conversion_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    attempt: Mapped[int] = mapped_column(Integer, primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    events_received: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fbtrace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer)
+
+
 class LeadDevice(Base):
     """A seller's phone that gets lead alerts (0095). The token is the phone's FCM address."""
 

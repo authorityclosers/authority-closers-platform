@@ -166,6 +166,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "lead_desk_sources",
         "lead_desk_settings",
         "lead_desk_devices",
+        "lead_desk_meta_conversions",
+        "lead_desk_meta_conversion_attempts",
         "partner_webhook_endpoints",
         "partner_quote_facts",
         "partner_webhook_events",

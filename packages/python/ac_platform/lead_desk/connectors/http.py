@@ -51,11 +51,12 @@ from ac_platform.lead_desk.connectors import (
     google_pull,
     meta,
     meta_backfill,
+    meta_capi,
     meta_pull,
 )
 from ac_platform.lead_desk.connectors import google_ads_api as gads
 from ac_platform.lead_desk.intake import Intake, token_hash
-from ac_platform.lead_desk.models import LeadSource
+from ac_platform.lead_desk.models import LeadDeskSettings, LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership, Organisation
 
@@ -132,6 +133,69 @@ class BackfillStarted(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     page: MetaPage
     imported: int
+
+
+class MetaDataset(BaseModel):
+    id: str
+    name: str
+
+
+class MetaAdAccount(BaseModel):
+    id: str
+    name: str
+
+
+class MetaDatasets(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    ad_accounts: list[MetaAdAccount] = Field(alias="adAccounts")
+    datasets: list[MetaDataset]
+
+
+class NewDataset(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    ad_account_id: str = Field(alias="adAccountId", pattern=r"^act_[0-9]{5,20}$")
+    name: str = Field(min_length=1, max_length=60)
+
+
+class ConversionsCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    dataset_id: str = Field(alias="datasetId", pattern=r"^[0-9]{5,20}$")
+    dataset_name: str = Field(alias="datasetName", min_length=1, max_length=120)
+    on: bool
+    events: dict[str, str | None] | None = None
+    test_code: str | None = Field(default=None, alias="testCode", max_length=32)
+
+
+class ConversionEventView(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    id: UUID
+    lead_id: UUID = Field(alias="leadId")
+    lead_name: str = Field(alias="leadName")
+    stage: str
+    event_name: str = Field(alias="eventName")
+    status: str
+    attempts: int
+    event_time: datetime = Field(alias="eventTime")
+    delivered_at: datetime | None = Field(default=None, alias="deliveredAt")
+    error: str | None = None
+
+
+class ConversionsView(BaseModel):
+    """Lead stages going back to the organisation's Meta dataset, and how it's going."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    configured: bool
+    connected: bool
+    connection_expires_at: str | None = Field(default=None, alias="connectionExpiresAt")
+    dataset: MetaDataset | None = None
+    on: bool
+    events: dict[str, str | None]
+    test_code: str | None = Field(default=None, alias="testCode")
+    since: str | None = None
+    counts: dict[str, int]
+    last_delivered_at: str | None = Field(default=None, alias="lastDeliveredAt")
+    waiting_on: str | None = Field(default=None, alias="waitingOn")
+    recent: list[ConversionEventView]
 
 
 class GoogleAccount(BaseModel):
@@ -390,8 +454,24 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 person_id=desk.viewer.person_id,
             )
             graph = meta.Graph(cfg)
-            user_token = await graph.user_token(code=code, redirect_uri=callback_url())
-            pages = await graph.pages(user_token)
+            user = await graph.user_token(code=code, redirect_uri=callback_url())
+            pages = await graph.pages(user.token)
+            # The organisation's own connection, sealed to it: it lists and writes the
+            # datasets that lead stages go back to (Conversions API for CRM).
+            row = await lead_settings(desk)
+            row.config = {
+                **(row.config or {}),
+                meta_capi.CONNECTION: {
+                    "token": meta.seal(
+                        cfg.token_key,
+                        user.token,
+                        page_id=meta_capi.connection_bound(desk.viewer.tenant_id),
+                    ),
+                    "expires_at": user.expires_at,
+                    "by": str(desk.viewer.person_id),
+                    "at": int(time.time()),
+                },
+            }
             existing = {str((s.config or {}).get("page_id")): s for s in await meta_sources(desk)}
             count = int(
                 await desk.db.scalar(
@@ -437,6 +517,140 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             await desk.db.flush()
         found = "connected" if pages else "nopages"
         return RedirectResponse(f"{back}&meta={found}", status_code=303, headers=PRIVATE)
+
+    # ----- lead stages back to Meta (Conversions API for CRM) -------------------------
+
+    async def lead_settings(desk: LeadDesk) -> LeadDeskSettings:
+        """The workspace's Lead Desk settings row, locked; made when missing. Writing
+        the Meta parts never moves the revision (not the team settings form)."""
+        row = await desk.db.get(LeadDeskSettings, desk.viewer.tenant_id, with_for_update=True)
+        if row is None:
+            row = LeadDeskSettings(
+                tenant_id=desk.viewer.tenant_id,
+                revision=1,
+                config={},
+                updated_by_person_id=None,
+                updated_at=desk.now,
+            )
+            desk.db.add(row)
+        return row
+
+    def connection(desk: LeadDesk, row: LeadDeskSettings | None, cfg: meta.MetaConfig) -> str:
+        token = (
+            meta_capi.connection_token(row.config or {}, cfg, desk.viewer.tenant_id)
+            if row is not None
+            else None
+        )
+        if token is None:
+            raise DeskError(409, "Continue with Meta again, so Sales Xray can see your datasets.")
+        return token
+
+    async def conversions_view(desk: LeadDesk) -> ConversionsView:
+        row = await desk.db.get(LeadDeskSettings, desk.viewer.tenant_id)
+        config = (row.config if row is not None else None) or {}
+        cfg = meta.config()
+        chosen = meta_capi.read_settings(config)
+        box = config.get(meta_capi.CONNECTION)
+        facts = await meta_capi.summary(desk.db, desk.viewer.tenant_id, desk.now)
+        return ConversionsView(
+            configured=cfg is not None,
+            connected=cfg is not None
+            and meta_capi.connection_token(config, cfg, desk.viewer.tenant_id) is not None,
+            connection_expires_at=_epoch_iso(box.get("expires_at"))
+            if isinstance(box, dict)
+            else None,
+            dataset=MetaDataset(id=chosen.dataset_id, name=chosen.dataset_name) if chosen else None,
+            on=bool(chosen and chosen.on),
+            events=chosen.events if chosen else dict(meta_capi.DEFAULT_EVENTS),
+            test_code=chosen.test_code if chosen else None,
+            since=_epoch_iso(chosen.since) if chosen else None,
+            counts=facts["counts"],
+            last_delivered_at=facts["last_delivered_at"].isoformat()
+            if facts["last_delivered_at"]
+            else None,
+            waiting_on=_waiting_words(facts["waiting_on"]),
+            recent=[ConversionEventView(**item) for item in facts["recent"]],
+        )
+
+    @router.get("/meta/conversions", response_model=ConversionsView, response_model_by_alias=True)
+    async def meta_conversions(request: Request, response: Response) -> ConversionsView:
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            return await conversions_view(desk)
+
+    @router.get("/meta/datasets", response_model=MetaDatasets, response_model_by_alias=True)
+    async def meta_datasets(request: Request, response: Response) -> MetaDatasets:
+        """The datasets and ad accounts the organisation shared when it connected."""
+        cfg = meta_config()
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            token = connection(
+                desk, await desk.db.get(LeadDeskSettings, desk.viewer.tenant_id), cfg
+            )
+            graph = meta.Graph(cfg)
+            return MetaDatasets(
+                ad_accounts=[MetaAdAccount(**item) for item in await graph.ad_accounts(token)],
+                datasets=[MetaDataset(**item) for item in await graph.datasets(token)],
+            )
+
+    @router.post("/meta/datasets", response_model=MetaDataset, status_code=201)
+    async def meta_new_dataset(
+        command: NewDataset, request: Request, response: Response
+    ) -> MetaDataset:
+        """A new dataset in one of the organisation's ad accounts."""
+        cfg = meta_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            token = connection(
+                desk, await desk.db.get(LeadDeskSettings, desk.viewer.tenant_id), cfg
+            )
+            made = await meta.Graph(cfg).create_dataset(
+                token, ad_account_id=command.ad_account_id, name=command.name.strip()
+            )
+            return MetaDataset(**made)
+
+    @router.put("/meta/conversions", response_model=ConversionsView, response_model_by_alias=True)
+    async def meta_save_conversions(
+        command: ConversionsCommand, request: Request, response: Response
+    ) -> ConversionsView:
+        """Pick the dataset, name each stage's event, switch sending on or off."""
+        meta_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            row = await lead_settings(desk)
+            try:
+                row.config = meta_capi.saved(
+                    row.config or {},
+                    dataset_id=command.dataset_id,
+                    dataset_name=command.dataset_name,
+                    on=command.on,
+                    events=command.events,
+                    test_code=command.test_code or None,
+                    now=int(time.time()),
+                    by=desk.viewer.person_id,
+                )
+            except meta_capi.ConversionsError as error:
+                raise DeskError(422, str(error)) from None
+            await desk.db.flush()
+            return await conversions_view(desk)
+
+    @router.post(
+        "/meta/conversions/{conversion_id}/retry",
+        response_model=ConversionsView,
+        response_model_by_alias=True,
+    )
+    async def meta_retry_conversion(
+        conversion_id: UUID, request: Request, response: Response
+    ) -> ConversionsView:
+        """Send an event Meta refused once more, while it is under 7 days old."""
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            if not await meta_capi.retry(desk.db, desk.viewer.tenant_id, conversion_id, desk.now):
+                raise DeskError(
+                    409, "That event can't be sent again: it went already, or is too old."
+                )
+            await desk.db.flush()
+            return await conversions_view(desk)
 
     @router.get("/meta/pages/{page_id}/forms", response_model=list[MetaForm])
     async def meta_forms(page_id: str, request: Request, response: Response) -> list[MetaForm]:
@@ -858,12 +1072,28 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
 
     application.include_router(router)
     meta_pull.attach(application, ctx.sessions, settings.environment)
+    meta_capi.attach(application, ctx.sessions, settings.environment)
     google_pull.attach(application, ctx.sessions, settings.environment)
 
 
 def _epoch_iso(value: object) -> str | None:
     if isinstance(value, int) and not isinstance(value, bool) and value > 0:
         return datetime.fromtimestamp(value, UTC).isoformat()
+    return None
+
+
+def _waiting_words(code: str | None) -> str | None:
+    """Why events wait on the customer, in words, or None when nothing waits on them."""
+    if code in ("meta_190", "meta_102", "not_connected"):
+        return "Meta ended the connection. Continue with Meta again to keep sending stages."
+    permission = code in ("meta_10", "meta_3") or (
+        code is not None and code.startswith("meta_2") and len(code) == 8
+    )
+    if permission:
+        return (
+            "Meta didn't allow sending to this dataset. Continue with Meta again and allow "
+            "your ad account and dataset."
+        )
     return None
 
 

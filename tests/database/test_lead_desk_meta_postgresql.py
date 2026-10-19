@@ -102,6 +102,31 @@ class FakeGraph:
         nxt = start + 2
         return rows[start:nxt], str(nxt) if nxt < len(rows) else None
 
+    # Continue with Meta, and the organisation's datasets.
+    async def user_token(self, *, code: str, redirect_uri: str) -> meta.UserToken:
+        assert code == "meta-code"
+        return meta.UserToken(token=USER_TOKEN, expires_at=int(time.time()) + 60 * DAY)
+
+    async def pages(self, user_token: str) -> list[dict[str, str]]:
+        assert user_token == USER_TOKEN
+        return [{"id": "p1", "name": "Fictional Homes", "token": "page-token-1"}]
+
+    async def ad_accounts(self, user_token: str) -> list[dict[str, str]]:
+        assert user_token == USER_TOKEN
+        return [{"id": "act_10000001", "name": "Fictional Homes ads"}]
+
+    async def datasets(self, user_token: str) -> list[dict[str, str]]:
+        return [{"id": "777000111", "name": "Fictional Homes website"}]
+
+    async def create_dataset(
+        self, user_token: str, *, ad_account_id: str, name: str
+    ) -> dict[str, str]:
+        assert (user_token, ad_account_id) == (USER_TOKEN, "act_10000001")
+        return {"id": "777000222", "name": name}
+
+
+USER_TOKEN = "fake-user-token"  # noqa: S105 - a stand-in, never a real token
+
 
 def test_turning_a_page_on_brings_in_all_90_days_and_every_form(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

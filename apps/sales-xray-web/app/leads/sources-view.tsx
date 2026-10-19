@@ -37,6 +37,7 @@ import {
   type SourceView,
 } from "./leads-client";
 import styles from "./leads.module.css";
+import { MetaConversions } from "./meta-conversions";
 
 /* ---------- Meta connector API (lead_desk/connectors) ---------- */
 
@@ -660,6 +661,9 @@ function MetaTile() {
         </p>
       ) : null}
       {status?.configured ? <LeadAccessSteps open={blocked} /> : null}
+      {status?.configured && status.pages.length ? (
+        <MetaConversions returned={params.get("meta") === "connected"} />
+      ) : null}
     </SourceRow>
   );
 }

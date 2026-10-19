@@ -1551,6 +1551,135 @@
   color: var(--sx-accent);
 }
 
+/* Lead stages back to Meta (Conversions API for CRM). */
+.capi {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+}
+
+.capiHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.capi .hint {
+  margin: 0;
+}
+
+.capi a {
+  color: var(--sx-accent);
+}
+
+.capiStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  font-size: var(--sx-text-sm);
+}
+
+.capiChooser {
+  display: grid;
+  gap: 10px;
+}
+
+.capiDatasets,
+.capiStages {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.capiDatasets legend,
+.capiStages legend {
+  margin-bottom: 4px;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.capiDatasets label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.capiDatasets small {
+  color: var(--sx-muted);
+}
+
+.capiStage {
+  display: grid;
+  grid-template-columns: minmax(0, 140px) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  font-size: var(--sx-text-sm);
+}
+
+.capiStage label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.capiStage input:not([type="checkbox"]) {
+  min-width: 0;
+  min-height: var(--sx-control-h);
+  padding: 0 8px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.capiStage input:disabled {
+  color: var(--sx-muted);
+}
+
+.capiNew summary,
+.capiLog summary {
+  cursor: pointer;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.capiNew > .row,
+.capiNew > label {
+  margin-top: 8px;
+}
+
+.capiLog ul {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.capiLog li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: var(--sx-text-sm);
+}
+
+.capiLog li small {
+  color: var(--sx-muted);
+}
+
 /* ---------- Other ways (collapsed) ---------- */
 
 .otherWays {
