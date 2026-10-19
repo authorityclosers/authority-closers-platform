@@ -117,6 +117,26 @@ const config: NextConfig = {
               destination: "/analysis/calls",
               permanent: false,
             },
+            // The organisation's tabs live in Settings (owner, 20 Oct).
+            ...(
+              [
+                ["members", "/settings/team"],
+                ["company", "/settings/organisation"],
+                ["overview", "/settings/organisation"],
+                ["integrations", "/settings/developers"],
+              ] as const
+            ).map(([tab, destination]) => ({
+              source: "/organisation",
+              has: [{ type: "query" as const, key: "tab", value: tab }],
+              destination,
+              permanent: false,
+            })),
+            {
+              source: "/organisation",
+              missing: [{ type: "query" as const, key: "tab" }],
+              destination: "/settings/organisation",
+              permanent: false,
+            },
             {
               source: "/",
               has: [

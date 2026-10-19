@@ -51,9 +51,14 @@ export function phoneTabFor(
     if (under(pathname, NEW_ANALYSIS_PATH))
       return active === "calls" ? "calls" : "new";
     if (
-      ["/prospects", "/coaching", "/organisation", "/account", "/plans"].some(
-        (root) => under(pathname, root),
-      )
+      [
+        "/prospects",
+        "/coaching",
+        "/organisation",
+        "/account",
+        "/settings",
+        "/plans",
+      ].some((root) => under(pathname, root))
     )
       return "more";
   }

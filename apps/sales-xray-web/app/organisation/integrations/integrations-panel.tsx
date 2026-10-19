@@ -1207,11 +1207,43 @@ function AppsSection({
   );
 }
 
-export function IntegrationsPanel() {
+/** The parts Settings shows in its own sections (20 Oct): apps, AI replies, developers. */
+export type IntegrationPart =
+  | "whatsapp"
+  | "social"
+  | "ai"
+  | "keys"
+  | "webhook"
+  | "handover"
+  | "apps";
+const ALL_PARTS: readonly IntegrationPart[] = [
+  "whatsapp",
+  "social",
+  "ai",
+  "keys",
+  "webhook",
+  "handover",
+  "apps",
+];
+const DEVELOPER_PARTS: ReadonlySet<IntegrationPart> = new Set([
+  "keys",
+  "webhook",
+  "handover",
+  "apps",
+]);
+
+export function IntegrationsPanel({
+  parts = ALL_PARTS,
+}: {
+  parts?: readonly IntegrationPart[];
+}) {
   const [data, setData] = useState<Integrations | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // Keys, the webhook, hand-over and apps share one read; the rest read their own.
+  const needsData = parts.some((part) => DEVELOPER_PARTS.has(part));
   useEffect(() => {
+    if (!needsData) return;
     const controller = new AbortController();
     readIntegrations(controller.signal).then(
       (value) => {
@@ -1224,44 +1256,67 @@ export function IntegrationsPanel() {
       },
     );
     return () => controller.abort();
-  }, [attempt]);
-  if (failed && !data)
+  }, [attempt, needsData]);
+  const shows = (part: IntegrationPart) => parts.includes(part);
+  const own = (
+    <>
+      {shows("whatsapp") ? <WhatsAppSettings /> : null}
+      {shows("social") ? <SocialSettings /> : null}
+      {shows("ai") ? <AiRepliesSettings /> : null}
+    </>
+  );
+  if (needsData && failed && !data)
     return (
-      <Empty
-        icon={KeyRound}
-        title="Integrations did not load"
-        action={{ onClick: () => setAttempt((n) => n + 1), label: "Try again" }}
-      />
+      <div className={styles.stack}>
+        {own}
+        <Empty
+          icon={KeyRound}
+          title="Integrations did not load"
+          action={{
+            onClick: () => setAttempt((n) => n + 1),
+            label: "Try again",
+          }}
+        />
+      </div>
     );
-  if (!data)
+  if (needsData && !data)
     return (
-      <div className={styles.skeletons} aria-busy="true">
-        <Skeleton height={120} />
-        <Skeleton height={160} />
+      <div className={styles.stack}>
+        {own}
+        <div className={styles.skeletons} aria-busy="true">
+          <Skeleton height={120} />
+          <Skeleton height={160} />
+        </div>
       </div>
     );
   return (
     <div className={styles.stack}>
-      <WhatsAppSettings />
-      <SocialSettings />
-      <AiRepliesSettings />
-      <KeysSection
-        data={data}
-        onChange={(keys) => setData({ ...data, keys })}
-      />
-      <WebhookSection
-        data={data}
-        onChange={(webhook) => setData({ ...data, webhook })}
-      />
-      <HandoverSection
-        data={data}
-        onChange={(handover) => setData({ ...data, handover })}
-      />
-      <AppsSection
-        data={data}
-        onApps={(apps) => setData({ ...data, apps })}
-        onConnections={(connections) => setData({ ...data, connections })}
-      />
+      {own}
+      {data && shows("keys") ? (
+        <KeysSection
+          data={data}
+          onChange={(keys) => setData({ ...data, keys })}
+        />
+      ) : null}
+      {data && shows("webhook") ? (
+        <WebhookSection
+          data={data}
+          onChange={(webhook) => setData({ ...data, webhook })}
+        />
+      ) : null}
+      {data && shows("handover") ? (
+        <HandoverSection
+          data={data}
+          onChange={(handover) => setData({ ...data, handover })}
+        />
+      ) : null}
+      {data && shows("apps") ? (
+        <AppsSection
+          data={data}
+          onApps={(apps) => setData({ ...data, apps })}
+          onConnections={(connections) => setData({ ...data, connections })}
+        />
+      ) : null}
     </div>
   );
 }

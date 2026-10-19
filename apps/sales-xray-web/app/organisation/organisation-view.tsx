@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -79,7 +79,10 @@ import {
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
 import { TeamPatternsSection } from "./team-patterns-section";
-import { IntegrationsPanel } from "./integrations/integrations-panel";
+import {
+  IntegrationsPanel,
+  type IntegrationPart,
+} from "./integrations/integrations-panel";
 
 type Base =
   | { status: "loading" }
@@ -196,13 +199,34 @@ function useLive<T>(
   ];
 }
 
+/** The app router, or null where the page is drawn without one (tests, previews). */
+function useOptionalRouter() {
+  try {
+    return useRouter();
+  } catch {
+    return null;
+  }
+}
+
 /** Company, members and the organisation's calls in the last 30 days. */
 export function OrganisationView({
   initial = null,
+  embedded = false,
+  sections,
+  integrationParts,
 }: {
   /** The page's first reads made on the server (dev), or null. */
   initial?: ServerOrganisation | null;
+  /**
+   * Inside Settings (20 Oct): no app frame of its own and no tab bar; these
+   * sections show together, in this order.
+   */
+  embedded?: boolean;
+  sections?: readonly Tab[];
+  /** Which parts of Integrations to show (Settings splits them into sections). */
+  integrationParts?: readonly IntegrationPart[];
 }) {
+  const router = useOptionalRouter();
   const access = useWorkspaceAccess();
   // The section in the address, the same on the server and in the browser.
   const searchParams = useSearchParams() as URLSearchParams | null;
@@ -234,9 +258,11 @@ export function OrganisationView({
   );
   const [baseAttempt, setBaseAttempt] = useState(0);
   const [tab, setTabState] = useState<Tab>(() => {
+    if (sections?.length) return sections[0];
     const value = searchParams?.get("tab") ?? null;
     return isTab(value) ? value : "overview";
   });
+  const shows = (id: Tab) => (sections ? sections.includes(id) : tab === id);
   const [missing, setMissing] = useState(false);
 
   const setTab = useCallback((next: Tab) => {
@@ -384,67 +410,66 @@ export function OrganisationView({
         : null;
   const name = live ? org.value.name : (current?.name ?? "");
 
-  return (
-    <AcquisitionShell
-      authenticated={authenticated}
-      homeHref="/"
-      active="organisation"
-      mobileFit={false}
+  const page = (
+    <div
+      className={styles.page}
+      data-organisation-view
+      data-embedded={embedded ? "" : undefined}
     >
-      <div className={styles.page} data-organisation-view>
-        {access?.authenticated === false ? (
-          <SignedOut onSignIn={access.requestAccountSignIn} />
-        ) : base.status === "loading" || !authenticated ? (
-          <OrganisationSkeleton />
-        ) : base.status === "error" ? (
-          <section className={styles.state} role="alert">
-            <span className={styles.stateIcon} aria-hidden="true">
-              <Building2 size={20} />
+      {access?.authenticated === false ? (
+        <SignedOut onSignIn={access.requestAccountSignIn} />
+      ) : base.status === "loading" || !authenticated ? (
+        <OrganisationSkeleton />
+      ) : base.status === "error" ? (
+        <section className={styles.state} role="alert">
+          <span className={styles.stateIcon} aria-hidden="true">
+            <Building2 size={20} />
+          </span>
+          <h1>The organisation could not be loaded</h1>
+          <p>Check your connection, then try again.</p>
+          <button
+            type="button"
+            className={styles.secondary}
+            onClick={() => {
+              setBase({ status: "loading" });
+              setBaseAttempt((count) => count + 1);
+            }}
+          >
+            <RefreshCw size={14} aria-hidden="true" />
+            Try again
+          </button>
+        </section>
+      ) : personal ? (
+        <PersonalState
+          organisations={base.workspaces.filter(
+            (item) => item.kind === "organisation",
+          )}
+        />
+      ) : (
+        <>
+          <header className={styles.header}>
+            <span className={styles.orgTile} aria-hidden="true">
+              <OrgLogo src={branding?.logoUrl} fallback={initials(name)} />
             </span>
-            <h1>The organisation could not be loaded</h1>
-            <p>Check your connection, then try again.</p>
-            <button
-              type="button"
-              className={styles.secondary}
-              onClick={() => {
-                setBase({ status: "loading" });
-                setBaseAttempt((count) => count + 1);
-              }}
-            >
-              <RefreshCw size={14} aria-hidden="true" />
-              Try again
-            </button>
-          </section>
-        ) : personal ? (
-          <PersonalState
-            organisations={base.workspaces.filter(
-              (item) => item.kind === "organisation",
-            )}
-          />
-        ) : (
-          <>
-            <header className={styles.header}>
-              <span className={styles.orgTile} aria-hidden="true">
-                <OrgLogo src={branding?.logoUrl} fallback={initials(name)} />
-              </span>
-              <div className={styles.headerCopy}>
-                <h1>{name}</h1>
-                <p>
-                  <span>Organisation</span>
-                  {memberCount !== null ? (
-                    <span>
-                      {memberCount} {memberCount === 1 ? "person" : "people"}
-                    </span>
-                  ) : null}
-                  {myRole ? (
-                    <span>
-                      Your role: <b>{ROLE_LABEL[myRole]}</b>
-                    </span>
-                  ) : null}
-                </p>
-              </div>
-            </header>
+            <div className={styles.headerCopy}>
+              <h1>{name}</h1>
+              <p>
+                <span>Organisation</span>
+                {memberCount !== null ? (
+                  <span>
+                    {memberCount} {memberCount === 1 ? "person" : "people"}
+                  </span>
+                ) : null}
+                {myRole ? (
+                  <span>
+                    Your role: <b>{ROLE_LABEL[myRole]}</b>
+                  </span>
+                ) : null}
+              </p>
+            </div>
+          </header>
 
+          {sections ? null : (
             <nav className={styles.tabs} aria-label="Organisation sections">
               {(canManage ? TABS : MEMBER_TABS).map(({ id, label }) => (
                 <button
@@ -464,94 +489,118 @@ export function OrganisationView({
                 </button>
               ))}
             </nav>
+          )}
 
-            <div key={tab} className={styles.panel}>
-              {tab === "overview" && (
-                <OverviewPanel
-                  activity={activity}
+          <div key={tab} className={styles.panel}>
+            {shows("overview") && (
+              <OverviewPanel
+                activity={activity}
+                members={members}
+                memberCount={memberCount}
+                team={canManage}
+                onInvite={() =>
+                  embedded && router
+                    ? router.push("/settings/team")
+                    : setTab("members")
+                }
+                retry={reloadActivity}
+                analysed={
+                  canManage && tenantId !== null ? (
+                    <SectionBoundary name="Calls analysed">
+                      <ReceiptActivitySection
+                        key={tenantId}
+                        members={
+                          members.status === "ready"
+                            ? members.value.filter(
+                                (member) => member.status === "active",
+                              )
+                            : null
+                        }
+                        onAccessLost={refreshAccess}
+                      />
+                    </SectionBoundary>
+                  ) : null
+                }
+              />
+            )}
+
+            {shows("members") && (
+              <SectionBoundary name="Members">
+                <MembersPanel
                   members={members}
-                  memberCount={memberCount}
-                  team={canManage}
-                  onInvite={() => setTab("members")}
-                  retry={reloadActivity}
-                  analysed={
-                    canManage && tenantId !== null ? (
-                      <SectionBoundary name="Calls analysed">
-                        <ReceiptActivitySection
-                          key={tenantId}
-                          members={
-                            members.status === "ready"
-                              ? members.value.filter(
-                                  (member) => member.status === "active",
-                                )
-                              : null
-                          }
-                          onAccessLost={refreshAccess}
+                  reload={() => {
+                    reloadMembers();
+                    reloadOrg();
+                  }}
+                  canManage={canManage}
+                  isOwner={live && myRole === "owner"}
+                  yourPersonId={access?.context?.personId ?? null}
+                  onMissing={() => setMissing(true)}
+                />
+              </SectionBoundary>
+            )}
+
+            {shows("integrations") && canManage && (
+              <SectionBoundary name="Integrations">
+                <IntegrationsPanel parts={integrationParts} />
+              </SectionBoundary>
+            )}
+            {sections?.includes("integrations") && live && !canManage ? (
+              <section className={styles.state} role="status">
+                <h2>Owners and admins only</h2>
+                <p>
+                  Ask an owner or admin of {name} to change this, or to make you
+                  an admin in Team &amp; roles.
+                </p>
+              </section>
+            ) : null}
+
+            {shows("company") && (
+              <SectionBoundary name="Company">
+                <CompanyPanel
+                  key={`${tenantId}:${org.status}`}
+                  org={live ? org.value : null}
+                  isOwner={live && myRole === "owner"}
+                  reload={reloadOrg}
+                  details={
+                    <>
+                      <SectionBoundary name="Logo">
+                        <CompanyLogoPanel
+                          key={`${access?.context?.sessionId}:${tenantId}`}
+                          name={name}
+                          canEdit={canManage}
                         />
                       </SectionBoundary>
-                    ) : null
+                      <SectionBoundary name="Company details">
+                        <CompanyDetailsPanel
+                          key={`${access?.context?.sessionId}:${tenantId}`}
+                          tenantId={tenantId}
+                          role={myRole}
+                          authenticated={authenticated}
+                          refresh={refreshOrganisation}
+                          onAccessLost={refreshAccess}
+                          onPersonal={showPersonal}
+                        />
+                      </SectionBoundary>
+                    </>
                   }
                 />
-              )}
-
-              {tab === "members" && (
-                <SectionBoundary name="Members">
-                  <MembersPanel
-                    members={members}
-                    reload={() => {
-                      reloadMembers();
-                      reloadOrg();
-                    }}
-                    canManage={canManage}
-                    isOwner={live && myRole === "owner"}
-                    yourPersonId={access?.context?.personId ?? null}
-                    onMissing={() => setMissing(true)}
-                  />
-                </SectionBoundary>
-              )}
-
-              {tab === "integrations" && canManage && (
-                <SectionBoundary name="Integrations">
-                  <IntegrationsPanel />
-                </SectionBoundary>
-              )}
-
-              {tab === "company" && (
-                <SectionBoundary name="Company">
-                  <CompanyPanel
-                    key={`${tenantId}:${org.status}`}
-                    org={live ? org.value : null}
-                    isOwner={live && myRole === "owner"}
-                    reload={reloadOrg}
-                    details={
-                      <>
-                        <SectionBoundary name="Logo">
-                          <CompanyLogoPanel
-                            key={`${access?.context?.sessionId}:${tenantId}`}
-                            name={name}
-                            canEdit={canManage}
-                          />
-                        </SectionBoundary>
-                        <SectionBoundary name="Company details">
-                          <CompanyDetailsPanel
-                            key={`${access?.context?.sessionId}:${tenantId}`}
-                            tenantId={tenantId}
-                            role={myRole}
-                            authenticated={authenticated}
-                            refresh={refreshOrganisation}
-                            onAccessLost={refreshAccess}
-                            onPersonal={showPersonal}
-                          />
-                        </SectionBoundary>
-                      </>
-                    }
-                  />
-                </SectionBoundary>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+              </SectionBoundary>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+  if (embedded) return page;
+  return (
+    <AcquisitionShell
+      authenticated={authenticated}
+      homeHref="/"
+      active="organisation"
+      mobileFit={false}
+    >
+      {page}
     </AcquisitionShell>
   );
 }

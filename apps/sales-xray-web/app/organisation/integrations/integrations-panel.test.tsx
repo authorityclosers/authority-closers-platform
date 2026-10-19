@@ -313,3 +313,25 @@ it("sets up the hand-over with a pasted key and the form questions", async () =>
   expect(host.textContent).toContain("…abcd");
   expect(host.textContent).not.toContain("psvc_secret_key");
 });
+
+it("shows only the parts Settings asks for, and reads integrations only when it needs them", async () => {
+  await act(async () =>
+    root.render(<IntegrationsPanel parts={["keys", "webhook"]} />),
+  );
+  await flush();
+  const urls = () => calls.map((call) => String(call.url));
+  expect(
+    urls().some((url) => url.includes("/v1/sales-xray/integrations")),
+  ).toBe(true);
+  expect(urls().some((url) => url.includes("/v1/lead-desk/"))).toBe(false);
+
+  act(() => root.unmount());
+  root = createRoot(host);
+  calls.length = 0;
+  await act(async () => root.render(<IntegrationsPanel parts={["ai"]} />));
+  await flush();
+  expect(
+    urls().some((url) => url.includes("/v1/sales-xray/integrations")),
+  ).toBe(false);
+  expect(urls().some((url) => url.includes("/ai-replies"))).toBe(true);
+});
