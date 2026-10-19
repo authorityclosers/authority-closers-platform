@@ -1,0 +1,326 @@
+/**
+ * Settings -> Connected apps: each app's health and a real test of each, from
+ * the Lead Desk back end (d8b2cfe6, contract in the shared notes:
+ * lead-desk-connected-apps-contract-20261020.md). Owners and admins only; a
+ * member's read is refused with 403.
+ */
+
+export type AppKey =
+  | "meta_leads"
+  | "whatsapp"
+  | "messenger"
+  | "instagram"
+  | "google_ads"
+  | "phone_calls"
+  | "webhook_sources"
+  | "ai_replies";
+export type AppState =
+  | "ready"
+  | "problem"
+  | "not_connected"
+  | "not_set_up"
+  | "off";
+export type Link = { method: "GET" | "POST"; path: string };
+export type Connection = {
+  id: string;
+  label: string;
+  detail: string | null;
+  state: AppState;
+  words: string | null;
+  disconnect: Link | null;
+};
+export type TestOffer = {
+  kind: string;
+  label: string;
+  needs: string[];
+  confirm: boolean;
+};
+export type AppHealth = {
+  app: AppKey;
+  name: string;
+  state: AppState;
+  words: string;
+  configured: boolean;
+  connect: Link | null;
+  connections: Connection[];
+  lastEvent: { at: string; words: string } | null;
+  lastError: { at: string | null; words: string } | null;
+  nextPullAt: string | null;
+  lastDeliveryAt: string | null;
+  tests: TestOffer[];
+};
+export type StepState = "done" | "waiting" | "failed" | "skipped";
+export type TestResult = {
+  testId: string | null;
+  status: "waiting" | "passed" | "failed";
+  words: string;
+  steps: { label: string; state: StepState; words: string | null }[];
+  /** AI replies' "Try it": the draft it wrote, when it wrote one. */
+  draft?: string | null;
+};
+export type MetaForm = { id: string; name: string; status: string };
+
+export class AppsError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+const KEYS = new Set<string>([
+  "meta_leads",
+  "whatsapp",
+  "messenger",
+  "instagram",
+  "google_ads",
+  "phone_calls",
+  "webhook_sources",
+  "ai_replies",
+]);
+const STATES = new Set<string>([
+  "ready",
+  "problem",
+  "not_connected",
+  "not_set_up",
+  "off",
+]);
+const STEPS = new Set<string>(["done", "waiting", "failed", "skipped"]);
+const BASE = "/v1/lead-desk";
+
+type Json = Record<string, unknown>;
+const isRecord = (value: unknown): value is Json =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+const text = (value: unknown): string | null =>
+  typeof value === "string" && value.trim() ? value : null;
+const state = (value: unknown): AppState =>
+  typeof value === "string" && STATES.has(value)
+    ? (value as AppState)
+    : "problem";
+
+// Only the back end's own routes are followed: same origin, under /v1/lead-desk.
+function link(value: unknown): Link | null {
+  if (!isRecord(value)) return null;
+  const path = text(value.path);
+  if (!path || !path.startsWith(`${BASE}/`) || path.includes("..")) return null;
+  return { method: value.method === "POST" ? "POST" : "GET", path };
+}
+
+function parseApp(value: unknown): AppHealth | null {
+  if (!isRecord(value) || typeof value.app !== "string" || !KEYS.has(value.app))
+    return null;
+  const event = isRecord(value.lastEvent) ? value.lastEvent : null;
+  const error = isRecord(value.lastError) ? value.lastError : null;
+  return {
+    app: value.app as AppKey,
+    name: text(value.name) ?? value.app,
+    state: state(value.state),
+    words: text(value.words) ?? "",
+    configured: value.configured !== false,
+    connect: link(value.connect),
+    connections: (Array.isArray(value.connections) ? value.connections : [])
+      .filter(isRecord)
+      .map((item) => ({
+        id: String(item.id ?? ""),
+        label: text(item.label) ?? "Connection",
+        detail: text(item.detail),
+        state: state(item.state ?? "ready"),
+        words: text(item.words),
+        disconnect: link(item.disconnect),
+      })),
+    lastEvent:
+      event && text(event.at) && text(event.words)
+        ? { at: event.at as string, words: event.words as string }
+        : null,
+    lastError:
+      error && text(error.words)
+        ? { at: text(error.at), words: error.words as string }
+        : null,
+    nextPullAt: text(value.nextPullAt),
+    lastDeliveryAt: isRecord(value.webhook)
+      ? text(value.webhook.lastDeliveryAt)
+      : null,
+    tests: (Array.isArray(value.tests) ? value.tests : [])
+      .filter(isRecord)
+      .filter((item) => text(item.kind) && text(item.label))
+      .map((item) => ({
+        kind: item.kind as string,
+        label: item.label as string,
+        needs: Array.isArray(item.needs)
+          ? item.needs.filter(
+              (need): need is string => typeof need === "string",
+            )
+          : [],
+        confirm: item.confirm === true,
+      })),
+  };
+}
+
+export function parseHealth(
+  value: unknown,
+): { checkedAt: string | null; apps: AppHealth[] } | null {
+  if (!isRecord(value) || !Array.isArray(value.apps)) return null;
+  return {
+    checkedAt: text(value.checkedAt),
+    apps: value.apps
+      .map(parseApp)
+      .filter((app): app is AppHealth => app !== null),
+  };
+}
+
+export function parseTest(value: unknown): TestResult | null {
+  if (!isRecord(value)) return null;
+  const status =
+    value.status === "passed" || value.status === "failed"
+      ? value.status
+      : "waiting";
+  return {
+    testId: text(value.testId),
+    status,
+    words: text(value.words) ?? "",
+    steps: (Array.isArray(value.steps) ? value.steps : [])
+      .filter(isRecord)
+      .filter((step) => text(step.label))
+      .map((step) => ({
+        label: step.label as string,
+        state:
+          typeof step.state === "string" && STEPS.has(step.state)
+            ? (step.state as StepState)
+            : "waiting",
+        words: text(step.words),
+      })),
+  };
+}
+
+/** AI replies' "Try it" answer, in the shape every other test uses. */
+export function parseTry(
+  value: unknown,
+): (TestResult & { replyId: string | null }) | null {
+  if (!isRecord(value)) return null;
+  const status = value.status;
+  const draft = text(value.draft);
+  return {
+    testId: null,
+    replyId: text(value.replyId),
+    status:
+      status === "queued"
+        ? "waiting"
+        : status === "drafted" || status === "handoff"
+          ? "passed"
+          : "failed",
+    words: text(value.words) ?? "",
+    steps: [],
+    draft,
+  };
+}
+
+async function send(
+  path: string,
+  init: RequestInit & { signal?: AbortSignal } = {},
+) {
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    cache: "no-store",
+    ...init,
+    headers: {
+      accept: "application/json",
+      ...(init.body ? { "content-type": "application/json" } : {}),
+    },
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok)
+    throw new AppsError(
+      response.status,
+      isRecord(body) && typeof body.detail === "string"
+        ? body.detail
+        : "Something went wrong. Try again in a moment.",
+    );
+  return body;
+}
+
+export async function readHealth(signal?: AbortSignal) {
+  const parsed = parseHealth(
+    await send(`${BASE}/integrations/health`, { signal }),
+  );
+  if (!parsed) throw new AppsError(502, "The answer could not be read.");
+  return parsed;
+}
+
+export async function startTest(app: AppKey, body: Record<string, unknown>) {
+  if (app === "ai_replies") return startTry(String(body.message ?? ""));
+  const parsed = parseTest(
+    await send(`${BASE}/integrations/${app}/test`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  );
+  if (!parsed) throw new AppsError(502, "The answer could not be read.");
+  return parsed;
+}
+
+export async function readTest(testId: string, signal?: AbortSignal) {
+  const parsed = parseTest(
+    await send(`${BASE}/integrations/tests/${encodeURIComponent(testId)}`, {
+      signal,
+    }),
+  );
+  if (!parsed) throw new AppsError(502, "The answer could not be read.");
+  return parsed;
+}
+
+async function startTry(message: string) {
+  const parsed = parseTry(
+    await send(`${BASE}/ai-replies/try`, {
+      method: "POST",
+      body: JSON.stringify({ message, channel: "whatsapp" }),
+    }),
+  );
+  if (!parsed) throw new AppsError(502, "The answer could not be read.");
+  // Polled like any other test, under its own id.
+  return {
+    ...parsed,
+    testId:
+      parsed.status === "waiting" && parsed.replyId
+        ? `try:${parsed.replyId}`
+        : null,
+  };
+}
+
+/** A test still going: its newest state (AI replies' try included). */
+export async function followTest(
+  testId: string,
+  signal?: AbortSignal,
+): Promise<TestResult> {
+  if (!testId.startsWith("try:")) return readTest(testId, signal);
+  const replyId = testId.slice(4);
+  const parsed = parseTry(
+    await send(`${BASE}/ai-replies/try/${encodeURIComponent(replyId)}`, {
+      signal,
+    }),
+  );
+  if (!parsed) throw new AppsError(502, "The answer could not be read.");
+  return { ...parsed, testId: parsed.status === "waiting" ? testId : null };
+}
+
+export async function readForms(
+  pageId: string,
+  signal?: AbortSignal,
+): Promise<MetaForm[]> {
+  const body = await send(
+    `${BASE}/meta/pages/${encodeURIComponent(pageId)}/forms`,
+    { signal },
+  );
+  return (Array.isArray(body) ? body : [])
+    .filter(isRecord)
+    .filter((form) => text(form.id) && text(form.name))
+    .map((form) => ({
+      id: form.id as string,
+      name: form.name as string,
+      status: text(form.status) ?? "",
+    }));
+}
+
+export async function disconnect(target: Link) {
+  await send(target.path, { method: "POST", body: JSON.stringify({}) });
+}

@@ -37,6 +37,9 @@ vi.mock("../organisation/organisation-view", () => ({
   },
 }));
 vi.mock("../leads/alerts-card", () => ({ AlertsCard: () => null }));
+vi.mock("./connected-apps", () => ({
+  ConnectedApps: () => <p data-testid="connected-apps">apps grid</p>,
+}));
 
 import { SettingsSectionView } from "./sections";
 import { SettingsSkeleton } from "./settings-skeleton";
@@ -162,13 +165,12 @@ it("builds each section from the existing screens, with only its own parts", asy
     organisation.map((props) => [props.sections, props.integrationParts]),
   ).toEqual([
     [["members"], undefined],
-    [["integrations"], ["whatsapp", "social"]],
     [["integrations"], ["keys", "webhook", "handover", "apps"]],
     [["integrations"], ["ai"]],
   ]);
-  // Lead ads still connect in Leads until their card lands here.
+  // Connected apps is one grid of app cards of its own.
   await render("apps");
-  expect(host.querySelector('a[href="/leads?tab=sources"]')).not.toBeNull();
+  expect(host.querySelector('[data-testid="connected-apps"]')).not.toBeNull();
   await render("devices");
   expect(host.querySelector('a[href="/apps"]')).not.toBeNull();
   expect(host.querySelector('a[href="/leads#phone-setup"]')).not.toBeNull();

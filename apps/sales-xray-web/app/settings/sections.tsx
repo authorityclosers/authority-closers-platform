@@ -20,6 +20,7 @@ import { ANDROID_APK_URL } from "../apps/release";
 import { AlertsCard } from "../leads/alerts-card";
 import { OrganisationView } from "../organisation/organisation-view";
 import { Panel } from "../ui/kit";
+import { ConnectedApps } from "./connected-apps";
 import type { SettingsSectionId } from "./settings-sections";
 import styles from "./sections.module.css";
 
@@ -50,28 +51,6 @@ function Note({
           {action}
         </Link>
       ) : null}
-    </div>
-  );
-}
-
-function ConnectedApps() {
-  return (
-    <div className={styles.stack}>
-      <Panel title="Lead ads">
-        <Note
-          icon={<Megaphone size={18} />}
-          title="Facebook, Instagram and Google lead ads"
-          href="/leads?tab=sources"
-          action="Open lead sources"
-        >
-          Connect your ad accounts so new leads arrive in Leads by themselves.
-        </Note>
-      </Panel>
-      <OrganisationView
-        embedded
-        sections={["integrations"]}
-        integrationParts={["whatsapp", "social"]}
-      />
     </div>
   );
 }
