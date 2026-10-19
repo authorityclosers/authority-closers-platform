@@ -34,18 +34,19 @@ def test_budget_cli_environment_guard(
 
 
 def test_budget_intent_is_strict_and_bounded():
+    # 19 Oct 2026 (owner, via the orchestrator): no ₹10,000 limit in code any more; the
+    # ceiling is checked by the budget service. The intent only bounds the integer.
     value = BudgetCapIntent(
         expected_revision=0,
-        new_cap_paise=1_000_000,
-        reason="approved release ceiling",
+        new_cap_paise=1_500_000,
+        reason="Raised by Rs 5,000 from Execution & budget",
     )
-    assert value.new_cap_paise == 1_000_000
+    assert value.new_cap_paise == 1_500_000
+    for cap in (-1, 2_147_483_648):
+        with pytest.raises(ValueError):
+            BudgetCapIntent(expected_revision=0, new_cap_paise=cap, reason="out of range")
     with pytest.raises(ValueError):
-        BudgetCapIntent(
-            expected_revision=0,
-            new_cap_paise=1_000_001,
-            reason="too high",
-        )
+        BudgetCapIntent(expected_revision=0, new_cap_paise="1000", reason="not an integer")
     with pytest.raises(ValueError):
         BudgetCapIntent(
             expected_revision=0,
