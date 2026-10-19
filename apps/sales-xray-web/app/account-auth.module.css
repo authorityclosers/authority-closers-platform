@@ -718,29 +718,17 @@
   display: grid;
   gap: 10px;
 }
-/* Apple's and Facebook's own button colours (their sign-in guidelines). */
+/* Apple's button is black on light screens and white on dark ones (its sign-in
+   button rules): ink on paper, which the theme already swaps. Facebook keeps the
+   neutral button with its blue mark, like Google. No colour of their own here. */
 .google[data-provider="apple"] {
-  border-color: #000;
-  background: #000;
-  color: #fff;
+  border-color: var(--sx-ink);
+  background: var(--sx-ink);
+  color: var(--sx-paper);
 }
 .google[data-provider="apple"]:hover:not(:disabled) {
-  border-color: #000;
-  background: #1d1d1f;
-}
-.google[data-provider="facebook"] {
-  border-color: #1877f2;
-  background: #1877f2;
-  color: #fff;
-}
-.google[data-provider="facebook"]:hover:not(:disabled) {
-  border-color: #166fe5;
-  background: #166fe5;
-}
-:global(html[data-theme="dark"]) .google[data-provider="apple"] {
-  border-color: #fff;
-  background: #fff;
-  color: #000;
+  border-color: var(--sx-ink);
+  background: color-mix(in oklab, var(--sx-ink) 88%, var(--sx-paper));
 }
 .divider {
   display: flex;

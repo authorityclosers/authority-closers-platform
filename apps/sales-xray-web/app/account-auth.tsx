@@ -201,7 +201,7 @@ function AppleMark() {
 }
 
 function FacebookMark() {
-  // Facebook's "f" logo, white on Facebook blue, as its button rules require.
+  // Facebook's "f" mark in Facebook blue, as its brand rules require.
   return (
     <svg
       className={styles.providerMark}
@@ -210,7 +210,7 @@ function FacebookMark() {
       focusable="false"
     >
       <path
-        fill="currentColor"
+        fill="#1877F2"
         d="M9.1 23.69v-7.98H6.63v-3.67H9.1v-1.58c0-4.09 1.85-5.98 5.86-5.98.4 0 .96.04 1.47.1.41.05.81.11 1.14.2v3.32a8.6 8.6 0 0 0-.65-.03c-.24-.01-.48-.01-.73-.01-.71 0-1.26.1-1.68.31-.28.14-.52.36-.68.62-.26.42-.37 1-.37 1.75v1.3h3.92l-.39 2.1-.29 1.57h-3.24v8.24C19.4 23.24 24 18.18 24 12.04 24 5.42 18.63.04 12 .04S0 5.42 0 12.04c0 5.63 3.87 10.35 9.1 11.65Z"
       />
     </svg>
