@@ -13,6 +13,7 @@ from datetime import datetime
 import sqlalchemy as sa
 from sqlalchemy import MetaData
 
+from ac_platform.admin_settings import models as admin_settings_models
 from ac_platform.app_updates import models as app_update_models
 from ac_platform.audit import models as audit_models
 from ac_platform.authorization import models as authorization_models
@@ -103,6 +104,7 @@ MODEL_MODULES = (
     partner_event_models,
     call_data_models,
     integration_models,
+    admin_settings_models,
     authorization_models,
     knowledge_models,
     catalog_models,
