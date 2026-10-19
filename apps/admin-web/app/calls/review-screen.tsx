@@ -52,6 +52,8 @@ import {
 } from "./review-logic";
 import { typing } from "./queue-keys";
 import { TranscriptPane } from "./transcript-pane";
+import { AnalysisTab } from "./analysis-tab";
+import type { CallDetail } from "./call-detail-data";
 import styles from "./review.module.css";
 
 const TABS: {
@@ -62,6 +64,7 @@ const TABS: {
 }[] = [
   { key: "transcript", label: "Transcript", key1: "T", phoneOnly: true },
   { key: "review", label: "Review", key1: "V" },
+  { key: "analysis", label: "Analysis", key1: "A" },
   { key: "report", label: "Report", key1: "R" },
   { key: "pillars", label: "Six pillars", key1: "S" },
   { key: "coaching", label: "Coaching", key1: "C" },
@@ -81,7 +84,10 @@ export function ReviewScreen({
   safety = false,
   labels = null,
   startMs = null,
+  analysis = null,
 }: {
+  /** What the call data engine found (its detail read), or null when not read yet. */
+  analysis?: CallDetail | null;
   /** The call's reviewer labels, or null when they couldn't be read. */
   labels?: Labels | null;
   /** The operator may withhold passages (platform_content_safety_manage). */
@@ -274,9 +280,9 @@ export function ReviewScreen({
           <Link
             href={`/calls/${call.recordingId}/map`}
             className={kitStyles.button}
-            title="Every stage of this call: status, time, cost, model"
+            title="The pipeline graph, every object and run, costs by branch"
           >
-            Pipeline map
+            Analysis map
           </Link>
           <Badge tone={STATUS_TONE[call.status]}>
             {STATUS_LABEL[call.status]}
@@ -447,6 +453,12 @@ export function ReviewScreen({
                   again.
                 </p>
               )
+            ) : tab === "analysis" ? (
+              <AnalysisTab
+                detail={analysis}
+                recordingId={call.recordingId}
+                onSeek={seek}
+              />
             ) : tab === "report" || tab === "transcript" ? (
               <CurrentReport report={bundle.report} onEvidence={playEvidence} />
             ) : tab === "pillars" ? (

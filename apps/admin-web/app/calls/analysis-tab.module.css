@@ -1,0 +1,135 @@
+/* The call page's Analysis tab: dense facts under their categories. Tokens only. */
+
+.tab {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px 16px;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.summary strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.more {
+  margin-left: auto;
+  color: var(--sx-accent);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.more:hover,
+.more:focus-visible {
+  text-decoration: underline;
+}
+
+.group h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.group h3 span {
+  color: var(--sx-muted);
+  font-weight: 500;
+}
+
+.group ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.group li {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 2fr) auto;
+  gap: 2px 10px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--sx-line);
+  font-size: var(--sx-text-sm);
+}
+
+.label {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.value {
+  min-width: 0;
+  color: var(--sx-ink);
+}
+
+.meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.moments {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2 / -1;
+  gap: 4px;
+}
+
+.moments button {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.moments button:hover,
+.moments button:focus-visible {
+  border-color: var(--sx-accent);
+  outline: none;
+}
+
+.empty {
+  margin: 0;
+  padding: 16px 14px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+@media (max-width: 760px) {
+  .group li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .label {
+    grid-column: 1 / -1;
+  }
+
+  .moments {
+    grid-column: 1 / -1;
+  }
+}

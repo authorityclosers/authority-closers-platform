@@ -12,6 +12,7 @@ import {
 import { FailedSteps } from "@/app/calls/failed-steps";
 import { queueApiPath, queueFilters } from "@/app/calls/queue-query";
 import { startAt } from "@/app/calls/review-logic";
+import { normalizeCallDetail } from "@/app/calls/call-detail-data";
 import { ReviewScreen } from "@/app/calls/review-screen";
 import { normalizeLabels } from "@/app/calls/labels-data";
 import { loadConsoleAccess } from "@/app/lib/console-access";
@@ -68,26 +69,32 @@ export default async function CallReviewPage({
   const compareRun = compareId
     ? call.data.runs.find((item) => item.id === compareId && item.reportId)
     : undefined;
-  const [bundle, compared, queue, access, labels] = await Promise.all([
-    run
-      ? adminRead(
-          `/v1/admin/conversation/runs/${run.id}/review`,
-          normalizeBundle,
-        )
-      : null,
-    compareRun && compareRun.id !== run?.id
-      ? adminRead(
-          `/v1/admin/conversation/runs/${compareRun.id}/review`,
-          normalizeBundle,
-        )
-      : null,
-    back ? adminRead(queueApiPath(backFilters, 100), normalizeQueue) : null,
-    loadConsoleAccess(),
-    adminRead(
-      `/v1/admin/conversation/calls/${recordingId}/labels`,
-      normalizeLabels,
-    ),
-  ]);
+  const [bundle, compared, queue, access, labels, analysis] = await Promise.all(
+    [
+      run
+        ? adminRead(
+            `/v1/admin/conversation/runs/${run.id}/review`,
+            normalizeBundle,
+          )
+        : null,
+      compareRun && compareRun.id !== run?.id
+        ? adminRead(
+            `/v1/admin/conversation/runs/${compareRun.id}/review`,
+            normalizeBundle,
+          )
+        : null,
+      back ? adminRead(queueApiPath(backFilters, 100), normalizeQueue) : null,
+      loadConsoleAccess(),
+      adminRead(
+        `/v1/admin/conversation/calls/${recordingId}/labels`,
+        normalizeLabels,
+      ),
+      adminRead(
+        `/v1/admin/call-data/calls/${recordingId}/detail`,
+        normalizeCallDetail,
+      ),
+    ],
+  );
 
   if (!run || !bundle?.ok)
     return (
@@ -188,6 +195,7 @@ export default async function CallReviewPage({
       back={back}
       safety={access.platform.includes("platform_content_safety_manage")}
       labels={labels.ok ? labels.data : null}
+      analysis={analysis.ok ? analysis.data : null}
       startMs={startAt(one(query.at))}
       neighbours={{
         previous: at > 0 ? (ids[at - 1] ?? null) : null,

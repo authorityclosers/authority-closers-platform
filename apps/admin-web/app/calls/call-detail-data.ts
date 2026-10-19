@@ -92,6 +92,14 @@ export type DetailObject = {
 
 export type Totals = { costInr: number; tokensIn: number; tokensOut: number };
 
+/** A moment the engine heard a fact: offsets in ms from the start of the call. */
+export type Evidence = {
+  startMs: number;
+  endMs: number | null;
+  quote: string | null;
+  speaker: string | null;
+};
+
 export type CallDetail = {
   call: {
     recordingId: string;
@@ -109,6 +117,8 @@ export type CallDetail = {
   objects: DetailObject[];
   totals: Record<Branch | "call", Totals>;
   engine: EngineObjects;
+  /** Each current fact's moments, by object id, earliest first. */
+  evidence: Record<string, Evidence[]>;
   taxonomyVersion: string | null;
 };
 
@@ -137,6 +147,26 @@ function objectState(row: Record<string, unknown>): ObjectState {
   if (row.retracted === true) return "retracted";
   if (row.current === false) return "superseded";
   return "current";
+}
+
+function evidenceByFact(raw: unknown): Record<string, Evidence[]> {
+  const found: Record<string, Evidence[]> = {};
+  for (const item of read.array(raw)) {
+    const fact = read.object(item);
+    const moments = read
+      .array(fact.evidence)
+      .map((entry) => read.object(entry))
+      .filter((entry) => typeof entry.start_ms === "number")
+      .map((entry) => ({
+        startMs: read.number(entry.start_ms),
+        endMs: n(entry.end_ms),
+        quote: s(entry.quote) ?? s(entry.text),
+        speaker: s(entry.role) ?? s(entry.speaker),
+      }))
+      .sort((a, b) => a.startMs - b.startMs);
+    if (moments.length) found[read.string(fact.object_id)] = moments;
+  }
+  return found;
 }
 
 export function normalizeCallDetail(raw: unknown): CallDetail {
@@ -251,6 +281,7 @@ export function normalizeCallDetail(raw: unknown): CallDetail {
       report: totals(total.report),
     },
     engine: normalizeEngineObjects(body),
+    evidence: evidenceByFact(body.facts),
     taxonomyVersion: s(body.taxonomy_version),
   };
 }
