@@ -51,6 +51,8 @@ export type NativeStatus = {
   calling: boolean;
   callAccess: boolean;
   audio: boolean;
+  /** The app can open a provider's sign-in in the phone's browser (app-connect.ts). */
+  connect: boolean;
 };
 
 type Channel = {
@@ -200,6 +202,7 @@ export async function phoneStatus(): Promise<NativeStatus | null> {
       calling: raw.calling === true,
       callAccess: raw.callAccess === true,
       audio: raw.audio === true,
+      connect: raw.connect === true,
     };
   } catch {
     return null;
@@ -713,4 +716,17 @@ export function onPhoneSignal(listener: (event: string) => void): () => void {
   };
   window.addEventListener("sx-phone", handle);
   return () => window.removeEventListener("sx-phone", handle);
+}
+
+/**
+ * Opens a Facebook or Google sign-in in the phone's own browser (they refuse
+ * the app's web view); the app comes back to this page when it is done.
+ */
+export async function openConnect(url: string): Promise<boolean> {
+  try {
+    const raw = await ask<{ opened?: boolean }>("openConnect", { url }, 10_000);
+    return raw.opened === true;
+  } catch {
+    return false;
+  }
 }

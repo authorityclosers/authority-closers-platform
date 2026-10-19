@@ -306,7 +306,14 @@ function Chooser({
   );
 }
 
-export function MetaConversions({ returned }: { returned: boolean }) {
+export function MetaConversions({
+  returned,
+  onConnect,
+}: {
+  returned: boolean;
+  /** Continue with Meta's click, so the Sales Xray app opens it in the phone's browser. */
+  onConnect?: (event: { preventDefault: () => void }) => void;
+}) {
   const [view, setView] = useState<Conversions | null>(null);
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -391,8 +398,10 @@ export function MetaConversions({ returned }: { returned: boolean }) {
       </p>
       {!view.connected ? (
         <p className={styles.hint}>
-          <a href={`${BASE}/connect`}>Continue with Meta</a> again to choose a
-          dataset.
+          <a href={`${BASE}/connect`} onClick={onConnect}>
+            Continue with Meta
+          </a>{" "}
+          again to choose a dataset.
         </p>
       ) : editing || !view.dataset ? (
         <Chooser

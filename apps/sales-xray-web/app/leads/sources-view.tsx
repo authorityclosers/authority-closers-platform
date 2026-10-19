@@ -25,6 +25,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { BRANDS, type Brand } from "../brands/brand-registry";
 import { BrandMark } from "../report-entities";
 import { Badge, Button, Field, kitStyles } from "../ui/kit";
+import { useAppConnect } from "./app-connect";
 import {
   addSource,
   ago,
@@ -205,6 +206,11 @@ function GoogleTile() {
   useEffect(() => {
     void load();
   }, []);
+  // In the Sales Xray app, Continue with Google opens in the phone's browser.
+  const connect = useAppConnect("google", ({ result, message }) => {
+    setNote(message ?? GOOGLE_RETURNED[result] ?? GOOGLE_RETURNED.failed);
+    if (result === "connected") void load();
+  });
 
   const run = async (account: GoogleAccount, work: () => Promise<string>) => {
     setBusy(account.customerId);
@@ -273,6 +279,7 @@ function GoogleTile() {
             className={kitStyles.button}
             data-variant={status.accounts.length ? undefined : "primary"}
             href={`${GOOGLE}/connect`}
+            onClick={connect}
           >
             {status.accounts.length ? (
               <>
@@ -451,6 +458,15 @@ function MetaTile() {
   useEffect(() => {
     void load();
   }, []);
+  // In the Sales Xray app, Continue with Meta opens in the phone's browser
+  // (Facebook refuses sign-in inside the app) and finishes back here.
+  const [appConnected, setAppConnected] = useState(0);
+  const connect = useAppConnect("meta", ({ result, message }) => {
+    setNote(message ?? RETURNED[result] ?? RETURNED.failed);
+    if (result !== "connected") return;
+    setAppConnected((times) => times + 1);
+    void load();
+  });
   // While older leads come in (a slice a minute), keep the count moving.
   const filling = status?.pages.some(
     (page) => page.active && page.backfill?.state === "running",
@@ -570,6 +586,7 @@ function MetaTile() {
             className={kitStyles.button}
             data-variant={status.pages.length ? undefined : "primary"}
             href={`${META}/connect`}
+            onClick={connect}
           >
             {status.pages.length ? (
               <>
@@ -662,7 +679,11 @@ function MetaTile() {
       ) : null}
       {status?.configured ? <LeadAccessSteps open={blocked} /> : null}
       {status?.configured && status.pages.length ? (
-        <MetaConversions returned={params.get("meta") === "connected"} />
+        <MetaConversions
+          key={appConnected}
+          returned={params.get("meta") === "connected" || appConnected > 0}
+          onConnect={connect}
+        />
       ) : null}
     </SourceRow>
   );

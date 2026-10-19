@@ -12,6 +12,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge, Button, Field } from "../ui/kit";
+import { useAppConnect } from "./app-connect";
 import { LeadsError } from "./leads-client";
 import styles from "./leads.module.css";
 import {
@@ -284,6 +285,13 @@ export function WhatsAppSettings() {
     RETURNED[params?.get("whatsapp") ?? ""] ?? null,
   );
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(0);
+  // In the Sales Xray app, Connect opens Meta in the phone's browser and
+  // finishes back here (Facebook refuses sign-in inside the app).
+  const connect = useAppConnect("whatsapp", ({ result, message }) => {
+    setNote(message ?? RETURNED[result] ?? RETURNED.failed);
+    if (result === "connected") setLoaded((times) => times + 1);
+  });
 
   useEffect(() => {
     let live = true;
@@ -304,7 +312,7 @@ export function WhatsAppSettings() {
     return () => {
       live = false;
     };
-  }, []);
+  }, [loaded]);
 
   // Hidden until AC's WhatsApp app is set up for Sales Xray (nothing to connect yet).
   if (!status || (!status.configured && !status.numbers.length)) return null;
@@ -343,6 +351,7 @@ export function WhatsAppSettings() {
         <a
           className={styles.waConnect}
           href={START_URL}
+          onClick={connect}
           data-variant={status.numbers.length ? undefined : "primary"}
         >
           {status.numbers.length ? "Add a number" : "Connect WhatsApp"}
