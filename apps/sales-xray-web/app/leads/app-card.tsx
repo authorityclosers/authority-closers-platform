@@ -19,8 +19,12 @@ import styles from "./app-card.module.css";
 
 export type CardTone = "good" | "warn" | "bad" | "neutral" | "accent";
 
-const brand = (key: string): Brand | undefined =>
-  BRANDS.find((item) => item.key === key);
+// Instagram's colour file is a dark glyph that vanishes in dark mode: its
+// one-colour mark in Instagram's colour instead (as Lead sources did).
+const brand = (key: string): Brand | undefined => {
+  const found = BRANDS.find((item) => item.key === key);
+  return found && key === "instagram" ? { ...found, logo: false } : found;
+};
 
 /** An app's own logo on a soft tile, or a line icon for our own features. */
 export function AppLogo({

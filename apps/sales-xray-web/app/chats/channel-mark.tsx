@@ -7,10 +7,14 @@ import { CHANNEL_LABEL, type ChatChannel } from "./chats-client";
 import styles from "./chats.module.css";
 
 // The apps' own marks, from the brand library the Lead sources use too.
+// Instagram's colour file is a dark glyph that vanishes in dark mode, so it
+// uses its one-colour mark in Instagram's colour (as Lead sources does).
+const find = (key: string) => BRANDS.find((brand) => brand.key === key);
+const instagram = find("instagram");
 const MARKS: Record<ChatChannel, Brand | undefined> = {
-  whatsapp: BRANDS.find((brand) => brand.key === "whatsapp"),
-  messenger: BRANDS.find((brand) => brand.key === "messenger"),
-  instagram: BRANDS.find((brand) => brand.key === "instagram"),
+  whatsapp: find("whatsapp"),
+  messenger: find("messenger"),
+  instagram: instagram ? { ...instagram, logo: false } : undefined,
 };
 
 /** The channel's own colour and mark, small: WhatsApp, Messenger, Instagram. */
