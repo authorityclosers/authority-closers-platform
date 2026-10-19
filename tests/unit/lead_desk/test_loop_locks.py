@@ -3,6 +3,7 @@ sender and the Google Ads puller shared one, then the WhatsApp runner and the re
 sender did, so two loops skipped each other's ticks)."""
 
 from ac_platform.lead_desk import push, review_push
+from ac_platform.lead_desk.ai_replies import runner as ai_runner
 from ac_platform.lead_desk.connectors import google_pull, meta_capi, meta_spend
 from ac_platform.lead_desk.social import runner as social_runner
 from ac_platform.lead_desk.whatsapp import runner
@@ -18,6 +19,7 @@ def test_every_lead_desk_loop_has_its_own_lock() -> None:
         "whatsapp and sla runner": runner._LOCK,
         "messenger and instagram runner": social_runner._LOCK,
         "meta ad spend reader": meta_spend._LOCK,
+        "ai replies runner": ai_runner._LOCK,
     }
     pairs = list(locks.values())
     assert len(set(pairs)) == len(pairs), locks

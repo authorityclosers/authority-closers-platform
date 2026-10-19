@@ -384,7 +384,9 @@ class LeadWhatsAppMessage(Base):
             " 'location', 'contacts', 'interactive', 'button', 'reaction', 'unsupported')",
             name="kind",
         ),
-        CheckConstraint("auto IS NULL OR auto IN ('first_reply', 'out_of_hours')", name="auto"),
+        CheckConstraint(
+            "auto IS NULL OR auto IN ('first_reply', 'out_of_hours', 'ai_reply')", name="auto"
+        ),
         CheckConstraint("wa_id ~ '^[0-9]{6,20}$'", name="wa_id").ddl_if(dialect="postgresql"),
         Index(
             "uq_lead_desk_whatsapp_message_wamid",
@@ -593,7 +595,7 @@ class LeadSocialMessage(Base):
             name="kind",
         ),
         CheckConstraint(
-            "auto IS NULL OR auto IN ('first_reply', 'out_of_hours', 'comment_reply')",
+            "auto IS NULL OR auto IN ('first_reply', 'out_of_hours', 'comment_reply', 'ai_reply')",
             name="auto",
         ),
         CheckConstraint("tag IS NULL OR tag IN ('HUMAN_AGENT')", name="tag"),
@@ -699,3 +701,52 @@ class LeadAdSpendDay(Base):
     clicks: Mapped[int] = mapped_column(BigInteger)
     meta_leads: Mapped[int] = mapped_column(Integer)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadAiReply(Base):
+    """One AI reply to a lead: a draft for a seller, a reply sent by itself, or a hand-off
+    to a person (and why), with the model, tokens and cost for Admin. The draft is the
+    customer's conversation: it is emptied when the lead leaves Lead Desk."""
+
+    __tablename__ = "lead_desk_ai_replies"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_ai_reply_tenant"),
+        CheckConstraint("channel IN ('whatsapp', 'messenger', 'instagram')", name="channel"),
+        CheckConstraint("mode IN ('suggest', 'auto')", name="mode"),
+        CheckConstraint(
+            "outcome IN ('drafted', 'sent', 'handoff', 'opted_out', 'failed', 'paused')",
+            name="outcome",
+        ),
+        CheckConstraint(
+            "input_tokens IS NULL OR (input_tokens >= 0 AND output_tokens >= 0)", name="tokens"
+        ),
+        Index("ix_lead_desk_ai_reply_lead", "tenant_id", "lead_id", "created_at"),
+        Index("ix_lead_desk_ai_reply_recent", "tenant_id", "created_at"),
+        Index(
+            "uq_lead_desk_ai_reply_auto",
+            "channel",
+            "message_id",
+            unique=True,
+            postgresql_where=text("mode = 'auto' AND message_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    channel: Mapped[str] = mapped_column(String(16))
+    message_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    mode: Mapped[str] = mapped_column(String(8))
+    outcome: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    draft: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    sent_message_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_inr: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    usage_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    requested_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
