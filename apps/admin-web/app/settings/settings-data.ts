@@ -176,7 +176,18 @@ export function analysisArea(result: Read<unknown>): SettingsArea {
   );
 }
 
-export function executionArea(result: Read<unknown>): SettingsArea {
+/** The budget's period in words: the cap and what is left count only this period. */
+const PERIOD: Record<string, string> = {
+  lifetime: "in total",
+  monthly: "this month",
+  daily: "today",
+};
+
+export function executionArea(
+  result: Read<unknown>,
+  /** GET /v1/admin/conversation/budget: the owner's ceiling and period, when readable. */
+  budgetSettings: Read<unknown> | null = null,
+): SettingsArea {
   return area(
     {
       key: "execution",
@@ -190,6 +201,12 @@ export function executionArea(result: Read<unknown>): SettingsArea {
       const control = read.object(body.control);
       const budget = body.budget ? read.object(body.budget) : null;
       const waiting = read.optionalNumber(body.waiting_calls);
+      const settings =
+        budgetSettings?.ok && read.object(budgetSettings.data).settings
+          ? read.object(read.object(budgetSettings.data).settings)
+          : null;
+      const period = settings ? read.string(settings.period) : "";
+      const periodWords = PERIOD[period] ?? (period ? words(period) : null);
       return {
         revision:
           read.optionalNumber(control.revision) !== null
@@ -206,7 +223,18 @@ export function executionArea(result: Read<unknown>): SettingsArea {
                 {
                   label: "AI budget",
                   value: rupeesFromPaise(budget.cap_paise),
+                  note: periodWords ?? undefined,
                 },
+                ...(settings &&
+                read.optionalNumber(settings.ceiling_paise) !== null
+                  ? [
+                      {
+                        label: "Ceiling",
+                        value: rupeesFromPaise(settings.ceiling_paise),
+                        note: "the most the budget can be raised to",
+                      },
+                    ]
+                  : []),
                 {
                   label: "Left",
                   value: rupeesFromPaise(budget.available_paise),

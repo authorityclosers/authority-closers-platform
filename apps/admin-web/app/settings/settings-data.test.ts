@@ -173,3 +173,30 @@ it("keeps an area that could not be read, with the reason and no rows", () => {
   expect(area.rows).toEqual([]);
   expect(area.href).toBe("/sales-xray/execution");
 });
+
+it("says which period the budget counts and shows the ceiling", () => {
+  const area = executionArea(
+    ok({
+      control: { revision: 4, paused: false, changed_at: null },
+      budget: {
+        cap_paise: 3_000_000,
+        available_paise: 2_000_000,
+        warning: "normal",
+      },
+    }),
+    ok({ settings: { period: "monthly", ceiling_paise: 5_000_000 } }),
+  );
+  expect(area.rows.map((row) => [row.label, row.value, row.note])).toEqual([
+    ["Analyses", "Running", undefined],
+    ["AI budget", "₹30,000", "this month"],
+    ["Ceiling", "₹50,000", "the most the budget can be raised to"],
+    ["Left", "₹20,000", "Normal"],
+  ]);
+  // Without the budget read the area still shows the cap, with no period.
+  expect(
+    executionArea(ok({ control: {}, budget: { cap_paise: 100 } }), {
+      ok: false,
+      error: "unavailable",
+    }).rows[1],
+  ).toEqual({ label: "AI budget", value: "₹1", note: undefined });
+});

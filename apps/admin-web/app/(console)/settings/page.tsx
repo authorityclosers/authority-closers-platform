@@ -23,20 +23,22 @@ export const dynamic = "force-dynamic";
  * the reads their own pages use, each with its last change and a Change link.
  */
 export default async function SettingsPage() {
-  const [providers, analysis, execution, callData, report] = await Promise.all([
-    adminRead("/v1/admin/conversation/providers", read.object),
-    adminRead("/v1/admin/conversation/analysis-settings", read.object),
-    adminRead("/v1/admin/conversation/execution", read.object),
-    adminRead("/v1/admin/call-data", normalizeCallData),
-    adminRead(
-      "/v1/admin/conversation/report-settings",
-      normalizeReportSettings,
-    ),
-  ]);
+  const [providers, analysis, execution, budget, callData, report] =
+    await Promise.all([
+      adminRead("/v1/admin/conversation/providers", read.object),
+      adminRead("/v1/admin/conversation/analysis-settings", read.object),
+      adminRead("/v1/admin/conversation/execution", read.object),
+      adminRead("/v1/admin/conversation/budget", read.object),
+      adminRead("/v1/admin/call-data", normalizeCallData),
+      adminRead(
+        "/v1/admin/conversation/report-settings",
+        normalizeReportSettings,
+      ),
+    ]);
   const areas: SettingsArea[] = [
     providerArea(providers),
     analysisArea(analysis),
-    executionArea(execution),
+    executionArea(execution, budget),
     callDataArea(callData),
     reportArea(report),
   ];
