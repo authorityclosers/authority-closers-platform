@@ -18,6 +18,11 @@ from cryptography.exceptions import InvalidTag
 from sqlalchemy import and_, column, func, select, table
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.admin_settings.staff_key_email import (
+    STAFF_KEY_CREATED_EVENT,
+    STAFF_KEY_CREATED_JOB,
+    STAFF_KEY_CREATED_ROUTE,
+)
 from ac_platform.application.asyncio_runtime import run_async
 from ac_platform.application.settings import Settings, get_settings
 from ac_platform.billing.expiry_jobs import ExpirySignal, MinuteExpiryWorker
@@ -59,6 +64,11 @@ from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_VERIFICATION_JOB_V2,
     PASSWORD_EMAIL_VERIFICATION_JOB_V3,
     decrypt_challenge_token,
+)
+from ac_platform.identity.provider_link_email import (
+    PROVIDER_LINKED_EVENT,
+    PROVIDER_LINKED_JOB,
+    PROVIDER_LINKED_ROUTE,
 )
 from ac_platform.identity.reviewer_auth import REVIEWER_AUTH_EVENT, REVIEWER_AUTH_JOB
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
@@ -120,6 +130,8 @@ OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
     {
         ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE,
         ORGANISATION_INVITATION_EVENT: ORGANISATION_INVITATION_ROUTE,
+        STAFF_KEY_CREATED_EVENT: STAFF_KEY_CREATED_ROUTE,
+        PROVIDER_LINKED_EVENT: PROVIDER_LINKED_ROUTE,
         REVIEWER_AUTH_EVENT: OutboxJobRoute(
             job_kind=REVIEWER_AUTH_JOB,
             required_payload_keys=frozenset({"challenge_id"}),
@@ -518,6 +530,8 @@ def build_default_dispatcher(
         {
             ENROLLMENT_WELCOME_JOB: handler,
             ORGANISATION_INVITATION_JOB: handler,
+            STAFF_KEY_CREATED_JOB: handler,
+            PROVIDER_LINKED_JOB: handler,
             REVIEWER_AUTH_JOB: handler,
             REVIEW_INVITATION_JOB: handler,
             EMAIL_LOGIN_REQUEST_JOB: handler,
@@ -684,6 +698,8 @@ class DurableWorker:
             if job.kind not in {
                 ENROLLMENT_WELCOME_JOB,
                 ORGANISATION_INVITATION_JOB,
+                STAFF_KEY_CREATED_JOB,
+                PROVIDER_LINKED_JOB,
                 REVIEWER_AUTH_JOB,
                 REVIEW_INVITATION_JOB,
                 EMAIL_LOGIN_REQUEST_JOB,
@@ -773,6 +789,22 @@ class DurableWorker:
         *,
         provider_key: str,
     ) -> EmailMessage:
+        if job.kind == PROVIDER_LINKED_JOB:
+            from ac_platform.identity.provider_link_email import (
+                resolve_provider_linked_message,
+            )
+
+            return await resolve_provider_linked_message(
+                session, self._settings, job, provider_key=provider_key
+            )
+        if job.kind == STAFF_KEY_CREATED_JOB:
+            from ac_platform.admin_settings.staff_key_email import (
+                resolve_staff_key_created_message,
+            )
+
+            return await resolve_staff_key_created_message(
+                session, self._settings, job, provider_key=provider_key
+            )
         if job.kind == ORGANISATION_INVITATION_JOB:
             from ac_platform.organisations.invite_email import (
                 resolve_organisation_invitation_message,

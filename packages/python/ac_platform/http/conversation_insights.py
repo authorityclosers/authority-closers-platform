@@ -30,6 +30,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence import sales_xray_tenants
 from ac_platform.conversation_intelligence.acquisition_library import _account_library_query
 from ac_platform.conversation_intelligence.admin_call_review import AdminCallReview
+from ac_platform.conversation_intelligence.analysis_insights import analysis_insights
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
@@ -443,6 +444,25 @@ def _install_admin(
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
         return {"organisations": organisations, "organisation": chosen, "overview": overview}
+
+    @router.get("/insights/analysis")
+    async def company_analysis(
+        request: Request,
+        response: Response,
+        organisation: UUID | None = None,
+        days: Annotated[int, Query(ge=1, le=365)] = 30,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """What buyers said and skill scores, from the analysis itself (Phase 4)."""
+        surface(request, response)
+        try:
+            _, chosen = await target(auth, organisation)
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+        if chosen is None:
+            return {"organisation": None}
+        found = await analysis_insights(auth.database, UUID(chosen["id"]), days=days)
+        return {"organisation": chosen, **found}
 
     @router.get("/insights/calls")
     async def company_view_calls(

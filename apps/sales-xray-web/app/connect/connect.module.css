@@ -1,0 +1,151 @@
+/* Connect consent screen: Sales Xray tokens only (sx-tokens.css). */
+
+.page {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: var(--sx-gutter);
+  background: var(--sx-paper);
+}
+
+.card {
+  display: grid;
+  gap: 12px;
+  width: min(440px, 100%);
+  padding: 24px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-float);
+}
+
+.card h1 {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-title);
+}
+
+.icon {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent-ink);
+}
+
+.org {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.text {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-md);
+}
+
+.small {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.scopes {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scopes li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.scopes svg {
+  color: var(--sx-good);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--sx-control-h);
+  padding: 0 16px;
+  border-radius: var(--sx-radius-sm);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  border: 1px solid var(--sx-accent);
+  background: var(--sx-accent);
+  color: var(--sx-surface);
+}
+
+.secondary {
+  border: 1px solid var(--sx-line-strong);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.waiting {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  color: var(--sx-ink-2);
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--sx-line);
+  border-top-color: var(--sx-accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

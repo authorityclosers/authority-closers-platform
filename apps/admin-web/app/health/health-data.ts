@@ -1,5 +1,11 @@
 /** Normalizer for GET /v1/admin/conversation/health; every field has a default. */
 import { read } from "../lib/read";
+import {
+  type EngineHealth,
+  type ReviewHealth,
+  normalizeEngineHealth,
+  normalizeReviewHealth,
+} from "./engine-data";
 
 export const JOB_STATUSES = [
   "queued",
@@ -88,6 +94,9 @@ export type Health = {
   };
   daily: { day: string; analysed: number; failed: number }[];
   versions: Version[];
+  /** The call data engine's runs and Review 2.0's measures (Phase 4). */
+  engine: EngineHealth;
+  review: ReviewHealth;
 };
 
 const counts = (raw: unknown) => {
@@ -211,6 +220,8 @@ export function normalizeHealth(raw: unknown): Health {
         paisePerMinute: read.optionalNumber(row.paise_per_minute),
       };
     }),
+    engine: normalizeEngineHealth(body.engine),
+    review: normalizeReviewHealth(body.review),
   };
 }
 

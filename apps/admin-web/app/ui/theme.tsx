@@ -4,7 +4,7 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useSyncExternalStore } from "react";
 
 import { THEME_KEY } from "./theme-script";
-import styles from "./kit.module.css";
+import { kitStyles as styles } from "./kit";
 
 type Choice = "system" | "light" | "dark";
 const NEXT: Record<Choice, Choice> = {

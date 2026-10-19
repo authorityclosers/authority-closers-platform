@@ -15,7 +15,7 @@ Commands (every change is a dry run without ``--apply``):
   the recent window is recorded and the owner is alerted (counts and short
   ids only), like a dead letter.
 - ``register-endpoint --tenant --url --secret-ref [--secret-ref-next]
-  --events analysis.completed [--facts-profile wiselife-quote-v1] [--supersede]
+  --events analysis.completed [--facts-profile <profile id>] [--supersede]
   --reason --operator-reference [--apply]``
 - ``disable-endpoint --endpoint-id --reason --operator-reference [--apply]``
 - ``list``: endpoints with masked URLs and event counts.
@@ -90,8 +90,14 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     register.add_argument("--url", required=True)
     register.add_argument("--secret-ref", required=True)
     register.add_argument("--secret-ref-next")
-    register.add_argument("--events", required=True, nargs="+", choices=EVENTS)
+    register.add_argument("--events", nargs="*", default=[], choices=(*EVENTS, "lead.handover"))
     register.add_argument("--facts-profile", choices=sorted(PROFILES))
+    register.add_argument("--kind", choices=("webhook", "handover"), default="webhook")
+    register.add_argument(
+        "--lead-fields",
+        type=Path,
+        help="hand-over only: JSON file with the parts and form questions an admin approved",
+    )
     register.add_argument("--supersede", action="store_true")
     register.add_argument("--reason", required=True)
     register.add_argument("--operator-reference", required=True)
@@ -110,6 +116,12 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     replay.add_argument("--reason", required=True)
     replay.add_argument("--operator-reference", required=True)
     replay.add_argument("--apply", action="store_true")
+
+    correct = commands.add_parser("correct-handover")
+    correct.add_argument("--event-id", required=True, type=UUID)
+    correct.add_argument("--reason", required=True)
+    correct.add_argument("--operator-reference", required=True)
+    correct.add_argument("--apply", action="store_true")
 
     test = commands.add_parser("test-event")
     test.add_argument("--endpoint-id", required=True, type=UUID)
@@ -456,6 +468,16 @@ async def _one_pass(
                 )
             )
         _print({"due_events": int(due or 0), "apply": False})
+        await _lead_pass(
+            sessions,
+            arguments,
+            environment=environment,
+            app_url=app_url,
+            client=client,
+            clock=clock,
+            deadline=deadline,
+            totals=totals,
+        )
         return bool(active)
     while active and time.monotonic() < deadline:
         delivered = await deliver_one(sessions, client, environment=environment, clock=clock)
@@ -470,8 +492,60 @@ async def _one_pass(
         swept = await erasure_sweep(session, clock())
     if any(swept.values()):
         _print(swept)
+    await _lead_pass(
+        sessions,
+        arguments,
+        environment=environment,
+        app_url=app_url,
+        client=client,
+        clock=clock,
+        deadline=deadline,
+        totals=totals,
+    )
     # The sweep runs even with no active endpoint, so erased calls are emptied regardless.
     return bool(active)
+
+
+async def _lead_pass(
+    sessions: Any,
+    arguments: argparse.Namespace,
+    *,
+    environment: str,
+    app_url: str,
+    client: Any,
+    clock: Callable[[], datetime],
+    deadline: float,
+    totals: dict[str, int],
+) -> None:
+    """Lead events and hand-overs (0102): freeze new ones, deliver due ones, empty old bodies.
+
+    It runs whether or not a webhook is active: a hand-over recipient may be the
+    organisation's only one.
+    """
+    from ac_platform.partner_events import lead_events
+
+    if not arguments.apply:
+        due = await lead_events.due_count(sessions, clock())
+        if due:
+            _print({"due_lead_events": due, "apply": False})
+        return
+    for line in await lead_events.collect(
+        sessions, environment=environment, app_url=app_url, now=clock()
+    ):
+        _print(line)
+    while time.monotonic() < deadline:
+        sent = await lead_events.deliver_one(sessions, client, environment=environment, clock=clock)
+        if sent is None:
+            break
+        totals["attempts"] += 1
+        totals["delivered"] += sent.get("status") == "delivered"
+        totals["dropped"] += "dropped" in sent
+        totals["dead_letters"] += sent.get("status") == "dead_letter"
+        _print(sent)
+    async with sessions() as session, session.begin():
+        emptied = await lead_events.erasure_sweep(session, clock())
+    if emptied:
+        _print({"lead_events_emptied": emptied})
 
 
 async def _run(
@@ -643,7 +717,7 @@ async def _inner_async(
 ) -> int:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-    from ac_platform.partner_events import endpoints
+    from ac_platform.partner_events import endpoints, lead_events
 
     environment = _environment(_service(arguments.service_config))
     app_url = _app_url(arguments, environment)
@@ -679,11 +753,27 @@ async def _inner_async(
                     secret_ref_next=arguments.secret_ref_next,
                     events=list(arguments.events),
                     facts_profile=arguments.facts_profile,
+                    kind=arguments.kind,
+                    lead_fields=(
+                        json.loads(arguments.lead_fields.read_text(encoding="utf-8"))
+                        if arguments.lead_fields
+                        else None
+                    ),
                     reason=arguments.reason,
                     operator_reference=arguments.operator_reference,
                     supersede=arguments.supersede,
                     apply=arguments.apply,
                     environment=environment,
+                    now=clock(),
+                )
+            elif arguments.command == "correct-handover":
+                result = await lead_events.correct(
+                    session,
+                    event_id=arguments.event_id,
+                    app_url=app_url,
+                    reason=arguments.reason,
+                    operator_reference=arguments.operator_reference,
+                    apply=arguments.apply,
                     now=clock(),
                 )
             elif arguments.command == "disable-endpoint":
@@ -706,7 +796,7 @@ async def _inner_async(
                 )
             _print(result)
             return 0
-    except endpoints.EndpointError as error:
+    except (endpoints.EndpointError, lead_events.LeadFieldsError) as error:
         _print({"error": str(error)})
         return 2
     finally:

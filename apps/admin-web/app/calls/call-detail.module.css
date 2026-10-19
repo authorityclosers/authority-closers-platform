@@ -1,0 +1,99 @@
+/* The call's analysis map: filters, dense tables. Tokens only. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.filters select,
+.filters input {
+  height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.filters input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chips button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.chips button[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-weight: 650;
+}
+
+.chips button:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 1px;
+}
+
+.count {
+  margin-left: auto;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.type small {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+.display {
+  min-width: 260px;
+}
+
+.muted {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.sub {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--sx-text-xs);
+}
+
+.none {
+  margin: 0;
+  padding: 16px 14px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}

@@ -143,3 +143,51 @@
     font-size: 16px;
   }
 }
+
+/* Dense rows: two short lines per cell instead of one tall one. */
+.callRow > th,
+.callRow > td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  vertical-align: top;
+}
+
+.callCell {
+  max-width: 260px;
+}
+
+.sub {
+  display: block;
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engine {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.mapLink {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.mapLink:hover,
+.mapLink:focus-visible {
+  text-decoration: underline;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

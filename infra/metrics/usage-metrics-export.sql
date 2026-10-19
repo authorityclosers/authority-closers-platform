@@ -189,12 +189,33 @@ hold AS (
   FROM hold_raw h
   GROUP BY 1, 2, 3, 4, 5, 6
 ),
+budget_setting AS (
+  -- The Admin budget settings (owner, 19 Oct 2026): the newest audited revision per
+  -- budget scope. Read from audit events, so the export also runs before migration 0099.
+  SELECT DISTINCT ON (resource_id) resource_id AS scope_id,
+         CASE WHEN payload -> 'after' ->> 'ceiling_paise' ~ '^[0-9]{1,12}$' THEN (payload -> 'after' ->> 'ceiling_paise')::bigint END AS ceiling_paise,
+         payload -> 'after' ->> 'period' AS period,
+         CASE WHEN payload -> 'after' ->> 'cap_paise' ~ '^[0-9]{1,12}$' THEN (payload -> 'after' ->> 'cap_paise')::bigint END AS cap_paise
+  FROM audit_events
+  WHERE action = 'conversation.budget_settings_changed'
+  ORDER BY resource_id, occurred_at DESC
+),
 budget AS (
-  SELECT b.scope_id,
-         CASE WHEN b.snapshot ->> 'cap_paise' ~ '^[0-9]{1,12}$' THEN (b.snapshot ->> 'cap_paise')::bigint END AS cap_paise,
+  SELECT b.scope_id, coalesce(s.period, 'lifetime') AS period, s.ceiling_paise,
+         -- Monthly and daily: the cap per period. Lifetime: the ledger's cap, at most the ceiling.
+         CASE WHEN s.period IN ('monthly', 'daily') THEN s.cap_paise
+              WHEN b.snapshot ->> 'cap_paise' ~ '^[0-9]{1,12}$'
+                THEN least((b.snapshot ->> 'cap_paise')::bigint, coalesce(s.ceiling_paise, (b.snapshot ->> 'cap_paise')::bigint)) END AS cap_paise,
          -- What the ledger counts against the cap: settled at its real cost, open at its quote.
+         -- In a period, settled spend counts only when it was reserved inside the period
+         -- (India time); money still held counts until it settles.
          (SELECT coalesce(sum(CASE
                    WHEN r ->> 'state' = 'released' THEN 0
+                   WHEN r ->> 'state' = 'settled' AND s.period IN ('monthly', 'daily')
+                     AND coalesce(CASE WHEN r -> 'quote' ->> 'created_at_epoch' ~ '^[0-9]{1,12}$'
+                                       THEN (r -> 'quote' ->> 'created_at_epoch')::bigint END, 0)
+                         < extract(epoch FROM date_trunc(CASE s.period WHEN 'daily' THEN 'day' ELSE 'month' END, now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')
+                     THEN 0
                    WHEN r ->> 'state' = 'settled' AND r -> 'settlement' ->> 'actual_paise' ~ '^[0-9]{1,12}$'
                      THEN (r -> 'settlement' ->> 'actual_paise')::bigint
                    WHEN r -> 'quote' ->> 'max_cost_paise' ~ '^[0-9]{1,12}$'
@@ -202,19 +223,23 @@ budget AS (
                    ELSE 0 END), 0)
             FROM json_array_elements(b.snapshot -> 'reservations') r) AS committed_paise
   FROM conversation_budget_accounts b
+  LEFT JOIN budget_setting s ON s.scope_id = b.scope_id::text
 ),
 waiting AS (
   -- Calls waiting for AI budget; they continue by themselves once it allows.
   SELECT count(*) AS n FROM conversation_processing_plans
   WHERE state = 'active' AND progress ->> 'failure_code' = 'budget_cap_reached'
 ),
-ceiling_request AS (
+budget_change AS (
+  -- Each Admin budget settings revision: amounts and periods only, never the reason text.
   SELECT id, occurred_at AS at,
-         CASE WHEN payload ->> 'requested_cap_paise' ~ '^[0-9]{1,12}$' THEN (payload ->> 'requested_cap_paise')::bigint END AS requested_paise,
-         CASE WHEN payload ->> 'sealed_ceiling_paise' ~ '^[0-9]{1,12}$' THEN (payload ->> 'sealed_ceiling_paise')::bigint END AS ceiling_paise,
-         left(payload ->> 'reason', 200) AS reason
+         CASE WHEN payload -> 'before' ->> 'ceiling_paise' ~ '^[0-9]{1,12}$' THEN (payload -> 'before' ->> 'ceiling_paise')::bigint END AS before_ceiling_paise,
+         CASE WHEN payload -> 'after' ->> 'ceiling_paise' ~ '^[0-9]{1,12}$' THEN (payload -> 'after' ->> 'ceiling_paise')::bigint END AS ceiling_paise,
+         payload -> 'before' ->> 'period' AS before_period,
+         payload -> 'after' ->> 'period' AS period,
+         CASE WHEN payload -> 'after' ->> 'cap_paise' ~ '^[0-9]{1,12}$' THEN (payload -> 'after' ->> 'cap_paise')::bigint END AS cap_paise
   FROM audit_events
-  WHERE action = 'conversation.budget_ceiling_requested' AND occurred_at >= (SELECT since FROM win)
+  WHERE action = 'conversation.budget_settings_changed' AND occurred_at >= (SELECT since FROM win)
 ),
 payment AS (
   SELECT a.tenant_id AS company_id, (e.verified_at AT TIME ZONE 'UTC')::date AS day, e.kind,
@@ -274,11 +299,15 @@ SELECT json_build_object(
       'day', day, 'scope', scope_id, 'state', state, 'ref', ref, 'provider', provider, 'kind', kind,
       'n', n, 'held_paise', held_paise, 'settled_paise', settled_paise
     ) ORDER BY day) FROM hold), '[]'::json),
-  'budgets', coalesce((SELECT json_agg(json_build_object('scope', scope_id, 'cap_paise', cap_paise, 'committed_paise', committed_paise)) FROM budget), '[]'::json),
+  'budgets', coalesce((SELECT json_agg(json_build_object(
+      'scope', scope_id, 'cap_paise', cap_paise, 'committed_paise', committed_paise,
+      'period', period, 'ceiling_paise', ceiling_paise
+    )) FROM budget), '[]'::json),
   'waiting_calls', (SELECT n FROM waiting),
-  'ceiling_requests', coalesce((SELECT json_agg(json_build_object(
-      'id', id, 'at', at, 'requested_paise', requested_paise, 'ceiling_paise', ceiling_paise, 'reason', reason
-    ) ORDER BY at) FROM ceiling_request), '[]'::json),
+  'budget_changes', coalesce((SELECT json_agg(json_build_object(
+      'id', id, 'at', at, 'before_ceiling_paise', before_ceiling_paise, 'ceiling_paise', ceiling_paise,
+      'before_period', before_period, 'period', period, 'cap_paise', cap_paise
+    ) ORDER BY at) FROM budget_change), '[]'::json),
   'payments', coalesce((SELECT json_agg(json_build_object(
       'company', company_id, 'day', day, 'kind', kind, 'mode', mode, 'currency', currency,
       'n', n, 'amount_minor', amount_minor

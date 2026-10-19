@@ -1,4 +1,4 @@
-"""19 Oct incident: a review request may wait seconds, never hold a connection for minutes."""
+"""19 Oct incident: a bounded sign-in may wait seconds, never hold a connection for minutes."""
 
 import asyncio
 import time
@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import DBAPIError
 
-from ac_platform.http.sales_xray_review import LOCK_TIMEOUT_MS, signed_in
+from ac_platform.http.bounded_session import LOCK_TIMEOUT_MS, signed_in
 
 
 class _Database:

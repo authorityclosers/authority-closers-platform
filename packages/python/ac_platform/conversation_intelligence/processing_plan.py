@@ -28,6 +28,7 @@ from ac_platform.conversation_intelligence.application import (
     utc,
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
+from ac_platform.conversation_intelligence.budget_settings import budget_limits
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
 from ac_platform.conversation_intelligence.contracts import (
     C5_REPAIR_FAILURE_CODES,
@@ -37,7 +38,6 @@ from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
     MinuteAccount,
     Quote,
-    effective_budget_cap_paise,
 )
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.inference import (
@@ -127,6 +127,26 @@ _LOGGER = logging.getLogger(__name__)
 # A call out of AI budget waits with this code and is rechecked this often.
 BUDGET_WAIT_CODE = "budget_cap_reached"
 BUDGET_RECHECK = timedelta(seconds=60)
+# A person's acceptance covers 24 hours (orchestrator, 19 Oct 2026), never past the
+# release approval or a retry's continuation grant, so a call waiting for AI budget
+# resumes without asking again. Every stage is still quoted fresh inside the plan.
+PLAN_VALIDITY = timedelta(hours=24)
+# The plan was accepted under another release approval: the person taps to continue.
+NEEDS_ACCEPTANCE_CODE = "needs_new_acceptance"
+
+
+class PlanNeedsAcceptance(ConversationDenied):
+    """The accepted plan is intact, but the current release approval differs.
+
+    Its prices and providers may have changed, so it never continues without the
+    person's new acceptance. The app shows only "Tap to continue your analysis".
+    """
+
+
+def plan_expires_at_epoch(now_epoch: int, *limits: int) -> int:
+    """When a new plan stops being valid: 24 h, or the earliest approval limit."""
+
+    return min(now_epoch + int(PLAN_VALIDITY.total_seconds()), *limits)
 
 
 def _retained_progress(row: ConversationProcessingPlan) -> dict[str, Any]:
@@ -485,7 +505,6 @@ async def require_plan_consent(
         or value.source_sha256 != recording.source_sha256
         or value.source_revision != recording.source_revision
         or not value.created_at_epoch <= int(now.timestamp()) < value.expires_at_epoch
-        or bundle.digest != value.authority_sha256
         or command is None
         or command.action != "processing_plan_accepted"
         or (command.tenant_id, command.person_id, command.result_id)
@@ -493,6 +512,10 @@ async def require_plan_consent(
         or command.intent_sha256 != content_hash(acceptance_intent(row))
     ):
         raise ConversationDenied("This processing plan needs current owner approval.")
+    if bundle.digest != value.authority_sha256:
+        # A fresh quote under another release could charge more: never continue
+        # without the person's OK (orchestrator, 19 Oct 2026).
+        raise PlanNeedsAcceptance("This analysis needs your OK to continue.")
     await validate_continuation_grant(app, actor, recording, value, now)
     return value
 
@@ -998,17 +1021,17 @@ class ConversationProcessingPlans:
             if budget_row is None:
                 raise ConversationConflict("The provider budget cannot cover this complete plan.")
             budget = BudgetAccount.from_dict(budget_row.snapshot)
-            try:
-                effective_cap = effective_budget_cap_paise(
-                    bundle.budget_cap_paise, budget.cap_paise
-                )
-            except ValueError:
-                raise ConversationDenied(
-                    "The persisted provider budget exceeds its release approval."
-                ) from None
+            limits = await budget_limits(
+                self.db,
+                scope_id=bundle.budget_scope_id,
+                sealed_ceiling_paise=bundle.budget_cap_paise,
+                budget=budget,
+                now=now,
+            )
+            effective_cap = min(limits.cap_paise, limits.ceiling_paise)
             if maximum_cost > effective_cap:
                 raise ConversationDenied("The complete plan exceeds the effective provider budget.")
-            if budget.available_paise < maximum_cost:
+            if limits.available_paise(budget) < maximum_cost:
                 raise ConversationConflict("The provider budget cannot cover this complete plan.")
         minutes = await self.db.get(
             ConversationMinuteAccount, (recording.tenant_id, recording.person_id)
@@ -1054,8 +1077,8 @@ class ConversationProcessingPlans:
                 ),
                 qualitative_pack_sha256=qualitative_pack_sha256,
                 created_at_epoch=int(now.timestamp()),
-                expires_at_epoch=min(
-                    int(now.timestamp()) + 3600,
+                expires_at_epoch=plan_expires_at_epoch(
+                    int(now.timestamp()),
                     bundle.expires_at_epoch,
                     *(item.expires_at_epoch for item in approvals.values()),
                     *(
@@ -1672,7 +1695,9 @@ class ProcessingPlanScheduler:
                     row.progress = {
                         **_retained_progress(row),
                         "failure_code": (
-                            "processing_authorization_or_input_unavailable"
+                            NEEDS_ACCEPTANCE_CODE
+                            if isinstance(error, PlanNeedsAcceptance)
+                            else "processing_authorization_or_input_unavailable"
                             if isinstance(error, (ConversationError, InferenceTaskError))
                             else "processing_coordinator_timeout"
                             if isinstance(error, TimeoutError)

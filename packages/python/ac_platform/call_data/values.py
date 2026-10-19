@@ -6,6 +6,8 @@ call object and a prospect field revision hold the same numeric statement.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import asdict
 from decimal import Decimal
@@ -327,6 +329,24 @@ _SMALL = frozenset({"the", "a", "an", "to", "of", "and", "for", "on", "in", "by"
 
 def _words(text: str) -> frozenset[str]:
     return frozenset(w for w in _WORD.findall(text.casefold()) if w not in _SMALL)
+
+
+def value_digest(
+    type_key: str, value: Any, span: tuple[Any, Any, Any] | list[Any] | None = None
+) -> str:
+    """The canonical fingerprint of an AI value: what "the same value" means.
+
+    sha256 of sorted, compact UTF-8 JSON of ``{"type", "value"}``, plus ``"span":
+    [start_ms, end_ms, speaker]`` for a segment label (segment ids are per transcript;
+    a better transcript numbers them again). Display, confidence, basis and evidence
+    are left out: a wording change or a new quote does not make a different claim.
+    Review 2.0 stores it with each verdict, so a later engine change never inherits one.
+    """
+    document: dict[str, Any] = {"type": type_key, "value": value}
+    if span is not None:
+        document["span"] = list(span)
+    encoded = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def similar(a: str, b: str) -> bool:

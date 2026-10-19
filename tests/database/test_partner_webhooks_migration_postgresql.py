@@ -47,6 +47,16 @@ def migration() -> Any:
     return module
 
 
+def later() -> Any:
+    """0102 builds on these tables, so it steps down first and back up after."""
+    path = ROOT / "db/migrations/versions/20261019_0102_partner_lead_events.py"
+    spec = importlib.util.spec_from_file_location("partner_lead_events_migration_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _endpoint(tenant_id: Any, **changes: Any) -> dict[str, Any]:
     now = datetime.now(UTC)
     values = {
@@ -56,7 +66,7 @@ def _endpoint(tenant_id: Any, **changes: Any) -> dict[str, Any]:
         "secret_ref": "AC_PARTNER_WEBHOOK_SECRET__FICTIONAL",
         "secret_ref_next": None,
         "events": ["analysis.completed"],
-        "facts_profile": "wiselife-quote-v1",
+        "facts_profile": "rooftop-solar-quote-v1",
         "status": "active",
         "events_since": now,
         "supersedes_endpoint_id": None,
@@ -91,9 +101,11 @@ def test_empty_migration_downgrades_reupgrades_and_matches_the_models(
         # Match env.py so Alembic applies the repository's constraint names.
         context = MigrationContext.configure(connection, opts={"target_metadata": model_metadata()})
         with Operations.context(context):
+            later().downgrade()
             module.downgrade()
             assert not TABLES & set(inspect(connection).get_table_names())
             module.upgrade()
+            later().upgrade()
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
 
 

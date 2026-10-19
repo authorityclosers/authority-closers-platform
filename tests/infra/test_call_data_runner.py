@@ -23,6 +23,24 @@ def test_service_restarts_and_picks_up_releases() -> None:
     text = SERVICE.read_text()
     assert "ExecStart=/usr/local/sbin/ac-call-data %i" in text
     assert "Restart=always" in text and "RuntimeMaxSec=" in text
+    # Stopping docker exec leaves the runner inside the worker: stop it there too.
+    assert "ExecStop=/usr/local/sbin/ac-call-data stop %i" in text
+
+
+def test_the_runner_left_inside_the_worker_is_stopped_before_a_new_one() -> None:
+    text = SCRIPT.read_text()
+    start = text.index('    docker exec "$container" python -m "$module"')
+    assert text.rindex('stop_container_runner "$container"', 0, start) < start
+    # Only looping (automatic) runners are stopped; a backfill never loops.
+    assert 'b"--loop" in parts' in text
+    # On the developer machine the runner is a host process; stop has nothing to do.
+    result = subprocess.run(  # noqa: S603
+        ["bash", str(SCRIPT), "stop", "development-live"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0 and result.stdout == ""
 
 
 def test_a_reached_cap_tells_the_owner_once_a_day_per_pipeline(tmp_path: Path) -> None:

@@ -1,3 +1,4 @@
+import { captureHeader } from "./capture-source";
 import {
   ACQUISITION,
   MAX_ACQUISITION_FILE_BYTES,
@@ -360,6 +361,7 @@ export async function advanceImport(
       "X-Source-SHA256": pending.sha,
       "X-Upload-Policy": batch.policySha,
       "X-Upload-Consent": "accepted",
+      ...captureHeader(file),
     },
     body: file,
   });

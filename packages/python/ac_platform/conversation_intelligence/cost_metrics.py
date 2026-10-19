@@ -48,6 +48,10 @@ ENVIRONMENT_FILTERS = ("all", *ENVIRONMENTS)
 MAX_DAYS = 120
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_CALLS = 300
+# Calls that cost nothing are listed apart, newest first (owner's review, 19 Oct 2026).
+MAX_ZERO_CALLS = 100
+# How the Per call tab can order the calls with a cost.
+CALL_SORTS = ("newest", "cost", "per_minute", "audio", "tokens")
 STALE_AFTER = timedelta(minutes=45)
 INDIA = ZoneInfo("Asia/Kolkata")
 TEST_KINDS = frozenset({"canary", "qa"})
@@ -451,10 +455,31 @@ class Scope:
     days: int
     environment: str
     tests: bool
+    # The Per call tab: its order, and whether each call carries its steps.
+    call_sort: str = "newest"
+    call_steps: bool = False
 
     @property
     def since(self) -> datetime:
         return self.now - timedelta(days=self.days)
+
+
+def _step_view(step: Step) -> dict[str, Any]:
+    """One provider step of a call: what ran, how, and what it cost (numbers only)."""
+
+    return {
+        "stage": step.stage,
+        "provider": step.provider,
+        "model": step.model,
+        "status": step.status,
+        "attempts": step.attempts,
+        "input_tokens": step.input_tokens,
+        "output_tokens": step.output_tokens,
+        "audio_minutes": _minutes(step.audio_ms) if step.audio_ms else None,
+        "elapsed_ms": step.elapsed_ms,
+        "rupees": None if step.paise is None else _rupees(step.paise),
+        "at": step.at.isoformat(),
+    }
 
 
 def _company(
@@ -462,7 +487,7 @@ def _company(
 ) -> dict[str, str]:
     known = exports[environment].companies.get(company or "") if environment in exports else None
     if known and known["kind"] == "personal":
-        return {"id": company or "", "name": "Individuals (personal accounts)", "kind": "personal"}
+        return {"id": company or "", "name": "Personal accounts", "kind": "personal"}
     return {
         "id": company or "",
         "name": known["name"] if known else "Unknown",
@@ -718,7 +743,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
     per_call: dict[tuple[str, str | None], list[Step]] = defaultdict(list)
     for step in window_steps:
         per_call[(step.environment, step.call)].append(step)
-    call_rows = []
+    call_rows: list[dict[str, Any]] = []
     for call in sorted(
         (
             call
@@ -741,6 +766,8 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
             row["runs"] += 1
             row["failed"] += step.status == "dead_letter"
         cost = spend(mine)
+        statuses = Counter(step.status for step in mine)
+        models = sorted({step.model for step in mine if step.model})
         rate = revenue_per_minute.get((call.environment, call.company or ""))
         revenue = None if rate is None else round(rate * call.billed_s / 60, 2)
         company = _company(by_env, call.environment, call.company)
@@ -773,8 +800,19 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
                 "version": version_label(call.version),
                 "revenue": revenue,
                 "margin": None if revenue is None else round(revenue - cost / 100, 2),
+                "tokens": sum(step.input_tokens + step.output_tokens for step in mine),
+                "models": models,
+                "statuses": dict(statuses),
+                **({"steps": [_step_view(step) for step in mine]} if scope.call_steps else {}),
             }
         )
+    paid_calls = [row for row in call_rows if row["rupees"] > 0]
+    zero_calls = [row for row in call_rows if row["rupees"] <= 0]
+    if scope.call_sort != "newest":
+        field = {"cost": "rupees", "per_minute": "per_minute", "audio": "audio_minutes"}.get(
+            scope.call_sort, "tokens"
+        )
+        paid_calls.sort(key=lambda row: row[field] or 0, reverse=True)
 
     # ---- revenue against cost, per company ----
     revenue_rows = _revenue_rows(chosen, by_env, steps, calls, scope)
@@ -820,7 +858,13 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         ],
         "overview": overview,
         "providers": providers,
-        "calls": {"rows": call_rows[:MAX_CALLS], "total": len(call_rows)},
+        "calls": {
+            "rows": paid_calls[:MAX_CALLS],
+            "total": len(paid_calls),
+            "sort": scope.call_sort,
+            "zero_rows": zero_calls[:MAX_ZERO_CALLS],
+            "zero_total": len(zero_calls),
+        },
         "revenue": revenue_rows,
         "pipelines": pipelines,
         "money": money,
@@ -1063,6 +1107,7 @@ def _money(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
     for export in exports:
         cap = sum(_int(row.get("cap_paise")) for row in export.budgets)
         used = sum(_int(row.get("committed_paise")) for row in export.budgets)
+        periods = {_text(row.get("period")) or "lifetime" for row in export.budgets}
         open_rows = [row for row in export.holds if row.get("state") == "uncertain"]
         by_ref: Counter[str] = Counter()
         by_ref_paise: Counter[str] = Counter()
@@ -1094,6 +1139,7 @@ def _money(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
                 "used_rupees": _rupees(used),
                 "used_share": round(used / cap, 3) if cap else None,
                 "waiting_calls": export.waiting_calls,
+                "period": periods.pop() if len(periods) == 1 else "lifetime",
                 "settled": sum(_int(row.get("n")) for row in settled),
                 "settled_rupees": _rupees(sum(_int(row.get("settled_paise")) for row in settled)),
                 "by_reason": [
@@ -1223,6 +1269,8 @@ class AdminCostMetrics:
         days: int = 30,
         environment: str = "all",
         tests: bool = False,
+        call_sort: str = "newest",
+        call_steps: bool = False,
     ) -> dict[str, Any]:
         if actor.tenant_id != self.operations_tenant_id:
             raise ConversationDenied("Cost and usage requires the AC operations workspace.")
@@ -1231,10 +1279,20 @@ class AdminCostMetrics:
             raise ConversationError("Choose a window between 1 and 120 days.")
         if environment not in ENVIRONMENT_FILTERS:
             raise ConversationError("Choose all, production, staging or development.")
+        if call_sort not in CALL_SORTS:
+            raise ConversationError("Sort calls by newest, cost, per_minute, audio or tokens.")
         exports, problems = read_store(self.store_root)
         now = utc(self.application.clock())
         result = build_metrics(
-            exports, Scope(now=now, days=days, environment=environment, tests=tests)
+            exports,
+            Scope(
+                now=now,
+                days=days,
+                environment=environment,
+                tests=tests,
+                call_sort=call_sort,
+                call_steps=call_steps,
+            ),
         )
         result["problems"] = problems
         result["available"] = [export.environment for export in exports]

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountAuth } from "./account-auth";
 import { AUTH_COMPLETE_MESSAGE } from "./account-auth-client";
 import { ThemeProvider } from "./lightbox/theme-provider";
@@ -732,4 +732,312 @@ it("manual Google recovery waits for the exact callback and the matching receipt
     "/v1/me/workspaces",
   ]);
   expect(onAuthenticated).toHaveBeenCalledOnce();
+});
+
+describe("when the sign-in window is blocked", () => {
+  beforeEach(() => window.sessionStorage.clear());
+
+  async function consentAndContinue() {
+    await act(async () =>
+      host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+    );
+    await click("Continue with Google");
+  }
+
+  it("signs in on this page with the same click and remembers where it started", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/config")) return Response.json(config);
+        throw new Error(`Unexpected ${url}`);
+      }),
+    );
+    const open = vi.fn().mockReturnValue(null);
+    vi.stubGlobal("open", open);
+    const navigate = vi
+      .spyOn(window.location, "assign")
+      .mockImplementation(() => {});
+    window.history.replaceState(null, "", "/login?next=/leads");
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    await consentAndContinue();
+    expect(open).toHaveBeenCalledOnce();
+    const started = new URL(navigate.mock.calls[0][0] as string);
+    expect(started.origin).toBe(window.location.origin);
+    expect(started.pathname).toBe("/v1/auth/google/start");
+    expect(started.searchParams.get("consent_version")).toBe("terms-v1");
+    const flow = new URLSearchParams(
+      started.searchParams.get("return_path")!.split("?")[1],
+    ).get("flow")!;
+    expect(
+      JSON.parse(window.sessionStorage.getItem("sx.signIn.redirect")!),
+    ).toMatchObject({
+      flow,
+      provider: "google",
+      returnTo: "/login?next=/leads",
+    });
+    expect(host.textContent).toContain("Opening Google sign-in…");
+    expect(host.textContent).not.toContain("Allow the sign-in window");
+  });
+
+  it("never opens a window inside Facebook's or Instagram's in-app browser", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(config)),
+    );
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (iPhone) AppleWebKit Mobile/15E148 Instagram 312.0.0.32.112",
+    );
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    const navigate = vi
+      .spyOn(window.location, "assign")
+      .mockImplementation(() => {});
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    await consentAndContinue();
+    expect(open).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledOnce();
+  });
+
+  it("finishes on return only after the account session reads back", async () => {
+    window.sessionStorage.setItem(
+      "sx.signIn.result",
+      JSON.stringify({ result: "success", provider: "google", at: Date.now() }),
+    );
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        if (url.includes("/config")) return Response.json(config);
+        if (url === "/v1/me/workspaces") return Response.json(session);
+        throw new Error(`Unexpected ${url}`);
+      }),
+    );
+    const onAuthenticated = vi.fn();
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={onAuthenticated} />),
+    );
+    await flush();
+    expect(calls).toContain("/v1/me/workspaces");
+    expect(onAuthenticated).toHaveBeenCalledOnce();
+    expect(window.sessionStorage.getItem("sx.signIn.result")).toBeNull();
+  });
+
+  it("shows a failed return as a corner card and reads no session", async () => {
+    window.sessionStorage.setItem(
+      "sx.signIn.result",
+      JSON.stringify({ result: "failed", provider: "google", at: Date.now() }),
+    );
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        return Response.json(config);
+      }),
+    );
+    const onAuthenticated = vi.fn();
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={onAuthenticated} />),
+    );
+    await flush();
+    const card = host.querySelector('[role="alert"]')!;
+    expect(card.textContent).toContain("Google sign-in could not be completed");
+    expect(calls).not.toContain("/v1/me/workspaces");
+    expect(onAuthenticated).not.toHaveBeenCalled();
+    await act(async () =>
+      host
+        .querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!
+        .click(),
+    );
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
+describe("Apple and Facebook next to Google", () => {
+  const everything = { ...config, apple_enabled: true, facebook_enabled: true };
+
+  beforeEach(() => window.sessionStorage.clear());
+  afterEach(() => {
+    delete (globalThis as { SXPhone?: unknown }).SXPhone;
+  });
+
+  function providerButtons() {
+    return Array.from(host.querySelectorAll("button"))
+      .map((button) => button.textContent?.trim() ?? "")
+      .filter((text) => text.startsWith("Continue with"));
+  }
+
+  it("offers Google, Apple, Facebook in that order, each only when configured", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(everything)),
+    );
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    expect(providerButtons()).toEqual([
+      "Continue with Google",
+      "Continue with Apple",
+      "Continue with Facebook",
+    ]);
+    expect(host.textContent).toContain(
+      "Tick the box above to continue with Google, Apple, Facebook or email.",
+    );
+    const text = host.textContent ?? "";
+    expect(text.indexOf("Continue with Facebook")).toBeLessThan(
+      text.indexOf("or use email"),
+    );
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ ...config, facebook_enabled: true })),
+    );
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    expect(providerButtons()).toEqual([
+      "Continue with Google",
+      "Continue with Facebook",
+    ]);
+  });
+
+  it("starts Facebook in the sign-in window on its own start path", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(everything)),
+    );
+    const assign = vi.fn();
+    vi.stubGlobal(
+      "open",
+      vi.fn().mockReturnValue({
+        close: vi.fn(),
+        closed: false,
+        location: { assign },
+      }),
+    );
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    await act(async () =>
+      host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+    );
+    await click("Continue with Facebook");
+    const started = new URL(assign.mock.calls[0][0], window.location.origin);
+    expect(started.pathname).toBe("/v1/auth/facebook/start");
+    expect(started.searchParams.get("surface")).toBe("sales_xray");
+    expect(host.textContent).toContain(
+      "Finish sign-in in the Facebook window.",
+    );
+  });
+
+  it("tells an older phone app to update before Apple or Facebook, and never opens a window", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(everything)),
+    );
+    const listeners: ((event: { data: unknown }) => void)[] = [];
+    (globalThis as { SXPhone?: unknown }).SXPhone = {
+      addEventListener: (
+        _type: string,
+        listener: (event: { data: unknown }) => void,
+      ) => listeners.push(listener),
+      postMessage: (raw: string) => {
+        const message = JSON.parse(raw) as { id: string };
+        queueMicrotask(() =>
+          listeners.forEach((listener) =>
+            listener({
+              data: JSON.stringify({
+                id: message.id,
+                ok: true,
+                result: { platform: "android", connect: true },
+              }),
+            }),
+          ),
+        );
+      },
+    };
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    const navigate = vi
+      .spyOn(window.location, "assign")
+      .mockImplementation(() => {});
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    await act(async () =>
+      host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+    );
+    await click("Continue with Apple");
+    await flush();
+    expect(open).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(host.querySelector('p[role="alert"]')?.textContent).toContain(
+      "Update the Sales Xray app to sign in with Apple",
+    );
+  });
+
+  it("explains an email that already has an account, and a provider that shared none", async () => {
+    for (const [result, provider, words] of [
+      [
+        "account_exists",
+        "facebook",
+        "This email already has an Authority Closers account",
+      ],
+      ["no_email", "facebook", "Facebook didn’t share your email address"],
+      ["no_email", "apple", "Apple didn’t share your email address"],
+    ] as const) {
+      window.sessionStorage.setItem(
+        "sx.signIn.result",
+        JSON.stringify({ result, provider, at: Date.now() }),
+      );
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Response.json(everything)),
+      );
+      await act(async () =>
+        root.render(
+          <AccountAuth key={result + provider} onAuthenticated={vi.fn()} />,
+        ),
+      );
+      await flush();
+      expect(host.querySelector('p[role="alert"]')?.textContent).toContain(
+        words,
+      );
+    }
+  });
+});
+
+it("keeps a full-page sign-in result through React's double effect run in development", async () => {
+  window.sessionStorage.setItem(
+    "sx.signIn.result",
+    JSON.stringify({ result: "failed", provider: "google", at: Date.now() }),
+  );
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(config)),
+  );
+  await act(async () =>
+    root.render(
+      <StrictMode>
+        <AccountAuth onAuthenticated={vi.fn()} />
+      </StrictMode>,
+    ),
+  );
+  await flush();
+  expect(host.querySelector('p[role="alert"]')?.textContent).toContain(
+    "Google sign-in could not be completed",
+  );
+  expect(window.sessionStorage.getItem("sx.signIn.result")).toBeNull();
 });

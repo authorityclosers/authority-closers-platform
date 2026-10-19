@@ -7,18 +7,22 @@ lead's history and are only ever added (supersede, never overwrite).
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKeyConstraint,
     Index,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
     Uuid,
@@ -217,6 +221,280 @@ class LeadDeskSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LeadMetaConversion(Base):
+    """One lead stage sent back to the organisation's Meta dataset (Conversions API for
+    CRM). Built once from a Lead Desk event and frozen, so a retry sends the same event.
+    The payload holds Meta's lead id and hashed identifiers only; it is emptied after
+    90 days. Lead Desk's own history stays the record of the lead's stage."""
+
+    __tablename__ = "lead_desk_meta_conversions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_meta_conversion_tenant"
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'delivered', 'rejected', 'dead_letter', 'dropped')",
+            name="status",
+        ),
+        CheckConstraint(
+            "stage IN ('new', 'not_connected', 'follow_up', 'interested', 'won', 'lost')",
+            name="stage",
+        ),
+        # A PostgreSQL regular expression; the SQLite registry checks skip it.
+        CheckConstraint("dataset_id ~ '^[0-9]{5,20}$'", name="dataset").ddl_if(
+            dialect="postgresql"
+        ),
+        CheckConstraint("length(trim(event_name)) > 0", name="event_name"),
+        CheckConstraint("(payload IS NULL) = (erased_at IS NOT NULL)", name="erasure"),
+        CheckConstraint("(status = 'delivered') = (delivered_at IS NOT NULL)", name="delivered"),
+        CheckConstraint("attempts >= 0", name="attempts"),
+        CheckConstraint("length(payload_sha256) = 64", name="digest"),
+        CheckConstraint(
+            "last_http_status IS NULL OR last_http_status BETWEEN 100 AND 599",
+            name="http_status",
+        ),
+        Index(
+            "uq_lead_desk_meta_conversion_stage",
+            "tenant_id",
+            "dataset_id",
+            "lead_id",
+            "event_name",
+            unique=True,
+        ),
+        Index(
+            "ix_lead_desk_meta_conversion_due",
+            "next_attempt_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_lead_desk_meta_conversion_recent", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    source_event_id: Mapped[UUID] = mapped_column(Uuid)
+    dataset_id: Mapped[str] = mapped_column(String(20))
+    stage: Mapped[str] = mapped_column(String(16))
+    event_name: Mapped[str] = mapped_column(String(50))
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    payload_sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))
+    attempts: Mapped[int] = mapped_column(Integer)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fbtrace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadMetaConversionAttempt(Base):
+    """One send of a lead stage to Meta; only ever added."""
+
+    __tablename__ = "lead_desk_meta_conversion_attempts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["conversion_id"],
+            ["lead_desk_meta_conversions.id"],
+            name="fk_lead_desk_meta_conversion_attempt_conversion",
+        ),
+        CheckConstraint("attempt >= 1", name="number"),
+        CheckConstraint("duration_ms >= 0 AND finished_at >= started_at", name="timing"),
+        CheckConstraint(
+            "http_status IS NULL OR http_status BETWEEN 100 AND 599", name="http_status"
+        ),
+        CheckConstraint("http_status IS NOT NULL OR error_code IS NOT NULL", name="outcome"),
+    )
+
+    conversion_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    attempt: Mapped[int] = mapped_column(Integer, primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    events_received: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fbtrace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer)
+
+
+class LeadWhatsAppNumber(Base):
+    """An organisation's own WhatsApp Business number, connected with Meta's Embedded
+    Signup. The token (and the two-step PIN Sales Xray set) are sealed to the number."""
+
+    __tablename__ = "lead_desk_whatsapp_numbers"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_whatsapp_number_tenant"
+        ),
+        CheckConstraint("status IN ('active', 'disconnected')", name="status"),
+        CheckConstraint(
+            "(status = 'disconnected') = (disconnected_at IS NOT NULL)", name="disconnected"
+        ),
+        # PostgreSQL regular expressions; the SQLite registry checks skip them.
+        CheckConstraint(
+            "waba_id ~ '^[0-9]{5,32}$' AND phone_number_id ~ '^[0-9]{5,32}$'", name="ids"
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "uq_lead_desk_whatsapp_number_active",
+            "phone_number_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        Index("ix_lead_desk_whatsapp_number_tenant", "tenant_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    waba_id: Mapped[str] = mapped_column(String(32))
+    phone_number_id: Mapped[str] = mapped_column(String(32))
+    display_number: Mapped[str] = mapped_column(String(32))
+    verified_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    quality: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    token: Mapped[dict[str, Any]] = mapped_column(JSON)
+    pin: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(16))
+    config: Mapped[dict[str, Any]] = mapped_column(JSON)
+    connected_by_person_id: Mapped[UUID] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    disconnected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadWhatsAppMessage(Base):
+    """One WhatsApp message in a lead's conversation, in or out. The text is the
+    customer's own data: it is emptied with the lead, never sent anywhere else."""
+
+    __tablename__ = "lead_desk_whatsapp_messages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["number_id"],
+            ["lead_desk_whatsapp_numbers.id"],
+            name="fk_lead_desk_whatsapp_message_number",
+        ),
+        CheckConstraint("direction IN ('in', 'out')", name="direction"),
+        CheckConstraint(
+            "status IN ('queued', 'sent', 'delivered', 'read', 'failed', 'received')",
+            name="status",
+        ),
+        CheckConstraint("(direction = 'in') = (status = 'received')", name="received"),
+        CheckConstraint(
+            "kind IN ('text', 'template', 'image', 'audio', 'video', 'document', 'sticker',"
+            " 'location', 'contacts', 'interactive', 'button', 'reaction', 'unsupported')",
+            name="kind",
+        ),
+        CheckConstraint(
+            "auto IS NULL OR auto IN ('first_reply', 'out_of_hours', 'ai_reply')", name="auto"
+        ),
+        CheckConstraint("wa_id ~ '^[0-9]{6,20}$'", name="wa_id").ddl_if(dialect="postgresql"),
+        Index(
+            "uq_lead_desk_whatsapp_message_wamid",
+            "wamid",
+            unique=True,
+            postgresql_where=text("wamid IS NOT NULL"),
+        ),
+        Index("ix_lead_desk_whatsapp_message_lead", "tenant_id", "lead_id", "created_at"),
+        Index(
+            "ix_lead_desk_whatsapp_message_chat", "tenant_id", "number_id", "wa_id", "created_at"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    number_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    wa_id: Mapped[str] = mapped_column(String(20))
+    direction: Mapped[str] = mapped_column(String(3))
+    wamid: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    body: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    template_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    template_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    media: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(16))
+    error_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    sent_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    auto: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    meta_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadWhatsAppTemplate(Base):
+    """A message template of the organisation's WhatsApp account, as Meta last told us."""
+
+    __tablename__ = "lead_desk_whatsapp_templates"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["number_id"],
+            ["lead_desk_whatsapp_numbers.id"],
+            name="fk_lead_desk_whatsapp_template_number",
+        ),
+        CheckConstraint("category IN ('MARKETING', 'UTILITY', 'AUTHENTICATION')", name="category"),
+        CheckConstraint("length(trim(name)) > 0 AND length(trim(language)) > 0", name="name"),
+        Index(
+            "uq_lead_desk_whatsapp_template",
+            "tenant_id",
+            "waba_id",
+            "name",
+            "language",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    number_id: Mapped[UUID] = mapped_column(Uuid)
+    waba_id: Mapped[str] = mapped_column(String(32))
+    meta_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    name: Mapped[str] = mapped_column(String(512))
+    language: Mapped[str] = mapped_column(String(16))
+    category: Mapped[str] = mapped_column(String(24))
+    status: Mapped[str] = mapped_column(String(24))
+    components: Mapped[list[Any]] = mapped_column(JSON)
+    quality: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    rejected_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadSlaBreach(Base):
+    """A lead that went past the organisation's first-response target, and who was told."""
+
+    __tablename__ = "lead_desk_sla_breaches"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_sla_breach_tenant"),
+        CheckConstraint("kind IN ('first_response')", name="kind"),
+        CheckConstraint("due_at >= started_at AND breached_at >= due_at", name="timing"),
+        Index(
+            "uq_lead_desk_sla_breach",
+            "tenant_id",
+            "lead_id",
+            "kind",
+            "started_at",
+            unique=True,
+        ),
+        Index("ix_lead_desk_sla_breach_recent", "tenant_id", "breached_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    kind: Mapped[str] = mapped_column(String(24))
+    owner_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    breached_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    alerted: Mapped[list[Any]] = mapped_column(JSON)
+    alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class LeadDevice(Base):
     """A seller's phone that gets lead alerts (0095). The token is the phone's FCM address."""
 
@@ -242,3 +520,233 @@ class LeadDevice(Base):
     app_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadSocialAccount(Base):
+    """An organisation's Facebook Page, with the Instagram professional account linked to
+    it, connected to AC's Messaging app. The Page token is sealed to the Page."""
+
+    __tablename__ = "lead_desk_social_accounts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_social_account_tenant"
+        ),
+        CheckConstraint("status IN ('active', 'disconnected')", name="status"),
+        CheckConstraint(
+            "(status = 'disconnected') = (disconnected_at IS NOT NULL)", name="disconnected"
+        ),
+        CheckConstraint(
+            "ig_username IS NULL OR ig_user_id IS NOT NULL",
+            name="instagram",
+        ),
+        # PostgreSQL regular expressions; the SQLite registry checks skip them.
+        CheckConstraint(
+            "page_id ~ '^[0-9]{5,32}$' AND (ig_user_id IS NULL OR ig_user_id ~ '^[0-9]{5,32}$')",
+            name="ids",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "uq_lead_desk_social_account_page",
+            "page_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        Index("ix_lead_desk_social_account_tenant", "tenant_id", "status"),
+        Index("ix_lead_desk_social_account_instagram", "ig_user_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    page_id: Mapped[str] = mapped_column(String(32))
+    page_name: Mapped[str] = mapped_column(String(200))
+    ig_user_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ig_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    token: Mapped[dict[str, Any]] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(16))
+    config: Mapped[dict[str, Any]] = mapped_column(JSON)
+    connected_by_person_id: Mapped[UUID] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    disconnected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadSocialMessage(Base):
+    """One Messenger or Instagram message in a lead's conversation, in or out, or a
+    comment on the business's post. The words are the customer's own data: they are
+    emptied with the lead, never sent anywhere else. A comment gets one private reply
+    at most (the partial unique index on ``comment_id`` for replies)."""
+
+    __tablename__ = "lead_desk_social_messages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["account_id"],
+            ["lead_desk_social_accounts.id"],
+            name="fk_lead_desk_social_message_account",
+        ),
+        CheckConstraint("channel IN ('messenger', 'instagram')", name="channel"),
+        CheckConstraint("direction IN ('in', 'out')", name="direction"),
+        CheckConstraint(
+            "status IN ('queued', 'sent', 'delivered', 'read', 'failed', 'received')",
+            name="status",
+        ),
+        CheckConstraint("(direction = 'in') = (status = 'received')", name="received"),
+        CheckConstraint(
+            "kind IN ('text', 'image', 'audio', 'video', 'file', 'sticker', 'share',"
+            " 'story_reply', 'story_mention', 'postback', 'comment', 'unsupported')",
+            name="kind",
+        ),
+        CheckConstraint(
+            "auto IS NULL OR auto IN ('first_reply', 'out_of_hours', 'comment_reply', 'ai_reply')",
+            name="auto",
+        ),
+        CheckConstraint("tag IS NULL OR tag IN ('HUMAN_AGENT')", name="tag"),
+        CheckConstraint(
+            "reply_state IS NULL OR reply_state IN ('pending', 'replied', 'failed', 'skipped')",
+            name="reply_state",
+        ),
+        CheckConstraint(
+            "(kind = 'comment') = (direction = 'in' AND comment_id IS NOT NULL AND mid IS NULL)",
+            name="comment",
+        ),
+        Index(
+            "uq_lead_desk_social_message_mid",
+            "mid",
+            unique=True,
+            postgresql_where=text("mid IS NOT NULL"),
+        ),
+        Index(
+            "uq_lead_desk_social_comment",
+            "comment_id",
+            unique=True,
+            postgresql_where=text("kind = 'comment'"),
+        ),
+        Index(
+            "uq_lead_desk_social_comment_reply",
+            "comment_id",
+            unique=True,
+            postgresql_where=text("auto = 'comment_reply'"),
+        ),
+        Index("ix_lead_desk_social_message_lead", "tenant_id", "lead_id", "created_at"),
+        Index(
+            "ix_lead_desk_social_message_chat",
+            "account_id",
+            "channel",
+            "user_id",
+            "created_at",
+        ),
+        Index(
+            "ix_lead_desk_social_message_pending",
+            "reply_state",
+            "created_at",
+            postgresql_where=text("reply_state = 'pending'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    account_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    channel: Mapped[str] = mapped_column(String(16))
+    user_id: Mapped[str] = mapped_column(String(40))
+    user_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    direction: Mapped[str] = mapped_column(String(3))
+    mid: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    comment_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    post_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    body: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    status: Mapped[str] = mapped_column(String(16))
+    error_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    sent_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    auto: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    tag: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reply_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    rule: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    meta_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadAdSpendDay(Base):
+    """What one Meta campaign spent on one day, as Meta's Marketing API last said. The
+    organisation's own ad data, read with its Continue with Meta connection (ads_read);
+    cost per lead is worked out from it and the leads that arrived here."""
+
+    __tablename__ = "lead_desk_ad_spend_days"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_ad_spend_tenant"),
+        CheckConstraint("provider IN ('meta')", name="provider"),
+        CheckConstraint(
+            "spend >= 0 AND impressions >= 0 AND clicks >= 0 AND meta_leads >= 0", name="counts"
+        ),
+        # PostgreSQL regular expressions; the SQLite registry checks skip them.
+        CheckConstraint(
+            "currency ~ '^[A-Z]{3}$' AND ad_account_id ~ '^act_[0-9]{1,30}$'"
+            " AND campaign_id ~ '^[0-9]{1,30}$'",
+            name="ids",
+        ).ddl_if(dialect="postgresql"),
+        Index("ix_lead_desk_ad_spend_day", "tenant_id", "day"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(16), primary_key=True)
+    ad_account_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    campaign_name: Mapped[str] = mapped_column(String(400))
+    currency: Mapped[str] = mapped_column(String(3))
+    spend: Mapped[Decimal] = mapped_column(Numeric(16, 2))
+    impressions: Mapped[int] = mapped_column(BigInteger)
+    clicks: Mapped[int] = mapped_column(BigInteger)
+    meta_leads: Mapped[int] = mapped_column(Integer)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadAiReply(Base):
+    """One AI reply to a lead: a draft for a seller, a reply sent by itself, or a hand-off
+    to a person (and why), with the model, tokens and cost for Admin. The draft is the
+    customer's conversation: it is emptied when the lead leaves Lead Desk."""
+
+    __tablename__ = "lead_desk_ai_replies"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_ai_reply_tenant"),
+        CheckConstraint("channel IN ('whatsapp', 'messenger', 'instagram')", name="channel"),
+        CheckConstraint("mode IN ('suggest', 'auto')", name="mode"),
+        CheckConstraint(
+            "outcome IN ('drafted', 'sent', 'handoff', 'opted_out', 'failed', 'paused')",
+            name="outcome",
+        ),
+        CheckConstraint(
+            "input_tokens IS NULL OR (input_tokens >= 0 AND output_tokens >= 0)", name="tokens"
+        ),
+        Index("ix_lead_desk_ai_reply_lead", "tenant_id", "lead_id", "created_at"),
+        Index("ix_lead_desk_ai_reply_recent", "tenant_id", "created_at"),
+        Index(
+            "uq_lead_desk_ai_reply_auto",
+            "channel",
+            "message_id",
+            unique=True,
+            postgresql_where=text("mode = 'auto' AND message_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    channel: Mapped[str] = mapped_column(String(16))
+    message_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    mode: Mapped[str] = mapped_column(String(8))
+    outcome: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    draft: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    sent_message_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_inr: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    usage_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    requested_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

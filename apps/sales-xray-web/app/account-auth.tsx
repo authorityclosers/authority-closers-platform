@@ -35,12 +35,20 @@ import {
   parseEmailCodeConfig,
   parseAuthCompletionUrl,
   passwordLogin,
+  popupHostileBrowser,
+  providerEnabled,
+  providerLabel,
   readCanonicalSession,
   readGoogleCompletion,
+  forgetSignInResult,
+  readSignInResult,
+  rememberRedirectSignIn,
   type AuthCompletionResult,
   type EmailCodeConfig,
+  type SignInProvider,
 } from "./account-auth-client";
 import styles from "./account-auth.module.css";
+import { inPhoneApp, phoneStatus } from "./leads/native-phone";
 
 export type AccountAuthPreviewState = "auth.email" | "auth.code" | "auth.error";
 
@@ -48,9 +56,13 @@ const PREVIEW_CONFIG: EmailCodeConfig = {
   enabled: true,
   consent_version: "review-only",
   google_enabled: true,
+  apple_enabled: true,
+  facebook_enabled: true,
   expires_in_seconds: 600,
   resend_after_seconds: 60,
 };
+// The order the sign-in screen offers them in (owner, 19 Oct 2026).
+const PROVIDERS = ["google", "apple", "facebook"] as const;
 // Decorative "x-ray" of a conversation: a scan passes over a two-speaker
 // waveform and the kinds of moment Sales Xray looks for light up. It shows no
 // data; heights are a fixed pattern so server and client render the same.
@@ -147,7 +159,7 @@ function GoogleMark() {
   // Google's own four-colour "G", as its sign-in branding requires.
   return (
     <svg
-      className={styles.googleMark}
+      className={styles.providerMark}
       viewBox="0 0 48 48"
       aria-hidden="true"
       focusable="false"
@@ -171,6 +183,46 @@ function GoogleMark() {
     </svg>
   );
 }
+function AppleMark() {
+  // Apple's logo, as Sign in with Apple's button guidelines require.
+  return (
+    <svg
+      className={styles.providerMark}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="currentColor"
+        d="M16.37 1.43c0 1.14-.49 2.27-1.18 3.08-.74.9-1.99 1.57-2.99 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.57-2.27 1.21-2.98.8-.94 2.14-1.64 3.25-1.68.03.13.05.28.05.43Zm4.56 15.71c-.03.07-.46 1.58-1.52 3.12-.94 1.34-1.94 2.71-3.43 2.71-1.52 0-1.9-.88-3.63-.88-1.7 0-2.3.91-3.67.91-1.38 0-2.33-1.26-3.43-2.8-1.29-1.82-2.32-4.63-2.32-7.28 0-4.28 2.8-6.55 5.55-6.55 1.45 0 2.68.95 3.6.95.87 0 2.22-1.01 3.9-1.01.61 0 2.89.06 4.37 2.19-.13.09-2.38 1.37-2.38 4.19 0 3.26 2.85 4.42 2.96 4.45Z"
+      />
+    </svg>
+  );
+}
+
+function FacebookMark() {
+  // Facebook's "f" mark in Facebook blue, as its brand rules require.
+  return (
+    <svg
+      className={styles.providerMark}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="#1877F2"
+        d="M9.1 23.69v-7.98H6.63v-3.67H9.1v-1.58c0-4.09 1.85-5.98 5.86-5.98.4 0 .96.04 1.47.1.41.05.81.11 1.14.2v3.32a8.6 8.6 0 0 0-.65-.03c-.24-.01-.48-.01-.73-.01-.71 0-1.26.1-1.68.31-.28.14-.52.36-.68.62-.26.42-.37 1-.37 1.75v1.3h3.92l-.39 2.1-.29 1.57h-3.24v8.24C19.4 23.24 24 18.18 24 12.04 24 5.42 18.63.04 12 .04S0 5.42 0 12.04c0 5.63 3.87 10.35 9.1 11.65Z"
+      />
+    </svg>
+  );
+}
+
+const PROVIDER_MARKS = {
+  google: GoogleMark,
+  apple: AppleMark,
+  facebook: FacebookMark,
+} as const;
+
 const subscribeHostname = () => () => {};
 const serverHostname = () => "";
 const LEARNER_ORIGINS_BY_SOURCE_HOST = {
@@ -191,6 +243,23 @@ export function learnerAuthLinksForHost(hostname: string) {
         forgotPasswordHref: `${origin}/forgot-password`,
       }
     : { registerHref: null, forgotPasswordHref: null };
+}
+
+/** What a finished sign-in that did not sign the person in should say. */
+export function signInProblem(
+  result: Exclude<AuthCompletionResult, "success">,
+  provider: SignInProvider,
+) {
+  const label = providerLabel(provider);
+  if (result === "account_exists")
+    return "This email already has an Authority Closers account. Sign in the way you did before, or with your password or an email code.";
+  if (result === "no_email")
+    return `${label} didn’t share your email address. Allow email access, or choose another way to sign in.`;
+  if (result === "review_terms")
+    return "Review the current Terms and Privacy notice, then try signing in again.";
+  if (result === "unavailable")
+    return `${label} sign-in is unavailable right now. Try again or use an email code.`;
+  return `${label} sign-in could not be completed. Try again or use an email code.`;
 }
 
 export function AccountAuth({
@@ -217,6 +286,8 @@ export function AccountAuth({
   );
   const [pending, setPending] = useState(false);
   const [popupActive, setPopupActive] = useState(false);
+  // A full-page sign-in is under way (the sign-in window was blocked).
+  const [redirecting, setRedirecting] = useState<SignInProvider | null>(null);
   const [sessionCheckNeeded, setSessionCheckNeeded] = useState(false);
   const [error, setError] = useState("");
   const [configError, setConfigError] = useState(false);
@@ -230,6 +301,7 @@ export function AccountAuth({
   const popupPoll = useRef<ReturnType<typeof setInterval> | null>(null);
   const popupMessage = useRef<((event: MessageEvent) => void) | null>(null);
   const popupOutcome = useRef<AuthCompletionResult | null>(null);
+  const popupProvider = useRef<SignInProvider>("google");
   const confirmingPopup = useRef(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
@@ -268,6 +340,66 @@ export function AccountAuth({
       });
     return () => request.abort();
   }, [loadAttempt, preview]);
+  const finish = useRef<() => void>(() => {});
+  useEffect(() => {
+    finish.current = complete;
+  });
+  useEffect(() => {
+    if (preview) return;
+    // Back from a full-page sign-in: the completion page already matched this
+    // flow's receipt; read the account session again before finishing.
+    // Read now, forget once used: development runs this effect twice.
+    const returned = readSignInResult();
+    if (!returned) return;
+    const request = new AbortController();
+    void Promise.resolve().then(async () => {
+      if (request.signal.aborted) return;
+      forgetSignInResult();
+      if (returned.result !== "success") {
+        if (returned.result === "review_terms")
+          setLoadAttempt((value) => value + 1);
+        setError(signInProblem(returned.result, returned.provider));
+        return;
+      }
+      inFlight.current = true;
+      setPending(true);
+      try {
+        await readCanonicalSession(request.signal);
+        if (!request.signal.aborted) finish.current();
+      } catch {
+        if (!request.signal.aborted)
+          setError(
+            `${providerLabel(returned.provider)} sign-in could not be confirmed. Try again or use an email code.`,
+          );
+      } finally {
+        inFlight.current = false;
+        if (!request.signal.aborted) setPending(false);
+      }
+    });
+    return () => request.abort();
+  }, [preview]);
+  useEffect(() => {
+    if (!redirecting) return;
+    // Still here: the page came back from the back-forward cache, or the
+    // phone app opened the sign-in in its browser and the person returned.
+    const reset = () => {
+      inFlight.current = false;
+      setPending(false);
+      setRedirecting(null);
+    };
+    const shown = (event: PageTransitionEvent) => {
+      if (event.persisted) reset();
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible") reset();
+    };
+    window.addEventListener("pageshow", shown);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("pageshow", shown);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [redirecting]);
   useEffect(
     () => () => {
       controller.current?.abort();
@@ -538,7 +670,7 @@ export function AccountAuth({
         inFlight.current = false;
         setPending(false);
         setError(
-          "Google sign-in could not be confirmed. Try again or use an email code.",
+          `${providerLabel(popupProvider.current)} sign-in could not be confirmed. Try again or use an email code.`,
         );
       }
     } finally {
@@ -560,18 +692,8 @@ export function AccountAuth({
     if (result === "review_terms") {
       setConsent(false);
       setLoadAttempt((attempt) => attempt + 1);
-      setError(
-        "Review the current Terms and Privacy notice, then try signing in again.",
-      );
-    } else if (result === "unavailable") {
-      setError(
-        "Google sign-in is unavailable right now. Try again or use an email code.",
-      );
-    } else {
-      setError(
-        "Google sign-in could not be completed. Try again or use an email code.",
-      );
     }
+    setError(signInProblem(result, popupProvider.current));
   }
 
   function checkGoogleWindow() {
@@ -594,72 +716,81 @@ export function AccountAuth({
         inFlight.current = false;
         setPending(false);
         setError(
-          "Google sign-in could not be confirmed. Try again or use an email code.",
+          `${providerLabel(popupProvider.current)} sign-in could not be confirmed. Try again or use an email code.`,
         );
         return;
       }
     } catch {
       // The provider page remains cross-origin until it returns here.
     }
-    setError("Finish sign-in in the Google window, then check again.");
+    setError(
+      `Finish sign-in in the ${providerLabel(popupProvider.current)} window, then check again.`,
+    );
   }
 
-  function google() {
+  function startProvider(provider: SignInProvider) {
     if (
       preview ||
-      !activeConfig?.google_enabled ||
-      !activeConfig.consent_version ||
+      !activeConfig ||
+      !providerEnabled(activeConfig, provider) ||
       configError ||
       !consent ||
       inFlight.current
     )
       return;
+    const label = providerLabel(provider);
+    // In the phone app only Google has the app's own sign-in window; Apple and
+    // Facebook go through this page, which the app opens in the phone's browser.
+    const appBrowser = provider !== "google" && inPhoneApp();
     // Open a blank same-origin popup synchronously. Fresh policy is checked
     // before navigating it to Google, while the File stays in this document.
+    // Where the window is blocked (the Claude desktop pane) or breaks (in-app
+    // browsers), the same click signs in on this page instead.
     const flow = crypto.randomUUID();
-    const child = window.open(
-      "about:blank",
-      "sales-xray-sign-in",
-      "popup,width=520,height=720",
-    );
-    if (!child) {
-      setError(
-        "Allow the sign-in window, or use an email code. This page stays open.",
-      );
-      return;
+    const opened =
+      appBrowser || popupHostileBrowser(navigator.userAgent)
+        ? null
+        : window.open(
+            "about:blank",
+            "sales-xray-sign-in",
+            "popup,width=520,height=720",
+          );
+    const child = opened && !opened.closed ? opened : null;
+    if (child) {
+      popup.current = child;
+      popupFlow.current = flow;
+      popupOutcome.current = null;
+      popupProvider.current = provider;
+      setPopupActive(true);
+      const handleMessage = (event: MessageEvent) => {
+        if (
+          event.origin !== window.location.origin ||
+          event.source !== popup.current ||
+          !popupFlow.current ||
+          !isAuthCompleteMessage(event.data, popupFlow.current)
+        )
+          return;
+        receiveGoogleResult(event.data.auth_result);
+      };
+      popupMessage.current = handleMessage;
+      window.addEventListener("message", handleMessage);
+      popupPoll.current = setInterval(() => {
+        cancelGoogle();
+        setError(`${label} sign-in timed out. Try again or use an email code.`);
+      }, 5 * 60_000);
     }
-    popup.current = child;
-    popupFlow.current = flow;
-    popupOutcome.current = null;
-    setPopupActive(true);
     inFlight.current = true;
     setPending(true);
     setError("");
-    const handleMessage = (event: MessageEvent) => {
-      if (
-        event.origin !== window.location.origin ||
-        event.source !== popup.current ||
-        !popupFlow.current ||
-        !isAuthCompleteMessage(event.data, popupFlow.current)
-      )
-        return;
-      receiveGoogleResult(event.data.auth_result);
-    };
-    popupMessage.current = handleMessage;
-    window.addEventListener("message", handleMessage);
-    popupPoll.current = setInterval(() => {
-      cancelGoogle();
-      setError("Google sign-in timed out. Try again or use an email code.");
-    }, 5 * 60_000);
     const request = new AbortController();
     controller.current = request;
     void emailCodeRequest("config", request.signal)
       .then(parseEmailCodeConfig)
-      .then((current) => {
+      .then(async (current) => {
         if (request.signal.aborted) return;
         setConfig(current);
         if (
-          !current.google_enabled ||
+          !providerEnabled(current, provider) ||
           !current.consent_version ||
           current.consent_version !== activeConfig.consent_version
         ) {
@@ -681,7 +812,28 @@ export function AccountAuth({
           consent_version: current.consent_version,
           return_path: `/auth/complete?flow=${flow}`,
         });
-        child.location.assign(`/v1/auth/google/start?${parameters}`);
+        const start = `/v1/auth/${provider}/start?${parameters}`;
+        if (child) {
+          child.location.assign(start);
+          return;
+        }
+        if (appBrowser && !(await phoneStatus())?.signIn) {
+          inFlight.current = false;
+          setPending(false);
+          setError(
+            `Update the Sales Xray app to sign in with ${label}, or use Google or an email code.`,
+          );
+          return;
+        }
+        if (request.signal.aborted) return;
+        // Without storage the completion page still signs in and goes home.
+        rememberRedirectSignIn(
+          flow,
+          provider,
+          window.location.pathname + window.location.search,
+        );
+        setRedirecting(provider);
+        window.location.assign(new URL(start, window.location.origin).href);
       })
       .catch(() => {
         if (request.signal.aborted) return;
@@ -705,12 +857,13 @@ export function AccountAuth({
     readGoogleBlocked,
     () => false,
   );
-  const googleAvailable =
-    !googleBlocked &&
-    !!activeConfig?.google_enabled &&
-    !!activeConfig.consent_version &&
+  const offered = (provider: SignInProvider) =>
+    (provider !== "google" || !googleBlocked) &&
+    providerEnabled(activeConfig, provider) &&
     !configError &&
     !(preview && previewState === "auth.error");
+  const offeredProviders = PROVIDERS.filter(offered);
+  const googleAvailable = offeredProviders.length > 0;
   const brandContent = <BrandMark />;
   const heading =
     displayedStep === "code"
@@ -911,25 +1064,37 @@ export function AccountAuth({
                     </p>
                   ) : null}
                   {googleAvailable && (
-                    <button
-                      type="button"
-                      className={styles.google}
-                      onClick={google}
-                      disabled={preview || !consent || pending}
-                      aria-describedby={
-                        !consent ? "account-google-consent-hint" : undefined
-                      }
-                    >
-                      <GoogleMark />
-                      Continue with Google
-                    </button>
+                    <div className={styles.providers}>
+                      {offeredProviders.map((provider) => {
+                        const Mark = PROVIDER_MARKS[provider];
+                        return (
+                          <button
+                            key={provider}
+                            type="button"
+                            className={styles.google}
+                            data-provider={provider}
+                            onClick={() => startProvider(provider)}
+                            disabled={preview || !consent || pending}
+                            aria-describedby={
+                              !consent
+                                ? "account-google-consent-hint"
+                                : undefined
+                            }
+                          >
+                            <Mark />
+                            Continue with {providerLabel(provider)}
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                   {googleAvailable && !consent && (
                     <p
                       id="account-google-consent-hint"
                       className={styles.consentHint}
                     >
-                      Tick the box above to continue with Google or email.
+                      Tick the box above to continue with{" "}
+                      {offeredProviders.map(providerLabel).join(", ")} or email.
                     </p>
                   )}
                   {googleAvailable && available && (
@@ -987,11 +1152,20 @@ export function AccountAuth({
                       </>
                     )}
                   </form>
+                  {redirecting && pending && (
+                    <div className={styles.popupActions} role="status">
+                      <p>Opening {providerLabel(redirecting)} sign-in…</p>
+                    </div>
+                  )}
                   {popupActive && pending && (
                     <div className={styles.popupActions} role="status">
-                      <p>Finish sign-in in the Google window.</p>
+                      <p>
+                        Finish sign-in in the{" "}
+                        {providerLabel(popupProvider.current)} window.
+                      </p>
                       <button type="button" onClick={checkGoogleWindow}>
-                        I finished Google sign-in
+                        I finished {providerLabel(popupProvider.current)}{" "}
+                        sign-in
                       </button>
                       <button type="button" onClick={cancelGoogle}>
                         Cancel
@@ -1178,6 +1352,16 @@ export function AccountAuth({
                 className={styles.error}
               >
                 {error}
+                {error ? (
+                  <button
+                    type="button"
+                    className={styles.errorClose}
+                    aria-label="Dismiss"
+                    onClick={() => setError("")}
+                  >
+                    ×
+                  </button>
+                ) : null}
               </p>
             </>
           )}

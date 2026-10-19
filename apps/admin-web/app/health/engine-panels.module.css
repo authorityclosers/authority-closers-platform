@@ -1,0 +1,164 @@
+/* Analysis health: the engine and Review 2.0 parts the kit doesn't draw. Tokens only. */
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--sx-gap);
+  align-items: start;
+}
+
+.code {
+  font-family: var(--lx-font-mono);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+}
+
+.share {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  font-variant-numeric: tabular-nums;
+}
+
+.share > :first-child:not(:last-child) {
+  flex: 1;
+  min-width: 60px;
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 120px;
+  padding: 14px 14px 0;
+}
+
+.day {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
+  height: 100%;
+}
+
+.day i {
+  display: block;
+  flex: none;
+  background: var(--sx-accent);
+}
+
+.day i:first-child {
+  border-radius: 3px 3px 0 0;
+}
+
+.day i[data-pipeline="deep"],
+.legend span[data-pipeline="deep"]::before {
+  background: var(--sx-info);
+}
+
+.day i[data-failed],
+.legend span[data-failed]::before {
+  background: var(--sx-bad);
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 14px 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.legend span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 2px;
+  background: var(--sx-accent);
+  content: "";
+}
+
+.reasons {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 14px;
+  list-style: none;
+}
+
+.reasons li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--sx-text-sm);
+}
+
+.reasons small,
+.facts small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.none {
+  margin: 0;
+  padding: 12px 14px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.subhead {
+  margin: 4px 14px 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+}
+
+.facts div {
+  display: grid;
+  grid-template-columns: minmax(120px, 2fr) 3fr;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--sx-text-sm);
+}
+
+.facts dt {
+  color: var(--sx-muted);
+}
+
+.facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+}
+
+.now {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}

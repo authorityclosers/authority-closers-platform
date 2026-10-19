@@ -42,6 +42,7 @@ from ac_platform.conversation_intelligence.budget_admin import (
     is_admin_budget_approval_ref,
     is_any_admin_budget_approval_ref,
 )
+from ac_platform.conversation_intelligence.budget_settings import budget_limits
 from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import IntakeIntent
@@ -130,11 +131,10 @@ def _budget_matches_release(previous: BudgetAccount, bundle: HostedApprovalBundl
         and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
     )
     # An Admin cap has no limit of its own (19 Oct 2026): new work is always bounded
-    # by ``effective_budget_cap_paise``, the smaller of it and the sealed ceiling.
+    # by the Admin budget settings (budget_settings.budget_limits). Any verified Admin's
+    # audited cap carries across releases, so a one-click raise never blocks the next one.
     admin_approval = is_admin_budget_approval_ref(previous.cap_approval.approval_ref, bundle.digest)
-    carried_admin_approval = is_any_admin_budget_approval_ref(
-        previous.cap_approval.approval_ref
-    ) and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
+    carried_admin_approval = is_any_admin_budget_approval_ref(previous.cap_approval.approval_ref)
     try:
         effective_budget_cap_paise(bundle.budget_cap_paise, previous.cap_paise)
     except ValueError:
@@ -1714,6 +1714,13 @@ class ConversationAuthority:
         await self.validate_quote(app, actor, recording, plan, row, quote, permission, now)
         minutes, budget = await service.accounts(recording, row)
         budget_snapshot = BudgetAccount.from_dict(budget.snapshot)
+        limits = await budget_limits(
+            app.database,
+            scope_id=bundle.budget_scope_id,
+            sealed_ceiling_paise=bundle.budget_cap_paise,
+            budget=budget_snapshot,
+            now=now,
+        )
         already = any(
             item.quote.quote_id == quote.quote_id for item in budget_snapshot.reservations
         )
@@ -1734,7 +1741,7 @@ class ConversationAuthority:
                     quote,
                     permission,
                     int(now.timestamp()),
-                    release_cap_paise=bundle.budget_cap_paise,
+                    **limits.reserve_kwargs(),
                 )
             except BudgetExhausted:
                 raise BudgetCapReached(
@@ -1767,9 +1774,7 @@ class ConversationAuthority:
             "privacy_notice": approval.privacy_notice,
             "cost_label": cost_label,
             "max_cost_paise": quote.max_cost_paise,
-            "budget_cap_paise": effective_budget_cap_paise(
-                bundle.budget_cap_paise, budget_snapshot.cap_paise
-            ),
+            "budget_cap_paise": min(limits.cap_paise, limits.ceiling_paise),
             "entitlement_seconds": quote.entitlement_seconds,
             "input_sha256": quote.input_sha256,
             "expires_at_epoch": quote.expires_at_epoch,

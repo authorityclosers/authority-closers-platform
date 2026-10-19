@@ -906,6 +906,12 @@ async def erase_pointer_reviews_for_recording(
     )
 
     await erase_gold_reviews_for_recording(database, recording_id, now)
+    # Review 2.0 answers judge this call's analysis: emptied in the same transaction.
+    from ac_platform.conversation_intelligence.review_verdicts import (
+        erase_review_verdicts_for_recording,
+    )
+
+    await erase_review_verdicts_for_recording(database, recording_id, now)
     return len(rows)
 
 

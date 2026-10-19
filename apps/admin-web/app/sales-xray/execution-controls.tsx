@@ -16,6 +16,13 @@ import {
   Unavailable,
   kitStyles,
 } from "../ui/kit";
+import {
+  BudgetSettingsPanel,
+  PERIOD_NOW,
+  budgetSettings,
+  resetsText,
+  rupees,
+} from "./budget-settings";
 import styles from "./execution-controls.module.css";
 
 const control = z
@@ -63,6 +70,8 @@ const budgetSchema = z
     revision: z.number().int().nonnegative(),
     approved_cap_paise: amount,
     budget: budgetAccount.nullable(),
+    /** The owner's ceiling and period (absent on older servers). */
+    settings: budgetSettings.optional(),
   })
   .strict();
 type BudgetState = z.infer<typeof budgetSchema>;
@@ -94,13 +103,6 @@ async function request(path: string, init: RequestInit = {}) {
 
 /** One-click raises (owner, 19 Oct 2026: "just making it 300 or 400" must be one click). */
 const RAISES = [100_000, 250_000, 500_000];
-const rupees = (paise: number) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(paise / 100);
-const ceilingEndpoint = "/v1/admin/conversation/budget/ceiling-request";
 
 function formatBudgetAmount(paise: number) {
   return (paise / 100).toFixed(2);
@@ -234,38 +236,6 @@ export function ExecutionControlsPanel() {
       setBusy(false);
     }
   }
-  async function askRoot() {
-    if (!budgetState || budgetBusy) return;
-    const requested = budgetState.approved_cap_paise * 2 || 1_000_000;
-    setBudgetBusy(true);
-    setBudgetError(null);
-    setBudgetMessage(null);
-    try {
-      await request(ceilingEndpoint, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "Idempotency-Key": newIdempotencyKey(),
-        },
-        body: JSON.stringify({
-          requested_cap_paise: requested,
-          reason:
-            "Asked from Execution & budget: the working cap needs room above the ceiling",
-        }),
-      });
-      setBudgetMessage(
-        `Root is asked to raise the ceiling to ${rupees(requested)}. You can raise the cap up to it once it's sealed.`,
-      );
-    } catch (failure) {
-      setBudgetError(
-        failure instanceof Error
-          ? failure.message
-          : "The request to Root could not be confirmed.",
-      );
-    } finally {
-      setBudgetBusy(false);
-    }
-  }
   async function changeBudget(override?: { capPaise: number; reason: string }) {
     if (!budgetState || budgetBusy) return;
     const newCapPaise = override?.capPaise ?? parseBudgetAmount(budgetDraft);
@@ -322,6 +292,9 @@ export function ExecutionControlsPanel() {
   }
   const budget = budgetState?.budget ?? state?.budget;
   const approvedBudgetCap = budgetState?.approved_cap_paise;
+  const settings = budgetState?.settings;
+  // "this month" / "today" for a monthly or daily budget (19 Oct 2026).
+  const now = settings ? PERIOD_NOW[settings.period] : "";
   return (
     <div className={styles.stack} aria-busy={busy}>
       <Panel
@@ -423,7 +396,7 @@ export function ExecutionControlsPanel() {
             <>
               <Tiles label="Budget">
                 <Kpi
-                  label="Active budget limit"
+                  label={now ? `Cap${now}` : "Active budget limit"}
                   value={money(budget.cap_paise)}
                 />
                 <Kpi
@@ -435,7 +408,7 @@ export function ExecutionControlsPanel() {
                   value={money(budget.held_paise)}
                 />
                 <Kpi
-                  label="Settled in the ledger"
+                  label={now ? `Settled${now}` : "Settled in the ledger"}
                   value={money(budget.settled_paise)}
                 />
               </Tiles>
@@ -460,9 +433,14 @@ export function ExecutionControlsPanel() {
                             ),
                           )
                         : 100}
-                      % used
+                      % used{now}
                     </strong>
-                    <small>sealed ceiling {rupees(approvedBudgetCap)}</small>
+                    <small>
+                      ceiling {rupees(approvedBudgetCap)}
+                      {settings && resetsText(settings)
+                        ? ` · ${resetsText(settings)}`
+                        : ""}
+                    </small>
                   </span>
                   {RAISES.map((step) => {
                     const target = budget.cap_paise + step;
@@ -475,7 +453,7 @@ export function ExecutionControlsPanel() {
                         title={
                           allowed
                             ? `Raise the budget to ${rupees(target)}`
-                            : "Above the sealed ceiling: ask Root to raise it"
+                            : "Above the ceiling: the owner can raise it in Budget settings"
                         }
                         onClick={() =>
                           void changeBudget({
@@ -488,13 +466,6 @@ export function ExecutionControlsPanel() {
                       </Button>
                     );
                   })}
-                  <Button
-                    variant="ghost"
-                    disabled={budgetBusy}
-                    onClick={() => void askRoot()}
-                  >
-                    Ask Root to raise the ceiling
-                  </Button>
                 </div>
               ) : null}
               {state?.waiting_calls ? (
@@ -515,7 +486,7 @@ export function ExecutionControlsPanel() {
                 <p role="alert" className={styles.alert}>
                   {budget.warning === "exhausted"
                     ? "The shared budget is exhausted or needs reconciliation. New reservations are stopped by the server."
-                    : `Budget warning: at least ${budget.warning === "critical" ? budget.critical_percent : budget.warning_percent}% of the ceiling is committed. Review usage before more analysis.`}
+                    : `Budget warning: at least ${budget.warning === "critical" ? budget.critical_percent : budget.warning_percent}% of the cap${now} is committed. Raise it above or review usage.`}
                 </p>
               ) : null}
               <p className={styles.hint}>
@@ -526,8 +497,14 @@ export function ExecutionControlsPanel() {
               {budgetState && approvedBudgetCap != null ? (
                 <div className={styles.budgetEditor}>
                   <Field
-                    label="Shared budget limit (INR)"
-                    hint={`Up to the release-approved ceiling of ${money(approvedBudgetCap)}. Existing reservations remain held.`}
+                    label={
+                      settings?.period === "monthly"
+                        ? "Cap per month (INR)"
+                        : settings?.period === "daily"
+                          ? "Cap per day (INR)"
+                          : "Shared budget limit (INR)"
+                    }
+                    hint={`Up to the ceiling of ${money(approvedBudgetCap)}. Existing reservations remain held.`}
                   >
                     <input
                       aria-label="Shared budget limit in INR"
@@ -545,7 +522,7 @@ export function ExecutionControlsPanel() {
                     <input
                       aria-label="Budget change reason"
                       type="text"
-                      maxLength={512}
+                      maxLength={300}
                       value={budgetReason}
                       onChange={(event) => setBudgetReason(event.target.value)}
                       disabled={budgetBusy}
@@ -579,6 +556,9 @@ export function ExecutionControlsPanel() {
           )}
         </div>
       </Panel>
+      {settings ? (
+        <BudgetSettingsPanel settings={settings} onSaved={() => refresh()} />
+      ) : null}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { captureHeader } from "../capture-source";
 import {
   AcquisitionError,
   acquisition,
@@ -122,6 +123,7 @@ export async function sendSource({
         "X-Source-SHA256": sha,
         "X-Upload-Policy": policySha,
         "X-Upload-Consent": "accepted",
+        ...captureHeader(file),
       },
       body: file,
     }),

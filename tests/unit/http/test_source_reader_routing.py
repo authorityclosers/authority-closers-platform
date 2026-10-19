@@ -67,7 +67,10 @@ async def test_http_source_reference_routing(tmp_path, monkeypatch, route, histo
             deleted_at=None,
         ),
     }
-    db = SimpleNamespace(get=AsyncMock(side_effect=lambda model, key: rows[(model, key)]))
+    # execute: the bounded sign-in sets its lock and statement timeouts.
+    db = SimpleNamespace(
+        get=AsyncMock(side_effect=lambda model, key: rows[(model, key)]), execute=AsyncMock()
+    )
     actor = SimpleNamespace(tenant_id=PUBLIC_TENANT, person_id=person_id)
 
     async def require_actor(_request: Request):

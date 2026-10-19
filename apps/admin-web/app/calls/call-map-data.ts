@@ -23,7 +23,7 @@ export const STAGE_STATUS_LABEL: Record<StageStatus, string> = {
   failed: "Failed",
   skipped: "Skipped",
   waiting: "Waiting",
-  not_built: "Coming in v0.64",
+  not_built: "Not built yet",
 };
 
 export const STAGE_STATUS_TONE: Record<

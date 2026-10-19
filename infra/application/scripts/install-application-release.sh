@@ -896,6 +896,19 @@ compose_for() {
   local public_film_override=''
   local filesystem_override=''
   local hosted_status=0
+  local -a metrics_compose_files=()
+  # The target archive owns this capability, including during rollback. Never
+  # reuse the current release's mount for an older target or another environment.
+  if [[ "$target_environment" == production ]]; then
+    local metrics_override="$target_release/compose.production-metrics.yaml"
+    if [[ -e "$metrics_override" || -L "$metrics_override" ]]; then
+      [[ -f "$metrics_override" && ! -L "$metrics_override" && -r "$metrics_override" ]] || {
+        printf 'Production metrics compose policy must be a readable regular file.\n' >&2
+        return 1
+      }
+      metrics_compose_files=(--file "$metrics_override")
+    fi
+  fi
   local -a fixture_compose_files=() hosted_compose_files=() hosted_env_files=() hosted_profiles=()
   if load_sales_xray_hosted_inputs "$target_release"; then
     hosted_compose_files=(--file "${sales_xray_hosted_inputs[0]}")
@@ -947,6 +960,7 @@ compose_for() {
         -u COMPOSE_ENV_FILES \
         -u COMPOSE_DISABLE_ENV_FILE \
         -u AC_COMPOSE_PROJECT \
+        -u AC_METRICS_STORE_ROOT \
         -u AC_ENVIRONMENT \
         -u AC_STATE_ROOT \
         -u AC_PUBLIC_APP_URL \
@@ -1013,6 +1027,7 @@ compose_for() {
       --env-file "$target_release/release-images.env" \
       "${hosted_env_files[@]}" \
       --file "$target_release/compose.yaml" \
+      "${metrics_compose_files[@]}" \
       "${fixture_compose_files[@]}" \
       "${hosted_compose_files[@]}" \
       "${hosted_profiles[@]}" \

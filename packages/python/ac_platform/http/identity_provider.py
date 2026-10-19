@@ -29,6 +29,13 @@ class IdentityProviderRejected(DomainError):
     status = 401
 
 
+class IdentityProviderEmailMissing(IdentityProviderRejected):
+    """The provider signed the person in but shared no verified email address."""
+
+    code = "identity_provider_email_missing"
+    title = "The sign-in shared no email address"
+
+
 class OAuthIdentityProvider(Protocol):
     """A server-side provider adapter; no provider token crosses into a browser."""
 
@@ -257,6 +264,7 @@ def create_google_provider(
 __all__ = [
     "DisabledIdentityProvider",
     "GoogleOIDCProvider",
+    "IdentityProviderEmailMissing",
     "IdentityProviderRejected",
     "IdentityProviderUnavailable",
     "OAuthIdentityProvider",

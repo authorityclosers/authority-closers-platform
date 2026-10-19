@@ -1,4 +1,4 @@
-"""Partner webhook tables (migration 20261018_0096, 18 Oct 2026).
+"""Partner webhook tables (migrations 20261018_0096 and 20261019_0102).
 
 Endpoints are superseded, never edited: a new URL or secret disables the old
 row and adds a new one. Quote facts and events keep their minimal provenance
@@ -234,6 +234,189 @@ class PartnerWebhookAttempt(Base):
         PrimaryKeyConstraint("event_id", "attempt"),
         ForeignKeyConstraint(
             ["event_id"], ["partner_webhook_events.id"], name="fk_partner_webhook_attempt_event"
+        ),
+        CheckConstraint("attempt >= 1", name="number"),
+        CheckConstraint("duration_ms >= 0 AND finished_at >= started_at", name="timing"),
+        CheckConstraint(
+            "http_status IS NULL OR http_status BETWEEN 100 AND 599", name="http_status"
+        ),
+        CheckConstraint("http_status IS NOT NULL OR error_code IS NOT NULL", name="outcome"),
+    )
+
+    event_id: Mapped[UUID] = mapped_column(Uuid)
+    attempt: Mapped[int] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer)
+
+
+LEAD_EVENT_TYPES = ("lead.handover", "lead.created", "lead.stage_changed", "lead.closed")
+
+
+class PartnerHandoverRecipient(Base):
+    """Where an organisation's customer hand-overs go (0102). Superseded, never edited."""
+
+    __tablename__ = "partner_handover_recipients"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_partner_handover_recipient_tenant"
+        ),
+        ForeignKeyConstraint(
+            ["supersedes_recipient_id"],
+            ["partner_handover_recipients.id"],
+            name="fk_partner_handover_recipient_supersedes",
+        ),
+        CheckConstraint("status IN ('active', 'disabled')", name="status"),
+        CheckConstraint("(status = 'disabled') = (disabled_at IS NOT NULL)", name="disabled"),
+        # PostgreSQL regular expressions; the SQLite registry checks skip them.
+        CheckConstraint(
+            "url ~ '^(https://|http://(127\\.0\\.0\\.1|localhost)(:[0-9]{1,5})?/)'"
+            " AND url ~ '/api/v1/service/customers/handover$'",
+            name="url",
+        ).ddl_if(dialect="postgresql"),
+        CheckConstraint(
+            "secret_ref ~ '^AC_PARTNER_WEBHOOK_SECRET__[A-Z0-9_]{1,64}$'", name="secret_ref"
+        ).ddl_if(dialect="postgresql"),
+        CheckConstraint(
+            "length(trim(created_by)) > 0 AND length(trim(reason)) > 0", name="provenance"
+        ),
+        Index(
+            "uq_partner_handover_recipient_active",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    url: Mapped[str] = mapped_column(String(2048))
+    secret_ref: Mapped[str] = mapped_column(String(100))
+    lead_fields: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16))
+    events_since: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    supersedes_recipient_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(160))
+    reason: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PartnerLeadEvent(Base):
+    """One frozen lead event (to a webhook) or hand-over (to a recipient) (0102)."""
+
+    __tablename__ = "partner_lead_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["endpoint_id"], ["partner_webhook_endpoints.id"], name="fk_partner_lead_event_endpoint"
+        ),
+        ForeignKeyConstraint(
+            ["recipient_id"],
+            ["partner_handover_recipients.id"],
+            name="fk_partner_lead_event_recipient",
+        ),
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_partner_lead_event_tenant"),
+        ForeignKeyConstraint(
+            ["correction_of"], ["partner_lead_events.id"], name="fk_partner_lead_event_correction"
+        ),
+        CheckConstraint(
+            "event_type IN ('lead.handover', 'lead.created', 'lead.stage_changed', 'lead.closed')",
+            name="event_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'delivered', 'rejected', 'dead_letter', 'dropped')",
+            name="status",
+        ),
+        CheckConstraint(
+            "(endpoint_id IS NULL) <> (recipient_id IS NULL)"
+            " AND (recipient_id IS NOT NULL) = (event_type = 'lead.handover')",
+            name="target",
+        ),
+        CheckConstraint(
+            "(event_type = 'lead.handover') = (handover_seq IS NOT NULL)"
+            " AND (handover_seq IS NULL OR handover_seq >= 1)"
+            " AND (correction_of IS NULL OR event_type = 'lead.handover')",
+            name="handover",
+        ),
+        CheckConstraint(
+            "result IS NULL OR result IN ('created', 'updated', 'in_review')", name="result"
+        ),
+        CheckConstraint("(status = 'rejected') = (rejection IS NOT NULL)", name="rejection"),
+        CheckConstraint("(payload IS NULL) = (erased_at IS NOT NULL)", name="erasure"),
+        CheckConstraint(
+            "erased_at IS NULL OR status IN ('delivered', 'rejected', 'dropped', 'dead_letter')",
+            name="erased_status",
+        ),
+        CheckConstraint("(status = 'delivered') = (delivered_at IS NOT NULL)", name="delivered"),
+        CheckConstraint(
+            "attempts >= 0 AND replayed_attempts >= 0 AND replayed_attempts <= attempts",
+            name="attempts",
+        ),
+        CheckConstraint("length(payload_sha256) = 64", name="digest"),
+        CheckConstraint(
+            "last_http_status IS NULL OR last_http_status BETWEEN 100 AND 599",
+            name="http_status",
+        ),
+        Index(
+            "uq_partner_lead_event_source",
+            "endpoint_id",
+            "source_event_id",
+            "event_type",
+            unique=True,
+            postgresql_where=text("endpoint_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_partner_lead_event_handover",
+            "recipient_id",
+            "source_event_id",
+            unique=True,
+            postgresql_where=text("recipient_id IS NOT NULL AND correction_of IS NULL"),
+        ),
+        Index(
+            "ix_partner_lead_event_due",
+            "next_attempt_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_partner_lead_event_lead", "tenant_id", "lead_id", "event_type", "occurred_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    endpoint_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    recipient_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    source_event_id: Mapped[UUID] = mapped_column(Uuid)
+    event_type: Mapped[str] = mapped_column(String(64))
+    handover_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    correction_of: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    payload_sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))
+    attempts: Mapped[int] = mapped_column(Integer)
+    replayed_attempts: Mapped[int] = mapped_column(Integer)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    leased_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    result: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    partner_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    rejection: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PartnerLeadAttempt(Base):
+    __tablename__ = "partner_lead_attempts"
+    __table_args__ = (
+        PrimaryKeyConstraint("event_id", "attempt"),
+        ForeignKeyConstraint(
+            ["event_id"], ["partner_lead_events.id"], name="fk_partner_lead_attempt_event"
         ),
         CheckConstraint("attempt >= 1", name="number"),
         CheckConstraint("duration_ms >= 0 AND finished_at >= started_at", name="timing"),

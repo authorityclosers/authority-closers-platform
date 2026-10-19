@@ -50,9 +50,12 @@ function retryKey(submissionId: string): string {
 export function AnalysisRetryAction({
   submissionId,
   recordingId,
+  label,
 }: {
   submissionId: string;
   recordingId: string;
+  /** The first button's words, e.g. "Continue analysis" (default "Try again"). */
+  label?: string;
 }) {
   const [plan, setPlan] = useState<ProcessingPlan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -209,9 +212,6 @@ export function AnalysisRetryAction({
       {plan && (
         <div>
           <p>Review this retry’s approval.</p>
-          <p>
-            Minutes are reserved now and used only when a report is delivered.
-          </p>
           <details>
             <summary>Providers and privacy terms</summary>
             {plan.stages.map((stage) => (
@@ -233,7 +233,7 @@ export function AnalysisRetryAction({
             ? "Checking retry…"
             : plan
               ? "Accept and retry analysis"
-              : "Try again"}
+              : (label ?? "Try again")}
         </button>
       </div>
     </div>

@@ -228,7 +228,9 @@ it("explains how to delete data, including leads from Meta lead forms", () => {
   expect(page).toContain("admin@authorityclosers.com");
   expect(page).toContain("Facebook or Instagram lead forms");
   expect(page).toContain("What we keep");
-  expect(page).toContain('dateTime="2026-10-16"');
+  expect(page).toContain('dateTime="2026-10-20"');
+  expect(page).toContain("If you signed in with Facebook");
+  expect(page).toContain("remove Sales Xray Sign-in");
   expect(privacy).toContain('see <a href="/data-deletion">/data-deletion</a>');
   expect(page).toContain('<a href="/privacy">/privacy</a>');
 });

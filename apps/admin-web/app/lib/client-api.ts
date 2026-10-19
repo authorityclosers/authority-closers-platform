@@ -28,12 +28,26 @@ export async function command<T>(
   idempotencyKey: string,
   fetcher: typeof fetch = fetch,
 ): Promise<CommandResult<T>> {
+  return send<T>("POST", path, body, idempotencyKey, fetcher);
+}
+
+/**
+ * A change with its method (POST or PUT, as the area's route takes it). The
+ * Idempotency-Key goes only to routes that take one (null for the others).
+ */
+export async function send<T>(
+  method: "POST" | "PUT",
+  path: string,
+  body: unknown,
+  idempotencyKey: string | null,
+  fetcher: typeof fetch = fetch,
+): Promise<CommandResult<T>> {
   if (!SAFE_PATH.test(path) || path.includes(".."))
     return { ok: false, status: 400, message: "This action isn't available." };
   let response: Response;
   try {
     response = await fetcher(path, {
-      method: "POST",
+      method,
       credentials: "same-origin",
       cache: "no-store",
       redirect: "error",
@@ -41,7 +55,7 @@ export async function command<T>(
         accept: "application/json",
         "content-type": "application/json",
         origin: window.location.origin,
-        "idempotency-key": idempotencyKey,
+        ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
       },
       body: JSON.stringify(body),
     });

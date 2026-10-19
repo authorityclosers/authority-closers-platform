@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./blob-sha256": "./src/blob-sha256.ts"
+    "./blob-sha256": "./src/blob-sha256.ts",
+    "./sx": "./src/sx/index.ts",
+    "./sx/client": "./src/sx/kit-client.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit --jsx react-jsx --module preserve --moduleResolution bundler --target es2022 --skipLibCheck src/index.ts --incremental --tsBuildInfoFile node_modules/.cache/tsc/tsconfig.tsbuildinfo"

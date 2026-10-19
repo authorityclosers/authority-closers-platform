@@ -67,14 +67,48 @@ def test_it_reads_the_store(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "production" / "usage.json").write_text(
         json.dumps(
             {
-                "budgets": [{"scope": "s", "cap_paise": 1_000_000, "committed_paise": 900_000}],
+                "budgets": [
+                    {
+                        "scope": "s",
+                        "cap_paise": 1_000_000,
+                        "committed_paise": 900_000,
+                        "period": "monthly",
+                    }
+                ],
                 "waiting_calls": 1,
-                "ceiling_requests": [{"id": "r1", "requested_paise": 2_000_000}],
+                "budget_changes": [{"id": "c1", "ceiling_paise": 2_000_000}],
             }
         )
     )
     monkeypatch.setattr(alerts, "STORE", tmp_path)
     figures = alerts.read_env("production")
     assert figures["share"] == 0.9 and figures["waiting"] == 1
-    assert [row["id"] for row in figures["requests"]] == ["r1"]
+    assert figures["period"] == "monthly"
+    assert [row["id"] for row in figures["changes"]] == ["c1"]
     assert alerts.read_env("staging") is None
+    _, notes, _ = alerts.alert_text("production", "90", figures)
+    assert notes.startswith("₹9,000 of this month's ₹10,000 cap is spent or held.")
+
+
+def test_one_line_per_ceiling_or_period_change_none_for_a_cap_raise() -> None:
+    alerts = _alerts()
+    raised = {
+        "id": "a",
+        "before_ceiling_paise": 1_000_000,
+        "ceiling_paise": 2_000_000,
+        "before_period": "lifetime",
+        "period": "monthly",
+        "cap_paise": 500_000,
+    }
+    assert alerts.change_line("production", raised) == (
+        "Sales X-Ray AI budget ceiling changed (production): ₹10,000 → ₹20,000; "
+        "cap ₹5,000 a month. https://admin.authorityclosers.com/sales-xray/execution"
+    )
+    period_only = {**raised, "before_ceiling_paise": 2_000_000, "period": "daily"}
+    assert alerts.change_line("development", period_only).startswith(
+        "Sales X-Ray AI budget period changed (dev); cap ₹5,000 a day."
+    )
+    cap_only = {**raised, "before_ceiling_paise": 2_000_000, "before_period": "monthly"}
+    assert alerts.change_line("production", cap_only) is None
+    first = {**raised, "before_ceiling_paise": None}
+    assert "the release amount → ₹20,000" in alerts.change_line("staging", first)

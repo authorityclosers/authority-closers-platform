@@ -65,9 +65,8 @@ it("coalesces a double click and accepts only the displayed successor plan", asy
   expect(button().disabled).toBe(true);
   await act(async () => resolve(new Response(JSON.stringify(plan))));
   expect(container.textContent).toContain("Providers and privacy terms");
-  expect(container.textContent).toContain(
-    "used only when a report is delivered",
-  );
+  // No minutes or price on a person's screen (owner, 19 Oct 2026).
+  expect(container.textContent).not.toMatch(/minutes|₹|cost|price/i);
   expect(fetch).toHaveBeenCalledTimes(1);
   await click();
   expect(fetch).toHaveBeenCalledTimes(2);

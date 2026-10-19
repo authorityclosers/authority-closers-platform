@@ -27,6 +27,9 @@ CAPTURE_SOURCES = (
     "desktop_recorder",
     "desktop_watch_folder",
     "chrome_tab",
+    # Migration 0100 (ADR 0056 F2): the Android app's own two ways of recording.
+    "android_in_app_recorder",
+    "android_call_recorder",
 )
 
 

@@ -62,6 +62,8 @@ import {
   type Stage,
 } from "./leads-client";
 import { LastCallBrief } from "./call-brief-card";
+import { SocialThread } from "./social-thread";
+import { WhatsAppThread } from "./whatsapp-thread";
 import { sourceText, whyLine } from "./desk-view";
 import { firstCallWords, ownerNote } from "./owner-words";
 import { phoneCallText } from "./phone-call-text";
@@ -1920,6 +1922,9 @@ export function LeadCard({
       </section>
 
       <LastCallBrief detail={detail} onChanged={onChanged} />
+
+      <WhatsAppThread leadId={lead.lead_id} canSend={detail.can_edit} />
+      <SocialThread leadId={lead.lead_id} canSend={detail.can_edit} />
 
       <section className={styles.historyBlock} aria-label="History">
         <h3 className={styles.stepLabel}>History</h3>

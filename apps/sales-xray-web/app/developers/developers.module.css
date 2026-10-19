@@ -1,0 +1,76 @@
+/* Developers page: the policy page frame plus code and tables (Sales Xray tokens). */
+
+.doc section {
+  margin-top: 28px;
+  scroll-margin-top: 16px;
+}
+
+.doc h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.doc p,
+.doc li {
+  overflow-wrap: anywhere;
+}
+
+.doc :not(pre) > code {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--sx-sunken);
+  font-size: 0.9em;
+}
+
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.code {
+  margin: 12px 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--sx-line);
+  border-radius: 10px;
+  background: var(--sx-sunken);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.code:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.table {
+  width: 100%;
+  margin: 12px 0;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table caption {
+  margin-bottom: 6px;
+  color: var(--sx-ink-2);
+  font-weight: 600;
+  text-align: left;
+}
+
+.table th,
+.table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--sx-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+@media (max-width: 640px) {
+  .table {
+    display: block;
+    overflow-x: auto;
+  }
+}

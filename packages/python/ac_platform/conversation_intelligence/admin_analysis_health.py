@@ -7,6 +7,9 @@ cost per analysed minute from the stored provider receipts, overall and per
 prompt version and Report model (to compare versions as they change). Costs are the
 admin pricing estimate, never a settlement. Failure text that is not a stored
 code is withheld: provider and media messages never reach this view.
+
+It also carries the call data engine's runs per pipeline and Review 2.0's
+measures (admin revamp Phase 4, 19 Oct 2026; see analysis_health_engine).
 """
 
 from __future__ import annotations
@@ -23,6 +26,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.admin_pricing import estimate_provider_usage
+from ac_platform.conversation_intelligence.analysis_health_engine import (
+    engine_health,
+    review_health,
+)
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationDenied,
@@ -431,6 +438,9 @@ class AdminAnalysisHealth:
                 {"day": day, "analysed": daily[day]["analysed"], "failed": daily[day]["failed"]}
             )
 
+        engine = await engine_health(self.database, scope, since=since, now=now)
+        review = await review_health(self.database, self.operations_tenant_id, scope, since=since)
+
         def stats(values: list[float]) -> dict[str, Any]:
             return {
                 "count": len(values),
@@ -474,4 +484,6 @@ class AdminAnalysisHealth:
             },
             "daily": series,
             "versions": versions,
+            "engine": engine,
+            "review": review,
         }

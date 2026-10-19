@@ -115,6 +115,29 @@ Infisical presence reaches a container. Check names and availability only.
 See [the ingress and rollout packet](BILLING_INGRESS.md) for the fixed proposed
 UTC instant, production hold, release checks and rollback boundary.
 
+## Sales Xray sign-in with Facebook and Apple (optional)
+
+The API reads these from the same Infisical `/application` path (dev:
+`/sales-xray-dev`). Each provider shows on the Sales Xray sign-in screen only
+once all its settings exist and are valid; missing or malformed values keep it
+off and never stop the API. No release requires them. Compose forwards them to
+the API only.
+
+| Secret                         | Constraint                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `AC_FACEBOOK_LOGIN_APP_ID`     | numeric App ID of that environment's "Sales Xray Sign-in" app (production the parent, staging and dev test apps) |
+| `AC_FACEBOOK_LOGIN_APP_SECRET` | that same app's App Secret; redirect URI `<Sales Xray URL>/v1/auth/facebook/callback`                       |
+| `AC_APPLE_SIGN_IN_SERVICE_ID`  | the Sign in with Apple Services ID; return URL `<Sales Xray URL>/v1/auth/apple/callback`                    |
+| `AC_APPLE_SIGN_IN_TEAM_ID`     | the 10-character Apple Team ID                                                                               |
+| `AC_APPLE_SIGN_IN_KEY_ID`      | the 10-character ID of the Sign in with Apple key                                                            |
+| `AC_APPLE_SIGN_IN_PRIVATE_KEY` | that key's `.p8` file: PEM, PEM with `\n`, or base64 of the file                                            |
+
+`AC_FACEBOOK_LOGIN_GRAPH_VERSION` is optional and not secret (default `v23.0`).
+Never copy a production value into staging or dev. On hosts behind Cloudflare
+Access (dev, staging), `POST /v1/auth/apple/callback` needs an Access bypass:
+Apple posts it cross-site. Setup: `docs/product/identity/facebook-login-app.md`
+and `docs/product/identity/apple-sign-in.md`.
+
 ## Sales Xray CRM lead sources (optional)
 
 The API reads these from the same Infisical `/application` path. The Meta Lead
@@ -153,6 +176,38 @@ requires them. Compose forwards them to the API only.
 environment has its own OAuth client; never copy a production value into
 staging or dev. A Google Ads lead form posts to
 `/v1/lead-desk/capture/{source}/google-ads` with the key Sales Xray wrote into it.
+
+## Sales Xray CRM WhatsApp (optional)
+
+The API reads these from the same Infisical `/application` path for each
+organisation's own WhatsApp number in Settings → Integrations (Meta's Embedded
+Signup, the separate "Sales Xray Messaging" Meta app; see
+`docs/product/lead-desk/whatsapp-app.md`). The channel stays off (Settings shows
+nothing) until the first four exist alongside `AC_LEAD_DESK_TOKEN_KEY`, which also
+seals each number's business token and PIN. No release requires them. Compose
+forwards them to the API only. Customers' messages are billed by Meta to the
+customer's own WhatsApp account.
+
+| Secret                             | Constraint                                                                                                              |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `AC_WHATSAPP_APP_ID`               | that environment's WhatsApp app: production the parent app, staging and dev their own test apps                        |
+| `AC_WHATSAPP_APP_SECRET`           | the App Secret of that same app; it also signs the webhook (`X-Hub-Signature-256`)                                      |
+| `AC_WHATSAPP_CONFIG_ID`            | that app's Facebook Login for Business configuration for Embedded Signup; redirect URI `<Sales Xray URL>/v1/lead-desk/whatsapp/callback` |
+| `AC_WHATSAPP_WEBHOOK_VERIFY_TOKEN` | independent random value, entered once in that app's WhatsApp webhook (`<Sales Xray URL>/v1/lead-desk/whatsapp/webhook`) |
+
+`AC_WHATSAPP_GRAPH_VERSION` is optional and not secret (default: the Meta
+leads connector's version). Each environment has its own app and values; never
+copy a production value into staging or dev. On dev and staging the webhook path
+needs a Cloudflare Access bypass, like the Meta leads webhook.
+
+Messenger and Instagram conversations (Settings → Integrations → Messenger &
+Instagram) use the same app: its App ID, App Secret and verify token above, plus
+`AC_MESSAGING_LOGIN_CONFIG_ID`, that app's Facebook Login for Business
+configuration for Pages and Instagram accounts (redirect URI
+`<Sales Xray URL>/v1/lead-desk/messaging/callback`; webhook
+`<Sales Xray URL>/v1/lead-desk/messaging/webhook` for the Page and Instagram
+objects). They stay off until it exists; WhatsApp's own configuration isn't needed
+for them. See `docs/product/lead-desk/instagram-messenger-app.md`.
 
 ## Sales Xray CRM push alerts (optional)
 

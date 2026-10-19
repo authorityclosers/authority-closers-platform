@@ -33,6 +33,8 @@ from ac_platform.http.conversation_insights import install_insights_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_reviews import install_conversation_review_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
+from ac_platform.http.identity_provider_apple import AppleSignInProvider
+from ac_platform.http.identity_provider_facebook import FacebookLoginProvider
 from ac_platform.http.learning import (
     ActivityMediaResolver,
     MediaDescriptorResolver,
@@ -81,6 +83,38 @@ def _google_provider_from_settings(settings: Settings) -> OAuthIdentityProvider:
         client_id=client_id,
         client_secret=client_secret.get_secret_value(),
     )
+
+
+def _extra_sign_in_providers(settings: Settings) -> dict[str, OAuthIdentityProvider]:
+    """Facebook and Apple for Sales Xray, each only once all its settings exist.
+
+    A provider whose settings are present but invalid stays off with a log line;
+    it never stops the API from starting.
+    """
+
+    providers: dict[str, OAuthIdentityProvider] = {}
+    facebook_secret = settings.facebook_login_app_secret
+    if settings.facebook_login_configured and facebook_secret is not None:
+        try:
+            providers["facebook"] = FacebookLoginProvider(
+                app_id=settings.facebook_login_app_id or "",
+                app_secret=facebook_secret.get_secret_value(),
+                graph_version=settings.facebook_login_graph_version,
+            )
+        except ValueError:
+            logger.warning("facebook_login_settings_invalid")
+    apple_key = settings.apple_sign_in_private_key
+    if settings.apple_sign_in_configured and apple_key is not None:
+        try:
+            providers["apple"] = AppleSignInProvider(
+                service_id=settings.apple_sign_in_service_id or "",
+                team_id=settings.apple_sign_in_team_id or "",
+                key_id=settings.apple_sign_in_key_id or "",
+                private_key=apple_key.get_secret_value(),
+            )
+        except ValueError:
+            logger.warning("apple_sign_in_settings_invalid")
+    return providers
 
 
 @asynccontextmanager
@@ -140,6 +174,7 @@ def create_app(
         settings=settings,
         sessions=session_factory,
         provider=configured_identity_provider,
+        extra_providers=_extra_sign_in_providers(settings),
     )
     ctx = RouteContext(settings=settings, require_actor=require_actor, sessions=session_factory)
     install_native_devices_http(

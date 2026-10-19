@@ -1,9 +1,12 @@
-"""Internal canary marking and a tenant-scoped recording predicate."""
+"""Internal canary marking and tenant-scoped recording predicates."""
 
+import hashlib
 from datetime import datetime
+from functools import cache
+from importlib import resources
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.selectable import Exists
 
@@ -33,7 +36,31 @@ async def mark_canary_submission(
     await db.flush()
 
 
-def recording_is_canary() -> Exists:
+@cache
+def fixture_sha256s() -> frozenset[str]:
+    """The bundled canary recordings. The QA smoke accounts upload the same file."""
+    fixtures = resources.files("ac_platform.conversation_intelligence") / "canary_fixture"
+    return frozenset(
+        hashlib.sha256(item.read_bytes()).hexdigest()
+        for item in fixtures.iterdir()
+        if item.name.endswith(".wav")
+    )
+
+
+def recording_is_canary() -> ColumnElement[bool]:
+    """Our own test calls: marked canary submissions and any upload of a bundled
+    canary recording (the nightly QA account run), kept out of usage, recordings,
+    review, gold and the library."""
+    return or_(
+        recording_is_marked_canary(),
+        ConversationRecording.source_sha256.in_(sorted(fixture_sha256s())),
+    )
+
+
+def recording_is_marked_canary() -> Exists:
+    """Only submissions the canary marked. Use where the fixture file alone must not
+    count: the profile gate (anyone can upload a public file) and retention (QA calls
+    are deleted on the normal schedule)."""
     return (
         select(ConversationCanarySubmission.submission_id)
         .join(

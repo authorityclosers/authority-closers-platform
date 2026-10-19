@@ -12,6 +12,12 @@
 # Reports never wait on this engine. Docs: docs/architecture/CALL_DATA_ENGINE.md
 #
 #   ac-call-data development-live | staging | production
+#   ac-call-data stop staging | production   (systemd ExecStop)
+#
+# On staging and production the runner lives inside the worker container, and
+# stopping `docker exec` leaves it running there, holding the lock. So every start
+# first stops a looping runner left in the container, and ExecStop stops it too.
+# A backfill run never loops, so it is never touched.
 set -euo pipefail
 
 module=ac_platform.call_data.runner
@@ -61,9 +67,56 @@ forward_alerts() {
   return 0
 }
 
+# stop_container_runner <container>: SIGTERM the looping runner (and its infisical
+# parent) inside the worker and wait until none is left.
+stop_container_runner() {
+  docker exec -i "$1" python - <<'PY'
+import os
+import signal
+import time
+
+
+def runners():
+    found = []
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            parts = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+        except OSError:
+            continue
+        if b"ac_platform.call_data.runner" in parts and b"--loop" in parts:
+            found.append(int(pid))
+    return found
+
+
+before = runners()
+for pid in before:
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+for _ in range(60):
+    if not runners():
+        break
+    time.sleep(1)
+left = runners()
+if before or left:
+    print(f'{{"runner_left_in_container": {len(before)}, "still_running": {len(left)}}}')
+raise SystemExit(1 if left else 0)
+PY
+}
+
 # Sourced (by the tests): the functions only.
 if [[ ${BASH_SOURCE[0]} != "$0" ]]; then
   return 0
+fi
+
+if [[ ${1:-} == stop ]]; then
+  case "${2:-}" in
+    staging | production) stop_container_runner "ac-application-$2-sales-xray-worker-1" || true ;;
+  esac
+  exit 0
 fi
 
 env_name=${1:?usage: ac-call-data development-live|staging|production}
@@ -100,6 +153,7 @@ case "$env_name" in
       sleep 300
       exit 0
     fi
+    stop_container_runner "$container"
     docker exec "$container" python -m "$module" \
       --service-config /run/ac-sales-xray/service.json \
       --database-url-file /run/ac-sales-xray/database-url \
