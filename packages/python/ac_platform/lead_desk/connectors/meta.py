@@ -309,13 +309,16 @@ def graph_error(error: Mapping[str, Any], status: int) -> MetaError:
 class Graph:
     """The few Graph calls the connector needs. Errors become plain MetaError messages."""
 
-    def __init__(self, cfg: MetaConfig, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self, cfg: MetaConfig, client: httpx.AsyncClient | None = None, *, timeout: float = 20
+    ) -> None:
         self.cfg = cfg
         self._client = client
+        self.timeout = timeout
 
     async def _call(self, method: str, path: str, **params: Any) -> dict[str, Any]:
         url = f"{self.cfg.graph}/{path.lstrip('/')}"
-        client = self._client or httpx.AsyncClient(timeout=20)
+        client = self._client or httpx.AsyncClient(timeout=self.timeout)
         try:
             response = await client.request(
                 method,

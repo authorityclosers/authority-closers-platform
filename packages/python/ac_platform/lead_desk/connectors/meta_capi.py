@@ -628,10 +628,31 @@ _SWEEP = """
 """
 
 
+# A lead that is no longer in Lead Desk takes its hashed identifiers with it, whatever
+# the event's state: a waiting one is dropped, a sent one keeps only its id and result.
+_GONE = """
+    UPDATE lead_desk_meta_conversions c
+    SET payload = NULL, erased_at = :now,
+        status = CASE WHEN c.status = 'pending' THEN 'dropped' ELSE c.status END,
+        last_error_code = CASE WHEN c.status = 'pending' THEN 'lead_gone'
+                               ELSE c.last_error_code END
+    WHERE c.id IN (
+      SELECT x.id FROM lead_desk_meta_conversions x
+      WHERE x.payload IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM lead_desk_leads l WHERE l.tenant_id = x.tenant_id AND l.id = x.lead_id
+        )
+      LIMIT 500
+    )
+"""
+
+
 async def erasure_sweep(db: AsyncSession, now: datetime) -> int:
-    """Empty event bodies older than 90 days; ids, digests, results and attempts stay."""
-    result = await db.execute(text(_SWEEP), {"now": now, "before": now - KEEP})
-    return int(getattr(result, "rowcount", 0) or 0)
+    """Empty event bodies older than 90 days, and at once those of a lead that is gone;
+    ids, digests, results and attempts stay."""
+    old = await db.execute(text(_SWEEP), {"now": now, "before": now - KEEP})
+    gone = await db.execute(text(_GONE), {"now": now})
+    return int(getattr(old, "rowcount", 0) or 0) + int(getattr(gone, "rowcount", 0) or 0)
 
 
 async def tick(

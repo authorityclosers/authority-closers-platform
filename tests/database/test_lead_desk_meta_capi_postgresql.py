@@ -15,12 +15,17 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from ac_platform.http.routes import RouteContext
 from ac_platform.lead_desk.connectors import meta, meta_capi
 from ac_platform.lead_desk.connectors.http import install_connectors_http
-from ac_platform.lead_desk.models import Lead, LeadMetaConversion, LeadMetaConversionAttempt
+from ac_platform.lead_desk.models import (
+    Lead,
+    LeadEvent,
+    LeadMetaConversion,
+    LeadMetaConversionAttempt,
+)
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
@@ -194,6 +199,19 @@ def test_lead_stages_go_back_to_the_organisations_meta_dataset(
                 rows = (await db.scalars(select(LeadMetaConversion))).all()
                 assert {row.status for row in rows} == {"delivered"}
                 assert all(row.fbtrace_id for row in rows)
+            # A lead that leaves Lead Desk takes its hashed identifiers with it.
+            gone = leads["100000000000002"].id
+            async with setup.sessions() as db, db.begin():
+                await db.execute(delete(LeadEvent).where(LeadEvent.lead_id == gone))
+                await db.execute(delete(Lead).where(Lead.id == gone))
+            async with setup.sessions() as db, db.begin():
+                assert await meta_capi.erasure_sweep(db, datetime.now(UTC)) == 2
+            async with setup.sessions() as db:
+                rows = (await db.scalars(select(LeadMetaConversion))).all()
+                emptied = {row.event_name for row in rows if row.payload is None}
+                assert emptied == {"Lead", "Not a fit"}
+                assert all(row.erased_at for row in rows if row.lead_id == gone)
+                assert sum(row.payload is not None for row in rows) == 4
         finally:
             await setup.engine.dispose()
 

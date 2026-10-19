@@ -35,7 +35,8 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import cast, func, select
+from sqlalchemy.dialects.postgresql import JSONB
 from starlette.requests import ClientDisconnect
 
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
@@ -753,7 +754,8 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             source = await page_source(desk, page_id)
             try:
                 token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
-                await meta.Graph(cfg).unsubscribe(page_id, token)
+                # The manager is waiting: give Meta a few seconds, not twenty.
+                await meta.Graph(cfg, timeout=6).unsubscribe(page_id, token)
             except meta.MetaError:
                 pass  # Already gone at Meta's end; switching it off here is what matters.
             source.active = False
@@ -807,22 +809,37 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         graph = meta.Graph(cfg)
         for event in events:
             try:
-                async with ctx.sessions() as database, database.begin():
-                    sources = (
-                        await database.scalars(
+                # Only this Page's sources, read without a lock; Meta is asked for the
+                # lead before anything is locked, then the source is locked to file it.
+                async with ctx.sessions() as database:
+                    matches = [
+                        (source.id, dict(source.config or {}))
+                        for source in (
+                            await database.scalars(
+                                select(LeadSource).where(
+                                    LeadSource.kind == "meta",
+                                    LeadSource.active.is_(True),
+                                    func.jsonb_extract_path_text(
+                                        cast(LeadSource.config, JSONB), "page_id"
+                                    )
+                                    == event.page_id,
+                                )
+                            )
+                        ).all()
+                    ]
+                for source_id, config in matches:
+                    if not meta.wants_form(config.get("forms"), event.form_id):
+                        continue
+                    token = meta.unseal(cfg.token_key, config["token"], page_id=event.page_id)
+                    lead = await graph.lead(event.leadgen_id, token)
+                    async with ctx.sessions() as database, database.begin():
+                        source = await database.scalar(
                             select(LeadSource)
-                            .where(LeadSource.kind == "meta", LeadSource.active.is_(True))
+                            .where(LeadSource.id == source_id, LeadSource.active.is_(True))
                             .with_for_update()
                         )
-                    ).all()
-                    for source in sources:
-                        config = source.config or {}
-                        if str(config.get("page_id")) != event.page_id:
+                        if source is None:
                             continue
-                        if not meta.wants_form(config.get("forms"), event.form_id):
-                            continue
-                        token = meta.unseal(cfg.token_key, config["token"], page_id=event.page_id)
-                        lead = await graph.lead(event.leadgen_id, token)
                         desk = LeadDesk(
                             database,
                             Viewer(
@@ -832,18 +849,10 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                                 name=source.label,
                             ),
                         )
-                        _, outcome = await desk.ingest(
-                            meta.lead_record(lead, page_name=str(config.get("page_name") or "")),
-                            source="meta",
-                            source_label=source.label,
-                            source_ref=event.leadgen_id[:200],
-                            actor=None,
+                        outcome = await meta_backfill.file_lead(
+                            desk, source, lead, page_name=str(config.get("page_name") or "")
                         )
-                        if outcome in {"created", "repeat"}:
-                            source.received += 1
-                            source.last_received_at = desk.now
-                            filed += 1
-                    await database.flush()
+                        filed += outcome in {"created", "repeat"}
             except (meta.MetaError, DeskError) as error:
                 # Meta retries a delivery that fails; one bad lead must not block the rest.
                 log.warning("meta lead %s not filed: %s", event.leadgen_id, error)

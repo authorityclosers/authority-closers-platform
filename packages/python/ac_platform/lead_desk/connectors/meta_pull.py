@@ -11,6 +11,11 @@ webhook Meta drops.
 The same tick moves each Page's "Bring in older leads" along (``meta_backfill``), and
 keeps the Page's list of forms fresh, so the page can say which forms are covered. A
 pull that Meta refuses leaves its reason on the Page (``last_error``) for the manager.
+
+No database lock is held while Meta answers: each Page is read from Meta first, then
+locked only while its leads are filed (``SKIP LOCKED``, so a Page a manager is working
+on waits for the next tick instead of making the manager wait). On 19 Oct 2026 a pull
+holding every Page's lock through Meta's calls made a manager's Switch off wait.
 """
 
 from __future__ import annotations
@@ -22,9 +27,10 @@ from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Any, Protocol
+from uuid import UUID
 
 from fastapi import FastAPI
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.lead_desk.connectors import meta, meta_backfill
@@ -36,7 +42,6 @@ log = logging.getLogger(__name__)
 PULL_EVERY = 600  # seconds between pulls of one Page
 OVERLAP = 3600  # re-read the last hour, so a lead Meta stamps late is not missed
 _TICK = 60
-_LOCK = (1802, 1261)  # one puller across API processes and slots
 _OUTCOMES = ("created", "repeat", "known", "skipped")
 
 
@@ -84,24 +89,39 @@ def due(config: Mapping[str, Any], now: int, every: int = PULL_EVERY) -> bool:
     return last is None or now - last >= every - _TICK // 2
 
 
-async def pull_source(
-    desk: LeadDesk, source: LeadSource, graph: _Graph, cfg: meta.MetaConfig, *, now: int
-) -> Pulled:
-    """Read one Page's leads since its last pull and file them; records the pull time."""
-    config = dict(source.config or {})
+@dataclass(frozen=True, slots=True)
+class Fetched:
+    """What Meta returned for one Page, read before any database lock is taken."""
+
+    listed: list[dict[str, str]] | None  # the Page's forms, when it takes "all"
+    leads: list[dict[str, Any]]
+
+
+async def fetch(
+    config: Mapping[str, Any], graph: _Graph, cfg: meta.MetaConfig, *, now: int
+) -> Fetched:
+    """Read one Page's leads since its last pull from Meta; touches no database."""
     page_id = str(config.get("page_id") or "")
     token = meta.unseal(cfg.token_key, config["token"], page_id=page_id)
     forms = config.get("forms", "all")
+    listed: list[dict[str, str]] | None = None
     if forms == "all":
         # Every form on the Page, read afresh each time, so a new form comes in by itself.
         listed = await graph.forms(page_id, token)
-        config = meta_backfill.remember_forms(config, listed)
         form_ids = [str(form["id"]) for form in listed]
     else:
         form_ids = [str(form) for form in forms or []]
+    return Fetched(listed, await graph.recent_leads(form_ids, token, since=since(config, now)))
+
+
+async def file(desk: LeadDesk, source: LeadSource, fetched: Fetched, *, now: int) -> Pulled:
+    """File what Meta returned and record the pull time, in the caller's transaction."""
+    config = dict(source.config or {})
+    if fetched.listed is not None:
+        config = meta_backfill.remember_forms(config, fetched.listed)
     result = Pulled()
     page_name = str(config.get("page_name") or "")
-    for lead in await graph.recent_leads(form_ids, token, since=since(config, now)):
+    for lead in fetched.leads:
         result.fetched += 1
         outcome = await meta_backfill.file_lead(desk, source, lead, page_name=page_name)
         key = outcome if outcome in _OUTCOMES else "skipped"
@@ -112,68 +132,128 @@ async def pull_source(
     return result
 
 
+async def pull_source(
+    desk: LeadDesk, source: LeadSource, graph: _Graph, cfg: meta.MetaConfig, *, now: int
+) -> Pulled:
+    """Read one Page's leads since its last pull and file them; records the pull time."""
+    return await file(desk, source, await fetch(source.config or {}, graph, cfg, now=now), now=now)
+
+
+def _desk(database: AsyncSession, source: LeadSource) -> LeadDesk:
+    return LeadDesk(
+        database,
+        Viewer(
+            person_id=source.created_by_person_id,
+            tenant_id=source.tenant_id,
+            role="system",
+            name=source.label,
+        ),
+    )
+
+
+async def _locked(database: AsyncSession, source_id: UUID) -> LeadSource | None:
+    """The Page's source, locked; None when it was switched off or someone holds it."""
+    source: LeadSource | None = await database.scalar(
+        select(LeadSource)
+        .where(
+            LeadSource.id == source_id,
+            LeadSource.kind == "meta",
+            LeadSource.active.is_(True),
+        )
+        .with_for_update(skip_locked=True)
+    )
+    return source
+
+
 async def pull_due(
     sessions: async_sessionmaker[AsyncSession], cfg: meta.MetaConfig, graph: _Graph, *, now: int
 ) -> int:
-    """Pull every active Meta Page that is due. Returns how many Pages were pulled."""
+    """Pull every active Meta Page that is due, and move each Page's backfill on.
+
+    Pages are read without a lock; Meta is asked with no transaction open; each Page is
+    then locked for a moment to file its leads. Another process, or a manager working
+    on that Page, holds the lock: the Page waits for the next tick. Returns how many
+    Pages were pulled."""
+    async with sessions() as database:
+        snapshot = [
+            (row.id, dict(row.config or {}))
+            for row in (
+                await database.scalars(
+                    select(LeadSource)
+                    .where(LeadSource.kind == "meta", LeadSource.active.is_(True))
+                    .order_by(LeadSource.created_at)
+                )
+            ).all()
+        ]
     pulled = 0
-    async with sessions() as database, database.begin():
-        if not await database.scalar(
-            text("SELECT pg_try_advisory_xact_lock(:a, :b)"), {"a": _LOCK[0], "b": _LOCK[1]}
-        ):
-            return 0
-        sources = (
-            await database.scalars(
-                select(LeadSource)
-                .where(LeadSource.kind == "meta", LeadSource.active.is_(True))
-                .order_by(LeadSource.created_at)
-                .with_for_update(skip_locked=True)
-            )
-        ).all()
-        for source in sources:
-            pull = due(source.config or {}, now)
-            backfill = meta_backfill.running(source.config or {})
-            if not (pull or backfill):
-                continue
-            desk = LeadDesk(
-                database,
-                Viewer(
-                    person_id=source.created_by_person_id,
-                    tenant_id=source.tenant_id,
-                    role="system",
-                    name=source.label,
-                ),
-            )
-            if backfill:
-                try:
-                    async with database.begin_nested():
-                        await meta_backfill.step(desk, source, graph, cfg, now=now)
-                except (DeskError, KeyError, ValueError) as error:
-                    log.warning("meta backfill for lead source %s failed: %s", source.id, error)
-                    await database.refresh(source)
-            if not pull:
-                continue
-            try:
-                async with database.begin_nested():
-                    counts = await pull_source(desk, source, graph, cfg, now=now)
-            except (meta.MetaError, DeskError, KeyError, ValueError) as error:
-                # One Page's failure must not stop the others; it is retried next tick.
-                log.warning("meta pull for lead source %s failed: %s", source.id, error)
-                await database.refresh(source)
-                if isinstance(error, meta.MetaError):
+    for source_id, config in snapshot:
+        # One Page's failure must not stop the others; it is tried again next tick.
+        if meta_backfill.running(config):
+            await _backfill(sessions, source_id, config, graph, cfg, now=now)
+        if due(config, now):
+            pulled += await _pull(sessions, source_id, config, graph, cfg, now=now)
+    return pulled
+
+
+async def _backfill(
+    sessions: async_sessionmaker[AsyncSession],
+    source_id: UUID,
+    config: Mapping[str, Any],
+    graph: _Graph,
+    cfg: meta.MetaConfig,
+    *,
+    now: int,
+) -> None:
+    try:
+        piece = await meta_backfill.read(config, graph, cfg, now=now)
+        if piece is None:
+            return
+        async with sessions() as database, database.begin():
+            source = await _locked(database, source_id)
+            if source is not None:
+                await meta_backfill.apply(_desk(database, source), source, piece, now=now)
+    except (DeskError, KeyError, ValueError) as error:
+        log.warning("meta backfill for lead source %s failed: %s", source_id, error)
+
+
+async def _pull(
+    sessions: async_sessionmaker[AsyncSession],
+    source_id: UUID,
+    config: Mapping[str, Any],
+    graph: _Graph,
+    cfg: meta.MetaConfig,
+    *,
+    now: int,
+) -> int:
+    try:
+        fetched = await fetch(config, graph, cfg, now=now)
+    except (meta.MetaError, KeyError, ValueError) as error:
+        log.warning("meta pull for lead source %s failed: %s", source_id, error)
+        if isinstance(error, meta.MetaError):
+            async with sessions() as database, database.begin():
+                source = await _locked(database, source_id)
+                if source is not None:
                     source.config = failed(
                         {**(source.config or {}), "last_pulled_at": now}, error, now
                     )
-                continue
-            pulled += 1
-            if counts.created or counts.repeat:
-                log.info(
-                    "meta pull filed %d new and %d repeat leads for lead source %s",
-                    counts.created,
-                    counts.repeat,
-                    source.id,
-                )
-    return pulled
+        return 0
+    try:
+        async with sessions() as database, database.begin():
+            source = await _locked(database, source_id)
+            if source is None or not due(source.config or {}, now):
+                return 0  # a manager is on it, or another process pulled it just now
+            counts = await file(_desk(database, source), source, fetched, now=now)
+    except (DeskError, KeyError, ValueError) as error:
+        log.warning("meta pull for lead source %s failed: %s", source_id, error)
+        return 0
+    if counts.created or counts.repeat:
+        log.info(
+            "meta pull filed %d new and %d repeat leads for lead source %s",
+            counts.created,
+            counts.repeat,
+            source_id,
+        )
+    return 1
 
 
 async def run_meta_puller(
