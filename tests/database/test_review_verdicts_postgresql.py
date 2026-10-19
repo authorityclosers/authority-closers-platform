@@ -144,7 +144,7 @@ def test_reviewers_judge_objects_answers_supersede_and_repeats_are_idempotent(
     answers = {item["question"]: item["answer"] for item in current["verdicts"]}
     assert answers == {"correct": {"value": "correct"}, "fix": {"text": fix["answer"]["text"]}}
     assert all(item["mine"] for item in current["verdicts"])
-    assert [item["key"] for item in current["pipelines"]] == ["analysis-sales"]
+    assert [item["key"] for item in current["pipelines"]] == ["analysis-sales", "coaching"]
     with postgres_harness.connect() as connection:
         assert connection.scalar(
             select(ReviewVerdict.id).where(ReviewVerdict.id == UUID(first["id"]))

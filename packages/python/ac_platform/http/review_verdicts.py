@@ -3,6 +3,7 @@
 GET  /review/pipelines                      the active pipelines
 GET  /review/queue                          the pipeline's sample, with progress
 GET  /review/calls/{recording_id}           pipelines and the call's current answers
+GET  /review/calls/{recording_id}/coaching  one run's coaching as points to judge
 POST /review/calls/{recording_id}/verdicts  one answer (Idempotency-Key, append-only)
 
 Admin host only; the service admits standing gold reviewers in the operations
@@ -101,6 +102,21 @@ def install_review_verdict_routes(
         scope(request, response)
         try:
             return await service(auth).call(auth.resolved.actor, recording_id)
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.get("/review/calls/{recording_id}/coaching")
+    async def coaching(
+        recording_id: UUID,
+        run: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """One analysis run's coaching as points to judge, apart from the report layout."""
+        scope(request, response)
+        try:
+            return await service(auth).coaching(auth.resolved.actor, recording_id, run)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 

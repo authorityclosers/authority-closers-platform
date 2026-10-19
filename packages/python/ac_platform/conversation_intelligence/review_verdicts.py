@@ -33,8 +33,12 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
     ConversationNotFound,
 )
+from ac_platform.conversation_intelligence.coaching_points import coaching_points
 from ac_platform.conversation_intelligence.gold_review_models import GoldReviewer
-from ac_platform.conversation_intelligence.models import ConversationRecording
+from ac_platform.conversation_intelligence.models import (
+    ConversationRecording,
+    ConversationReportDraft,
+)
 from ac_platform.conversation_intelligence.review_models import ReviewPipeline, ReviewVerdict
 from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSandboxOrganisation,
@@ -46,9 +50,9 @@ SAVED_ACTION = "review.verdict_saved"
 PIPELINE_SCHEMA = "ac.review-pipeline/1"
 TARGET_KINDS = ("object", "fact", "segment", "voice", "coaching")
 QUESTION_KINDS = ("verdict", "pick", "correct", "scale")
-# Objects and facts now. Segments need the engine's span-aware digest and their
-# object ids in its reads (after v0.66); voice and coaching follow.
-SUPPORTED_TARGETS = ("object", "fact")
+# Objects, facts and coaching points now. Segments need the engine's span-aware
+# digest and their object ids in its reads (after v0.66); voice follows.
+SUPPORTED_TARGETS = ("object", "fact", "coaching")
 MAX_TEXT = 2000
 
 # The pipelines Review 2.0 starts with. A saved version with the same key replaces
@@ -78,6 +82,34 @@ DEFAULT_PIPELINES: dict[str, dict[str, Any]] = {
             ],
             "reconcile": {"reviewers": 2},
             "measure": ["agreement_by_type", "agreement_by_pipeline_version"],
+        },
+    },
+    # Coaching is reviewed apart from the analysis, in coaching terms (owner, 19 Oct).
+    "coaching": {
+        "kind": "coaching",
+        "title": "Coaching",
+        "definition": {
+            "schema": PIPELINE_SCHEMA,
+            "targets": ["coaching"],
+            "sample": {"order": "newest", "limit": 20},
+            "show": ["coaching_point", "evidence"],
+            "questions": [
+                {
+                    "key": "true",
+                    "kind": "verdict",
+                    "label": "True for this call?",
+                    "options": ["true", "false", "unsure"],
+                },
+                {"key": "useful", "kind": "scale", "label": "How useful for this rep?"},
+                {
+                    "key": "fix",
+                    "kind": "correct",
+                    "label": "What should the coaching say?",
+                    "when": {"true": "false"},
+                },
+            ],
+            "reconcile": {"reviewers": 2},
+            "measure": ["agreement_by_point_kind", "usefulness"],
         },
     },
 }
@@ -357,11 +389,58 @@ class ReviewVerdicts:
             "items": items,
         }
 
+    async def _report_points(self, recording_id: UUID, run_id: UUID) -> list[dict[str, str]]:
+        """The coaching points of one analysis run's saved report (none once erased)."""
+        draft = await self.database.scalar(
+            select(ConversationReportDraft)
+            .where(
+                ConversationReportDraft.run_id == run_id,
+                ConversationReportDraft.recording_id == recording_id,
+                ConversationReportDraft.erased_at.is_(None),
+            )
+            .order_by(ConversationReportDraft.created_at.desc())
+            .limit(1)
+        )
+        if draft is None or draft.payload is None:
+            raise ConversationNotFound("This analysis has no saved coaching.")
+        return coaching_points(draft.payload)
+
+    async def coaching(
+        self, actor: ActorContext, recording_id: UUID, run_id: UUID
+    ) -> dict[str, Any]:
+        """One run's coaching as points to judge, apart from the report's layout."""
+        await self.admit(actor)
+        await self._recording(recording_id)
+        points = await self._report_points(recording_id, run_id)
+        return {
+            "run_id": str(run_id),
+            "points": [{**point, "ref": f"{run_id}:{point['key']}"} for point in points],
+        }
+
     async def _target_digest(self, recording_id: UUID, kind: str, ref: str) -> str:
         from ac_platform.call_data.models import CallObject
 
         if kind not in SUPPORTED_TARGETS:
             raise ConversationError("This kind of target cannot be reviewed yet.")
+        if kind == "coaching":
+            run_text, _, key = ref.partition(":")
+            try:
+                run_id = UUID(run_text)
+            except ValueError:
+                raise ConversationError("Name the analysis run and coaching point.") from None
+            point = next(
+                (
+                    item
+                    for item in await self._report_points(recording_id, run_id)
+                    if item["key"] == key
+                ),
+                None,
+            )
+            if point is None:
+                raise ConversationNotFound("That coaching point is not in this analysis.")
+            return value_digest(
+                f"coaching.{point['kind']}", {"title": point["title"], "text": point["text"]}
+            )
         try:
             object_id = UUID(ref)
         except ValueError:
