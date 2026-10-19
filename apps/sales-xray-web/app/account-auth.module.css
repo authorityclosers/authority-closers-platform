@@ -778,17 +778,63 @@
   color: var(--lx-ink);
   font-weight: 600;
 }
+/* Problems show as a small card in the corner, never inside the form, so
+   nothing on the card moves when one appears (owner rule, 29 Sep). */
 .error {
-  min-height: 18px;
-  margin: 8px 0 0;
-  color: var(--lx-danger);
-  font-size: 12.5px;
-  line-height: 1.5;
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  margin: 0;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--lx-line-strong);
+  border-left: 3px solid var(--lx-danger);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2);
+  color: var(--lx-ink);
+  font-size: 13px;
+  line-height: 1.45;
   overflow-wrap: anywhere;
+  animation: errorIn var(--lx-dur-move) var(--lx-ease-move);
 }
 .error:empty {
-  min-height: 0;
-  margin: 0;
+  display: none;
+}
+.error:focus {
+  outline: none;
+}
+.error:focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 2px;
+}
+.errorClose {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: -4px -4px -4px auto;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lx-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.errorClose:hover {
+  background: var(--lx-paper-2);
+  color: var(--lx-ink);
+}
+@keyframes errorIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 .notice {
   display: flex;
@@ -1223,7 +1269,8 @@
   .accent,
   .eyebrow::before,
   .confirmedMark,
-  .spin {
+  .spin,
+  .error {
     animation: none;
   }
   .beamRail {

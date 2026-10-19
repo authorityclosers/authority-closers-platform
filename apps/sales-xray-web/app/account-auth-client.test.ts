@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from "vitest";
 import {
   AUTH_COMPLETE_MESSAGE,
@@ -14,6 +15,12 @@ import {
   passwordLogin,
   readCanonicalSession,
   validAuthFlow,
+  keepSignInResult,
+  popupHostileBrowser,
+  rememberRedirectSignIn,
+  safeReturnPath,
+  takeRedirectSignIn,
+  takeSignInResult,
 } from "./account-auth-client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -263,4 +270,68 @@ it("requests current Sales Xray consent capability on the correct surface", asyn
   expect(fetcher.mock.calls[0][0]).toBe(
     "/v1/auth/email-code/config?surface=sales_xray",
   );
+});
+
+it("knows the in-app browsers that break sign-in windows", () => {
+  for (const agent of [
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 [FBAN/FBIOS;FBAV/450.0.0.38.108;FBBV/1]",
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/120 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/450.0.0.38.108;]",
+    "Mozilla/5.0 (iPhone) AppleWebKit Mobile/15E148 Instagram 312.0.0.32.112 (iPhone15,2; iOS 17_0)",
+    "Mozilla/5.0 (Linux; Android 14) Chrome/120 Mobile Safari/537.36 Line/13.20.0",
+  ])
+    expect(popupHostileBrowser(agent)).toBe(true);
+  for (const agent of [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130 Safari/537.36",
+    "Mozilla/5.0 (Macintosh) AppleWebKit Version/17.0 Safari/605.1.15",
+    "Mozilla/5.0 (Linux; Android 14) Chrome/120 Mobile Safari/537.36 SalesXrayApp/0.3.70",
+    "Pipeline/2.0",
+    null,
+  ])
+    expect(popupHostileBrowser(agent)).toBe(false);
+});
+
+it("keeps only same-origin app pages as a place to return to", () => {
+  expect(safeReturnPath("/login?next=/leads")).toBe("/login?next=/leads");
+  expect(safeReturnPath("/leads#tab")).toBe("/leads");
+  for (const value of [
+    "//attacker.example/",
+    "https://attacker.example/",
+    "/\\attacker.example",
+    "/auth/complete?flow=x",
+    "/v1/auth/google/start",
+    "leads",
+    "/" + "a".repeat(600),
+    42,
+  ])
+    expect(safeReturnPath(value)).toBe("/");
+});
+
+it("hands a full-page sign-in back once, for its own flow and not too late", () => {
+  const flow = "eaed7960-d4d0-4675-bd34-5b6a7d9c598d";
+  window.sessionStorage.clear();
+  expect(rememberRedirectSignIn("not-a-flow", "google", "/")).toBe(false);
+  expect(rememberRedirectSignIn(flow, "google", "/leads")).toBe(true);
+  expect(takeRedirectSignIn("6d5be9d7-bce6-49c0-9f67-3e68e5de9b45")).toBeNull();
+  rememberRedirectSignIn(flow, "google", "/leads");
+  expect(takeRedirectSignIn(flow)).toEqual({
+    provider: "google",
+    returnTo: "/leads",
+  });
+  expect(takeRedirectSignIn(flow)).toBeNull();
+  window.sessionStorage.setItem(
+    "sx.signIn.redirect",
+    JSON.stringify({ flow, provider: "google", returnTo: "/", at: 1 }),
+  );
+  expect(takeRedirectSignIn(flow)).toBeNull();
+  keepSignInResult("unavailable", "google");
+  expect(takeSignInResult()).toEqual({
+    result: "unavailable",
+    provider: "google",
+  });
+  expect(takeSignInResult()).toBeNull();
+  window.sessionStorage.setItem(
+    "sx.signIn.result",
+    JSON.stringify({ result: "success", provider: "google", at: 1 }),
+  );
+  expect(takeSignInResult()).toBeNull();
 });

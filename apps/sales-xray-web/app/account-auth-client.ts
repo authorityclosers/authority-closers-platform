@@ -266,3 +266,176 @@ export function maskedEmail(email: string) {
   const at = email.lastIndexOf("@");
   return at > 0 ? `${email.slice(0, 1)}•••${email.slice(at)}` : "your email";
 }
+
+/**
+ * Full-page sign-in, for browsers that block the sign-in window: the Claude
+ * desktop pane, and Facebook's and Instagram's in-app browsers, where people
+ * arrive from lead ads. The same click navigates this tab through
+ * /v1/auth/<provider>/start; /auth/complete confirms the flow's receipt, keeps
+ * a short "signed in" note for this tab and returns to the starting page,
+ * where the sign-in screen finishes as it does after the window.
+ */
+export type SignInProvider = "google" | "apple" | "facebook";
+const SIGN_IN_PROVIDERS = new Set<SignInProvider>([
+  "google",
+  "apple",
+  "facebook",
+]);
+
+export function providerLabel(provider: SignInProvider) {
+  return provider === "google"
+    ? "Google"
+    : provider === "apple"
+      ? "Apple"
+      : "Facebook";
+}
+
+const REDIRECT_KEY = "sx.signIn.redirect";
+const RESULT_KEY = "sx.signIn.result";
+/** As long as the server keeps the sign-in transaction. */
+const REDIRECT_MAX_AGE_MS = 10 * 60 * 1000;
+/** The receipt the completion page checked is good for three minutes. */
+const RESULT_MAX_AGE_MS = 3 * 60 * 1000;
+
+/** In-app browsers known to break sign-in windows. */
+const POPUP_HOSTILE =
+  /\bFBA[NV]\/|\bFB_IAB\b|\bFB4A\b|\bFBIOS\b|\bInstagram[ /]\d|\bLinkedInApp\b|\bBytedanceWebview\b|\bmusical_ly_|\bSnapchat\/|\bLine\/\d/i;
+
+export function popupHostileBrowser(userAgent: string | null | undefined) {
+  return POPUP_HOSTILE.test(userAgent ?? "");
+}
+
+/** A same-origin page to come back to; never the completion or API paths. */
+export function safeReturnPath(candidate: unknown): string {
+  if (
+    typeof candidate !== "string" ||
+    candidate.length > 512 ||
+    !candidate.startsWith("/") ||
+    candidate.startsWith("//") ||
+    candidate.includes("\\")
+  )
+    return "/";
+  try {
+    const url = new URL(candidate, "https://sales-xray.invalid");
+    if (
+      url.origin !== "https://sales-xray.invalid" ||
+      url.pathname.startsWith("/auth/complete") ||
+      url.pathname.startsWith("/v1/")
+    )
+      return "/";
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return "/";
+  }
+}
+
+function sessionStore(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberRedirectSignIn(
+  flow: string,
+  provider: SignInProvider,
+  returnTo: string,
+) {
+  if (!UUID.test(flow)) return false;
+  try {
+    sessionStore()?.setItem(
+      REDIRECT_KEY,
+      JSON.stringify({
+        flow,
+        provider,
+        returnTo: safeReturnPath(returnTo),
+        at: Date.now(),
+      }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The page a full-page sign-in started from, once, for this exact flow. */
+export function takeRedirectSignIn(
+  flow: string,
+): { provider: SignInProvider; returnTo: string } | null {
+  const store = sessionStore();
+  try {
+    const raw = store?.getItem(REDIRECT_KEY);
+    store?.removeItem(REDIRECT_KEY);
+    const kept = JSON.parse(raw ?? "null") as {
+      flow?: unknown;
+      provider?: unknown;
+      returnTo?: unknown;
+      at?: unknown;
+    } | null;
+    if (
+      !kept ||
+      kept.flow !== flow ||
+      !UUID.test(flow) ||
+      typeof kept.provider !== "string" ||
+      !SIGN_IN_PROVIDERS.has(kept.provider as SignInProvider) ||
+      typeof kept.at !== "number" ||
+      Date.now() - kept.at > REDIRECT_MAX_AGE_MS
+    )
+      return null;
+    return {
+      provider: kept.provider as SignInProvider,
+      returnTo: safeReturnPath(kept.returnTo),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function keepSignInResult(
+  result: AuthCompletionResult,
+  provider: SignInProvider,
+) {
+  try {
+    sessionStore()?.setItem(
+      RESULT_KEY,
+      JSON.stringify({ result, provider, at: Date.now() }),
+    );
+  } catch {
+    // Without storage the starting page simply shows the sign-in again.
+  }
+}
+
+/** The outcome of a full-page sign-in this tab just came back from, once. */
+export function takeSignInResult(): {
+  result: AuthCompletionResult;
+  provider: SignInProvider;
+} | null {
+  const store = sessionStore();
+  try {
+    const raw = store?.getItem(RESULT_KEY);
+    if (raw === null || raw === undefined) return null;
+    store?.removeItem(RESULT_KEY);
+    const kept = JSON.parse(raw) as {
+      result?: unknown;
+      provider?: unknown;
+      at?: unknown;
+    } | null;
+    if (
+      !kept ||
+      typeof kept.at !== "number" ||
+      Date.now() - kept.at > RESULT_MAX_AGE_MS ||
+      typeof kept.result !== "string" ||
+      !AUTH_COMPLETION_RESULTS.has(kept.result as AuthCompletionResult) ||
+      typeof kept.provider !== "string" ||
+      !SIGN_IN_PROVIDERS.has(kept.provider as SignInProvider)
+    )
+      return null;
+    return {
+      result: kept.result as AuthCompletionResult,
+      provider: kept.provider as SignInProvider,
+    };
+  } catch {
+    return null;
+  }
+}

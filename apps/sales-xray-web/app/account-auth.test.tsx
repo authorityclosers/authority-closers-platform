@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountAuth } from "./account-auth";
 import { AUTH_COMPLETE_MESSAGE } from "./account-auth-client";
 import { ThemeProvider } from "./lightbox/theme-provider";
@@ -732,4 +732,130 @@ it("manual Google recovery waits for the exact callback and the matching receipt
     "/v1/me/workspaces",
   ]);
   expect(onAuthenticated).toHaveBeenCalledOnce();
+});
+
+describe("when the sign-in window is blocked", () => {
+  beforeEach(() => window.sessionStorage.clear());
+
+  async function consentAndContinue() {
+    await act(async () =>
+      host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+    );
+    await click("Continue with Google");
+  }
+
+  it("signs in on this page with the same click and remembers where it started", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/config")) return Response.json(config);
+        throw new Error(`Unexpected ${url}`);
+      }),
+    );
+    const open = vi.fn().mockReturnValue(null);
+    vi.stubGlobal("open", open);
+    const navigate = vi
+      .spyOn(window.location, "assign")
+      .mockImplementation(() => {});
+    window.history.replaceState(null, "", "/login?next=/leads");
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    await consentAndContinue();
+    expect(open).toHaveBeenCalledOnce();
+    const started = new URL(navigate.mock.calls[0][0] as string);
+    expect(started.origin).toBe(window.location.origin);
+    expect(started.pathname).toBe("/v1/auth/google/start");
+    expect(started.searchParams.get("consent_version")).toBe("terms-v1");
+    const flow = new URLSearchParams(
+      started.searchParams.get("return_path")!.split("?")[1],
+    ).get("flow")!;
+    expect(
+      JSON.parse(window.sessionStorage.getItem("sx.signIn.redirect")!),
+    ).toMatchObject({
+      flow,
+      provider: "google",
+      returnTo: "/login?next=/leads",
+    });
+    expect(host.textContent).toContain("Opening Google sign-in…");
+    expect(host.textContent).not.toContain("Allow the sign-in window");
+  });
+
+  it("never opens a window inside Facebook's or Instagram's in-app browser", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(config)),
+    );
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (iPhone) AppleWebKit Mobile/15E148 Instagram 312.0.0.32.112",
+    );
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    const navigate = vi
+      .spyOn(window.location, "assign")
+      .mockImplementation(() => {});
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    await consentAndContinue();
+    expect(open).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledOnce();
+  });
+
+  it("finishes on return only after the account session reads back", async () => {
+    window.sessionStorage.setItem(
+      "sx.signIn.result",
+      JSON.stringify({ result: "success", provider: "google", at: Date.now() }),
+    );
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        if (url.includes("/config")) return Response.json(config);
+        if (url === "/v1/me/workspaces") return Response.json(session);
+        throw new Error(`Unexpected ${url}`);
+      }),
+    );
+    const onAuthenticated = vi.fn();
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={onAuthenticated} />),
+    );
+    await flush();
+    expect(calls).toContain("/v1/me/workspaces");
+    expect(onAuthenticated).toHaveBeenCalledOnce();
+    expect(window.sessionStorage.getItem("sx.signIn.result")).toBeNull();
+  });
+
+  it("shows a failed return as a corner card and reads no session", async () => {
+    window.sessionStorage.setItem(
+      "sx.signIn.result",
+      JSON.stringify({ result: "failed", provider: "google", at: Date.now() }),
+    );
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        return Response.json(config);
+      }),
+    );
+    const onAuthenticated = vi.fn();
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={onAuthenticated} />),
+    );
+    await flush();
+    const card = host.querySelector('[role="alert"]')!;
+    expect(card.textContent).toContain("Google sign-in could not be completed");
+    expect(calls).not.toContain("/v1/me/workspaces");
+    expect(onAuthenticated).not.toHaveBeenCalled();
+    await act(async () =>
+      host
+        .querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!
+        .click(),
+    );
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
 });
