@@ -9,9 +9,10 @@
 # Dry run by default (lists what would be read, spends nothing). With --apply it:
 #   1. refuses while a release holds /run/ac-release.lock (never during a promote);
 #   2. takes a verified database snapshot (ac-db-snapshot);
-#   3. pauses the automatic runner (one runner per database), runs the backfill,
-#      and always restarts the runner;
-#   4. prints spend and object counts (content-free).
+#   3. pauses the automatic runner (one runner per database): the systemd unit and
+#      the runner it left inside the worker container (stopping `docker exec` does
+#      not stop the process inside), runs the backfill, and always restarts the unit;
+#   4. prints every outcome line count and the spend and object counts (content-free).
 #
 #   sudo scripts/data-changes/call-data-backfill.sh <staging|production> [--apply]
 set -euo pipefail
@@ -40,6 +41,45 @@ FROM call_objects WHERE erased_at IS NULL GROUP BY 2 ORDER BY 2;
 SQL
 }
 
+# The automatic runner's process inside the worker (and its infisical parent): SIGTERM,
+# then wait until none is left. Prints what it found; never touches a backfill run.
+stop_container_runner() {
+  docker exec -i "$worker" python - <<'PY'
+import os
+import signal
+import time
+
+
+def runners():
+    found = []
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            parts = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+        except OSError:
+            continue
+        if b"ac_platform.call_data.runner" in parts and b"--loop" in parts:
+            found.append(int(pid))
+    return found
+
+
+before = runners()
+for pid in before:
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+for _ in range(60):
+    if not runners():
+        break
+    time.sleep(1)
+left = runners()
+print(f"automatic runner processes stopped: {len(before) - len(left)}, still running: {len(left)}")
+raise SystemExit(1 if left else 0)
+PY
+}
+
 if [[ $mode == dry-run ]]; then
   echo "dry run on $env_name: calls the fast pipeline would read (deep follows each fast read)"
   "${runner[@]}" --pipeline fast | tail -n +2
@@ -52,5 +92,14 @@ snapshot=$(/usr/local/sbin/ac-db-snapshot "$env_name" call-data-backfill | tail 
 echo "snapshot: $snapshot"
 systemctl stop "ac-call-data@$env_name" 2>/dev/null || true
 trap 'systemctl start "ac-call-data@$env_name" 2>/dev/null || true' EXIT
-"${runner[@]}" --pipeline both --apply | tail -n +2 | grep -o '"outcome": "[a-z_:]*"\|"skipped": "[a-z_]*"\|"stopped": "[a-z_]*"' | sort | uniq -c
+stop_container_runner
+lines=$(mktemp)
+"${runner[@]}" --pipeline both --apply > "$lines" 2>&1 || echo "runner exit $?"
+grep -o '"outcome": "[a-z_:]*"\|"skipped": "[a-z_]*"\|"stopped": "[a-z_]*"' "$lines" | sort | uniq -c || true
+if grep -q '"another_runner"' "$lines"; then
+  echo "another runner held the lock; nothing was read" >&2
+  rm -f "$lines"
+  exit 4
+fi
+rm -f "$lines"
 summary
