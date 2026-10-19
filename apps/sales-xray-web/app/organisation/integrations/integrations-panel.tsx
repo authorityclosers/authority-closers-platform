@@ -56,6 +56,7 @@ import {
   type Integrations,
   type Webhook,
 } from "./integrations-client";
+import { AiRepliesSettings } from "../../leads/ai-replies";
 import { SocialSettings } from "../../leads/social-settings";
 import { WhatsAppSettings } from "../../leads/whatsapp-settings";
 import styles from "./integrations.module.css";
@@ -1243,6 +1244,7 @@ export function IntegrationsPanel() {
     <div className={styles.stack}>
       <WhatsAppSettings />
       <SocialSettings />
+      <AiRepliesSettings />
       <KeysSection
         data={data}
         onChange={(keys) => setData({ ...data, keys })}

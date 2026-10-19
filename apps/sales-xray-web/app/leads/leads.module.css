@@ -1619,6 +1619,23 @@
   gap: 6px;
 }
 
+/* AI replies: "Suggest a reply" beside a reply box, and why a person should answer. */
+.aiSuggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.aiHandoff {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--lx-warning-soft, rgba(245, 158, 11, 0.12));
+  border-left: 3px solid var(--sx-warn, #f59e0b);
+  font-size: 13px;
+}
+
 .waCompose textarea,
 .waTemplate input,
 .waTemplate select,

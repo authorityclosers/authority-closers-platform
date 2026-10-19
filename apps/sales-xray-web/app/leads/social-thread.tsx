@@ -11,6 +11,8 @@ import { AtSign, MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "../ui/kit";
+import { AiHelp, useLeadAi } from "./ai-replies";
+import type { AiLeadState } from "./ai-replies-client";
 import { ago, LeadsError } from "./leads-client";
 import styles from "./leads.module.css";
 import {
@@ -55,10 +57,12 @@ function Bubble({ message }: { message: SocialMessage }) {
 
 function Composer({
   leadId,
+  ai,
   thread,
   onSent,
 }: {
   leadId: string;
+  ai: AiLeadState | null;
   thread: Thread;
   onSent: (next: SocialConversation) => void;
 }) {
@@ -95,6 +99,15 @@ function Composer({
   return (
     <>
       <p className={styles.hint}>{socialWindowLine(thread)}</p>
+      {can ? (
+        <AiHelp
+          ai={ai}
+          leadId={leadId}
+          channel={thread.channel}
+          accountId={thread.accountId}
+          onDraft={setText}
+        />
+      ) : null}
       {can ? (
         <div className={styles.waCompose}>
           <textarea
@@ -133,6 +146,7 @@ export function SocialThread({
   onChanged?: () => void;
 }) {
   const [chat, setChat] = useState<SocialConversation | null>(null);
+  const ai = useLeadAi(leadId);
 
   useEffect(() => {
     let live = true;
@@ -169,6 +183,7 @@ export function SocialThread({
             </ol>
             {canSend ? (
               <Composer
+                ai={ai}
                 leadId={leadId}
                 thread={thread}
                 onSent={(next) => {

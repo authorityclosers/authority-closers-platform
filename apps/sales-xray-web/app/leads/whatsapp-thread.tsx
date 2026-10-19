@@ -11,6 +11,7 @@ import { MessageCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Badge, Button } from "../ui/kit";
+import { AiHelp, useLeadAi } from "./ai-replies";
 import { ago, LeadsError } from "./leads-client";
 import styles from "./leads.module.css";
 import {
@@ -142,6 +143,7 @@ export function WhatsAppThread({
   const [how, setHow] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const ai = useLeadAi(leadId);
 
   useEffect(() => {
     let live = true;
@@ -199,6 +201,12 @@ export function WhatsAppThread({
       {canSend ? (
         <>
           <p className={styles.hint}>{windowLine(chat)}</p>
+          <AiHelp
+            ai={ai}
+            leadId={leadId}
+            channel="whatsapp"
+            onDraft={setText}
+          />
           {chat.windowOpen ? (
             <div className={styles.waCompose}>
               <textarea
