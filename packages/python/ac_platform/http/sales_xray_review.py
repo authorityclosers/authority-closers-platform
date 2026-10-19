@@ -6,8 +6,8 @@ gold service, rows and audio guards are the Admin reviewer workspace's own; see
 and ``/devices`` turn on review alerts on the reviewer's phone
 (:mod:`lead_desk.review_push`).
 
-Every route signs in inside a time budget (``signed_in``). Reads and the audio
-route use the read-only sign-in (shared locks, no session write), and the audio
+Every route signs in inside a time budget (:func:`http.bounded_session.signed_in`).
+Reads and the audio route use the read-only sign-in (shared locks, no session write), and the audio
 route lets go of its database transaction before the bytes stream. On 19 Oct a
 review audio stream held the locking sign-in for its whole stream; each badge
 poll of the same person queued behind it holding a pooled connection, and the
@@ -16,16 +16,12 @@ production pool ran dry (13 badges waited up to 28 minutes).
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Response
-from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
@@ -44,53 +40,21 @@ from ac_platform.conversation_intelligence.gold_review_account import (
 from ac_platform.conversation_intelligence.gold_review_contracts import GoldSave
 from ac_platform.conversation_intelligence.gold_reviews import GoldReviews
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.bounded_session import read_only as read_only_sign_in
+from ac_platform.http.bounded_session import signed_in
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import push, review_push
 from ac_platform.lead_desk.contracts import DeviceCommand, DeviceView, PushConfig
 from ac_platform.telemetry.redaction import sanitize_error
 
 _PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
-_BUSY = "Review is busy for a moment. Try again."
 # Seconds a request may spend signing in and reading; the badge is polled by
 # every signed-in person, so it gets the shortest budget.
 BADGE_BUDGET = 5.0
 READ_BUDGET = 15.0
 WRITE_BUDGET = 15.0
-# No statement here waits longer than this for a row lock.
-LOCK_TIMEOUT_MS = 2000
-# lock_not_available, query_canceled (statement_timeout)
-_GAVE_UP = {"55P03", "57014"}
 
 StreamSource = Callable[..., Awaitable[StreamingResponse]]
-
-
-def _busy() -> HTTPException:
-    return HTTPException(503, _BUSY, headers={**_PRIVATE, "Retry-After": "30"})
-
-
-@asynccontextmanager
-async def signed_in(
-    resolver: RequireActor, request: Request, budget: float
-) -> AsyncIterator[AuthenticatedTransaction]:
-    """Sign in and work within ``budget`` seconds, or answer 503 and free the connection.
-
-    A cancelled lock wait ends on the server too, so a slow neighbour can delay one
-    review request by seconds, never hold a pooled connection for minutes.
-    """
-    try:
-        async with asyncio.timeout(budget):
-            async with asynccontextmanager(resolver)(request) as auth:
-                await auth.database.execute(text(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT_MS}ms'"))
-                await auth.database.execute(
-                    text(f"SET LOCAL statement_timeout = '{int(budget * 1000)}ms'")
-                )
-                yield auth
-    except TimeoutError:
-        raise _busy() from None
-    except DBAPIError as error:
-        if getattr(error.orig, "sqlstate", None) in _GAVE_UP:
-            raise _busy() from None
-        raise
 
 
 def install_sales_xray_review_http(
@@ -102,7 +66,7 @@ def install_sales_xray_review_http(
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> None:
     router = APIRouter(prefix="/v1/sales-xray/review", tags=["sales-xray-review"])
-    read_only: RequireActor = getattr(require_actor, "read_only", require_actor)
+    read_only = read_only_sign_in(require_actor)
 
     def reading(request: Request, budget: float = READ_BUDGET) -> Any:
         return signed_in(read_only, request, budget)

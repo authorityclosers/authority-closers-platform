@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator, Iterator
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from starlette.responses import StreamingResponse
 from starlette.types import Receive, Scope, Send
 
@@ -23,7 +23,11 @@ from ac_platform.conversation_intelligence.storage import (
     PrivateLocalRecordingStorage,
     StorageError,
 )
-from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
+from ac_platform.http.auth import RequireActor
+from ac_platform.http.bounded_session import read_only, signed_in
+
+# Seconds to sign in, check the call and open its verified source.
+SOURCE_BUDGET = 15.0
 
 
 def byte_range(value: str | None, size: int) -> tuple[int, int]:
@@ -82,15 +86,22 @@ class _PrivateAudioResponse(StreamingResponse):
 def install_playback_route(
     router: APIRouter, require_actor: RequireActor, storage: PrivateLocalRecordingStorage
 ) -> None:
-    # Keep the same fresh permission/recording locks until streaming and cleanup end.
-    dependency = Depends(require_actor, scope="request")
+    # Sign in read-only (shared locks, no session write), check the call and open
+    # its source, then end the transaction: the stream holds no row locks and no
+    # pooled connection for its up to 180 s, so the same person's writes never wait
+    # behind it (19 Oct pool incident). The storage adapter verified the complete
+    # source before the first block, so the bytes sent are the ones checked; an
+    # erasure that starts mid-stream no longer waits for the stream to finish.
+    sign_in = read_only(require_actor)
 
     @router.get("/recordings/{recording_id}/source")
-    async def source(
-        recording_id: UUID, request: Request, auth: AuthenticatedTransaction = dependency
-    ) -> StreamingResponse:
+    async def source(recording_id: UUID, request: Request) -> StreamingResponse:
         if request.query_params:
             raise HTTPException(422, "Playback scope comes from your current AC session.")
+        async with signed_in(sign_in, request, SOURCE_BUDGET) as auth:
+            return await _open(recording_id, request, auth)
+
+    async def _open(recording_id: UUID, request: Request, auth: Any) -> StreamingResponse:
         try:
             recording = await ConversationApplication(auth.database).get(
                 auth.resolved.actor, recording_id
