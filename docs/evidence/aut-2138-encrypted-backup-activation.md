@@ -20,8 +20,8 @@ download creation and removal of failed downloads. Child environments omit
 secret variables, passphrases use stdin, stderr is discarded, and errors use
 fixed codes. Each child starts its own process group; timeout, overflow, failure
 and successful exit clean up that group without signalling unrelated groups.
-This primitive is **not yet integrated into the candidate** and changes no live
-behavior. It requires a manifest entry when the supported source package is
+This primitive is integrated into both source copies for upload and fetch.
+The package remains unadmitted and is not installed on a host. It requires a manifest entry when the supported source package is
 completed.
 
 Focused validation: 36 tests pass (23 existing candidate cases and 13 new process
@@ -37,11 +37,10 @@ on the issue as they become available.
 
 ## Ownership and remaining integration
 
-Root's three candidate paths remain claimed by AUT-2133 until an explicit
-handoff is returned in `/home/acdev/strikes/2138/INBOX.md`. The request was
-appended to Root's existing INBOX. The existing call-data consumer repair request
-was continued in its INBOX; there is no competing consumer edit or duplicate
-sizing task.
+Root transferred all five candidate source/test paths at preparation commit
+`dabd2b11b8d96c97748e6c25f5727944c3ee1015`; their initial SHA-256 values matched
+the transfer. Root retains host execution. The call-data reply relinquishes
+consumer constant edits to Platform while other owners' parity work is preserved.
 
 Required integration before review:
 
@@ -144,3 +143,24 @@ in the newly reviewed archive revision; decrypt/hash alone is insufficient.
 
 No host action, historical deletion, new provider/account/schedule, budget
 change, app promotion, hold edit or disk encryption occurred in this work.
+
+## Transport integration verification — 19 October 2026
+
+Both helper copies now use bounded stdout for all subprocesses. Remote reads use
+`rclone cat` into an exclusive private file; advertised sizes are advisory. One
+900-second monotonic deadline covers upload/fetch, including hash/extraction
+loops. GnuPG output also streams through the byte cap; stderr is discarded and
+its process environment excludes secrets. No child can write the download path
+directly. Both ciphertext and remote receipt must round-trip before success.
+Malformed/non-object/mismatched receipts refuse; partial remote pairs stay in
+place and subsequent attempts refuse overwrite. Temporary paths are scoped to
+this invocation and removed on failure. Scratch requires three maximum archives
+plus 64 MiB free; upload removes the original tar and ciphertext as soon as each
+is superseded, bounding the maximum workspace to three archive equivalents.
+
+Fictional focused validation: 46 PASS (33 helper + 13 process cases), including
+actual oversized child streams for listing/cipher/receipt with a lying size
+advertisement; corrupted remote receipts; partial upload; shared stage deadline;
+private scratch cleanup; and real GnuPG round-trip. Capture/retention, same-pair
+metadata, consumer alignment and installer rollback remain unfinished. These
+checks establish transport behavior only; no database recovery is claimed.

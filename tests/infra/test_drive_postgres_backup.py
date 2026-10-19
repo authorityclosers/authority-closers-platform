@@ -6,7 +6,6 @@ import io
 import json
 import os
 import shutil
-import subprocess
 import tarfile
 from pathlib import Path
 
@@ -55,7 +54,7 @@ def remote(monkeypatch):
     calls = []
     prefix = backup.identity("staging", NAME)
 
-    def transfer(*args):
+    def transfer(*args, stdout_limit=backup.MAX_CONTROL_BYTES, destination=None):
         calls.append(args)
         if args[0] == "lsf":
             if "--dirs-only" in args:
@@ -65,6 +64,13 @@ def remote(monkeypatch):
             return json.dumps(
                 {"count": len(objects), "bytes": sum(map(len, objects.values()))}
             ).encode()
+        if args[0] == "cat":
+            data = objects[args[1]]
+            if len(data) > stdout_limit:
+                raise backup.Refusal("child_stdout_limit")
+            destination.write_bytes(data)
+            destination.chmod(0o600)
+            return b""
         assert args[0] == "copyto"
         source, target = args[1:3]
         if source.startswith(prefix):
@@ -223,13 +229,18 @@ def test_child_secret_redaction_and_no_secret_argv(monkeypatch):
 
     def fake_run(command, **kwargs):
         assert KEY not in repr(command)
-        assert "INFISICAL_TOKEN" not in kwargs["env"]
-        assert "AC_POSTGRES_DRIVE_STAGING_PASSPHRASE" not in kwargs["env"]
-        return subprocess.CompletedProcess(command, 1, b"", b"fictional-sensitive-token")
+        assert kwargs["input"] == KEY.encode()
+        assert kwargs["stdout_limit"] == backup.MAX_CONTROL_BYTES
+        raise backup.ProcessRefusal("child_failed")
 
-    monkeypatch.setattr(backup.subprocess, "run", fake_run)
-    with pytest.raises(backup.Refusal, match="^child_failed$") as result:
+    monkeypatch.setattr(backup, "run_process", fake_run)
+
+    @backup.operation
+    def invoke():
         backup.checked(["gpg"], input=KEY.encode())
+
+    with pytest.raises(backup.Refusal, match="^child_failed$") as result:
+        invoke()
     assert "sensitive" not in str(result.value)
 
 
@@ -240,3 +251,131 @@ def test_capture_and_retention_are_preserved_in_candidate():
     assert "--min-age 14d" in wrapper
     assert "drive_postgres_backup.py upload" in wrapper
     assert 'rclone --config /root/ac-drive/rclone.conf copy "$dir"' not in wrapper
+
+
+@pytest.fixture
+def fictional_encryption(monkeypatch):
+    def crypt(source, output, secret, home, *, decrypt=False):
+        shutil.copyfile(source, output)
+        output.chmod(0o600)
+
+    monkeypatch.setattr(backup, "crypt", crypt)
+
+
+@pytest.mark.parametrize("corruption", [b"{}", b"[]", b"not json", b"null"])
+def test_upload_fetches_remote_receipt_and_refuses_corruption(
+    snapshot, remote, fictional_encryption, monkeypatch, corruption
+):
+    transfer = backup.rclone
+    objects, calls = remote
+
+    def corrupt(*args, **kwargs):
+        result = transfer(*args, **kwargs)
+        if args[0] == "copyto" and args[2].endswith(backup.CIPHER_RECEIPT):
+            objects[args[2]] = corruption
+        return result
+
+    monkeypatch.setattr(backup, "rclone", corrupt)
+    with pytest.raises(
+        backup.Refusal, match="ciphertext_receipt_mismatch|invalid_ciphertext_receipt"
+    ):
+        backup.upload(snapshot, "staging")
+    assert any(
+        call[:2] == ("cat", backup.identity("staging", NAME) + "/" + backup.CIPHER_RECEIPT)
+        for call in calls
+    )
+    assert {p.name for p in snapshot.parent.iterdir()} == {NAME}
+    assert (snapshot / "backup.dump").exists()
+
+
+def test_partial_remote_pair_refuses_and_is_never_overwritten(
+    snapshot, remote, fictional_encryption, monkeypatch
+):
+    transfer = backup.rclone
+    objects, _ = remote
+
+    def fail_receipt(*args, **kwargs):
+        if args[0] == "copyto" and args[2].endswith(backup.CIPHER_RECEIPT):
+            raise backup.Refusal("child_failed")
+        return transfer(*args, **kwargs)
+
+    monkeypatch.setattr(backup, "rclone", fail_receipt)
+    with pytest.raises(backup.Refusal, match="child_failed"):
+        backup.upload(snapshot, "staging")
+    assert len(objects) == 1
+    previous = dict(objects)
+    with pytest.raises(backup.Refusal, match="remote_snapshot_already_exists"):
+        backup.upload(snapshot, "staging")
+    assert previous == objects
+    assert {p.name for p in snapshot.parent.iterdir()} == {NAME}
+
+
+@pytest.mark.parametrize("oversized", [backup.CIPHER, backup.CIPHER_RECEIPT, "listing"])
+def test_actual_transport_stream_refuses_even_when_remote_size_lies(
+    tmp_path, monkeypatch, oversized
+):
+    import sys
+
+    monkeypatch.setenv("AC_POSTGRES_DRIVE_STAGING_PASSPHRASE", KEY)
+    monkeypatch.setattr(backup, "MAX_ARCHIVE_BYTES", 1024)
+    out = tmp_path / "output"
+    out.mkdir(mode=0o700)
+    limits = []
+
+    def transport(*args, stdout_limit=backup.MAX_CONTROL_BYTES, destination=None):
+        if args[0] == "size":
+            return b'{"count":2,"bytes":2}'
+        if args[0] == "lsf" and oversized != "listing":
+            return (backup.CIPHER + "\n" + backup.CIPHER_RECEIPT).encode()
+        if (
+            args[0] == "cat"
+            and args[1].endswith(backup.CIPHER_RECEIPT)
+            and oversized != backup.CIPHER_RECEIPT
+        ):
+            destination.write_text("{}")
+            destination.chmod(0o600)
+            return b""
+        limits.append(stdout_limit)
+        return backup.checked(
+            [sys.executable, "-c", 'import os; os.write(1,b"x"*(2*1024*1024))'],
+            stdout_limit=stdout_limit,
+            destination=destination,
+        )
+
+    monkeypatch.setattr(backup, "rclone", transport)
+    with pytest.raises(backup.Refusal, match="^child_stdout_limit$"):
+        backup.fetch("staging", NAME, out)
+    assert limits == [
+        {
+            "listing": backup.MAX_CONTROL_BYTES,
+            backup.CIPHER: 1024,
+            backup.CIPHER_RECEIPT: backup.MAX_SIDECAR_BYTES,
+        }[oversized]
+    ]
+    assert not list(out.iterdir())
+
+
+def test_scratch_reservation_fails_before_remote_or_workspace(snapshot, remote, monkeypatch):
+    monkeypatch.setattr(backup.shutil, "disk_usage", lambda p: shutil._ntuple_diskusage(100, 99, 1))
+    with pytest.raises(backup.Refusal, match="scratch_reservation_required"):
+        backup.upload(snapshot, "staging")
+    assert remote == ({}, [])
+    assert {p.name for p in snapshot.parent.iterdir()} == {NAME}
+
+
+def test_pipeline_uses_one_deadline_across_transport_stages(
+    snapshot, remote, fictional_encryption, monkeypatch
+):
+    import sys
+
+    monkeypatch.setattr(backup, "OPERATION_SECONDS", 0.2)
+    transfer = backup.rclone
+
+    def slow(*args, **kwargs):
+        backup.checked([sys.executable, "-c", "import time; time.sleep(.08)"], stdout_limit=0)
+        return transfer(*args, **kwargs)
+
+    monkeypatch.setattr(backup, "rclone", slow)
+    with pytest.raises(backup.Refusal, match="^operation_deadline_exceeded$"):
+        backup.upload(snapshot, "staging")
+    assert {p.name for p in snapshot.parent.iterdir()} == {NAME}

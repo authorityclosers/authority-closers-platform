@@ -15,14 +15,26 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import stat
-import subprocess
 import sys
 import tarfile
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import wraps
 from pathlib import Path
+
+# The same bytes run from the source checkout and from the manifest-installed
+# libexec directory. No host paths or credentials are inspected at import.
+PROCESS_SOURCE = Path(__file__).resolve().parents[2] / "infra/vps-foundation/scripts"
+if (PROCESS_SOURCE / "drive_backup_process.py").is_file():
+    sys.path.insert(0, str(PROCESS_SOURCE))
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from drive_backup_process import Deadline, ProcessRefusal  # noqa: E402
+from drive_backup_process import run as run_process  # noqa: E402
 
 ROOT = Path("/srv/authority-closers/backups")
 CONFIG = Path("/root/ac-drive/rclone.conf")
@@ -35,35 +47,65 @@ MAX_ARCHIVE_BYTES = MAX_DUMP_BYTES + 1024 * 1024
 MAX_SIDECAR_BYTES = 16 * 1024
 CIPHER = "backup.tar.gpg"
 CIPHER_RECEIPT = "encrypted-receipt.json"
+MAX_CONTROL_BYTES = 64 * 1024
+SCRATCH_RESERVATION_BYTES = 3 * MAX_ARCHIVE_BYTES + 64 * 1024 * 1024
+OPERATION_SECONDS = 900
+OPERATION: ContextVar[Deadline | None] = ContextVar("drive_operation", default=None)
 
 
 class Refusal(RuntimeError):
     """Fixed codes only; never expose child diagnostics or secret values."""
 
 
-def checked(command: list[str], *, input: bytes | None = None) -> bytes:
-    env = {k: os.environ[k] for k in ("PATH", "HOME", "LANG", "LC_ALL") if k in os.environ}
+def operation(function):
+    @wraps(function)
+    def bounded(*args, **kwargs):
+        if OPERATION.get() is not None:
+            return function(*args, **kwargs)
+        token = OPERATION.set(Deadline(OPERATION_SECONDS))
+        try:
+            return function(*args, **kwargs)
+        except ProcessRefusal as error:
+            raise Refusal(str(error)) from error
+        finally:
+            OPERATION.reset(token)
+
+    return bounded
+
+
+def deadline() -> Deadline:
+    current = OPERATION.get()
+    if current is None:
+        raise Refusal("operation_deadline_required")
+    current.remaining()
+    return current
+
+
+def checked(
+    command: list[str],
+    *,
+    input: bytes | None = None,
+    stdout_limit: int = MAX_CONTROL_BYTES,
+    destination: Path | None = None,
+) -> bytes:
     try:
-        result = subprocess.run(  # noqa: S603 - fixed gpg/rclone callers, no shell
+        return run_process(
             command,
+            deadline=deadline(),
             input=input,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            timeout=900,
-            env=env,
-            check=False,
+            stdout_limit=stdout_limit,
+            destination=destination,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
-        raise Refusal("child_unavailable_or_timeout") from error
-    if result.returncode:
-        raise Refusal("child_failed")
-    return result.stdout
+    except ProcessRefusal as error:
+        raise Refusal(str(error)) from error
 
 
 def digest(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as src:
         for block in iter(lambda: src.read(1024 * 1024), b""):
+            if OPERATION.get() is not None:
+                deadline()
             h.update(block)
     return h.hexdigest()
 
@@ -120,7 +162,8 @@ def validate_snapshot(path: Path, environment: str, name: str) -> dict:
         raise Refusal("migration_identity_required")
     receipt = json.loads((path / "receipt.json").read_text())
     if (
-        receipt.get("environment") != environment
+        not isinstance(receipt, dict)
+        or receipt.get("environment") != environment
         or receipt.get("at") != name.split("-")[0]
         or receipt.get("bytes") != dump.stat().st_size
         or receipt.get("alembic") != head
@@ -135,6 +178,8 @@ def workspace(parent: Path) -> Iterator[Path]:
     st = parent.lstat()
     if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
         raise Refusal("unsafe_workspace_parent")
+    if shutil.disk_usage(parent).free < SCRATCH_RESERVATION_BYTES:
+        raise Refusal("scratch_reservation_required")
     with tempfile.TemporaryDirectory(prefix=".encrypted-drive-", dir=parent) as tmp:
         path = Path(tmp)
         path.chmod(0o700)
@@ -146,6 +191,7 @@ def crypt(source: Path, output: Path, secret: bytes, home: Path, *, decrypt: boo
     args = [
         "gpg",
         "--no-options",
+        "--no-autostart",
         "--homedir",
         str(home),
         "--batch",
@@ -158,7 +204,7 @@ def crypt(source: Path, output: Path, secret: bytes, home: Path, *, decrypt: boo
         "--max-output",
         str(MAX_ARCHIVE_BYTES),
         "--output",
-        str(output),
+        "-",
     ]
     if decrypt:
         args += ["--decrypt", str(source)]
@@ -177,14 +223,19 @@ def crypt(source: Path, output: Path, secret: bytes, home: Path, *, decrypt: boo
             "none",
             str(source),
         ]
-    checked(args, input=secret)
-    output.chmod(0o600)
+    checked(args, input=secret, stdout_limit=MAX_ARCHIVE_BYTES, destination=output)
 
 
 def extract_archive(archive: Path, target: Path) -> None:
     # Never extractall: no links, directories, arbitrary paths or overwrite.
     with tarfile.open(archive, "r:") as tar:
-        members = tar.getmembers()
+        # Stop before an adversarial header stream becomes an unbounded list.
+        members = []
+        for _ in range(len(FILES) + 1):
+            member = tar.next()
+            if member is None:
+                break
+            members.append(member)
         if len(members) != len(FILES) or {m.name for m in members} != FILES:
             raise Refusal("unexpected_archive_entries")
         for member in members:
@@ -199,6 +250,8 @@ def extract_archive(archive: Path, target: Path) -> None:
                 os.chmod(out.name, 0o600)
                 remaining = member.size
                 while remaining:
+                    if OPERATION.get() is not None:
+                        deadline()
                     block = src.read(min(1024 * 1024, remaining))
                     if not block:
                         raise Refusal("truncated_archive_member")
@@ -206,7 +259,9 @@ def extract_archive(archive: Path, target: Path) -> None:
                     remaining -= len(block)
 
 
-def rclone(*args: str) -> bytes:
+def rclone(
+    *args: str, stdout_limit: int = MAX_CONTROL_BYTES, destination: Path | None = None
+) -> bytes:
     return checked(
         [
             "rclone",
@@ -220,14 +275,36 @@ def rclone(*args: str) -> bytes:
             "2",
             "--timeout",
             "60s",
-        ]
+        ],
+        stdout_limit=stdout_limit,
+        destination=destination,
     )
+
+
+def download(remote: str, destination: Path, limit: int) -> None:
+    # rclone copyto writes unchecked bytes before we can enforce a limit. cat
+    # streams through the same capped pipe used for every child operation.
+    rclone("cat", remote, stdout_limit=limit, destination=destination)
+    regular(destination, limit)
+
+
+def read_receipt(path: Path) -> dict:
+    regular(path, MAX_SIDECAR_BYTES)
+    try:
+        result = json.loads(path.read_text())
+    except (ValueError, UnicodeError) as error:
+        raise Refusal("invalid_ciphertext_receipt") from error
+    if not isinstance(result, dict):
+        raise Refusal("invalid_ciphertext_receipt")
+    return result
 
 
 def verify_cipher(path: Path, receipt: dict, environment: str, name: str) -> None:
     regular(path, MAX_ARCHIVE_BYTES)
     if (
-        receipt.get("schema") != "ac-postgres-drive-encrypted-v1"
+        set(receipt)
+        != {"schema", "environment", "snapshot", "cipher", "ciphertext_bytes", "ciphertext_sha256"}
+        or receipt.get("schema") != "ac-postgres-drive-encrypted-v1"
         or receipt.get("environment") != environment
         or receipt.get("snapshot") != name
         or receipt.get("cipher") != "OpenPGP-AES256-MDC"
@@ -237,6 +314,7 @@ def verify_cipher(path: Path, receipt: dict, environment: str, name: str) -> Non
         raise Refusal("ciphertext_receipt_mismatch")
 
 
+@operation
 def upload(snapshot: Path, environment: str) -> dict:
     name = snapshot.name
     remote = identity(environment, name)
@@ -249,6 +327,7 @@ def upload(snapshot: Path, environment: str) -> dict:
                 tar.add(snapshot / filename, arcname=filename, recursive=False)
         encrypted = work / CIPHER
         crypt(archive, encrypted, secret, work / "gnupg")
+        archive.unlink()
         receipt = {
             "schema": "ac-postgres-drive-encrypted-v1",
             "environment": environment,
@@ -268,9 +347,15 @@ def upload(snapshot: Path, environment: str) -> dict:
             raise Refusal("remote_snapshot_already_exists")
         rclone("copyto", str(encrypted), f"{remote}/{CIPHER}")
         rclone("copyto", str(work / CIPHER_RECEIPT), f"{remote}/{CIPHER_RECEIPT}")
+        remote_receipt = work / "readback-receipt.json"
+        download(f"{remote}/{CIPHER_RECEIPT}", remote_receipt, MAX_SIDECAR_BYTES)
+        fetched_receipt = read_receipt(remote_receipt)
+        if fetched_receipt != receipt:
+            raise Refusal("ciphertext_receipt_mismatch")
         fetched = work / "readback.gpg"
-        rclone("copyto", f"{remote}/{CIPHER}", str(fetched))
-        verify_cipher(fetched, receipt, environment, name)
+        download(f"{remote}/{CIPHER}", fetched, MAX_ARCHIVE_BYTES)
+        verify_cipher(fetched, fetched_receipt, environment, name)
+        encrypted.unlink()
         decrypted = work / "readback.tar"
         crypt(fetched, decrypted, secret, work / "gnupg", decrypt=True)
         restored = work / "readback"
@@ -291,6 +376,7 @@ def upload(snapshot: Path, environment: str) -> dict:
         }
 
 
+@operation
 def fetch(environment: str, name: str, destination: Path) -> dict:
     remote = identity(environment, name)
     secret = passphrase(environment)
@@ -303,14 +389,15 @@ def fetch(environment: str, name: str, destination: Path) -> dict:
         # Check the remote inventory/size before downloading to bound disk use.
         size = json.loads(rclone("size", remote, "--json"))
         if (
-            size.get("count") != 2
+            not isinstance(size, dict)
+            or size.get("count") != 2
+            or type(size.get("bytes")) is not int
             or not 0 < size.get("bytes", 0) <= MAX_ARCHIVE_BYTES + MAX_SIDECAR_BYTES
         ):
             raise Refusal("remote_size_limit")
-        rclone("copyto", f"{remote}/{CIPHER_RECEIPT}", str(work / CIPHER_RECEIPT))
-        regular(work / CIPHER_RECEIPT, MAX_SIDECAR_BYTES)
-        receipt = json.loads((work / CIPHER_RECEIPT).read_text())
-        rclone("copyto", f"{remote}/{CIPHER}", str(work / CIPHER))
+        download(f"{remote}/{CIPHER_RECEIPT}", work / CIPHER_RECEIPT, MAX_SIDECAR_BYTES)
+        receipt = read_receipt(work / CIPHER_RECEIPT)
+        download(f"{remote}/{CIPHER}", work / CIPHER, MAX_ARCHIVE_BYTES)
         verify_cipher(work / CIPHER, receipt, environment, name)
         archive = work / "backup.tar"
         crypt(work / CIPHER, archive, secret, work / "gnupg", decrypt=True)
