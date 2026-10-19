@@ -101,6 +101,23 @@ export function measureFileWave(file: File): Promise<WaveformEnvelope | null> {
   return pending;
 }
 
+/**
+ * The chosen file's wave for the call on screen: only when that file was sent
+ * as this very call. Opening another call while a file is still chosen must
+ * never draw the earlier file's shape over it (owner, 19 Oct: "old waveform
+ * flashes").
+ */
+export function waveForCall(
+  sent: { file: File; callId: string } | null,
+  file: File | null | undefined,
+  callId: string | null | undefined,
+  wave: WaveformEnvelope | null,
+): WaveformEnvelope | null {
+  return sent && file && callId && sent.file === file && sent.callId === callId
+    ? wave
+    : null;
+}
+
 /** The file's measured wave once it is ready; null until then or if none. */
 export function useFileWave(
   file: File | null | undefined,

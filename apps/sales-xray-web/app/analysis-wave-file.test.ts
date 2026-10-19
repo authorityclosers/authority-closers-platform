@@ -1,6 +1,10 @@
 import { expect, it } from "vitest";
 
-import { envelopeFromSamples, measureFileWave } from "./analysis-wave-file";
+import {
+  envelopeFromSamples,
+  measureFileWave,
+  waveForCall,
+} from "./analysis-wave-file";
 import { parseWaveform } from "./source-waveform";
 
 const RATE = 8_000;
@@ -46,4 +50,18 @@ it("has no wave without samples, and none where the browser can't decode", async
   await expect(measureFileWave(file)).resolves.toBeNull();
   // One measurement per file.
   expect(measureFileWave(file)).toBe(measureFileWave(file));
+});
+
+it("lends the chosen file's wave only to the call it was sent as", () => {
+  const sent = new File([new Uint8Array(4)], "first.m4a");
+  const other = new File([new Uint8Array(4)], "second.m4a");
+  const wave = envelopeFromSamples([new Float32Array(8_000).fill(0.2)], 8_000);
+  const record = { file: sent, callId: "call-1" };
+  expect(waveForCall(record, sent, "call-1", wave)).toBe(wave);
+  // Another saved call opened while the file is still chosen.
+  expect(waveForCall(record, sent, "call-2", wave)).toBeNull();
+  // A new file chosen after sending: not the sent call's shape.
+  expect(waveForCall(record, other, "call-1", wave)).toBeNull();
+  // Nothing sent yet.
+  expect(waveForCall(null, sent, "call-1", wave)).toBeNull();
 });

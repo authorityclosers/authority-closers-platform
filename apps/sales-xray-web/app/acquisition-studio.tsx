@@ -92,7 +92,7 @@ import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { withWaveMorph } from "./analysis-wave";
-import { useFileWave } from "./analysis-wave-file";
+import { useFileWave, waveForCall } from "./analysis-wave-file";
 import { planView } from "./plan-view";
 import { useProcessingReview } from "./processing-review-port";
 import { clearCallFacts } from "./call-facts";
@@ -308,6 +308,11 @@ export function AcquisitionStudio({
   // The chosen file's wave, measured in this browser (shared with its card),
   // carries the call's shape into sending and the steps.
   const fileWave = useFileWave(file);
+  // Which call the chosen file became, so its wave stays with that call only.
+  const [fileSentAs, setFileSentAs] = useState<{
+    file: File;
+    callId: string;
+  } | null>(null);
   // The advertised trial cap is a guest's figure; a signed-in account shows
   // "checking…" until its own balance arrives (the minutes pill shows it too).
   const advertisedTrial =
@@ -1640,6 +1645,7 @@ export function AcquisitionStudio({
         setAllowanceUnknown(false);
         if (recoveredProgress) setProgress(recoveredProgress);
         setSubmission(bound);
+        setFileSentAs({ file: selected, callId: bound.id });
         clearConsent();
         // With a root store the start below is the single owner; the mounted
         // auto-acceptance effect stays reserved for the embedded learner.
@@ -2430,6 +2436,8 @@ export function AcquisitionStudio({
           active={activeRequestedCallId ? "calls" : "analyse"}
           authenticated={access?.authenticated === true}
           loading={opening && access?.authenticated !== true}
+          // A saved call is its Report from the first frame, never "Calls".
+          pageName={activeRequestedCallId ? "Report" : undefined}
           homeHref={homeHref}
           mobileFit
           allowance={allowance}
@@ -3405,7 +3413,12 @@ export function AcquisitionStudio({
                 {submission && !report && showProgress && (
                   <AcquisitionProcessingPanel
                     submissionId={submission.id}
-                    localEnvelope={fileWave}
+                    localEnvelope={waveForCall(
+                      fileSentAs,
+                      file,
+                      submission.id,
+                      fileWave,
+                    )}
                     progress={progress}
                     waitingForApproval={waitingForApproval}
                     accepted={plan?.accepted ?? false}
