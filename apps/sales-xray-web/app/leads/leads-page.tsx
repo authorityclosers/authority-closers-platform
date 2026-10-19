@@ -47,6 +47,7 @@ import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
 import { PhoneSetupBar } from "./phone-setup";
 import { UnknownCallsCard } from "./unknown-calls-card";
+import { SocialInbox } from "./social-inbox";
 import { WhatsAppInbox } from "./whatsapp-inbox";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
@@ -479,6 +480,7 @@ export function LeadsRoute() {
                   <PhoneLogCard />
                   <UnknownCallsCard onSave={setUnknownLead} />
                   <WhatsAppInbox onOpen={(leadId) => open(leadId)} />
+                  <SocialInbox onOpen={(leadId) => open(leadId)} />
                 </>
               }
             />

@@ -16,7 +16,7 @@ import { useCallback, useEffect, useRef } from "react";
 
 import { inPhoneApp, openConnect, phoneStatus } from "./native-phone";
 
-export type ConnectProvider = "meta" | "google" | "whatsapp";
+export type ConnectProvider = "meta" | "google" | "whatsapp" | "messaging";
 
 /** What happened: the server's word ("connected", "nopages", "cancelled", …)
  * and, when it said more, its own words. */
@@ -26,11 +26,13 @@ const STARTS: Record<ConnectProvider, string> = {
   meta: "/v1/lead-desk/meta/connect",
   google: "/v1/lead-desk/google/connect",
   whatsapp: "/v1/lead-desk/whatsapp/start",
+  messaging: "/v1/lead-desk/messaging/connect",
 };
 const FINISHES: Record<ConnectProvider, string> = {
   meta: "/v1/lead-desk/meta/app-complete",
   google: "/v1/lead-desk/google/app-complete",
   whatsapp: "/v1/lead-desk/whatsapp/app-complete",
+  messaging: "/v1/lead-desk/messaging/app-complete",
 };
 const KEPT = "sx.appConnect";
 /** As long as the server keeps the hand-off. */
