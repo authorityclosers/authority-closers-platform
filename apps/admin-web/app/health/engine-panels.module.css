@@ -155,3 +155,10 @@
   gap: 6px 10px;
   margin: 0;
 }
+
+.now {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}

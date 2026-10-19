@@ -98,7 +98,12 @@ export function EngineHealthPanels({ data }: { data: EngineHealth }) {
               </span>
               {row.running || row.quiet ? (
                 <span>
-                  {row.running} running · {row.quiet} gone quiet
+                  {[
+                    row.running ? `${row.running} running` : null,
+                    row.quiet ? `${row.quiet} gone quiet` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
               ) : null}
             </Card>
@@ -162,12 +167,12 @@ export function EngineHealthPanels({ data }: { data: EngineHealth }) {
                 <td data-num="">{inr(row.costPerRunInr)}</td>
                 <td data-num="">
                   {row.running || row.quiet ? (
-                    <>
-                      {row.running} running
+                    <span className={styles.now}>
+                      {row.running ? `${row.running} running` : null}
                       {row.quiet ? (
                         <Badge tone="warn">{row.quiet} quiet</Badge>
                       ) : null}
-                    </>
+                    </span>
                   ) : (
                     "–"
                   )}
@@ -292,7 +297,22 @@ export function EngineHealthPanels({ data }: { data: EngineHealth }) {
             <Why detail="The same outcomes per pipeline version, newest first, to compare a new version with the one before it." />
           }
         >
-          <Table label="By engine version">
+          <Table
+            label="By engine version"
+            cards={data.versions.map((row) => (
+              <Card key={`${row.pipeline}-${row.version}`}>
+                <strong>
+                  {PIPELINE_LABEL[row.pipeline] ?? row.pipeline}{" "}
+                  <span className={styles.code}>{row.version}</span>
+                </strong>
+                <span>
+                  {row.runs} runs · success {percent(row.successShare)} ·
+                  typical {span(row.time.p50)} · {inr(row.costPerRunInr)} a run
+                </span>
+                {row.lastAt ? <span>Last run {when(row.lastAt)}</span> : null}
+              </Card>
+            ))}
+          >
             <thead>
               <tr>
                 <th scope="col">Version</th>

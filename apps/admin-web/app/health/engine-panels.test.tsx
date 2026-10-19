@@ -188,6 +188,8 @@ it("shows each pipeline's outcomes, reasons and runs gone quiet", async () => {
   expect(rows[0]).toContain("6 s");
   expect(rows[1]).toContain("1 running");
   expect(rows[1]).toContain("1 quiet");
+  expect(rows[0]).not.toContain("running");
+  expect(text).not.toContain("0 running");
   expect(text).toContain("provider_timeout");
   expect(text).toContain("too_long");
   expect(text).toContain("Deep run with no outcome");
