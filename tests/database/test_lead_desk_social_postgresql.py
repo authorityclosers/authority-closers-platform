@@ -433,6 +433,15 @@ def test_messenger_and_instagram_conversations_and_comment_replies(
                 inbox_view = (await client.get(f"{BASE}/social/inbox")).json()
                 assert {item["channel"] for item in inbox_view} == {"messenger", "instagram"}
                 assert len(inbox_view) >= 4
+                # The Chats screen's fields: Page, kind, direction, status, reply clock.
+                assert all(item["accountId"] and item["place"] for item in inbox_view)
+                assert {item["place"].split(" · ")[0] for item in inbox_view} == {
+                    "Messenger",
+                    "Instagram",
+                }
+                assert all(item["lastStatus"] and item["lastKind"] for item in inbox_view)
+                for item in inbox_view:
+                    assert (item["waitingSince"] is not None) == item["waiting"]
 
                 # ----- a lead that leaves takes its words -----
                 async with setup.sessions() as db, db.begin():

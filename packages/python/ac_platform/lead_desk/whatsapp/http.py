@@ -12,6 +12,7 @@ workspace; managers (owners and admins) set things up, sellers see their own lea
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -34,6 +35,7 @@ from ac_platform.lead_desk import sla
 from ac_platform.lead_desk.connectors import app_return, meta
 from ac_platform.lead_desk.connectors.app_return import AppComplete, AppCompleted
 from ac_platform.lead_desk.models import LeadDeskSettings, LeadWhatsAppNumber, LeadWhatsAppTemplate
+from ac_platform.lead_desk.social import inbox as social_inbox
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.lead_desk.whatsapp import cloud, inbox, runner
 from ac_platform.tenancy.models import Membership, Organisation
@@ -159,6 +161,42 @@ class ThreadView(BaseModel):
     last_at: datetime = Field(alias="lastAt")
     waiting: bool
     window_open: bool = Field(alias="windowOpen")
+    # For the Chats screen; read as optional by older pages.
+    account_id: UUID | None = Field(default=None, alias="accountId")
+    place: str | None = None
+    last_kind: str = Field(default="text", alias="lastKind")
+    last_direction: str = Field(default="in", alias="lastDirection")
+    last_status: str = Field(default="received", alias="lastStatus")
+    waiting_since: datetime | None = Field(default=None, alias="waitingSince")
+    window_closes_at: datetime | None = Field(default=None, alias="windowClosesAt")
+    owner_id: UUID | None = Field(default=None, alias="ownerId")
+    owner_name: str | None = Field(default=None, alias="ownerName")
+
+
+class ChatThreadView(ThreadView):
+    """One conversation on the Chats screen, whichever channel it is on."""
+
+    key: str  # the channel, the account and a hash of the person's id: stable, opaque
+    channel: Literal["whatsapp", "messenger", "instagram"]
+
+
+class ChatsSla(BaseModel):
+    on: bool
+    minutes: int
+
+
+class ChatsView(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    generated_at: datetime = Field(alias="generatedAt")
+    sla: ChatsSla
+    threads: list[ChatThreadView]
+
+
+CHATS_LIMIT = 200
+
+
+def _person_key(*parts: object) -> str:
+    return hashlib.sha256(":".join(str(part) for part in parts).encode()).hexdigest()[:16]
 
 
 class SlaView(BaseModel):
@@ -684,9 +722,77 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     last_at=thread.last_at,
                     waiting=thread.waiting,
                     window_open=thread.window_open,
+                    account_id=thread.number_id,
+                    place=thread.place,
+                    last_kind=thread.last_kind,
+                    last_direction=thread.last_direction,
+                    last_status=thread.last_status,
+                    waiting_since=thread.waiting_since,
+                    window_closes_at=thread.window_closes_at,
+                    owner_id=thread.owner_id,
+                    owner_name=thread.owner_name,
                 )
                 for thread in await inbox.inbox(desk)
             ]
+
+    @router.get("/chats", response_model=ChatsView, response_model_by_alias=True)
+    async def chats(request: Request, response: Response) -> ChatsView:
+        """WhatsApp, Messenger and Instagram conversations together (the Chats screen):
+        waiting ones first, then newest. A seller sees only the leads they own."""
+        async with desk_for(request, response) as desk:
+            _, config = await desk.settings()
+            target = sla.read(config)
+            rows: list[ChatThreadView] = [
+                ChatThreadView(
+                    key=f"whatsapp:{thread.number_id}:{_person_key(desk.tenant_id, thread.wa_id)}",
+                    channel="whatsapp",
+                    lead_id=thread.lead_id,
+                    lead_name=thread.lead_name,
+                    last_text=thread.last_text,
+                    last_at=thread.last_at,
+                    waiting=thread.waiting,
+                    window_open=thread.window_open,
+                    account_id=thread.number_id,
+                    place=thread.place,
+                    last_kind=thread.last_kind,
+                    last_direction=thread.last_direction,
+                    last_status=thread.last_status,
+                    waiting_since=thread.waiting_since,
+                    window_closes_at=thread.window_closes_at,
+                    owner_id=thread.owner_id,
+                    owner_name=thread.owner_name,
+                )
+                for thread in await inbox.inbox(desk)
+            ]
+            rows += [
+                ChatThreadView(
+                    key=f"{thread.channel}:{thread.account_id}:"
+                    f"{_person_key(desk.tenant_id, thread.user_id)}",
+                    channel="instagram" if thread.channel == "instagram" else "messenger",
+                    lead_id=thread.lead_id,
+                    lead_name=thread.lead_name,
+                    last_text=thread.last_text,
+                    last_at=thread.last_at,
+                    waiting=thread.waiting,
+                    window_open=thread.window_open,
+                    account_id=thread.account_id,
+                    place=thread.place,
+                    last_kind=thread.last_kind,
+                    last_direction=thread.last_direction,
+                    last_status=thread.last_status,
+                    waiting_since=thread.waiting_since,
+                    window_closes_at=thread.window_closes_at,
+                    owner_id=thread.owner_id,
+                    owner_name=thread.owner_name,
+                )
+                for thread in await social_inbox.inbox(desk)
+            ]
+            rows.sort(key=lambda row: (not row.waiting, -row.last_at.timestamp()))
+            return ChatsView(
+                generated_at=desk.now,
+                sla=ChatsSla(on=bool(target.on), minutes=int(target.minutes)),
+                threads=rows[:CHATS_LIMIT],
+            )
 
     # Dev reaches these through the Leads webhook's Cloudflare Access bypass
     # (/v1/lead-desk/meta/webhook/*); staging and production use the canonical path.

@@ -39,7 +39,7 @@ from ac_platform.lead_desk.models import (
     LeadSocialMessage,
 )
 from ac_platform.lead_desk.social import graph
-from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
+from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, owner_names
 
 STATUS_ORDER: Final[dict[str, int]] = {"queued": 0, "sent": 1, "delivered": 2, "read": 3}
 FIRST_REPLY_WITHIN: Final[timedelta] = timedelta(minutes=10)
@@ -713,12 +713,24 @@ class InboxThread:
     last_at: datetime
     waiting: bool
     window_open: bool
+    # For the Chats screen (chats-inbox-api-ask, 20 Oct): which Page, the newest
+    # message's kind, direction and status, the reply clock, and the lead's owner.
+    account_id: UUID | None = None
+    user_id: str = ""
+    place: str | None = None
+    last_kind: str = "text"
+    last_direction: str = "in"
+    last_status: str = "received"
+    waiting_since: datetime | None = None
+    window_closes_at: datetime | None = None
+    owner_id: UUID | None = None
+    owner_name: str | None = None
 
 
 _THREADS = """
     SELECT DISTINCT ON (m.account_id, m.channel, m.user_id)
-           m.lead_id, m.channel, m.user_id, m.user_name, m.body, m.kind, m.direction,
-           COALESCE(m.meta_time, m.created_at) AS at
+           m.lead_id, m.account_id, m.channel, m.user_id, m.user_name, m.body, m.kind,
+           m.direction, m.status, COALESCE(m.meta_time, m.created_at) AS at
     FROM lead_desk_social_messages m
     WHERE m.tenant_id = :tenant AND m.erased_at IS NULL AND m.created_at >= :since
     ORDER BY m.account_id, m.channel, m.user_id, COALESCE(m.meta_time, m.created_at) DESC,
@@ -733,6 +745,20 @@ _LAST_IN = """
     GROUP BY m.account_id, m.channel, m.user_id
 """
 
+# The reply clock: their first message after our last one, per conversation.
+_WAITING_SINCE = """
+    SELECT i.account_id, i.channel, i.user_id, MIN(COALESCE(i.meta_time, i.created_at)) AS at
+    FROM lead_desk_social_messages i
+    WHERE i.tenant_id = :tenant AND i.direction = 'in' AND i.erased_at IS NULL
+      AND i.created_at >= :since
+      AND COALESCE(i.meta_time, i.created_at) > COALESCE(
+        (SELECT MAX(COALESCE(o.meta_time, o.created_at)) FROM lead_desk_social_messages o
+         WHERE o.tenant_id = i.tenant_id AND o.account_id = i.account_id
+           AND o.channel = i.channel AND o.user_id = i.user_id AND o.direction = 'out'),
+        '-infinity'::timestamptz)
+    GROUP BY i.account_id, i.channel, i.user_id
+"""
+
 
 async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
     """Conversations of the last month, waiting ones first; a seller sees their own."""
@@ -740,9 +766,14 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
     params = {"tenant": desk.tenant_id, "since": since}
     rows = (await desk.db.execute(text(_THREADS), params)).all()
     last_in = {
-        (row.channel, row.user_id): row.at
+        (row.account_id, row.channel, row.user_id): row.at
         for row in (await desk.db.execute(text(_LAST_IN), params)).all()
     }
+    since_in = {
+        (row.account_id, row.channel, row.user_id): row.at
+        for row in (await desk.db.execute(text(_WAITING_SINCE), params)).all()
+    }
+    pages = {row.id: row for row in await accounts(desk.db, desk.tenant_id, active=False)}
     leads = {
         lead.id: lead
         for lead in (
@@ -754,6 +785,7 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
             )
         ).all()
     }
+    owners = await owner_names(desk.db, (lead.owner_person_id for lead in leads.values()))
     out: list[InboxThread] = []
     for row in rows:
         lead = leads.get(row.lead_id) if row.lead_id else None
@@ -761,6 +793,11 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
             lead is None or lead.owner_person_id != desk.viewer.person_id
         ):
             continue
+        key = (row.account_id, row.channel, row.user_id)
+        heard = last_in.get(key)
+        open_ = graph.window_open(heard, desk.now)
+        page = pages.get(row.account_id)
+        owner = lead.owner_person_id if lead else None
         out.append(
             InboxThread(
                 lead_id=lead.id if lead else None,
@@ -769,7 +806,17 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
                 last_text=row.body or None,
                 last_at=row.at,
                 waiting=row.direction == "in",
-                window_open=graph.window_open(last_in.get((row.channel, row.user_id)), desk.now),
+                window_open=open_,
+                account_id=row.account_id,
+                user_id=row.user_id,
+                place=label(page, row.channel) if page else None,
+                last_kind=row.kind,
+                last_direction=row.direction,
+                last_status=row.status,
+                waiting_since=since_in.get(key) if row.direction == "in" else None,
+                window_closes_at=heard + graph.WINDOW if open_ and heard else None,
+                owner_id=owner,
+                owner_name=owners.get(owner) if owner else None,
             )
         )
     out.sort(key=lambda thread: (not thread.waiting, -thread.last_at.timestamp()))

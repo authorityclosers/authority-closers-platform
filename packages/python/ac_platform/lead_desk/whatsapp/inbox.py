@@ -35,7 +35,7 @@ from ac_platform.lead_desk.models import (
     LeadWhatsAppNumber,
     LeadWhatsAppTemplate,
 )
-from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
+from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, owner_names
 from ac_platform.lead_desk.whatsapp import cloud
 from ac_platform.partner_events.lead_events import consent_granted
 
@@ -131,8 +131,11 @@ async def connect_number(
     *,
     waba_id: str,
     phone_number_id: str,
+    register: bool = True,
 ) -> LeadWhatsAppNumber:
-    """Keep one number with its sealed token and a PIN we set; subscribe and register it."""
+    """Keep one number with its sealed token and a PIN we set; subscribe and register it.
+    ``register=False`` keeps a number Meta registered already (its dashboard test number,
+    dev only), with no PIN of ours."""
     elsewhere = await desk.db.scalar(
         select(LeadWhatsAppNumber.tenant_id).where(
             LeadWhatsAppNumber.phone_number_id == phone_number_id,
@@ -144,8 +147,9 @@ async def connect_number(
         raise DeskError(409, "This WhatsApp number is connected to another organisation.")
     facts = await api.number(phone_number_id, business_token)
     await api.subscribe(waba_id, business_token)
-    pin = cloud.new_pin()
-    await api.register(phone_number_id, business_token, pin)
+    pin = cloud.new_pin() if register else None
+    if pin is not None:
+        await api.register(phone_number_id, business_token, pin)
     row = await desk.db.scalar(
         select(LeadWhatsAppNumber)
         .where(
@@ -156,7 +160,7 @@ async def connect_number(
         .with_for_update()
     )
     sealed = cloud.seal(cfg, business_token, phone_number_id=phone_number_id, what="token")
-    sealed_pin = cloud.seal(cfg, pin, phone_number_id=phone_number_id, what="pin")
+    sealed_pin = cloud.seal(cfg, pin, phone_number_id=phone_number_id, what="pin") if pin else None
     if row is None:
         row = LeadWhatsAppNumber(
             id=uuid4(),
@@ -648,25 +652,58 @@ class Thread:
     last_direction: str
     waiting: bool
     window_open: bool
+    # For the Chats screen (chats-inbox-api-ask, 20 Oct): which number, the newest
+    # message's kind and status, the reply clock, and the lead's owner.
+    number_id: UUID | None = None
+    place: str | None = None
+    last_kind: str = "text"
+    last_status: str = "received"
+    waiting_since: datetime | None = None
+    window_closes_at: datetime | None = None
+    owner_id: UUID | None = None
+    owner_name: str | None = None
 
 
 _THREADS = """
     SELECT DISTINCT ON (m.wa_id, m.number_id)
-           m.lead_id, m.wa_id, m.body, m.kind, m.direction,
+           m.lead_id, m.wa_id, m.number_id, m.body, m.kind, m.direction, m.status,
            COALESCE(m.meta_time, m.created_at) AS at
     FROM lead_desk_whatsapp_messages m
     WHERE m.tenant_id = :tenant AND m.erased_at IS NULL AND m.created_at >= :since
     ORDER BY m.wa_id, m.number_id, COALESCE(m.meta_time, m.created_at) DESC, m.id DESC
 """
 
+# The reply clock: their first message after our last one, per conversation.
+_WAITING_SINCE = """
+    SELECT i.wa_id, i.number_id, MIN(COALESCE(i.meta_time, i.created_at)) AS at
+    FROM lead_desk_whatsapp_messages i
+    WHERE i.tenant_id = :tenant AND i.direction = 'in' AND i.erased_at IS NULL
+      AND i.created_at >= :since
+      AND COALESCE(i.meta_time, i.created_at) > COALESCE(
+        (SELECT MAX(COALESCE(o.meta_time, o.created_at)) FROM lead_desk_whatsapp_messages o
+         WHERE o.tenant_id = i.tenant_id AND o.wa_id = i.wa_id AND o.number_id = i.number_id
+           AND o.direction = 'out'),
+        '-infinity'::timestamptz)
+    GROUP BY i.wa_id, i.number_id
+"""
+
 
 async def inbox(desk: LeadDesk, *, days: int = 30) -> list[Thread]:
     """Conversations of the last month, newest first; a seller sees their own leads'."""
-    rows = (
-        await desk.db.execute(
-            text(_THREADS), {"tenant": desk.tenant_id, "since": desk.now - timedelta(days=days)}
-        )
-    ).all()
+    params = {"tenant": desk.tenant_id, "since": desk.now - timedelta(days=days)}
+    rows = (await desk.db.execute(text(_THREADS), params)).all()
+    since_in = {
+        (row.wa_id, row.number_id): row.at
+        for row in (await desk.db.execute(text(_WAITING_SINCE), params)).all()
+    }
+    places = {
+        row.id: row.display_number
+        for row in (
+            await desk.db.scalars(
+                select(LeadWhatsAppNumber).where(LeadWhatsAppNumber.tenant_id == desk.tenant_id)
+            )
+        ).all()
+    }
     leads = {
         lead.id: lead
         for lead in (
@@ -696,6 +733,7 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[Thread]:
             )
         ).all()
     }
+    owners = await owner_names(desk.db, (lead.owner_person_id for lead in leads.values()))
     out: list[Thread] = []
     for row in rows:
         lead = leads.get(row.lead_id) if row.lead_id else None
@@ -703,6 +741,10 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[Thread]:
             lead is None or lead.owner_person_id != desk.viewer.person_id
         ):
             continue
+        heard = inbound.get(row.wa_id)
+        open_ = cloud.window_open(heard, desk.now)
+        owner = lead.owner_person_id if lead else None
+        number = places.get(row.number_id)
         out.append(
             Thread(
                 lead_id=lead.id if lead else None,
@@ -712,7 +754,17 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[Thread]:
                 last_at=row.at,
                 last_direction=row.direction,
                 waiting=row.direction == "in",
-                window_open=cloud.window_open(inbound.get(row.wa_id), desk.now),
+                window_open=open_,
+                number_id=row.number_id,
+                place=f"WhatsApp · {number}" if number else None,
+                last_kind=row.kind,
+                last_status=row.status,
+                waiting_since=since_in.get((row.wa_id, row.number_id))
+                if row.direction == "in"
+                else None,
+                window_closes_at=heard + cloud.WINDOW if open_ and heard else None,
+                owner_id=owner,
+                owner_name=owners.get(owner) if owner else None,
             )
         )
     out.sort(key=lambda thread: (not thread.waiting, -thread.last_at.timestamp()))

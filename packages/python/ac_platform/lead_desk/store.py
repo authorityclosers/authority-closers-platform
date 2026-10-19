@@ -159,6 +159,15 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+async def owner_names(db: AsyncSession, ids: Iterable[UUID | None]) -> dict[UUID, str]:
+    """The names of the people who own these leads (for inbox rows)."""
+    wanted = {value for value in ids if value is not None}
+    if not wanted:
+        return {}
+    people = (await db.scalars(select(Person).where(Person.id.in_(wanted)))).all()
+    return {person.id: person_name(person) for person in people}
+
+
 def person_name(person: Person | None) -> str:
     if person is None:
         return "A teammate"

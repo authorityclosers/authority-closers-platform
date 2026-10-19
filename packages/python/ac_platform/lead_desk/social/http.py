@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,6 +41,7 @@ from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership, Organisation
 
 log = logging.getLogger(__name__)
+events = structlog.get_logger(__name__)
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 NO_STORE = {"Cache-Control": "no-store"}
 _MAX_WEBHOOK = 3 * 1024 * 1024
@@ -137,6 +139,16 @@ class InboxView(BaseModel):
     last_at: datetime = Field(alias="lastAt")
     waiting: bool
     window_open: bool = Field(alias="windowOpen")
+    # For the Chats screen; read as optional by older pages.
+    account_id: UUID | None = Field(default=None, alias="accountId")
+    place: str | None = None
+    last_kind: str = Field(default="text", alias="lastKind")
+    last_direction: str = Field(default="in", alias="lastDirection")
+    last_status: str = Field(default="received", alias="lastStatus")
+    waiting_since: datetime | None = Field(default=None, alias="waitingSince")
+    window_closes_at: datetime | None = Field(default=None, alias="windowClosesAt")
+    owner_id: UUID | None = Field(default=None, alias="ownerId")
+    owner_name: str | None = Field(default=None, alias="ownerName")
 
 
 def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -505,6 +517,15 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                     last_at=thread.last_at,
                     waiting=thread.waiting,
                     window_open=thread.window_open,
+                    account_id=thread.account_id,
+                    place=thread.place,
+                    last_kind=thread.last_kind,
+                    last_direction=thread.last_direction,
+                    last_status=thread.last_status,
+                    waiting_since=thread.waiting_since,
+                    window_closes_at=thread.window_closes_at,
+                    owner_id=thread.owner_id,
+                    owner_name=thread.owner_name,
                 )
                 for thread in await inbox.inbox(desk)
             ]
@@ -580,14 +601,15 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
             done = await inbox.receive(
                 database, delivery, now=datetime.now(UTC), names=names, app_id=cfg.app_id
             )
-        # Counts and reasons only, never a message, a name or an id.
-        log.info(
-            "messaging webhook: %d messages, %d statuses, %d comments, skipped %s",
-            done.messages,
-            done.statuses,
-            done.comments,
-            [(skip.reason, ",".join(skip.fields)) for skip in delivery.skipped]
-            + [(reason, "") for reason in done.skipped if reason == "no_rule"],
+        # Counts and reasons only, never a message, a name or an id (structlog: the
+        # stdlib logger's info lines don't reach the journal).
+        events.info(
+            "lead_desk_messaging_webhook",
+            messages=done.messages,
+            statuses=done.statuses,
+            comments=done.comments,
+            skipped=[f"{skip.reason}:{','.join(skip.fields)}" for skip in delivery.skipped]
+            + [reason for reason in done.skipped if reason == "no_rule"],
         )
         return {
             "messages": done.messages,
