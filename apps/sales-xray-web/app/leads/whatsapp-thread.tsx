@@ -8,8 +8,10 @@
  */
 
 import { MessageCircle } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { chatHref } from "../chats/chats-client";
 import { Badge, Button } from "../ui/kit";
 import { AiHelp, useLeadAi } from "./ai-replies";
 import { ago, LeadsError } from "./leads-client";
@@ -23,6 +25,9 @@ import {
   type WaMessage,
   type WaTemplate,
 } from "./whatsapp-client";
+
+// The drawer keeps the latest few; the whole chat lives in Chats (owner, 20 Oct).
+const RECENT = 3;
 
 const STATUS: Record<string, string> = {
   queued: "Sending",
@@ -188,10 +193,25 @@ export function WhatsAppThread({
         ) : (
           <Badge>Not agreed yet</Badge>
         )}
+        {chat.messages.length ? (
+          <Link
+            className={styles.openChats}
+            href={chatHref("whatsapp", leadId)}
+            prefetch={false}
+          >
+            Open in Chats
+          </Link>
+        ) : null}
       </div>
+      {chat.messages.length > RECENT ? (
+        <p className={styles.hint}>
+          {chat.messages.length - RECENT} earlier message
+          {chat.messages.length - RECENT === 1 ? "" : "s"} in Chats
+        </p>
+      ) : null}
       {chat.messages.length ? (
         <ol className={styles.waMessages}>
-          {chat.messages.map((message) => (
+          {chat.messages.slice(-RECENT).map((message) => (
             <Bubble key={message.id} message={message} />
           ))}
         </ol>

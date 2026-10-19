@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
+  chatHref,
   composerState,
   dayGroups,
   filterThreads,
@@ -11,6 +12,7 @@ import {
   readChats,
   readSeen,
   readThread,
+  sameThread,
   threadKey,
   waitedFor,
   waitTone,
@@ -359,4 +361,20 @@ it("reads the open chat from the address and ignores anything else", () => {
   expect(openedFromHash("#chat=sms:abc")).toBeNull();
   expect(openedFromHash("#chat=messenger:<script>")).toBeNull();
   expect(openedFromHash("")).toBeNull();
+});
+
+it("links to one chat and finds it with or without the account", () => {
+  expect(chatHref("messenger", LEAD_A)).toBe(`/chats#chat=messenger:${LEAD_A}`);
+  expect(chatHref("whatsapp", LEAD_A, ACCOUNT)).toBe(
+    `/chats#chat=whatsapp:${LEAD_A}:${ACCOUNT}`,
+  );
+  const base = { channel: "messenger" as const, leadId: LEAD_A };
+  expect(sameThread({ ...base, accountId: ACCOUNT }, base)).toBe(true);
+  expect(
+    sameThread({ ...base, accountId: ACCOUNT }, { ...base, accountId: LEAD_B }),
+  ).toBe(false);
+  expect(sameThread(base, { ...base, channel: "instagram" })).toBe(false);
+  expect(sameThread({ ...base, leadId: null }, { ...base, leadId: null })).toBe(
+    false,
+  );
 });

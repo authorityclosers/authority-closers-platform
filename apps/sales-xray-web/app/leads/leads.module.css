@@ -4014,3 +4014,28 @@
     height: 32px;
   }
 }
+
+/* Owner, 20 Oct: the whole chat lives in Chats; the drawer links there. */
+.openChats {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: var(--sx-control-h);
+  margin-left: auto;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.openChats:hover {
+  background: color-mix(in oklab, var(--sx-accent) 18%, transparent);
+}
+
+.openChats:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}

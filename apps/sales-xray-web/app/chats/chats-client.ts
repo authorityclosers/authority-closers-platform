@@ -83,6 +83,28 @@ type Extra = Partial<
   >
 >;
 
+/** The address of one chat, for "Open in Chats" elsewhere in the app. */
+export function chatHref(
+  channel: ChatChannel,
+  leadId: string,
+  accountId?: string | null,
+): string {
+  return `${CHATS_PATH}#chat=${[channel, leadId, accountId].filter(Boolean).join(":")}`;
+}
+
+/** Two references to one conversation (an account id may be missing on one). */
+export function sameThread(
+  a: Pick<ChatThread, "channel" | "leadId" | "accountId">,
+  b: Pick<ChatThread, "channel" | "leadId" | "accountId">,
+): boolean {
+  return (
+    a.channel === b.channel &&
+    !!a.leadId &&
+    a.leadId === b.leadId &&
+    (!a.accountId || !b.accountId || a.accountId === b.accountId)
+  );
+}
+
 /** The same conversation keeps the same key across reads. */
 export function threadKey(
   channel: ChatChannel,

@@ -62,6 +62,7 @@ import {
   type Stage,
 } from "./leads-client";
 import { LastCallBrief } from "./call-brief-card";
+import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
 import { WhatsAppThread } from "./whatsapp-thread";
 import { sourceText, whyLine } from "./desk-view";
@@ -1570,7 +1571,13 @@ export function LeadCard({
       .map((field) => ({ label: field.label, value: field.value })),
   ];
   // A lead typed in by hand has no form: its answers are the details above.
-  const answers = FORM_SOURCES.has(lead.source) ? detail.source_fields : [];
+  // A lead that began as a chat has no form either: never Meta's raw ids.
+  const origin = chatOrigin(lead);
+  const answers = !FORM_SOURCES.has(lead.source)
+    ? []
+    : origin
+      ? chatFacts(detail.source_fields)
+      : detail.source_fields;
 
   const move = async (personId: string | null) => {
     setMoving(true);
@@ -1806,7 +1813,9 @@ export function LeadCard({
         )}
         {answers.length ? (
           <div className={styles.formAnswers}>
-            <span className={styles.stepLabel}>Answers from the form</span>
+            <span className={styles.stepLabel}>
+              {origin ? "From the chat" : "Answers from the form"}
+            </span>
             <dl className={styles.detailRows}>
               {answers.map((field, index) => (
                 <div key={`${field.label}-${index}`}>

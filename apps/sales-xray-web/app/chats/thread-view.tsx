@@ -18,9 +18,9 @@ import {
   SendHorizontal,
   Smile,
   Sticker,
+  UserRound,
   Video,
 } from "lucide-react";
-import Link from "next/link";
 import {
   useEffect,
   useLayoutEffect,
@@ -251,11 +251,17 @@ function Composer({
 
 export function ThreadView({
   thread,
+  leadShown = false,
+  onLead,
   onBack,
   onChanged,
 }: {
   thread: Pick<ChatThread, "key" | "channel" | "leadId" | "accountId"> &
     Partial<Pick<ChatThread, "leadName" | "place">>;
+  /** The lead's panel is open beside the chat. */
+  leadShown?: boolean;
+  /** Show or hide the lead (a sheet on phones). */
+  onLead?: () => void;
   onBack: () => void;
   /** Something was sent: the list reads again. */
   onChanged: () => void;
@@ -311,7 +317,8 @@ export function ThreadView({
   };
 
   const messages = [...(detail?.messages ?? []), ...(pending ? [pending] : [])];
-  const name = thread.leadName ?? "";
+  // Undefined while the list loads; empty when the chat is older than it.
+  const name = thread.leadName;
   return (
     <section
       className={styles.thread}
@@ -329,21 +336,23 @@ export function ThreadView({
         </button>
         <ChatAvatar name={name || "?"} channel={channel} size={36} />
         <span className={styles.threadTitle}>
-          {name ? (
-            <strong>{name}</strong>
-          ) : (
+          {name === undefined ? (
             <Skeleton width={140} height={14} />
+          ) : (
+            <strong>{name || "This chat"}</strong>
           )}
           <small>{detail?.place ?? thread.place ?? " "}</small>
         </span>
         {leadId ? (
-          <Link
+          <button
+            type="button"
             className={styles.headAction}
-            href={`/leads#lead=${encodeURIComponent(leadId)}`}
-            prefetch={false}
+            aria-pressed={leadShown}
+            onClick={onLead}
           >
-            Open lead
-          </Link>
+            <UserRound size={15} aria-hidden="true" />
+            Lead
+          </button>
         ) : null}
       </header>
       <div

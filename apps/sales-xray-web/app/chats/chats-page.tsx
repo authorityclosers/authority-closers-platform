@@ -34,6 +34,7 @@ import {
   CHATS_PATH,
   isUnread,
   NO_FILTER,
+  sameThread,
   readChats,
   readSla,
   type ChatChannel,
@@ -44,6 +45,8 @@ import {
 } from "./chats-client";
 import styles from "./chats.module.css";
 import { ThreadFilters, ThreadList, ThreadListSkeleton } from "./thread-list";
+import { LeadPanel, LeadSheetDialog } from "./lead-panel";
+import { readPanelChoice, savePanelChoice, useMedia } from "./media";
 import { ThreadView } from "./thread-view";
 
 const LIST_EVERY_MS = 20 * 1000;
@@ -73,15 +76,6 @@ export function openedFromHash(hash: string): Opened | null {
     leadId,
     accountId: accountId || null,
   };
-}
-
-/** The address of one chat, for "Open in Chats" elsewhere in the app. */
-export function chatHref(
-  channel: ChatChannel,
-  leadId: string,
-  accountId?: string | null,
-): string {
-  return `${CHATS_PATH}#chat=${[channel, leadId, accountId].filter(Boolean).join(":")}`;
 }
 
 // The chat this page opened on top of the list: Back pops it again, so the
@@ -119,17 +113,29 @@ function ChatsFrame({
   list,
   thread,
   open,
+  panel,
 }: {
   list: ReactNode;
   thread: ReactNode;
   open: boolean;
+  /** The lead beside the chat (computers only; phones use a sheet). */
+  panel?: ReactNode;
 }) {
   return (
-    <div className={styles.root} data-open={open ? "thread" : "list"}>
+    <div
+      className={styles.root}
+      data-open={open ? "thread" : "list"}
+      data-panel={panel ? "open" : undefined}
+    >
       <aside className={styles.listPane} aria-label="Chats list">
         {list}
       </aside>
       <div className={styles.threadPane}>{thread}</div>
+      {panel ? (
+        <aside className={styles.panelPane} aria-label="Lead">
+          {panel}
+        </aside>
+      ) : null}
     </div>
   );
 }
@@ -201,6 +207,14 @@ export function ChatsRoute() {
   const [version, setVersion] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const hadList = useRef(false);
+  // The lead beside the chat: open by default on wide screens, then as the
+  // person last left it; on phones a sheet, opened on demand per chat.
+  const narrow = useMedia("(max-width: 899.98px)");
+  const wide = useMedia("(min-width: 1200px)");
+  const [panelChoice, setPanelChoice] = useState<boolean | null>(
+    readPanelChoice,
+  );
+  const [sheetFor, setSheetFor] = useState<string | null>(null);
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
 
@@ -276,7 +290,7 @@ export function ChatsRoute() {
     [current, list],
   );
   const openThread =
-    (opened && threads.find((thread) => thread.key === opened.key)) ?? null;
+    (opened && threads.find((thread) => sameThread(thread, opened))) ?? null;
 
   // Opening a chat (or a new message arriving in the open one) marks it seen.
   useEffect(() => {
@@ -348,10 +362,21 @@ export function ChatsRoute() {
   const shownThread = opened
     ? {
         ...opened,
-        leadName: openThread?.leadName,
+        // Undefined while the list loads; empty when the chat is older than it.
+        leadName: openThread?.leadName ?? (ready ? "" : undefined),
         place: openThread?.place,
       }
     : null;
+  const leadId = shownThread?.leadId ?? null;
+  const panelShown = !narrow && !!leadId && (panelChoice ?? wide);
+  const toggleLead = () => {
+    if (narrow) {
+      setSheetFor(leadId);
+      return;
+    }
+    setPanelChoice(!panelShown);
+    savePanelChoice(!panelShown);
+  };
 
   return (
     <AcquisitionShell
@@ -362,6 +387,18 @@ export function ChatsRoute() {
     >
       <ChatsFrame
         open={!!opened}
+        panel={
+          panelShown && leadId ? (
+            <LeadPanel
+              key={leadId}
+              leadId={leadId}
+              onClose={() => {
+                setPanelChoice(false);
+                savePanelChoice(false);
+              }}
+            />
+          ) : null
+        }
         list={
           ready ? (
             <>
@@ -378,7 +415,7 @@ export function ChatsRoute() {
                 me={me?.person_id ?? personId}
                 marks={marks}
                 sla={sla}
-                activeKey={opened?.key ?? null}
+                activeKey={openThread?.key ?? opened?.key ?? null}
                 showOwner={showScopes}
                 now={now}
                 onOpen={(thread) =>
@@ -407,6 +444,8 @@ export function ChatsRoute() {
             <ThreadView
               key={shownThread.key}
               thread={shownThread}
+              leadShown={panelShown}
+              onLead={toggleLead}
               onBack={closeChat}
               onChanged={refresh}
             />
@@ -415,6 +454,9 @@ export function ChatsRoute() {
           )
         }
       />
+      {narrow && leadId && sheetFor === leadId ? (
+        <LeadSheetDialog leadId={leadId} onClose={() => setSheetFor(null)} />
+      ) : null}
     </AcquisitionShell>
   );
 }

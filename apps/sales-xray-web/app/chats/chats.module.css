@@ -676,12 +676,16 @@
 
 .bubbleMeta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 2px 6px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
+}
+
+.bubbleMeta > * {
   white-space: nowrap;
 }
 
@@ -962,5 +966,370 @@
   .root {
     height: auto;
     min-height: 520px;
+  }
+}
+
+/* ---------- The lead beside the chat ---------- */
+
+.root {
+  position: relative;
+}
+
+.panelPane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-left: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  animation: chats-slide var(--lx-dur-move) var(--lx-ease-move) both;
+}
+
+@media (min-width: 1200px) {
+  .root[data-panel="open"] {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) 320px;
+  }
+}
+
+/* 900-1199 px: the lead takes the list's place; Back brings the list again. */
+@media (min-width: 900px) and (max-width: 1199.98px) {
+  .root[data-panel="open"] {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  }
+
+  .root[data-panel="open"] .listPane {
+    display: none;
+  }
+
+  .root[data-panel="open"] .backButton {
+    display: inline-grid;
+  }
+}
+
+.panel {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.panelClose {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.panelClose:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.panelBody {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  gap: 16px;
+  padding: 18px 16px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.panelHead {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding-right: 32px;
+}
+
+.panelHead > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.panelHead strong {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font: var(--sx-text-panel);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panelBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.callAction {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 16px;
+  border-radius: var(--sx-radius-md);
+  background: var(--lx-gradient-primary, var(--sx-accent));
+  box-shadow: var(--lx-shadow-cta);
+  color: var(--sx-accent-ink);
+  text-decoration: none;
+  transition: transform var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.callAction:active {
+  transform: scale(0.98);
+}
+
+.callAction span {
+  display: grid;
+}
+
+.callAction strong {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.callAction small {
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+.facts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.facts > div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+}
+
+.facts dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.facts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.facts a {
+  color: var(--sx-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ownerSelect {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--sx-control-h);
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.panelNotes {
+  display: grid;
+  gap: 8px;
+}
+
+.panelNotes h3 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+.panelNotes ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.panelNotes li {
+  padding: 10px 12px;
+  border-left: 3px solid var(--lx-focus-edge, var(--sx-line));
+  border-radius: 0 var(--sx-radius-sm) var(--sx-radius-sm) 0;
+  background: color-mix(in oklab, var(--lx-focus) 7%, var(--sx-surface));
+}
+
+.panelNotes li p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.panelNotes li small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.noteBox {
+  display: grid;
+  gap: 6px;
+}
+
+.noteBox textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  max-height: 160px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  field-sizing: content;
+  resize: none;
+}
+
+.noteBox textarea:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.noteSave {
+  justify-self: end;
+  min-height: var(--sx-control-h);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.panelQuiet {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.panelLink {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: var(--sx-control-h);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.panelClose:focus-visible,
+.callAction:focus-visible,
+.noteSave:focus-visible,
+.panelLink:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* ---------- Phones: the lead as a sheet ---------- */
+
+.sheet {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 560px;
+  max-height: min(86dvh, 760px);
+  margin: auto auto 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--sx-shadow-float);
+}
+
+.sheet[open] {
+  display: flex;
+  flex-direction: column;
+  animation: chats-sheet var(--lx-dur-move) var(--lx-ease-move) both;
+}
+
+.sheet::backdrop {
+  background: var(--sx-scrim);
+}
+
+.sheet .panelBody {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+.sheetGrip {
+  flex: none;
+  width: 40px;
+  height: 4px;
+  margin: 8px auto 0;
+  border-radius: 999px;
+  background: var(--sx-line-strong);
+}
+
+@keyframes chats-slide {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+@keyframes chats-sheet {
+  from {
+    transform: translateY(40px);
+    opacity: 0.4;
+  }
+}
+
+@media (max-width: 899.98px) {
+  .panelPane {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panelPane,
+  .sheet[open],
+  .callAction {
+    animation: none;
+    transition: none;
   }
 }
