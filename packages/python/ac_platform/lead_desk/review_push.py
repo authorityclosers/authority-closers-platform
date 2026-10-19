@@ -58,7 +58,8 @@ from ac_platform.tenancy.models import Membership
 
 ACTION = "conversation.gold_review_alerted"
 RESOURCE = "conversation_review_assignment"
-_LOCK = (1802, 1264)  # one review sender across API processes and slots
+# 1264 is the Google lead pull's; sharing it made each loop skip the other's ticks.
+_LOCK = (1802, 1266)  # one review sender across API processes and slots
 
 
 @dataclass(slots=True)
