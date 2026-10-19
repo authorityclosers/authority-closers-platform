@@ -69,6 +69,9 @@ from ac_platform.identity.provider_link_email import (
     PROVIDER_LINKED_EVENT,
     PROVIDER_LINKED_JOB,
     PROVIDER_LINKED_ROUTE,
+    PROVIDER_REMOVED_EVENT,
+    PROVIDER_REMOVED_JOB,
+    PROVIDER_REMOVED_ROUTE,
 )
 from ac_platform.identity.reviewer_auth import REVIEWER_AUTH_EVENT, REVIEWER_AUTH_JOB
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
@@ -132,6 +135,7 @@ OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
         ORGANISATION_INVITATION_EVENT: ORGANISATION_INVITATION_ROUTE,
         STAFF_KEY_CREATED_EVENT: STAFF_KEY_CREATED_ROUTE,
         PROVIDER_LINKED_EVENT: PROVIDER_LINKED_ROUTE,
+        PROVIDER_REMOVED_EVENT: PROVIDER_REMOVED_ROUTE,
         REVIEWER_AUTH_EVENT: OutboxJobRoute(
             job_kind=REVIEWER_AUTH_JOB,
             required_payload_keys=frozenset({"challenge_id"}),
@@ -532,6 +536,7 @@ def build_default_dispatcher(
             ORGANISATION_INVITATION_JOB: handler,
             STAFF_KEY_CREATED_JOB: handler,
             PROVIDER_LINKED_JOB: handler,
+            PROVIDER_REMOVED_JOB: handler,
             REVIEWER_AUTH_JOB: handler,
             REVIEW_INVITATION_JOB: handler,
             EMAIL_LOGIN_REQUEST_JOB: handler,
@@ -700,6 +705,7 @@ class DurableWorker:
                 ORGANISATION_INVITATION_JOB,
                 STAFF_KEY_CREATED_JOB,
                 PROVIDER_LINKED_JOB,
+                PROVIDER_REMOVED_JOB,
                 REVIEWER_AUTH_JOB,
                 REVIEW_INVITATION_JOB,
                 EMAIL_LOGIN_REQUEST_JOB,
@@ -789,12 +795,12 @@ class DurableWorker:
         *,
         provider_key: str,
     ) -> EmailMessage:
-        if job.kind == PROVIDER_LINKED_JOB:
+        if job.kind in {PROVIDER_LINKED_JOB, PROVIDER_REMOVED_JOB}:
             from ac_platform.identity.provider_link_email import (
-                resolve_provider_linked_message,
+                resolve_provider_notice_message,
             )
 
-            return await resolve_provider_linked_message(
+            return await resolve_provider_notice_message(
                 session, self._settings, job, provider_key=provider_key
             )
         if job.kind == STAFF_KEY_CREATED_JOB:
