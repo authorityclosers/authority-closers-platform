@@ -8,12 +8,19 @@
  * whole map, objects and runs are one click away.
  */
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { Badge, type Tone } from "../ui/kit";
 import type { CallDetail, Evidence } from "./call-detail-data";
 import { clock } from "./call-data";
 import { rupees } from "./call-map-data";
+import {
+  myAnswers,
+  othersOn,
+  withSaved,
+  type ReviewCall,
+} from "./review-verdicts-data";
+import { VerdictChips } from "./verdict-chips";
 import styles from "./analysis-tab.module.css";
 
 const PERSON = new Set(["person", "confirmed", "edited"]);
@@ -31,10 +38,13 @@ const tokens = (value: number) =>
 export function AnalysisTab({
   detail,
   recordingId,
+  review = null,
   onSeek,
 }: {
   detail: CallDetail | null;
   recordingId: string;
+  /** Review 2.0 for this call; null when this person isn't a gold reviewer. */
+  review?: ReviewCall | null;
   onSeek: (ms: number) => void;
 }) {
   const groups = useMemo(() => {
@@ -51,6 +61,10 @@ export function AnalysisTab({
       facts,
     }));
   }, [detail]);
+
+  const [verdicts, setVerdicts] = useState(review?.verdicts ?? []);
+  const pipeline =
+    review?.pipelines.find((item) => item.targets.includes("fact")) ?? null;
 
   if (!detail)
     return (
@@ -129,6 +143,19 @@ export function AnalysisTab({
                           </button>
                         ))}
                       </span>
+                    ) : null}
+                    {pipeline ? (
+                      <VerdictChips
+                        recordingId={recordingId}
+                        pipeline={pipeline}
+                        targetKind="fact"
+                        targetRef={fact.objectId}
+                        mine={myAnswers(verdicts, fact.objectId)}
+                        others={othersOn(verdicts, fact.objectId)}
+                        onSaved={(saved) =>
+                          setVerdicts((current) => withSaved(current, saved))
+                        }
+                      />
                     ) : null}
                   </li>
                 );

@@ -133,3 +133,80 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Review 2.0: one-tap verdicts under each fact. */
+.review {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2 / -1;
+  align-items: center;
+  gap: 6px;
+}
+
+.chips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.chips button,
+.fix button {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  cursor: pointer;
+}
+
+.chips button[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-weight: 650;
+}
+
+.chips button:disabled,
+.fix button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.chips button:focus-visible,
+.fix button:focus-visible,
+.fix input:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 1px;
+}
+
+.fix {
+  display: inline-flex;
+  flex: 1 1 240px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fix input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+}
+
+.others {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.error {
+  color: var(--sx-bad);
+  font-size: var(--sx-text-xs);
+}

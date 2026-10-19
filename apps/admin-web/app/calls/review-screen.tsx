@@ -54,6 +54,7 @@ import { typing } from "./queue-keys";
 import { TranscriptPane } from "./transcript-pane";
 import { AnalysisTab } from "./analysis-tab";
 import type { CallDetail } from "./call-detail-data";
+import type { ReviewCall } from "./review-verdicts-data";
 import styles from "./review.module.css";
 
 const TABS: {
@@ -85,9 +86,12 @@ export function ReviewScreen({
   labels = null,
   startMs = null,
   analysis = null,
+  review = null,
 }: {
   /** What the call data engine found (its detail read), or null when not read yet. */
   analysis?: CallDetail | null;
+  /** Review 2.0 for this call, for gold reviewers; else null. */
+  review?: ReviewCall | null;
   /** The call's reviewer labels, or null when they couldn't be read. */
   labels?: Labels | null;
   /** The operator may withhold passages (platform_content_safety_manage). */
@@ -456,6 +460,7 @@ export function ReviewScreen({
             ) : tab === "analysis" ? (
               <AnalysisTab
                 detail={analysis}
+                review={review}
                 recordingId={call.recordingId}
                 onSeek={seek}
               />

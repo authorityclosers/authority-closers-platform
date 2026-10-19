@@ -13,6 +13,7 @@ import { FailedSteps } from "@/app/calls/failed-steps";
 import { queueApiPath, queueFilters } from "@/app/calls/queue-query";
 import { startAt } from "@/app/calls/review-logic";
 import { normalizeCallDetail } from "@/app/calls/call-detail-data";
+import { normalizeReviewCall } from "@/app/calls/review-verdicts-data";
 import { ReviewScreen } from "@/app/calls/review-screen";
 import { normalizeLabels } from "@/app/calls/labels-data";
 import { loadConsoleAccess } from "@/app/lib/console-access";
@@ -69,8 +70,8 @@ export default async function CallReviewPage({
   const compareRun = compareId
     ? call.data.runs.find((item) => item.id === compareId && item.reportId)
     : undefined;
-  const [bundle, compared, queue, access, labels, analysis] = await Promise.all(
-    [
+  const [bundle, compared, queue, access, labels, analysis, review] =
+    await Promise.all([
       run
         ? adminRead(
             `/v1/admin/conversation/runs/${run.id}/review`,
@@ -93,8 +94,12 @@ export default async function CallReviewPage({
         `/v1/admin/call-data/calls/${recordingId}/detail`,
         normalizeCallDetail,
       ),
-    ],
-  );
+      // Review 2.0: answers for gold reviewers; anyone else gets a 403 and no chips.
+      adminRead(
+        `/v1/admin/conversation/review/calls/${recordingId}`,
+        normalizeReviewCall,
+      ),
+    ]);
 
   if (!run || !bundle?.ok)
     return (
@@ -196,6 +201,7 @@ export default async function CallReviewPage({
       safety={access.platform.includes("platform_content_safety_manage")}
       labels={labels.ok ? labels.data : null}
       analysis={analysis.ok ? analysis.data : null}
+      review={review.ok ? review.data : null}
       startMs={startAt(one(query.at))}
       neighbours={{
         previous: at > 0 ? (ids[at - 1] ?? null) : null,
