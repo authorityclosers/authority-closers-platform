@@ -1,0 +1,966 @@
+/*
+ * Chats (owner, 20 Oct 2026). Tokens only (ui/sx-tokens.css and the Lightbox
+ * palette); no raw colours. The page fills the window: the list and the open
+ * chat scroll inside themselves, nothing else moves.
+ */
+
+.root {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.listPane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+}
+
+.threadPane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background-color: var(--sx-paper);
+  background-image: radial-gradient(
+    color-mix(in oklab, var(--sx-line) 75%, transparent) 1px,
+    transparent 1.4px
+  );
+  background-size: 20px 20px;
+}
+
+/* ---------- Filters ---------- */
+
+.filters {
+  display: grid;
+  flex: none;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.search {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 6px;
+  height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+  color: var(--sx-muted);
+}
+
+.search[data-placeholder] {
+  border-color: transparent;
+}
+
+.search:focus-within {
+  border-color: var(--sx-accent);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-focus-ring);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  outline: none;
+}
+
+.scopes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+}
+
+.scopes button {
+  min-height: calc(var(--sx-control-h) - 4px);
+  padding: 0 8px;
+  border: 0;
+  border-radius: calc(var(--sx-radius-sm) - 2px);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.scopes button[aria-pressed="true"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.chips {
+  display: flex;
+  min-height: 30px;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  flex: none;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--lx-dur-quick) var(--lx-ease-quick),
+    color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.chip:hover {
+  background: var(--sx-sunken);
+}
+
+.chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--sx-ink);
+  color: var(--sx-surface);
+}
+
+.chip[data-channel="whatsapp"][aria-pressed="true"] {
+  background: var(--lx-strength);
+}
+
+.chip[data-channel="messenger"][aria-pressed="true"] {
+  background: var(--lx-closing);
+}
+
+.chip[data-channel="instagram"][aria-pressed="true"] {
+  background: linear-gradient(
+    120deg,
+    var(--lx-missed),
+    var(--lx-objection) 60%,
+    var(--lx-focus)
+  );
+}
+
+/* ---------- The list ---------- */
+
+.listBody {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 6px 8px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  box-sizing: border-box;
+  align-items: start;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  padding: 10px;
+  border: 0;
+  border-radius: var(--sx-radius-md);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.row:hover:not(:disabled) {
+  background: var(--sx-sunken);
+}
+
+.row:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.row[data-active] {
+  background: var(--sx-accent-soft);
+}
+
+.row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.rowMain {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.rowTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rowTop strong {
+  overflow: hidden;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowTop time {
+  flex: none;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.row[data-unread] .rowTop strong {
+  font-weight: 750;
+}
+
+.row[data-unread] .rowTop time {
+  color: var(--sx-accent);
+  font-weight: 700;
+}
+
+.rowText {
+  display: flex;
+  min-width: 0;
+  min-height: 20px;
+  align-items: center;
+  gap: 4px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.rowText > span:not(.unreadDot):not(.ticks) {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row[data-unread] .rowText {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.unreadDot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sx-accent);
+  box-shadow: 0 0 0 3px var(--sx-accent-soft);
+  animation: chats-pop var(--lx-dur-move) var(--lx-ease-pop, ease-out) both;
+}
+
+.rowMeta {
+  display: flex;
+  min-width: 0;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.rowPlace {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner,
+.wait {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.owner[data-none] {
+  background: color-mix(in oklab, var(--sx-warn) 12%, transparent);
+  color: var(--lx-focus-ink);
+}
+
+.wait {
+  margin-left: auto;
+  background: var(--sx-accent-soft);
+  color: var(--lx-strength-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.wait[data-tone="warn"] {
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  color: var(--lx-focus-ink);
+}
+
+.wait[data-tone="bad"] {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+.rowSkeleton {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  box-sizing: border-box;
+  gap: 12px;
+  min-height: 72px;
+  padding: 10px;
+}
+
+.rowSkeleton > span:first-child {
+  border-radius: 50%;
+}
+
+.rowSkeleton > span:last-child {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  padding-top: 3px;
+}
+
+/* ---------- Channel marks and avatars ---------- */
+
+.channelMark {
+  display: inline-grid;
+  flex: none;
+  width: var(--mark, 16px);
+  height: var(--mark, 16px);
+  place-items: center;
+  border-radius: 50%;
+  color: var(--sx-surface);
+}
+
+.channelMark[data-channel="whatsapp"] {
+  background: var(--lx-strength);
+}
+
+.channelMark[data-channel="messenger"] {
+  background: var(--lx-closing);
+}
+
+.channelMark[data-channel="instagram"] {
+  background: linear-gradient(
+    135deg,
+    var(--lx-missed),
+    var(--lx-objection) 55%,
+    var(--lx-focus)
+  );
+}
+
+.chatAvatar {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: fit-content;
+  height: fit-content;
+}
+
+.chatAvatar > .channelMark {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  box-shadow: 0 0 0 2px var(--sx-surface);
+}
+
+/* ---------- Empty and hint states ---------- */
+
+.listEmpty,
+.pickHint {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 6px;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.pickHint {
+  flex: 1;
+}
+
+.emptyMark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-panel);
+}
+
+.emptyText {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.linkButton {
+  min-height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.linkButton:hover {
+  background: var(--sx-accent-soft);
+}
+
+/* ---------- One chat ---------- */
+
+.thread {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.threadHead {
+  display: flex;
+  flex: none;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 10px;
+  min-height: 62px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+}
+
+.backButton {
+  display: none;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  margin-left: -8px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.backButton:hover {
+  background: var(--sx-sunken);
+}
+
+.threadTitle {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.threadTitle strong {
+  overflow: hidden;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.threadTitle small {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headAction {
+  display: inline-flex;
+  flex: none;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--sx-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.headAction:hover {
+  background: var(--sx-sunken);
+}
+
+.headAction[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.messages {
+  flex: 1;
+  min-height: 0;
+  padding: 4px clamp(12px, 3vw, 32px) 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.days,
+.bubbles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dayLine {
+  position: sticky;
+  z-index: 1;
+  top: 6px;
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 6px;
+  pointer-events: none;
+}
+
+.dayLine span {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sx-surface) 94%, transparent);
+  box-shadow: var(--lx-shadow-1);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.bubbleRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 2px;
+  animation: chats-in var(--lx-dur-quick) var(--lx-ease-quick) both;
+}
+
+.bubbleRow[data-first] {
+  margin-top: 10px;
+}
+
+.bubbleRow[data-dir="out"] {
+  align-items: flex-end;
+}
+
+.bubble {
+  display: grid;
+  box-sizing: border-box;
+  max-width: min(72%, 560px);
+  gap: 3px;
+  padding: 7px 10px 5px 11px;
+  border-radius: 16px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: 0 1px 1.5px color-mix(in oklab, var(--lx-film) 10%, transparent);
+}
+
+.bubbleRow[data-dir="in"][data-last] .bubble {
+  border-bottom-left-radius: 5px;
+}
+
+.bubbleRow[data-dir="out"] .bubble {
+  background: color-mix(in oklab, var(--lx-teal) 16%, var(--sx-surface));
+}
+
+.bubbleRow[data-dir="out"][data-last] .bubble {
+  border-bottom-right-radius: 5px;
+}
+
+.bubble[data-failed] {
+  background: var(--sx-bad-soft);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--sx-bad) 35%, transparent);
+}
+
+.bubbleTag {
+  justify-self: start;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sx-ink) 7%, transparent);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--sx-ink) 6%, transparent);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.bubbleText {
+  margin: 0;
+  font-size: var(--sx-text-md);
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bubbleText[data-quiet] {
+  color: var(--sx-muted);
+  font-style: italic;
+}
+
+.bubbleMeta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bubbleWho {
+  overflow: hidden;
+  max-width: 22ch;
+  text-overflow: ellipsis;
+}
+
+.failedLine {
+  max-width: min(72%, 560px);
+  margin: 3px 4px 0;
+  color: var(--sx-bad);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-align: right;
+}
+
+.ticks {
+  display: inline-flex;
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.ticks[data-status="read"] {
+  color: var(--lx-closing);
+}
+
+.ticks[data-status="failed"] {
+  color: var(--sx-bad);
+}
+
+.ticks[data-status="queued"] {
+  opacity: 0.75;
+}
+
+.messagesSkeleton {
+  display: grid;
+  gap: 10px;
+  padding-top: 18px;
+}
+
+.messagesSkeleton > span {
+  display: flex;
+}
+
+.messagesSkeleton > span[data-dir="out"] {
+  justify-content: flex-end;
+}
+
+.messagesSkeleton > span > span {
+  border-radius: 16px;
+}
+
+/* ---------- The reply box ---------- */
+
+.composer {
+  display: grid;
+  flex: none;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+}
+
+.windowLine {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.4;
+}
+
+.windowLine[data-tone="warn"] {
+  background: color-mix(in oklab, var(--sx-warn) 11%, transparent);
+  color: var(--lx-focus-ink);
+}
+
+.composeBox {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.composeBox[data-placeholder] {
+  border-radius: 22px;
+  background: var(--sx-sunken);
+}
+
+.composeBox textarea {
+  flex: 1;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 148px;
+  padding: 11px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: 22px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  line-height: 1.4;
+  field-sizing: content;
+  resize: none;
+}
+
+.composeBox textarea:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+  background: var(--sx-surface);
+  box-shadow: var(--sx-focus-ring);
+}
+
+.sendButton {
+  display: grid;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--lx-gradient-primary, var(--sx-accent));
+  color: var(--sx-accent-ink);
+  box-shadow: var(--lx-shadow-cta);
+  cursor: pointer;
+  transition:
+    transform var(--lx-dur-quick) var(--lx-ease-quick),
+    opacity var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.sendButton:disabled {
+  background: var(--sx-sunken);
+  box-shadow: none;
+  color: var(--sx-muted);
+  cursor: default;
+}
+
+.sendButton:not(:disabled):active {
+  transform: scale(0.93);
+}
+
+.sendButton:focus-visible,
+.backButton:focus-visible,
+.headAction:focus-visible,
+.chip:focus-visible,
+.scopes button:focus-visible,
+.linkButton:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* ---------- Tab badge (rail and phone tab bar) ---------- */
+
+.tabIcon {
+  position: relative;
+  display: inline-flex;
+}
+
+.tabBadge {
+  position: absolute;
+  top: -7px;
+  left: calc(100% - 9px);
+  box-sizing: border-box;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 2px solid var(--sx-surface);
+  border-radius: 999px;
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Motion ---------- */
+
+@keyframes chats-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes chats-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubbleRow,
+  .unreadDot {
+    animation: none;
+  }
+
+  .row,
+  .chip,
+  .sendButton {
+    transition: none;
+  }
+}
+
+/* ---------- Touch ---------- */
+
+@media (pointer: coarse) {
+  .chip {
+    height: 36px;
+    padding: 0 13px;
+  }
+
+  .chips {
+    min-height: 36px;
+  }
+}
+
+/* ---------- Phones and tablets: one pane at a time, edge to edge ---------- */
+
+@media (max-width: 899.98px) {
+  .root {
+    grid-template-columns: minmax(0, 1fr);
+    height: calc(100% + 36px);
+    margin: -12px calc(-1 * max(16px, env(safe-area-inset-right, 0px))) -24px
+      calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .root[data-open="list"] .threadPane,
+  .root[data-open="thread"] .listPane {
+    display: none;
+  }
+
+  .listPane {
+    border-right: 0;
+  }
+
+  .backButton {
+    display: inline-grid;
+  }
+
+  .threadHead {
+    padding: 8px 12px;
+  }
+
+  .bubble,
+  .failedLine {
+    max-width: 84%;
+  }
+
+  .filters {
+    padding: 10px 16px 8px;
+  }
+
+  .listBody {
+    padding: 4px 6px 8px;
+  }
+}
+
+/* Short windows and 200% zoom: the page scrolls as a whole instead. */
+@media (max-height: 560px) {
+  .root {
+    height: auto;
+    min-height: 520px;
+  }
+}

@@ -124,7 +124,8 @@ it("makes the sidebar search open Calls with the typed text", () => {
   expect(form?.querySelector("kbd")?.textContent).toBe("Ctrl K");
 });
 
-it("keeps the phone tab bar to five tabs, plus a dev settings control", () => {
+// Owner, 17 Oct: five tabs; 20 Oct: Chats gets its own tab beside Leads.
+it("keeps the phone tab bar to its six tabs, plus a dev settings control", () => {
   for (const liveData of [false, true]) {
     const shell = (
       <AcquisitionShell authenticated active="dashboard">
@@ -142,8 +143,8 @@ it("keeps the phone tab bar to five tabs, plus a dev settings control", () => {
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Home", "Leads", "New", "Calls", "More", "Settings"]
-        : ["Home", "Leads", "New", "Calls", "More"],
+        ? ["Home", "Leads", "Chats", "New", "Calls", "More", "Settings"]
+        : ["Home", "Leads", "Chats", "New", "Calls", "More"],
     );
     // Owner, 17 Oct: Prospects and Coaching open from the More sheet.
     expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
@@ -159,7 +160,7 @@ it("keeps the phone tab bar to five tabs, plus a dev settings control", () => {
   }
 });
 
-it("keeps the five tabs for an unconfirmed session; signed out offers Home, New and Sign in", () => {
+it("keeps the six tabs for an unconfirmed session; signed out offers Home, New and Sign in", () => {
   const tabs = (shell: React.ReactElement) => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(shell);
@@ -175,7 +176,7 @@ it("keeps the five tabs for an unconfirmed session; signed out offers Home, New 
         <p>Dashboard</p>
       </AcquisitionShell>,
     ),
-  ).toEqual(["Home", "Leads", "New", "Calls", "More"]);
+  ).toEqual(["Home", "Leads", "Chats", "New", "Calls", "More"]);
   // B22: Leads and Calls only lead to a sign-in prompt for a visitor.
   expect(
     tabs(

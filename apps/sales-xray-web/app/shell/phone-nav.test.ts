@@ -53,3 +53,10 @@ it("lights the desktop rail icon from the address too", () => {
   expect(shellActiveFor("/", "dashboard")).toBe("dashboard");
   expect(shellActiveFor(null, "prospects")).toBe("prospects");
 });
+
+it("Chats has its own tab and rail icon beside Leads (owner, 20 Oct)", () => {
+  expect(phoneTabFor("/chats", "analyse")).toBe("chats");
+  expect(phoneTabFor(null, "chats")).toBe("chats");
+  expect(shellActiveFor("/chats", "analyse")).toBe("chats");
+  expect(phoneTabFor("/chatsroom", undefined)).toBeNull();
+});

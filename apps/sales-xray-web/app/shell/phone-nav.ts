@@ -1,11 +1,21 @@
 import { CALLS_PATH, NEW_ANALYSIS_PATH } from "../analysis-routes";
 
-/** The five phone tabs (owner, 17 Oct): everything else lives under More. */
-export type PhoneTab = "dashboard" | "leads" | "calls" | "new" | "more";
+/**
+ * The phone tabs (owner, 17 Oct: five, everything else under More; 20 Oct:
+ * Chats gets its own place beside Leads).
+ */
+export type PhoneTab =
+  | "dashboard"
+  | "leads"
+  | "chats"
+  | "calls"
+  | "new"
+  | "more";
 
 export type ShellActive =
   | "dashboard"
   | "leads"
+  | "chats"
   | "analyse"
   | "calls"
   | "account"
@@ -18,6 +28,7 @@ export type ShellActive =
 const FROM_ACTIVE: Record<ShellActive, PhoneTab> = {
   dashboard: "dashboard",
   leads: "leads",
+  chats: "chats",
   analyse: "new",
   calls: "calls",
   prospects: "more",
@@ -43,6 +54,7 @@ export function phoneTabFor(
   if (pathname) {
     if (under(pathname, "/dashboard")) return "dashboard";
     if (under(pathname, "/leads")) return "leads";
+    if (under(pathname, "/chats")) return "chats";
     if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
       return "calls";
     // A call analysed here keeps /analysis/new in the router while the
@@ -76,6 +88,7 @@ export function shellActiveFor(
   if (pathname) {
     if (under(pathname, "/dashboard")) return "dashboard";
     if (under(pathname, "/leads")) return "leads";
+    if (under(pathname, "/chats")) return "chats";
     if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
       return "calls";
     if (under(pathname, NEW_ANALYSIS_PATH))

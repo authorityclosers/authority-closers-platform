@@ -94,6 +94,7 @@ import {
   isRelativeUpdateHref,
   type UpdateNotification,
 } from "./updates-client";
+import { ChatsTabIcon } from "../chats/chats-badge";
 import { LeadsTabIcon } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import styles from "./lightbox-shell.module.css";
@@ -107,6 +108,7 @@ export type LightboxShellProps = {
   active?:
     | "dashboard"
     | "leads"
+    | "chats"
     | "analyse"
     | "calls"
     | "account"
@@ -169,6 +171,7 @@ function resolvePageTitle(
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
   if (active === "leads") return "Leads";
+  if (active === "chats") return "Chats";
   if (active === "prospects") return "Prospects";
   if (active === "coaching") return "Coaching";
   if (active === "account") return "Account";
@@ -877,6 +880,21 @@ function LightboxShellFrame({
               <span style={RAIL_NAME_STYLE}>Leads</span>
             </Link>
             <Link
+              className={`${styles.stripBtn}${place === "chats" ? ` ${styles.stripBtnActive}` : ""}`}
+              href="/chats"
+              prefetch={false}
+              aria-label="Chats"
+              data-rail-tip="Chats"
+              aria-current={place === "chats" ? "page" : undefined}
+            >
+              <ChatsTabIcon
+                size={20}
+                strokeWidth={1.75}
+                live={leadsBadgeLive}
+              />
+              <span style={RAIL_NAME_STYLE}>Chats</span>
+            </Link>
+            <Link
               className={`${styles.stripBtn}${place === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
               href={newAnalysisHref}
               aria-label="New analysis"
@@ -1295,6 +1313,18 @@ function LightboxShellFrame({
           >
             <LeadsTabIcon size={20} live={leadsBadgeLive} />
             <span>Leads</span>
+          </Link>
+        )}
+        {/* Owner, 20 Oct: chats get their own place, beside Leads. */}
+        {guest ? null : (
+          <Link
+            className={styles.bottomLink}
+            href="/chats"
+            prefetch={false}
+            aria-current={phoneTab === "chats" ? "page" : undefined}
+          >
+            <ChatsTabIcon size={20} live={leadsBadgeLive} />
+            <span>Chats</span>
           </Link>
         )}
         <Link
