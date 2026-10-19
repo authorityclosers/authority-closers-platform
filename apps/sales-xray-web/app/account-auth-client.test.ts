@@ -22,6 +22,8 @@ import {
   safeReturnPath,
   takeRedirectSignIn,
   takeSignInResult,
+  connectOutcome,
+  connectProvider,
 } from "./account-auth-client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -366,4 +368,53 @@ it("reads the Apple and Facebook flags, hidden when an older server sends none",
       consent_version: null,
     }),
   ).toThrow();
+});
+
+it("keeps the settings dialog in a return path but no other hash", () => {
+  expect(safeReturnPath("/dashboard#settings/security")).toBe(
+    "/dashboard#settings/security",
+  );
+  expect(safeReturnPath("/dashboard#settings")).toBe("/dashboard#settings");
+  expect(safeReturnPath("/dashboard#elsewhere")).toBe("/dashboard");
+  expect(safeReturnPath("/dashboard#settings/<x>")).toBe("/dashboard");
+});
+
+it("connects by a page redirect that comes back to the settings page", () => {
+  window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/dashboard#settings/security");
+  const navigate = vi
+    .spyOn(window.location, "assign")
+    .mockImplementation(() => {});
+  connectProvider("facebook");
+  const started = new URL(navigate.mock.calls[0][0] as string);
+  expect(started.pathname).toBe("/v1/auth/facebook/start");
+  expect(started.searchParams.get("action")).toBe("link");
+  expect(started.searchParams.get("surface")).toBe("sales_xray");
+  const flow = new URLSearchParams(
+    started.searchParams.get("return_path")!.split("?")[1],
+  ).get("flow")!;
+  expect(takeRedirectSignIn(flow)).toEqual({
+    provider: "facebook",
+    returnTo: "/dashboard#settings/security",
+  });
+  navigate.mockRestore();
+});
+
+it("reads the Connect results and says them plainly", () => {
+  const flow = "eaed7960-d4d0-4675-bd34-5b6a7d9c598d";
+  for (const result of ["linked", "already_linked", "fresh_sign_in"] as const)
+    expect(parseAuthCompletionQuery({ flow, auth_result: result })).toEqual({
+      flow,
+      result,
+    });
+  expect(connectOutcome("linked", "google")).toEqual({
+    tone: "success",
+    message: "Google is connected. You can now sign in with Google.",
+  });
+  expect(connectOutcome("already_linked", "facebook").message).toBe(
+    "That Facebook account is already used by another Sales Xray account.",
+  );
+  expect(connectOutcome("fresh_sign_in", "apple").message).toContain(
+    "within 10 minutes",
+  );
 });

@@ -123,7 +123,13 @@ export type AuthCompletionResult =
   /** The email already has an account this provider may not join. */
   | "account_exists"
   /** The provider shared no (verified) email address. */
-  | "no_email";
+  | "no_email"
+  /** Settings -> Connect: the provider is now on the signed-in account. */
+  | "linked"
+  /** Settings -> Connect: that provider account signs in to another account. */
+  | "already_linked"
+  /** Settings -> Connect: sign in again first (within 10 minutes). */
+  | "fresh_sign_in";
 
 const AUTH_COMPLETION_RESULTS = new Set<AuthCompletionResult>([
   "success",
@@ -132,6 +138,9 @@ const AUTH_COMPLETION_RESULTS = new Set<AuthCompletionResult>([
   "unavailable",
   "account_exists",
   "no_email",
+  "linked",
+  "already_linked",
+  "fresh_sign_in",
 ]);
 
 export function parseAuthCompletionQuery(
@@ -339,6 +348,9 @@ export function popupHostileBrowser(userAgent: string | null | undefined) {
   return POPUP_HOSTILE.test(userAgent ?? "");
 }
 
+// The settings dialog lives in the hash (settings-open.ts); keep only that.
+const SETTINGS_HASH = /^#settings(?:\/[a-z-]{1,32})?$/;
+
 /** A same-origin page to come back to; never the completion or API paths. */
 export function safeReturnPath(candidate: unknown): string {
   if (
@@ -357,7 +369,8 @@ export function safeReturnPath(candidate: unknown): string {
       url.pathname.startsWith("/v1/")
     )
       return "/";
-    return `${url.pathname}${url.search}`;
+    const hash = SETTINGS_HASH.test(url.hash) ? url.hash : "";
+    return `${url.pathname}${url.search}${hash}`;
   } catch {
     return "/";
   }
@@ -498,4 +511,61 @@ export function takeSignInResult() {
   const returned = readSignInResult();
   forgetSignInResult();
   return returned;
+}
+
+/**
+ * Settings -> Connect (owner, 20 Oct 2026): add Google, Apple or Facebook to the
+ * signed-in account by a page redirect. The server needs a sign-in in the last 10
+ * minutes; the result comes back to this page as readSignInResult() ("linked",
+ * "already_linked", "fresh_sign_in", "failed" or "unavailable"). Not inside the
+ * phone app: its browser tab holds no Sales Xray session.
+ */
+export function connectProvider(provider: SignInProvider) {
+  const flow = crypto.randomUUID();
+  rememberRedirectSignIn(
+    flow,
+    provider,
+    window.location.pathname + window.location.search + window.location.hash,
+  );
+  const parameters = new URLSearchParams({
+    action: "link",
+    surface: "sales_xray",
+    return_path: `/auth/complete?flow=${flow}`,
+  });
+  window.location.assign(
+    new URL(`/v1/auth/${provider}/start?${parameters}`, window.location.origin)
+      .href,
+  );
+}
+
+/** What Settings says after a Connect came back. */
+export function connectOutcome(
+  result: AuthCompletionResult,
+  provider: SignInProvider,
+): { tone: "success" | "error"; message: string } {
+  const label = providerLabel(provider);
+  if (result === "linked")
+    return {
+      tone: "success",
+      message: `${label} is connected. You can now sign in with ${label}.`,
+    };
+  if (result === "already_linked")
+    return {
+      tone: "error",
+      message: `That ${label} account is already used by another Sales Xray account.`,
+    };
+  if (result === "fresh_sign_in")
+    return {
+      tone: "error",
+      message: `For your safety, sign out and sign in again, then connect ${label} within 10 minutes.`,
+    };
+  if (result === "unavailable")
+    return {
+      tone: "error",
+      message: `${label} is unavailable right now. Try again in a moment.`,
+    };
+  return {
+    tone: "error",
+    message: `${label} couldn’t be connected. Try again.`,
+  };
 }
