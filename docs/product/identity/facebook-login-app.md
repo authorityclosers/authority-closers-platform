@@ -33,11 +33,23 @@ Meta dashboard needs for **Continue with Facebook**. The code is in
 | | App | App ID | Mode |
 | --- | --- | --- | --- |
 | production | **Sales Xray Sign-in** (consumer, Facebook Login use case) | 1448624290545887 | development until App Review passes |
-| staging | test app "Sales Xray Sign-in - staging" | (make from the parent) | always development |
-| dev | test app "Sales Xray Sign-in - dev" | (make from the parent) | always development |
+| staging | test app "Sales Xray Sign-in - staging" | 1455343733195283 | always development |
+| dev | test app "Sales Xray Sign-in - dev" | 2170927907172743 | always development |
 
 Test apps copy the parent's settings and have their own ID and secret; only
-people with a role on the app can sign in with them.
+people with a role on the app can sign in with them. App IDs are public; the
+secrets live only in Infisical.
+
+State on 19 Oct 2026 (orchestrator):
+
+- The use case has `public_profile` and `email` (`email` was missing at first).
+- Parent: Facebook Login settings as below, production redirect URI saved.
+- Each test app has its own App domain. The test apps copied the production
+  redirect URI and Meta's dashboard doesn't open Facebook Login settings for
+  consumer test apps, so each environment's own callback is set through the
+  Graph API once the secrets are stored.
+- `AC_FACEBOOK_LOGIN_APP_ID` is set for dev (Infisical and dev-live), staging and
+  production; the secrets follow through the owner's paste file.
 
 ## Facebook Login settings, per app
 
