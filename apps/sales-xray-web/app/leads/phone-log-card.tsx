@@ -128,9 +128,11 @@ export function PhoneLogCard() {
     <section className={styles.phoneLogCard} aria-label="Log work calls">
       <History size={20} aria-hidden="true" />
       <span>
-        <strong>Log your work calls by themselves.</strong>{" "}
-        {problem ??
-          "Calls with your leads from the phone dialer show on the lead and in your day. Other numbers never leave your phone."}
+        <strong>Log work calls by themselves</strong>{" "}
+        <small>
+          {problem ??
+            "Only calls with your leads. Other numbers stay on your phone."}
+        </small>
       </span>
       <Button
         variant="primary"

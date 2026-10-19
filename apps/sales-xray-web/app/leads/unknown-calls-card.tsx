@@ -68,10 +68,7 @@ export function UnknownCallsCard({
         <UserPlus size={18} aria-hidden="true" />
         <span>
           <strong>Save as a lead?</strong>
-          <small>
-            Work calls with numbers that aren&apos;t leads. They stay on your
-            phone unless you save them.
-          </small>
+          <small>Work calls that aren&apos;t leads stay on your phone.</small>
         </span>
       </header>
       <ul>

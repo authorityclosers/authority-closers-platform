@@ -1,0 +1,222 @@
+/* The signed-out welcome (owner, 19 Oct). Fits a phone without scrolling;
+   --sx tokens only; motion stops for reduced motion. */
+.welcome {
+  display: grid;
+  gap: var(--sx-gap);
+  width: min(100%, 520px);
+  margin: 0 auto;
+  padding: var(--sx-gutter) 0 calc(var(--sx-gutter) * 2);
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 8px;
+  padding: 28px 22px 24px;
+  border: 1px solid color-mix(in oklab, var(--sx-accent) 22%, var(--sx-line));
+  border-radius: 22px;
+  background:
+    radial-gradient(
+      120% 90% at 100% 0%,
+      color-mix(in oklab, var(--sx-accent) 22%, transparent),
+      transparent 60%
+    ),
+    linear-gradient(
+      160deg,
+      color-mix(in oklab, var(--sx-accent) 9%, var(--sx-surface)),
+      var(--sx-surface)
+    );
+  box-shadow: 0 18px 40px -28px
+    color-mix(in oklab, var(--sx-accent) 60%, transparent);
+}
+
+.wave {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 64px;
+  margin-bottom: 10px;
+}
+
+.wave i {
+  flex: 1;
+  height: var(--h);
+  min-height: 6px;
+  border-radius: 99px;
+  background: linear-gradient(
+    180deg,
+    var(--sx-accent),
+    color-mix(in oklab, var(--sx-accent) 45%, var(--sx-surface))
+  );
+  opacity: 0.85;
+  transform-origin: center;
+}
+
+.kicker {
+  margin: 0;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.text {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.points {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.points li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease;
+}
+
+.points li:hover {
+  transform: translateX(2px);
+  border-color: color-mix(in oklab, var(--sx-accent) 40%, var(--sx-line));
+}
+
+.pointIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.actions {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.signIn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-size: 16px;
+  font-weight: 650;
+  text-decoration: none;
+  box-shadow: 0 10px 24px -14px var(--sx-accent);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    filter 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.signIn svg {
+  transition: transform 160ms ease;
+}
+
+.signIn:hover {
+  filter: brightness(1.06);
+}
+
+.signIn:hover svg {
+  transform: translateX(3px);
+}
+
+.signIn:active {
+  transform: scale(0.97);
+  box-shadow: 0 4px 12px -10px var(--sx-accent);
+}
+
+.signIn:focus-visible,
+.guest:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 3px;
+}
+
+.guest {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.guest:hover {
+  text-decoration: underline;
+}
+
+.oneAccount {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wave i {
+    animation: breathe 2.4s ease-in-out infinite;
+    animation-delay: calc(var(--i) * -90ms);
+  }
+  .hero,
+  .points li,
+  .actions {
+    animation: rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .points li {
+    animation-delay: calc(140ms + var(--i) * 70ms);
+  }
+  .actions {
+    animation-delay: 380ms;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scaleY(0.72);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}

@@ -197,7 +197,9 @@ export function ProfileMenu({
     }
   }
 
-  const userInitials = initials(accountName);
+  // Until the profile arrives the avatar is an empty circle: a stand-in
+  // "AC" that turned into the person's own initial flickered (19 Oct).
+  const userInitials = authenticated && !profile ? "" : initials(accountName);
   const displayName = accountLabel;
   const displayEmail =
     profileEmail ||

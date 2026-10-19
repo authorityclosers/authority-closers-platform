@@ -1,0 +1,114 @@
+/* First run in the phone app: a full screen above the page, one permission at a
+   time. The app pads the page clear of the bars and the cut-out (SafeArea), so
+   only the gutter is added here. */
+.page {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: var(--sx-gutter);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.body {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 12px;
+  flex: 1;
+  width: min(440px, 100%);
+  margin: 0 auto;
+}
+
+.progress {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.icon[data-done] {
+  background: color-mix(in oklab, var(--sx-good) 14%, transparent);
+  color: var(--sx-good);
+}
+
+.title {
+  margin: 4px 0 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.line {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.summary {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  color: var(--sx-muted);
+}
+
+.summary li[data-on] {
+  color: var(--sx-ink);
+}
+
+.summary li[data-on] svg {
+  color: var(--sx-good);
+}
+
+.summary li span {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.actions {
+  display: grid;
+  gap: 8px;
+  width: min(440px, 100%);
+  margin: 16px auto 0;
+}
+
+.actions button {
+  min-height: 48px;
+  justify-content: center;
+}

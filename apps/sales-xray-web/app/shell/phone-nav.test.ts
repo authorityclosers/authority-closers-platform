@@ -28,6 +28,12 @@ it("keeps a call's report under Calls", () => {
   expect(phoneTabFor("/calls", undefined)).toBe("calls");
 });
 
+it("moves a just-analysed call from New to Calls once its report shows", () => {
+  expect(phoneTabFor("/analysis/new", "analyse")).toBe("new");
+  expect(phoneTabFor("/analysis/new", "calls")).toBe("calls");
+  expect(shellActiveFor("/analysis/new", "calls")).toBe("calls");
+});
+
 it("falls back to the page's own section where the address is shared", () => {
   expect(phoneTabFor("/", "analyse")).toBe("new");
   expect(phoneTabFor("/sales-xray", "calls")).toBe("calls");
