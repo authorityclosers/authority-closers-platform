@@ -240,6 +240,9 @@ class ConversionsView(BaseModel):
     counts: dict[str, int]
     last_delivered_at: str | None = Field(default=None, alias="lastDeliveredAt")
     waiting_on: str | None = Field(default=None, alias="waitingOn")
+    # Stage changes that go once they settle (5 minutes), and when the first goes.
+    settling: int = 0
+    sends_at: str | None = Field(default=None, alias="sendsAt")
     recent: list[ConversionEventView]
 
 
@@ -673,7 +676,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         cfg = meta.config()
         chosen = meta_capi.read_settings(config)
         box = config.get(meta_capi.CONNECTION)
-        facts = await meta_capi.summary(desk.db, desk.viewer.tenant_id, desk.now)
+        facts = await meta_capi.summary(desk.db, desk.viewer.tenant_id, desk.now, settings=chosen)
         return ConversionsView(
             configured=cfg is not None,
             connected=cfg is not None
@@ -691,6 +694,8 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             if facts["last_delivered_at"]
             else None,
             waiting_on=_waiting_words(facts["waiting_on"]),
+            settling=facts["settling"],
+            sends_at=facts["sends_at"].isoformat() if facts["sends_at"] else None,
             recent=[ConversionEventView(**item) for item in facts["recent"]],
         )
 

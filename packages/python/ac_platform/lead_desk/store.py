@@ -25,6 +25,7 @@ from ac_platform.identity.models import Person
 from ac_platform.lead_desk import allocation
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk.capture import (
+    REFERENCE_KEYS,
     CaptureError,
     bounded_payload,
     display_name,
@@ -894,7 +895,12 @@ class LeadDesk:
     def _source_fields(payload: Mapping[str, Any]) -> tuple[FieldValue, ...]:
         values: list[FieldValue] = []
         for name, value in flatten(payload).items():
-            if value is None or isinstance(value, (dict, list)) or str(name).startswith("_"):
+            if (
+                value is None
+                or isinstance(value, (dict, list))
+                or str(name).startswith("_")
+                or str(name) in REFERENCE_KEYS  # a source's own id, not an answer
+            ):
                 continue
             text = " ".join(str(value).split())
             if text:

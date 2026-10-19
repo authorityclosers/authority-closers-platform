@@ -129,6 +129,17 @@ const type = async (input: HTMLInputElement, value: string) => {
 
 it("says in one line what went to Meta", () => {
   expect(sentLine(view())).toBe("No dataset chosen yet");
+  const waiting = sentLine(
+    view({
+      dataset: { id: "1", name: "CRM" },
+      on: true,
+      settling: 3,
+      sendsAt: new Date(Date.now() + 4 * 60_000 - 1000).toISOString(),
+      counts: { delivered: 2, pending: 1 },
+    }),
+  );
+  expect(waiting).toContain("3 stages going in about 4 min");
+  expect(waiting).toContain("1 waiting to send");
   expect(sentLine(view({ dataset: { id: "1", name: "CRM" }, on: false }))).toBe(
     "Switched off · CRM",
   );

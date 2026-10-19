@@ -38,6 +38,9 @@ export type Conversions = {
   counts: Record<string, number>;
   lastDeliveredAt?: string | null;
   waitingOn?: string | null;
+  /** Stage changes that go once they settle (5 minutes, in case they change back). */
+  settling?: number;
+  sendsAt?: string | null;
   recent: ConversionEvent[];
 };
 type Datasets = { adAccounts: MetaDataset[]; datasets: MetaDataset[] };
@@ -96,6 +99,19 @@ export function sentLine(view: Conversions): string {
     `${sent} stage${sent === 1 ? "" : "s"} sent this week`,
   ];
   if (view.lastDeliveredAt) parts.push(`last ${ago(view.lastDeliveredAt)}`);
+  const waiting = view.settling ?? 0;
+  if (waiting > 0) {
+    const minutes = view.sendsAt
+      ? Math.ceil((Date.parse(view.sendsAt) - Date.now()) / 60_000)
+      : 0;
+    parts.push(
+      `${waiting} stage${waiting === 1 ? "" : "s"} going ${
+        minutes > 1 ? `in about ${minutes} min` : "within a minute"
+      }`,
+    );
+  }
+  const pending = view.counts.pending ?? 0;
+  if (pending > 0) parts.push(`${pending} waiting to send`);
   return parts.join(" · ");
 }
 

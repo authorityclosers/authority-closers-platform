@@ -24,6 +24,7 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
 )
 from ac_platform.lead_desk.capture import (
     FIELDS,
+    REFERENCE_KEYS,
     CaptureError,
     language_name,
     normalise_phone,
@@ -355,7 +356,7 @@ class Intake:
         reference = next(
             (
                 str(record[key])[:200]
-                for key in ("leadgen_id", "lead_id", "id", "submission_id", "entry_id")
+                for key in REFERENCE_KEYS
                 if isinstance(record.get(key), (str, int)) and str(record[key]).strip()
             ),
             None,
