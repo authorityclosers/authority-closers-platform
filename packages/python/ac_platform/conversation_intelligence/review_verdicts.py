@@ -7,8 +7,9 @@ primitives (sample, show, ask, reconcile, measure); this module stores answers
 - Reviewers are the standing gold reviewers (``conversation_gold_reviewers``, the
   only designation); revoking one ends their access here too. Admin requests come
   from the operations workspace.
-- The AI digest is computed here from the call object judged (type, value, display),
-  so a verdict stays bound to the value it judged when the engine later changes it.
+- The AI digest is computed here from the call object judged, by the call data
+  engine's recipe (type and value only: wording, confidence, basis and evidence
+  never void a verdict), so a verdict stays bound to the claim it judged.
 - Answers never write to call objects, their decisions or Lead Desk fields.
 - Append-only: a changed answer supersedes the old row; call erasure empties answers.
 """
@@ -40,8 +41,9 @@ SAVED_ACTION = "review.verdict_saved"
 PIPELINE_SCHEMA = "ac.review-pipeline/1"
 TARGET_KINDS = ("object", "fact", "segment", "voice", "coaching")
 QUESTION_KINDS = ("verdict", "pick", "correct", "scale")
-# Slice 1 judges call objects and their facts and segments; voice and coaching follow.
-SUPPORTED_TARGETS = ("object", "fact", "segment")
+# Objects and facts now. Segments need the engine's span-aware digest and their
+# object ids in its reads (after v0.66); voice and coaching follow.
+SUPPORTED_TARGETS = ("object", "fact")
 MAX_TEXT = 2000
 
 # The pipelines Review 2.0 starts with. A saved version with the same key replaces
@@ -80,10 +82,15 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def value_digest(type_key: str, value: Any, display: str | None) -> str:
-    """The AI value a verdict judges: its type, structured value and wording."""
+def value_digest(type_key: str, value: Any) -> str:
+    """The claim a verdict judges, by the call data engine's recipe: type and value.
+
+    Display is made from value, so a wording change never voids a verdict that is
+    still right; nor do confidence, basis or evidence. Stored when the verdict is
+    written: after erasure the value is gone and cannot be hashed again.
+    """
     body = json.dumps(
-        {"type": type_key, "value": value, "display": display},
+        {"type": type_key, "value": value},
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
@@ -226,7 +233,7 @@ class ReviewVerdicts:
         is_segment = found.type_key == "conversation.segment"
         if (kind == "segment") != is_segment:
             raise ConversationError("That item is not a " + kind + ".")
-        return value_digest(found.type_key, found.value, found.display)
+        return value_digest(found.type_key, found.value)
 
     async def save(
         self,

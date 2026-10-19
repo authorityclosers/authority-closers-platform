@@ -43,12 +43,18 @@ def test_answers_that_do_not_fit_are_refused(question: dict, answer: object) -> 
         validate_answer(question, answer)
 
 
-def test_the_digest_follows_the_ai_value_not_its_key_order() -> None:
-    one = value_digest("need.primary_pain", {"text": "Visits", "n": 1}, "Visits")
-    assert one == value_digest("need.primary_pain", {"n": 1, "text": "Visits"}, "Visits")
-    assert one != value_digest("need.primary_pain", {"text": "Visits", "n": 2}, "Visits")
-    assert one != value_digest("need.primary_pain", {"text": "Visits", "n": 1}, "Other words")
-    assert len(one) == 64
+def test_the_digest_is_the_engine_recipe_type_and_value() -> None:
+    one = value_digest("need.primary_pain", {"text": "Visits", "n": 1})
+    assert one == value_digest("need.primary_pain", {"n": 1, "text": "Visits"})
+    assert one != value_digest("need.primary_pain", {"text": "Visits", "n": 2})
+    assert one != value_digest("need.other_pain", {"text": "Visits", "n": 1})
+    # The engine's own recipe, byte for byte: sorted keys, compact, UTF-8.
+    import hashlib
+    import json
+
+    doc = {"type": "need.primary_pain", "value": {"text": "Visits", "n": 1}}
+    expected = json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    assert one == hashlib.sha256(expected.encode()).hexdigest()
 
 
 def test_default_pipelines_use_only_known_targets_and_question_kinds() -> None:

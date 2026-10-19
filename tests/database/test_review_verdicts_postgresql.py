@@ -122,7 +122,7 @@ def test_reviewers_judge_objects_answers_supersede_and_repeats_are_idempotent(
     first = _with_service(url, owner.tenant_id, _save(seeded, request_key="r-1"))
     target = seeded["target"]
     assert first["answer"] == {"value": "wrong"}
-    assert first["ai_sha256"] == value_digest(target.type_key, target.value, target.display)
+    assert first["ai_sha256"] == value_digest(target.type_key, target.value)
     assert first["pipeline"] == {"key": "analysis-sales", "version": 1}
 
     # The same request again returns the same answer and writes nothing new.
@@ -159,7 +159,7 @@ def test_answers_are_checked_and_revoked_reviewers_stop(postgres_harness: Engine
         {"answer": {"value": "maybe"}},  # not an option
         {"question_key": "fix", "answer": {"text": "  "}},  # empty correction
         {"question_key": "nonsense"},
-        {"target_kind": "segment"},  # this object is not a segment
+        {"target_kind": "segment"},  # not judged in this pipeline yet
         {"target_kind": "voice"},  # not judged in this pipeline
         {"target_ref": "not-a-uuid"},
     ):
