@@ -344,6 +344,9 @@ it.each([
   "/analysis/new",
   "/analysis/calls",
   `/analysis/calls/${prospectId}/`,
+  "/settings",
+  "/settings/team",
+  "/settings/ai-replies/",
 ])("keeps %s inside the existing authenticated app boundary", async (route) => {
   pathname = route;
   await mount(<AccountProbe />);

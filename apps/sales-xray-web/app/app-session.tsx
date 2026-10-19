@@ -35,6 +35,8 @@ const SHELL_ROUTES = new Set([
   "/coaching",
   // Sales Xray CRM: the seller's lead desk (owner order 16 Oct 2026).
   "/leads",
+  // Settings and each of its sections (owner, 20 Oct 2026).
+  "/settings",
 ]);
 
 function isShellRoute(pathname: string | null) {
@@ -45,6 +47,7 @@ function isShellRoute(pathname: string | null) {
   const personId = route.match(/^\/organisation\/people\/([^/]+)$/)?.[1];
   return (
     SHELL_ROUTES.has(route) ||
+    /^\/settings\/[a-z-]+$/.test(route) ||
     callIdFromPath(route) !== null ||
     (prospectId !== undefined && UUID_RE.test(prospectId)) ||
     (personId !== undefined && UUID_RE.test(personId))
