@@ -1136,6 +1136,26 @@ it("holds 'Your report is ready' for a beat, then the report rises in where the 
   expect(report?.hasAttribute("data-reveal")).toBe(true);
 });
 
+it("keeps one analysis panel, and its wave, from sending to the report's beat", async () => {
+  // Owner, 19 Oct: an old waveform flashed as the screen changed. The panel
+  // was drawn again when the upload finished and again when the result came.
+  stubMotion(false);
+  deferSourcePut = true;
+  await mountWithAccountAccess();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  const panel = container.querySelector('[aria-label="Analysis progress"]');
+  expect(panel?.textContent).toContain("Sending your call");
+  const wave = panel?.querySelector("[data-wave-phase], [class*='wave']");
+  await saveDeferredSource();
+  const after = container.querySelector('[aria-label="Analysis progress"]');
+  expect(after).toBe(panel);
+  expect(after?.textContent).not.toContain("Sending your call");
+  if (wave) expect(after?.contains(wave)).toBe(true);
+});
+
 it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
   await mountWithAccountAccess();
   expect(

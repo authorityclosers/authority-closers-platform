@@ -14,7 +14,7 @@ const tone = (seconds: number, amplitude: number) =>
     (_, index) => Math.sin((index / RATE) * 2 * Math.PI * 220) * amplitude,
   );
 
-it("measures a file the way the server does: the loudest channel's RMS per second", () => {
+it("measures a file the way the server does: the loudest channel's RMS per 40 ms frame", () => {
   const quiet = tone(10, 0.1);
   const loud = tone(10, 0.5);
   // The second half of the call is silent on both channels.
@@ -23,12 +23,13 @@ it("measures a file the way the server does: the loudest channel's RMS per secon
   const envelope = envelopeFromSamples([quiet, loud], RATE);
   expect(envelope).not.toBeNull();
   expect(envelope!.duration_ms).toBe(10_000);
-  expect(envelope!.points).toHaveLength(10);
+  expect(envelope!.points).toHaveLength(250);
   expect(envelope!.points[0].start_ms).toBe(0);
-  expect(envelope!.points[9].start_ms).toBe(9_000);
+  expect(envelope!.points[1].start_ms).toBe(40);
+  expect(envelope!.points[249].start_ms).toBe(9_960);
   // A sine's RMS is its amplitude / √2; the louder channel wins.
   expect(envelope!.points[0].level).toBeCloseTo(0.5 / Math.SQRT2, 2);
-  expect(envelope!.points[9].level).toBe(0);
+  expect(envelope!.points[249].level).toBe(0);
   // The same contract the panel and the Report read from the server.
   expect(parseWaveform(envelope)).toEqual(envelope);
 });

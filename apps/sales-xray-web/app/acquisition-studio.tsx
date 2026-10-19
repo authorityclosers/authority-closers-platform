@@ -2876,22 +2876,10 @@ export function AcquisitionStudio({
                     </span>
                   </div>
                 ) : null}
-                {busy && !submission ? (
-                  // One screen from the first byte (owner, 11 Oct 16:00): the
-                  // analysis panel shows the call being sent, then carries on.
-                  <AcquisitionProcessingPanel
-                    upload={{ fraction: null }}
-                    localEnvelope={fileWave}
-                    stageRows={[]}
-                    statusText="Sending your call"
-                    fileName={displayFileName ?? undefined}
-                    fileMeta={
-                      displayFileBytes !== null
-                        ? `${(displayFileBytes / 1048576).toFixed(1)} MB`
-                        : undefined
-                    }
-                  />
-                ) : deletionOnlyId && !displayFileSelected && !submission ? (
+                {/* While a call is sent, the analysis panel below shows it. */}
+                {busy && !submission ? null : deletionOnlyId &&
+                  !displayFileSelected &&
+                  !submission ? (
                   <>
                     <span className="studio-upload-icon">
                       <FileText size={30} />
@@ -3410,7 +3398,25 @@ export function AcquisitionStudio({
                     )}
                   </div>
                 )}
-                {submission && !report && showProgress && (
+                {busy && !submission ? (
+                  // One screen from the first byte (owner, 11 Oct 16:00): the
+                  // analysis panel shows the call being sent, then carries on.
+                  // Both states share this one place, so the panel and its
+                  // wave stay on screen as sending turns into analysing
+                  // instead of being drawn again (owner, 19 Oct).
+                  <AcquisitionProcessingPanel
+                    upload={{ fraction: null }}
+                    localEnvelope={fileWave}
+                    stageRows={[]}
+                    statusText="Sending your call"
+                    fileName={displayFileName ?? undefined}
+                    fileMeta={
+                      displayFileBytes !== null
+                        ? `${(displayFileBytes / 1048576).toFixed(1)} MB`
+                        : undefined
+                    }
+                  />
+                ) : submission && !report && showProgress ? (
                   <AcquisitionProcessingPanel
                     submissionId={submission.id}
                     localEnvelope={waveForCall(
@@ -3511,7 +3517,7 @@ export function AcquisitionStudio({
                       </button>
                     )}
                   </AcquisitionProcessingPanel>
-                )}
+                ) : null}
                 {/* The progress screen keeps deletion in its ⋯ menu. */}
                 {(deletionOnlyId ||
                   (submission && (report || (plan && consent)))) && (
@@ -3905,7 +3911,13 @@ export function AcquisitionStudio({
       </div>
     );
 
-    const reportContent = (
+    // Speaker profiles belong to the report. Keying them on the transcript
+    // while the call is still analysing rebuilt the whole page when the
+    // result arrived, so the panel's wave restarted during "Your report is
+    // ready" (owner, 19 Oct: old waveform flashes).
+    const reportContent = !report ? (
+      content
+    ) : (
       <SpeakerServerProfiles
         key={`${submission?.id}:${result?.transcript.revision}:${result?.claimed}:${access?.context?.personId}:${access?.context?.sessionId}:${access?.context?.tenantId}:${access?.authenticated}`}
         callId={submission?.id ?? null}
