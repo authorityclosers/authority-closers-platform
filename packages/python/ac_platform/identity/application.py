@@ -17,12 +17,20 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import SessionTransactionOrigin
 
-from ac_platform.identity.models import DeletionRequestStatus, PersonStatus, SessionAudience
-from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
+from ac_platform.identity.models import (
+    DeletionRequestStatus,
+    Person,
+    PersonStatus,
+    SessionAudience,
+)
+from ac_platform.identity.repositories import (
+    AsyncSqlAlchemyIdentityRepository,
+    _person_snapshot,
+)
 from ac_platform.identity.sales_xray_profile import erase_sales_xray_profile
 from ac_platform.identity.services import (
     AccountUnavailableError,
@@ -60,7 +68,9 @@ from ac_platform.identity.services import (
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import (
     Membership,
+    MembershipRole,
     MembershipStatus,
+    Organisation,
     Tenant,
     TenantStatus,
 )
@@ -86,6 +96,36 @@ def _optional_text(value: str | None, field_name: str, maximum: int) -> str | No
     if len(normalized) > maximum:
         raise ValueError(f"{field_name} must be at most {maximum} characters")
     return normalized
+
+
+class ProviderEmailInUseError(IdentityServiceError):
+    """A new provider identity's email belongs to an account it may not be linked to."""
+
+
+async def has_platform_staff_membership(session: AsyncSession, person_id: UUID) -> bool:
+    """Support, admin or owner outside customer organisations: platform staff.
+
+    The same rule keeps email sign-in codes away from these accounts
+    (identity/email_login.py); a provider's email alone never opens them either.
+    """
+
+    staff_person_id = await session.scalar(
+        select(Membership.person_id)
+        .where(
+            Membership.person_id == person_id,
+            Membership.status == MembershipStatus.ACTIVE.value,
+            Membership.role.in_(
+                (
+                    MembershipRole.SUPPORT.value,
+                    MembershipRole.ADMIN.value,
+                    MembershipRole.OWNER.value,
+                )
+            ),
+            Membership.tenant_id.not_in(select(Organisation.tenant_id)),
+        )
+        .limit(1)
+    )
+    return staff_person_id is not None
 
 
 class ProductionTransactionRequiredError(IdentityServiceError):
@@ -167,6 +207,9 @@ class RegisteredIdentity:
     consent_changed: bool = False
     previous_consent_version: str | None = None
     previous_consented_at: datetime | None = None
+    # True when this provider identity was just linked to an existing account
+    # because its verified email matched (``link_existing_email=True``).
+    linked_by_email: bool = False
 
 
 class AsyncIdentityApplication:
@@ -740,8 +783,21 @@ class AsyncIdentityApplication:
         user_agent: str | None = None,
         ip_address: str | None = None,
         now: datetime | None = None,
+        link_existing_email: bool | None = None,
     ) -> RegisteredIdentity:
-        """Create or consent-upgrade a provider identity and issue a session atomically."""
+        """Create or consent-upgrade a provider identity and issue a session atomically.
+
+        ``link_existing_email`` decides what happens when a provider identity seen for
+        the first time carries the email of an existing account:
+
+        - ``None`` (the default): no lookup; creating the account fails on the
+          unique email, as it always did.
+        - ``True``: link the provider identity to that account and sign in, but only
+          when the account is active, its own email is verified and it is not
+          platform staff. Otherwise :class:`ProviderEmailInUseError`.
+        - ``False``: never link (a provider that does not assert email
+          verification); :class:`ProviderEmailInUseError`.
+        """
 
         self._require_transaction()
         current_time = _now(now)
@@ -816,6 +872,23 @@ class AsyncIdentityApplication:
                 previous_consent_version=previous_consent_version,
                 previous_consented_at=previous_consented_at,
             )
+        if link_existing_email is not None:
+            existing = await self._lock_person_by_email(validated.email)
+            if existing is not None:
+                if not link_existing_email or not await self._may_link_by_email(existing):
+                    raise ProviderEmailInUseError(
+                        "the provider email belongs to an account it may not be linked to"
+                    )
+                return await self._register_by_verified_email(
+                    existing,
+                    transaction_id,
+                    validated,
+                    consent_version=normalized_consent_version,
+                    allow_consent_supersession=allow_consent_supersession,
+                    current_time=current_time,
+                    user_agent=user_agent,
+                    ip_address=ip_address,
+                )
         await self._consume_authorization_callback(
             transaction_id, validated, current_time=current_time
         )
@@ -845,6 +918,79 @@ class AsyncIdentityApplication:
             consent_changed=True,
             previous_consent_version=None,
             previous_consented_at=None,
+        )
+
+    async def _lock_person_by_email(self, email: str) -> PersonSnapshot | None:
+        rows = (
+            await self._session.scalars(
+                select(Person)
+                .where(func.lower(Person.email) == email.lower())
+                .order_by(Person.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+        if len(rows) > 1:  # pragma: no cover - uq_persons_email_ci forbids it
+            raise IdentityResolutionError("email resolves to more than one person")
+        return _person_snapshot(rows[0]) if rows else None
+
+    async def _may_link_by_email(self, person: PersonSnapshot) -> bool:
+        return (
+            person.status == PersonStatus.ACTIVE.value
+            and person.email is not None
+            and person.email_verified_at is not None
+            and not await has_platform_staff_membership(self._session, person.id)
+        )
+
+    async def _register_by_verified_email(
+        self,
+        person: PersonSnapshot,
+        transaction_id: UUID,
+        validated: ValidatedProviderAssertion,
+        *,
+        consent_version: str,
+        allow_consent_supersession: bool,
+        current_time: datetime,
+        user_agent: str | None,
+        ip_address: str | None,
+    ) -> RegisteredIdentity:
+        """Link a new provider identity to the account its verified email names."""
+
+        require_verified_person(person, provider_email=validated.email)
+        if person.consent_version not in {None, consent_version} and not allow_consent_supersession:
+            raise ProviderConsentVersionConflictError(
+                "the existing account has a different recorded consent version"
+            )
+        await self._consume_authorization_callback(
+            transaction_id, validated, current_time=current_time
+        )
+        linked = await self._link_provider_key(person, validated, current_time=current_time)
+        if linked.person_id != person.id:  # pragma: no cover - enforced by the linker
+            raise ConflictingProviderIdentityError("provider key is linked to another person")
+        previous_consent_version = person.consent_version
+        previous_consented_at = person.consented_at
+        consent_changed = person.consent_version != consent_version or person.consented_at is None
+        if consent_changed:
+            person = replace(
+                person,
+                consent_version=consent_version,
+                consented_at=current_time,
+                revision=person.revision + 1,
+            )
+            await self._repository.save_person(person)
+        issued = await self._issue_session(
+            person,
+            current_time=current_time,
+            user_agent=user_agent,
+            ip_address=ip_address,
+        )
+        return RegisteredIdentity(
+            person=person,
+            session=issued,
+            consent_changed=consent_changed,
+            previous_consent_version=previous_consent_version,
+            previous_consented_at=previous_consented_at,
+            linked_by_email=True,
         )
 
     async def authenticate_provider(

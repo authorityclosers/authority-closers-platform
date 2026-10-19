@@ -33,6 +33,11 @@ _SALES_XRAY_APP_HANDOFF_MAX_LENGTH = 1024
 _SALES_XRAY_APP_HANDOFF_AAD = b"ac-platform:sales-xray-app-handoff:v1"
 
 
+# Identity providers a sign-in transaction can be bound to. A transaction issued
+# for one provider is refused at another provider's callback.
+AUTH_PROVIDERS = frozenset({"google", "facebook", "apple"})
+
+
 class InvalidAuthTransaction(DomainError):
     code = "invalid_auth_transaction"
     title = "The sign-in transaction is invalid"
@@ -65,6 +70,16 @@ def _normalize_app_challenge(value: object, surface: str) -> str | None:
         raise InvalidAuthTransaction("Only the Sales Xray app can take a sign-in back.")
     if not isinstance(value, str) or SALES_XRAY_APP_CHALLENGE_PATTERN.fullmatch(value) is None:
         raise InvalidAuthTransaction("The app sign-in challenge is invalid.")
+    return value
+
+
+def _normalize_provider(value: object, surface: str) -> str:
+    if value is None:
+        return "google"
+    if not isinstance(value, str) or value not in AUTH_PROVIDERS:
+        raise InvalidAuthTransaction("The sign-in provider is not allowed.")
+    if value != "google" and surface != "sales_xray":
+        raise InvalidAuthTransaction("This sign-in provider is only offered by Sales Xray.")
     return value
 
 
@@ -217,6 +232,9 @@ class AuthTransaction:
     # Set only when the Sales Xray app started this sign-in in a Custom Tab: the
     # callback then hands the session to the app instead of the browser.
     app_challenge: str | None = None
+    # The identity provider this transaction was issued for. Older signed
+    # transactions carry no value and are Google's.
+    provider: str = "google"
 
     @classmethod
     def issue(
@@ -228,6 +246,7 @@ class AuthTransaction:
         consent_version: str | None = None,
         age_attested: bool = False,
         app_challenge: str | None = None,
+        provider: str = "google",
         now: int | None = None,
     ) -> AuthTransaction:
         if surface not in {"learner", "admin", "coach", "sales_xray"}:
@@ -245,6 +264,7 @@ class AuthTransaction:
             consent_version=normalized_consent,
             age_attested=_normalize_age_attested(age_attested, normalized_consent),
             app_challenge=_normalize_app_challenge(app_challenge, surface),
+            provider=_normalize_provider(provider, surface),
         )
 
     @classmethod
@@ -257,6 +277,7 @@ class AuthTransaction:
         consent_version: str | None = None,
         age_attested: bool = False,
         app_challenge: str | None = None,
+        provider: str = "google",
     ) -> AuthTransaction:
         if surface not in {"learner", "admin", "coach", "sales_xray"}:
             raise InvalidAuthTransaction("The requested application surface is not allowed.")
@@ -273,6 +294,7 @@ class AuthTransaction:
             consent_version=normalized_consent,
             age_attested=_normalize_age_attested(age_attested, normalized_consent),
             app_challenge=_normalize_app_challenge(app_challenge, surface),
+            provider=_normalize_provider(provider, surface),
         )
 
     @property
@@ -300,6 +322,9 @@ class AuthTransactionCodec:
         if transaction.app_challenge is None:
             # Ordinary browser transactions keep exactly their previous shape.
             payload.pop("app_challenge")
+        if transaction.provider == "google":
+            # Google transactions keep exactly their previous shape too.
+            payload.pop("provider")
         serialized = json.dumps(
             payload,
             sort_keys=True,
@@ -335,12 +360,14 @@ class AuthTransactionCodec:
                 "return_path",
                 "issued_at",
             }
-            if set(payload) not in (
+            known_shapes = (
                 base_fields,
                 base_fields | {"consent_version"},
                 base_fields | {"consent_version", "age_attested"},
                 base_fields | {"consent_version", "age_attested", "app_challenge"},
-            ):
+            )
+            # A Facebook or Apple transaction adds "provider" to any of them.
+            if set(payload) - {"provider"} not in known_shapes:
                 raise ValueError("unexpected transaction fields")
             if payload["v"] not in {1, 2}:
                 raise ValueError("unsupported transaction version")
@@ -362,6 +389,7 @@ class AuthTransactionCodec:
                     payload.get("app_challenge"),
                     str(payload["surface"]),
                 ),
+                provider=_normalize_provider(payload.get("provider"), str(payload["surface"])),
             )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise InvalidAuthTransaction("The sign-in transaction payload is invalid.") from exc
@@ -498,6 +526,124 @@ class SalesXrayAppHandoffCodec:
         return handoff
 
 
+# Apple posts its sign-in result cross-site (response_mode=form_post), so the
+# SameSite=Lax transaction cookie is not sent with that POST. The POST only seals
+# what Apple sent into this short cookie and redirects to a same-site GET, where
+# the normal callback checks run.
+APPLE_FORM_POST_TTL_SECONDS = 120
+_APPLE_FORM_POST_AAD = b"ac-platform:apple-form-post:v1"
+_APPLE_FORM_POST_MAX_LENGTH = 6000
+
+
+@dataclass(frozen=True, slots=True)
+class AppleFormPost:
+    state: str
+    code: str | None
+    error: str | None
+    first_name: str | None
+    last_name: str | None
+    issued_at: int
+    expires_at: int
+
+
+class AppleFormPostCodec:
+    """Sealed (encrypted and authenticated) copy of one Apple form_post, two minutes."""
+
+    def __init__(self, transaction_secret: bytes | str) -> None:
+        if isinstance(transaction_secret, str):
+            transaction_secret = transaction_secret.encode("utf-8")
+        if len(transaction_secret) < 32:
+            raise ValueError("OAuth transaction secret must contain at least 32 bytes")
+        self._aead = AESGCM(
+            hmac.new(
+                transaction_secret,
+                b"ac-platform:apple-form-post:v1\x00",
+                hashlib.sha256,
+            ).digest()
+        )
+
+    def encode(
+        self,
+        *,
+        state: str,
+        code: str | None,
+        error: str | None,
+        first_name: str | None = None,
+        last_name: str | None = None,
+        now: int | None = None,
+    ) -> str:
+        issued_at = int(time() if now is None else now)
+        payload = {
+            "v": 1,
+            "state": state,
+            "code": code,
+            "error": error,
+            "first_name": first_name,
+            "last_name": last_name,
+            "issued_at": issued_at,
+            "expires_at": issued_at + APPLE_FORM_POST_TTL_SECONDS,
+        }
+        serialized = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        nonce = secrets.token_bytes(12)
+        sealed = _base64url_encode(
+            nonce + self._aead.encrypt(nonce, serialized, _APPLE_FORM_POST_AAD)
+        )
+        if len(sealed) > _APPLE_FORM_POST_MAX_LENGTH:
+            raise InvalidAuthTransaction("The Apple sign-in result is too large.")
+        return sealed
+
+    def decode(self, value: str, *, now: int | None = None) -> AppleFormPost:
+        if not isinstance(value, str) or len(value) > _APPLE_FORM_POST_MAX_LENGTH:
+            raise InvalidAuthTransaction("The Apple sign-in result is malformed.")
+        sealed = _base64url_decode(value)
+        if len(sealed) < 12 + 16:
+            raise InvalidAuthTransaction("The Apple sign-in result is malformed.")
+        try:
+            serialized = self._aead.decrypt(sealed[:12], sealed[12:], _APPLE_FORM_POST_AAD)
+        except InvalidTag as exc:
+            raise InvalidAuthTransaction("The Apple sign-in result is invalid.") from exc
+        try:
+            payload = json.loads(serialized)
+            expected = {
+                "v",
+                "state",
+                "code",
+                "error",
+                "first_name",
+                "last_name",
+                "issued_at",
+                "expires_at",
+            }
+            if not isinstance(payload, dict) or set(payload) != expected or payload["v"] != 1:
+                raise ValueError("unexpected Apple form_post fields")
+            for name in ("code", "error", "first_name", "last_name"):
+                if payload[name] is not None and not isinstance(payload[name], str):
+                    raise ValueError("invalid Apple form_post value")
+            if not isinstance(payload["state"], str):
+                raise ValueError("invalid Apple form_post state")
+            if type(payload["issued_at"]) is not int or type(payload["expires_at"]) is not int:
+                raise ValueError("invalid Apple form_post time")
+            result = AppleFormPost(
+                state=payload["state"],
+                code=payload["code"],
+                error=payload["error"],
+                first_name=payload["first_name"],
+                last_name=payload["last_name"],
+                issued_at=payload["issued_at"],
+                expires_at=payload["expires_at"],
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise InvalidAuthTransaction("The Apple sign-in result is invalid.") from exc
+        current_time = int(time() if now is None else now)
+        if (
+            result.expires_at - result.issued_at != APPLE_FORM_POST_TTL_SECONDS
+            or result.issued_at > current_time + AUTH_TRANSACTION_FUTURE_SKEW_SECONDS
+            or result.expires_at <= current_time
+        ):
+            raise InvalidAuthTransaction("The Apple sign-in result has expired.")
+        return result
+
+
 def sales_xray_app_verifier_matches(app_challenge: str, verifier: str) -> bool:
     """RFC 7636 S256: the app's verifier must hash to the challenge it started with."""
 
@@ -508,7 +654,11 @@ def sales_xray_app_verifier_matches(app_challenge: str, verifier: str) -> bool:
 
 
 __all__ = [
+    "APPLE_FORM_POST_TTL_SECONDS",
+    "AUTH_PROVIDERS",
     "AUTH_TRANSACTION_MAX_AGE_SECONDS",
+    "AppleFormPost",
+    "AppleFormPostCodec",
     "SALES_XRAY_APP_HANDOFF_TTL_SECONDS",
     "SALES_XRAY_COMPLETION_RECEIPT_TTL_SECONDS",
     "AuthTransaction",

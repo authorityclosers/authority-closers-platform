@@ -28,8 +28,10 @@ from ac_platform.application.settings import Settings
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth_transactions import (
+    APPLE_FORM_POST_TTL_SECONDS,
     AUTH_TRANSACTION_MAX_AGE_SECONDS,
     SALES_XRAY_COMPLETION_RECEIPT_TTL_SECONDS,
+    AppleFormPostCodec,
     AuthTransaction,
     AuthTransactionCodec,
     InvalidAuthTransaction,
@@ -41,14 +43,17 @@ from ac_platform.http.auth_transactions import (
 )
 from ac_platform.http.identity_provider import (
     DisabledIdentityProvider,
+    IdentityProviderEmailMissing,
     IdentityProviderRejected,
     IdentityProviderUnavailable,
     OAuthIdentityProvider,
 )
+from ac_platform.http.identity_provider_apple import apple_user_name
 from ac_platform.http.problem import problem_response
 from ac_platform.identity.application import (
     AccountDeletionPrivacyHook,
     AsyncIdentityApplication,
+    ProviderEmailInUseError,
     ResolvedActorContext,
 )
 from ac_platform.identity.email_login import (
@@ -477,6 +482,9 @@ class EmailLoginCodeConfigResponse(BaseModel):
     enabled: bool
     consent_version: str | None
     google_enabled: bool
+    # Sales Xray only: each shows once its provider's settings exist.
+    apple_enabled: bool = False
+    facebook_enabled: bool = False
     expires_in_seconds: int
     resend_after_seconds: int
 
@@ -1504,7 +1512,14 @@ def _sales_xray_app_return_page(
 def _sales_xray_auth_result_response(
     settings: Settings,
     *,
-    result: Literal["success", "failed", "review_terms", "unavailable"],
+    result: Literal[
+        "success",
+        "failed",
+        "review_terms",
+        "unavailable",
+        "account_exists",
+        "no_email",
+    ],
     transaction_cookie_names: tuple[str, ...],
     flow_id: UUID | None = None,
     app_handoff: bool = False,
@@ -1572,8 +1587,41 @@ def _email_login_return_path(surface: str, candidate: str) -> str:
     return normalized
 
 
-def _surface_callback_uri(settings: Settings, surface: str) -> str:
-    return f"{_surface_origin(settings, surface)}/v1/auth/google/callback"
+def _surface_callback_uri(settings: Settings, surface: str, provider: str = "google") -> str:
+    return f"{_surface_origin(settings, surface)}/v1/auth/{provider}/callback"
+
+
+# Providers offered next to Google, on Sales Xray only.
+SALES_XRAY_EXTRA_PROVIDERS = frozenset({"facebook", "apple"})
+_OAUTH_STATE_PATTERN = re.compile(r"[A-Za-z0-9_-]{32,160}")
+# "/" because deployments name it with the __Host- prefix, which requires Path=/.
+_APPLE_RETURN_COOKIE_PATH = "/"
+_APPLE_RETURN_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{40,6000}\Z")
+_APPLE_FORM_POST_MAX_BYTES = 16 * 1024
+
+
+def _link_existing_email(surface: str, provider: str) -> bool | None:
+    """Whether a first sign-in with this provider may join the account its email names.
+
+    Sales Xray links only when the provider asserts the email is verified (Google,
+    Apple); Facebook asserts no verification, so it never links. The identity
+    application also refuses platform staff and unverified or inactive accounts.
+    Other surfaces keep their behaviour (no lookup).
+    """
+
+    if surface != "sales_xray":
+        return None
+    return provider in {"google", "apple"}
+
+
+def _apple_return_cookie_name(settings: Settings, state: str) -> str:
+    digest = hashlib.sha256(state.encode("utf-8")).digest()[:16]
+    suffix = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return f"{settings.oauth_transaction_cookie_name}_apple.{suffix}"
+
+
+def _provider_label(provider: str) -> str:
+    return {"google": "Google", "facebook": "Facebook", "apple": "Apple"}.get(provider, provider)
 
 
 # Navigation context only; these destinations do not grant enrollment or access.
@@ -1678,10 +1726,23 @@ def install_identity_http(
     sessions: async_sessionmaker[AsyncSession],
     provider: OAuthIdentityProvider | None = None,
     account_deletion_hook: AccountDeletionPrivacyHook | None = None,
+    extra_providers: Mapping[str, OAuthIdentityProvider] | None = None,
 ) -> RequireActor:
-    """Install identity routes around one caller-owned database transaction."""
+    """Install identity routes around one caller-owned database transaction.
+
+    ``provider`` is Google. ``extra_providers`` may add ``facebook`` and ``apple``,
+    which Sales Xray offers next to Google once their settings exist.
+    """
 
     identity_provider = provider or DisabledIdentityProvider()
+    unknown_providers = set(extra_providers or {}) - SALES_XRAY_EXTRA_PROVIDERS
+    if unknown_providers:
+        raise ValueError(f"unsupported sign-in providers: {sorted(unknown_providers)}")
+    sign_in_providers: dict[str, OAuthIdentityProvider] = {
+        "google": identity_provider,
+        **(extra_providers or {}),
+    }
+    apple_return_codec = AppleFormPostCodec(settings.oauth_transaction_secret.get_secret_value())
     codec = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value())
     completion_receipt_codec = SalesXrayCompletionReceiptCodec(
         settings.oauth_transaction_secret.get_secret_value()
@@ -1827,6 +1888,8 @@ def install_identity_http(
                 settings.google_oauth_configured
                 and not isinstance(identity_provider, DisabledIdentityProvider)
             ),
+            apple_enabled=surface == "sales_xray" and "apple" in sign_in_providers,
+            facebook_enabled=surface == "sales_xray" and "facebook" in sign_in_providers,
             expires_in_seconds=int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
             resend_after_seconds=int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
         )
@@ -2307,7 +2370,7 @@ def install_identity_http(
         tenant_id: UUID,
         previous_consent_version: str | None,
         previous_consented_at: datetime | None,
-        accepted_via: Literal["google", "email_otp"],
+        accepted_via: Literal["google", "facebook", "apple", "email_otp"],
     ) -> None:
         """Append the canonical learner-consent audit for a signed full acceptance."""
 
@@ -2349,7 +2412,11 @@ def install_identity_http(
             },
             reason=(
                 "Learner accepted the current published Terms and Privacy notice via "
-                + ("Google sign-in." if accepted_via == "google" else "email sign-in code.")
+                + (
+                    "email sign-in code."
+                    if accepted_via == "email_otp"
+                    else f"{_provider_label(accepted_via)} sign-in."
+                )
             ),
             now=consented_at,
         )
@@ -2618,7 +2685,64 @@ def install_identity_http(
             str | None, Query(min_length=43, max_length=43, pattern=r"^[A-Za-z0-9_-]{43}$")
         ] = None,
     ) -> Response:
+        return await _start_provider_sign_in(
+            "google",
+            request,
+            authorization_type=authorization_type,
+            surface=surface,
+            return_path=return_path,
+            consent=consent,
+            age_attested=age_attested,
+            client_consent_version=client_consent_version,
+            app_challenge=app_challenge,
+        )
+
+    @router.get("/auth/{provider_name}/start", name="sales_xray_provider_auth_start")
+    async def sales_xray_provider_auth_start(
+        request: Request,
+        provider_name: Literal["facebook", "apple"],
+        authorization_type: Annotated[ProviderAuthorizationType, Query(alias="action")],
+        surface: Literal["sales_xray"] = "sales_xray",
+        return_path: str = "/home",
+        consent: bool = False,
+        age_attested: bool = False,
+        client_consent_version: Annotated[
+            str | None, Query(alias="consent_version", min_length=1, max_length=64)
+        ] = None,
+        app_challenge: Annotated[
+            str | None, Query(min_length=43, max_length=43, pattern=r"^[A-Za-z0-9_-]{43}$")
+        ] = None,
+    ) -> Response:
+        return await _start_provider_sign_in(
+            provider_name,
+            request,
+            authorization_type=authorization_type,
+            surface=surface,
+            return_path=return_path,
+            consent=consent,
+            age_attested=age_attested,
+            client_consent_version=client_consent_version,
+            app_challenge=app_challenge,
+        )
+
+    async def _start_provider_sign_in(
+        provider_name: str,
+        request: Request,
+        *,
+        authorization_type: ProviderAuthorizationType,
+        surface: str,
+        return_path: str,
+        consent: bool,
+        age_attested: bool,
+        client_consent_version: str | None,
+        app_challenge: str | None,
+    ) -> Response:
         _require_surface_host(request, settings, surface)
+        if provider_name != "google" and surface != "sales_xray":
+            raise InvalidAuthTransaction("This sign-in provider is only offered by Sales Xray.")
+        selected_provider = sign_in_providers.get(provider_name)
+        if selected_provider is None:
+            raise IdentityProviderUnavailable("This sign-in provider is not configured.")
         safe_return_path = normalize_return_path(return_path)
         if app_challenge is not None and surface != "sales_xray":
             raise InvalidAuthTransaction("Only the Sales Xray app can take a sign-in back.")
@@ -2681,7 +2805,7 @@ def install_identity_http(
             raise InvalidAuthTransaction(
                 "Use the current Sales Xray completion flow to continue sign-in."
             )
-        audience = identity_provider.audience
+        audience = selected_provider.audience
         person_id: UUID | None = None
         async with sessions() as database, database.begin():
             identity = _identity(database)
@@ -2703,9 +2827,10 @@ def install_identity_http(
             consent_version=consent_version,
             age_attested=(surface == "sales_xray" and age_attested),
             app_challenge=app_challenge,
+            provider=provider_name,
         )
-        redirect_uri = _surface_callback_uri(settings, surface)
-        authorization_url = identity_provider.authorization_url(
+        redirect_uri = _surface_callback_uri(settings, surface, provider_name)
+        authorization_url = selected_provider.authorization_url(
             transaction,
             redirect_uri=redirect_uri,
         )
@@ -2730,9 +2855,146 @@ def install_identity_http(
         code: str | None = None,
         provider_error: Annotated[str | None, Query(alias="error")] = None,
     ) -> Response:
+        del state_value, code, provider_error  # read below with their repeats
+        return await _finish_provider_sign_in(
+            "google",
+            request,
+            state_values=request.query_params.getlist("state"),
+            code_values=request.query_params.getlist("code"),
+            error_values=request.query_params.getlist("error"),
+        )
+
+    @router.post("/auth/apple/callback", name="apple_auth_form_post")
+    async def apple_auth_form_post(request: Request) -> Response:
+        """Apple's form_post: sealed into a two-minute cookie, then a same-site GET.
+
+        Apple posts cross-site, so the SameSite=Lax transaction cookie is missing
+        here. Nothing is decided in this step; the GET callback runs every check.
+        """
+
+        def failed() -> Response:
+            return _sales_xray_auth_result_response(
+                settings,
+                result="failed",
+                transaction_cookie_names=(),
+            )
+
+        _require_surface_host(request, settings, "sales_xray")
+        raw = await request.body()
+        if len(raw) > _APPLE_FORM_POST_MAX_BYTES:
+            return failed()
+        try:
+            fields = parse_qs(raw.decode("utf-8"), strict_parsing=True, max_num_fields=8)
+        except (UnicodeDecodeError, ValueError):
+            return failed()
+        if not set(fields) <= {"state", "code", "id_token", "user", "error"} or any(
+            len(values) != 1 for values in fields.values()
+        ):
+            return failed()
+        state = fields.get("state", [""])[0]
+        code = fields.get("code", [None])[0]
+        error = fields.get("error", [None])[0]
+        if (
+            _OAUTH_STATE_PATTERN.fullmatch(state) is None
+            or (code is None) == (error is None)
+            or code is not None
+            and (len(code) > 4096 or not code.isascii())
+            or error is not None
+            and len(error) > 200
+        ):
+            return failed()
+        first_name, last_name = apple_user_name(fields.get("user", [None])[0])
+        try:
+            sealed = apple_return_codec.encode(
+                state=state,
+                code=code,
+                error=error,
+                first_name=first_name,
+                last_name=last_name,
+            )
+        except InvalidAuthTransaction:
+            return failed()
+        response = RedirectResponse(
+            f"{_surface_origin(settings, 'sales_xray')}/v1/auth/apple/callback?"
+            + urlencode({"state": state}),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+        response.set_cookie(
+            _apple_return_cookie_name(settings, state),
+            sealed,
+            max_age=APPLE_FORM_POST_TTL_SECONDS,
+            httponly=True,
+            secure=settings.secure_cookies,
+            samesite="lax",
+            path=_APPLE_RETURN_COOKIE_PATH,
+        )
+        response.headers["cache-control"] = "no-store"
+        response.headers["pragma"] = "no-cache"
+        response.headers["referrer-policy"] = "no-referrer"
+        return response
+
+    @router.get("/auth/{provider_name}/callback", name="sales_xray_provider_auth_callback")
+    async def sales_xray_provider_auth_callback(
+        request: Request,
+        provider_name: Literal["facebook", "apple"],
+    ) -> Response:
         state_values = request.query_params.getlist("state")
-        code_values = request.query_params.getlist("code")
-        error_values = request.query_params.getlist("error")
+        if provider_name == "facebook":
+            return await _finish_provider_sign_in(
+                "facebook",
+                request,
+                state_values=state_values,
+                code_values=request.query_params.getlist("code"),
+                error_values=request.query_params.getlist("error"),
+            )
+        # Apple: only what its own form_post sealed counts, never the query.
+        code_values: list[str] = []
+        error_values: list[str] = []
+        apple_name: tuple[str | None, str | None] = (None, None)
+        cookie_name: str | None = None
+        if len(state_values) == 1 and _OAUTH_STATE_PATTERN.fullmatch(state_values[0]):
+            cookie_name = _apple_return_cookie_name(settings, state_values[0])
+            try:
+                sealed = _single_raw_cookie(
+                    request,
+                    name=cookie_name,
+                    pattern=_APPLE_RETURN_COOKIE_VALUE_PATTERN,
+                    required=False,
+                )
+                posted = apple_return_codec.decode(sealed) if sealed is not None else None
+            except (_InvalidRawCookie, InvalidAuthTransaction):
+                posted = None
+            if posted is not None and hmac.compare_digest(posted.state, state_values[0]):
+                code_values = [posted.code] if posted.code is not None else []
+                error_values = [posted.error] if posted.error is not None else []
+                apple_name = (posted.first_name, posted.last_name)
+        response = await _finish_provider_sign_in(
+            "apple",
+            request,
+            state_values=state_values,
+            code_values=code_values,
+            error_values=error_values,
+            apple_name=apple_name,
+        )
+        if cookie_name is not None:
+            response.delete_cookie(
+                cookie_name,
+                httponly=True,
+                secure=settings.secure_cookies,
+                samesite="lax",
+                path=_APPLE_RETURN_COOKIE_PATH,
+            )
+        return response
+
+    async def _finish_provider_sign_in(
+        provider_name: str,
+        request: Request,
+        *,
+        state_values: list[str],
+        code_values: list[str],
+        error_values: list[str],
+        apple_name: tuple[str | None, str | None] = (None, None),
+    ) -> Response:
         malformed_callback = (
             len(state_values) != 1
             or re.fullmatch(r"[A-Za-z0-9_-]{32,160}", state_values[0] if state_values else "")
@@ -2805,6 +3067,8 @@ def install_identity_http(
                 raise InvalidAuthTransaction("Link identities through Academy account settings.")
             if not hmac.compare_digest(transaction.state, state_value):
                 raise InvalidAuthTransaction("The callback state does not match the transaction.")
+            if transaction.provider != provider_name:
+                raise InvalidAuthTransaction("The sign-in transaction belongs to another provider.")
         except InvalidAuthTransaction as error:
             if not transaction_cookie_names:
                 transaction_cookie_names = _oauth_callback_failure_cookie_names(
@@ -2931,15 +3195,17 @@ def install_identity_http(
                 AuthenticationRequired("A valid Authority Closers session is required."),
                 transaction_cookie_names=transaction_cookie_names,
             )
-        redirect_uri = _surface_callback_uri(settings, transaction.surface)
+        redirect_uri = _surface_callback_uri(settings, transaction.surface, provider_name)
         try:
-            assertion = await identity_provider.exchange_code(
+            assertion = await sign_in_providers.get(
+                provider_name, DisabledIdentityProvider()
+            ).exchange_code(
                 code,
                 transaction,
                 callback_state=state_value,
                 redirect_uri=redirect_uri,
             )
-        except IdentityProviderRejected:
+        except IdentityProviderRejected as rejection:
             if transaction.surface == "learner":
                 return _learner_oauth_recovery_response(
                     settings,
@@ -2950,7 +3216,11 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
-                    result="failed",
+                    result=(
+                        "no_email"
+                        if isinstance(rejection, IdentityProviderEmailMissing)
+                        else "failed"
+                    ),
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
                     app_handoff=app_handoff,
@@ -2983,6 +3253,16 @@ def install_identity_http(
                 IdentityProviderUnavailable("The identity provider is temporarily unavailable."),
                 transaction_cookie_names=transaction_cookie_names,
             )
+        if provider_name == "apple" and any(apple_name):
+            # Apple sends the name once, with the first sign-in's form_post.
+            assertion = replace(
+                assertion,
+                display_name=" ".join(part for part in apple_name if part),
+                given_name=apple_name[0],
+                family_name=apple_name[1],
+            )
+        # Facebook asserts no email verification: no organisation joins by email.
+        joins_by_email = provider_name != "facebook"
         session_token: str | None = None
         issued_session_id: UUID | None = None
         photo_refresh: tuple[UUID, str, str] | None = None
@@ -3000,29 +3280,34 @@ def install_identity_http(
                         ),
                         display_name=None,
                         user_agent=request.headers.get("user-agent"),
+                        link_existing_email=_link_existing_email(
+                            transaction.surface, provider_name
+                        ),
                     )
                     session_token = registered.session.token
                     issued_session_id = registered.session.metadata.id
-                    await join_at_sign_in_best_effort(
-                        database,
-                        registered.person.id,
-                        settings=settings,
-                        assertion=assertion,
-                        internal_tester_policy=getattr(
-                            application.state, "internal_tester_policy", None
-                        ),
-                    )
-                    profile_claims = await _record_google_profile_claims_best_effort(
-                        database,
-                        person_id=registered.person.id,
-                        assertion=assertion,
-                    )
-                    photo_refresh = await _prepare_google_profile_photo_best_effort(
-                        database,
-                        person_id=registered.person.id,
-                        assertion=assertion,
-                        claims=profile_claims,
-                    )
+                    if joins_by_email:
+                        await join_at_sign_in_best_effort(
+                            database,
+                            registered.person.id,
+                            settings=settings,
+                            assertion=assertion,
+                            internal_tester_policy=getattr(
+                                application.state, "internal_tester_policy", None
+                            ),
+                        )
+                    if provider_name == "google":
+                        profile_claims = await _record_google_profile_claims_best_effort(
+                            database,
+                            person_id=registered.person.id,
+                            assertion=assertion,
+                        )
+                        photo_refresh = await _prepare_google_profile_photo_best_effort(
+                            database,
+                            person_id=registered.person.id,
+                            assertion=assertion,
+                            claims=profile_claims,
+                        )
                     if transaction.surface in {"learner", "sales_xray"}:
                         tenant_id = await ensure_public_learner(
                             database,
@@ -3040,7 +3325,23 @@ def install_identity_http(
                                     tenant_id=tenant_id,
                                     previous_consent_version=(registered.previous_consent_version),
                                     previous_consented_at=registered.previous_consented_at,
-                                    accepted_via="google",
+                                    accepted_via=cast(
+                                        Literal["google", "facebook", "apple"], provider_name
+                                    ),
+                                )
+                            if registered.linked_by_email:
+                                await AuditRepository(database).append(
+                                    tenant_id=tenant_id,
+                                    actor_person_id=registered.person.id,
+                                    session_id=registered.session.metadata.id,
+                                    action="identity.provider_linked_by_verified_email.v1",
+                                    resource_type="person",
+                                    resource_id=registered.person.id,
+                                    payload={"provider": provider_name},
+                                    reason=(
+                                        f"{_provider_label(provider_name)} sign-in was linked "
+                                        "to this account because its verified email matched."
+                                    ),
                                 )
                             await _prefill_sales_xray_profile_name(
                                 database,
@@ -3058,26 +3359,28 @@ def install_identity_http(
                     )
                     session_token = issued.token
                     issued_session_id = issued.metadata.id
-                    await join_at_sign_in_best_effort(
-                        database,
-                        issued.metadata.person_id,
-                        settings=settings,
-                        assertion=assertion,
-                        internal_tester_policy=getattr(
-                            application.state, "internal_tester_policy", None
-                        ),
-                    )
-                    profile_claims = await _record_google_profile_claims_best_effort(
-                        database,
-                        person_id=issued.metadata.person_id,
-                        assertion=assertion,
-                    )
-                    photo_refresh = await _prepare_google_profile_photo_best_effort(
-                        database,
-                        person_id=issued.metadata.person_id,
-                        assertion=assertion,
-                        claims=profile_claims,
-                    )
+                    if joins_by_email:
+                        await join_at_sign_in_best_effort(
+                            database,
+                            issued.metadata.person_id,
+                            settings=settings,
+                            assertion=assertion,
+                            internal_tester_policy=getattr(
+                                application.state, "internal_tester_policy", None
+                            ),
+                        )
+                    if provider_name == "google":
+                        profile_claims = await _record_google_profile_claims_best_effort(
+                            database,
+                            person_id=issued.metadata.person_id,
+                            assertion=assertion,
+                        )
+                        photo_refresh = await _prepare_google_profile_photo_best_effort(
+                            database,
+                            person_id=issued.metadata.person_id,
+                            assertion=assertion,
+                            claims=profile_claims,
+                        )
                     # Existing members may also own an operations tenant. In
                     # that case the generic identity service issues an
                     # unscoped session; the learner surface must select its
@@ -3118,17 +3421,18 @@ def install_identity_http(
                         assertion,
                         pkce_verifier=transaction.pkce_verifier,
                     )
-                    profile_claims = await _record_google_profile_claims_best_effort(
-                        database,
-                        person_id=linked.person_id,
-                        assertion=assertion,
-                    )
-                    await _prepare_google_profile_photo_best_effort(
-                        database,
-                        person_id=linked.person_id,
-                        assertion=assertion,
-                        claims=profile_claims,
-                    )
+                    if provider_name == "google":
+                        profile_claims = await _record_google_profile_claims_best_effort(
+                            database,
+                            person_id=linked.person_id,
+                            assertion=assertion,
+                        )
+                        await _prepare_google_profile_photo_best_effort(
+                            database,
+                            person_id=linked.person_id,
+                            assertion=assertion,
+                            claims=profile_claims,
+                        )
         except PasswordRegistrationUnavailable as error:
             if transaction.surface == "sales_xray":
                 if isinstance(
@@ -3192,6 +3496,21 @@ def install_identity_http(
                     result="consent_update_required",
                     transaction_cookie_names=transaction_cookie_names,
                     transaction_return_path=transaction.return_path,
+                )
+            return await _oauth_identity_problem_response(
+                request,
+                settings,
+                error,
+                transaction_cookie_names=transaction_cookie_names,
+            )
+        except ProviderEmailInUseError as error:
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="account_exists",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
                 )
             return await _oauth_identity_problem_response(
                 request,
