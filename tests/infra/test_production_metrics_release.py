@@ -100,7 +100,8 @@ def test_only_production_api_gets_read_only_metrics(tmp_path: Path, environment:
             assert len(mounts) == 1
             assert mounts[0]["source"] == METRICS
             assert mounts[0]["read_only"] is True
-            assert mounts[0]["bind"]["create_host_path"] is False
+            # Some Compose versions omit a false create_host_path when rendering the config.
+            assert mounts[0].get("bind", {}).get("create_host_path", False) is False
         else:
             assert root is None
             assert mounts == []

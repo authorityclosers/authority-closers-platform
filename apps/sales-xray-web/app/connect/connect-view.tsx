@@ -82,6 +82,8 @@ export function ConnectView() {
         if (!live) return;
         if (status === 401) {
           const back = `${window.location.pathname}${window.location.search}`;
+          // A full page load to sign-in, so the session cookie is fresh when the user comes back here.
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           window.location.assign(`/login?next=${encodeURIComponent(back)}`);
           setView({ kind: "leaving" });
         } else if (status === 403)

@@ -5,7 +5,7 @@ from uuid import UUID
 
 import httpx
 import pytest
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from ac_platform.conversation_intelligence.application import (
@@ -113,7 +113,7 @@ def test_source_reader_reference_routing(postgres_harness, tmp_path, monkeypatch
                     assert (await _import_valid(fixture, sessions))["state"] == "completed"
             elif reader == "http":
 
-                async def require_actor():
+                async def require_actor(_request: Request):
                     async with sessions() as db, db.begin():
                         yield SimpleNamespace(
                             database=db, resolved=SimpleNamespace(actor=state.actor)
