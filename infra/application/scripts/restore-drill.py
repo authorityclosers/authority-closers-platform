@@ -661,7 +661,15 @@ SOCIAL_PARITY_TABLES = STAFF_KEYS_PARITY_TABLES + (
     "lead_desk_social_accounts",
     "lead_desk_social_messages",
 )
+# 0108 adds ad spend per Meta campaign.
+SPEND_PARITY_MIGRATION_HEAD = "20261019_0108"
+SPEND_PARITY_CONTRACT = "ac-postgres-parity-v75"
+SPEND_PARITY_TABLES = SOCIAL_PARITY_TABLES + ("lead_desk_ad_spend_days",)
 VERSIONED_PARITY_CONTRACTS = {
+    SPEND_PARITY_MIGRATION_HEAD: (
+        SPEND_PARITY_CONTRACT,
+        SPEND_PARITY_TABLES,
+    ),
     SOCIAL_PARITY_MIGRATION_HEAD: (
         SOCIAL_PARITY_CONTRACT,
         SOCIAL_PARITY_TABLES,

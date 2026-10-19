@@ -28,7 +28,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -55,6 +55,7 @@ from ac_platform.lead_desk.connectors import (
     meta_backfill,
     meta_capi,
     meta_pull,
+    meta_spend,
 )
 from ac_platform.lead_desk.connectors import google_ads_api as gads
 from ac_platform.lead_desk.connectors.app_return import AppComplete, AppCompleted
@@ -181,6 +182,46 @@ class ConversionEventView(BaseModel):
     event_time: datetime = Field(alias="eventTime")
     delivered_at: datetime | None = Field(default=None, alias="deliveredAt")
     error: str | None = None
+
+
+class SpendCampaignView(BaseModel):
+    """One campaign's spend and what each lead from it cost (amounts as decimal text)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    campaign_id: str = Field(alias="campaignId")
+    campaign_name: str = Field(alias="campaignName")
+    ad_account_id: str = Field(alias="adAccountId")
+    currency: str
+    spend: str
+    impressions: int
+    clicks: int
+    meta_leads: int = Field(alias="metaLeads")
+    leads: int
+    won: int
+    per_lead: str | None = Field(default=None, alias="perLead")
+    per_customer: str | None = Field(default=None, alias="perCustomer")
+
+
+class SpendTotalView(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    currency: str
+    spend: str
+    leads: int
+    won: int
+    per_lead: str | None = Field(default=None, alias="perLead")
+
+
+class SpendView(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    configured: bool
+    connected: bool
+    synced_at: datetime | None = Field(default=None, alias="syncedAt")
+    error: str | None = None
+    accounts: int | None = None
+    start: date
+    end: date
+    totals: list[SpendTotalView]
+    campaigns: list[SpendCampaignView]
 
 
 class ConversionsView(BaseModel):
@@ -657,6 +698,79 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response) as desk:
             desk._require_manager()
             return await conversions_view(desk)
+
+    # ----- ad spend per campaign (Marketing API, ads_read) ------------------------------
+
+    def money(value: Any) -> str | None:
+        return f"{value:.2f}" if value is not None else None
+
+    async def spend_view(desk: LeadDesk, days: int) -> SpendView:
+        end = desk.now.date()
+        start = end - timedelta(days=days - 1)
+        row = await desk.db.get(LeadDeskSettings, desk.viewer.tenant_id)
+        state = meta_spend.sync_state((row.config if row else None) or {})
+        campaigns = await meta_spend.report(desk.db, desk.viewer.tenant_id, start=start, end=end)
+        return SpendView(
+            configured=meta.config() is not None,
+            connected=state["connected"],
+            synced_at=state["synced_at"],
+            error=state["error"],
+            accounts=state["accounts"],
+            start=start,
+            end=end,
+            totals=[
+                SpendTotalView(
+                    currency=currency,
+                    spend=money(bucket["spend"]) or "0.00",
+                    leads=bucket["leads"],
+                    won=bucket["won"],
+                    per_lead=money(bucket["per_lead"]),
+                )
+                for currency, bucket in meta_spend.totals(campaigns).items()
+            ],
+            campaigns=[
+                SpendCampaignView(
+                    campaign_id=item.campaign_id,
+                    campaign_name=item.campaign_name,
+                    ad_account_id=item.ad_account_id,
+                    currency=item.currency,
+                    spend=money(item.spend) or "0.00",
+                    impressions=item.impressions,
+                    clicks=item.clicks,
+                    meta_leads=item.meta_leads,
+                    leads=item.leads,
+                    won=item.won,
+                    per_lead=money(item.per_lead),
+                    per_customer=money(item.per_customer),
+                )
+                for item in campaigns[:200]
+            ],
+        )
+
+    @router.get("/meta/spend", response_model=SpendView, response_model_by_alias=True)
+    async def meta_spend_report(
+        request: Request, response: Response, days: int = Query(default=30, ge=1, le=92)
+    ) -> SpendView:
+        """What each Meta campaign spent and what each lead from it cost (managers)."""
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            return await spend_view(desk, days)
+
+    @router.post("/meta/spend/refresh", response_model=SpendView, response_model_by_alias=True)
+    async def meta_spend_refresh(
+        request: Request, response: Response, days: int = Query(default=30, ge=1, le=92)
+    ) -> SpendView:
+        """Read the spend from Meta now (the last 30 days), then show it."""
+        cfg = meta_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            tenant_id = desk.viewer.tenant_id
+        # Meta is asked with no transaction of this request open.
+        await meta_spend.tick(
+            ctx.sessions, cfg, meta.Graph(cfg), now=datetime.now(UTC), only=tenant_id
+        )
+        async with desk_for(request, response) as desk:
+            return await spend_view(desk, days)
 
     @router.get("/meta/datasets", response_model=MetaDatasets, response_model_by_alias=True)
     async def meta_datasets(request: Request, response: Response) -> MetaDatasets:
@@ -1190,6 +1304,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
     application.include_router(router)
     meta_pull.attach(application, ctx.sessions, settings.environment)
     meta_capi.attach(application, ctx.sessions, settings.environment)
+    meta_spend.attach(application, ctx.sessions, settings.environment)
     google_pull.attach(application, ctx.sessions, settings.environment)
 
 

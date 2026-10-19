@@ -7,18 +7,22 @@ lead's history and are only ever added (supersede, never overwrite).
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKeyConstraint,
     Index,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
     Uuid,
@@ -660,3 +664,38 @@ class LeadSocialMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadAdSpendDay(Base):
+    """What one Meta campaign spent on one day, as Meta's Marketing API last said. The
+    organisation's own ad data, read with its Continue with Meta connection (ads_read);
+    cost per lead is worked out from it and the leads that arrived here."""
+
+    __tablename__ = "lead_desk_ad_spend_days"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_ad_spend_tenant"),
+        CheckConstraint("provider IN ('meta')", name="provider"),
+        CheckConstraint(
+            "spend >= 0 AND impressions >= 0 AND clicks >= 0 AND meta_leads >= 0", name="counts"
+        ),
+        # PostgreSQL regular expressions; the SQLite registry checks skip them.
+        CheckConstraint(
+            "currency ~ '^[A-Z]{3}$' AND ad_account_id ~ '^act_[0-9]{1,30}$'"
+            " AND campaign_id ~ '^[0-9]{1,30}$'",
+            name="ids",
+        ).ddl_if(dialect="postgresql"),
+        Index("ix_lead_desk_ad_spend_day", "tenant_id", "day"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(16), primary_key=True)
+    ad_account_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    campaign_name: Mapped[str] = mapped_column(String(400))
+    currency: Mapped[str] = mapped_column(String(3))
+    spend: Mapped[Decimal] = mapped_column(Numeric(16, 2))
+    impressions: Mapped[int] = mapped_column(BigInteger)
+    clicks: Mapped[int] = mapped_column(BigInteger)
+    meta_leads: Mapped[int] = mapped_column(Integer)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
