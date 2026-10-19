@@ -1631,8 +1631,8 @@
   margin: 0;
   padding: 6px 10px;
   border-radius: 8px;
-  background: var(--lx-warning-soft, rgba(245, 158, 11, 0.12));
-  border-left: 3px solid var(--sx-warn, #f59e0b);
+  background: var(--lx-warning-soft);
+  border-left: 3px solid var(--sx-warn);
   font-size: 13px;
 }
 
