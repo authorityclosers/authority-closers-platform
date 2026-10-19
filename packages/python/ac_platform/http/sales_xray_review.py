@@ -5,16 +5,27 @@ gold service, rows and audio guards are the Admin reviewer workspace's own; see
 :mod:`conversation_intelligence.gold_review_account` for the admission. ``/push``
 and ``/devices`` turn on review alerts on the reviewer's phone
 (:mod:`lead_desk.review_push`).
+
+Every route signs in inside a time budget (``signed_in``). Reads and the audio
+route use the read-only sign-in (shared locks, no session write), and the audio
+route lets go of its database transaction before the bytes stream. On 19 Oct a
+review audio stream held the locking sign-in for its whole stream; each badge
+poll of the same person queued behind it holding a pooled connection, and the
+production pool ran dry (13 badges waited up to 28 minutes).
 """
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Response
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
@@ -39,8 +50,47 @@ from ac_platform.lead_desk.contracts import DeviceCommand, DeviceView, PushConfi
 from ac_platform.telemetry.redaction import sanitize_error
 
 _PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
+_BUSY = "Review is busy for a moment. Try again."
+# Seconds a request may spend signing in and reading; the badge is polled by
+# every signed-in person, so it gets the shortest budget.
+BADGE_BUDGET = 5.0
+READ_BUDGET = 15.0
+WRITE_BUDGET = 15.0
+# No statement here waits longer than this for a row lock.
+LOCK_TIMEOUT_MS = 2000
+# lock_not_available, query_canceled (statement_timeout)
+_GAVE_UP = {"55P03", "57014"}
 
 StreamSource = Callable[..., Awaitable[StreamingResponse]]
+
+
+def _busy() -> HTTPException:
+    return HTTPException(503, _BUSY, headers={**_PRIVATE, "Retry-After": "30"})
+
+
+@asynccontextmanager
+async def signed_in(
+    resolver: RequireActor, request: Request, budget: float
+) -> AsyncIterator[AuthenticatedTransaction]:
+    """Sign in and work within ``budget`` seconds, or answer 503 and free the connection.
+
+    A cancelled lock wait ends on the server too, so a slow neighbour can delay one
+    review request by seconds, never hold a pooled connection for minutes.
+    """
+    try:
+        async with asyncio.timeout(budget):
+            async with asynccontextmanager(resolver)(request) as auth:
+                await auth.database.execute(text(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT_MS}ms'"))
+                await auth.database.execute(
+                    text(f"SET LOCAL statement_timeout = '{int(budget * 1000)}ms'")
+                )
+                yield auth
+    except TimeoutError:
+        raise _busy() from None
+    except DBAPIError as error:
+        if getattr(error.orig, "sqlstate", None) in _GAVE_UP:
+            raise _busy() from None
+        raise
 
 
 def install_sales_xray_review_http(
@@ -52,8 +102,13 @@ def install_sales_xray_review_http(
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> None:
     router = APIRouter(prefix="/v1/sales-xray/review", tags=["sales-xray-review"])
-    actor_dependency = Depends(require_actor, scope="function")
-    request_dependency = Depends(require_actor, scope="request")
+    read_only: RequireActor = getattr(require_actor, "read_only", require_actor)
+
+    def reading(request: Request, budget: float = READ_BUDGET) -> Any:
+        return signed_in(read_only, request, budget)
+
+    def writing(request: Request) -> Any:
+        return signed_in(require_actor, request, WRITE_BUDGET)
 
     def surface(request: Request, response: Response, *, write: bool = False) -> None:
         response.headers.update(_PRIVATE)
@@ -86,22 +141,20 @@ def install_sales_xray_review_http(
         )
 
     @router.get("/badge")
-    async def read_badge(
-        request: Request, response: Response, auth: AuthenticatedTransaction = actor_dependency
-    ) -> Any:
+    async def read_badge(request: Request, response: Response) -> Any:
         surface(request, response)
-        return await badge(
-            auth.database, settings.operations_tenant_id, auth.resolved.actor.person_id, clock()
-        )
+        async with reading(request, BADGE_BUDGET) as auth:
+            return await badge(
+                auth.database, settings.operations_tenant_id, auth.resolved.actor.person_id, clock()
+            )
 
     @router.get("/push", response_model=PushConfig, response_model_by_alias=True)
-    async def read_push(
-        request: Request, response: Response, auth: AuthenticatedTransaction = actor_dependency
-    ) -> PushConfig:
+    async def read_push(request: Request, response: Response) -> PushConfig:
         """The app's Firebase client settings (public, no secrets), for reviewers only."""
         surface(request, response)
-        if not await standing_reviewer(auth.database, auth.resolved.actor.person_id):
-            return PushConfig(enabled=False)
+        async with reading(request, BADGE_BUDGET) as auth:
+            if not await standing_reviewer(auth.database, auth.resolved.actor.person_id):
+                return PushConfig(enabled=False)
         return push.client_config(push.config())
 
     @router.post("/devices", response_model=DeviceView, response_model_by_alias=True)
@@ -109,46 +162,44 @@ def install_sales_xray_review_http(
         body: DeviceCommand,
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = actor_dependency,
     ) -> DeviceView:
         """This phone gets my review alerts."""
         surface(request, response, write=True)
-        actor = auth.resolved.actor
         try:
-            registered = await review_push.register_phone(
-                auth.database,
-                actor.person_id,
-                body,
-                clock(),
-                quiet=(settings.operations_tenant_id, settings.public_learner_tenant_id),
-                current=actor.tenant_id,
-            )
+            async with writing(request) as auth:
+                actor = auth.resolved.actor
+                registered = await review_push.register_phone(
+                    auth.database,
+                    actor.person_id,
+                    body,
+                    clock(),
+                    quiet=(settings.operations_tenant_id, settings.public_learner_tenant_id),
+                    current=actor.tenant_id,
+                )
         except ConversationError as error:
             raise failed(error) from None
         return DeviceView(registered=registered)
 
     @router.get("/queue")
-    async def read_queue(
-        request: Request, response: Response, auth: AuthenticatedTransaction = actor_dependency
-    ) -> Any:
+    async def read_queue(request: Request, response: Response) -> Any:
         surface(request, response)
         try:
-            return await queue(auth.database, auth.resolved.actor.person_id, clock())
+            async with reading(request) as auth:
+                return await queue(auth.database, auth.resolved.actor.person_id, clock())
         except ConversationError as error:
             raise failed(error) from None
 
     @router.get("/metrics")
-    async def read_metrics(
-        request: Request, response: Response, auth: AuthenticatedTransaction = actor_dependency
-    ) -> Any:
+    async def read_metrics(request: Request, response: Response) -> Any:
         surface(request, response)
         try:
-            return await metrics(
-                auth.database,
-                settings.operations_tenant_id,
-                auth.resolved.actor.person_id,
-                clock(),
-            )
+            async with reading(request) as auth:
+                return await metrics(
+                    auth.database,
+                    settings.operations_tenant_id,
+                    auth.resolved.actor.person_id,
+                    clock(),
+                )
         except ConversationError as error:
             raise failed(error) from None
 
@@ -157,13 +208,13 @@ def install_sales_xray_review_http(
         assignment_id: UUID,
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = actor_dependency,
     ) -> Any:
         surface(request, response)
         try:
-            body = await GoldReviews(service(auth)).get(
-                account_actor(auth.resolved.actor), assignment_id
-            )
+            async with reading(request) as auth:
+                body = await GoldReviews(service(auth)).get(
+                    account_actor(auth.resolved.actor), assignment_id
+                )
         except ConversationError as error:
             raise failed(error) from None
         body["audio_source_url"] = f"/v1/sales-xray/review/assignments/{assignment_id}/source"
@@ -176,13 +227,13 @@ def install_sales_xray_review_http(
         request: Request,
         response: Response,
         idempotency_key: str = Header(min_length=1, max_length=128, alias="Idempotency-Key"),
-        auth: AuthenticatedTransaction = actor_dependency,
     ) -> Any:
         surface(request, response, write=True)
         try:
-            return await GoldReviews(service(auth)).save(
-                account_actor(auth.resolved.actor), assignment_id, body, idempotency_key
-            )
+            async with writing(request) as auth:
+                return await GoldReviews(service(auth)).save(
+                    account_actor(auth.resolved.actor), assignment_id, body, idempotency_key
+                )
         except ConversationError as error:
             raise failed(error) from None
 
@@ -191,12 +242,18 @@ def install_sales_xray_review_http(
         assignment_id: UUID,
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = request_dependency,
     ) -> StreamingResponse:
         surface(request, response)
-        return await stream_source(
-            service(auth), auth.database, account_actor(auth.resolved.actor), assignment_id, request
-        )
+        # The transaction ends with this block: the stream itself holds no locks
+        # and no pooled connection, however long the phone keeps it open.
+        async with reading(request) as auth:
+            return await stream_source(
+                service(auth),
+                auth.database,
+                account_actor(auth.resolved.actor),
+                assignment_id,
+                request,
+            )
 
     app.include_router(router)
 
