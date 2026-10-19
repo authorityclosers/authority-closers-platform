@@ -13,12 +13,21 @@ test_fail_after_activate="${AC_TEST_FAIL_AFTER_ACTIVATE:-0}"
 approved_legacy_release_id="${AC_APPROVED_LEGACY_RELEASE_ID:-}"
 install_scope="${AC_INSTALL_SCOPE:-}"
 install_scope_was_set="${AC_INSTALL_SCOPE+x}"
-if [[ "$install_scope_was_set" == x && "$install_scope" != backup ]]; then
-  printf 'AC_INSTALL_SCOPE accepts only backup.\n' >&2
+if [[ "$install_scope_was_set" == x && "$install_scope" != backup && "$install_scope" != drive-backup ]]; then
+  printf 'AC_INSTALL_SCOPE accepts only backup or drive-backup.\n' >&2
   exit 2
 fi
 scoped_backup_install=0
-[[ "$install_scope" == backup ]] && scoped_backup_install=1
+[[ "$install_scope" == backup || "$install_scope" == drive-backup ]] && scoped_backup_install=1
+contain_plaintext_predecessor=0
+drive_uploader_target="/usr/local/sbin/ac-db-snapshot"
+legacy_drive_sha=1cd4e3c80a4c593948b758e902c6f7ac4614b8b751394daa3fe467fa5dc162a5
+if [[ -n "${AC_TEST_DRIVE_LEGACY_SHA256:-}" ]]; then
+  [[ "$test_mode" == 1 && "$AC_TEST_DRIVE_LEGACY_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+    printf 'Fictional predecessor override requires isolated test mode.\n' >&2; exit 2;
+  }
+  legacy_drive_sha="$AC_TEST_DRIVE_LEGACY_SHA256"
+fi
 
 [[ "$test_mode" == 0 || "$test_mode" == 1 ]] || {
   printf 'AC_TEST_MODE must be 0 or 1.\n' >&2
@@ -86,7 +95,7 @@ srv_root="${install_root}/srv/authority-closers"
 releases_root="$srv_root/releases"
 release_dir="$releases_root/$release_id"
 current_link="$srv_root/current"
-scope_record="${install_root}/var/lib/authority-closers/foundation-scopes/backup.release"
+scope_record="${install_root}/var/lib/authority-closers/foundation-scopes/${install_scope:-backup}.release"
 stage_dir=''
 rollback_dir=''
 scope_record_tmp=''
@@ -105,6 +114,17 @@ legacy_compose_root="$srv_root/compose/foundation"
 legacy_compose_file="$legacy_compose_root/compose.yaml"
 legacy_env_file="$srv_root/env/foundation.env"
 declare -a transaction_targets=()
+
+install_drive_guard() {
+  local guard_tmp guard_target="${install_root}${drive_uploader_target}"
+  guard_tmp="$(mktemp "$(dirname "$guard_target")/.drive-disabled.XXXXXX")"
+  if [[ "$test_mode" == 1 ]]; then
+    install -m 0750 "$release_dir/scripts/drive-backup-disabled" "$guard_tmp"
+  else
+    install -o root -g root -m 0750 "$release_dir/scripts/drive-backup-disabled" "$guard_tmp"
+  fi
+  mv --no-target-directory --force "$guard_tmp" "$guard_target"
+}
 
 reconcile_compose_release() {
   local target_release compose_file image_env_file
@@ -216,6 +236,12 @@ restore_failed_transaction() {
   if [[ -s "$rollback_dir/host-files.tar" ]]; then
     tar --acls --xattrs --numeric-owner --directory=/ \
       --extract --file="$rollback_dir/host-files.tar" || rollback_failed=1
+  fi
+  if [[ "$contain_plaintext_predecessor" == 1 ]]; then
+    # The legacy uploader is excluded from automatic preimages, so it is never
+    # restored, even briefly. A separately reviewed operator owns recovery.
+    install_drive_guard || rollback_failed=1
+    printf 'CONTAINED  Drive uploader remains disabled; operator recovery required.\n' >&2
   fi
   if [[ "$scoped_backup_install" == 0 ]]; then
     restore_current_link || rollback_failed=1
@@ -333,6 +359,9 @@ begin_transaction() {
 
   snapshot_paths=()
   for target in "${transaction_targets[@]}"; do
+    if [[ "$contain_plaintext_predecessor" == 1 && "$target" == "${install_root}${drive_uploader_target}" ]]; then
+      continue
+    fi
     if [[ -e "$target" || -L "$target" ]]; then
       snapshot_paths+=("${target#/}")
     fi
@@ -344,6 +373,9 @@ begin_transaction() {
     : > "$rollback_dir/host-files.tar"
   fi
   transaction_active=1
+  if [[ "$contain_plaintext_predecessor" == 1 ]]; then
+    install_drive_guard
+  fi
 }
 
 if [[ "$test_mode" == 1 ]]; then
@@ -441,13 +473,16 @@ else
 fi
 
 manifest="$release_dir/config/release/install-manifest.tsv"
+if [[ "$install_scope" == drive-backup ]]; then
+  manifest="$release_dir/config/release/install-manifest-drive-backup.tsv"
+fi
 [[ -r "$manifest" ]] || { printf 'Released install manifest is not readable: %s\n' "$manifest" >&2; exit 1; }
 declare -A installed_targets=()
 declare -A backup_scope_targets=() backup_scope_found=()
 declare -a install_sources=() install_targets=()
 declare -a install_modes=() install_owners=() install_groups=()
 if [[ "$scoped_backup_install" == 1 ]]; then
-  scope_list="$release_dir/config/release/install-scope-backup.txt"
+  scope_list="$release_dir/config/release/install-scope-${install_scope}.txt"
   [[ -r "$scope_list" ]] || { printf 'Backup install scope list is not readable.\n' >&2; exit 1; }
   while IFS= read -r target || [[ -n "$target" ]]; do
     [[ -z "$target" || "$target" == \#* ]] && continue
@@ -511,6 +546,36 @@ if [[ "$scoped_backup_install" == 1 ]]; then
       exit 1
     }
   done
+fi
+
+if [[ "$install_scope" == drive-backup ]]; then
+  [[ "${AC_DRIVE_ADMITTED_SOURCE_SHA:-}" == "$release_sha" ]] || {
+    printf 'Drive maintenance requires admission bound to this exact source commit.\n' >&2; exit 1;
+  }
+  drive_uploader="${install_root}${drive_uploader_target}"
+  if [[ -e "$drive_uploader" || -L "$drive_uploader" ]]; then
+    [[ -f "$drive_uploader" && ! -L "$drive_uploader" && "$(stat -c %h "$drive_uploader")" == 1 ]] || {
+      printf 'Drive predecessor must be a regular unlinked file.\n' >&2; exit 1;
+    }
+    actual_drive_sha="$(sha256sum "$drive_uploader" | cut -d ' ' -f1)"
+    [[ "$actual_drive_sha" == "${AC_DRIVE_EXPECTED_UPLOADER_SHA256:-}" ]] || {
+      printf 'Drive predecessor drift refused.\n' >&2; exit 1;
+    }
+    if [[ "$actual_drive_sha" == "$legacy_drive_sha" ]]; then
+      [[ "${AC_DRIVE_LEGACY_FAILURE_POLICY:-}" == disabled ]] || {
+        printf 'Legacy plaintext predecessor requires reviewed disabled-on-failure coverage.\n' >&2; exit 1;
+      }
+      contain_plaintext_predecessor=1
+    else
+      [[ "$actual_drive_sha" == "${AC_DRIVE_SAFE_PREDECESSOR_SHA256:-}" ]] || {
+        printf 'Encrypted rollback predecessor requires an independently reviewed digest.\n' >&2; exit 1;
+      }
+    fi
+  else
+    [[ "${AC_DRIVE_EXPECTED_UPLOADER_SHA256:-}" == absent ]] || {
+      printf 'First Drive install requires an explicit absent predecessor pin.\n' >&2; exit 1;
+    }
+  fi
 fi
 
 ((${#install_targets[@]} > 0)) || { printf 'Released install manifest is empty.\n' >&2; exit 1; }

@@ -49,6 +49,8 @@ def run(
     stdout_limit: int,
     input: bytes | None = None,
     destination: Path | None = None,
+    input_path: Path | None = None,
+    routing: dict[str, str] | None = None,
 ) -> bytes:
     """Stream stdout with an actual byte cap, to memory or an exclusive file.
 
@@ -59,12 +61,22 @@ def run(
     """
     if stdout_limit < 0 or (input is not None and len(input) > MAX_STDIN_BYTES):
         raise ProcessRefusal("invalid_process_io_limit")
+    if input is not None and input_path is not None:
+        raise ProcessRefusal("invalid_process_io_limit")
+    if routing and (
+        set(routing) != {"AC_INFISICAL_ENVIRONMENT", "AC_INFISICAL_PATH"}
+        or routing["AC_INFISICAL_ENVIRONMENT"] not in ("prod", "staging")
+        or routing["AC_INFISICAL_PATH"] != "/application"
+    ):
+        raise ProcessRefusal("invalid_process_routing")
     deadline.remaining()
     environment = {
         key: os.environ[key] for key in ("PATH", "HOME", "LANG", "LC_ALL") if key in os.environ
     }
+    environment.update(routing or {})
     process = None
     output = None
+    source = None
     created = False
     succeeded = False
     selector = selectors.DefaultSelector()
@@ -76,9 +88,13 @@ def run(
             fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             created = True
             output = os.fdopen(fd, "wb", buffering=0)
+        if input_path is not None:
+            source = input_path.open("rb")
         process = subprocess.Popen(  # noqa: S603 - fixed callers; no shell or inherited secrets
             command,
-            stdin=subprocess.PIPE if pending else subprocess.DEVNULL,
+            stdin=source
+            if source is not None
+            else (subprocess.PIPE if pending else subprocess.DEVNULL),
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             env=environment,
@@ -149,6 +165,8 @@ def run(
                         stream.close()
             if output is not None:
                 output.close()
+            if source is not None:
+                source.close()
             if created and not succeeded:
                 assert destination is not None
                 destination.unlink(missing_ok=True)

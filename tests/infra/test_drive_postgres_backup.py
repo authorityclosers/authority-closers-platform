@@ -42,6 +42,24 @@ def snapshot(tmp_path, monkeypatch):
             }
         )
     )
+    module = backup.canonical()
+    (path / "metadata.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "authority-closers-postgresql-logical",
+                "environment": "staging",
+                "format": "custom",
+                "verification": "pg_restore --list",
+                "dump_bytes": len(data),
+                "dump_sha256": hashlib.sha256(data).hexdigest(),
+                "migration_head": "20261019_0097",
+                "parity_contract": module.parity_contract_for_head("20261019_0097"),
+                "row_counts": {
+                    table: 0 for table in module.parity_tables_for_head("20261019_0097")
+                },
+            }
+        )
+    )
     for item in path.iterdir():
         item.chmod(0o600)
     monkeypatch.setenv("AC_POSTGRES_DRIVE_STAGING_PASSPHRASE", KEY)
@@ -244,13 +262,12 @@ def test_child_secret_redaction_and_no_secret_argv(monkeypatch):
     assert "sensitive" not in str(result.value)
 
 
-def test_capture_and_retention_are_preserved_in_candidate():
+def test_wrapper_requires_explicit_execution_and_uses_only_encrypted_helper():
     wrapper = (ROOT / "scripts/ops/ac-db-snapshot").read_text()
-    assert 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -Z 6' in wrapper
-    assert "tail -n +25" in wrapper
-    assert "--min-age 14d" in wrapper
-    assert "drive_postgres_backup.py upload" in wrapper
-    assert 'rclone --config /root/ac-drive/rclone.conf copy "$dir"' not in wrapper
+    assert '"$1" == --execute' in wrapper
+    assert '"$helper" capture' in wrapper
+    assert "rclone" not in wrapper and "pg_dump" not in wrapper
+    assert "rm -rf" not in wrapper
 
 
 @pytest.fixture
@@ -379,3 +396,157 @@ def test_pipeline_uses_one_deadline_across_transport_stages(
     with pytest.raises(backup.Refusal, match="^operation_deadline_exceeded$"):
         backup.upload(snapshot, "staging")
     assert {p.name for p in snapshot.parent.iterdir()} == {NAME}
+
+
+def test_legacy_snapshot_can_be_retained_but_never_uploaded_as_v2(snapshot, remote):
+    (snapshot / "metadata.json").unlink()
+    backup.validate_snapshot(snapshot, "staging", NAME, allow_legacy=True)
+    with pytest.raises(backup.Refusal, match="unexpected_snapshot_entries"):
+        backup.upload(snapshot, "staging")
+    assert remote == ({}, [])
+
+
+@pytest.mark.parametrize(
+    "field", ["dump_sha256", "dump_bytes", "environment", "row_counts", "migration_head"]
+)
+def test_metadata_must_bind_the_same_dump_and_environment(snapshot, remote, field):
+    path = snapshot / "metadata.json"
+    metadata = json.loads(path.read_text())
+    metadata[field] = {} if field == "row_counts" else "wrong"
+    path.write_text(json.dumps(metadata))
+    with pytest.raises(backup.Refusal, match="same_snapshot_metadata_required"):
+        backup.upload(snapshot, "staging")
+    assert remote == ({}, [])
+
+
+def test_missing_capture_key_has_no_files_or_capture_effect(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "ROOT", tmp_path / "backups")
+    monkeypatch.delenv("AC_POSTGRES_DRIVE_STAGING_PASSPHRASE", raising=False)
+    monkeypatch.setattr(backup, "canonical", lambda: pytest.fail("capture before key"))
+    for _ in range(30):
+        with pytest.raises(backup.Refusal, match="dedicated_infisical_secret_required"):
+            backup.capture("staging", "fictional")
+    assert not (tmp_path / "backups").exists()
+
+
+def test_repeated_failed_uploads_keep_exactly_24_and_the_newest_verified_pair(
+    snapshot, tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    module = backup.canonical()
+    monkeypatch.setattr(backup, "ROOT", tmp_path / "backups")
+    target = SimpleNamespace(migration_head="20261019_0097")
+    monkeypatch.setattr(module, "resolve_application_release", lambda env: target)
+    monkeypatch.setattr(module, "assert_healthy", lambda *a, **kw: None)
+
+    def capture_pair(target, work, max_bytes, *, capture_io):
+        pair = work / "pair"
+        pair.mkdir(mode=0o750)
+        for filename in ["backup.dump", "metadata.json"]:
+            shutil.copyfile(snapshot / filename, pair / filename)
+        return (
+            pair / "backup.dump",
+            pair / "metadata.json",
+            json.loads((pair / "metadata.json").read_text()),
+        )
+
+    monkeypatch.setattr(module, "capture_dump", capture_pair)
+
+    def failed_upload(*args):
+        raise backup.Refusal("child_failed")
+
+    monkeypatch.setattr(backup, "upload", failed_upload)
+    for i in range(30):
+        with pytest.raises(backup.Refusal, match="child_failed"):
+            backup.capture("staging", f"failure-{i:03d}")
+        ring = tmp_path / "backups/staging-snapshots"
+        snapshots = list(ring.iterdir())
+        assert len(snapshots) == min(i + 1, 24)
+        assert any(p.name.endswith(f"failure-{i:03d}") for p in snapshots)
+        assert all({f.name for f in p.iterdir()} == backup.FILES for p in snapshots)
+    foreign = ring / "foreign-file"
+    foreign.write_text("preserve")
+    with pytest.raises(backup.Refusal, match="unknown_local_ring_entry"):
+        backup.capture("staging", "blocked-by-foreign")
+    assert foreign.read_text() == "preserve"
+    assert len(list(ring.iterdir())) == 25
+
+
+def test_failed_capture_leaves_no_published_or_temporary_snapshot(snapshot, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    module = backup.canonical()
+    monkeypatch.setattr(backup, "ROOT", tmp_path / "backups")
+    monkeypatch.setattr(module, "resolve_application_release", lambda env: SimpleNamespace())
+    monkeypatch.setattr(module, "assert_healthy", lambda *a, **kw: None)
+
+    def fail_capture(target, work, max_bytes, **kwargs):
+        (work / "partial").write_text("fictional partial dump")
+        raise module.BackupError("safe message")
+
+    monkeypatch.setattr(module, "capture_dump", fail_capture)
+    for _ in range(30):
+        with pytest.raises(backup.Refusal, match="canonical_capture_failed"):
+            backup.capture("staging", "failure")
+    assert not list((tmp_path / "backups/staging-snapshots").iterdir())
+
+
+def test_canonical_capture_uses_one_exported_snapshot_for_dump_and_counts(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    module = backup.canonical()
+    monkeypatch.setattr(module, "prepare_directory", lambda p: p.mkdir(exist_ok=True))
+    monkeypatch.setattr(module.os, "chown", lambda *a, **kw: None)
+    monkeypatch.setattr(module, "is_root_owned", lambda p: True)
+    events = []
+    target = SimpleNamespace(
+        environment="staging",
+        migration_head="20261019_0097",
+        release_dir=tmp_path / ("a" * 40),
+        profile_file=tmp_path / "staging.env",
+        images_file=tmp_path / "images.env",
+        compose_project="ac-application-staging",
+    )
+
+    class IO:
+        def holder(self, target):
+            return SimpleNamespace(
+                snapshot_id="00000003-0000001B-1",
+                assert_alive=lambda: None,
+                close=lambda: events.append("closed"),
+            )
+
+        def dump(self, target, snapshot_id, path):
+            events.append(("dump", snapshot_id))
+            path.write_bytes(b"PGDMPfictional")
+            return path.stat().st_size
+
+        def verify(self, target, path):
+            assert path.read_bytes() == b"PGDMPfictional"
+
+        def read(self, command, **kwargs):
+            assert "SET TRANSACTION SNAPSHOT '00000003-0000001B-1'" in command[-1]
+            events.append(("counts", "00000003-0000001B-1"))
+            lines = ["__migration_head__|" + target.migration_head] + [
+                t + "|7" for t in module.parity_tables_for_head(target.migration_head)
+            ]
+            return SimpleNamespace(stdout="\n".join(lines))
+
+        def remaining(self):
+            return 1
+
+    dump, metadata_path, metadata = module.capture_dump(
+        target, tmp_path / "captures", 1024, capture_io=IO()
+    )
+    assert metadata["dump_sha256"] == hashlib.sha256(dump.read_bytes()).hexdigest()
+    assert metadata["dump_bytes"] == dump.stat().st_size
+    assert set(metadata["row_counts"].values()) == {7}
+    assert json.loads(metadata_path.read_text()) == metadata
+    assert events == [("dump", "00000003-0000001B-1"), ("counts", "00000003-0000001B-1"), "closed"]
+
+
+def test_equal_environment_keys_are_refused_before_capture(snapshot, monkeypatch):
+    monkeypatch.setenv("AC_POSTGRES_DRIVE_PRODUCTION_PASSPHRASE", KEY)
+    with pytest.raises(backup.Refusal, match="independent_environment_secrets_required"):
+        backup.capture("staging", "must-not-capture")

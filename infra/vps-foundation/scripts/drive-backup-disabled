@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# A legacy plaintext uploader is never an automatic rollback target.
+printf 'Drive backup disabled after failed encrypted installation; operator recovery required.\n' >&2
+exit 1

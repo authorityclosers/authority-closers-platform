@@ -1,0 +1,6 @@
+# kind	source	target	mode	owner	group
+executable	scripts/drive-db-snapshot	/usr/local/sbin/ac-db-snapshot	0750	root	root
+executable	scripts/drive_postgres_backup.py	/usr/local/libexec/authority-closers/drive_postgres_backup.py	0640	root	root
+executable	scripts/drive_backup_process.py	/usr/local/libexec/authority-closers/drive_backup_process.py	0640	root	root
+executable	scripts/drive-backup-disabled	/usr/local/libexec/authority-closers/drive-backup-disabled	0750	root	root
+executable	scripts/ac-postgres-backup.py	/usr/local/libexec/authority-closers/ac-postgres-backup.py	0755	root	root

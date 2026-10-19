@@ -1,0 +1,5 @@
+/usr/local/sbin/ac-db-snapshot
+/usr/local/libexec/authority-closers/drive_postgres_backup.py
+/usr/local/libexec/authority-closers/drive_backup_process.py
+/usr/local/libexec/authority-closers/drive-backup-disabled
+/usr/local/libexec/authority-closers/ac-postgres-backup.py

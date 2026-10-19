@@ -22,6 +22,7 @@ import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Protocol
 
 try:
     import grp
@@ -947,6 +948,18 @@ class ApplicationTarget:
     migration_head: str
 
 
+class CaptureIO(Protocol):
+    """Optional bounded I/O for a separate Drive capture, never an R2 limit change."""
+
+    def holder(self, target: ApplicationTarget) -> ExportedSnapshotHolder: ...
+    def dump(self, target: ApplicationTarget, snapshot_id: str, path: Path) -> int: ...
+    def verify(self, target: ApplicationTarget, path: Path) -> None: ...
+    def read(
+        self, command: list[str], *, target: ApplicationTarget, timeout_seconds: int
+    ) -> subprocess.CompletedProcess[str]: ...
+    def remaining(self) -> float: ...
+
+
 @dataclass
 class ExportedSnapshotHolder:
     """A bounded read-only PostgreSQL transaction exporting one snapshot."""
@@ -1019,7 +1032,9 @@ def snapshot_holder_command(target: ApplicationTarget) -> list[str]:
     ]
 
 
-def start_exported_snapshot_holder(target: ApplicationTarget) -> ExportedSnapshotHolder:
+def start_exported_snapshot_holder(
+    target: ApplicationTarget, *, timeout_seconds: float = SNAPSHOT_HOLDER_START_TIMEOUT_SECONDS
+) -> ExportedSnapshotHolder:
     try:
         process = subprocess.Popen(  # noqa: S603 - command uses fixed release paths
             snapshot_holder_command(target),
@@ -1048,14 +1063,14 @@ def start_exported_snapshot_holder(target: ApplicationTarget) -> ExportedSnapsho
 
     def read_snapshot_line() -> None:
         try:
-            output_queue.put(process.stdout.readline())
+            output_queue.put(process.stdout.readline(129))
         except OSError as error:
             output_queue.put(error)
 
     reader = threading.Thread(target=read_snapshot_line, daemon=True)
     reader.start()
     try:
-        line = output_queue.get(timeout=SNAPSHOT_HOLDER_START_TIMEOUT_SECONDS)
+        line = output_queue.get(timeout=timeout_seconds)
     except queue.Empty as error:
         try:
             terminate_process(process)
@@ -1270,6 +1285,8 @@ def compose_environment(target: ApplicationTarget) -> dict[str, str]:
     environment["AC_INFISICAL_PATH"] = "/application"
     for key in (*PROFILE_KEYS, *SECRET_KEYS):
         environment.pop(key, None)
+    for key in ("AC_POSTGRES_DRIVE_PRODUCTION_PASSPHRASE", "AC_POSTGRES_DRIVE_STAGING_PASSPHRASE"):
+        environment.pop(key, None)
     return environment
 
 
@@ -1293,11 +1310,19 @@ def run_checked(
         raise BackupError("The bounded backup command failed.") from exc
 
 
-def assert_healthy(target: ApplicationTarget) -> None:
-    result = run_checked(compose_command(target, "ps", "-q", "postgres"), target=target)
+def assert_healthy(target: ApplicationTarget, *, reader: Callable | None = None) -> None:
+    result = (reader or run_checked)(compose_command(target, "ps", "-q", "postgres"), target=target)
     container_id = result.stdout.strip()
     if not re.fullmatch(r"[0-9a-f]{12,64}", container_id):
         raise BackupError(f"The {target.environment} postgres container is not present.")
+    if reader is not None:
+        health = reader(
+            ["docker", "inspect", "--format", "{{.State.Health.Status}}", container_id],
+            target=target,
+        ).stdout.strip()
+        if health != "healthy":
+            raise BackupError(f"The {target.environment} postgres container is not healthy.")
+        return
     try:
         health = subprocess.run(  # noqa: S603 - container ID is validated before use
             ["docker", "inspect", "--format", "{{.State.Health.Status}}", container_id],  # noqa: S607
@@ -1423,9 +1448,11 @@ def parity_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
     )
 
 
-def source_row_counts(target: ApplicationTarget, snapshot_id: str) -> dict[str, int]:
+def source_row_counts(
+    target: ApplicationTarget, snapshot_id: str, *, reader: Callable | None = None
+) -> dict[str, int]:
     tables = parity_tables_for_head(target.migration_head)
-    result = run_checked(
+    result = (reader or run_checked)(
         parity_command(target, snapshot_id),
         target=target,
         timeout_seconds=PG_RESTORE_LIST_TIMEOUT_SECONDS,
@@ -1451,15 +1478,15 @@ def terminate_process(process: subprocess.Popen[bytes]) -> None:
     if os.name == "posix":
         with contextlib.suppress(ProcessLookupError):
             os.killpg(process.pid, signal.SIGTERM)
-        try:
+        with contextlib.suppress(subprocess.TimeoutExpired):
             process.wait(timeout=PG_DUMP_KILL_AFTER_SECONDS)
-            return
-        except subprocess.TimeoutExpired:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
+        # A leader can exit while a descendant retains its pipes. These are
+        # owned sessions; always finish group cleanup, never a shared group.
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
     else:
         process.kill()
-    process.wait()
+    process.wait(timeout=PG_DUMP_KILL_AFTER_SECONDS)
 
 
 def sha256_file(path: Path) -> str:
@@ -1533,7 +1560,11 @@ def fsync_directory(path: Path) -> None:
 
 
 def capture_dump(
-    target: ApplicationTarget, logical_dir: Path, max_bytes: int
+    target: ApplicationTarget,
+    logical_dir: Path,
+    max_bytes: int,
+    *,
+    capture_io: CaptureIO | None = None,
 ) -> tuple[Path, Path, dict[str, object]]:
     prepare_directory(logical_dir)
     remove_stale_temporaries(logical_dir, target.environment)
@@ -1557,49 +1588,63 @@ def capture_dump(
     process: subprocess.Popen[bytes] | None = None
     bytes_written = 0
     try:
-        snapshot_holder = start_exported_snapshot_holder(target)
-        snapshot_holder.assert_alive()
-        process = subprocess.Popen(  # noqa: S603 - command is fixed to the exact compose release and timeout
-            dump_command(target, snapshot_holder.snapshot_id),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            env=compose_environment(target),
-            start_new_session=(os.name == "posix"),
+        snapshot_holder = (
+            capture_io.holder(target) if capture_io else start_exported_snapshot_holder(target)
         )
-        assert process.stdout is not None
-        with temporary_path.open("wb") as destination:
-            while True:
-                chunk = process.stdout.read(1024 * 1024)
-                if not chunk:
-                    break
-                bytes_written += len(chunk)
-                if bytes_written > max_bytes:
-                    terminate_process(process)
-                    raise BackupError(
-                        f"The {target.environment} logical dump exceeded its fixed size bound."
-                    )
-                destination.write(chunk)
-            destination.flush()
-            os.fsync(destination.fileno())
-        if process.wait() != 0:
-            raise BackupError(f"The {target.environment} logical dump command failed.")
-        if bytes_written == 0:
-            raise BackupError(f"The {target.environment} logical dump was empty.")
-        with temporary_path.open("rb") as verified_dump:
-            restore_result = subprocess.run(  # noqa: S603 - command is fixed to the exact compose release
-                compose_command(target, "exec", "-T", "postgres", "pg_restore", "--list"),
-                stdin=verified_dump,
-                stdout=subprocess.DEVNULL,
+        snapshot_holder.assert_alive()
+        if capture_io:
+            bytes_written = capture_io.dump(target, snapshot_holder.snapshot_id, temporary_path)
+            if not 0 < bytes_written <= max_bytes:
+                raise BackupError("The bounded capture exceeded its fixed size bound.")
+        else:
+            process = subprocess.Popen(  # noqa: S603 - fixed exact compose release and timeout
+                dump_command(target, snapshot_holder.snapshot_id),
+                stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 env=compose_environment(target),
-                timeout=PG_RESTORE_LIST_TIMEOUT_SECONDS,
+                start_new_session=(os.name == "posix"),
             )
-        if restore_result.returncode != 0:
-            raise BackupError(
-                f"The {target.environment} logical dump failed pg_restore --list verification."
-            )
+            assert process.stdout is not None
+            with temporary_path.open("wb") as destination:
+                while True:
+                    chunk = process.stdout.read(min(1024 * 1024, max_bytes - bytes_written + 1))
+                    if not chunk:
+                        break
+                    bytes_written += len(chunk)
+                    if bytes_written > max_bytes:
+                        terminate_process(process)
+                        raise BackupError(
+                            f"The {target.environment} logical dump exceeded its fixed size bound."
+                        )
+                    destination.write(chunk)
+                destination.flush()
+                os.fsync(destination.fileno())
+            if process.wait() != 0:
+                raise BackupError(f"The {target.environment} logical dump command failed.")
+        if bytes_written == 0:
+            raise BackupError(f"The {target.environment} logical dump was empty.")
+        if capture_io:
+            capture_io.verify(target, temporary_path)
+        else:
+            with temporary_path.open("rb") as verified_dump:
+                restore_result = subprocess.run(  # noqa: S603 - fixed exact compose release
+                    compose_command(target, "exec", "-T", "postgres", "pg_restore", "--list"),
+                    stdin=verified_dump,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    env=compose_environment(target),
+                    timeout=PG_RESTORE_LIST_TIMEOUT_SECONDS,
+                )
+            if restore_result.returncode != 0:
+                raise BackupError(
+                    f"The {target.environment} logical dump failed pg_restore --list verification."
+                )
         snapshot_holder.assert_alive()
-        row_counts = source_row_counts(target, snapshot_holder.snapshot_id)
+        row_counts = (
+            source_row_counts(target, snapshot_holder.snapshot_id, reader=capture_io.read)
+            if capture_io
+            else source_row_counts(target, snapshot_holder.snapshot_id)
+        )
         snapshot_holder.close()
         snapshot_holder = None
         completed_time = utc_now()
@@ -1607,6 +1652,8 @@ def capture_dump(
         captured_at_epoch_ns = time.time_ns()
         capture_id = f"{completed_time.strftime('%Y%m%dT%H%M%S.%fZ')}-{os.getpid()}"
         digest = sha256_file(temporary_path)
+        if capture_io:
+            capture_io.remaining()
         metadata: dict[str, object] = {
             "artifact_type": "authority-closers-postgresql-logical",
             "restic_tag": RESTIC_TAG,

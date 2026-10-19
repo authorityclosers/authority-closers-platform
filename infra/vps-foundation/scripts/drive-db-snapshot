@@ -1,35 +1,22 @@
-#!/bin/bash
-# ac-db-snapshot <staging|production> [label]: full pg_dump snapshot, verified, copied to Google Drive.
-# Owner order 12 Oct 2026: no raising of the bounded R2 dump limit; use Google Drive as the object store for now.
-# AUT-2133 candidate: encrypted transport, pending sensitive review/activation.
-# The database password never leaves the container. Prints the local snapshot directory.
+#!/usr/bin/env bash
+# Candidate only. Dry-run by default; explicit --execute is required for capture.
+# Reuse canonical exported-snapshot capture/counts through the bounded Drive helper.
 set -euo pipefail
-env="${1:?usage: ac-db-snapshot <staging|production> [label]}"; label="${2:-manual}"
-case "$env" in staging|production) ;; *) echo "environment must be staging or production" >&2; exit 2 ;; esac
-label=$(printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '-')
-container="ac-application-$env-postgres-1"
-ts=$(date -u +%Y%m%dT%H%M%SZ)
-root=/srv/authority-closers/backups/$env-snapshots
-dir="$root/$ts-$label"
-install -d -m 750 -o root -g acops "$root" "$dir"
-docker exec "$container" sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -Z 6' > "$dir/backup.dump"
-size=$(stat -c %s "$dir/backup.dump")
-[ "$size" -gt 100000 ] || { echo "snapshot too small ($size bytes)" >&2; exit 1; }
-entries=$(docker exec -i "$container" pg_restore --list < "$dir/backup.dump" | grep -c ';' || true)
-[ "$entries" -gt 100 ] || { echo "snapshot is not restorable ($entries TOC entries)" >&2; exit 1; }
-docker exec "$container" sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version"' > "$dir/alembic.txt" 2>/dev/null || true
-( cd "$dir" && sha256sum backup.dump > backup.dump.sha256 )
-printf '{"environment":"%s","label":"%s","at":"%s","bytes":%s,"toc_entries":%s,"alembic":"%s"}\n' \
-  "$env" "$label" "$ts" "$size" "$entries" "$(cat "$dir/alembic.txt" 2>/dev/null)" > "$dir/receipt.json"
-chmod 640 "$dir"/*; chgrp acops "$dir"/*
-# Only the encrypted archive and its ciphertext receipt leave the host.
-# ac-infisical-run-backup supplies separate dedicated production/staging keys;
-# this helper refuses missing keys and never falls back to a plaintext upload.
-/usr/local/sbin/ac-infisical-run-backup -- python3 \
-  /usr/local/libexec/authority-closers/drive_postgres_backup.py upload \
-  --environment "$env" --snapshot "$ts-$label" --execute
-# Rotation of these snapshot copies only: newest 24 kept locally, 14 days kept on Drive.
-ls -1dt "$root"/*/ 2>/dev/null | tail -n +25 | xargs -r rm -rf
-rclone --config /root/ac-drive/rclone.conf delete "acdrive:AC Backups/postgres/$env" --min-age 14d --quiet || true
-rclone --config /root/ac-drive/rclone.conf rmdirs "acdrive:AC Backups/postgres/$env" --leave-root --quiet || true
-echo "$dir"
+snapshot_environment="${1:?usage: ac-db-snapshot <staging|production> [label] [--execute]}"
+shift
+case "$snapshot_environment" in staging|production) ;; *) printf 'invalid environment\n' >&2; exit 2 ;; esac
+snapshot_label=manual
+if [[ $# -gt 0 && "$1" != --* ]]; then
+  snapshot_label="$1"
+  shift
+fi
+helper=/usr/local/libexec/authority-closers/drive_postgres_backup.py
+if [[ $# == 1 && "$1" == --execute ]]; then
+  exec /usr/local/sbin/ac-infisical-run-backup -- python3 "$helper" capture \
+    --environment "$snapshot_environment" --label "$snapshot_label" --execute
+elif [[ $# == 0 ]]; then
+  exec python3 "$helper" capture --environment "$snapshot_environment" --label "$snapshot_label"
+else
+  printf 'only --execute is accepted\n' >&2
+  exit 2
+fi

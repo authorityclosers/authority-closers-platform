@@ -180,3 +180,29 @@ def test_expired_deadline_has_no_filesystem_effect(tmp_path, monkeypatch):
     with pytest.raises(runner.ProcessRefusal, match="^operation_deadline_exceeded$"):
         runner.run(child("pass"), deadline=deadline, stdout_limit=0, destination=destination)
     assert not destination.exists()
+
+
+def test_capture_file_input_and_explicit_routing_exclude_other_secrets(tmp_path, monkeypatch):
+    source = tmp_path / "dump"
+    source.write_bytes(b"PGDMPfictional")
+    monkeypatch.setenv("INFISICAL_TOKEN", "fictional-secret")
+    result = runner.run(
+        child(
+            "import os,sys; assert 'INFISICAL_TOKEN' not in os.environ; "
+            "assert os.environ['AC_INFISICAL_ENVIRONMENT']=='staging'; "
+            "assert os.environ['AC_INFISICAL_PATH']=='/application'; "
+            "assert sys.stdin.buffer.read()==b'PGDMPfictional'; print('ok',end='')"
+        ),
+        deadline=runner.Deadline(5),
+        stdout_limit=2,
+        input_path=source,
+        routing={"AC_INFISICAL_ENVIRONMENT": "staging", "AC_INFISICAL_PATH": "/application"},
+    )
+    assert result == b"ok"
+    with pytest.raises(runner.ProcessRefusal, match="invalid_process_routing"):
+        runner.run(
+            child("pass"),
+            deadline=runner.Deadline(5),
+            stdout_limit=0,
+            routing={"INFISICAL_TOKEN": "do-not-inherit"},
+        )

@@ -11,12 +11,16 @@ This is an operator candidate, not an installer or a release controller.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
 import shutil
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -34,23 +38,27 @@ if (PROCESS_SOURCE / "drive_backup_process.py").is_file():
 else:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 from drive_backup_process import Deadline, ProcessRefusal  # noqa: E402
+from drive_backup_process import _cleanup as cleanup_owned  # noqa: E402
 from drive_backup_process import run as run_process  # noqa: E402
 
 ROOT = Path("/srv/authority-closers/backups")
 CONFIG = Path("/root/ac-drive/rclone.conf")
 REMOTE = "acdrive:AC Backups/postgres"
-FILES = frozenset({"backup.dump", "backup.dump.sha256", "alembic.txt", "receipt.json"})
+LEGACY_FILES = frozenset({"backup.dump", "backup.dump.sha256", "alembic.txt", "receipt.json"})
+FILES = LEGACY_FILES | {"metadata.json"}
 NAME = re.compile(r"[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9._-]{1,80}\Z")
 HEAD = re.compile(r"[0-9]{8}_[0-9]{4}\Z")
 MAX_DUMP_BYTES = 512 * 1024 * 1024  # Drive-only transport; never alters R2 policy.
 MAX_ARCHIVE_BYTES = MAX_DUMP_BYTES + 1024 * 1024
 MAX_SIDECAR_BYTES = 16 * 1024
+MAX_METADATA_BYTES = 64 * 1024
 CIPHER = "backup.tar.gpg"
 CIPHER_RECEIPT = "encrypted-receipt.json"
 MAX_CONTROL_BYTES = 64 * 1024
 SCRATCH_RESERVATION_BYTES = 3 * MAX_ARCHIVE_BYTES + 64 * 1024 * 1024
 OPERATION_SECONDS = 900
 OPERATION: ContextVar[Deadline | None] = ContextVar("drive_operation", default=None)
+CANONICAL = None
 
 
 class Refusal(RuntimeError):
@@ -122,7 +130,7 @@ def regular(path: Path, limit: int) -> None:
         not stat.S_ISREG(st.st_mode)
         or st.st_uid != os.geteuid()
         or st.st_nlink != 1
-        or st.st_mode & 0o007
+        or st.st_mode & 0o027
         or st.st_size > limit
     ):
         raise Refusal("unsafe_or_oversize_file")
@@ -139,16 +147,49 @@ def passphrase(environment: str) -> bytes:
     value = os.environ.get(key, "")
     if len(value) < 43 or len(value) > 256 or any(ord(c) < 33 or ord(c) > 126 for c in value):
         raise Refusal("dedicated_infisical_secret_required")
+    other = "STAGING" if environment == "production" else "PRODUCTION"
+    if value == os.environ.get(f"AC_POSTGRES_DRIVE_{other}_PASSPHRASE"):
+        raise Refusal("independent_environment_secrets_required")
     return value.encode("ascii") + b"\n"
 
 
-def validate_snapshot(path: Path, environment: str, name: str) -> dict:
-    if path.is_symlink() or not path.is_dir() or path.stat().st_uid != os.geteuid():
+def canonical():
+    global CANONICAL
+    if CANONICAL is None:
+        source = Path(__file__).resolve().with_name("ac-postgres-backup.py")
+        if not source.is_file():
+            source = PROCESS_SOURCE / "ac-postgres-backup.py"
+        spec = importlib.util.spec_from_file_location("ac_drive_canonical_capture", source)
+        if spec is None or spec.loader is None:
+            raise Refusal("canonical_capture_source_required")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        CANONICAL = module
+    return CANONICAL
+
+
+def file_limit(filename: str) -> int:
+    if filename == "backup.dump":
+        return MAX_DUMP_BYTES
+    return MAX_METADATA_BYTES if filename == "metadata.json" else MAX_SIDECAR_BYTES
+
+
+def validate_snapshot(
+    path: Path, environment: str, name: str, *, allow_legacy: bool = False
+) -> dict:
+    if (
+        path.is_symlink()
+        or not path.is_dir()
+        or path.stat().st_uid != os.geteuid()
+        or path.stat().st_mode & 0o022
+    ):
         raise Refusal("unsafe_snapshot_directory")
-    if {p.name for p in path.iterdir()} != FILES:
+    entries = {p.name for p in path.iterdir()}
+    if entries != FILES and not (allow_legacy and entries == LEGACY_FILES):
         raise Refusal("unexpected_snapshot_entries")
-    for filename in FILES:
-        regular(path / filename, MAX_DUMP_BYTES if filename == "backup.dump" else MAX_SIDECAR_BYTES)
+    for filename in entries:
+        regular(path / filename, file_limit(filename))
     dump = path / "backup.dump"
     with dump.open("rb") as handle:
         magic = handle.read(5)
@@ -169,6 +210,24 @@ def validate_snapshot(path: Path, environment: str, name: str) -> dict:
         or receipt.get("alembic") != head
     ):
         raise Refusal("snapshot_receipt_mismatch")
+    if "metadata.json" in entries:
+        metadata = json.loads((path / "metadata.json").read_text())
+        module = canonical()
+        if (
+            not isinstance(metadata, dict)
+            or metadata.get("artifact_type") != "authority-closers-postgresql-logical"
+            or metadata.get("environment") != environment
+            or metadata.get("format") != "custom"
+            or metadata.get("verification") != "pg_restore --list"
+            or metadata.get("dump_bytes") != dump.stat().st_size
+            or metadata.get("dump_sha256") != digest(dump)
+            or metadata.get("migration_head") != head
+            or metadata.get("parity_contract") != module.parity_contract_for_head(head)
+            or not isinstance(metadata.get("row_counts"), dict)
+            or set(metadata["row_counts"]) != set(module.parity_tables_for_head(head))
+            or any(type(value) is not int or value < 0 for value in metadata["row_counts"].values())
+        ):
+            raise Refusal("same_snapshot_metadata_required")
     return receipt
 
 
@@ -239,7 +298,7 @@ def extract_archive(archive: Path, target: Path) -> None:
         if len(members) != len(FILES) or {m.name for m in members} != FILES:
             raise Refusal("unexpected_archive_entries")
         for member in members:
-            limit = MAX_DUMP_BYTES if member.name == "backup.dump" else MAX_SIDECAR_BYTES
+            limit = file_limit(member.name)
             if not member.isfile() or not 0 <= member.size <= limit:
                 raise Refusal("unsafe_archive_member")
         for member in members:
@@ -304,7 +363,7 @@ def verify_cipher(path: Path, receipt: dict, environment: str, name: str) -> Non
     if (
         set(receipt)
         != {"schema", "environment", "snapshot", "cipher", "ciphertext_bytes", "ciphertext_sha256"}
-        or receipt.get("schema") != "ac-postgres-drive-encrypted-v1"
+        or receipt.get("schema") != "ac-postgres-drive-encrypted-v2"
         or receipt.get("environment") != environment
         or receipt.get("snapshot") != name
         or receipt.get("cipher") != "OpenPGP-AES256-MDC"
@@ -329,7 +388,7 @@ def upload(snapshot: Path, environment: str) -> dict:
         crypt(archive, encrypted, secret, work / "gnupg")
         archive.unlink()
         receipt = {
-            "schema": "ac-postgres-drive-encrypted-v1",
+            "schema": "ac-postgres-drive-encrypted-v2",
             "environment": environment,
             "snapshot": name,
             "cipher": "OpenPGP-AES256-MDC",
@@ -416,16 +475,196 @@ def fetch(environment: str, name: str, destination: Path) -> dict:
     }
 
 
+class BoundedCaptureIO:
+    """Reuse the canonical snapshot/count contract with Drive-specific limits."""
+
+    def remaining(self) -> float:
+        return deadline().remaining()
+
+    def holder(self, target):
+        module = canonical()
+        holder = module.start_exported_snapshot_holder(
+            target,
+            timeout_seconds=min(self.remaining(), module.SNAPSHOT_HOLDER_START_TIMEOUT_SECONDS),
+        )
+
+        class OwnedHolder:
+            snapshot_id = holder.snapshot_id
+
+            def assert_alive(self):
+                holder.assert_alive()
+
+            def close(self):
+                try:
+                    holder.close()
+                finally:
+                    cleanup_owned(holder.process)
+
+        return OwnedHolder()
+
+    def run(self, command, target, *, limit=MAX_CONTROL_BYTES, destination=None, input_path=None):
+        return run_process(
+            command,
+            deadline=deadline(),
+            stdout_limit=limit,
+            destination=destination,
+            input_path=input_path,
+            routing={
+                "AC_INFISICAL_ENVIRONMENT": target.secret_environment,
+                "AC_INFISICAL_PATH": "/application",
+            },
+        )
+
+    def read(self, command, *, target, timeout_seconds=30):
+        output = self.run(command, target)
+        return subprocess.CompletedProcess(command, 0, output.decode("utf-8"), "")
+
+    def dump(self, target, snapshot_id, path):
+        self.run(
+            canonical().dump_command(target, snapshot_id),
+            target,
+            limit=MAX_DUMP_BYTES,
+            destination=path,
+        )
+        return path.stat().st_size
+
+    def verify(self, target, path):
+        self.run(
+            canonical().compose_command(target, "exec", "-T", "postgres", "pg_restore", "--list"),
+            target,
+            limit=8 * 1024 * 1024,
+            input_path=path,
+        )
+
+
+def local_ring(root: Path, environment: str, *, retained: Path | None = None) -> None:
+    """Refuse unknown contents before deletion; remove only exact owned files."""
+    candidates = []
+    for item in root.iterdir():
+        if not NAME.fullmatch(item.name):
+            raise Refusal("unknown_local_ring_entry")
+        validate_snapshot(item, environment, item.name, allow_legacy=True)
+        candidates.append(item)
+    if retained is None:
+        if len(candidates) > 24:
+            raise Refusal("local_ring_over_limit")
+        return
+    if retained not in candidates:
+        raise Refusal("retained_snapshot_required")
+    keep = {retained, *sorted((p for p in candidates if p != retained), reverse=True)[:23]}
+    for item in candidates:
+        if item in keep:
+            continue
+        for filename in sorted(p.name for p in item.iterdir()):
+            if filename not in FILES:
+                raise Refusal("unknown_local_ring_entry")
+            regular(item / filename, file_limit(filename))
+            (item / filename).unlink()
+        item.rmdir()
+
+
+@operation
+def capture(environment: str, label: str) -> dict:
+    # Missing credentials must have no capture, retention or transport effect.
+    passphrase(environment)
+    name = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + label
+    identity(environment, name)
+    root = ROOT / f"{environment}-snapshots"
+    root.mkdir(mode=0o750, parents=True, exist_ok=True)
+    if root.is_symlink():
+        raise Refusal("unsafe_snapshot_directory")
+    local_ring(root, environment)
+    module = canonical()
+    retained = None
+    try:
+        io = BoundedCaptureIO()
+        target = module.resolve_application_release(environment)
+        module.assert_healthy(target, reader=io.read)
+        with workspace(root) as work:
+            dump, metadata_path, metadata = module.capture_dump(
+                target,
+                work,
+                MAX_DUMP_BYTES,
+                capture_io=io,
+            )
+            prepared = work / "prepared"
+            prepared.mkdir(mode=0o750)
+            dump.rename(prepared / "backup.dump")
+            metadata_path.rename(prepared / "metadata.json")
+            (prepared / "backup.dump.sha256").write_text(
+                f"{metadata['dump_sha256']}  backup.dump\n"
+            )
+            (prepared / "alembic.txt").write_text(target.migration_head + "\n")
+            receipt = {
+                "environment": environment,
+                "at": name.split("-")[0],
+                "label": label,
+                "bytes": metadata["dump_bytes"],
+                "alembic": target.migration_head,
+            }
+            (prepared / "receipt.json").write_text(json.dumps(receipt, sort_keys=True) + "\n")
+            for item in prepared.iterdir():
+                item.chmod(0o640)
+            validate_snapshot(prepared, environment, name)
+            retained = root / name
+            if retained.exists() or retained.is_symlink():
+                raise Refusal("local_snapshot_already_exists")
+            prepared.rename(retained)
+        # Retain exactly 24 verified local points before the network phase.
+        # A remote timeout therefore cannot defer rotation indefinitely. A
+        # failed retention check stops before any more captures can accumulate.
+        local_ring(root, environment, retained=retained)
+        result = upload(retained, environment)
+        # Preserve the existing 14-day remote policy, only after verification.
+        # Source/tests here never execute this against a live transport.
+        rclone("delete", f"{REMOTE}/{environment}", "--min-age", "14d")
+        rclone("rmdirs", f"{REMOTE}/{environment}", "--leave-root")
+        return {**result, "local_snapshot": str(retained), "metadata": "same_exported_snapshot"}
+    except module.BackupError as error:
+        raise Refusal("canonical_capture_failed") from error
+
+
+@contextmanager
+def execution_locks(environment: str) -> Iterator[None]:
+    # Take the same nonblocking deployment lock as both release installers.
+    # No installer or Compose operation is invoked by this helper.
+    path = Path("/srv/authority-closers/application/.deployment.lock")
+    fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1:
+            raise Refusal("unsafe_deployment_lock")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise Refusal("release_or_backup_active") from error
+        module = canonical()
+        try:
+            with module.environment_lock(environment, Path("/")):
+                yield
+        except module.BackupError as error:
+            raise Refusal("canonical_backup_lock_failed") from error
+    finally:
+        os.close(fd)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("upload", "fetch"))
+    parser.add_argument("action", choices=("capture", "upload", "fetch"))
     parser.add_argument("--environment", required=True, choices=("production", "staging"))
-    parser.add_argument("--snapshot", required=True)
+    parser.add_argument("--snapshot")
+    parser.add_argument("--label", default="manual")
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args(argv)
     try:
-        identity(args.environment, args.snapshot)
+        if args.action == "capture":
+            if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", args.label):
+                raise Refusal("invalid_snapshot_identity")
+        elif args.snapshot is None:
+            raise Refusal("snapshot_required")
+        else:
+            identity(args.environment, args.snapshot)
         if args.action == "fetch" and args.destination is None:
             raise Refusal("destination_required")
         if not args.execute:
@@ -434,7 +673,9 @@ def main(argv: list[str] | None = None) -> int:
                     {
                         "dry_run": True,
                         "action": args.action,
-                        "remote": identity(args.environment, args.snapshot),
+                        "remote": identity(args.environment, args.snapshot)
+                        if args.snapshot
+                        else f"{REMOTE}/{args.environment}/<capture>",
                         "remote_files": sorted([CIPHER, CIPHER_RECEIPT]),
                         "plaintext_upload": False,
                         "retention_changed": False,
@@ -445,11 +686,15 @@ def main(argv: list[str] | None = None) -> int:
         if os.geteuid() != 0:
             raise Refusal("root_required")
         os.umask(0o077)
-        result = (
-            upload(ROOT / f"{args.environment}-snapshots" / args.snapshot, args.environment)
-            if args.action == "upload"
-            else fetch(args.environment, args.snapshot, args.destination)
-        )
+        with execution_locks(args.environment):
+            if args.action == "capture":
+                result = capture(args.environment, args.label)
+            elif args.action == "upload":
+                result = upload(
+                    ROOT / f"{args.environment}-snapshots" / args.snapshot, args.environment
+                )
+            else:
+                result = fetch(args.environment, args.snapshot, args.destination)
         print(json.dumps(result, sort_keys=True))
         return 0
     except (Refusal, OSError, ValueError, tarfile.TarError) as error:

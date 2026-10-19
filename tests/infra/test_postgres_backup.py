@@ -660,7 +660,7 @@ def test_exported_snapshot_holder_rolls_back_and_fails_closed_on_timeout(
             self.stdout = type(
                 "FakeStdout",
                 (),
-                {"readline": lambda _self: b"00000003-0000001B-1\n"},
+                {"readline": lambda _self, limit: b"00000003-0000001B-1\n"[:limit]},
             )()
             self.returncode: int | None = None
             self.timeout = timeout
