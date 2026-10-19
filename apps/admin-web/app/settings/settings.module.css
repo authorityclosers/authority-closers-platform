@@ -21,3 +21,32 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
 }
+
+/* A setting changed in place: one click for on/off, a small field with Save otherwise. */
+.control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.control input,
+.control select {
+  min-width: 0;
+  max-width: 180px;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.changed {
+  color: var(--sx-good);
+  font-size: var(--sx-text-xs);
+}

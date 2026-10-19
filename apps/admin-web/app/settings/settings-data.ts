@@ -9,7 +9,13 @@ import { read } from "../lib/read";
 import type { CallDataSettings } from "../sales-xray/call-data-model";
 import type { ReportSettingsOverview } from "../sales-xray/report-settings-data";
 
-export type SettingRow = { label: string; value: string; note?: string };
+/** id: the registry setting this row shows (GET /v1/admin/settings), changed in place. */
+export type SettingRow = {
+  label: string;
+  value: string;
+  note?: string;
+  id?: string;
+};
 
 export type SettingsArea = {
   key: string;
@@ -109,6 +115,7 @@ export function providerArea(result: Read<unknown>): SettingsArea {
             ),
           },
           {
+            id: "providers.paid_allowed",
             label: "Paid providers",
             value: yesNo(policy.allow_paid, "Allowed", "Not allowed"),
           },
@@ -145,26 +152,32 @@ export function analysisArea(result: Read<unknown>): SettingsArea {
         changedAt: read.optionalString(body.created_at),
         rows: [
           {
+            id: "analysis.facts_max_requests",
             label: "Facts: most AI requests per call",
             value: number("c4_max_requests"),
           },
           {
+            id: "analysis.facts_max_tokens",
             label: "Facts: longest answer",
             value: `${number("c4_max_completion_tokens")} tokens`,
           },
           {
+            id: "analysis.report_max_tokens",
             label: "Report: longest answer",
             value: `${number("c5_max_completion_tokens")} tokens`,
           },
           {
+            id: "analysis.report_detail",
             label: "Report detail",
             value: words(read.string(settings.c5_output_profile, "—")),
           },
           {
+            id: "analysis.coaching_prompt",
             label: "Coaching prompt",
             value: read.string(settings.c5_coaching_prompt_revision, "—"),
           },
           {
+            id: "analysis.report_language",
             label: "Report language",
             value:
               LANGUAGE[read.string(settings.report_language_default)] ??
@@ -215,12 +228,14 @@ export function executionArea(
         changedAt: read.optionalString(control.changed_at),
         rows: [
           {
+            id: "execution.paused",
             label: "Analyses",
             value: yesNo(control.paused, "Paused", "Running"),
           },
           ...(budget
             ? [
                 {
+                  id: "budget.cap_paise",
                   label: "AI budget",
                   value: rupeesFromPaise(budget.cap_paise),
                   note: periodWords ?? undefined,
@@ -229,6 +244,7 @@ export function executionArea(
                 read.optionalNumber(settings.ceiling_paise) !== null
                   ? [
                       {
+                        id: "budget.ceiling_paise",
                         label: "Ceiling",
                         value: rupeesFromPaise(settings.ceiling_paise),
                         note: "the most the budget can be raised to",
@@ -266,24 +282,41 @@ export function callDataArea(result: Read<CallDataSettings>): SettingsArea {
     },
     result,
     (data: CallDataSettings) => {
-      const pipeline = (key: "fast" | "deep", label: string): SettingRow => {
+      const pipeline = (key: "fast" | "deep", label: string): SettingRow[] => {
         const config = data.config[key];
-        return {
-          label,
-          value: config.enabled
-            ? `On · ${config.model} · ₹${config.dailyCapInr.toLocaleString("en-IN")} a day`
-            : "Off",
-          note: `${rupees(data.spentToday[key])} spent today${
-            data.status[key].atCap ? " · cap reached" : ""
-          }${data.status[key].waiting ? ` · ${data.status[key].waiting} waiting` : ""}`,
-        };
+        const id = `call_data.${key}`;
+        return [
+          {
+            id: `${id}.enabled`,
+            label,
+            value: config.enabled ? "On" : "Off",
+            note: `${rupees(data.spentToday[key])} spent today${
+              data.status[key].atCap ? " · cap reached" : ""
+            }${data.status[key].waiting ? ` · ${data.status[key].waiting} waiting` : ""}`,
+          },
+          {
+            id: `${id}.model`,
+            label: `${label}: model`,
+            value: config.model || "—",
+          },
+          {
+            id: `${id}.daily_cap_inr`,
+            label: `${label}: daily cap`,
+            value: `₹${config.dailyCapInr.toLocaleString("en-IN")} a day`,
+          },
+          {
+            id: `${id}.max_call_minutes`,
+            label: `${label}: longest call`,
+            value: `${config.maxCallMinutes} min`,
+          },
+        ];
       };
       return {
         revision: data.revision !== null ? String(data.revision) : null,
         changedAt: data.history[0]?.at ?? null,
         rows: [
-          pipeline("fast", "Fast pipeline"),
-          pipeline("deep", "Deep pipeline"),
+          ...pipeline("fast", "Fast pipeline"),
+          ...pipeline("deep", "Deep pipeline"),
           {
             label: "Live transcription",
             value: data.config.streaming.provider

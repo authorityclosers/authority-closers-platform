@@ -16,6 +16,8 @@ import {
   reportArea,
   type SettingsArea,
 } from "@/app/settings/settings-data";
+import { normalizeRegistry } from "@/app/settings/registry-data";
+import { SettingControl } from "@/app/settings/setting-control";
 import styles from "@/app/settings/settings.module.css";
 import { Page, PageHeader, Panel, Table, Unavailable } from "@/app/ui/kit";
 
@@ -27,22 +29,58 @@ export const dynamic = "force-dynamic";
  * the reads their own pages use, each with its last change and a Change link.
  */
 export default async function SettingsPage() {
-  const [providers, analysis, execution, budget, callData, report, review] =
-    await Promise.all([
-      adminRead("/v1/admin/conversation/providers", read.object),
-      adminRead("/v1/admin/conversation/analysis-settings", read.object),
-      adminRead("/v1/admin/conversation/execution", read.object),
-      adminRead("/v1/admin/conversation/budget", read.object),
-      adminRead("/v1/admin/call-data", normalizeCallData),
-      adminRead(
-        "/v1/admin/conversation/report-settings",
-        normalizeReportSettings,
-      ),
-      adminRead(
-        "/v1/admin/conversation/review/pipelines",
-        normalizePipelineSettings,
-      ),
-    ]);
+  const [
+    providers,
+    analysis,
+    execution,
+    budget,
+    callDataRaw,
+    report,
+    review,
+    registry,
+  ] = await Promise.all([
+    adminRead("/v1/admin/conversation/providers", read.object),
+    adminRead("/v1/admin/conversation/analysis-settings", read.object),
+    adminRead("/v1/admin/conversation/execution", read.object),
+    adminRead("/v1/admin/conversation/budget", read.object),
+    adminRead("/v1/admin/call-data", read.object),
+    adminRead(
+      "/v1/admin/conversation/report-settings",
+      normalizeReportSettings,
+    ),
+    adminRead(
+      "/v1/admin/conversation/review/pipelines",
+      normalizePipelineSettings,
+    ),
+    adminRead("/v1/admin/settings", normalizeRegistry),
+  ]);
+  const callData = callDataRaw.ok
+    ? { ok: true as const, data: normalizeCallData(callDataRaw.data) }
+    : callDataRaw;
+  // Each area's answer as read, by its route: the registry's controls change from these.
+  const answers: Record<string, unknown> = Object.fromEntries(
+    (
+      [
+        ["/v1/admin/conversation/providers", providers],
+        ["/v1/admin/conversation/analysis-settings", analysis],
+        ["/v1/admin/conversation/execution", execution],
+        ["/v1/admin/conversation/budget", budget],
+        ["/v1/admin/call-data", callDataRaw],
+      ] as const
+    )
+      .filter(([, result]) => result.ok)
+      .map(([path, result]) => [path, result.ok ? result.data : null]),
+  );
+  const control = (id: string | undefined) => {
+    const setting =
+      id && registry.ok
+        ? registry.data.settings.find((item) => item.id === id)
+        : undefined;
+    if (!setting?.write || !(setting.read.path in answers)) return null;
+    return (
+      <SettingControl setting={setting} answer={answers[setting.read.path]} />
+    );
+  };
   const areas: SettingsArea[] = [
     providerArea(providers),
     analysisArea(analysis),
@@ -63,6 +101,9 @@ export default async function SettingsPage() {
           "Every setting Admin controls, its value now and where to change it",
           `${settings} settings in ${areas.length} areas`,
           missing ? `${missing} could not be read` : "All read just now",
+          registry.ok
+            ? "Change in place: each change goes through its area's own checks"
+            : null,
           environment
             ? `${environment[0].toUpperCase()}${environment.slice(1)}`
             : null,
@@ -105,6 +146,7 @@ export default async function SettingsPage() {
                         {row.note ? (
                           <small className={styles.note}>{row.note}</small>
                         ) : null}
+                        {control(row.id)}
                       </td>
                     </tr>
                   ))}

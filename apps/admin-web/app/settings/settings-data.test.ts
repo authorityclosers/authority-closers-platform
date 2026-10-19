@@ -38,7 +38,7 @@ it("lists each step's provider and model and the paid policy", () => {
   expect(area.changedAt).toBe("2026-10-18T10:00:00Z");
   expect(area.rows).toEqual([
     { label: "Hosted AI", value: "Switched on" },
-    { label: "Paid providers", value: "Allowed" },
+    { id: "providers.paid_allowed", label: "Paid providers", value: "Allowed" },
     {
       label: "Conversation facts",
       value: "gemini · gemini-3.8-flash",
@@ -97,7 +97,7 @@ it("shows running or paused, the budget and calls waiting", () => {
   ]);
 });
 
-it("summarises both call data pipelines with today's spend", () => {
+it("shows each call data setting on its own row with today's spend", () => {
   const area = callDataArea(
     ok(
       normalizeCallData({
@@ -118,13 +118,35 @@ it("summarises both call data pipelines with today's spend", () => {
   );
   expect(area.revision).toBe("5");
   expect(area.changedAt).toBe("2026-10-19T02:00:00Z");
-  expect(area.rows[0]).toEqual({
-    label: "Fast pipeline",
-    value: "On · gemini-3.8-flash · ₹300 a day",
-    note: "₹12.50 spent today",
+  // One row per setting, each tagged with its registry id so it changes in place.
+  expect(area.rows.slice(0, 4)).toEqual([
+    {
+      id: "call_data.fast.enabled",
+      label: "Fast pipeline",
+      value: "On",
+      note: "₹12.50 spent today",
+    },
+    {
+      id: "call_data.fast.model",
+      label: "Fast pipeline: model",
+      value: "gemini-3.8-flash",
+    },
+    {
+      id: "call_data.fast.daily_cap_inr",
+      label: "Fast pipeline: daily cap",
+      value: "₹300 a day",
+    },
+    {
+      id: "call_data.fast.max_call_minutes",
+      label: "Fast pipeline: longest call",
+      value: "60 min",
+    },
+  ]);
+  expect(area.rows[4]).toMatchObject({
+    id: "call_data.deep.enabled",
+    value: "Off",
   });
-  expect(area.rows[1].value).toBe("Off");
-  expect(area.rows[2]).toEqual({
+  expect(area.rows[8]).toEqual({
     label: "Live transcription",
     value: "Not set",
     note: undefined,
@@ -198,5 +220,10 @@ it("says which period the budget counts and shows the ceiling", () => {
       ok: false,
       error: "unavailable",
     }).rows[1],
-  ).toEqual({ label: "AI budget", value: "₹1", note: undefined });
+  ).toEqual({
+    id: "budget.cap_paise",
+    label: "AI budget",
+    value: "₹1",
+    note: undefined,
+  });
 });
