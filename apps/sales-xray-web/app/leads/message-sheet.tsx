@@ -52,6 +52,7 @@ export function MessageSheet({
   myName,
   org,
   preset,
+  channel: initialChannel = "whatsapp",
   onClose,
   onLogged,
 }: {
@@ -62,6 +63,8 @@ export function MessageSheet({
   org: string;
   /** The ready message to start with, such as "missed_call" after a missed call. */
   preset?: string | null;
+  /** The channel the person tapped (WhatsApp or SMS). */
+  channel?: Channel;
   onClose: () => void;
   onLogged?: (next: LeadDetail) => void;
 }) {
@@ -76,7 +79,7 @@ export function MessageSheet({
       : "";
   const first =
     templates.find((template) => template.key === preset) ?? templates[0];
-  const [channel, setChannel] = useState<Channel>("whatsapp");
+  const [channel, setChannel] = useState<Channel>(initialChannel);
   const [picked, setPicked] = useState<string | null>(first?.key ?? null);
   const [text, setText] = useState(() => fill(first));
   const chosen = templates.find((template) => template.key === picked);

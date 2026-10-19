@@ -87,8 +87,8 @@ describe("logging work calls on the phone", () => {
         : status(),
     );
     await act(async () => root.render(<PhoneLogCard />));
-    expect(host.textContent).toContain("Log your work calls by themselves.");
-    expect(host.textContent).toContain("Other numbers never leave your phone.");
+    expect(host.textContent).toContain("Log work calls by themselves");
+    expect(host.textContent).toContain("Other numbers stay on your phone.");
     expect(button("Jio").getAttribute("aria-pressed")).toBe("true");
 
     await act(async () => button("Airtel").click());
@@ -146,7 +146,7 @@ describe("logging work calls on the phone", () => {
       method: "callLogSetup",
       args: { on: false, sim: "8991-1" },
     });
-    expect(host.textContent).toContain("Log your work calls by themselves.");
+    expect(host.textContent).toContain("Log work calls by themselves");
   });
 
   it("stays hidden after Not now until it is on", async () => {
