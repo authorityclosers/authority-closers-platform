@@ -59,6 +59,7 @@ def install_report_settings_http(
             ConversationApplication(auth.database),
             operations_tenant_id=settings.operations_tenant_id,
             organisation_ids=await organisation_ids(auth.database),
+            personal_tenant_id=settings.public_learner_tenant_id,
         )
 
     @admin.get("")

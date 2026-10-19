@@ -213,7 +213,7 @@ def test_individuals_are_named_plainly() -> None:
         companies=[{"id": "co-1", "name": "Authority Closers Public Learners", "kind": "personal"}]
     )
     result = build_metrics([parse_export("staging", document)], _scope())
-    assert result["calls"]["rows"][0]["company"] == "Individuals (personal accounts)"
+    assert result["calls"]["rows"][0]["company"] == "Personal accounts"
 
 
 def test_a_call_shows_each_stage_its_billed_minutes_and_report_time() -> None:

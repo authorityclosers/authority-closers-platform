@@ -54,6 +54,9 @@ from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership, Organisation
 
+# How long a retry's owner continuation grant lasts (orchestrator, 19 Oct 2026).
+CONTINUATION_VALIDITY = timedelta(hours=24)
+
 
 @dataclass(frozen=True, slots=True)
 class SubmissionScope:
@@ -458,8 +461,9 @@ class GuestOwnership:
         )
         if owner_person_id is None and owner_visitor_id is None:
             raise ConversationDenied("A current upload owner is required.")
+        # A retry's grant covers 24 hours, like the plan it allows (19 Oct 2026).
         expires_at = min(
-            now + timedelta(hours=1),
+            now + CONTINUATION_VALIDITY,
             utc(permission.expires_at),
             utc(permission.retention_until),
         )

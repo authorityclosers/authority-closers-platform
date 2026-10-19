@@ -42,6 +42,7 @@ from ac_platform.conversation_intelligence.report_settings_models import (
     ReportSettingsVersion,
 )
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.organisations.workspace_kinds import classify_workspaces
 from ac_platform.tenancy.models import Organisation, Tenant
 
 MAX_VERSIONS = 200
@@ -202,10 +203,12 @@ class ReportSettingsAdmin:
         *,
         operations_tenant_id: UUID,
         organisation_ids: tuple[UUID, ...],
+        personal_tenant_id: UUID | None = None,
     ) -> None:
         self.application = application
         self.database: AsyncSession = application.database
         self.operations_tenant_id = operations_tenant_id
+        self.personal_tenant_id = personal_tenant_id
         self.organisation_ids = tuple(
             item for item in dict.fromkeys(organisation_ids) if item != operations_tenant_id
         )
@@ -224,7 +227,17 @@ class ReportSettingsAdmin:
                 .where(Tenant.id.in_(self.organisation_ids))
             )
         ).all()
-        return {tenant_id: (name, industry_of(details)) for tenant_id, name, details in rows}
+        # Clear names (Admin 2.0, 19 Oct 2026): "Personal accounts", not the registered name.
+        clear = await classify_workspaces(
+            self.database,
+            operations_tenant_id=self.operations_tenant_id,
+            personal_tenant_id=self.personal_tenant_id,
+            tenant_ids=self.organisation_ids,
+        )
+        return {
+            tenant_id: (clear[tenant_id].name if tenant_id in clear else name, industry_of(details))
+            for tenant_id, name, details in rows
+        }
 
     async def overview(self, actor: ActorContext) -> dict[str, Any]:
         """Parameters, every version with what it changes, who uses which, and the history."""

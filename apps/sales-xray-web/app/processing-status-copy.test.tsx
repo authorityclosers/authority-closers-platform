@@ -101,6 +101,32 @@ it("shows a terminal failure and safe retry after the server releases minutes", 
   expect(container.textContent).not.toContain("Analysis paused");
 });
 
+it("asks for one tap, with no price or time limit, when a plan needs the person's OK again", async () => {
+  for (const code of ["needs_new_acceptance", "processing_budget_expired"]) {
+    await render({
+      submissionId,
+      needsAttention: true,
+      progress: {
+        ...running,
+        recording_id: recordingId,
+        run_state: "failed",
+        minute_state: "released",
+        failure_code: code,
+        retry_available: true,
+      },
+    });
+    expect(container.querySelector("h3")?.textContent).toBe(
+      "Tap to continue your analysis",
+    );
+    expect(container.querySelector("button")?.textContent).toBe(
+      "Continue analysis",
+    );
+    expect(container.textContent).not.toMatch(
+      /₹|paise|cost|price|expire|valid|minutes/i,
+    );
+  }
+});
+
 it("drops the caps label when quiet (the progress screen), keeping the status", async () => {
   for (const progress of [
     {

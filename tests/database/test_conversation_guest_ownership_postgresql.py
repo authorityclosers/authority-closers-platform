@@ -1060,8 +1060,10 @@ def test_owner_can_append_bounded_fresh_plan_continuation_without_resetting_usag
                 assert grant.usage_id == usage_id
                 assert grant.owner_visitor_id == guest.visitor_id
                 assert grant.owner_person_id is None
-                assert grant.expires_at <= state.now + timedelta(hours=1)
+                # 24 h like the plan it allows (19 Oct 2026), never past the call's terms.
+                assert grant.expires_at <= state.now + timedelta(hours=24)
                 assert grant.expires_at > state.now + timedelta(minutes=59)
+                grant_ends = grant.expires_at
                 lease = await database.get(ConversationProcessingLease, actor.processing_lease_id)
                 usage = await database.get(ConversationAcquisitionUsage, usage_id)
                 assert lease is not None and lease.expires_at == original_expiry
@@ -1089,7 +1091,7 @@ def test_owner_can_append_bounded_fresh_plan_continuation_without_resetting_usag
                         key="fresh-plan-wrong-owner",
                     )
 
-            object.__setattr__(state, "now", state.now + timedelta(minutes=61))
+            object.__setattr__(state, "now", grant_ends + timedelta(minutes=1))
             async with AsyncSession(engine) as database, database.begin():
                 with pytest.raises(ConversationDenied):
                     await admit_processing_actor(database, actor, state.now)

@@ -3397,7 +3397,7 @@ export function AcquisitionStudio({
                         }
                         onClick={() => void freshPlan()}
                       >
-                        Refresh expired plan
+                        Refresh and continue
                       </button>
                     )}
                   </div>

@@ -462,7 +462,7 @@ def _company(
 ) -> dict[str, str]:
     known = exports[environment].companies.get(company or "") if environment in exports else None
     if known and known["kind"] == "personal":
-        return {"id": company or "", "name": "Individuals (personal accounts)", "kind": "personal"}
+        return {"id": company or "", "name": "Personal accounts", "kind": "personal"}
     return {
         "id": company or "",
         "name": known["name"] if known else "Unknown",
