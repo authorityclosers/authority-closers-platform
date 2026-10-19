@@ -93,6 +93,15 @@ class UserToken:
     expires_at: int | None
 
 
+def token_key(raw: str) -> bytes | None:
+    """``AC_LEAD_DESK_TOKEN_KEY`` as the 32 bytes that seal tokens, or None if it isn't."""
+    try:
+        key = base64.urlsafe_b64decode(raw.strip() + "==")
+    except (ValueError, TypeError):
+        return None
+    return key if len(key) == 32 else None
+
+
 def config(env: Mapping[str, str] | None = None) -> MetaConfig | None:
     """AC's Meta app settings, or None while any is missing (the connector stays off)."""
     env = os.environ if env is None else env
@@ -106,11 +115,8 @@ def config(env: Mapping[str, str] | None = None) -> MetaConfig | None:
     values = {name: (env.get(name) or "").strip() for name in names}
     if not all(values.values()):
         return None
-    try:
-        key = base64.urlsafe_b64decode(values["AC_LEAD_DESK_TOKEN_KEY"] + "==")
-    except (ValueError, TypeError):
-        return None
-    if len(key) != 32:
+    key = token_key(values["AC_LEAD_DESK_TOKEN_KEY"])
+    if key is None:
         return None
     return MetaConfig(
         app_id=values["AC_META_APP_ID"],

@@ -641,7 +641,20 @@ META_CONVERSIONS_PARITY_TABLES = INTEGRATIONS_PARITY_TABLES + (
     "lead_desk_meta_conversions",
     "lead_desk_meta_conversion_attempts",
 )
+# 0105 adds WhatsApp in the CRM and the first-response SLA.
+WHATSAPP_PARITY_MIGRATION_HEAD = "20261019_0105"
+WHATSAPP_PARITY_CONTRACT = "ac-postgres-parity-v72"
+WHATSAPP_PARITY_TABLES = META_CONVERSIONS_PARITY_TABLES + (
+    "lead_desk_whatsapp_numbers",
+    "lead_desk_whatsapp_messages",
+    "lead_desk_whatsapp_templates",
+    "lead_desk_sla_breaches",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    WHATSAPP_PARITY_MIGRATION_HEAD: (
+        WHATSAPP_PARITY_CONTRACT,
+        WHATSAPP_PARITY_TABLES,
+    ),
     META_CONVERSIONS_PARITY_MIGRATION_HEAD: (
         META_CONVERSIONS_PARITY_CONTRACT,
         META_CONVERSIONS_PARITY_TABLES,
