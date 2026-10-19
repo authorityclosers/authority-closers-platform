@@ -1,0 +1,20 @@
+[Unit]
+Description=Sales Xray AI replies runner (%i)
+Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/infra/application/scripts/ac-lead-desk-ai
+After=network-online.target docker.service
+
+[Service]
+Type=exec
+ExecStart=/usr/local/sbin/ac-lead-desk-ai %i
+# The runner lives inside the worker on staging and production; stop it there too.
+ExecStop=/usr/local/sbin/ac-lead-desk-ai stop %i
+Restart=always
+RestartSec=15s
+# Pick up each new release: restart at least every 30 minutes (the runner holds no state).
+RuntimeMaxSec=30min
+Nice=10
+MemoryMax=256M
+CPUQuota=25%
+
+[Install]
+WantedBy=multi-user.target

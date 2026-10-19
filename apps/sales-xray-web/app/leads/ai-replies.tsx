@@ -8,7 +8,9 @@
  *   guardrails), the channels, whether prices may be quoted, and the business profile
  *   the AI may answer from (what you do, your services, FAQs, notes).
  * - In a lead's conversation: "Suggest a reply" fills the reply box with a draft, or
- *   says why a person should answer instead.
+ *   says why a person should answer instead. The draft is written in the background
+ *   (by the AI replies runner); the button asks every couple of seconds until it is
+ *   ready. Nothing shows while AI replies are paused.
  */
 
 import { Plus, Sparkles, Trash2 } from "lucide-react";
@@ -17,9 +19,13 @@ import { useEffect, useState } from "react";
 import { Badge, Button, Field } from "../ui/kit";
 import {
   draftReply,
+  draftStatus,
   HANDOFF_WORDS,
   leadAi,
+  tryReply,
+  tryStatus,
   type AiChannel,
+  type AiDraft,
   type AiLeadState,
   type AiSettings,
 } from "./ai-replies-client";
@@ -93,6 +99,8 @@ export function AiRepliesSettings() {
         <h3>AI replies</h3>
         {!form.available ? (
           <Badge>Coming soon</Badge>
+        ) : form.paused && form.mode !== "off" ? (
+          <Badge tone="warn">Paused for now</Badge>
         ) : form.mode === "off" ? (
           <Badge>Off</Badge>
         ) : form.ready ? (
@@ -244,7 +252,89 @@ export function AiRepliesSettings() {
           {note}
         </p>
       ) : null}
+      {form.available && form.ready && !form.paused ? <TryIt /> : null}
     </section>
+  );
+}
+
+const POLL_MS = 1500;
+const POLL_TRIES = 30;
+
+/** Ask again every POLL_MS until a queued draft is written (or we stop waiting). */
+async function untilWritten(
+  first: AiDraft,
+  again: (replyId: string) => Promise<AiDraft>,
+): Promise<AiDraft> {
+  let answer = first;
+  for (
+    let tries = 0;
+    answer.status === "queued" && answer.replyId && tries < POLL_TRIES;
+    tries += 1
+  ) {
+    await new Promise((done) => setTimeout(done, POLL_MS));
+    answer = await again(answer.replyId);
+  }
+  return answer;
+}
+
+/** The AI's answer in the seller's words: the draft, or why a person should answer. */
+function answerWords(answer: AiDraft): string {
+  if (answer.status === "queued") return HANDOFF_WORDS.failed;
+  if (answer.status === "paused" || answer.status === "failed")
+    return answer.words || HANDOFF_WORDS.failed;
+  return `A person should answer. ${answer.words || HANDOFF_WORDS[answer.reason ?? ""] || ""}`.trim();
+}
+
+/**
+ * "Try it" in Settings: type a message a lead might send and see the reply the AI
+ * would draft from this profile. Nothing is sent to anyone.
+ */
+function TryIt() {
+  const [message, setMessage] = useState("");
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    setAnswer(null);
+    try {
+      const done = await untilWritten(
+        await tryReply({ message: message.trim() }),
+        tryStatus,
+      );
+      setAnswer(
+        done.status === "drafted" && done.draft
+          ? `AI draft: ${done.draft}`
+          : answerWords(done),
+      );
+    } catch (reason) {
+      setAnswer(
+        reason instanceof LeadsError ? reason.message : "That didn't work.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className={styles.aiSuggest}>
+      <Field label="Try it: a message a lead might send">
+        <textarea
+          value={message}
+          maxLength={500}
+          rows={2}
+          onChange={(event) => setMessage(event.target.value)}
+        />
+      </Field>
+      <Button variant="ghost" disabled={busy || !message.trim()} onClick={run}>
+        <Sparkles size={14} aria-hidden="true" />
+        {busy ? "Thinking…" : "Try it"}
+      </Button>
+      <p className={styles.hint}>Nothing is sent to anyone.</p>
+      {answer ? (
+        <p className={styles.hint} role="status">
+          {answer}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -269,14 +359,16 @@ export function SuggestReply({
     setBusy(true);
     setNote(null);
     try {
-      const answer = await draftReply(leadId, { channel, accountId });
-      if (answer.draft && !answer.handoff) {
+      // Queued: the draft is written in the background; ask until it is ready.
+      const answer = await untilWritten(
+        await draftReply(leadId, { channel, accountId }),
+        (replyId) => draftStatus(leadId, replyId),
+      );
+      if (answer.draft && !answer.handoff && answer.status !== "queued") {
         onDraft(answer.draft);
         setNote("AI draft: read it, change anything, then send.");
       } else {
-        setNote(
-          `A person should answer. ${answer.words || HANDOFF_WORDS[answer.reason ?? ""] || ""}`.trim(),
-        );
+        setNote(answerWords(answer));
       }
     } catch (reason) {
       setNote(
@@ -335,6 +427,7 @@ export function AiHelp({
 }) {
   if (!ai?.available || ai.mode === "off" || !ai.channels.includes(channel))
     return null;
+  const suggest = ai.ready && !ai.paused;
   const handoff = ai.handoffs.find((item) => item.channel === channel);
   return (
     <>
@@ -344,7 +437,7 @@ export function AiHelp({
           {HANDOFF_WORDS[handoff.reason] ?? handoff.reason}
         </p>
       ) : null}
-      {ai.ready ? (
+      {suggest ? (
         <SuggestReply
           leadId={leadId}
           channel={channel}

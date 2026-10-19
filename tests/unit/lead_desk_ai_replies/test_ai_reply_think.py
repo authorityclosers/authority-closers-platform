@@ -42,7 +42,6 @@ def ready(case: Case, *, window: bool = True) -> service.Prepared:
         lead_id=uuid4(),
         lead_name="Asha Fictional",
         owner_person_id=None,
-        payload=None,
         channel="whatsapp",
         account_id=None,
         settings=case.business,

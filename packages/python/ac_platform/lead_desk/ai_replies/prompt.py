@@ -1,10 +1,19 @@
 """What the model is told for one AI reply, and how its answer is read.
 
-The model sees the organisation's own facts (its profile in Lead Desk), the lead's
-first name and form answers, and the last few messages of this conversation, never
-anything else. The lead's words are given as data; the rules say to ignore any
-instruction inside them. The answer is one small JSON object; anything else is a
-hand-off.
+Exactly these go to the model, nothing else:
+
+- the organisation's own profile (business name, what it does, products and services,
+  FAQs, notes) and whether it lets the AI give prices;
+- the channel (WhatsApp, Messenger or Instagram) and the script of the lead's last
+  message;
+- the words of this conversation's last 10 messages, from that channel only, without
+  filled-in WhatsApp templates;
+- the lead's first name, only when the lead didn't come from Meta lead ads.
+
+Never sent: phone numbers, emails, lead form answers, or anything Meta's lead ads gave
+us (the Leads app's review declared no AI provider receives that data). The lead's
+words are given as data; the rules say to ignore any instruction inside them. The
+answer is one small JSON object; anything else is a hand-off.
 """
 
 from __future__ import annotations
@@ -13,7 +22,7 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Final
 
 from ac_platform.lead_desk.ai_replies.rules import Settings, script_of
 
@@ -77,32 +86,11 @@ class Turn:
     text: str
 
 
-def form_answers(payload: Any, limit: int = 12) -> list[tuple[str, str]]:
-    """The lead form's answers (Meta's field_data), for context only."""
-    out: list[tuple[str, str]] = []
-    if not isinstance(payload, Mapping):
-        return out
-    for item in payload.get("field_data") or []:
-        if not isinstance(item, Mapping) or not isinstance(item.get("name"), str):
-            continue
-        name = item["name"]
-        if any(word in name.casefold() for word in ("phone", "email", "mobile")):
-            continue  # contact details aren't needed for an answer
-        values = item.get("values")
-        value = values[0] if isinstance(values, list) and values else values
-        if value not in (None, ""):
-            out.append((name[:80], str(value)[:200]))
-        if len(out) >= limit:
-            break
-    return out
-
-
 def build(
     settings: Settings,
     *,
     channel: str,
     lead_name: str,
-    payload: Any,
     turns: Sequence[Turn],
 ) -> tuple[str, str]:
     """The system and user messages for one reply."""
@@ -117,10 +105,6 @@ def build(
     words = (lead_name or "").strip().split()
     first = words[0][:40] if words and not words[0].startswith(("+", "@")) else "unknown"
     lines = [f"Lead's first name: {first}"]
-    answers = form_answers(payload)
-    if answers:
-        lines.append("Their lead form answers:")
-        lines.extend(f"- {name}: {value}" for name, value in answers)
     lines.append("The conversation so far, oldest first:")
     for turn in list(turns)[-HISTORY:]:
         who = "Lead" if turn.direction == "in" else "Business"

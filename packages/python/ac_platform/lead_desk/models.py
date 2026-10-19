@@ -712,9 +712,12 @@ class LeadAiReply(Base):
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_ai_reply_tenant"),
         CheckConstraint("channel IN ('whatsapp', 'messenger', 'instagram')", name="channel"),
-        CheckConstraint("mode IN ('suggest', 'auto')", name="mode"),
+        CheckConstraint("mode IN ('suggest', 'auto', 'try')", name="mode"),
+        # "Try it" drafts a reply for a sample message: no lead.
+        CheckConstraint("mode = 'try' OR lead_id IS NOT NULL", name="lead"),
         CheckConstraint(
-            "outcome IN ('drafted', 'sent', 'handoff', 'opted_out', 'failed', 'paused')",
+            "outcome IN ('queued', 'drafted', 'sent', 'handoff', 'opted_out', 'failed', 'paused',"
+            " 'waiting')",
             name="outcome",
         ),
         CheckConstraint(
@@ -733,10 +736,12 @@ class LeadAiReply(Base):
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
-    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     channel: Mapped[str] = mapped_column(String(16))
     message_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     mode: Mapped[str] = mapped_column(String(8))
+    # "Try it" only: the sample message the business typed (emptied after a day).
+    sample: Mapped[str | None] = mapped_column(String(500), nullable=True)
     outcome: Mapped[str] = mapped_column(String(16))
     reason: Mapped[str | None] = mapped_column(String(24), nullable=True)
     draft: Mapped[str | None] = mapped_column(String(1000), nullable=True)
@@ -749,4 +754,23 @@ class LeadAiReply(Base):
     usage_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requested_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # When the API finished acting on the row: the reply sent, or the seller alerted.
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadAiSettings(Base):
+    """One saved revision of AI replies' Admin settings for this environment (newest
+    wins): the switch, the provider and model, and the cap with its period."""
+
+    __tablename__ = "lead_desk_ai_settings"
+    __table_args__ = (
+        UniqueConstraint("revision", name="uq_lead_desk_ai_settings_revision"),
+        CheckConstraint("revision >= 1", name="revision"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    config: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

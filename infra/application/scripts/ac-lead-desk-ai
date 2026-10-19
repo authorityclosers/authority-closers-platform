@@ -1,0 +1,171 @@
+#!/bin/bash
+# Sales Xray AI replies runner (owner rules via the orchestrator, 19 Oct 2026): asks
+# the model Admin chose for the AI replies the API queued (drafts for sellers, and
+# automatic replies for organisations that opted in). Long-running (systemd restarts
+# it); one runner per database (advisory lock).
+#
+# The provider key exists only in this runner's own `infisical run` child, started
+# with the worker's provider launcher, exactly like the call data engine; the API
+# never holds a model key. The switch, model and cap (₹, per day, month or for
+# good) are in Admin -> AI replies. At the cap automatic replies wait for budget,
+# suggestions pause, and the owner gets ONE alert per period; "Raise and resume" in
+# Admin restarts them at once. It never sends a message: the API does.
+#
+#   ac-lead-desk-ai development-live | staging | production
+#   ac-lead-desk-ai stop staging | production   (systemd ExecStop)
+#
+# On staging and production the runner lives inside the worker container, and
+# stopping `docker exec` leaves it running there, holding the lock. So every start
+# first stops a runner left in the container, and ExecStop stops it too.
+set -euo pipefail
+
+module=ac_platform.lead_desk.ai_replies.cli
+state=${LEAD_DESK_AI_STATE:-/var/lib/ac-lead-desk-ai}
+# The owner's alert command (tests point NOTIFY at a recorder).
+NOTIFY=${NOTIFY:-/usr/local/sbin/ac-notify-owner}
+
+# notify <text>: best effort; the child gets no secrets and 30 seconds at most.
+notify() {
+  local status=sent
+  if [[ ! -x "$NOTIFY" ]]; then
+    status=absent
+  elif ! env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 \
+    timeout 30 "$NOTIFY" "$1" </dev/null >/dev/null 2>&1; then
+    status=failed
+  fi
+  printf '{"alert_forwarded": "%s"}\n' "$status"
+}
+
+# alert_text <environment> <line>: the owner's message for a cap line, or nothing
+# (status 1). Only fixed words and numbers are used.
+alert_text() {
+  local env_name=$1 line=$2 spent="?" period=day
+  local re_cap='"stopped": "lead_desk_ai_cap"'
+  local re_spent='"spent_inr": "([0-9]{1,6}(\.[0-9]{1,4})?)"'
+  local re_period='"period": "(daily|monthly|lifetime)"'
+  [[ $line =~ $re_cap ]] || return 1
+  [[ $line =~ $re_spent ]] && spent=${BASH_REMATCH[1]}
+  if [[ $line =~ $re_period ]]; then
+    case ${BASH_REMATCH[1]} in
+      daily) period="today" ;;
+      monthly) period="this month" ;;
+      lifetime) period="in all" ;;
+    esac
+  fi
+  printf 'Sales X-Ray AI replies (%s): the cap was reached (Rs %s spent %s). Automatic replies wait and suggestions pause; nothing is lost. Admin -> AI replies -> Raise and resume.' \
+    "$env_name" "$spent" "$period"
+}
+
+# forward_alerts <environment>: copy the runner's lines to stdout unchanged; send
+# the owner one message per cap period (the line's period and period_key) when the
+# cap is hit.
+forward_alerts() {
+  local env_name=$1 line text key period mark
+  local re_key='"period_key": "([0-9]{4}(-[0-9]{2}){0,2}|lifetime)"'
+  local re_period='"period": "(daily|monthly|lifetime)"'
+  while IFS= read -r line || [[ -n $line ]]; do
+    printf '%s\n' "$line"
+    text=$(alert_text "$env_name" "$line") || continue
+    key=$(date -u +%F) period=daily
+    [[ $line =~ $re_key ]] && key=${BASH_REMATCH[1]}
+    [[ $line =~ $re_period ]] && period=${BASH_REMATCH[1]}
+    mark="$state/$env_name.$period.alerted"
+    [[ "$(cat "$mark" 2>/dev/null)" == "$key" ]] && continue
+    notify "$text"
+    printf '%s\n' "$key" >"$mark" 2>/dev/null || true
+  done
+  return 0
+}
+
+# stop_container_runner <container>: SIGTERM the looping runner (and its infisical
+# parent) inside the worker and wait until none is left.
+stop_container_runner() {
+  docker exec -i "$1" python - <<'PY'
+import os
+import signal
+import time
+
+
+def runners():
+    found = []
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            parts = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+        except OSError:
+            continue
+        if b"ac_platform.lead_desk.ai_replies.cli" in parts and b"--loop" in parts:
+            found.append(int(pid))
+    return found
+
+
+before = runners()
+for pid in before:
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+for _ in range(60):
+    if not runners():
+        break
+    time.sleep(1)
+left = runners()
+if before or left:
+    print(f'{{"runner_left_in_container": {len(before)}, "still_running": {len(left)}}}')
+raise SystemExit(1 if left else 0)
+PY
+}
+
+# Sourced (by the tests): the functions only.
+if [[ ${BASH_SOURCE[0]} != "$0" ]]; then
+  return 0
+fi
+
+if [[ ${1:-} == stop ]]; then
+  case "${2:-}" in
+    staging | production) stop_container_runner "ac-application-$2-sales-xray-worker-1" || true ;;
+  esac
+  exit 0
+fi
+
+env_name=${1:?usage: ac-lead-desk-ai development-live|staging|production}
+install -d -m 700 "$state"
+common=(--loop --apply)
+
+case "$env_name" in
+  development-live)
+    slot=$(cat /var/lib/ac-dev-live-backend/active-slot)
+    python=/srv/authority-closers/development/live-backend/$slot/.venv/bin/python
+    cd /tmp
+    if ! env -i PATH=/usr/bin:/bin "$python" -c "import $module" 2>/dev/null; then
+      echo "AI replies runner is not in this release yet"
+      sleep 300
+      exit 0
+    fi
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 PYTHONUNBUFFERED=1 \
+      "$python" -m "$module" \
+      --service-config /etc/authority-closers/development/service-live.json \
+      --database-url-file /etc/authority-closers/development/database-url-live \
+      --token-file /etc/authority-closers/development/identities/gemini/token \
+      --infisical /usr/local/bin/infisical \
+      "${common[@]}" | forward_alerts "$env_name"
+    ;;
+  staging | production)
+    container=ac-application-$env_name-sales-xray-worker-1
+    if ! docker exec "$container" python -c "import $module" 2>/dev/null; then
+      echo "AI replies runner is not in this release yet"
+      sleep 300
+      exit 0
+    fi
+    stop_container_runner "$container"
+    docker exec "$container" python -m "$module" \
+      --service-config /run/ac-sales-xray/service.json \
+      --database-url-file /run/ac-sales-xray/database-url \
+      "${common[@]}" | forward_alerts "$env_name"
+    ;;
+  *)
+    echo "unknown environment: $env_name" >&2
+    exit 2
+    ;;
+esac
