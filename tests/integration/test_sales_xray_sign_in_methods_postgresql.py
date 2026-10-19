@@ -20,7 +20,11 @@ from ac_platform.http.auth import install_identity_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.routes import RouteContext
 from ac_platform.http.routes.sign_in_methods import install as install_sign_in_methods
-from ac_platform.identity.application import AsyncIdentityApplication
+from ac_platform.identity.application import (
+    AsyncIdentityApplication,
+    has_platform_staff_membership,
+)
+from ac_platform.identity.email_login import EmailLoginCodeService
 from ac_platform.identity.models import PasswordCredential, Person, ProviderIdentity
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.provider_link_email import (
@@ -28,7 +32,13 @@ from ac_platform.identity.provider_link_email import (
     PROVIDER_REMOVED_EVENT,
 )
 from ac_platform.outbox.models import OutboxEvent
-from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus, Tenant
+from ac_platform.tenancy.models import (
+    Membership,
+    MembershipRole,
+    MembershipStatus,
+    Organisation,
+    Tenant,
+)
 from tests.integration.test_password_identity_http_postgresql import _Harness, _run_async
 from tests.integration.test_password_identity_http_postgresql import (
     postgres_harness as _postgres_harness,
@@ -47,7 +57,13 @@ def postgres_harness() -> Iterator[_Harness]:
 
 
 def _seed(
-    harness: _Harness, *, password: bool, providers: tuple[str, ...], staff: bool = False
+    harness: _Harness,
+    *,
+    password: bool,
+    providers: tuple[str, ...],
+    staff: bool = False,
+    role: str = MembershipRole.ADMIN.value,
+    organisation: bool = False,
 ) -> tuple[UUID, UUID]:
     tenant_id, person_id = uuid4(), uuid4()
     verified = datetime(2026, 9, 1, tzinfo=UTC)
@@ -78,11 +94,21 @@ def _seed(
             staff_tenant = uuid4()
             database.add(Tenant(id=staff_tenant, slug=f"sx-ops-{staff_tenant.hex}", name="Ops"))
             database.flush()
+            if organisation:
+                # A customer organisation: its admins are not platform staff.
+                database.add(
+                    Organisation(
+                        tenant_id=staff_tenant,
+                        created_by_person_id=person_id,
+                        creation_command_id=uuid4(),
+                        domain_verification_token=uuid4().hex * 2,
+                    )
+                )
             database.add(
                 Membership(
                     tenant_id=staff_tenant,
                     person_id=person_id,
-                    role=MembershipRole.ADMIN.value,
+                    role=role,
                     status=MembershipStatus.ACTIVE.value,
                 )
             )
@@ -295,3 +321,110 @@ def test_another_origin_or_a_missing_provider_is_refused(postgres_harness: _Harn
     )
     assert missing.status_code == 404
     assert _google_rows(postgres_harness, person_id) == 1
+
+
+@pytest.mark.parametrize("role", ["owner", "admin", "support"])
+def test_platform_staff_email_code_never_counts_so_their_only_provider_stays(
+    postgres_harness: _Harness, role: str
+) -> None:
+    """Email codes are never sent to owner, admin or support staff, so with only
+    Google and an email address, Google is their last way in."""
+
+    tenant_id, person_id = _seed(
+        postgres_harness, password=False, providers=(GOOGLE,), staff=True, role=role
+    )
+    listing = _run_async(
+        _call(
+            postgres_harness,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            age=timedelta(0),
+            method="GET",
+            path="/v1/me/sign-in-methods",
+        )
+    ).json()
+    assert [(item["kind"], item["removable"]) for item in listing["methods"]] == [("google", False)]
+    response = _run_async(
+        _call(
+            postgres_harness,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            age=timedelta(minutes=1),
+            method="POST",
+            path="/v1/me/sign-in-methods/google/remove",
+        )
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "last_method"
+    assert _google_rows(postgres_harness, person_id) == 1
+    assert _removals(postgres_harness, person_id) == ([], [])
+
+
+def test_a_customer_organisation_admin_keeps_email_codes_so_google_can_go(
+    postgres_harness: _Harness,
+) -> None:
+    """Organisation owners and admins do get email codes, so a code still counts."""
+
+    tenant_id, person_id = _seed(
+        postgres_harness,
+        password=False,
+        providers=(GOOGLE,),
+        staff=True,
+        role=MembershipRole.ADMIN.value,
+        organisation=True,
+    )
+    response = _run_async(
+        _call(
+            postgres_harness,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            age=timedelta(minutes=1),
+            method="POST",
+            path="/v1/me/sign-in-methods/google/remove",
+        )
+    )
+    assert response.status_code == 200
+    assert _google_rows(postgres_harness, person_id) == 0
+
+
+@pytest.mark.parametrize(
+    ("role", "organisation"),
+    [
+        ("owner", False),
+        ("admin", False),
+        ("support", False),
+        ("owner", True),
+        ("admin", True),
+        ("member", False),
+    ],
+)
+def test_the_email_code_rule_and_the_removal_rule_name_the_same_staff(
+    postgres_harness: _Harness, role: str, organisation: bool
+) -> None:
+    """Sign-in methods count an email code exactly where the email-code service sends one."""
+
+    _, person_id = _seed(
+        postgres_harness,
+        password=False,
+        providers=(),
+        staff=True,
+        role=role,
+        organisation=organisation,
+    )
+
+    async def compare() -> tuple[bool, bool]:
+        engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        try:
+            async with async_sessionmaker(engine)() as database:
+                email_rule = await EmailLoginCodeService(
+                    database,
+                    challenge_secret="x" * 40,  # noqa: S106
+                )._has_privileged_membership(person_id)
+                removal_rule = await has_platform_staff_membership(database, person_id)
+                return email_rule, removal_rule
+        finally:
+            await engine.dispose()
+
+    email_rule, removal_rule = _run_async(compare())
+    assert email_rule == removal_rule
+    assert email_rule is (role in {"owner", "admin", "support"} and not organisation)
