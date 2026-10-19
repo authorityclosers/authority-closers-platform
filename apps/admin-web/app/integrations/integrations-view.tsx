@@ -2,7 +2,7 @@
  * Admin -> Integrations: every organisation's API keys, webhooks and
  * connected apps, needing-a-look first. Organisations set these up
  * themselves in Sales Xray (Settings -> Integrations); staff see them here
- * and can stop a key or a webhook at once. Keys show by prefix and webhooks
+ * and can stop a key, a webhook or a connected app at once. Keys show by prefix and webhooks
  * by host: no key or secret ever reaches this page.
  */
 import { Plug } from "lucide-react";
@@ -307,6 +307,13 @@ export function IntegrationsView({ data }: { data: Integrations }) {
                             ? `Disconnected ${when(connection.revokedAt)}`
                             : `Connected ${ago(connection.createdAt, "")} · ${connection.lastUsedAt ? `last used ${when(connection.lastUsedAt)}` : "not used yet"}`}
                         </small>
+                        {connection.revokedAt ? null : (
+                          <IntegrationAction
+                            kind="connection"
+                            id={connection.id}
+                            name={connection.app}
+                          />
+                        )}
                       </li>
                     ))}
                   </ul>

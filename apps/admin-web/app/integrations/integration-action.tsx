@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Stop one integration at once: revoke an API key or turn a webhook off
- * (POST /v1/admin/integrations/keys/{id}/revoke, /webhooks/{id}/disable).
+ * Stop one integration at once: revoke an API key, turn a webhook off or
+ * disconnect an app (POST /v1/admin/integrations/keys/{id}/revoke,
+ * /webhooks/{id}/disable, /connections/{id}/revoke).
  * Asks first, says what stops, and shows the API's answer as it is. The
  * change is audited in the organisation's own history.
  */
@@ -27,6 +28,13 @@ const ACTIONS = {
     done: "Turned off",
     path: (id: string) => `/v1/admin/integrations/webhooks/${id}/disable`,
     warn: "No more events go to this address, and its signing secret is retired.",
+  },
+  connection: {
+    button: "Disconnect",
+    busy: "Disconnecting…",
+    done: "Disconnected",
+    path: (id: string) => `/v1/admin/integrations/connections/${id}/revoke`,
+    warn: "The app loses access at once and all its tokens stop working. The organisation can connect it again.",
   },
 } as const;
 

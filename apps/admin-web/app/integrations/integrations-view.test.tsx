@@ -187,6 +187,50 @@ it("asks before revoking, posts once and refreshes the page", async () => {
   expect(host.querySelector('[role="status"]')?.textContent).toBe("Revoked");
 });
 
+it("disconnects an app after asking, and offers it only while connected", async () => {
+  const fetcher = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({ id: "c1", revoked_at: "2026-10-19T10:00:00+00:00" }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () => root.render(<IntegrationsView data={DATA} />));
+  const disconnect = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Disconnect Dialer One"]',
+  );
+  await act(async () => disconnect!.click());
+  expect(host.textContent).toContain("The app loses access at once");
+  const confirm = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+    (item) => item.textContent === "Disconnect now",
+  );
+  await act(async () => confirm!.click());
+  const [path] = fetcher.mock.calls[0] as unknown as [string];
+  expect(path).toBe("/v1/admin/integrations/connections/c1/revoke");
+  expect(refresh).toHaveBeenCalled();
+
+  const gone = normalizeIntegrations({
+    organisations: [
+      {
+        id: "o",
+        name: "Gone",
+        connections: [
+          { id: "c9", app: "Old app", revoked_at: "2026-10-01T00:00:00+00:00" },
+        ],
+      },
+    ],
+  });
+  await act(async () => root.render(<IntegrationsView data={gone} />));
+  expect(
+    host.querySelector('button[aria-label="Disconnect Old app"]'),
+  ).toBeNull();
+  expect(host.textContent).toContain("Disconnected");
+});
+
 it("shows the API's refusal and keeps the row", async () => {
   vi.stubGlobal(
     "fetch",
