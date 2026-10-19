@@ -31,8 +31,13 @@ const STATE_LABEL: Record<ObjectState, string> = {
 
 const words = (value: string) => value.replaceAll("_", " ");
 
-/** A person's word (confirmed, edited) always wins over the AI's read (observed, inferred). */
+/**
+ * A person's word always wins over the AI's read. Objects store observed,
+ * inferred or person (a person's answer itself is in decisions); facts show
+ * confirmed or edited once a person accepted or changed them.
+ */
 const BASIS: Record<string, { who: string; tone: Tone }> = {
+  person: { who: "Person", tone: "accent" },
   confirmed: { who: "Person", tone: "accent" },
   edited: { who: "Person", tone: "accent" },
   observed: { who: "AI", tone: "neutral" },
@@ -136,9 +141,11 @@ export function ObjectsTable({
               <td>
                 {object.basis ? (
                   <Badge tone={BASIS[object.basis]?.tone ?? "neutral"}>
-                    {BASIS[object.basis]
-                      ? `${BASIS[object.basis].who} · ${object.basis}`
-                      : object.basis}
+                    {object.basis === "person"
+                      ? "Person"
+                      : BASIS[object.basis]
+                        ? `${BASIS[object.basis].who} · ${object.basis}`
+                        : object.basis}
                   </Badge>
                 ) : (
                   "—"

@@ -50,6 +50,7 @@ it("says whose word each object is and shows current objects first", async () =>
         objects={[
           object("a", "current", "confirmed", "Wants site visits"),
           object("b", "current", "inferred", "Worried about scope"),
+          object("d", "current", "person", "Budget is fixed"),
           object("c", "erased", "observed", ""),
         ]}
       />,
@@ -57,9 +58,11 @@ it("says whose word each object is and shows current objects first", async () =>
   );
   const rows = () =>
     [...host.querySelectorAll("tbody tr")].map((row) => row.textContent);
-  expect(rows()).toHaveLength(2);
+  expect(rows()).toHaveLength(3);
   expect(rows()[0]).toContain("Person · confirmed");
   expect(rows()[1]).toContain("AI · inferred");
+  expect(rows()[2]).toContain("Person");
+  expect(rows()[2]).not.toContain("Person · person");
   expect(rows()[0]).toContain("90%");
   const erased = [...host.querySelectorAll("button")].find((button) =>
     button.textContent?.startsWith("Erased"),
