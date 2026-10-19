@@ -10,6 +10,10 @@ import {
   rupees,
   span,
 } from "@/app/health/health-data";
+import {
+  EngineHealthPanels,
+  ReviewHealthPanels,
+} from "@/app/health/engine-panels";
 import styles from "@/app/health/health.module.css";
 import { RetryJob } from "@/app/health/retry-job";
 import { adminRead } from "@/app/lib/server-api";
@@ -58,7 +62,7 @@ export default async function HealthPage({
       <PageHeader
         title="Analysis health"
         context={[
-          "Sales Xray analyses: what finished, failed, stalled, how long it took and what it cost",
+          "Sales Xray analyses: the call data engine, report jobs and reviewers' verdicts; what finished, failed or stalled, how long it took and what it cost",
         ]}
       />
       <QueryTabs base="/health" param="days" items={WINDOWS} current={window} />
@@ -101,6 +105,9 @@ export default async function HealthPage({
               note={`Estimate over ${health.cost.minutes} min · not a bill`}
             />
           </Tiles>
+
+          <EngineHealthPanels data={health.engine} />
+          <ReviewHealthPanels data={health.review} />
 
           <div className={styles.columns}>
             <Panel
