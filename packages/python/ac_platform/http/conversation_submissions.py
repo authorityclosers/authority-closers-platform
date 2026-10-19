@@ -59,8 +59,12 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
 from ac_platform.conversation_intelligence.bulk_import_ownership import ImportOwnership
+from ac_platform.conversation_intelligence.capture_source import capture_source_header
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance
-from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+from ac_platform.conversation_intelligence.guest_ownership import (
+    UPLOAD_CAPTURE_SOURCE,
+    GuestOwnership,
+)
 from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
@@ -639,6 +643,14 @@ def install_submission_http(
                 422,
                 "Choose an audio or video file up to 100 MB and accept the current upload terms.",
             )
+        try:
+            # How the phone captured it (ADR 0056 F2): stored when the call row is created.
+            # Each request runs in its own context, so it never reaches another upload.
+            UPLOAD_CAPTURE_SOURCE.set(
+                capture_source_header(request.headers.getlist("x-capture-source"))
+            )
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
         # Authenticate before accepting bytes. No database transaction remains
         # open during network streaming or isolated native decoding.
         actor_binding: tuple[UUID, UUID, UUID | None] | None = None

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -932,6 +933,11 @@ async def admit_processing_actor(
     return usage
 
 
+# This upload's X-Capture-Source (ADR 0056 F2), set by the source upload route for its
+# own request only; the row below is append-only, so it is written once, here.
+UPLOAD_CAPTURE_SOURCE: ContextVar[str | None] = ContextVar("upload_capture_source", default=None)
+
+
 async def link_registered_recording(
     database: AsyncSession, actor: ProcessingActor, recording: ConversationRecording, now: datetime
 ) -> None:
@@ -960,6 +966,7 @@ async def link_registered_recording(
             processing_lease_id=actor.processing_lease_id,
             usage_id=usage.id,
             source_sha256=usage.source_sha256,
+            capture_source=UPLOAD_CAPTURE_SOURCE.get(),
             created_at=now,
         )
     )

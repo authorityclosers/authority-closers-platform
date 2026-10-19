@@ -8,6 +8,7 @@
  * of this exists: Call stays a tel: link and the seller answers by hand.
  */
 
+import { fromPhone, rememberCapture } from "../capture-source";
 export type NativeRecording = {
   source: string;
   name: string;
@@ -16,6 +17,8 @@ export type NativeRecording = {
   ext: string;
   mime: string;
   supported: boolean;
+  /** "dialer", "in_app" or "accessibility" (app 0.3.43+); see capture-source.ts. */
+  captured?: string;
 };
 
 export type NativeCallResult =
@@ -149,6 +152,7 @@ export function parseRecording(raw: unknown): NativeRecording | null {
     ext: text(value.ext),
     mime: text(value.mime) || "audio/mpeg",
     supported: value.supported !== false,
+    ...(text(value.captured) ? { captured: text(value.captured) } : {}),
   };
 }
 
@@ -272,7 +276,9 @@ export async function readPhoneRecording(
     onProgress?.(offset);
     if (piece.eof || bytes.length === 0) break;
   }
-  return new File(parts, recording.name, { type: recording.mime });
+  const file = new File(parts, recording.name, { type: recording.mime });
+  rememberCapture(file, fromPhone(recording.captured));
+  return file;
 }
 
 /** The "Didn't get through" reason that matches what the phone saw. */
