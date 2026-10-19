@@ -1,7 +1,9 @@
-# Sales Xray WhatsApp: what Meta's dashboard needs
+# Sales Xray Messaging (WhatsApp): what Meta's dashboard needs
 
 Phase B of the Meta integration (orchestrator brief, 19 Oct 2026): a WhatsApp channel
-in the Sales Xray CRM. Each customer organisation connects **its own** WhatsApp number
+in the Sales Xray CRM. The app is **"Sales Xray Messaging"**: Meta does not allow
+"WhatsApp" in an app's name (orchestrator, 19 Oct). The same app also carries
+Instagram and Messenger conversations (Phase C, `instagram-messenger-app.md`). Each customer organisation connects **its own** WhatsApp number
 in Settings → Integrations with Meta's Embedded Signup, and pays Meta directly for its
 messages. Nothing here is named after a customer.
 
@@ -22,9 +24,11 @@ lead capture (see `meta-apps.md`).
 
 | | App | Type | Where |
 | --- | --- | --- | --- |
-| production | **Sales Xray WhatsApp** (parent) | Business | Authority Closers portfolio 1027309697060163 |
-| staging | Sales Xray WhatsApp - staging (test app) | from the parent | same |
-| dev | Sales Xray WhatsApp - dev (test app) | from the parent | same |
+| production | **Sales Xray Messaging** (parent) | Business | Authority Closers portfolio 1027309697060163 |
+| staging | Sales Xray Messaging - staging (test app) | from the parent | same |
+| dev | Sales Xray Messaging - dev (test app) | from the parent | same |
+
+The settings keep their `AC_WHATSAPP_*` names (section 5): they are this app's.
 
 Business verification of Authority Closers is done (16 Oct), which the Tech Provider
 steps need.
@@ -120,7 +124,45 @@ Until then only people with a role on the app can connect a number (same as Lead
   recipient numbers, added in the dashboard). Recipients: only our own team phones.
 - No real customer conversations on dev.
 
-## 8. Money
+## 8. Dev: ready for the values (checked 19 Oct, 15:50Z)
+
+The code is on dev (`ac-dev-live-api` serves 0de9566d). The channel switches on the
+moment the four settings exist; nothing else in Sales Xray changes.
+
+1. On `ac` (root), each value from stdin, never on screen:
+   `<value> | ac-secret-drop AC_WHATSAPP_APP_ID dev`, then `AC_WHATSAPP_CONFIG_ID`,
+   `AC_WHATSAPP_APP_SECRET`, and last `AC_WHATSAPP_WEBHOOK_VERIFY_TOKEN dev --restart`
+   (the restart makes the dev API read them). `AC_LEAD_DESK_TOKEN_KEY` is already there.
+2. Check, signed in to dev as an owner: Settings → Integrations shows WhatsApp with
+   **Connect WhatsApp**. On the server:
+   `curl -s 'http://127.0.0.1:8101/v1/lead-desk/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=<token>&hub.challenge=42'`
+   answers `42` (a wrong token answers 403).
+3. **Gap: Cloudflare Access.** On dev, `/v1/lead-desk/whatsapp/webhook` still goes to
+   the Access sign-in (302), so Meta cannot deliver messages or statuses there; the
+   Leads webhook has its bypass (it answers 403 from Sales Xray). The bypass for this
+   path is Align 3's per-environment Root card. Until it exists, sending works and
+   the dev inbox stays empty.
+4. In the dev test app (Meta dashboard): redirect URI
+   `https://salesxray-dev.authorityclosers.com/v1/lead-desk/whatsapp/callback`, the
+   webhook above with the verify token and the fields in section 4, and our team
+   phones as test recipients.
+5. Connect: Settings → Integrations → Connect WhatsApp → Embedded Signup. **Check**
+   that Embedded Signup lists the test app's own test account and number; if it
+   doesn't, the number is connected once with the dashboard's temporary token instead
+   (a dev-only step, asked for then).
+
+Then the two review screencasts, on dev with the test number:
+
+- **Send a message** (`whatsapp_business_messaging`): a test phone writes to the
+  test number → the lead appears in Leads with the conversation → the seller replies
+  in the lead's conversation → the reply arrives on the phone (shown side by side) →
+  the status ticks to delivered and read.
+- **Create a template** (`whatsapp_business_management`): Settings → Integrations →
+  WhatsApp → Templates → new template (name, language, category, body with a
+  variable) → it shows Pending → after Meta approves, Approved → it is sent to a lead
+  outside the 24-hour window.
+
+## 9. Money
 
 Each customer's WhatsApp account has its own billing with Meta: the customer adds a
 payment method in WhatsApp Manager during or after Embedded Signup. Authority Closers

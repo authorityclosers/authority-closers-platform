@@ -158,7 +158,7 @@ staging or dev. A Google Ads lead form posts to
 
 The API reads these from the same Infisical `/application` path for each
 organisation's own WhatsApp number in Settings → Integrations (Meta's Embedded
-Signup, the separate "Sales Xray WhatsApp" Meta app; see
+Signup, the separate "Sales Xray Messaging" Meta app; see
 `docs/product/lead-desk/whatsapp-app.md`). The channel stays off (Settings shows
 nothing) until the first four exist alongside `AC_LEAD_DESK_TOKEN_KEY`, which also
 seals each number's business token and PIN. No release requires them. Compose

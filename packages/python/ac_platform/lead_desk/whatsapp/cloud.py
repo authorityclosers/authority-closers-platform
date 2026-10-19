@@ -1,7 +1,7 @@
 """WhatsApp Cloud API for the Sales Xray CRM: AC's Meta app, and each customer's own number.
 
 An organisation connects its own WhatsApp Business number with Meta's Embedded Signup
-(the "Sales Xray WhatsApp" app, see docs/product/lead-desk/whatsapp-app.md). The page
+(the "Sales Xray Messaging" app, see docs/product/lead-desk/whatsapp-app.md). The page
 gets a one-time code and the number's ids; the server swaps the code for a business
 integration token, subscribes AC's app to the account's webhook and registers the
 number for the Cloud API. The token is sealed to the number. The customer's own
