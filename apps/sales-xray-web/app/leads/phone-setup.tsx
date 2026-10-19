@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "../ui/kit";
 import { Sheet } from "./lead-sheet";
+import { usePhoneOnboarded } from "./phone-onboarding";
 import { reportPhone } from "./leads-client";
 import {
   askCallAccess,
@@ -107,9 +108,24 @@ export async function reportSetup(status: SetupStatus): Promise<void> {
   }
 }
 
+/** Opens the checklist from More (/leads#phone-setup) after the first run. */
+export const PHONE_SETUP_HASH = "#phone-setup";
+
 export function PhoneSetupBar() {
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [open, setOpen] = useState(false);
+  // The first run asked for each permission: the bar leaves Leads, the
+  // checklist stays one tap away in More.
+  const onboarded = usePhoneOnboarded();
+
+  useEffect(() => {
+    const read = () => {
+      if (window.location.hash === PHONE_SETUP_HASH) setOpen(true);
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
 
   const take = useCallback((next: SetupStatus | null) => {
     if (!next) return;
@@ -129,7 +145,7 @@ export function PhoneSetupBar() {
 
   if (!status) return null;
   const { done, total } = setupProgress(status);
-  if (done >= total && !open) return null;
+  if ((done >= total || onboarded) && !open) return null;
 
   return (
     <>
@@ -154,7 +170,15 @@ export function PhoneSetupBar() {
         open={open}
         status={status}
         onStatus={take}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          if (window.location.hash === PHONE_SETUP_HASH)
+            history.replaceState(
+              null,
+              "",
+              window.location.pathname + window.location.search,
+            );
+        }}
       />
     </>
   );
