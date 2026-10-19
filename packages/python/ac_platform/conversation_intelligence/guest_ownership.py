@@ -966,8 +966,9 @@ async def link_registered_recording(
             processing_lease_id=actor.processing_lease_id,
             usage_id=usage.id,
             source_sha256=usage.source_sha256,
-            capture_source=UPLOAD_CAPTURE_SOURCE.get(),
             created_at=now,
+            # Only when the upload named one: older schemas (upgrade proofs) lack it.
+            **({"capture_source": source} if (source := UPLOAD_CAPTURE_SOURCE.get()) else {}),
         )
     )
     await database.flush()

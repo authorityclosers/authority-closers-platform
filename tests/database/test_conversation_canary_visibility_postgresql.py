@@ -1,5 +1,6 @@
 """Canary visibility proofs against PostgreSQL with fictional uploads only."""
 
+import hashlib
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,7 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
-from ac_platform.conversation_intelligence import acquisition_library
+from ac_platform.conversation_intelligence import acquisition_library, canary
 from ac_platform.conversation_intelligence.admin_recordings import AdminConversationRecordings
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -25,9 +26,11 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.review_contracts import ReviewAssignmentCreateRequest
 from ac_platform.conversation_intelligence.review_service import ConversationReviewService
+from tests.database import test_conversation_account_library_postgresql as account_library_tests
 from tests.database.test_conversation_account_library_postgresql import (
     _seed_retained_guest_submission,
     _upload,
+    _wav_one_second_48k,
 )
 from tests.database.test_conversation_authority_postgresql import _promote_admin
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -35,12 +38,21 @@ from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
 
 
+def _fixture() -> bytes:
+    """A stand-in for the bundled canary recording: the test audio, last sample changed."""
+    audio = bytearray(_wav_one_second_48k())
+    audio[-1] ^= 1
+    return bytes(audio)
+
+
 @pytest.fixture
 def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
 
-async def _sources(setup: Any, owner: str = "guest") -> list[dict[str, Any]]:
+async def _sources(setup: Any, owner: str = "guest", by: str = "marker") -> list[dict[str, Any]]:
+    """Three sources; the middle one is a canary, by marker or (by="fixture") as an
+    unmarked upload of the bundled canary recording, as the QA account run sends."""
     sources = []
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
@@ -57,12 +69,17 @@ async def _sources(setup: Any, owner: str = "guest") -> list[dict[str, Any]]:
             else:
                 async with setup.sessions() as db, db.begin():
                     setup.guest = await setup.factory(db).issue()
-                source = await _seed_retained_guest_submission(setup)
+                if index == 1 and by == "fixture":
+                    with pytest.MonkeyPatch.context() as patch:
+                        patch.setattr(account_library_tests, "_wav_one_second_48k", _fixture)
+                        source = await _seed_retained_guest_submission(setup)
+                else:
+                    source = await _seed_retained_guest_submission(setup)
                 if owner == "claimed":
                     async with setup.sessions() as db, db.begin():
                         await setup.factory(db).claim(setup.guest.token, setup.state.actor)
             sources.append(source)
-            if index == 1:
+            if index == 1 and by == "marker":
                 async with setup.sessions() as db, db.begin():
                     recording = await db.get(ConversationRecording, source["recording_id"])
                     await mark_canary_submission(
@@ -76,11 +93,17 @@ async def _sources(setup: Any, owner: str = "guest") -> list[dict[str, Any]]:
     return sources
 
 
-def test_admin_pages_and_search_exclude_canary(postgres_harness: Any, tmp_path: Path) -> None:
+@pytest.mark.parametrize("by", ["marker", "fixture"])
+def test_admin_pages_and_search_exclude_canary(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, by: str
+) -> None:
+    fixture_sha256 = hashlib.sha256(_fixture()).hexdigest()
+    monkeypatch.setattr(canary, "fixture_sha256s", lambda: frozenset({fixture_sha256}))
+
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
         try:
-            older, canary, newer = await _sources(setup)
+            older, test_call, newer = await _sources(setup, by=by)
             actor = await _promote_admin(setup.engine, setup.state)
             async with setup.sessions() as db, db.begin():
                 inventory = AdminConversationRecordings(
@@ -93,7 +116,7 @@ def test_admin_pages_and_search_exclude_canary(postgres_harness: Any, tmp_path: 
                 second = await inventory.list(actor, limit=1, cursor=first["next_cursor"])
                 assert [row["id"] for row in second["items"]] == [str(older["recording_id"])]
                 assert second["next_cursor"] is None
-                assert await inventory.list(actor, search=str(canary["recording_id"])) == {
+                assert await inventory.list(actor, search=str(test_call["recording_id"])) == {
                     "items": [],
                     "next_cursor": None,
                 }
