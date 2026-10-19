@@ -38,17 +38,20 @@ export type NavIcon =
   | "calls"
   | "gold"
   | "reviewers"
+  | "review"
   | "health"
   | "usage"
   | "company"
   | "outcomes"
   | "providers"
+  | "settings"
   | "analysis"
   | "execution"
   | "minutes"
   | "synthetic"
   | "people"
   | "organisations"
+  | "integrations"
   | "billing"
   | "academies"
   | "learning"
@@ -110,6 +113,12 @@ export const NAVIGATION: readonly NavGroup[] = [
         phone: true,
       },
       {
+        href: "/analysis-review",
+        label: "Analysis review",
+        icon: "review",
+        need: { kind: "salesXray" },
+      },
+      {
         href: "/reviewers",
         label: "Reviewers",
         icon: "reviewers",
@@ -153,6 +162,12 @@ export const NAVIGATION: readonly NavGroup[] = [
     label: "Sales Xray setup",
     items: [
       {
+        href: "/settings",
+        label: "All settings",
+        icon: "settings",
+        need: { kind: "salesXray" },
+      },
+      {
         href: "/sales-xray/providers",
         label: "Providers & costs",
         icon: "providers",
@@ -167,6 +182,12 @@ export const NAVIGATION: readonly NavGroup[] = [
       {
         href: "/sales-xray/call-data",
         label: "Call data",
+        icon: "analysis",
+        need: { kind: "salesXray" },
+      },
+      {
+        href: "/sales-xray/report-settings",
+        label: "Report settings",
         icon: "analysis",
         need: { kind: "salesXray" },
       },
@@ -204,6 +225,12 @@ export const NAVIGATION: readonly NavGroup[] = [
         label: "Organisations",
         icon: "organisations",
         need: { kind: "platform", any: ["platform_tenants_read"] },
+      },
+      {
+        href: "/integrations",
+        label: "Integrations",
+        icon: "integrations",
+        need: { kind: "salesXray" },
       },
       {
         // /platform is the only path platform-only operators are admitted to (proxy.ts).

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -53,6 +54,9 @@ from ac_platform.identity.models import PasswordCredential, Person, ProviderIden
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership, Organisation
+
+# How long a retry's owner continuation grant lasts (orchestrator, 19 Oct 2026).
+CONTINUATION_VALIDITY = timedelta(hours=24)
 
 
 @dataclass(frozen=True, slots=True)
@@ -458,8 +462,9 @@ class GuestOwnership:
         )
         if owner_person_id is None and owner_visitor_id is None:
             raise ConversationDenied("A current upload owner is required.")
+        # A retry's grant covers 24 hours, like the plan it allows (19 Oct 2026).
         expires_at = min(
-            now + timedelta(hours=1),
+            now + CONTINUATION_VALIDITY,
             utc(permission.expires_at),
             utc(permission.retention_until),
         )
@@ -928,6 +933,11 @@ async def admit_processing_actor(
     return usage
 
 
+# This upload's X-Capture-Source (ADR 0056 F2), set by the source upload route for its
+# own request only; the row below is append-only, so it is written once, here.
+UPLOAD_CAPTURE_SOURCE: ContextVar[str | None] = ContextVar("upload_capture_source", default=None)
+
+
 async def link_registered_recording(
     database: AsyncSession, actor: ProcessingActor, recording: ConversationRecording, now: datetime
 ) -> None:
@@ -957,6 +967,8 @@ async def link_registered_recording(
             usage_id=usage.id,
             source_sha256=usage.source_sha256,
             created_at=now,
+            # Only when the upload named one: older schemas (upgrade proofs) lack it.
+            **({"capture_source": source} if (source := UPLOAD_CAPTURE_SOURCE.get()) else {}),
         )
     )
     await database.flush()

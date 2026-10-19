@@ -122,3 +122,103 @@ it("stays 'Coming soon' until AC's Google Ads app is set up", async () => {
   expect(google().textContent).toContain("Coming soon");
   expect(google().querySelector("a")).toBeNull();
 });
+
+/** The app's SXPhone object: answers status (this app can open the browser) and openConnect. */
+function fakePhone(sent: string[]) {
+  const listeners: ((event: { data: unknown }) => void)[] = [];
+  vi.stubGlobal("SXPhone", {
+    addEventListener: (
+      _: string,
+      listener: (event: { data: unknown }) => void,
+    ) => listeners.push(listener),
+    postMessage: (data: string) => {
+      const message = JSON.parse(data) as { id: string; method: string };
+      sent.push(message.method);
+      const result =
+        message.method === "status" ? { connect: true } : { opened: true };
+      queueMicrotask(() =>
+        listeners.forEach((listener) =>
+          listener({
+            data: JSON.stringify({ id: message.id, ok: true, result }),
+          }),
+        ),
+      );
+    },
+  });
+}
+
+const settle = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+it("in the Sales Xray app, Continue with Google opens in the phone's browser", async () => {
+  const sent: string[] = [];
+  fakePhone(sent);
+  const plain = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes("/google/connect?")) {
+        calls.push({ url: String(input), method: "GET" });
+        return json({
+          url: "https://accounts.google.com/o/oauth2/v2/auth?x=1",
+        });
+      }
+      return plain(input, init);
+    }),
+  );
+  await render();
+  const link = google().querySelector("a") as HTMLAnchorElement;
+  const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+  await act(async () => {
+    link.dispatchEvent(click);
+  });
+  await settle();
+
+  expect(click.defaultPrevented).toBe(true);
+  expect(sent).toEqual(["status", "openConnect"]);
+  expect(
+    calls.some((call) =>
+      call.url.startsWith("/v1/lead-desk/google/connect?app_challenge="),
+    ),
+  ).toBe(true);
+});
+
+it("finishes a Google Connect the app brought back to this page", async () => {
+  window.localStorage.setItem(
+    "sx.appConnect",
+    JSON.stringify({
+      provider: "google",
+      verifier: "v".repeat(64),
+      at: Date.now(),
+    }),
+  );
+  window.history.replaceState(
+    null,
+    "",
+    `/leads?tab=sources#connect=google&handoff=${"H".repeat(40)}`,
+  );
+  const plain = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/google/app-complete")) {
+        calls.push({ url: String(input), method: init?.method ?? "GET" });
+        return json({ result: "noaccounts" });
+      }
+      return plain(input, init);
+    }),
+  );
+  await render();
+  await settle();
+
+  expect(calls).toContainEqual({
+    url: "/v1/lead-desk/google/app-complete",
+    method: "POST",
+  });
+  expect(google().textContent).toContain(
+    "That Google account has no Google Ads accounts.",
+  );
+  expect(window.location.hash).toBe("");
+});

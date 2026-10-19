@@ -1,6 +1,10 @@
 import { adminRead } from "@/app/lib/server-api";
 import { Page, PageHeader, QueryTabs, Unavailable } from "@/app/ui/kit";
-import { ENVIRONMENTS, normalizeMetrics } from "@/app/usage/cost-data";
+import {
+  ENVIRONMENTS,
+  chartView,
+  normalizeMetrics,
+} from "@/app/usage/cost-data";
 import {
   COST_WINDOWS,
   CallsView,
@@ -34,6 +38,10 @@ type Query = {
   tests?: string;
   a?: string;
   b?: string;
+  charts?: string;
+  ca?: string;
+  cb?: string;
+  sort?: string;
 };
 
 const pick = (
@@ -61,6 +69,8 @@ export default async function UsagePage({
     ),
     env: pick(query.env, ["all", ...ENVIRONMENTS], "all"),
     tests: query.tests === "1",
+    // The Overview's chosen charts and compared pair (owner, 19 Oct 2026).
+    ...chartView(query),
   };
   const keep = [
     current.days !== "30" ? `days=${current.days}` : "",
@@ -73,7 +83,11 @@ export default async function UsagePage({
   const result = events
     ? null
     : await adminRead(
-        `/v1/admin/conversation/metrics?days=${current.days}&env=${current.env}&tests=${current.tests ? 1 : 0}`,
+        `/v1/admin/conversation/metrics?days=${current.days}&env=${current.env}&tests=${current.tests ? 1 : 0}${
+          current.tab === "calls"
+            ? `&sort=${current.sort ?? "newest"}&steps=1`
+            : ""
+        }`,
         normalizeMetrics,
       );
   const metrics = result?.ok ? result.data : null;
@@ -98,7 +112,9 @@ export default async function UsagePage({
           {current.tab === "overview" ? (
             <OverviewView metrics={metrics} current={current} />
           ) : null}
-          {current.tab === "calls" ? <CallsView metrics={metrics} /> : null}
+          {current.tab === "calls" ? (
+            <CallsView metrics={metrics} current={current} />
+          ) : null}
           {current.tab === "revenue" ? <RevenueView metrics={metrics} /> : null}
           {current.tab === "providers" ? (
             <ProvidersView metrics={metrics} />

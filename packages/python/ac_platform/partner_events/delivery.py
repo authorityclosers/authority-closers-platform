@@ -160,6 +160,40 @@ def read_secrets(secret_ref: str, secret_ref_next: str | None) -> list[bytes] | 
     return values
 
 
+async def read_secrets_for(
+    sessions: Any, tenant_id: UUID, secret_ref: str, secret_ref_next: str | None
+) -> list[bytes] | None:
+    """``read_secrets``, plus secrets made in Settings -> Integrations.
+
+    A name ``AC_PARTNER_WEBHOOK_SECRET__SEALED_<id>`` is read from the organisation's
+    sealed store (``ac_platform.integrations.sealed``, platform key
+    ``AC_INTEGRATIONS_SEAL_KEY``); every other name still comes from the environment.
+    """
+    from ac_platform.integrations import sealed
+
+    refs = [secret_ref, *([secret_ref_next] if secret_ref_next else [])]
+    if all(sealed.id_from_ref(ref) is None for ref in refs):
+        return read_secrets(secret_ref, secret_ref_next)
+
+    def one(connection: Any, ref: str) -> bytes | None:
+        if sealed.id_from_ref(ref) is None:
+            value = os.environ.get(ref, "")
+            return value.encode() if value else None
+        return sealed.resolve(connection, ref, tenant_id=tenant_id)
+
+    def read(sync: Any) -> list[bytes] | None:
+        connection = sync.connection()
+        current = one(connection, secret_ref)
+        if current is None:
+            return None
+        following = one(connection, secret_ref_next) if secret_ref_next else None
+        return [current, *([following] if following else [])]
+
+    async with sessions() as session:
+        result: list[bytes] | None = await session.run_sync(read)
+        return result
+
+
 @dataclass(frozen=True)
 class Outcome:
     http_status: int | None
@@ -506,7 +540,12 @@ async def deliver_one(
     elif not url_allowed(claimed.endpoint_url, environment):
         outcome = Outcome(None, "url_refused", 0)
     else:
-        secrets = read_secrets(claimed.secret_ref, claimed.secret_ref_next)
+        secrets = await read_secrets_for(
+            sessions,
+            UUID(str(claimed.report["tenant_id"])),
+            claimed.secret_ref,
+            claimed.secret_ref_next,
+        )
         if secrets is None:
             outcome = Outcome(None, "secret_missing", 0)
         else:

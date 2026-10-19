@@ -608,6 +608,22 @@ def grant_minutes(account: MinuteAccount, grant: MinuteGrant) -> MinuteAccount:
     return replace(account, grants=(*account.grants, grant))
 
 
+def committed_since(budget: BudgetAccount, period_start_epoch: int | None) -> int:
+    """What counts against a budget: everything ever (None), or since a period began.
+
+    Money still held for a running call counts whenever it was reserved; settled
+    spend counts only when it was reserved inside the period (19 Oct 2026).
+    """
+
+    return sum(
+        r.committed_paise
+        for r in budget.reservations
+        if period_start_epoch is None
+        or r.state not in {"settled", "released"}
+        or r.quote.created_at_epoch >= period_start_epoch
+    )
+
+
 def revise_budget_cap(
     budget: BudgetAccount, new_cap_paise: int, approval: BudgetCapApproval
 ) -> BudgetAccount:
@@ -683,6 +699,8 @@ def reserve(
     now_epoch: int,
     *,
     release_cap_paise: int | None = None,
+    period_cap_paise: int | None = None,
+    period_start_epoch: int | None = None,
 ) -> LedgerTransition:
     existing = _pair(minutes, budget, reservation_id)
     if existing is not None:
@@ -712,6 +730,10 @@ def reserve(
         committed_paise = sum(item.committed_paise for item in budget.reservations)
         if quote.max_cost_paise > effective_cap - committed_paise:
             raise BudgetExhausted("current release project budget exhausted")
+    if period_cap_paise is not None:
+        _integer(period_cap_paise, "period cap paise")
+        if quote.max_cost_paise > period_cap_paise - committed_since(budget, period_start_epoch):
+            raise BudgetExhausted("period project budget exhausted")
     reservation = Reservation(reservation_id, quote, permission)
     return LedgerTransition(
         replace(minutes, reservations=(*minutes.reservations, reservation)),

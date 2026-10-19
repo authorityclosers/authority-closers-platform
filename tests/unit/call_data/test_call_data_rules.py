@@ -344,3 +344,21 @@ def test_one_click_caps_step_through_the_presets() -> None:
         5000,
         5000,
     ]
+
+
+def test_one_canonical_value_digest_shared_with_review_verdicts() -> None:
+    import hashlib
+
+    from ac_platform.call_data.values import value_digest
+
+    first = value_digest("person.name", {"text": "Amit", "unit": None})
+    assert first == value_digest("person.name", {"unit": None, "text": "Amit"})  # key order
+    # Byte for byte: sorted keys, compact separators, UTF-8 kept (Review 2.0 pins the same).
+    assert (
+        value_digest("need.goal", {"text": "पैसे बचाना"})
+        == hashlib.sha256('{"type":"need.goal","value":{"text":"पैसे बचाना"}}'.encode()).hexdigest()
+    )
+    labels = {"intent": "discovery", "act": "question"}
+    here = value_digest("conversation.segment", labels, (1000, 4000, "prospect"))
+    assert here != value_digest("conversation.segment", labels, (1000, 4500, "prospect"))
+    assert here != value_digest("conversation.segment", labels)

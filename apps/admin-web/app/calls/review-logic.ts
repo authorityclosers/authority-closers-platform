@@ -28,6 +28,7 @@ export function waveformBars(
 
 export type ReviewTab =
   | "review"
+  | "analysis"
   | "report"
   | "pillars"
   | "coaching"
@@ -84,6 +85,8 @@ export function keyAction(event: {
       return { kind: "tab", tab: "transcript" };
     case "v":
       return { kind: "tab", tab: "review" };
+    case "a":
+      return { kind: "tab", tab: "analysis" };
     case "n":
       return { kind: "call", step: 1 };
     case "p":

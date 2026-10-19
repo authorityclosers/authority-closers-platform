@@ -105,14 +105,23 @@ class ProviderFailure(RuntimeError):
 async def active_endpoints(session: Any) -> int:
     from sqlalchemy import func, select
 
-    from ac_platform.partner_events.models import PartnerWebhookEndpoint
+    from ac_platform.partner_events.models import (
+        PartnerHandoverRecipient,
+        PartnerWebhookEndpoint,
+    )
 
     count = await session.scalar(
         select(func.count())
         .select_from(PartnerWebhookEndpoint)
         .where(PartnerWebhookEndpoint.status == "active")
     )
-    return int(count or 0)
+    # 0102: a hand-over recipient may be an organisation's only one.
+    recipients = await session.scalar(
+        select(func.count())
+        .select_from(PartnerHandoverRecipient)
+        .where(PartnerHandoverRecipient.status == "active")
+    )
+    return int(count or 0) + int(recipients or 0)
 
 
 # Newest live report per call, of a workspace with an active endpoint that takes

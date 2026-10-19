@@ -1,5 +1,5 @@
 #!/bin/bash
-# Partner webhooks runner: Sales X-Ray -> partner (first Wise Life), contract
+# Partner webhooks runner: Sales X-Ray -> partners, contract
 # sx.analysis_completed.v1 (18 Oct 2026).
 # Every minute (ac-partner-events@<env>.timer), for about 55 seconds: quote
 # facts for new reports of workspaces with an active endpoint (one Gemini 3.8

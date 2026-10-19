@@ -103,15 +103,22 @@ DEFAULT_RATE_LIMIT_RULES = (
     RateLimitRule(
         name="oauth-start",
         method="GET",
-        path=re.compile(r"^/v1/auth/google/start$"),
+        path=re.compile(r"^/v1/auth/(?:google|facebook|apple)/start$"),
         capacity=20,
         refill_seconds=600,
     ),
     RateLimitRule(
         name="oauth-callback",
         method="GET",
-        path=re.compile(r"^/v1/auth/google/callback$"),
+        path=re.compile(r"^/v1/auth/(?:google|facebook|apple)/callback$"),
         capacity=60,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
+        name="oauth-apple-form-post",
+        method="POST",
+        path=re.compile(r"^/v1/auth/apple/callback$"),
+        capacity=30,
         refill_seconds=600,
     ),
     RateLimitRule(

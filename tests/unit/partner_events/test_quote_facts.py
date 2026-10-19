@@ -48,7 +48,7 @@ def _fact(kind: str, value: dict[str, Any], evidence: list[str], **extra: Any) -
 
 
 def test_profile_matches_the_v1_contract_and_its_schema() -> None:
-    profile = load_profile("wiselife-quote-v1")
+    profile = load_profile("rooftop-solar-quote-v1")
     assert profile.looked_for == FACT_TYPES
     assert profile.model_id == "gemini-3.8-flash"
     item = profile.response_schema["properties"]["facts"]["items"]
@@ -62,9 +62,9 @@ def test_profile_matches_the_v1_contract_and_its_schema() -> None:
 
 
 def test_prompt_names_roles_and_cites_segment_ids_only() -> None:
-    profile = load_profile("wiselife-quote-v1")
+    profile = load_profile("rooftop-solar-quote-v1")
     system, user = build_prompt(profile, SEGMENTS[:2], SPEAKERS)
-    assert system.startswith("wiselife-quote-prompt/1\n")
+    assert system.startswith("rooftop-solar-quote-prompt/1\n")
     assert "Amounts of money appear only in mentioned_price" in system
     assert user.splitlines() == [
         "Transcript:",
@@ -856,3 +856,18 @@ def test_check_5_facts_that_must_survive(
 ) -> None:
     (fact,) = _one(kind, value, text)
     assert fact["value"] == expected
+
+
+def test_profiles_resolve_through_their_configuration_files() -> None:
+    """Each profiles/*.json names its own id; no profile id is written in code."""
+    import json
+
+    from ac_platform.partner_events import quote_facts
+
+    for profile, name in quote_facts.PROFILES.items():
+        data = json.loads((quote_facts.PROFILE_DIR / name).read_text(encoding="utf-8"))
+        assert data["profile"] == profile
+        assert load_profile(profile).name == profile
+    assert "rooftop-solar-quote-v1" in quote_facts.PROFILES
+    source = (quote_facts.PROFILE_DIR.parent / "quote_facts.py").read_text(encoding="utf-8")
+    assert "rooftop-solar-quote-v1" not in source

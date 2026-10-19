@@ -214,6 +214,9 @@ def test_deep_waits_for_fast_then_supersedes_labels_and_measures(postgres_harnes
         everything = facts.call_objects(connection, seeded["recording_id"])
     assert everything["schema"] == "call-data-objects/1"
     assert [s["segment_id"] for s in everything["segments"]] == ["s1", "s2", "s3", "s4", "s5"]
+    # Each label and the voice carry their object id, so a review verdict can name them.
+    assert all(UUID(s["object_id"]) for s in everything["segments"])
+    assert UUID(everything["voice"]["object_id"])
     assert everything["segments"][1]["speaker"] == "prospect"
     assert everything["segments"][0]["intent"] == "discovery"
     assert everything["voice"]["source"] == "transcript timings only"

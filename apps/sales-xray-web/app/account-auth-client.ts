@@ -2,6 +2,9 @@ export type EmailCodeConfig = {
   enabled: boolean;
   consent_version: string | null;
   google_enabled: boolean;
+  /** Each provider shows only once its settings exist on the server. */
+  apple_enabled: boolean;
+  facebook_enabled: boolean;
   expires_in_seconds: number;
   resend_after_seconds: number;
 };
@@ -31,8 +34,18 @@ export function parseCodeTiming(value: unknown) {
   };
 }
 
+function optionalFlag(value: unknown) {
+  if (value === undefined) return false;
+  if (typeof value !== "boolean")
+    throw new Error("Invalid sign-in configuration");
+  return value;
+}
+
 export function parseEmailCodeConfig(value: unknown): EmailCodeConfig {
   const item = object(value);
+  // Older servers send no Apple or Facebook flag: both stay hidden.
+  const apple = optionalFlag(item.apple_enabled);
+  const facebook = optionalFlag(item.facebook_enabled);
   if (
     typeof item.enabled !== "boolean" ||
     typeof item.google_enabled !== "boolean" ||
@@ -40,7 +53,8 @@ export function parseEmailCodeConfig(value: unknown): EmailCodeConfig {
       (typeof item.consent_version !== "string" ||
         !item.consent_version.trim() ||
         item.consent_version.length > 64)) ||
-    ((item.enabled || item.google_enabled) && item.consent_version === null)
+    ((item.enabled || item.google_enabled || apple || facebook) &&
+      item.consent_version === null)
   )
     throw new Error("Invalid sign-in configuration");
   return {
@@ -48,6 +62,8 @@ export function parseEmailCodeConfig(value: unknown): EmailCodeConfig {
     enabled: item.enabled,
     consent_version: item.consent_version,
     google_enabled: item.google_enabled,
+    apple_enabled: apple,
+    facebook_enabled: facebook,
   };
 }
 
@@ -103,13 +119,19 @@ export type AuthCompletionResult =
   | "success"
   | "failed"
   | "review_terms"
-  | "unavailable";
+  | "unavailable"
+  /** The email already has an account this provider may not join. */
+  | "account_exists"
+  /** The provider shared no (verified) email address. */
+  | "no_email";
 
 const AUTH_COMPLETION_RESULTS = new Set<AuthCompletionResult>([
   "success",
   "failed",
   "review_terms",
   "unavailable",
+  "account_exists",
+  "no_email",
 ]);
 
 export function parseAuthCompletionQuery(
@@ -265,4 +287,215 @@ export async function passwordLogin(
 export function maskedEmail(email: string) {
   const at = email.lastIndexOf("@");
   return at > 0 ? `${email.slice(0, 1)}•••${email.slice(at)}` : "your email";
+}
+
+/**
+ * Full-page sign-in, for browsers that block the sign-in window: the Claude
+ * desktop pane, and Facebook's and Instagram's in-app browsers, where people
+ * arrive from lead ads. The same click navigates this tab through
+ * /v1/auth/<provider>/start; /auth/complete confirms the flow's receipt, keeps
+ * a short "signed in" note for this tab and returns to the starting page,
+ * where the sign-in screen finishes as it does after the window.
+ */
+export type SignInProvider = "google" | "apple" | "facebook";
+const SIGN_IN_PROVIDERS = new Set<SignInProvider>([
+  "google",
+  "apple",
+  "facebook",
+]);
+
+export function providerLabel(provider: SignInProvider) {
+  return provider === "google"
+    ? "Google"
+    : provider === "apple"
+      ? "Apple"
+      : "Facebook";
+}
+
+export function providerEnabled(
+  config: EmailCodeConfig | null | undefined,
+  provider: SignInProvider,
+) {
+  if (!config?.consent_version) return false;
+  return provider === "google"
+    ? config.google_enabled
+    : provider === "apple"
+      ? config.apple_enabled
+      : config.facebook_enabled;
+}
+
+const REDIRECT_KEY = "sx.signIn.redirect";
+const RESULT_KEY = "sx.signIn.result";
+/** As long as the server keeps the sign-in transaction. */
+const REDIRECT_MAX_AGE_MS = 10 * 60 * 1000;
+/** The receipt the completion page checked is good for three minutes. */
+const RESULT_MAX_AGE_MS = 3 * 60 * 1000;
+
+/** In-app browsers known to break sign-in windows. */
+const POPUP_HOSTILE =
+  /\bFBA[NV]\/|\bFB_IAB\b|\bFB4A\b|\bFBIOS\b|\bInstagram[ /]\d|\bLinkedInApp\b|\bBytedanceWebview\b|\bmusical_ly_|\bSnapchat\/|\bLine\/\d/i;
+
+export function popupHostileBrowser(userAgent: string | null | undefined) {
+  return POPUP_HOSTILE.test(userAgent ?? "");
+}
+
+/** A same-origin page to come back to; never the completion or API paths. */
+export function safeReturnPath(candidate: unknown): string {
+  if (
+    typeof candidate !== "string" ||
+    candidate.length > 512 ||
+    !candidate.startsWith("/") ||
+    candidate.startsWith("//") ||
+    candidate.includes("\\")
+  )
+    return "/";
+  try {
+    const url = new URL(candidate, "https://sales-xray.invalid");
+    if (
+      url.origin !== "https://sales-xray.invalid" ||
+      url.pathname.startsWith("/auth/complete") ||
+      url.pathname.startsWith("/v1/")
+    )
+      return "/";
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return "/";
+  }
+}
+
+function sessionStore(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberRedirectSignIn(
+  flow: string,
+  provider: SignInProvider,
+  returnTo: string,
+) {
+  if (!UUID.test(flow)) return false;
+  try {
+    sessionStore()?.setItem(
+      REDIRECT_KEY,
+      JSON.stringify({
+        flow,
+        provider,
+        returnTo: safeReturnPath(returnTo),
+        at: Date.now(),
+      }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The page a full-page sign-in started from, for this exact flow. */
+export function readRedirectSignIn(
+  flow: string,
+): { provider: SignInProvider; returnTo: string } | null {
+  try {
+    const raw = sessionStore()?.getItem(REDIRECT_KEY);
+    const kept = JSON.parse(raw ?? "null") as {
+      flow?: unknown;
+      provider?: unknown;
+      returnTo?: unknown;
+      at?: unknown;
+    } | null;
+    if (
+      !kept ||
+      kept.flow !== flow ||
+      !UUID.test(flow) ||
+      typeof kept.provider !== "string" ||
+      !SIGN_IN_PROVIDERS.has(kept.provider as SignInProvider) ||
+      typeof kept.at !== "number" ||
+      Date.now() - kept.at > REDIRECT_MAX_AGE_MS
+    )
+      return null;
+    return {
+      provider: kept.provider as SignInProvider,
+      returnTo: safeReturnPath(kept.returnTo),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function forgetRedirectSignIn() {
+  try {
+    sessionStore()?.removeItem(REDIRECT_KEY);
+  } catch {
+    // Nothing kept, nothing to forget.
+  }
+}
+
+/** The page a full-page sign-in started from, once, for this exact flow. */
+export function takeRedirectSignIn(flow: string) {
+  const started = readRedirectSignIn(flow);
+  forgetRedirectSignIn();
+  return started;
+}
+
+export function keepSignInResult(
+  result: AuthCompletionResult,
+  provider: SignInProvider,
+) {
+  try {
+    sessionStore()?.setItem(
+      RESULT_KEY,
+      JSON.stringify({ result, provider, at: Date.now() }),
+    );
+  } catch {
+    // Without storage the starting page simply shows the sign-in again.
+  }
+}
+
+/** The outcome of a full-page sign-in this tab just came back from. */
+export function readSignInResult(): {
+  result: AuthCompletionResult;
+  provider: SignInProvider;
+} | null {
+  try {
+    const raw = sessionStore()?.getItem(RESULT_KEY);
+    if (raw === null || raw === undefined) return null;
+    const kept = JSON.parse(raw) as {
+      result?: unknown;
+      provider?: unknown;
+      at?: unknown;
+    } | null;
+    if (
+      !kept ||
+      typeof kept.at !== "number" ||
+      Date.now() - kept.at > RESULT_MAX_AGE_MS ||
+      typeof kept.result !== "string" ||
+      !AUTH_COMPLETION_RESULTS.has(kept.result as AuthCompletionResult) ||
+      typeof kept.provider !== "string" ||
+      !SIGN_IN_PROVIDERS.has(kept.provider as SignInProvider)
+    )
+      return null;
+    return {
+      result: kept.result as AuthCompletionResult,
+      provider: kept.provider as SignInProvider,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function forgetSignInResult() {
+  try {
+    sessionStore()?.removeItem(RESULT_KEY);
+  } catch {
+    // Nothing kept, nothing to forget.
+  }
+}
+
+/** The outcome of a full-page sign-in this tab just came back from, once. */
+export function takeSignInResult() {
+  const returned = readSignInResult();
+  forgetSignInResult();
+  return returned;
 }

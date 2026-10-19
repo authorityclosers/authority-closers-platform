@@ -6,6 +6,8 @@ After=network-online.target docker.service
 [Service]
 Type=exec
 ExecStart=/usr/local/sbin/ac-call-data %i
+# The runner lives inside the worker on staging and production; stop it there too.
+ExecStop=/usr/local/sbin/ac-call-data stop %i
 Restart=always
 RestartSec=15s
 # Pick up each new release: restart at least every 30 minutes (the runner holds no state).

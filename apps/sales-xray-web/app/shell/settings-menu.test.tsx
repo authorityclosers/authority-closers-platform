@@ -476,3 +476,41 @@ it("lists the pages that are not phone tabs, organisation pages only in one", as
   // The website has no phone calls to offer.
   expect(document.body.textContent).not.toContain("Calls on this phone");
 });
+
+it("offers Phone setup in the More sheet inside the phone app only", async () => {
+  const bridge = window as Window & { SXPhone?: unknown };
+  const render = async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () =>
+      root.render(
+        <SettingsMenu
+          open
+          anchorRef={{ current: document.createElement("button") }}
+          onClose={() => {}}
+          name="Fictional User"
+          email="fictional@example.test"
+          allowance={null}
+          organisation={false}
+          insights={false}
+        />,
+      ),
+    );
+    return [
+      ...document.querySelectorAll<HTMLAnchorElement>(
+        'nav[aria-label="More pages"] a',
+      ),
+    ].map((link) => link.getAttribute("href"));
+  };
+  expect(await render()).not.toContain("/leads#phone-setup");
+  await act(async () => root.unmount());
+  host.remove();
+  bridge.SXPhone = { postMessage: () => {}, addEventListener: () => {} };
+  try {
+    expect(await render()).toContain("/leads#phone-setup");
+    expect(document.body.textContent).toContain("Phone setup");
+  } finally {
+    delete bridge.SXPhone;
+  }
+});

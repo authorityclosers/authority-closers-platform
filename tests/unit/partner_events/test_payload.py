@@ -57,7 +57,7 @@ APP = "https://salesxray.example.test/"
 
 def test_golden_event_body() -> None:
     payload = build_event(
-        EVENT, CONTEXT, Extraction("complete", "wiselife-quote-v1", [FACT]), app_url=APP
+        EVENT, CONTEXT, Extraction("complete", "rooftop-solar-quote-v1", [FACT]), app_url=APP
     )
     assert payload == {
         "schema": "sx.analysis_completed.v1",
@@ -91,7 +91,7 @@ def test_golden_event_body() -> None:
         "summary": "The customer wants a [n] kW system; the salesperson sends a quotation today.",
         "outcome": {"kind": "follow_up"},
         "extraction": {
-            "profile": "wiselife-quote-v1",
+            "profile": "rooftop-solar-quote-v1",
             "status": "complete",
             "looked_for": list(FACT_TYPES),
         },
@@ -113,7 +113,7 @@ def test_no_lead_no_outcome_skipped_and_failed_extractions() -> None:
     assert skipped["extraction"] == {"profile": None, "status": "skipped", "looked_for": []}
     assert skipped["facts"] == []
     failed = build_event(
-        EVENT, context, Extraction("failed", "wiselife-quote-v1", [FACT]), app_url=APP
+        EVENT, context, Extraction("failed", "rooftop-solar-quote-v1", [FACT]), app_url=APP
     )
     assert failed["extraction"]["status"] == "failed"
     assert failed["extraction"]["looked_for"] == list(FACT_TYPES)
@@ -201,7 +201,7 @@ def test_a_body_over_256_kb_drops_its_facts_and_reads_failed() -> None:
         for _ in range(2000)
     ]
     payload = build_event(
-        EVENT, CONTEXT, Extraction("complete", "wiselife-quote-v1", many), app_url=APP
+        EVENT, CONTEXT, Extraction("complete", "rooftop-solar-quote-v1", many), app_url=APP
     )
     assert payload["extraction"]["status"] == "failed"
     assert payload["facts"] == []
@@ -251,7 +251,10 @@ def test_hostile_strings_anywhere_never_break_the_body() -> None:
         lead=Lead(UUID("66666666-6666-4666-8666-666666666666"), "+91\u0000", "Cust\udfff", "Pune"),
     )
     payload = build_event(
-        EVENT, context, Extraction("complete", "wiselife-quote-v1", [hostile_fact]), app_url=APP
+        EVENT,
+        context,
+        Extraction("complete", "rooftop-solar-quote-v1", [hostile_fact]),
+        app_url=APP,
     )
     body = json.loads(body_bytes(payload))
     assert body["summary"] == "Quoted [n]"

@@ -1,0 +1,143 @@
+/* Admin -> Integrations: what the kit doesn't draw. Tokens only. */
+
+.code {
+  font-family: var(--lx-font-mono);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+}
+
+.muted {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.scopes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.scopes code {
+  padding: 1px 6px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-family: var(--lx-font-mono);
+  font-size: var(--sx-text-xs);
+}
+
+.badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.subhead {
+  margin: 12px 14px 6px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.apps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 14px 14px;
+  list-style: none;
+}
+
+.apps li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: var(--sx-text-sm);
+}
+
+.confirm {
+  display: grid;
+  gap: 6px;
+  max-width: 320px;
+}
+
+.confirm small {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  line-height: 1.35;
+}
+
+.confirmButtons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Staff keys: this person's keys for the Admin command line and MCP. */
+.staff {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+
+.staff > p {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+}
+
+.staff .apps {
+  padding: 0;
+}
+
+.made {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-accent);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+  font-size: var(--sx-text-sm);
+}
+
+.secret {
+  overflow-wrap: anywhere;
+  padding: 6px 8px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-family: var(--lx-font-mono);
+  font-size: var(--sx-text-xs);
+  user-select: all;
+}
+
+.makeForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.makeForm input[type="text"],
+.makeForm input:not([type]) {
+  min-width: 200px;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--sx-text-sm);
+}

@@ -13,6 +13,7 @@ from datetime import datetime
 import sqlalchemy as sa
 from sqlalchemy import MetaData
 
+from ac_platform.admin_settings import models as admin_settings_models
 from ac_platform.app_updates import models as app_update_models
 from ac_platform.audit import models as audit_models
 from ac_platform.authorization import models as authorization_models
@@ -27,6 +28,7 @@ from ac_platform.coaching import models as coaching_models
 from ac_platform.community import models as community_models
 from ac_platform.conversation_intelligence import (
     acquisition_models,
+    budget_settings_models,
     bulk_import_models,
     call_metrics_models,
     canary_models,
@@ -38,7 +40,9 @@ from ac_platform.conversation_intelligence import (
     prospect_call_outcome_models,
     prospect_models,
     recovery_models,
+    report_settings_models,
     review_label_models,
+    review_models,
     sensitive_segment_models,
     source_object_models,
     speaker_map_models,
@@ -50,6 +54,7 @@ from ac_platform.db.base import Base
 from ac_platform.enrollment import models as enrollment_models
 from ac_platform.identity import google_profile_models, sales_xray_profile_models
 from ac_platform.identity import models as identity_models
+from ac_platform.integrations import models as integration_models
 from ac_platform.knowledge import models as knowledge_models
 from ac_platform.lead_desk import models as lead_desk_models
 from ac_platform.learning import models as learning_models
@@ -86,15 +91,20 @@ MODEL_MODULES = (
     speaker_map_models,
     execution_control_models,
     recovery_models,
+    report_settings_models,
+    budget_settings_models,
     source_object_models,
     sensitive_segment_models,
     review_label_models,
+    review_models,
     insight_models,
     pointer_review_models,
     prospect_call_outcome_models,
     lead_desk_models,
     partner_event_models,
     call_data_models,
+    integration_models,
+    admin_settings_models,
     authorization_models,
     knowledge_models,
     catalog_models,

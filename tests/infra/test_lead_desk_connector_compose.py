@@ -17,6 +17,12 @@ LEAD_CONNECTOR_SETTINGS = {
     "AC_GOOGLE_ADS_CLIENT_ID": "fixture-google-ads-client-id",
     "AC_GOOGLE_ADS_CLIENT_SECRET": "fixture-google-ads-client-secret",
     "AC_GOOGLE_ADS_DEVELOPER_TOKEN": "fixture-google-ads-developer-token",
+    "AC_WHATSAPP_APP_ID": "fixture-whatsapp-app-id",
+    "AC_WHATSAPP_APP_SECRET": "fixture-whatsapp-app-secret",
+    "AC_WHATSAPP_CONFIG_ID": "fixture-whatsapp-config-id",
+    "AC_WHATSAPP_WEBHOOK_VERIFY_TOKEN": "fixture-whatsapp-webhook-verify-token",
+    "AC_WHATSAPP_GRAPH_VERSION": "fixture-whatsapp-graph-version",
+    "AC_MESSAGING_LOGIN_CONFIG_ID": "fixture-messaging-login-config-id",
 }
 
 

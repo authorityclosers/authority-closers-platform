@@ -1,4 +1,4 @@
-"""Quote facts for a partner's quotation draft (profile ``wiselife-quote-v1``).
+"""Quote facts for a partner's quotation draft (profiles in ``profiles/``).
 
 One provider call reads one saved transcript and lists what was said about
 the system, add-ons, prices, promises, next steps and objections. The model
@@ -59,7 +59,22 @@ from ac_platform.partner_events.summary_mask import mask_numbers, mask_when
 Match = Literal["whole", "ambiguous"]
 
 PROFILE_DIR = Path(__file__).with_name("profiles")
-PROFILES = {"wiselife-quote-v1": "wiselife_quote_v1.json"}
+
+
+def _profiles() -> dict[str, str]:
+    """Profile ids to their files. Each ``profiles/*.json`` names its own id, so a
+    profile is configuration chosen per endpoint (``facts_profile``), never code."""
+    found: dict[str, str] = {}
+    for path in sorted(PROFILE_DIR.glob("*.json")):
+        profile = json.loads(path.read_text(encoding="utf-8")).get("profile")
+        if isinstance(profile, str) and profile:
+            if profile in found:
+                raise ValueError(f"duplicate facts profile {profile}")
+            found[profile] = path.name
+    return found
+
+
+PROFILES = _profiles()
 
 # The v1 contract (sx.analysis_completed.v1, 18 Oct 2026). A profile must match it exactly.
 FACT_TYPES = (

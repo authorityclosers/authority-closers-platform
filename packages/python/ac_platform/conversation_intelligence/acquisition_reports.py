@@ -108,6 +108,7 @@ _PLAN_FAILURE_CODES = frozenset(
         "processing_authorization_or_input_unavailable",
         "processing_budget_expired",
         "budget_cap_reached",
+        "needs_new_acceptance",
         "processing_coordinator_timeout",
         "processing_coordinator_failed",
     }

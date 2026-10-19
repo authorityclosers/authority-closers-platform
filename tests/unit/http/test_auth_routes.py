@@ -111,6 +111,7 @@ class _IdentityApplication:
         allow_consent_supersession: bool = False,
         display_name: str | None = None,
         user_agent: str | None = None,
+        link_existing_email: bool | None = None,
     ) -> SimpleNamespace:
         type(self).registered_provider_calls.append(
             {
@@ -121,6 +122,7 @@ class _IdentityApplication:
                 "allow_consent_supersession": allow_consent_supersession,
                 "display_name": display_name,
                 "user_agent": user_agent,
+                "link_existing_email": link_existing_email,
             }
         )
         return SimpleNamespace(
@@ -136,6 +138,7 @@ class _IdentityApplication:
             consent_changed=True,
             previous_consent_version=None,
             previous_consented_at=None,
+            linked_by_email=False,
         )
 
 
@@ -321,6 +324,7 @@ class _ProviderCollisionIdentityApplication(_IdentityApplication):
         allow_consent_supersession: bool = False,
         display_name: str | None = None,
         user_agent: str | None = None,
+        link_existing_email: bool | None = None,
     ) -> SimpleNamespace:
         del (
             transaction_id,
@@ -330,6 +334,7 @@ class _ProviderCollisionIdentityApplication(_IdentityApplication):
             allow_consent_supersession,
             display_name,
             user_agent,
+            link_existing_email,
         )
         raise ConflictingProviderIdentityError("provider key is already linked to another person")
 
@@ -574,6 +579,8 @@ def test_email_code_config_and_routes_expose_a_small_surface_bound_contract() ->
         "enabled": True,
         "consent_version": "staging-test-document-v1",
         "google_enabled": True,
+        "apple_enabled": False,
+        "facebook_enabled": False,
         "expires_in_seconds": 600,
         "resend_after_seconds": 60,
     }

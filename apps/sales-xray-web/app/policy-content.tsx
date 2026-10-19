@@ -33,7 +33,7 @@ const UPDATED: Record<PolicySlug, [string, string]> = {
   refunds: ["2026-10-16", "16 October 2026"],
   delivery: ["2026-10-03", "3 October 2026"],
   contact: ["2026-10-16", "16 October 2026"],
-  "data-deletion": ["2026-10-16", "16 October 2026"],
+  "data-deletion": ["2026-10-20", "20 October 2026"],
 };
 
 type Section = {
@@ -64,6 +64,13 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "In Sales Xray, open Leads, then Sources, and disconnect the Page. New leads stop arriving at once.",
         "To remove Sales Xray's access at Meta as well, open Facebook Settings, then Business integrations, and remove Sales Xray Leads.",
         "To delete the leads already received, or the stored connection to your Page, email us.",
+      ],
+    },
+    {
+      title: "If you signed in with Facebook",
+      paragraphs: [
+        "We keep only your Facebook person id and the name and email Facebook shared, to sign you in. Ask for your account to be deleted as above and they go with it.",
+        "To remove Sales Xray at Facebook too, open Facebook Settings, then Apps and websites, and remove Sales Xray Sign-in.",
       ],
     },
     {

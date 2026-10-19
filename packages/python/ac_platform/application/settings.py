@@ -103,6 +103,15 @@ class Settings(BaseSettings):
     oauth_transaction_cookie_name: str = "ac_oauth_transaction"
     google_oauth_client_id: str | None = None
     google_oauth_client_secret: SecretStr | None = None
+    # Continue with Facebook and Sign in with Apple on Sales Xray. Each stays off
+    # until every one of its settings exists (Infisical, per environment).
+    facebook_login_app_id: str | None = None
+    facebook_login_app_secret: SecretStr | None = None
+    facebook_login_graph_version: str = "v23.0"
+    apple_sign_in_service_id: str | None = None
+    apple_sign_in_team_id: str | None = None
+    apple_sign_in_key_id: str | None = None
+    apple_sign_in_private_key: SecretStr | None = None
     learner_consent_version: str | None = None
     public_learner_tenant_id: UUID | None = None
     operations_tenant_id: UUID | None = None
@@ -802,6 +811,26 @@ class Settings(BaseSettings):
             len(client_id) > 512 or not client_id.endswith(".apps.googleusercontent.com")
         ):
             raise ValueError("AC_GOOGLE_OAUTH_CLIENT_ID is not a Google web client ID")
+
+    @property
+    def facebook_login_configured(self) -> bool:
+        secret = self.facebook_login_app_secret
+        return bool(
+            (self.facebook_login_app_id or "").strip()
+            and secret is not None
+            and secret.get_secret_value().strip()
+        )
+
+    @property
+    def apple_sign_in_configured(self) -> bool:
+        key = self.apple_sign_in_private_key
+        return bool(
+            (self.apple_sign_in_service_id or "").strip()
+            and (self.apple_sign_in_team_id or "").strip()
+            and (self.apple_sign_in_key_id or "").strip()
+            and key is not None
+            and key.get_secret_value().strip()
+        )
 
     @property
     def google_oauth_configured(self) -> bool:

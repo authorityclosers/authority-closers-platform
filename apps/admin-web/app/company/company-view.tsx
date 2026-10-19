@@ -4,6 +4,9 @@
  * and every value is also written out; amber marks only "needs attention".
  */
 import Link from "next/link";
+
+import type { AnalysisInsights } from "./analysis-data";
+import { AnalysisPanels } from "./analysis-panels";
 import type { CSSProperties } from "react";
 
 import {
@@ -222,6 +225,7 @@ export function CompanyView({
   callsError,
   offset,
   view = "overview",
+  analysis = null,
 }: {
   organisations: Organisation[];
   organisation: Organisation;
@@ -231,6 +235,8 @@ export function CompanyView({
   callsError: string | null;
   offset: number;
   view?: CompanyViewKey;
+  /** What buyers said and skill scores, from the analysis (Phase 4). */
+  analysis?: AnalysisInsights | null;
 }) {
   const { totals, previous } = data;
   const value = rupees(totals.wonValue);
@@ -393,7 +399,11 @@ export function CompanyView({
             </Panel>
             <Panel
               title="Skills across the calls"
-              sub="Observed share; calls needing attention"
+              sub={
+                analysis?.skills.length
+                  ? "What each report marks (observed or not), not quality: see Skill scores"
+                  : "Observed share; calls needing attention"
+              }
             >
               <div className={styles.inset}>
                 <ul className={styles.skills}>
@@ -433,25 +443,28 @@ export function CompanyView({
               </div>
             </Panel>
           </div>
+          {analysis ? <AnalysisPanels data={analysis} /> : null}
           <div className={styles.grid}>
-            <Panel title="Objections" sub="What prospects pushed back on">
-              <div className={styles.inset}>
-                {data.objections.length ? (
-                  <Bars
-                    rows={data.objections.map((row) => ({
-                      key: row.kind,
-                      label: row.label,
-                      value: row.calls,
-                      note: `${percent(row.calls ? row.won / row.calls : null)} won`,
-                    }))}
-                  />
-                ) : (
-                  <p className={styles.muted}>
-                    No objections recorded in these calls.
-                  </p>
-                )}
-              </div>
-            </Panel>
+            {data.objections.length || !analysis ? (
+              <Panel title="Objections" sub="What prospects pushed back on">
+                <div className={styles.inset}>
+                  {data.objections.length ? (
+                    <Bars
+                      rows={data.objections.map((row) => ({
+                        key: row.kind,
+                        label: row.label,
+                        value: row.calls,
+                        note: `${percent(row.calls ? row.won / row.calls : null)} won`,
+                      }))}
+                    />
+                  ) : (
+                    <p className={styles.muted}>
+                      No objections recorded in these calls.
+                    </p>
+                  )}
+                </div>
+              </Panel>
+            ) : null}
             <Panel
               title={
                 data.mistakes.length

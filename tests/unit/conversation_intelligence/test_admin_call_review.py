@@ -135,6 +135,9 @@ def _queue_service(monkeypatch: pytest.MonkeyPatch, recordings: list[Any]) -> Ad
             for row in recordings
         }
 
+    async def engine(_self: AdminCallReview, ids: Any) -> dict[UUID, dict[str, Any]]:
+        return {identifier: {"fast": "succeeded", "deep": None, "objects": 7} for identifier in ids}
+
     for name, value in {
         "_admit": admit,
         "_owners": owners,
@@ -142,6 +145,7 @@ def _queue_service(monkeypatch: pytest.MonkeyPatch, recordings: list[Any]) -> Ad
         "_runs": runs,
         "_plans": plans,
         "_reports": reports,
+        "_engine": engine,
     }.items():
         monkeypatch.setattr(AdminCallReview, name, value)
 
@@ -201,6 +205,8 @@ async def test_queue_filters_counts_facets_and_pages(monkeypatch: pytest.MonkeyP
     assert {entry["value"] for entry in everything["facets"]["providers"]} == {"gemini", "openai"}
     first = everything["items"][0]
     assert first["organisation"] == {"id": str(TEAM_A), "name": "Team A", "kind": "customer"}
+    # The engine at a glance: each read's newest state and the current objects.
+    assert first["engine"] == {"fast": "succeeded", "deep": None, "objects": 7}
     assert first["report_run_id"] == str(ready.runs[0].id)
 
     only_ready = await service.queue(actor, status="ready")

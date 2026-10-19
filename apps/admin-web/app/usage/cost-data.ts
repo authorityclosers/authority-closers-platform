@@ -107,6 +107,21 @@ export type StageCost = {
   failed: number;
 };
 
+/** One provider step of a call (Per call drill-down, 19 Oct 2026). */
+export type CallStep = {
+  stage: string;
+  provider: string | null;
+  model: string | null;
+  status: string;
+  attempts: number;
+  inputTokens: number;
+  outputTokens: number;
+  audioMinutes: number | null;
+  elapsedMs: number | null;
+  rupees: number | null;
+  at: string;
+};
+
 export type CallRow = {
   environment: string;
   id: string;
@@ -124,6 +139,12 @@ export type CallRow = {
   version: string;
   revenue: number | null;
   margin: number | null;
+  tokens: number;
+  models: string[];
+  /** How many of its steps ended in each status. */
+  statuses: Record<string, number>;
+  /** Each step, when the Per call tab asked for them. */
+  steps: CallStep[];
 };
 
 export type RevenueRow = {
@@ -186,6 +207,8 @@ export type MoneyEnv = {
   usedRupees: number;
   usedShare: number | null;
   waitingCalls: number;
+  /** lifetime, monthly or daily: what the cap and the spend refer to. */
+  period: string;
   settled: number;
   settledRupees: number;
   byReason: { ref: string; label: string; n: number; rupees: number }[];
@@ -238,7 +261,14 @@ export type Metrics = {
     byStage: StageRow[];
   };
   providers: { models: ModelRow[]; daily: ProviderDay[] };
-  calls: { rows: CallRow[]; total: number };
+  calls: {
+    rows: CallRow[];
+    total: number;
+    sort: string;
+    /** Calls that cost nothing, listed apart. */
+    zeroRows: CallRow[];
+    zeroTotal: number;
+  };
   revenue: {
     rows: RevenueRow[];
     totals: Record<string, { revenue: number; cost: number; margin: number }>;
@@ -269,6 +299,61 @@ const numbers = (value: unknown): Record<string, number> =>
   Object.fromEntries(
     Object.entries(read.object(value)).map(([key, item]) => [key, n(item)]),
   );
+
+function callRow(item: unknown): CallRow {
+  const row = read.object(item);
+  return {
+    environment: env(row.environment),
+    id: s(row.id),
+    company: s(row.company, "Unknown"),
+    companyKind: s(row.company_kind, "other"),
+    kind: s(row.kind, "real"),
+    at: s(row.at),
+    audioMinutes: n(row.audio_minutes),
+    stages: Object.fromEntries(
+      Object.entries(read.object(row.stages)).map(([stage, value]) => {
+        const cost = read.object(value);
+        return [
+          stage,
+          {
+            inputTokens: n(cost.input_tokens),
+            outputTokens: n(cost.output_tokens),
+            rupees: n(cost.rupees),
+            runs: n(cost.runs),
+            failed: n(cost.failed),
+          },
+        ];
+      }),
+    ),
+    rupees: n(row.rupees),
+    perMinute: on(row.per_minute),
+    billedMinutes: n(row.billed_minutes),
+    report: read.boolean(row.report),
+    reportMs: on(row.report_ms),
+    version: s(row.version),
+    revenue: on(row.revenue),
+    margin: on(row.margin),
+    tokens: n(row.tokens),
+    models: read.strings(row.models),
+    statuses: numbers(row.statuses),
+    steps: read.array(row.steps).map((value) => {
+      const step = read.object(value);
+      return {
+        stage: s(step.stage),
+        provider: os(step.provider),
+        model: os(step.model),
+        status: s(step.status),
+        attempts: n(step.attempts),
+        inputTokens: n(step.input_tokens),
+        outputTokens: n(step.output_tokens),
+        audioMinutes: on(step.audio_minutes),
+        elapsedMs: on(step.elapsed_ms),
+        rupees: on(step.rupees),
+        at: s(step.at),
+      };
+    }),
+  };
+}
 
 export function normalizeMetrics(raw: unknown): Metrics {
   const body = read.object(raw);
@@ -388,41 +473,10 @@ export function normalizeMetrics(raw: unknown): Metrics {
     },
     calls: {
       total: n(calls.total),
-      rows: read.array(calls.rows).map((item) => {
-        const row = read.object(item);
-        return {
-          environment: env(row.environment),
-          id: s(row.id),
-          company: s(row.company, "Unknown"),
-          companyKind: s(row.company_kind, "other"),
-          kind: s(row.kind, "real"),
-          at: s(row.at),
-          audioMinutes: n(row.audio_minutes),
-          stages: Object.fromEntries(
-            Object.entries(read.object(row.stages)).map(([stage, value]) => {
-              const cost = read.object(value);
-              return [
-                stage,
-                {
-                  inputTokens: n(cost.input_tokens),
-                  outputTokens: n(cost.output_tokens),
-                  rupees: n(cost.rupees),
-                  runs: n(cost.runs),
-                  failed: n(cost.failed),
-                },
-              ];
-            }),
-          ),
-          rupees: n(row.rupees),
-          perMinute: on(row.per_minute),
-          billedMinutes: n(row.billed_minutes),
-          report: read.boolean(row.report),
-          reportMs: on(row.report_ms),
-          version: s(row.version),
-          revenue: on(row.revenue),
-          margin: on(row.margin),
-        };
-      }),
+      sort: s(calls.sort, "newest"),
+      rows: read.array(calls.rows).map(callRow),
+      zeroTotal: n(calls.zero_total),
+      zeroRows: read.array(calls.zero_rows).map(callRow),
     },
     revenue: {
       paymentsRecorded: n(revenue.payments_recorded),
@@ -520,6 +574,7 @@ export function normalizeMetrics(raw: unknown): Metrics {
           usedRupees: n(row.used_rupees),
           usedShare: on(row.used_share),
           waitingCalls: n(row.waiting_calls),
+          period: s(row.period) || "lifetime",
           settled: n(row.settled),
           settledRupees: n(row.settled_rupees),
           byReason: read.array(row.by_reason).map((value) => {
@@ -654,8 +709,15 @@ export const dayLabel = (day: string) => {
 
 /** Query string for the cost views, keeping the other filters. */
 export function costQuery(
-  current: { tab: string; days: string; env: string; tests: boolean },
-  change: Partial<{ tab: string; days: string; env: string; tests: boolean }>,
+  current: {
+    tab: string;
+    days: string;
+    env: string;
+    tests: boolean;
+  } & ChartView,
+  change: Partial<
+    { tab: string; days: string; env: string; tests: boolean } & ChartView
+  >,
   extra: Record<string, string> = {},
 ): string {
   const next = { ...current, ...change };
@@ -664,6 +726,13 @@ export function costQuery(
   if (next.days !== "30") params.set("days", next.days);
   if (next.env !== "all") params.set("env", next.env);
   if (next.tests) params.set("tests", "1");
+  // The Overview's chosen charts and compared pair stay with every filter change.
+  if (next.charts) params.set("charts", next.charts);
+  if (next.ca && next.cb) {
+    params.set("ca", next.ca);
+    params.set("cb", next.cb);
+  }
+  if (next.sort && next.sort !== "newest") params.set("sort", next.sort);
   for (const [key, value] of Object.entries(extra)) params.set(key, value);
   const text = params.toString();
   return text ? `/usage?${text}` : "/usage";
@@ -681,4 +750,228 @@ export function comparePair(
   const second =
     find(b) ?? pipelines.find((item) => item.id !== first?.id) ?? null;
   return [first, second];
+}
+
+/* ---------- Charts the owner picks and compares (owner, 19 Oct 2026) ---------- */
+
+export type SeriesUnit = "inr" | "perMin" | "minutes" | "count" | "tokens";
+
+/** One per-day line: a value per day of the window, oldest first. */
+export type Series = {
+  key: string;
+  label: string;
+  unit: SeriesUnit;
+  days: string[];
+  /** null where there is nothing to divide (cost per minute on a day with no audio). */
+  values: (number | null)[];
+};
+
+/** Shown when the link names no charts: the two the page always had. */
+export const DEFAULT_CHARTS = ["spend", "perMinute"];
+export const MAX_CHARTS = 8;
+
+const providerName = (provider: string) =>
+  provider
+    ? `${provider.charAt(0).toUpperCase()}${provider.slice(1)}`
+    : "Unknown";
+
+const slug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+/** Every per-day series this read can draw, each with a stable key for the link. */
+export function chartSeries(metrics: Metrics): Series[] {
+  const daily = metrics.overview.daily;
+  const days = daily.map((day) => day.day);
+  const series: Series[] = [
+    {
+      key: "spend",
+      label: "Spend per day",
+      unit: "inr",
+      days,
+      values: daily.map((day) => day.spend),
+    },
+    {
+      key: "perMinute",
+      label: "Cost per audio minute",
+      unit: "perMin",
+      days,
+      values: daily.map((day) => day.perMinute),
+    },
+    {
+      key: "audio",
+      label: "Audio minutes",
+      unit: "minutes",
+      days,
+      values: daily.map((day) => day.audioMinutes),
+    },
+    {
+      key: "calls",
+      label: "Calls analysed",
+      unit: "count",
+      days,
+      values: daily.map((day) => day.calls),
+    },
+  ];
+  for (const name of ENVIRONMENTS)
+    if (daily.some((day) => (day.byEnvironment[name] ?? 0) > 0))
+      series.push({
+        key: `env-${name}`,
+        label: `${ENVIRONMENT_LABEL[name] ?? name} spend`,
+        unit: "inr",
+        days,
+        values: daily.map((day) => day.byEnvironment[name] ?? 0),
+      });
+  const tokensByDay = new Map<string, number>();
+  const spendByProvider = new Map<string, Map<string, number>>();
+  for (const row of metrics.providers.daily) {
+    tokensByDay.set(
+      row.day,
+      (tokensByDay.get(row.day) ?? 0) + row.inputTokens + row.outputTokens,
+    );
+    const byDay =
+      spendByProvider.get(row.provider) ?? new Map<string, number>();
+    byDay.set(row.day, (byDay.get(row.day) ?? 0) + row.rupees);
+    spendByProvider.set(row.provider, byDay);
+  }
+  if (tokensByDay.size)
+    series.push({
+      key: "tokens",
+      label: "AI tokens (in + out)",
+      unit: "tokens",
+      days,
+      values: days.map((day) => tokensByDay.get(day) ?? 0),
+    });
+  for (const [provider, byDay] of [...spendByProvider].sort(([a], [b]) =>
+    a.localeCompare(b),
+  ))
+    series.push({
+      key: `provider-${slug(provider) || "unknown"}`,
+      label: `${providerName(provider)} spend`,
+      unit: "inr",
+      days,
+      values: days.map((day) => byDay.get(day) ?? 0),
+    });
+  return series;
+}
+
+/** The charts a link asks for, in its order, known keys only; "none" hides them all. */
+export function chartsFrom(
+  value: string | undefined,
+  available: readonly string[],
+): string[] {
+  if (value === undefined || value === "")
+    return DEFAULT_CHARTS.filter((key) => available.includes(key));
+  if (value === "none") return [];
+  return [...new Set(value.split(","))]
+    .filter((key) => available.includes(key))
+    .slice(0, MAX_CHARTS);
+}
+
+/** The link value after showing or hiding one chart. */
+export function toggleChart(shown: readonly string[], key: string): string {
+  const next = shown.includes(key)
+    ? shown.filter((item) => item !== key)
+    : [...shown, key].slice(0, MAX_CHARTS);
+  return next.length ? next.join(",") : "none";
+}
+
+/** How closely two daily series move together (Pearson r), over days both have. */
+export function correlation(
+  a: readonly (number | null)[],
+  b: readonly (number | null)[],
+): number | null {
+  const pairs: [number, number][] = [];
+  a.forEach((x, index) => {
+    const y = b[index];
+    if (x !== null && y !== null && y !== undefined) pairs.push([x, y]);
+  });
+  if (pairs.length < 3) return null;
+  const meanX = pairs.reduce((sum, [x]) => sum + x, 0) / pairs.length;
+  const meanY = pairs.reduce((sum, [, y]) => sum + y, 0) / pairs.length;
+  let xy = 0;
+  let xx = 0;
+  let yy = 0;
+  for (const [x, y] of pairs) {
+    xy += (x - meanX) * (y - meanY);
+    xx += (x - meanX) ** 2;
+    yy += (y - meanY) ** 2;
+  }
+  return xx && yy ? xy / Math.sqrt(xx * yy) : null;
+}
+
+/** "move together", "move opposite" or "aren't related", in plain words. */
+export function together(r: number | null): string {
+  if (r === null) return "too few days to tell";
+  if (r >= 0.6) return "move together";
+  if (r <= -0.6) return "move opposite";
+  return "aren't clearly related";
+}
+
+/** A value in its own unit, for labels and tooltips. */
+export function seriesValue(unit: SeriesUnit, value: number | null): string {
+  if (unit === "inr") return inr(value);
+  if (unit === "perMin") return perMin(value);
+  if (value === null) return "–";
+  if (unit === "minutes") return minutes(value);
+  if (unit === "tokens") return tokens(value);
+  return count(value);
+}
+
+/** The chart view kept in the link: shown charts and the compared pair. */
+export type ChartView = {
+  charts?: string;
+  ca?: string;
+  cb?: string;
+  /** Per call order: newest unless chosen. */
+  sort?: string;
+};
+
+/** The orders the Per call tab offers (the API accepts the same keys). */
+export const CALL_SORTS = [
+  { key: "newest", label: "Newest" },
+  { key: "cost", label: "Most expensive" },
+  { key: "per_minute", label: "Highest per minute" },
+  { key: "audio", label: "Longest audio" },
+  { key: "tokens", label: "Most tokens" },
+];
+
+/** Why a call cost nothing, from how its steps ended. */
+export function zeroReason(statuses: Record<string, number>): string {
+  const failed = statuses.dead_letter ?? 0;
+  const done = statuses.succeeded ?? 0;
+  const waiting = Object.entries(statuses)
+    .filter(([status]) => status !== "dead_letter" && status !== "succeeded")
+    .reduce((sum, [, value]) => sum + value, 0);
+  if (failed)
+    return `${count(failed)} ${failed === 1 ? "step" : "steps"} failed before any paid work`;
+  if (waiting)
+    return `${count(waiting)} ${waiting === 1 ? "step hasn't" : "steps haven't"} finished`;
+  if (done) return "its finished steps have no price on the price sheet yet";
+  return "no provider step ran";
+}
+
+const VIEW_VALUE = /^[a-zA-Z0-9_,-]{1,300}$/;
+
+/** Only well-formed view values survive into links. */
+export function chartView(query: {
+  charts?: string;
+  ca?: string;
+  cb?: string;
+  sort?: string;
+}): ChartView {
+  const keep = (value: string | undefined) =>
+    value !== undefined && VIEW_VALUE.test(value) ? value : undefined;
+  return {
+    charts: keep(query.charts),
+    ca: keep(query.ca),
+    cb: keep(query.cb),
+    sort: CALL_SORTS.some(
+      (item) => item.key === query.sort && item.key !== "newest",
+    )
+      ? query.sort
+      : undefined,
+  };
 }

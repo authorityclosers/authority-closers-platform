@@ -8,7 +8,7 @@ Meta login must all work on dev, staging and production. This is the plan.
 | App | Type | What it does | Permissions (use case) |
 | --- | --- | --- | --- |
 | **Sales Xray Leads** | Business | Leads from Facebook and Instagram Instant Forms arrive in the CRM (Page `leadgen` webhook). Lead stages go back to Meta (Conversions API for CRM) so ads find more good leads. Later: ad reporting. | Capture & manage ad leads: `leads_retrieval`, `pages_manage_ads`, `pages_read_engagement`, `pages_show_list`, `pages_manage_metadata`, `business_management`, `ads_read` (dataset for lead stages). Facebook Login for Business configuration. Webhooks: Page → `leadgen`. |
-| **Sales Xray WhatsApp** | Business | A customer connects their WhatsApp number to the CRM (Embedded Signup) and talks to leads there. AC's own number too. | WhatsApp use case: `whatsapp_business_management`, `whatsapp_business_messaging`. Login for Business configuration for Embedded Signup. Webhook: `whatsapp_business_account`. |
+| **Sales Xray Messaging** (Meta allows no "WhatsApp" in app names) | Business | A customer connects their WhatsApp number to the CRM (Embedded Signup) and talks to leads there; AC's own number too. Also the Page's Messenger and Instagram conversations and comment replies (Phase C, `instagram-messenger-app.md`). | WhatsApp use case: `whatsapp_business_management`, `whatsapp_business_messaging`. Login for Business configuration for Embedded Signup. Webhook: `whatsapp_business_account`. Messenger and Instagram: see `instagram-messenger-app.md`. Details: `whatsapp-app.md`. |
 | **Sales Xray Sign-in** | Consumer | "Continue with Facebook" sign-in to Sales Xray. | Facebook Login: `public_profile`, `email`. |
 
 Why three:
@@ -104,7 +104,8 @@ variable explicitly, so these five must be added there (and to
    `/v1/lead-desk/meta/webhook` (and `/v1/lead-desk/capture/*` for Google Ads
    and website forms). The Meta return address needs no bypass: the signed-in
    person's browser makes that request. Until then, connecting a Page still
-   pulls its last 7 days of leads.
+   files its last week of leads at once and the rest Meta keeps (90 days) in
+   the background, and the 10-minute pull reads new ones.
 
 ## Order
 

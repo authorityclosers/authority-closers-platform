@@ -595,7 +595,129 @@ CALL_DATA_PARITY_TABLES = PARTNER_WEBHOOKS_PARITY_TABLES + (
     "call_objects",
     "call_object_decisions",
 )
+REPORT_SETTINGS_PARITY_MIGRATION_HEAD = "20261019_0098"
+REPORT_SETTINGS_PARITY_CONTRACT = "ac-postgres-parity-v65"
+REPORT_SETTINGS_PARITY_TABLES = CALL_DATA_PARITY_TABLES + (
+    "conversation_report_settings_versions",
+    "conversation_report_settings_events",
+)
+BUDGET_SETTINGS_PARITY_MIGRATION_HEAD = "20261019_0099"
+BUDGET_SETTINGS_PARITY_CONTRACT = "ac-postgres-parity-v66"
+BUDGET_SETTINGS_PARITY_TABLES = REPORT_SETTINGS_PARITY_TABLES + ("conversation_budget_settings",)
+# 0100 widens one CHECK (capture sources); the table list is 0099's.
+CAPTURE_SOURCE_PARITY_MIGRATION_HEAD = "20261019_0100"
+CAPTURE_SOURCE_PARITY_CONTRACT = "ac-postgres-parity-v67"
+CAPTURE_SOURCE_PARITY_TABLES = BUDGET_SETTINGS_PARITY_TABLES
+# 0101 adds Review 2.0 (pipelines and verdicts).
+REVIEW_PARITY_MIGRATION_HEAD = "20261019_0101"
+REVIEW_PARITY_CONTRACT = "ac-postgres-parity-v68"
+REVIEW_PARITY_TABLES = CAPTURE_SOURCE_PARITY_TABLES + (
+    "review_pipelines",
+    "review_verdicts",
+)
+# 0102 adds partner lead events and customer hand-overs.
+PARTNER_LEAD_EVENTS_PARITY_MIGRATION_HEAD = "20261019_0102"
+PARTNER_LEAD_EVENTS_PARITY_CONTRACT = "ac-postgres-parity-v69"
+PARTNER_LEAD_EVENTS_PARITY_TABLES = REVIEW_PARITY_TABLES + (
+    "partner_handover_recipients",
+    "partner_lead_events",
+    "partner_lead_attempts",
+)
+# 0103 adds the developer platform: API keys and sealed integration secrets.
+INTEGRATIONS_PARITY_MIGRATION_HEAD = "20261019_0103"
+INTEGRATIONS_PARITY_CONTRACT = "ac-postgres-parity-v70"
+INTEGRATIONS_PARITY_TABLES = PARTNER_LEAD_EVENTS_PARITY_TABLES + (
+    "integration_api_keys",
+    "integration_secrets",
+    "integration_oauth_clients",
+    "integration_oauth_grants",
+    "integration_oauth_codes",
+    "integration_oauth_tokens",
+)
+# 0104 adds the CRM's lead stages sent back to Meta (Conversions API for CRM).
+META_CONVERSIONS_PARITY_MIGRATION_HEAD = "20261019_0104"
+META_CONVERSIONS_PARITY_CONTRACT = "ac-postgres-parity-v71"
+META_CONVERSIONS_PARITY_TABLES = INTEGRATIONS_PARITY_TABLES + (
+    "lead_desk_meta_conversions",
+    "lead_desk_meta_conversion_attempts",
+)
+# 0105 adds WhatsApp in the CRM and the first-response SLA.
+WHATSAPP_PARITY_MIGRATION_HEAD = "20261019_0105"
+WHATSAPP_PARITY_CONTRACT = "ac-postgres-parity-v72"
+WHATSAPP_PARITY_TABLES = META_CONVERSIONS_PARITY_TABLES + (
+    "lead_desk_whatsapp_numbers",
+    "lead_desk_whatsapp_messages",
+    "lead_desk_whatsapp_templates",
+    "lead_desk_sla_breaches",
+)
+# 0106 adds staff keys for the Admin command line and MCP.
+STAFF_KEYS_PARITY_MIGRATION_HEAD = "20261019_0106"
+STAFF_KEYS_PARITY_CONTRACT = "ac-postgres-parity-v73"
+STAFF_KEYS_PARITY_TABLES = WHATSAPP_PARITY_TABLES + ("admin_staff_keys",)
+# 0107 adds Messenger and Instagram conversations in the CRM.
+SOCIAL_PARITY_MIGRATION_HEAD = "20261019_0107"
+SOCIAL_PARITY_CONTRACT = "ac-postgres-parity-v74"
+SOCIAL_PARITY_TABLES = STAFF_KEYS_PARITY_TABLES + (
+    "lead_desk_social_accounts",
+    "lead_desk_social_messages",
+)
+# 0108 adds ad spend per Meta campaign.
+SPEND_PARITY_MIGRATION_HEAD = "20261019_0108"
+SPEND_PARITY_CONTRACT = "ac-postgres-parity-v75"
+SPEND_PARITY_TABLES = SOCIAL_PARITY_TABLES + ("lead_desk_ad_spend_days",)
+# 0109 adds AI replies to leads.
+AI_REPLIES_PARITY_MIGRATION_HEAD = "20261019_0109"
+AI_REPLIES_PARITY_CONTRACT = "ac-postgres-parity-v76"
+AI_REPLIES_PARITY_TABLES = SPEND_PARITY_TABLES + ("lead_desk_ai_replies",)
 VERSIONED_PARITY_CONTRACTS = {
+    AI_REPLIES_PARITY_MIGRATION_HEAD: (
+        AI_REPLIES_PARITY_CONTRACT,
+        AI_REPLIES_PARITY_TABLES,
+    ),
+    SPEND_PARITY_MIGRATION_HEAD: (
+        SPEND_PARITY_CONTRACT,
+        SPEND_PARITY_TABLES,
+    ),
+    SOCIAL_PARITY_MIGRATION_HEAD: (
+        SOCIAL_PARITY_CONTRACT,
+        SOCIAL_PARITY_TABLES,
+    ),
+    STAFF_KEYS_PARITY_MIGRATION_HEAD: (
+        STAFF_KEYS_PARITY_CONTRACT,
+        STAFF_KEYS_PARITY_TABLES,
+    ),
+    WHATSAPP_PARITY_MIGRATION_HEAD: (
+        WHATSAPP_PARITY_CONTRACT,
+        WHATSAPP_PARITY_TABLES,
+    ),
+    META_CONVERSIONS_PARITY_MIGRATION_HEAD: (
+        META_CONVERSIONS_PARITY_CONTRACT,
+        META_CONVERSIONS_PARITY_TABLES,
+    ),
+    INTEGRATIONS_PARITY_MIGRATION_HEAD: (
+        INTEGRATIONS_PARITY_CONTRACT,
+        INTEGRATIONS_PARITY_TABLES,
+    ),
+    PARTNER_LEAD_EVENTS_PARITY_MIGRATION_HEAD: (
+        PARTNER_LEAD_EVENTS_PARITY_CONTRACT,
+        PARTNER_LEAD_EVENTS_PARITY_TABLES,
+    ),
+    REVIEW_PARITY_MIGRATION_HEAD: (
+        REVIEW_PARITY_CONTRACT,
+        REVIEW_PARITY_TABLES,
+    ),
+    CAPTURE_SOURCE_PARITY_MIGRATION_HEAD: (
+        CAPTURE_SOURCE_PARITY_CONTRACT,
+        CAPTURE_SOURCE_PARITY_TABLES,
+    ),
+    BUDGET_SETTINGS_PARITY_MIGRATION_HEAD: (
+        BUDGET_SETTINGS_PARITY_CONTRACT,
+        BUDGET_SETTINGS_PARITY_TABLES,
+    ),
+    REPORT_SETTINGS_PARITY_MIGRATION_HEAD: (
+        REPORT_SETTINGS_PARITY_CONTRACT,
+        REPORT_SETTINGS_PARITY_TABLES,
+    ),
     CALL_DATA_PARITY_MIGRATION_HEAD: (
         CALL_DATA_PARITY_CONTRACT,
         CALL_DATA_PARITY_TABLES,

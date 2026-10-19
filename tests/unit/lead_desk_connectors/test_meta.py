@@ -215,3 +215,125 @@ def test_subscribe_needs_success() -> None:
         return httpx.Response(200, json={"success": True})
 
     asyncio.run(_graph(handler).subscribe("111", "t"))
+
+
+def _leads_handler(pages: dict[str | None, dict]) -> tuple[list[dict], object]:
+    seen: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        seen.append(params)
+        return httpx.Response(200, json=pages[params.get("after")])
+
+    return seen, handler
+
+
+PAGED = {
+    None: {
+        "data": [{"id": "L1"}, {"id": "L2"}],
+        "paging": {"cursors": {"after": "c1"}, "next": "https://graph.facebook.com/next"},
+    },
+    "c1": {"data": [{"id": "L3"}], "paging": {"cursors": {"after": "c2"}}},
+}
+
+
+def test_recent_leads_follows_metas_pages_to_the_end() -> None:
+    seen, handler = _leads_handler(PAGED)
+    leads = asyncio.run(_graph(handler).recent_leads(["F1"], "t", since=100))
+    assert [lead["id"] for lead in leads] == ["L1", "L2", "L3"]
+    assert [params.get("after") for params in seen] == [None, "c1"]
+    assert json.loads(seen[0]["filtering"]) == [
+        {"field": "time_created", "operator": "GREATER_THAN", "value": 100}
+    ]
+
+
+def test_recent_leads_stops_at_its_limit() -> None:
+    seen, handler = _leads_handler(PAGED)
+    leads = asyncio.run(_graph(handler).recent_leads(["F1", "F2"], "t", since=100, limit=2))
+    assert [lead["id"] for lead in leads] == ["L1", "L2"]
+    assert len(seen) == 1 and seen[0]["limit"] == "2"
+
+
+def test_one_page_of_leads_returns_metas_next_cursor() -> None:
+    _, handler = _leads_handler(PAGED)
+    graph = _graph(handler)
+    rows, after = asyncio.run(graph.leads_page("F1", "t", since=100))
+    assert ([row["id"] for row in rows], after) == (["L1", "L2"], "c1")
+    rows, after = asyncio.run(graph.leads_page("F1", "t", since=100, after="c1"))
+    assert ([row["id"] for row in rows], after) == (["L3"], None)
+
+
+def test_forms_lists_every_form_archived_ones_too() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v23.0/111/leadgen_forms"
+        if request.url.params.get("after") == "c1":
+            return httpx.Response(200, json={"data": [{"id": "F2", "status": "ARCHIVED"}]})
+        return httpx.Response(
+            200,
+            json={
+                "data": [{"id": "F1", "name": "Enquiry", "status": "ACTIVE"}],
+                "paging": {"cursors": {"after": "c1"}, "next": "https://graph.facebook.com/n"},
+            },
+        )
+
+    forms = asyncio.run(_graph(handler).forms("111", "t"))
+    assert forms == [
+        {"id": "F1", "name": "Enquiry", "status": "ACTIVE"},
+        {"id": "F2", "name": "F2", "status": "ARCHIVED"},
+    ]
+
+
+@pytest.mark.parametrize(
+    "error, kind",
+    [
+        ({"code": 190}, "token"),
+        (
+            {"code": 200, "message": "Lead access is restricted by the Leads Access Manager"},
+            "lead_access",
+        ),
+        ({"code": 100, "message": "This app has no leads access for the page"}, "lead_access"),
+        ({"code": 10}, "permission"),
+        ({"code": 1}, "other"),
+    ],
+)
+def test_graph_errors_say_what_the_manager_can_do(error: dict, kind: str) -> None:
+    assert meta.graph_error(error, 400).kind == kind
+
+
+def _access(body: dict, status: int = 200):
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v23.0/111"
+        assert request.url.params["fields"] == "has_lead_access.app_id(1234567890)"
+        return httpx.Response(status, json=body)
+
+    return asyncio.run(_graph(handler).require_lead_access("111", "t"))
+
+
+def test_a_business_using_leads_access_manager_must_allow_the_app() -> None:
+    with pytest.raises(meta.MetaError) as caught:
+        _access(
+            {"has_lead_access": {"enabled_lead_access_manager": True, "can_access_lead": False}}
+        )
+    assert caught.value.kind == "lead_access" and "Leads Access Manager" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "body, status",
+    [
+        ({"has_lead_access": {"enabled_lead_access_manager": True, "can_access_lead": True}}, 200),
+        (
+            {"has_lead_access": {"enabled_lead_access_manager": False, "can_access_lead": False}},
+            200,
+        ),
+        ({"id": "111"}, 200),
+        ({"error": {"code": 100, "message": "Unknown field"}}, 400),
+    ],
+)
+def test_lead_access_that_meta_allows_or_doesnt_report_carries_on(body: dict, status: int) -> None:
+    _access(body, status)
+
+
+def test_a_lost_connection_is_not_hidden_by_the_lead_access_check() -> None:
+    with pytest.raises(meta.MetaError) as caught:
+        _access({"error": {"code": 190, "message": "expired"}}, 400)
+    assert caught.value.kind == "token"

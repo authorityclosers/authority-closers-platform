@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  chartSeries,
+  chartView,
+  chartsFrom,
   comparePair,
+  correlation,
   costQuery,
   inr,
   normalizeMetrics,
   perMin,
   seconds,
+  seriesValue,
+  toggleChart,
+  together,
 } from "./cost-data";
 
 describe("normalizeMetrics", () => {
@@ -50,7 +57,7 @@ describe("normalizeMetrics", () => {
           {
             environment: "staging",
             id: "c1",
-            company: "Wise Life",
+            company: "Sunrise Rooftops",
             stages: {
               C2: { rupees: 3.67, runs: 1 },
               C5: { input_tokens: 5470 },
@@ -140,5 +147,127 @@ describe("comparePair", () => {
       ["new", "mid"],
     );
     expect(comparePair([], undefined, undefined)).toEqual([null, null]);
+  });
+});
+
+describe("charts the owner picks and compares", () => {
+  const metrics = normalizeMetrics({
+    overview: {
+      daily: [
+        {
+          day: "2026-10-17",
+          by_environment: { staging: 2 },
+          spend: 2,
+          audio_minutes: 4,
+          per_minute: 0.5,
+          calls: 1,
+        },
+        {
+          day: "2026-10-18",
+          by_environment: { staging: 4, development: 1 },
+          spend: 5,
+          audio_minutes: 8,
+          per_minute: 0.625,
+          calls: 2,
+        },
+        {
+          day: "2026-10-19",
+          by_environment: { development: 3 },
+          spend: 3,
+          audio_minutes: 0,
+          per_minute: null,
+          calls: 0,
+        },
+      ],
+    },
+    providers: {
+      daily: [
+        {
+          day: "2026-10-18",
+          provider: "gemini",
+          model: "m",
+          input_tokens: 1000,
+          output_tokens: 200,
+          rupees: 2,
+        },
+        {
+          day: "2026-10-17",
+          provider: "openai",
+          model: "m",
+          input_tokens: 10,
+          output_tokens: 5,
+          rupees: 0.5,
+        },
+      ],
+    },
+  });
+
+  it("offers every day series, and each environment and provider that spent", () => {
+    const series = chartSeries(metrics);
+    expect(series.map((item) => item.key)).toEqual([
+      "spend",
+      "perMinute",
+      "audio",
+      "calls",
+      "env-staging",
+      "env-development",
+      "tokens",
+      "provider-gemini",
+      "provider-openai",
+    ]);
+    expect(series.find((item) => item.key === "tokens")?.values).toEqual([
+      15, 1200, 0,
+    ]);
+    expect(series.find((item) => item.key === "provider-gemini")?.label).toBe(
+      "Gemini spend",
+    );
+    expect(series.find((item) => item.key === "perMinute")?.values).toEqual([
+      0.5,
+      0.625,
+      null,
+    ]);
+  });
+
+  it("keeps the chosen charts and the compared pair in the link", () => {
+    const keys = chartSeries(metrics).map((item) => item.key);
+    expect(chartsFrom(undefined, keys)).toEqual(["spend", "perMinute"]);
+    expect(chartsFrom("calls,bogus,calls,spend", keys)).toEqual([
+      "calls",
+      "spend",
+    ]);
+    expect(chartsFrom("none", keys)).toEqual([]);
+    expect(toggleChart(["spend", "perMinute"], "spend")).toBe("perMinute");
+    expect(toggleChart(["spend"], "spend")).toBe("none");
+    expect(toggleChart(["spend"], "calls")).toBe("spend,calls");
+    const current = {
+      tab: "overview",
+      days: "7",
+      env: "all",
+      tests: false,
+      charts: "calls",
+    };
+    expect(costQuery(current, { ca: "spend", cb: "calls" })).toBe(
+      "/usage?days=7&charts=calls&ca=spend&cb=calls",
+    );
+    expect(
+      costQuery(
+        { ...current, ca: "spend", cb: "calls" },
+        { ca: undefined, cb: undefined },
+      ),
+    ).toBe("/usage?days=7&charts=calls");
+    expect(
+      chartView({ charts: "spend,calls", ca: "<script>", cb: "calls" }),
+    ).toEqual({ charts: "spend,calls", ca: undefined, cb: "calls" });
+  });
+
+  it("says in words whether two series move together", () => {
+    expect(correlation([1, 2, 3, 4], [2, 4, 6, 8])).toBeCloseTo(1);
+    expect(together(correlation([1, 2, 3, 4], [8, 6, 4, 2]))).toBe(
+      "move opposite",
+    );
+    expect(correlation([1, null, 3], [1, 2, 3])).toBeNull();
+    expect(together(null)).toBe("too few days to tell");
+    expect(seriesValue("tokens", 1200)).toBe("1,200");
+    expect(seriesValue("inr", 4.73)).toBe("₹4.73");
   });
 });

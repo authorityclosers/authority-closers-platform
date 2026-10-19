@@ -1,6 +1,6 @@
 {
-  "profile": "wiselife-quote-v1",
-  "prompt_revision": "wiselife-quote-prompt/1",
+  "profile": "rooftop-solar-quote-v1",
+  "prompt_revision": "rooftop-solar-quote-prompt/1",
   "model_id": "gemini-3.8-flash",
   "max_output_tokens": 4000,
   "looked_for": [

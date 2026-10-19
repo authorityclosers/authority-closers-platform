@@ -9,6 +9,9 @@ import { AnalysisRetryAction } from "./analysis-retry-status";
 // Foreground observation only, never a provider timeout or predicted finish.
 const UPDATE_WAIT_MS = 60_000;
 
+/** Stops that only need the person's OK again: one tap, never a price. */
+const NEEDS_OK = new Set(["needs_new_acceptance", "processing_budget_expired"]);
+
 const REPORT_FAILURE_COPY: Record<string, string> = {
   conversation_call_map_invalid:
     "The call overview needs a valid structured draft.",
@@ -105,25 +108,36 @@ export function ProcessingStatusCopy({
   /** No caps label above the title (the calm progress screen, Strike A). */
   quiet?: boolean;
 }) {
-  if (progress?.run_state === "failed")
+  if (progress?.run_state === "failed") {
+    // The accepted plan's 24 hours ran out, or a new release needs the person's OK
+    // (orchestrator, 19 Oct 2026): no price, no time limit, only one tap.
+    const needsOk = NEEDS_OK.has(progress.failure_code ?? "");
     return (
       <div className={styles.copy}>
-        {quiet ? null : <p className={styles.kicker}>LAST CONFIRMED STATUS</p>}
-        <h3>Analysis failed</h3>
+        {quiet ? null : (
+          <p className={styles.kicker}>
+            {needsOk ? "SAVED CALL" : "LAST CONFIRMED STATUS"}
+          </p>
+        )}
+        <h3>{needsOk ? "Tap to continue your analysis" : "Analysis failed"}</h3>
         <p>
-          {progress.minute_state === "released"
-            ? "Your minutes have been released. Your recording is saved."
-            : "Your recording is saved. No new analysis has been started."}
+          {needsOk
+            ? "Your recording is saved."
+            : progress.minute_state === "released"
+              ? "Your minutes have been released. Your recording is saved."
+              : "Your recording is saved. No new analysis has been started."}
         </p>
         {progress.retry_available && progress.recording_id && (
           <AnalysisRetryAction
             key={submissionId}
             submissionId={submissionId}
             recordingId={progress.recording_id}
+            label={needsOk ? "Continue analysis" : undefined}
           />
         )}
       </div>
     );
+  }
   const projection = projectProcessing(progress, waitingForApproval);
   const current =
     projection.current?.state === "running" ? projection.current.stage : null;

@@ -14,6 +14,7 @@ import {
   Globe,
   GraduationCap,
   LifeBuoy,
+  ListChecks,
   LogOut,
   MailOpen,
   Plus,
@@ -28,6 +29,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
   type RefObject,
@@ -42,6 +44,8 @@ import { formatAnalysisTime } from "../analysis-time";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
 import { when } from "../leads/leads-client";
+import { inPhoneApp } from "../leads/native-phone";
+import { PHONE_SETUP_HASH } from "../leads/phone-setup";
 import {
   ANDROID_DOWNLOAD_READY,
   PHONE_APP_HREF,
@@ -139,6 +143,8 @@ function Back({ label, onBack }: { label: string; onBack: () => void }) {
  * The account card that opens from the gear: who is signed in, the minutes
  * left, and one list for settings, language, usage, plans and what's new.
  */
+const noSubscription = () => () => {};
+
 export function SettingsMenu({
   open,
   anchorRef,
@@ -198,6 +204,14 @@ export function SettingsMenu({
   );
   const pathname = usePathname();
   const inApp = useInApp();
+  // The phone app's own setup checklist (calls, alerts, recordings), once its
+  // first run has taken the bar off Leads (owner, 19 Oct). Read after
+  // hydration, so the first paint matches the server's.
+  const phoneApp = useSyncExternalStore(
+    noSubscription,
+    inPhoneApp,
+    () => false,
+  );
   const { signOut, signingOut, error: signOutError } = useSalesXraySignOut();
 
   // A sign out that could not be confirmed says so in the corner.
@@ -410,6 +424,18 @@ export function SettingsMenu({
                     </span>
                     Calls on this phone
                   </button>
+                ) : null}
+                {phoneApp ? (
+                  <Link
+                    href={`/leads${PHONE_SETUP_HASH}`}
+                    className={styles.tile}
+                    onClick={onClose}
+                  >
+                    <span aria-hidden="true">
+                      <ListChecks size={20} />
+                    </span>
+                    Phone setup
+                  </Link>
                 ) : null}
               </nav>
               {minutes ? (

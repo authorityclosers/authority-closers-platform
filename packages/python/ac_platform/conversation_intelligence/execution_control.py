@@ -24,7 +24,8 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
     utc,
 )
-from ac_platform.conversation_intelligence.entitlements import BudgetAccount
+from ac_platform.conversation_intelligence.budget_settings import BudgetLimits, budget_limits
+from ac_platform.conversation_intelligence.entitlements import BudgetAccount, committed_since
 from ac_platform.conversation_intelligence.execution_control_models import (
     ConversationExecutionControl,
 )
@@ -118,25 +119,33 @@ async def require_execution_enabled(
         raise ConversationExecutionPaused()
 
 
-def budget_view(snapshot: BudgetAccount) -> dict[str, Any]:
-    committed = snapshot.cap_paise - snapshot.available_paise
-    settled = sum(
-        r.committed_paise
+def budget_view(snapshot: BudgetAccount, limits: BudgetLimits | None = None) -> dict[str, Any]:
+    start = None if limits is None else limits.period_start_epoch
+    cap = snapshot.cap_paise if limits is None else min(limits.cap_paise, limits.ceiling_paise)
+    committed = committed_since(snapshot, start)
+    available = cap - committed
+    counted = [
+        r
         for r in snapshot.reservations
-        if r.state in {"settled", "reconciliation_required"}
+        if start is None
+        or r.state not in {"settled", "released"}
+        or r.quote.created_at_epoch >= start
+    ]
+    settled = sum(
+        r.committed_paise for r in counted if r.state in {"settled", "reconciliation_required"}
     )
-    uncertain = sum(r.committed_paise for r in snapshot.reservations if r.state == "uncertain")
-    if snapshot.has_overrun or snapshot.available_paise <= 0:
+    uncertain = sum(r.committed_paise for r in counted if r.state == "uncertain")
+    if snapshot.has_overrun or available <= 0:
         level = "exhausted"
-    elif committed * 100 >= snapshot.cap_paise * 90:
+    elif committed * 100 >= cap * 90:
         level = "critical"
-    elif committed * 100 >= snapshot.cap_paise * 80:
+    elif committed * 100 >= cap * 80:
         level = "warning"
     else:
         level = "normal"
     return {
-        "cap_paise": snapshot.cap_paise,
-        "available_paise": snapshot.available_paise,
+        "cap_paise": cap,
+        "available_paise": available,
         "committed_paise": committed,
         "settled_paise": settled,
         "held_paise": committed - settled,
@@ -164,7 +173,11 @@ class ExecutionControls:
         await ConversationProviderAdmin(self.app).admit(actor, shared_identity_locks=True)
 
     async def current(
-        self, actor: ActorContext, *, budget_scope_id: UUID | None = None
+        self,
+        actor: ActorContext,
+        *,
+        budget_scope_id: UUID | None = None,
+        sealed_ceiling_paise: int | None = None,
     ) -> dict[str, Any]:
         await self.admit(actor)
         state = await execution_state(
@@ -180,7 +193,19 @@ class ExecutionControls:
                 .execution_options(populate_existing=True)
             )
             if row is not None:
-                budget = budget_view(BudgetAccount.from_dict(row.snapshot))
+                snapshot = BudgetAccount.from_dict(row.snapshot)
+                limits = (
+                    None
+                    if sealed_ceiling_paise is None
+                    else await budget_limits(
+                        self.database,
+                        scope_id=budget_scope_id,
+                        sealed_ceiling_paise=sealed_ceiling_paise,
+                        budget=snapshot,
+                        now=utc(self.app.clock()),
+                    )
+                )
+                budget = budget_view(snapshot, limits)
         history = (
             await self.database.scalars(
                 select(ConversationExecutionControl)

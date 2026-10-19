@@ -1,0 +1,112 @@
+/* The pipeline graph. Tokens only; status colours match the stage badges. */
+
+.frame {
+  overflow-x: auto;
+  padding: 12px 14px;
+  scrollbar-width: thin;
+}
+
+.graph {
+  display: block;
+  width: 100%;
+  min-width: 720px;
+  height: auto;
+  font-family: inherit;
+}
+
+.lane {
+  fill: color-mix(in oklab, var(--sx-sunken) 55%, transparent);
+}
+
+.laneLabel {
+  fill: var(--sx-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.edge {
+  fill: none;
+  stroke: var(--sx-line-strong);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+.edge[data-status="done"] {
+  stroke: color-mix(in oklab, var(--sx-good) 70%, var(--sx-line));
+  stroke-dasharray: none;
+}
+
+.edge[data-status="running"] {
+  stroke: var(--sx-accent);
+  stroke-dasharray: none;
+}
+
+.edge[data-status="failed"] {
+  stroke: var(--sx-bad);
+  stroke-dasharray: none;
+}
+
+.node rect {
+  fill: var(--sx-surface);
+  stroke: var(--sx-line-strong);
+  stroke-width: 1;
+}
+
+.node[data-status="done"] rect {
+  stroke: color-mix(in oklab, var(--sx-good) 55%, var(--sx-line));
+}
+
+.node[data-status="running"] rect {
+  fill: var(--sx-accent-soft);
+  stroke: var(--sx-accent);
+}
+
+.node[data-status="failed"] rect {
+  fill: var(--sx-bad-soft);
+  stroke: var(--sx-bad);
+}
+
+.node[data-status="skipped"] rect,
+.node[data-status="waiting"] rect,
+.node[data-status="not_built"] rect {
+  stroke-dasharray: 4 3;
+}
+
+.dot {
+  fill: var(--sx-muted);
+}
+
+.node[data-status="done"] .dot {
+  fill: var(--sx-good);
+}
+
+.node[data-status="running"] .dot {
+  fill: var(--sx-accent);
+}
+
+.node[data-status="failed"] .dot {
+  fill: var(--sx-bad);
+}
+
+.nodeTitle {
+  fill: var(--sx-ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.nodeMeta {
+  fill: var(--sx-muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.node[data-status="skipped"] .nodeTitle,
+.node[data-status="not_built"] .nodeTitle {
+  fill: var(--sx-muted);
+}
+
+.extra {
+  margin: 8px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

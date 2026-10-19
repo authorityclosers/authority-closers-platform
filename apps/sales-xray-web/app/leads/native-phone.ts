@@ -8,6 +8,7 @@
  * of this exists: Call stays a tel: link and the seller answers by hand.
  */
 
+import { fromPhone, rememberCapture } from "../capture-source";
 export type NativeRecording = {
   source: string;
   name: string;
@@ -16,6 +17,8 @@ export type NativeRecording = {
   ext: string;
   mime: string;
   supported: boolean;
+  /** "dialer", "in_app" or "accessibility" (app 0.3.43+); see capture-source.ts. */
+  captured?: string;
 };
 
 export type NativeCallResult =
@@ -48,6 +51,10 @@ export type NativeStatus = {
   calling: boolean;
   callAccess: boolean;
   audio: boolean;
+  /** The app can open a provider's sign-in in the phone's browser (app-connect.ts). */
+  connect: boolean;
+  /** The app signs in with Apple and Facebook through the phone's browser too. */
+  signIn: boolean;
 };
 
 type Channel = {
@@ -149,6 +156,7 @@ export function parseRecording(raw: unknown): NativeRecording | null {
     ext: text(value.ext),
     mime: text(value.mime) || "audio/mpeg",
     supported: value.supported !== false,
+    ...(text(value.captured) ? { captured: text(value.captured) } : {}),
   };
 }
 
@@ -196,6 +204,8 @@ export async function phoneStatus(): Promise<NativeStatus | null> {
       calling: raw.calling === true,
       callAccess: raw.callAccess === true,
       audio: raw.audio === true,
+      connect: raw.connect === true,
+      signIn: raw.signIn === true,
     };
   } catch {
     return null;
@@ -272,7 +282,9 @@ export async function readPhoneRecording(
     onProgress?.(offset);
     if (piece.eof || bytes.length === 0) break;
   }
-  return new File(parts, recording.name, { type: recording.mime });
+  const file = new File(parts, recording.name, { type: recording.mime });
+  rememberCapture(file, fromPhone(recording.captured));
+  return file;
 }
 
 /** The "Didn't get through" reason that matches what the phone saw. */
@@ -707,4 +719,17 @@ export function onPhoneSignal(listener: (event: string) => void): () => void {
   };
   window.addEventListener("sx-phone", handle);
   return () => window.removeEventListener("sx-phone", handle);
+}
+
+/**
+ * Opens a Facebook or Google sign-in in the phone's own browser (they refuse
+ * the app's web view); the app comes back to this page when it is done.
+ */
+export async function openConnect(url: string): Promise<boolean> {
+  try {
+    const raw = await ask<{ opened?: boolean }>("openConnect", { url }, 10_000);
+    return raw.opened === true;
+  } catch {
+    return false;
+  }
 }

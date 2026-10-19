@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationDenied,
 )
+from ac_platform.conversation_intelligence.budget_settings import budget_limits
 from ac_platform.conversation_intelligence.checkpoints import (
     Checkpoint,
     SourceBinding,
@@ -589,18 +590,27 @@ class ConversationInference:
             return await self.application._run_view(actor, existing.run_id)
         identifier = uuid4()
         minutes, budget = await self.accounts(recording, row)
-        try:
-            release_cap_paise = (
-                self.authority.current(now).budget_cap_paise if self.authority is not None else None
+        snapshot = BudgetAccount.from_dict(budget.snapshot)
+        limit_kwargs: dict[str, int | None] = {}
+        if self.authority is not None:
+            bundle = self.authority.current(now)
+            limits = await budget_limits(
+                self.application.database,
+                scope_id=bundle.budget_scope_id,
+                sealed_ceiling_paise=bundle.budget_cap_paise,
+                budget=snapshot,
+                now=now,
             )
+            limit_kwargs = limits.reserve_kwargs()
+        try:
             transition = reserve(
                 MinuteAccount.from_dict(minutes.snapshot),
-                BudgetAccount.from_dict(budget.snapshot),
+                snapshot,
                 str(identifier),
                 quote,
                 permission,
                 int(now.timestamp()),
-                release_cap_paise=release_cap_paise,
+                **limit_kwargs,
             )
         except BudgetExhausted:
             raise BudgetCapReached(

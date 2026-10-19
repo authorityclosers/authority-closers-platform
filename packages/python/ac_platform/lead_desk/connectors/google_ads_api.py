@@ -139,13 +139,26 @@ def unseal(key: bytes, box: object, *, customer_id: str, what: str) -> str:
 # ----- OAuth -------------------------------------------------------------------------
 
 
-def make_state(cfg: GoogleAdsConfig, *, tenant_id: UUID, person_id: UUID) -> str:
-    return meta.make_state(cfg.client_secret, tenant_id=tenant_id, person_id=person_id)
+def make_state(
+    cfg: GoogleAdsConfig, *, tenant_id: UUID, person_id: UUID, app_challenge: str | None = None
+) -> str:
+    return meta.make_state(
+        cfg.client_secret, tenant_id=tenant_id, person_id=person_id, app_challenge=app_challenge
+    )
 
 
-def read_state(cfg: GoogleAdsConfig, state: str, *, tenant_id: UUID, person_id: UUID) -> None:
+def peek_state(cfg: GoogleAdsConfig, state: str) -> dict[str, Any]:
     try:
-        meta.read_state(cfg.client_secret, state, tenant_id=tenant_id, person_id=person_id)
+        return meta.peek_state(cfg.client_secret, state)
+    except meta.MetaError as error:
+        raise GoogleAdsApiError(str(error).replace("Meta", "Google")) from None
+
+
+def read_state(
+    cfg: GoogleAdsConfig, state: str, *, tenant_id: UUID, person_id: UUID
+) -> dict[str, Any]:
+    try:
+        return meta.read_state(cfg.client_secret, state, tenant_id=tenant_id, person_id=person_id)
     except meta.MetaError as error:
         raise GoogleAdsApiError(str(error).replace("Meta", "Google")) from None
 

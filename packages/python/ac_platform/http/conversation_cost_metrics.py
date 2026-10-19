@@ -19,7 +19,7 @@ from ac_platform.conversation_intelligence.application import (
 from ac_platform.conversation_intelligence.cost_metrics import AdminCostMetrics
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_admin_surface
 
-_FILTERS = {"days", "env", "tests"}
+_FILTERS = {"days", "env", "tests", "sort", "steps"}
 
 
 def install_cost_metrics_routes(
@@ -34,6 +34,8 @@ def install_cost_metrics_routes(
         days: Annotated[int, Query(ge=1, le=120)] = 30,
         env: Literal["all", "production", "staging", "development"] = "all",
         tests: Annotated[int, Query(ge=0, le=1)] = 0,
+        sort: Literal["newest", "cost", "per_minute", "audio", "tokens"] = "newest",
+        steps: Annotated[int, Query(ge=0, le=1)] = 0,
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
         """Spend, usage, revenue against cost and hold health; numbers only, never content."""
@@ -42,7 +44,9 @@ def install_cost_metrics_routes(
         response.headers["Cache-Control"] = "private, no-store"
         names = set(request.query_params)
         if names - _FILTERS or any(len(request.query_params.getlist(n)) != 1 for n in names):
-            raise HTTPException(422, "Cost and usage takes days, env and tests once each.")
+            raise HTTPException(
+                422, "Cost and usage takes days, env, tests, sort and steps once each."
+            )
         if settings.operations_tenant_id is None:
             raise HTTPException(503, "Cost and usage is not configured.")
         try:
@@ -51,6 +55,13 @@ def install_cost_metrics_routes(
                 settings.operations_tenant_id,
                 store_root=settings.metrics_store_root,
                 here=settings.environment,
-            ).summary(auth.resolved.actor, days=days, environment=env, tests=bool(tests))
+            ).summary(
+                auth.resolved.actor,
+                days=days,
+                environment=env,
+                tests=bool(tests),
+                call_sort=sort,
+                call_steps=bool(steps),
+            )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None

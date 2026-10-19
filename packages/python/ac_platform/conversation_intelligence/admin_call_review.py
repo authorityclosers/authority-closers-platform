@@ -25,8 +25,9 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
@@ -261,6 +262,47 @@ class AdminCallReview:
             plans.sort(key=lambda plan: (utc(plan.created_at), str(plan.id)), reverse=True)
         return grouped
 
+    async def _engine(self, recording_ids: Sequence[UUID]) -> dict[UUID, dict[str, Any]]:
+        """The call data engine at a glance: each read's newest run state, current objects.
+
+        Two grouped reads over the window. Current means not superseded, retracted
+        or erased, as in the engine's detail read; segment labels are not counted.
+        """
+        # The call data engine imports conversation models; import it on use.
+        from ac_platform.call_data.models import CallDataRun, CallObject
+
+        ids = list(recording_ids)
+        if not ids:
+            return {}
+        engine: dict[UUID, dict[str, Any]] = {
+            identifier: {"fast": None, "deep": None, "objects": 0} for identifier in ids
+        }
+        runs = await self.database.execute(
+            select(CallDataRun.recording_id, CallDataRun.pipeline, CallDataRun.state)
+            .where(CallDataRun.recording_id.in_(ids))
+            .order_by(CallDataRun.created_at.desc(), CallDataRun.id.desc())
+        )
+        for recording_id, pipeline, state in runs.all():
+            row = engine.get(recording_id)
+            if row is not None and pipeline in ("fast", "deep") and row[pipeline] is None:
+                row[pipeline] = state
+        successor = aliased(CallObject)
+        counted = await self.database.execute(
+            select(CallObject.recording_id, func.count())
+            .where(
+                CallObject.recording_id.in_(ids),
+                CallObject.type_key != "conversation.segment",
+                CallObject.retracted.is_(False),
+                CallObject.erased_at.is_(None),
+                ~exists().where(successor.supersedes_id == CallObject.id),
+            )
+            .group_by(CallObject.recording_id)
+        )
+        for recording_id, count in counted.all():
+            if recording_id in engine:
+                engine[recording_id]["objects"] = int(count)
+        return engine
+
     async def _reports(self, recording_ids: Sequence[UUID]) -> dict[UUID, dict[UUID, UUID]]:
         """recording -> run -> latest report id. Columns only: payloads stay unread."""
 
@@ -396,6 +438,7 @@ class AdminCallReview:
         runs = await self._runs(ids)
         plans = await self._plans(ids)
         reports = await self._reports(ids)
+        engine = await self._engine(ids)
         label_rows = await ReviewLabels(
             self.application,
             self.operations_tenant_id,
@@ -446,6 +489,7 @@ class AdminCallReview:
                     },
                     "report_run_id": None if report_run is None else str(report_run.id),
                     "review": review_state(label_rows.get(recording.id, [])),
+                    "engine": engine.get(recording.id, {"fast": None, "deep": None, "objects": 0}),
                 }
             )
 

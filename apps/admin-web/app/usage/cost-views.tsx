@@ -5,14 +5,18 @@
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Coins, Gauge, GitCompare, Landmark, Receipt } from "lucide-react";
+import { Coins, Gauge, GitCompare, Landmark, Receipt, X } from "lucide-react";
 
 import {
   ENVIRONMENTS,
+  CALL_SORTS,
   ENVIRONMENT_LABEL,
   KIND_LABEL,
   STAGE_LABEL,
+  chartSeries,
+  chartsFrom,
   comparePair,
+  correlation,
   costQuery,
   count,
   dayLabel,
@@ -21,10 +25,17 @@ import {
   pct,
   perMin,
   seconds,
+  seriesValue,
   stamp,
+  toggleChart,
+  together,
   tokens,
+  zeroReason,
+  type CallRow,
+  type ChartView,
   type Metrics,
   type Pipeline,
+  type Series,
 } from "@/app/usage/cost-data";
 import styles from "@/app/usage/usage.module.css";
 import {
@@ -45,7 +56,7 @@ export type CostFilter = {
   days: string;
   env: string;
   tests: boolean;
-};
+} & ChartView;
 
 export const COST_WINDOWS = [
   { key: "1", label: "Today" },
@@ -382,38 +393,11 @@ export function OverviewView({
           </tbody>
         </Table>
       </Panel>
-      <div className={styles.columns}>
-        <Panel
-          title="Spend per day"
-          sub={windowLabel}
-          tools={
-            <span className={styles.legend}>
-              {ENVIRONMENTS.map((name) => (
-                <Env key={name} name={name} />
-              ))}
-            </span>
-          }
-        >
-          {o.spendWindow > 0 ? (
-            <DailyBars metrics={metrics} />
-          ) : (
-            <Empty icon={Coins} title="No spend in this window" />
-          )}
-        </Panel>
-        <Panel
-          title="Cost per audio minute"
-          sub="per day"
-          tools={
-            <Why detail="Each call's whole cost (transcription, facts, report, pointer review, repeats) on the day it was first transcribed, divided by its minutes of audio. A later backfill counts on the call's own day." />
-          }
-        >
-          {o.audioMinutes > 0 ? (
-            <PerMinuteBars metrics={metrics} />
-          ) : (
-            <Empty icon={Gauge} title="No audio transcribed in this window" />
-          )}
-        </Panel>
-      </div>
+      <ChartBoard
+        metrics={metrics}
+        current={current}
+        windowLabel={windowLabel}
+      />
       <div className={styles.columns}>
         <Panel
           title="Where the money goes"
@@ -536,13 +520,448 @@ export function OverviewView({
   );
 }
 
+/* ---------- Charts: pick which show, compare two (owner, 19 Oct 2026) ---------- */
+
+/** Any per-day series as bars, each day's value against the window's highest. */
+function SeriesBars({ series }: { series: Series }) {
+  const peak = Math.max(0, ...series.values.map((value) => value ?? 0));
+  if (!series.days.length || peak <= 0)
+    return <Empty icon={Coins} title="Nothing to draw in this window" />;
+  const environment = series.key.startsWith("env-")
+    ? series.key.slice(4)
+    : undefined;
+  return (
+    <>
+      <div className={styles.bars} role="img" aria-label={series.label}>
+        {series.days.map((day, index) => {
+          const value = series.values[index] ?? null;
+          return (
+            <span
+              key={day}
+              className={styles.bar}
+              data-empty={value ? undefined : ""}
+              title={`${dayLabel(day)}: ${seriesValue(series.unit, value)}`}
+            >
+              {value ? (
+                <i
+                  data-env={environment}
+                  style={{ height: `${(value / peak) * 100}%` }}
+                />
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
+      <div className={styles.axis} aria-hidden="true">
+        <span>{dayLabel(series.days[0] ?? "")}</span>
+        <span>highest {seriesValue(series.unit, peak)}</span>
+        <span>{dayLabel(series.days.at(-1) ?? "")}</span>
+      </div>
+    </>
+  );
+}
+
+const LINE_W = 640;
+const LINE_H = 180;
+const LINE_PAD = 8;
+
+const peakOf = (series: Series) =>
+  Math.max(0, ...series.values.map((value) => value ?? 0));
+
+/** The polyline for one series, drawn against its own highest value. */
+function linePoints(series: Series): string {
+  const peak = peakOf(series) || 1;
+  const step =
+    series.values.length > 1
+      ? (LINE_W - 2 * LINE_PAD) / (series.values.length - 1)
+      : 0;
+  return series.values
+    .map((value, index) =>
+      value === null
+        ? null
+        : `${(LINE_PAD + index * step).toFixed(1)},${(
+            LINE_H -
+            LINE_PAD -
+            (value / peak) * (LINE_H - 2 * LINE_PAD)
+          ).toFixed(1)}`,
+    )
+    .filter((point): point is string => point !== null)
+    .join(" ");
+}
+
+/** Two series over the same days, each on its own scale, with a day-by-day table. */
+function CompareChart({ a, b }: { a: Series; b: Series }) {
+  const r = correlation(a.values, b.values);
+  const total = (series: Series) =>
+    series.unit === "perMin"
+      ? null
+      : series.values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  return (
+    <Panel
+      title={`${a.label} and ${b.label}`}
+      sub={`each on its own scale · they ${together(r)}`}
+      tools={
+        <Why detail="Both lines share the days; each is drawn against its own highest value, so their shapes compare even when the units differ. They move together when the correlation over the days both have is 0.6 or more." />
+      }
+    >
+      <svg
+        className={styles.lines}
+        viewBox={`0 0 ${LINE_W} ${LINE_H}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`${a.label} compared with ${b.label}, day by day`}
+      >
+        <polyline className={styles.lineA} points={linePoints(a)} />
+        <polyline className={styles.lineB} points={linePoints(b)} />
+      </svg>
+      <div className={styles.axis} aria-hidden="true">
+        <span>{dayLabel(a.days[0] ?? "")}</span>
+        <span>{dayLabel(a.days.at(-1) ?? "")}</span>
+      </div>
+      <div className={styles.compareLegend}>
+        {[a, b].map((series, index) => {
+          const sum = total(series);
+          return (
+            <span key={series.key} data-line={index ? "b" : "a"}>
+              <strong>{series.label}</strong> highest{" "}
+              {seriesValue(series.unit, peakOf(series))}
+              {sum !== null ? ` · total ${seriesValue(series.unit, sum)}` : ""}
+            </span>
+          );
+        })}
+      </div>
+      <details className={styles.compareDays}>
+        <summary>Day by day</summary>
+        <Table label={`${a.label} and ${b.label} by day`}>
+          <thead>
+            <tr>
+              <th scope="col">Day</th>
+              <th scope="col" data-num="">
+                {a.label}
+              </th>
+              <th scope="col" data-num="">
+                {b.label}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {a.days.map((day, index) => (
+              <tr key={day}>
+                <th scope="row">{dayLabel(day)}</th>
+                <td data-num="">
+                  {seriesValue(a.unit, a.values[index] ?? null)}
+                </td>
+                <td data-num="">
+                  {seriesValue(b.unit, b.values[index] ?? null)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </details>
+    </Panel>
+  );
+}
+
+/** The Overview's charts: a picker, an optional comparison, then the chosen charts. */
+export function ChartBoard({
+  metrics,
+  current,
+  windowLabel,
+}: {
+  metrics: Metrics;
+  current: CostFilter;
+  windowLabel: string;
+}) {
+  const o = metrics.overview;
+  const series = chartSeries(metrics);
+  const byKey = new Map(series.map((item) => [item.key, item]));
+  const shown = chartsFrom(current.charts, [...byKey.keys()]);
+  const a = current.ca ? byKey.get(current.ca) : undefined;
+  const b = current.cb ? byKey.get(current.cb) : undefined;
+  const comparing = a && b && a.key !== b.key ? { a, b } : null;
+  const link = (change: ChartView) => costQuery(current, change);
+  const options = series.map((item) => (
+    <option key={item.key} value={item.key}>
+      {item.label}
+    </option>
+  ));
+  return (
+    <>
+      <div className={styles.chartTools}>
+        <Chips
+          label="Charts"
+          items={series.map((item) => ({
+            key: item.key,
+            label: item.label,
+            href: link({ charts: toggleChart(shown, item.key) }),
+            on: shown.includes(item.key),
+          }))}
+        />
+        <form
+          className={styles.compareForm}
+          action="/usage"
+          method="get"
+          aria-label="Compare two charts"
+        >
+          {current.days !== "30" ? (
+            <input type="hidden" name="days" value={current.days} />
+          ) : null}
+          {current.env !== "all" ? (
+            <input type="hidden" name="env" value={current.env} />
+          ) : null}
+          {current.tests ? (
+            <input type="hidden" name="tests" value="1" />
+          ) : null}
+          {current.charts ? (
+            <input type="hidden" name="charts" value={current.charts} />
+          ) : null}
+          <label>
+            <span>Compare</span>
+            <select name="ca" defaultValue={comparing?.a.key ?? "spend"}>
+              {options}
+            </select>
+          </label>
+          <label>
+            <span>with</span>
+            <select name="cb" defaultValue={comparing?.b.key ?? "perMinute"}>
+              {options}
+            </select>
+          </label>
+          <Button type="submit">Compare</Button>
+          {comparing ? (
+            <Link
+              href={link({ ca: undefined, cb: undefined })}
+              scroll={false}
+              className={styles.chip}
+            >
+              Stop comparing
+            </Link>
+          ) : null}
+        </form>
+      </div>
+      {comparing ? <CompareChart a={comparing.a} b={comparing.b} /> : null}
+      {shown.length ? (
+        <div className={styles.columns}>
+          {shown.map((key) => {
+            const item = byKey.get(key);
+            if (!item) return null;
+            return (
+              <Panel
+                key={key}
+                title={item.label}
+                sub={key === "perMinute" ? "per day" : windowLabel}
+                tools={
+                  <span className={styles.legend}>
+                    {key === "spend"
+                      ? ENVIRONMENTS.map((name) => (
+                          <Env key={name} name={name} />
+                        ))
+                      : null}
+                    {key === "perMinute" ? (
+                      <Why detail="Each call's whole cost (transcription, facts, report, pointer review, repeats) on the day it was first transcribed, divided by its minutes of audio. A later backfill counts on the call's own day." />
+                    ) : null}
+                    <Link
+                      href={link({ charts: toggleChart(shown, key) })}
+                      scroll={false}
+                      className={styles.hide}
+                      aria-label={`Hide ${item.label}`}
+                      title="Hide this chart"
+                    >
+                      <X size={14} aria-hidden />
+                    </Link>
+                  </span>
+                }
+              >
+                {key === "spend" ? (
+                  o.spendWindow > 0 ? (
+                    <DailyBars metrics={metrics} />
+                  ) : (
+                    <Empty icon={Coins} title="No spend in this window" />
+                  )
+                ) : key === "perMinute" ? (
+                  o.audioMinutes > 0 ? (
+                    <PerMinuteBars metrics={metrics} />
+                  ) : (
+                    <Empty
+                      icon={Gauge}
+                      title="No audio transcribed in this window"
+                    />
+                  )
+                ) : (
+                  <SeriesBars series={item} />
+                )}
+              </Panel>
+            );
+          })}
+        </div>
+      ) : (
+        <p className={styles.hint}>All charts are hidden. Pick any above.</p>
+      )}
+    </>
+  );
+}
+
 /* ---------- Per call ---------- */
 
 const STAGE_ORDER = ["C2", "C4", "C5", "PR"];
 
-export function CallsView({ metrics }: { metrics: Metrics }) {
-  const rows = metrics.calls.rows;
-  if (!rows.length)
+const STEP_STATUS: Record<string, string> = {
+  succeeded: "done",
+  dead_letter: "failed",
+  retry_wait: "retrying",
+  leased: "running",
+  queued: "waiting",
+  cancelled: "cancelled",
+};
+
+/** Each provider step of one call: what ran, how, and what it cost. */
+function CallSteps({ row }: { row: CallRow }) {
+  if (!row.steps.length)
+    return <p className={styles.hint}>This read has no step detail.</p>;
+  return (
+    <Table label={`Steps of the ${row.company} call at ${stamp(row.at)}`}>
+      <thead>
+        <tr>
+          <th scope="col">Step</th>
+          <th scope="col">Provider and model</th>
+          <th scope="col">Status</th>
+          <th scope="col" data-num="">
+            Tries
+          </th>
+          <th scope="col" data-num="">
+            Tokens in
+          </th>
+          <th scope="col" data-num="">
+            Tokens out
+          </th>
+          <th scope="col" data-num="">
+            Audio
+          </th>
+          <th scope="col" data-num="">
+            Took
+          </th>
+          <th scope="col" data-num="">
+            Cost
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {row.steps.map((step, index) => (
+          <tr key={`${step.stage}-${step.at}-${index}`}>
+            <th scope="row">
+              {STAGE_LABEL[step.stage] ?? step.stage}
+              <span className={styles.sub}>{stamp(step.at)}</span>
+            </th>
+            <td>
+              {step.provider ?? "–"}
+              <span className={styles.sub}>{step.model ?? "–"}</span>
+            </td>
+            <td>{STEP_STATUS[step.status] ?? step.status}</td>
+            <td data-num="">{count(step.attempts)}</td>
+            <td data-num="">{tokens(step.inputTokens)}</td>
+            <td data-num="">{tokens(step.outputTokens)}</td>
+            <td data-num="">
+              {step.audioMinutes === null ? "–" : minutes(step.audioMinutes)}
+            </td>
+            <td data-num="">{seconds(step.elapsedMs)}</td>
+            <td data-num="">
+              {step.rupees === null ? (
+                <span className={styles.sub}>no price</span>
+              ) : (
+                inr(step.rupees)
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+}
+
+/** One call: a summary line that opens to its steps. */
+function CallLine({ row, here }: { row: CallRow; here: string | null }) {
+  return (
+    <details className={styles.callLine} role="listitem">
+      <summary>
+        <span className={styles.callWho}>
+          <strong>{row.company}</strong>
+          <span className={styles.sub}>
+            <Env name={row.environment} /> · {stamp(row.at)} ·{" "}
+            {minutes(row.audioMinutes)}
+            {row.kind !== "real"
+              ? ` · ${KIND_LABEL[row.kind] ?? row.kind}`
+              : ""}
+          </span>
+          {row.models.length ? (
+            <span className={styles.sub}>{row.models.join(" · ")}</span>
+          ) : null}
+        </span>
+        {STAGE_ORDER.map((stage) => {
+          const cost = row.stages[stage];
+          return (
+            <span key={stage} data-num="" data-label={STAGE_LABEL[stage]}>
+              {cost ? inr(cost.rupees) : "–"}
+              {cost && cost.runs > 1 ? <small>{cost.runs} runs</small> : null}
+              {cost && cost.failed ? <small>{cost.failed} failed</small> : null}
+            </span>
+          );
+        })}
+        <span data-num="" data-label="Total">
+          <strong>{inr(row.rupees)}</strong>
+          <small>{perMin(row.perMinute)}</small>
+        </span>
+        <span data-num="" data-label="Tokens">
+          {tokens(row.tokens)}
+        </span>
+        <span data-num="" data-label="Report in">
+          {row.report ? seconds(row.reportMs) : "no report"}
+        </span>
+      </summary>
+      <div className={styles.callDetail}>
+        <CallSteps row={row} />
+        <p className={styles.hint}>
+          {minutes(row.billedMinutes)} billed ·{" "}
+          {row.margin === null
+            ? "no paid plan, so no margin"
+            : `margin ${inr(row.margin)}`}
+          {row.version ? ` · ${row.version}` : ""}
+          {here === row.environment ? (
+            <>
+              {" · "}
+              <Link href={`/calls/${row.id}`}>Open the call</Link>
+            </>
+          ) : null}
+        </p>
+      </div>
+    </details>
+  );
+}
+
+export function CallsView({
+  metrics,
+  current,
+}: {
+  metrics: Metrics;
+  current: CostFilter;
+}) {
+  const { rows, total, sort, zeroRows, zeroTotal } = metrics.calls;
+  const sorter = (
+    <div className={styles.filters}>
+      <Chips
+        label="Sort"
+        items={CALL_SORTS.map((item) => ({
+          key: item.key,
+          label: item.label,
+          href: costQuery(current, {
+            sort: item.key === "newest" ? undefined : item.key,
+          }),
+          on: sort === item.key,
+        }))}
+      />
+    </div>
+  );
+  if (!rows.length && !zeroTotal)
     return (
       <Panel title="Calls">
         <Empty
@@ -553,107 +972,69 @@ export function CallsView({ metrics }: { metrics: Metrics }) {
       </Panel>
     );
   return (
-    <Panel
-      title="Cost per call"
-      sub={
-        metrics.calls.total > rows.length
-          ? `newest ${count(rows.length)} of ${count(metrics.calls.total)}`
-          : `${count(rows.length)} calls`
-      }
-      tools={
-        <Why detail="Each call's provider steps priced from the price sheet: transcription by audio length, facts, report and pointer review by tokens in and out. Margin needs a paid plan: plan price per included minute times the minutes billed, minus cost." />
-      }
-    >
-      <Table
-        label="Cost per call"
-        cards={rows.map((row) => (
-          <div key={`${row.environment}-${row.id}`} role="listitem">
-            <Env name={row.environment} /> · {row.company} ·{" "}
-            {minutes(row.audioMinutes)} · {inr(row.rupees)} (
-            {perMin(row.perMinute)})
-          </div>
-        ))}
+    <>
+      {sorter}
+      <Panel
+        title="Cost per call"
+        sub={
+          total > rows.length
+            ? `${count(rows.length)} of ${count(total)} calls with a cost`
+            : `${count(total)} ${total === 1 ? "call" : "calls"} with a cost`
+        }
+        tools={
+          <Why detail="Each call's provider steps priced from the price sheet: transcription by audio length, facts, report and pointer review by tokens in and out. Open a call to see every step: provider and model, tries, tokens, audio, time and cost. Margin needs a paid plan. Calls that cost nothing are listed apart below." />
+        }
       >
-        <thead>
-          <tr>
-            <th scope="col">Call</th>
-            {STAGE_ORDER.map((stage) => (
-              <th key={stage} scope="col" data-num="">
-                {STAGE_LABEL[stage]}
-              </th>
+        {rows.length ? (
+          <div className={styles.callList} role="list" aria-label="Calls">
+            <div className={styles.callHead} aria-hidden="true">
+              <span>Call</span>
+              {STAGE_ORDER.map((stage) => (
+                <span key={stage} data-num="">
+                  {STAGE_LABEL[stage]}
+                </span>
+              ))}
+              <span data-num="">Total</span>
+              <span data-num="">Tokens</span>
+              <span data-num="">Report in</span>
+            </div>
+            {rows.map((row) => (
+              <CallLine
+                key={`${row.environment}-${row.id}`}
+                row={row}
+                here={metrics.here}
+              />
             ))}
-            <th scope="col" data-num="">
-              Total
-            </th>
-            <th scope="col" data-num="">
-              Billed
-            </th>
-            <th scope="col" data-num="">
-              Margin
-            </th>
-            <th scope="col" data-num="">
-              Report in
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={`${row.environment}-${row.id}`}>
-              <th scope="row">
-                {metrics.here === row.environment ? (
-                  <Link href={`/calls/${row.id}`}>{row.company}</Link>
-                ) : (
-                  row.company
-                )}
+          </div>
+        ) : (
+          <Empty icon={Receipt} title="No call cost anything in this window" />
+        )}
+      </Panel>
+      {zeroTotal ? (
+        <details className={styles.zeroCalls}>
+          <summary>
+            {count(zeroTotal)} {zeroTotal === 1 ? "call" : "calls"} cost nothing{" "}
+            <span className={styles.sub}>no paid step finished · show</span>
+          </summary>
+          <ul>
+            {zeroRows.map((row) => (
+              <li key={`${row.environment}-${row.id}`}>
+                <strong>{row.company}</strong>{" "}
                 <span className={styles.sub}>
                   <Env name={row.environment} /> · {stamp(row.at)} ·{" "}
-                  {minutes(row.audioMinutes)}
-                  {row.kind !== "real"
-                    ? ` · ${KIND_LABEL[row.kind] ?? row.kind}`
-                    : ""}
+                  {minutes(row.audioMinutes)} · {zeroReason(row.statuses)}
                 </span>
-              </th>
-              {STAGE_ORDER.map((stage) => {
-                const cost = row.stages[stage];
-                return (
-                  <td key={stage} data-num="">
-                    {cost ? inr(cost.rupees) : "–"}
-                    {cost && (cost.inputTokens || cost.outputTokens) ? (
-                      <span className={styles.sub}>
-                        {tokens(cost.inputTokens)} in ·{" "}
-                        {tokens(cost.outputTokens)} out
-                      </span>
-                    ) : null}
-                    {cost && cost.runs > 1 ? (
-                      <span className={styles.sub}>{cost.runs} runs</span>
-                    ) : null}
-                  </td>
-                );
-              })}
-              <td data-num="">
-                <strong>{inr(row.rupees)}</strong>
-                <span className={styles.sub}>{perMin(row.perMinute)}</span>
-              </td>
-              <td data-num="">{minutes(row.billedMinutes)}</td>
-              <td data-num="">
-                {row.margin === null ? (
-                  <span className={styles.sub}>no paid plan</span>
-                ) : (
-                  <span
-                    className={row.margin >= 0 ? styles.better : styles.worse}
-                  >
-                    {inr(row.margin)}
-                  </span>
-                )}
-              </td>
-              <td data-num="">
-                {row.report ? seconds(row.reportMs) : "no report"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-    </Panel>
+              </li>
+            ))}
+          </ul>
+          {zeroTotal > zeroRows.length ? (
+            <p className={styles.hint}>
+              Newest {count(zeroRows.length)} shown.
+            </p>
+          ) : null}
+        </details>
+      ) : null}
+    </>
   );
 }
 
@@ -1177,7 +1558,13 @@ export function MoneyView({ metrics }: { metrics: Metrics }) {
                   ? "warn"
                   : undefined
             }
-            note={`${inr(row.usedRupees)} of ${inr(row.cap)} · ${count(row.open)} open holds${
+            note={`${inr(row.usedRupees)} of ${inr(row.cap)}${
+              row.period === "monthly"
+                ? " this month"
+                : row.period === "daily"
+                  ? " today"
+                  : ""
+            } · ${count(row.open)} open holds${
               row.waitingCalls
                 ? ` · ${count(row.waitingCalls)} calls waiting`
                 : ""
