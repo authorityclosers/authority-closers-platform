@@ -528,6 +528,16 @@ class Graph:
         if body.get("success") not in (True, "true"):
             raise SocialError("Facebook didn't switch on messages for this Page. Try again.")
 
+    async def subscribed_apps(self, page_id: str, page_token: str) -> dict[str, list[str]]:
+        """The apps this Page sends its events to, and which fields (Connected apps)."""
+        body = await self._call("GET", f"{page_id}/subscribed_apps", token=page_token)
+        out: dict[str, list[str]] = {}
+        for row in body.get("data") or []:
+            if isinstance(row, Mapping) and row.get("id"):
+                fields = row.get("subscribed_fields")
+                out[str(row["id"])] = [str(f) for f in fields] if isinstance(fields, list) else []
+        return out
+
     async def profile(self, channel: str, user_id: str, page_token: str) -> str | None:
         """The person's name (Messenger) or @username (Instagram), if Meta shares it."""
         try:

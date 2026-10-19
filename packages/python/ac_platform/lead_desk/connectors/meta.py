@@ -571,6 +571,19 @@ class Graph:
     async def unsubscribe(self, page_id: str, page_token: str) -> None:
         await self._call("DELETE", f"{page_id}/subscribed_apps", access_token=page_token)
 
+    async def create_test_lead(self, form_id: str, page_token: str) -> str:
+        """Meta's test lead on this form (Settings → Connected apps). A form holds one test
+        lead at a time, so an older one is deleted first. Its leadgen webhook brings it in."""
+        old = await self._call("GET", f"{form_id}/test_leads", access_token=page_token)
+        for row in old.get("data") or []:
+            if isinstance(row, Mapping) and row.get("id"):
+                await self._call("DELETE", str(row["id"]), access_token=page_token)
+        made = await self._call("POST", f"{form_id}/test_leads", access_token=page_token)
+        lead_id = str(made.get("id") or "")
+        if not lead_id:
+            raise MetaError("Meta didn't make the test lead. Try again.")
+        return lead_id
+
     async def lead(self, leadgen_id: str, page_token: str) -> dict[str, Any]:
         return await self._call("GET", leadgen_id, fields=LEAD_FIELDS, access_token=page_token)
 
