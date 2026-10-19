@@ -31,6 +31,14 @@ const STATE_LABEL: Record<ObjectState, string> = {
 
 const words = (value: string) => value.replaceAll("_", " ");
 
+/** A person's word (confirmed, edited) always wins over the AI's read (observed, inferred). */
+const BASIS: Record<string, { who: string; tone: Tone }> = {
+  confirmed: { who: "Person", tone: "accent" },
+  edited: { who: "Person", tone: "accent" },
+  observed: { who: "AI", tone: "neutral" },
+  inferred: { who: "AI", tone: "neutral" },
+};
+
 export function ObjectsTable({
   objects,
 }: {
@@ -117,13 +125,25 @@ export function ObjectsTable({
                 <small>{words(object.category || object.type)}</small>
                 {words(object.type)}
               </th>
-              <td className={styles.display}>{object.display || "—"}</td>
+              <td className={styles.display}>
+                {object.display || (object.state === "erased" ? "Erased" : "—")}
+              </td>
               <td data-num="">
                 {object.confidence === null
                   ? "—"
                   : `${Math.round(object.confidence * (object.confidence <= 1 ? 100 : 1))}%`}
               </td>
-              <td className={styles.muted}>{object.basis ?? "—"}</td>
+              <td>
+                {object.basis ? (
+                  <Badge tone={BASIS[object.basis]?.tone ?? "neutral"}>
+                    {BASIS[object.basis]
+                      ? `${BASIS[object.basis].who} · ${object.basis}`
+                      : object.basis}
+                  </Badge>
+                ) : (
+                  "—"
+                )}
+              </td>
               <td className={styles.muted}>
                 {[object.pipeline, object.version]
                   .filter(Boolean)

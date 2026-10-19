@@ -112,7 +112,8 @@ export function PipelineGraph({
           const label = [duration(edge.durationMs), rupees(edge.costInr)]
             .filter(Boolean)
             .join(" · ");
-          // Each node already shows its time and cost; the link says it on hover.
+          // A link's time and cost are its target stage's own (never add them up;
+          // the branch totals do that once). Nodes show them; hover repeats them.
           return (
             <path
               key={`${edge.from}-${edge.to}`}
@@ -121,9 +122,9 @@ export function PipelineGraph({
               d={`M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`}
             >
               <title>
-                {[`${edge.from} → ${edge.to}`, label]
-                  .filter(Boolean)
-                  .join(": ")}
+                {`${edge.from} → ${edge.to}${
+                  label ? ` · ${edge.to} itself took ${label}` : ""
+                }`}
               </title>
             </path>
           );
