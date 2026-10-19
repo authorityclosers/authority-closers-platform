@@ -46,20 +46,29 @@ One configuration per app (parent, staging, dev):
   **check** which token types the dashboard offers, and prefer a **system user**
   access token that never expires).
 - Products: WhatsApp Cloud API (Embedded Signup v4 picks products in the
-  configuration; the page passes `extras: {}`).
+  configuration).
 - Assets: WhatsApp accounts (and the phone numbers in them).
 - Permissions: `whatsapp_business_management`, `whatsapp_business_messaging`.
   `business_management` only if the dashboard requires it.
 - Record the **configuration ID** for each environment.
 
-Facebook Login for Business → Settings:
+Sales Xray opens Embedded Signup **by redirect**, the same way as Continue with Meta for
+leads: no Meta JavaScript SDK on our pages, so the site's content-security policy stays
+as it is. After signup, Sales Xray swaps the code with the same return address, reads
+the shared WhatsApp accounts from the token (`debug_token` granular scopes) and
+connects each number in them.
 
-- Allowed domains for the JavaScript SDK:
-  `salesxray.authorityclosers.com`, `salesxray-staging.authorityclosers.com`,
-  `salesxray-dev.authorityclosers.com` (each on its own app).
-- Valid OAuth redirect URI: `https://<host>/organisation/integrations` (the page that
-  opens Embedded Signup; the code comes back to the page in the JS callback and the
-  server exchanges it within 30 seconds).
+Facebook Login for Business → Settings, per app:
+
+- Valid OAuth redirect URI:
+  `https://salesxray.authorityclosers.com/v1/lead-desk/whatsapp/callback`
+  (staging: `salesxray-staging…`, dev: `salesxray-dev…`, each on its own app). The
+  person's browser makes this request, so it needs no Cloudflare Access bypass.
+- **Check** whether Embedded Signup v4 in this account allows the redirect flow; if the
+  dashboard insists on the JavaScript SDK, the site's CSP needs
+  `script-src https://connect.facebook.net` and `frame-src https://www.facebook.com`
+  (an edge change through Align 3), and the page path `POST /v1/lead-desk/whatsapp/connect`
+  (code + account + number ids) is already built for it.
 
 ## 4. Webhook
 

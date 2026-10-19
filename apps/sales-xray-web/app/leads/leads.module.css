@@ -1551,6 +1551,225 @@
   color: var(--sx-accent);
 }
 
+/* WhatsApp: the lead's conversation, the desk inbox, Settings → Integrations. */
+.waThread,
+.waInbox,
+.waSettings,
+.slaPanel {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  min-width: 0;
+}
+
+.waHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.waHead h3 {
+  margin: 0;
+  font-size: var(--sx-text-md);
+}
+
+.waMessages {
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.waBubble {
+  max-width: 85%;
+  padding: 6px 10px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+  overflow-wrap: anywhere;
+}
+
+.waBubble[data-direction="out"] {
+  justify-self: end;
+  background: var(--sx-accent-soft);
+}
+
+.waBubble p {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  white-space: pre-wrap;
+}
+
+.waBubble small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.waCompose,
+.waTemplate,
+.waOptIn {
+  display: grid;
+  gap: 6px;
+}
+
+.waCompose textarea,
+.waTemplate input,
+.waTemplate select,
+.waOptIn input,
+.waRules textarea,
+.slaPanel select {
+  min-width: 0;
+  min-height: var(--sx-control-h);
+  padding: 6px 8px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+}
+
+.waPreview {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.waInbox ul,
+.waTemplates ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.waInbox button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.waInbox button:hover {
+  background: var(--sx-sunken);
+}
+
+.waInbox button span {
+  display: grid;
+  min-width: 0;
+}
+
+.waInbox small,
+.waTemplates small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waConnect {
+  justify-self: start;
+  padding: 6px 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.waConnect[data-variant="primary"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.waNumber,
+.waRules {
+  display: grid;
+  gap: 8px;
+}
+
+.waNumber + .waNumber {
+  padding-top: 8px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.waTemplates li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.waTemplates li span {
+  display: grid;
+  min-width: 0;
+}
+
+.waTemplateText {
+  white-space: normal;
+}
+
+.waNew summary {
+  cursor: pointer;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.slaField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--sx-text-sm);
+}
+
+.slaTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sx-text-sm);
+}
+
+.slaTable caption {
+  margin-bottom: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-align: left;
+}
+
+.slaTable th,
+.slaTable td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--sx-line);
+  text-align: left;
+}
+
+@media (max-width: 600px) {
+  .slaTable {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
 /* Lead stages back to Meta (Conversions API for CRM). */
 .capi {
   display: grid;

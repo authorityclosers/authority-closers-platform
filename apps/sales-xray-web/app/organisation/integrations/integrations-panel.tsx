@@ -56,6 +56,7 @@ import {
   type Integrations,
   type Webhook,
 } from "./integrations-client";
+import { WhatsAppSettings } from "../../leads/whatsapp-settings";
 import styles from "./integrations.module.css";
 
 const STATE_TONE: Record<ApiKey["state"], Tone> = {
@@ -1239,6 +1240,7 @@ export function IntegrationsPanel() {
     );
   return (
     <div className={styles.stack}>
+      <WhatsAppSettings />
       <KeysSection
         data={data}
         onChange={(keys) => setData({ ...data, keys })}
