@@ -43,6 +43,7 @@ export type NavIcon =
   | "company"
   | "outcomes"
   | "providers"
+  | "settings"
   | "analysis"
   | "execution"
   | "minutes"
@@ -152,6 +153,12 @@ export const NAVIGATION: readonly NavGroup[] = [
   {
     label: "Sales Xray setup",
     items: [
+      {
+        href: "/settings",
+        label: "All settings",
+        icon: "settings",
+        need: { kind: "salesXray" },
+      },
       {
         href: "/sales-xray/providers",
         label: "Providers & costs",

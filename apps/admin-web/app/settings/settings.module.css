@@ -1,0 +1,23 @@
+/* Admin → Settings: areas flow in two columns on wide screens (no gaps under
+   short panels), one column on phones. */
+
+.grid {
+  columns: 2 440px;
+  column-gap: var(--sx-gap);
+}
+
+.grid > * {
+  margin-bottom: var(--sx-gap);
+  break-inside: avoid;
+}
+
+.note {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.foot {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
