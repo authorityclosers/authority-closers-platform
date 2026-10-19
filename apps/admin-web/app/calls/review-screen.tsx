@@ -54,7 +54,8 @@ import { typing } from "./queue-keys";
 import { TranscriptPane } from "./transcript-pane";
 import { AnalysisTab } from "./analysis-tab";
 import type { CallDetail } from "./call-detail-data";
-import type { ReviewCall } from "./review-verdicts-data";
+import { CoachingReview } from "./coaching-review";
+import type { CoachingPoint, ReviewCall } from "./review-verdicts-data";
 import styles from "./review.module.css";
 
 const TABS: {
@@ -88,11 +89,14 @@ export function ReviewScreen({
   initialTab = null,
   analysis = null,
   review = null,
+  coachingPoints = null,
 }: {
   /** What the call data engine found (its detail read), or null when not read yet. */
   analysis?: CallDetail | null;
   /** Review 2.0 for this call, for gold reviewers; else null. */
   review?: ReviewCall | null;
+  /** This run's coaching as points to judge, for gold reviewers; else null. */
+  coachingPoints?: CoachingPoint[] | null;
   /** The call's reviewer labels, or null when they couldn't be read. */
   labels?: Labels | null;
   /** The operator may withhold passages (platform_content_safety_manage). */
@@ -478,7 +482,16 @@ export function ReviewScreen({
                 onEvidence={playEvidence}
               />
             ) : tab === "coaching" ? (
-              <Coaching report={bundle.report} onEvidence={playEvidence} />
+              <>
+                {review && coachingPoints ? (
+                  <CoachingReview
+                    recordingId={call.recordingId}
+                    review={review}
+                    points={coachingPoints}
+                  />
+                ) : null}
+                <Coaching report={bundle.report} onEvidence={playEvidence} />
+              </>
             ) : tab === "metrics" ? (
               <Metrics bundle={bundle} names={names} />
             ) : (

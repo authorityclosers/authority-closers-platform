@@ -21,6 +21,8 @@ const OPTION_LABEL: Record<string, string> = {
   correct: "Right",
   wrong: "Wrong",
   unsure: "Unsure",
+  true: "True",
+  false: "False",
 };
 
 const label = (option: string) =>
@@ -98,6 +100,27 @@ export function VerdictChips({
                 onClick={() => void save(question.key, { value: option })}
               >
                 {label(option)}
+              </button>
+            ))}
+          </span>
+        ) : question.kind === "scale" ? (
+          <span
+            key={question.key}
+            className={styles.chips}
+            role="group"
+            aria-label={question.label}
+            title={question.label}
+          >
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={mine[question.key]?.value === value}
+                aria-label={`${question.label} ${value} of 5`}
+                disabled={busy !== null}
+                onClick={() => void save(question.key, { value })}
+              >
+                {value}
               </button>
             ))}
           </span>

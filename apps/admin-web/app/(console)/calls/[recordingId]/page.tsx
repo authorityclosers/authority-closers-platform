@@ -13,7 +13,10 @@ import { FailedSteps } from "@/app/calls/failed-steps";
 import { queueApiPath, queueFilters } from "@/app/calls/queue-query";
 import { startAt } from "@/app/calls/review-logic";
 import { normalizeCallDetail } from "@/app/calls/call-detail-data";
-import { normalizeReviewCall } from "@/app/calls/review-verdicts-data";
+import {
+  normalizeCoachingPoints,
+  normalizeReviewCall,
+} from "@/app/calls/review-verdicts-data";
 import { ReviewScreen } from "@/app/calls/review-screen";
 import { normalizeLabels } from "@/app/calls/labels-data";
 import { loadConsoleAccess } from "@/app/lib/console-access";
@@ -186,6 +189,13 @@ export default async function CallReviewPage({
       </Page>
     );
 
+  // Review 2.0's coaching review: this run's coaching as points, for gold reviewers.
+  const coaching = review.ok
+    ? await adminRead(
+        `/v1/admin/conversation/review/calls/${recordingId}/coaching?run=${run.id}`,
+        normalizeCoachingPoints,
+      )
+    : null;
   const ids = queue?.ok ? queue.data.items.map((item) => item.recordingId) : [];
   const at = ids.indexOf(recordingId);
   return (
@@ -202,6 +212,7 @@ export default async function CallReviewPage({
       labels={labels.ok ? labels.data : null}
       analysis={analysis.ok ? analysis.data : null}
       review={review.ok ? review.data : null}
+      coachingPoints={coaching?.ok ? coaching.data : null}
       startMs={startAt(one(query.at))}
       initialTab={one(query.tab) === "analysis" ? "analysis" : null}
       neighbours={{

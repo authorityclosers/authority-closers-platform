@@ -146,3 +146,25 @@ export function withSaved(
     saved,
   ];
 }
+
+/** One run's coaching as points to judge (GET …/review/calls/{id}/coaching?run=). */
+export type CoachingPoint = {
+  ref: string;
+  key: string;
+  kind: string;
+  title: string;
+  text: string;
+};
+
+export function normalizeCoachingPoints(raw: unknown): CoachingPoint[] {
+  return read.array(read.object(raw).points).map((item) => {
+    const point = read.object(item);
+    return {
+      ref: read.string(point.ref),
+      key: read.string(point.key),
+      kind: read.string(point.kind),
+      title: read.string(point.title, "Coaching"),
+      text: read.string(point.text),
+    };
+  });
+}
