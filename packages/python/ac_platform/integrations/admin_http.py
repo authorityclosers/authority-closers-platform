@@ -4,6 +4,7 @@
                                                      keys, webhook and connected apps
 - POST /v1/admin/integrations/keys/{id}/revoke       a key, at once
 - POST /v1/admin/integrations/webhooks/{id}/disable  a webhook, at once
+- POST /v1/admin/integrations/connections/{id}/revoke  a connected app, at once
 
 Each change is audited in that organisation's own chain and answers with the updated
 row. No key or secret is ever returned: keys by prefix, webhooks by scheme and host.
@@ -319,6 +320,36 @@ async def disable_webhook(
     return _webhook_row(fresh, health[endpoint_id])
 
 
+async def revoke_connection(
+    database: AsyncSession, *, grant_id: UUID, actor: Any, now: datetime
+) -> dict[str, Any]:
+    found = await database.run_sync(
+        lambda session: oauth.connection_row(session.connection(), grant_id)
+    )
+    if found is None:
+        raise IntegrationError("not_found", 404)
+    changed = await database.run_sync(
+        lambda session: oauth.revoke_grant(
+            session.connection(), grant_id=grant_id, by=f"admin:{actor.person_id}", now=now
+        )
+    )
+    if changed:
+        await AuditRepository(database).append(
+            tenant_id=UUID(found["tenant_id"]),
+            actor_person_id=actor.person_id,
+            action="integration.app_disconnected",
+            resource_type="integration_oauth_grant",
+            resource_id=str(grant_id),
+            payload={"app": found["app"], "by": "platform"},
+            session_id=actor.session_id,
+        )
+    fresh: dict[str, Any] | None = await database.run_sync(
+        lambda session: oauth.connection_row(session.connection(), grant_id)
+    )
+    assert fresh is not None
+    return fresh
+
+
 def install_integrations_admin_http(application: FastAPI, ctx: RouteContext) -> None:
     settings = ctx.settings
     dependency = Depends(ctx.require_actor, scope="function")
@@ -390,5 +421,20 @@ def install_integrations_admin_http(application: FastAPI, ctx: RouteContext) -> 
             )
         except IntegrationError:
             raise HTTPException(404, "That webhook is not here.") from None
+
+    @router.post("/connections/{grant_id}/revoke")
+    async def disconnect(
+        grant_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        actor = await admit(request, response, auth, write=True)
+        try:
+            return await revoke_connection(
+                auth.database, grant_id=grant_id, actor=actor, now=datetime.now(UTC)
+            )
+        except IntegrationError:
+            raise HTTPException(404, "That connection is not here.") from None
 
     application.include_router(router)

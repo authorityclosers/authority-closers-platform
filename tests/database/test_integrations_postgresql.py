@@ -619,3 +619,88 @@ def test_an_admin_sets_up_the_hand_over_with_a_pasted_key(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_platform_admins_disconnect_an_app(postgres_harness: Any, tmp_path: Path) -> None:
+    from ac_platform.integrations import admin_http, oauth
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            tenant, person = setup.state.tenant_id, setup.state.person_id
+            now = datetime.now(UTC)
+            verifier = "v" * 50
+            async with setup.sessions() as db, db.begin():
+
+                def connect(sync: Any) -> dict[str, Any]:
+                    connection = sync.connection()
+                    app, secret = oauth.register_client(
+                        connection,
+                        tenant_id=tenant,
+                        person_id=person,
+                        name="Partner CRM",
+                        redirect_uris=["https://partner.example.test/cb"],
+                        confidential=True,
+                        now=now,
+                    )
+                    client = oauth.find_client(connection, app["client_id"])
+                    code = oauth.issue_code(
+                        connection,
+                        client=client,
+                        tenant_id=tenant,
+                        person_id=person,
+                        scopes=["calls:read"],
+                        redirect_uri="https://partner.example.test/cb",
+                        code_challenge=oauth.challenge_for(verifier),
+                        now=now,
+                    )
+                    return oauth.exchange_code(
+                        connection,
+                        code=code,
+                        client_id=app["client_id"],
+                        client_secret=secret,
+                        redirect_uri="https://partner.example.test/cb",
+                        code_verifier=verifier,
+                        now=now,
+                    )
+
+                tokens = await db.run_sync(connect)
+            async with setup.sessions() as db:
+                seen = await admin_http.overview(
+                    db,
+                    operations_tenant_id=None,
+                    personal_tenant_id=None,
+                    environment="test",
+                    now=now,
+                )
+            assert seen["counts"]["connected_apps"] == 1
+            [grant] = seen["organisations"][0]["connections"]
+            assert grant["app"] == "Partner CRM" and grant["revoked_at"] is None
+            async with setup.sessions() as db, db.begin():
+                row = await admin_http.revoke_connection(
+                    db, grant_id=UUID(grant["id"]), actor=setup.state.actor, now=now
+                )
+            assert row["revoked_at"] is not None and row["tenant_id"] == str(tenant)
+            async with setup.sessions() as db:
+                assert (
+                    await db.run_sync(
+                        lambda sync: oauth.authenticate(
+                            sync.connection(), tokens["access_token"], now=now
+                        )
+                    )
+                    is None
+                )
+                actions = (
+                    await db.scalars(
+                        select(AuditEvent.action).where(
+                            AuditEvent.tenant_id == tenant,
+                            AuditEvent.action == "integration.app_disconnected",
+                        )
+                    )
+                ).all()
+            assert actions == ["integration.app_disconnected"]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

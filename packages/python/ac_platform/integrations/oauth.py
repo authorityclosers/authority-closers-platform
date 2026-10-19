@@ -471,6 +471,16 @@ def all_connections(connection: Any, limit: int = 2000) -> list[dict[str, Any]]:
     return [{**_connection_view(row), "tenant_id": str(row.tenant_id)} for row in rows]
 
 
+def connection_row(connection: Any, grant_id: UUID) -> dict[str, Any] | None:
+    """One connection with its organisation, for platform admins."""
+    row = connection.execute(
+        select(GRANTS, CLIENTS.c.name)
+        .join(CLIENTS, CLIENTS.c.client_id == GRANTS.c.client_id)
+        .where(GRANTS.c.id == grant_id)
+    ).first()
+    return None if row is None else {**_connection_view(row), "tenant_id": str(row.tenant_id)}
+
+
 def tenant_clients(connection: Any, tenant_id: UUID) -> list[dict[str, Any]]:
     rows = connection.execute(
         select(CLIENTS)

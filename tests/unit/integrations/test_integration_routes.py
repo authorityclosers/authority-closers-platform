@@ -23,6 +23,9 @@ PATHS = (
     "/v1/admin/integrations",
     "/v1/admin/integrations/keys/{key_id}/revoke",
     "/v1/admin/integrations/webhooks/{endpoint_id}/disable",
+    "/v1/admin/integrations/connections/{grant_id}/revoke",
+    "/v1/sales-xray/integrations/handover",
+    "/v1/sales-xray/integrations/handover/disable",
 )
 
 

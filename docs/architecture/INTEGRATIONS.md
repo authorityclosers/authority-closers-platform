@@ -3,9 +3,9 @@
 Owner order, 19 Oct 2026: connecting any app to Sales X-Ray must be as simple as with top SaaS apps. That means no Infisical, password managers or ops steps per customer, and nothing named after any one customer.
 
 ## Slices
-1. **API keys and the webhook in Organisation → Integrations.** Built (migration 0103).
-2. **Connect:** "Sign in with Sales X-Ray", OAuth 2.0 authorisation code with PKCE, a consent screen and scopes. Next.
-3. **A CLI and an MCP server** on the same API, with the public `/developers` page. After Connect.
+1. **API keys, the webhook and the hand-over in Organisation → Integrations.** Built (migration 0103).
+2. **Connect:** "Connect to Sales X-Ray", OAuth 2.0 authorisation code with PKCE, a consent screen and scopes. Built.
+3. **A command line and an MCP server** on the same API (`/developers/sx.py`), with the public `/developers` page. Built.
 
 ## Who
 Integrations are for active owners and admins of a registered organisation. The live membership is checked on every request. Members and personal accounts do not see the tab. Platform admins see every organisation's integrations in Admin (`GET /v1/admin/integrations`) and can revoke a key.
@@ -52,7 +52,29 @@ It is the partner-events endpoint from 0096. It keeps the same table, events, si
 - **Delivery log.** The last 50 events (analysis and lead events) with state, tries and the last answer, never the payload. An event that stopped retrying can be sent again.
 - **Turn off.** Disables the endpoint and retires its secrets.
 
+## The hand-over
+When a lead is won, Sales X-Ray calls the organisation's own app (`POST <app>/api/v1/service/customers/handover`, 0102).
+- **Set up in Integrations.** The owner or admin enters the app's address (the path is added when missing) and pastes the service key their app issued. The key is sealed as a `partner_key` and never shown again; the page shows its last four characters.
+- **What goes.** They approve the optional parts and, per part, the exact form question each answer comes from (`lead_events.validate_lead_fields`).
+- **Changes.** It is the 0102 recipient: superseded, never edited, audited. Changing the address or parts keeps the key; a new key retires the old one; Turn off retires it.
+
+## Connect (OAuth 2.0 + PKCE)
+- **Apps.** An organisation registers its own apps in Integrations (`sxc_` client id; for an app with a server, an `sxcs_` secret shown once). Return addresses are exact: https, or http on 127.0.0.1/localhost.
+- **Consent.** `/connect` checks the app and address before showing anything; a wrong app or address is shown, never redirected. The open organisation's owner or admin approves the scopes.
+- **Codes and tokens.** Codes are single-use for 10 minutes and bound to the client, address and PKCE S256 verifier. `sxa_` access tokens last 1 hour on `/v1/api`; `sxr_` refresh tokens last 30 days and are replaced on use. A code or refresh token used twice ends the connection. `POST /v1/oauth/token` and `POST /v1/oauth/revoke` (RFC 7009). Everything is stored as SHA-256.
+- **Disconnect.** In Integrations, or by a platform admin.
+
+## Command line and MCP
+`/developers/sx.py` is one Python file, standard library only, that reads the key from `SX_API_KEY`. Commands: `me`, `calls`, `facts`, `leads`, `lead` and `add-lead`. `sx.py mcp` is an MCP server on stdio with tools `whoami`, `list_calls`, `call_facts`, `list_leads`, `get_lead` and `add_lead`. The public `/developers` page documents everything above, with signature checks in Node.js and Python.
+
+## Admin
+`GET /v1/admin/integrations` (`sx-integrations-admin/2`) returns:
+- counts;
+- per organisation, with its kind: keys by prefix with who made and revoked them, webhooks by host with last delivery, last status and failures in 24 hours, and connected apps.
+
+Platform admins can revoke a key, turn off a webhook or disconnect an app. Each action is audited in the organisation's own chain and answers with the updated row.
+
 ## Not yet
-- Connect (OAuth) and the CLI, MCP and `/developers` (slices 2 and 3).
+- A remote MCP server with Connect sign-in, which needs dynamic client registration (RFC 7591) and `/.well-known/oauth-authorization-server`.
+- Webhook management through the API (`webhooks:manage`).
 - More than one webhook per organisation: 0096 keeps one active endpoint.
-- Hand-over recipients (0102) made from the page: the same sealed `partner_key` pattern, next.
