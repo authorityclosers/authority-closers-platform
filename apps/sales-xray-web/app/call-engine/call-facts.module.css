@@ -1,0 +1,233 @@
+/* "From the calls" on a lead: Sales Xray tokens only (sx-tokens.css). */
+
+.card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: var(--sx-badge-h);
+}
+
+.head h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--sx-text-panel);
+}
+
+.head h3 svg {
+  color: var(--sx-accent);
+}
+
+.filled {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.filled svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--sx-good);
+}
+
+.ask {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--sx-accent) 35%, var(--sx-line));
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+}
+
+.askTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.askCount {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.askLabel {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.askQuestion {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.askValue {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.quote {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--sx-accent);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.quoteWho {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.actions,
+.editRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.input {
+  flex: 1 1 180px;
+  min-width: 0;
+  min-height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 1px;
+}
+
+.known {
+  display: grid;
+  gap: 8px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  min-height: var(--sx-control-h);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toggle svg {
+  transition: transform 120ms ease;
+}
+
+.toggle svg[data-open] {
+  transform: rotate(180deg);
+}
+
+.groups {
+  display: grid;
+  gap: 12px;
+}
+
+.group {
+  display: grid;
+  gap: 2px;
+}
+
+.groupLabel {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.rows {
+  display: grid;
+  margin: 0;
+}
+
+.rows > div {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--sx-line);
+  font-size: var(--sx-text-sm);
+}
+
+.rows > div:first-child {
+  border-top: 0;
+}
+
+.rows dt {
+  color: var(--sx-muted);
+}
+
+.rows dd {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  color: var(--sx-ink);
+  overflow-wrap: anywhere;
+}
+
+.rows small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.rows small[data-basis="confirmed"],
+.rows small[data-basis="edited"] {
+  color: var(--sx-good);
+}
+
+.rows small[data-basis="ai"] {
+  color: var(--sx-warn);
+}
+
+@media (max-width: 560px) {
+  .rows > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .actions > button {
+    flex: 1 1 auto;
+  }
+}

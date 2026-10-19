@@ -5,6 +5,7 @@
  */
 import { normalizeFailedJob, type FailedJob } from "../health/health-data";
 import { read } from "../lib/read";
+import { asKind, type WorkspaceKind } from "../lib/workspaces";
 import { asReviewState, REVIEW_STATES, type ReviewState } from "./labels-data";
 
 export const CALL_STATUSES = [
@@ -55,7 +56,7 @@ export type Person = {
 export type QueueItem = {
   recordingId: string;
   uploadedAt: string | null;
-  organisation: { id: string; name: string };
+  organisation: { id: string; name: string; kind: WorkspaceKind };
   rep: Person;
   status: CallStatus;
   language: string | null;
@@ -120,6 +121,7 @@ export function normalizeQueue(raw: unknown): Queue {
         organisation: {
           id: read.string(organisation.id),
           name: read.string(organisation.name, "Unknown organisation"),
+          kind: asKind(organisation.kind),
         },
         rep: person(row.rep),
         status: asStatus(row.status),
@@ -177,7 +179,7 @@ export type Run = {
 export type Call = {
   recordingId: string;
   uploadedAt: string | null;
-  organisation: { id: string; name: string };
+  organisation: { id: string; name: string; kind: WorkspaceKind };
   rep: Person;
   status: CallStatus;
   runs: Run[];
@@ -194,6 +196,7 @@ export function normalizeCall(raw: unknown): Call {
     organisation: {
       id: read.string(organisation.id),
       name: read.string(organisation.name, "Unknown organisation"),
+      kind: asKind(organisation.kind),
     },
     rep: person(body.rep),
     status: asStatus(body.status),

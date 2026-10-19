@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   notAnalysedCalls,
   prepareAnalyseAll,
-  rupees,
   runAnalyseAll,
   type CallRun,
   type Preparation,
@@ -198,10 +197,6 @@ export function AnalyseAllControl({
       >
         {confirm && confirm.planned.length ? (
           <ul className={styles.facts}>
-            <li>
-              <b>{`Up to ${rupees(confirm.maxCostPaise)}`}</b> in total: each
-              call&apos;s quoted maximum. The actual cost is usually lower.
-            </li>
             {confirm.budgetStopped ? (
               <li>
                 The analysis budget covers only these calls for now; the rest
@@ -210,7 +205,6 @@ export function AnalyseAllControl({
             ) : (
               <li>
                 If the analysis budget runs out, the remaining calls wait.
-                Nothing is charged for them.
               </li>
             )}
             {checks ? (

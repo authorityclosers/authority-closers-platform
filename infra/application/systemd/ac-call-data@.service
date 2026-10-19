@@ -1,0 +1,18 @@
+[Unit]
+Description=Sales Xray call data engine, fast pipeline (%i)
+Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/docs/architecture/CALL_DATA_ENGINE.md
+After=network-online.target docker.service
+
+[Service]
+Type=exec
+ExecStart=/usr/local/sbin/ac-call-data %i
+Restart=always
+RestartSec=15s
+# Pick up each new release: restart at least every 30 minutes (the runner holds no state).
+RuntimeMaxSec=30min
+Nice=10
+MemoryMax=384M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

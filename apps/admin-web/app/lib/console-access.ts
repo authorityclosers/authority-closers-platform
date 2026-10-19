@@ -3,6 +3,7 @@ import { cache } from "react";
 
 import { LOCAL_PREVIEW_ENV } from "./admin-access";
 import type { ConsoleAccess } from "./nav";
+import { normalizeWorkspaces, type Workspace } from "./workspaces";
 import {
   adminRead,
   devEdgeTransport,
@@ -80,3 +81,30 @@ export const loadConsoleAccess = cache(async () => {
   await connection();
   return readConsoleAccess();
 });
+
+/** Platform read: every workspace and what it is, for the person menu. */
+export const WORKSPACES_PERMISSION = "platform_tenants_read";
+
+export async function readConsoleWorkspaces(
+  access: ConsoleAccess,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<Workspace[] | null> {
+  if (
+    access.state !== "verified" ||
+    !access.platform.includes(WORKSPACES_PERMISSION) ||
+    !internalTransport(env)
+  )
+    return null;
+  const listed = await adminRead(
+    "/v1/platform/workspaces",
+    normalizeWorkspaces,
+    {
+      env,
+    },
+  );
+  return listed.ok ? listed.data : null;
+}
+
+export const loadConsoleWorkspaces = cache(async (access: ConsoleAccess) =>
+  readConsoleWorkspaces(access),
+);

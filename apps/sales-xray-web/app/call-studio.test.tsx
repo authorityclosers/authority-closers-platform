@@ -1365,7 +1365,7 @@ describe("CallStudio", () => {
     },
   );
 
-  it("shows a funded upper limit and requires explicit cost consent", async () => {
+  it("asks for explicit plan consent without showing a price", async () => {
     vi.useFakeTimers();
     const originalHandler = handleApi;
     handleApi = (path, init) => {
@@ -1384,14 +1384,13 @@ describe("CallStudio", () => {
     await flush();
     await act(async () => vi.advanceTimersByTimeAsync(2500));
     await flush();
-    expect(container.textContent).toContain("Up to ₹500.50 · approved budget");
+    // Owner 19 Oct: the plan still needs an explicit approval, but no price shows.
     expect(container.textContent).toContain(
-      "I approve this processing plan up to ₹500.50",
+      "I approve this processing plan and its privacy terms.",
     );
+    expect(container.textContent).not.toContain("₹");
+    expect(container.textContent).not.toContain("cost");
     expect(getButton("Start approved report").disabled).toBe(true);
-    expect(container.textContent).not.toContain(
-      "exact zero-cost processing plan",
-    );
   });
 
   it("rejects a false zero-cost label before showing a report", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  factsFromCallData,
   factsFromCallReview,
   factsFromReport,
   factsFromSavedProspect,
@@ -85,5 +86,82 @@ describe("prospect facts read model", () => {
       ),
     );
     expect(facts.quality).toEqual({ score: null, reason: null });
+  });
+});
+
+describe("call data engine source (prospect-facts/1)", () => {
+  const [first, second] = amitTranscript.segments;
+  const fact = (type: string, display: string, extra: object = {}) => ({
+    object_id: type,
+    type,
+    display,
+    value: {},
+    basis: "observed",
+    status: "kept",
+    ai_read: false,
+    evidence: [
+      {
+        segment_id: first.id,
+        quote: first.text.slice(0, 20),
+        start_ms: first.start_ms,
+        end_ms: first.end_ms,
+        speaker: "spk",
+      },
+    ],
+    ...extra,
+  });
+  const payload = {
+    schema: "prospect-facts/1",
+    facts: [
+      fact("company.name", "XYZ Digital"),
+      fact("company.revenue", "₹4–5 lakh a month", { basis: "edited" }),
+      fact("need.goal", "Reach ₹10 lakh a month", { basis: "inferred" }),
+      fact("commitment.follow_up", "Friday 4 PM", {
+        value: { date: "2026-10-23", time: "16:00", purpose: "Partner call" },
+      }),
+      fact("money.investment_discussed", "Considering ₹2 lakh"),
+      fact("friction.question", "Will the team close alone?"),
+      fact("conversation.segment", "ignored"),
+      fact("company.industry", "", {}),
+    ],
+  };
+
+  it("maps engine facts by type with their basis and evidence", () => {
+    const source = factsFromCallData(payload, amitTranscript);
+    expect(source.company).toMatchObject({
+      value: "XYZ Digital",
+      basis: "call",
+    });
+    expect(source.company?.evidence[0].start_ms).toBe(first.start_ms);
+    expect(source.revenue?.basis).toBe("person");
+    expect(source.wants?.basis).toBe("ai_read");
+    expect(source.industry).toBeUndefined();
+    expect(source.followUp).toMatchObject({
+      when: "Fri 23 Oct · 4:00 pm",
+      about: "Partner call",
+    });
+    expect(source.insights?.map((item) => item.kind)).toEqual([
+      "investment",
+      "question",
+    ]);
+  });
+
+  it("sits after the saved prospect and before the call review", () => {
+    const facts = prospectFacts(
+      {},
+      factsFromCallData(payload, amitTranscript),
+      factsFromCallReview({ prospect_profile: AMIT_PROFILE }, amitTranscript),
+    );
+    expect(facts.company.value).toBe("XYZ Digital");
+    // The review still fills what the engine has not read.
+    expect(facts.name.value).toBe("Amit");
+    expect(second).toBeDefined();
+  });
+
+  it("gives nothing for an older server or another schema", () => {
+    expect(factsFromCallData(null, amitTranscript)).toEqual({});
+    expect(
+      factsFromCallData({ schema: "x", facts: [] }, amitTranscript),
+    ).toEqual({});
   });
 });

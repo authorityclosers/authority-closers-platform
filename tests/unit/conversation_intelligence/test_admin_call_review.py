@@ -21,6 +21,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationDenied,
     ConversationError,
 )
+from ac_platform.organisations.workspace_kinds import Workspace
 
 OPS = UUID("f5386fc3-033d-4e75-a333-7774381cb4d5")
 TEAM_A = UUID("206ccee8-a246-433b-b6d3-78eb21592a5c")
@@ -116,8 +117,11 @@ def _queue_service(monkeypatch: pytest.MonkeyPatch, recordings: list[Any]) -> Ad
     async def owners(_self: AdminCallReview, rows: Any) -> dict[UUID, dict]:
         return {row.id: reps[row.id] for row in rows}
 
-    async def organisations(_self: AdminCallReview, ids: Any) -> dict[UUID, str]:
-        return {TEAM_A: "Team A", TEAM_B: "Team B"}
+    async def organisations(_self: AdminCallReview, ids: Any) -> dict[UUID, Workspace]:
+        return {
+            TEAM_A: Workspace(TEAM_A, "Team A", "Team A", "customer", "active"),
+            TEAM_B: Workspace(TEAM_B, "Team B", "Team B", "sandbox", "active"),
+        }
 
     async def runs(_self: AdminCallReview, ids: Any) -> dict[UUID, list[Any]]:
         return {row.id: row.runs for row in recordings}
@@ -196,7 +200,7 @@ async def test_queue_filters_counts_facets_and_pages(monkeypatch: pytest.MonkeyP
     ]
     assert {entry["value"] for entry in everything["facets"]["providers"]} == {"gemini", "openai"}
     first = everything["items"][0]
-    assert first["organisation"] == {"id": str(TEAM_A), "name": "Team A"}
+    assert first["organisation"] == {"id": str(TEAM_A), "name": "Team A", "kind": "customer"}
     assert first["report_run_id"] == str(ready.runs[0].id)
 
     only_ready = await service.queue(actor, status="ready")

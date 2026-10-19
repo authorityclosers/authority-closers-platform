@@ -1,0 +1,112 @@
+#!/bin/bash
+# Sales Xray call data engine (owner direction 19 Oct 2026): every NEW call's
+# transcript becomes typed facts (fast pipeline, seconds) and, when switched on,
+# a whole-call read (deep pipeline). Long-running (systemd restarts it); one
+# runner per database (advisory lock).
+#
+# Never backfills: the first start records a moment once
+# (/var/lib/ac-call-data/<env>.since) and only transcripts saved after it are
+# processed. Models, switches and daily rupee caps are in Admin -> Call data.
+# At a cap nothing is lost: calls wait (30 days) and the owner gets ONE alert a
+# day per pipeline; "Raise to ₹X and resume" in Admin restarts them at once.
+# Reports never wait on this engine. Docs: docs/architecture/CALL_DATA_ENGINE.md
+#
+#   ac-call-data development-live | staging | production
+set -euo pipefail
+
+module=ac_platform.call_data.runner
+state=${CALL_DATA_STATE:-/var/lib/ac-call-data}
+# The owner's alert command (tests point NOTIFY at a recorder).
+NOTIFY=${NOTIFY:-/usr/local/sbin/ac-notify-owner}
+
+# notify <text>: best effort; the child gets no secrets and 30 seconds at most.
+notify() {
+  local status=sent
+  if [[ ! -x "$NOTIFY" ]]; then
+    status=absent
+  elif ! env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 \
+    timeout 30 "$NOTIFY" "$1" </dev/null >/dev/null 2>&1; then
+    status=failed
+  fi
+  printf '{"alert_forwarded": "%s"}\n' "$status"
+}
+
+# alert_text <environment> <line>: the owner's message for a cap line, or nothing
+# (status 1). Only fixed words and numbers are used.
+alert_text() {
+  local env_name=$1 line=$2 pipeline spent="?"
+  local re_cap='"stopped": "(fast|deep)_daily_cap"' re_spent='"spent_inr": "([0-9]{1,5}(\.[0-9]{1,4})?)"'
+  [[ $line =~ $re_cap ]] || return 1
+  pipeline=${BASH_REMATCH[1]}
+  [[ $line =~ $re_spent ]] && spent=${BASH_REMATCH[1]}
+  printf 'Sales X-Ray call data (%s): the %s pipeline reached its daily cap (Rs %s spent today). New calls wait, nothing is lost and Reports are not affected. Admin -> Sales Xray setup -> Call data -> Raise and resume.' \
+    "$env_name" "$pipeline" "$spent"
+}
+
+# forward_alerts <environment>: copy the runner's lines to stdout unchanged; send
+# the owner one message per pipeline per day when a cap is reached.
+forward_alerts() {
+  local env_name=$1 line text pipeline mark today
+  local re_cap='"stopped": "(fast|deep)_daily_cap"'
+  today=$(date -u +%F)
+  while IFS= read -r line || [[ -n $line ]]; do
+    printf '%s\n' "$line"
+    text=$(alert_text "$env_name" "$line") || continue
+    [[ $line =~ $re_cap ]] && pipeline=${BASH_REMATCH[1]}
+    mark="$state/$env_name.$pipeline.alerted"
+    [[ "$(cat "$mark" 2>/dev/null)" == "$today" ]] && continue
+    notify "$text"
+    printf '%s\n' "$today" >"$mark" 2>/dev/null || true
+  done
+  return 0
+}
+
+# Sourced (by the tests): the functions only.
+if [[ ${BASH_SOURCE[0]} != "$0" ]]; then
+  return 0
+fi
+
+env_name=${1:?usage: ac-call-data development-live|staging|production}
+install -d -m 700 "$state"
+
+since_file=$state/$env_name.since
+[ -s "$since_file" ] || date -u +%Y-%m-%dT%H:%M:%S+00:00 > "$since_file"
+since=$(cat "$since_file")
+# 30 days: calls that waited at a cap are still read once it is raised.
+common=(--not-before "$since" --recent-hours 720 --loop --apply)
+
+case "$env_name" in
+  development-live)
+    slot=$(cat /var/lib/ac-dev-live-backend/active-slot)
+    python=/srv/authority-closers/development/live-backend/$slot/.venv/bin/python
+    cd /tmp
+    if ! env -i PATH=/usr/bin:/bin "$python" -c "import $module" 2>/dev/null; then
+      echo "call data runner is not in this release yet"
+      sleep 300
+      exit 0
+    fi
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 PYTHONUNBUFFERED=1 \
+      "$python" -m "$module" \
+      --service-config /etc/authority-closers/development/service-live.json \
+      --database-url-file /etc/authority-closers/development/database-url-live \
+      --token-file /etc/authority-closers/development/identities/gemini/token \
+      --infisical /usr/local/bin/infisical \
+      "${common[@]}" | forward_alerts "$env_name"
+    ;;
+  staging | production)
+    container=ac-application-$env_name-sales-xray-worker-1
+    if ! docker exec "$container" python -c "import $module" 2>/dev/null; then
+      echo "call data runner is not in this release yet"
+      sleep 300
+      exit 0
+    fi
+    docker exec "$container" python -m "$module" \
+      --service-config /run/ac-sales-xray/service.json \
+      --database-url-file /run/ac-sales-xray/database-url \
+      "${common[@]}" | forward_alerts "$env_name"
+    ;;
+  *)
+    echo "unknown environment: $env_name" >&2
+    exit 2
+    ;;
+esac

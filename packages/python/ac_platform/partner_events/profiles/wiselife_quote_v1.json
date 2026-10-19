@@ -1,0 +1,151 @@
+{
+  "profile": "wiselife-quote-v1",
+  "prompt_revision": "wiselife-quote-prompt/1",
+  "model_id": "gemini-3.8-flash",
+  "max_output_tokens": 4000,
+  "looked_for": [
+    "system_size",
+    "product_mention",
+    "load",
+    "add_on",
+    "battery_type",
+    "warranty",
+    "site",
+    "delivery_basis",
+    "mentioned_price",
+    "promise",
+    "next_step",
+    "objection"
+  ],
+  "single_types": ["system_size", "battery_type", "warranty", "site", "delivery_basis"],
+  "vocabularies": {
+    "add_on.kind": [
+      "dongle",
+      "packing",
+      "extended_warranty",
+      "acdb",
+      "dcdb",
+      "battery",
+      "panel",
+      "structure",
+      "earthing",
+      "lightning_arrestor",
+      "other"
+    ],
+    "system_size.unit": ["kW", "kVA"],
+    "battery_type.kind": ["lithium", "tubular", "other"],
+    "delivery_basis.kind": ["delivered_to_site", "from_godown"],
+    "mentioned_price.applies_to": ["system", "add_on", "installation", "transport", "other"],
+    "speaker": ["salesperson", "customer", "unknown"],
+    "next_step.action": ["send_quotation", "site_visit", "call_back", "meeting", "other"],
+    "objection.kind": [
+      "price_concern",
+      "affordability_gap",
+      "time_constraint",
+      "stall",
+      "competitor_or_status_quo",
+      "decision_maker_absent",
+      "trust_concern",
+      "other"
+    ],
+    "outcome.kind": ["closed", "follow_up", "no_sale", "future_date", "disqualified", "unclear"]
+  },
+  "instructions": [
+    "You read one sales call between a salesperson of a solar and power-backup company and a customer.",
+    "List the facts below only when they were actually said in this call. Never guess, never fill gaps, never convert or calculate anything.",
+    "",
+    "Each transcript line looks like: [s12] customer 03:10: words. Cite facts only by these segment ids, like \"s12\".",
+    "",
+    "For every fact return:",
+    "- type: one of the fact types below.",
+    "- status: \"stated\"; for a one-per-call type, \"conflicting\" when different values were said, with every other value in alternatives (each with its own value and evidence).",
+    "- value: the fields for that type, listed below.",
+    "- evidence: the segment id or ids where it was said. The first id must contain stated_as (or when_text) word for word.",
+    "- stated_as: copy the exact words from the transcript line, in the same script and spelling, as short as possible.",
+    "",
+    "Fact types:",
+    "- system_size (one per call): the system capacity the customer wants or was offered. value: {stated_as}.",
+    "- product_mention (list): a product or model name that was said. value: {stated_as}.",
+    "- load (list): an appliance or load the customer wants to run. value: {stated_as}.",
+    "- add_on (list): an extra item. value: {kind: dongle, packing, extended_warranty, acdb, dcdb, battery, panel, structure, earthing, lightning_arrestor or other; qty: a whole number only when a count was said, else null; stated_as}.",
+    "- battery_type (one per call): value: {kind: lithium, tubular or other; stated_as}.",
+    "- warranty (one per call): value: {years: a whole number only when said, else null; stated_as}.",
+    "- site (one per call): installation site details such as roof type, floor or location. value: {stated_as}.",
+    "- delivery_basis (one per call): value: {kind: delivered_to_site or from_godown; stated_as}.",
+    "- mentioned_price (list): any amount of money that was said. value: {applies_to: system, add_on, installation, transport or other; stated_as: the exact words of the amount, for example \"3.70 lakh\"}. Never convert the amount.",
+    "- promise (list): something the salesperson or the customer promised to do. value: {text: one short plain sentence}.",
+    "- next_step (list): an agreed next step. value: {action: send_quotation, site_visit, call_back, meeting or other; when_text: the exact words for when, for example \"today evening\", or null}.",
+    "- objection (list): a concern the customer raised. value: {kind: price_concern, affordability_gap, time_constraint, stall, competitor_or_status_quo, decision_maker_absent, trust_concern or other; text: one short plain sentence}.",
+    "",
+    "Rules:",
+    "- Amounts of money appear only in mentioned_price. Never write a price, an amount, a SKU or a model code in text, when_text or any other field.",
+    "- Leave a type out when the call did not say it.",
+    "- No names, phone numbers, addresses or other personal details in text.",
+    "- At most 10 facts of each list type."
+  ],
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "facts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "system_size",
+                "product_mention",
+                "load",
+                "add_on",
+                "battery_type",
+                "warranty",
+                "site",
+                "delivery_basis",
+                "mentioned_price",
+                "promise",
+                "next_step",
+                "objection"
+              ]
+            },
+            "status": { "type": "string", "enum": ["stated", "conflicting"] },
+            "value": {
+              "type": "object",
+              "properties": {
+                "stated_as": { "type": "string" },
+                "kind": { "type": "string" },
+                "qty": { "anyOf": [{ "type": "integer" }, { "type": "null" }] },
+                "years": { "anyOf": [{ "type": "integer" }, { "type": "null" }] },
+                "applies_to": { "type": "string" },
+                "text": { "type": "string" },
+                "action": { "type": "string" },
+                "when_text": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+              }
+            },
+            "evidence": { "type": "array", "items": { "type": "string" } },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "object",
+                    "properties": {
+                      "stated_as": { "type": "string" },
+                      "kind": { "type": "string" },
+                      "years": { "anyOf": [{ "type": "integer" }, { "type": "null" }] }
+                    }
+                  },
+                  "evidence": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["value", "evidence"]
+              }
+            }
+          },
+          "required": ["type", "status", "value", "evidence"]
+        }
+      }
+    },
+    "required": ["facts"]
+  }
+}

@@ -503,7 +503,9 @@ def _exercise_browser(backend: BrowserBackend, evidence: Path) -> None:
             expect(page.get_by_role("button", name="Continue to analysis")).to_be_enabled()
             page.get_by_role("button", name="Continue to analysis").click()
             expect(page.get_by_role("heading", name="Ready to upload privately")).to_be_visible()
-            expect(page.get_by_text("₹0 · local audio measurements", exact=True)).to_be_visible()
+            # Owner, 19 Oct: the person never sees a price, not even ₹0.
+            expect(page.get_by_text("₹0 · local audio measurements", exact=True)).to_have_count(0)
+            expect(page.get_by_text("Processing cost")).to_have_count(0)
             upload = page.get_by_role("button", name="Upload and measure privately")
             expect(upload).to_be_disabled()
             page.get_by_role("checkbox").check()

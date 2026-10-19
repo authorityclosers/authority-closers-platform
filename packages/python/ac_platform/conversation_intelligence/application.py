@@ -1146,6 +1146,10 @@ class ConversationApplication:
 
         # Every saved AI pointer review version goes with its call (AUT-2010).
         await erase_pointer_reviews_for_recording(self.database, recording.id, now)
+        from ac_platform.call_data.engine import erase_call_data_for_recording
+
+        # Every call object and decision goes with its call (call data engine, 19 Oct).
+        await erase_call_data_for_recording(self.database, recording.id, now)
         recording.state, recording.deleted_at = "deleted", now
         # Flush all retention clears before acknowledging the deletion job so
         # the durable erasure is visible before the worker lease is completed.

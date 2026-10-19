@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import * as api from "@ac/operations-web/api";
 
 import type { ConsoleAccess } from "../lib/nav";
+import type { Workspace } from "../lib/workspaces";
 import { ConsoleShell } from "./shell";
 
 vi.mock("next/navigation", () => ({
@@ -41,15 +42,52 @@ afterEach(async () => {
   localStorage.clear();
 });
 
-async function render(access: ConsoleAccess = dipak) {
+async function render(
+  access: ConsoleAccess = dipak,
+  workspaces: Workspace[] | null = null,
+) {
   await act(async () =>
     root.render(
-      <ConsoleShell access={access} environment="staging">
+      <ConsoleShell
+        access={access}
+        environment="staging"
+        workspaces={workspaces}
+      >
         <p>Page body</p>
       </ConsoleShell>,
     ),
   );
 }
+
+const WORKSPACES: Workspace[] = [
+  {
+    id: "c0000000-0000-4000-8000-000000000001",
+    name: "Fictional Closers",
+    registeredName: "Fictional Closers",
+    kind: "company",
+    status: "active",
+    members: 5,
+    calls: 37,
+  },
+  {
+    id: "c0000000-0000-4000-8000-000000000002",
+    name: "Personal accounts",
+    registeredName: "Fictional Public Learners",
+    kind: "personal",
+    status: "active",
+    members: 10,
+    calls: 136,
+  },
+  {
+    id: "c0000000-0000-4000-8000-000000000003",
+    name: "AC Operations",
+    registeredName: "Fictional Closers",
+    kind: "operations",
+    status: "active",
+    members: 2,
+    calls: 0,
+  },
+];
 function button(label: string) {
   const node = host.querySelector<HTMLButtonElement>(
     `button[aria-label="${label}"]`,
@@ -72,7 +110,7 @@ it("lists only the sections the account can use and marks the current one", asyn
     host.querySelector('a[href="/calls"][aria-current="page"]'),
   ).not.toBeNull();
   expect(host.textContent).toContain("Page body");
-  expect(host.textContent).toContain("staging");
+  expect(host.textContent).toContain("Staging");
 });
 
 it("hides Sales Xray review from accounts outside the control list", async () => {
@@ -148,4 +186,86 @@ it("names every icon-only control, including Go to on phones", async () => {
       .querySelector('button[aria-keyshortcuts="Control+K Meta+K"]')
       ?.getAttribute("aria-label"),
   ).toBe("Go to a section or call");
+});
+
+it("heads the rail with the signed-in person and lists every workspace by kind", async () => {
+  await render(dipak, WORKSPACES);
+  const person = host.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Signed in as Dipak Example"]',
+  )!;
+  expect(person.textContent).toBe("DEDipak ExampleAdmin");
+  const panel = host.querySelector<HTMLElement>(
+    `#${CSS.escape(person.getAttribute("aria-controls")!)}`,
+  )!;
+  expect(panel.hidden).toBe(true);
+  await act(async () => person.click());
+  expect(panel.hidden).toBe(false);
+  expect(panel.textContent).toContain("dipak@authorityclosers.com");
+  expect(panel.textContent).toContain(
+    "Admin · AC Operations · platform access",
+  );
+  const groups = [...panel.querySelectorAll("section")].map((section) =>
+    section.getAttribute("aria-label"),
+  );
+  expect(groups).toEqual([
+    "Our company",
+    "Personal accounts",
+    "Staff workspace",
+  ]);
+  // Each one says what it is, and the registry name is kept in view.
+  expect(panel.textContent).toContain("Our company5 people · 37 calls");
+  expect(panel.textContent).toContain(
+    "Registered as “Fictional Public Learners”",
+  );
+  expect(
+    panel.querySelector(
+      'a[href="/calls?organisation=c0000000-0000-4000-8000-000000000002"]',
+    ),
+  ).not.toBeNull();
+  // The staff workspace holds no calls, so it opens nothing.
+  expect(
+    panel.querySelector(
+      'a[href="/calls?organisation=c0000000-0000-4000-8000-000000000003"]',
+    ),
+  ).toBeNull();
+  expect(panel.textContent).toContain("2 people · no calls");
+  await act(async () =>
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })),
+  );
+  expect(panel.hidden).toBe(true);
+  expect(document.activeElement).toBe(person);
+});
+
+it("shows only the person, with no workspace list, without platform read", async () => {
+  await render({ ...dipak, platform: [] }, null);
+  expect(host.textContent).toContain("Dipak Example");
+  expect(host.textContent).not.toContain("Organisations and accounts");
+  expect(host.textContent).not.toContain("Authority Closers");
+});
+
+it("opens the same page in another environment's Admin from the top bar", async () => {
+  await render();
+  const toggle = button("Environment: Staging. Switch environment");
+  const panel = host.querySelector<HTMLElement>(
+    `#${CSS.escape(toggle.getAttribute("aria-controls")!)}`,
+  )!;
+  expect(panel.hidden).toBe(true);
+  await act(async () => toggle.click());
+  expect(panel.hidden).toBe(false);
+  const links = [...panel.querySelectorAll("a")].map((a) =>
+    a.getAttribute("href"),
+  );
+  expect(links).toEqual([
+    "https://admin.authorityclosers.com/calls",
+    "https://admin-dev.authorityclosers.com/calls",
+    "/usage?env=all",
+  ]);
+  expect(panel.querySelector('[aria-current="true"]')?.textContent).toContain(
+    "You are here",
+  );
+  await act(async () =>
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })),
+  );
+  expect(panel.hidden).toBe(true);
+  expect(document.activeElement).toBe(toggle);
 });
