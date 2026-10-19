@@ -5,14 +5,17 @@
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Coins, Gauge, GitCompare, Landmark, Receipt } from "lucide-react";
+import { Coins, Gauge, GitCompare, Landmark, Receipt, X } from "lucide-react";
 
 import {
   ENVIRONMENTS,
   ENVIRONMENT_LABEL,
   KIND_LABEL,
   STAGE_LABEL,
+  chartSeries,
+  chartsFrom,
   comparePair,
+  correlation,
   costQuery,
   count,
   dayLabel,
@@ -21,10 +24,15 @@ import {
   pct,
   perMin,
   seconds,
+  seriesValue,
   stamp,
+  toggleChart,
+  together,
   tokens,
+  type ChartView,
   type Metrics,
   type Pipeline,
+  type Series,
 } from "@/app/usage/cost-data";
 import styles from "@/app/usage/usage.module.css";
 import {
@@ -45,7 +53,7 @@ export type CostFilter = {
   days: string;
   env: string;
   tests: boolean;
-};
+} & ChartView;
 
 export const COST_WINDOWS = [
   { key: "1", label: "Today" },
@@ -382,38 +390,11 @@ export function OverviewView({
           </tbody>
         </Table>
       </Panel>
-      <div className={styles.columns}>
-        <Panel
-          title="Spend per day"
-          sub={windowLabel}
-          tools={
-            <span className={styles.legend}>
-              {ENVIRONMENTS.map((name) => (
-                <Env key={name} name={name} />
-              ))}
-            </span>
-          }
-        >
-          {o.spendWindow > 0 ? (
-            <DailyBars metrics={metrics} />
-          ) : (
-            <Empty icon={Coins} title="No spend in this window" />
-          )}
-        </Panel>
-        <Panel
-          title="Cost per audio minute"
-          sub="per day"
-          tools={
-            <Why detail="Each call's whole cost (transcription, facts, report, pointer review, repeats) on the day it was first transcribed, divided by its minutes of audio. A later backfill counts on the call's own day." />
-          }
-        >
-          {o.audioMinutes > 0 ? (
-            <PerMinuteBars metrics={metrics} />
-          ) : (
-            <Empty icon={Gauge} title="No audio transcribed in this window" />
-          )}
-        </Panel>
-      </div>
+      <ChartBoard
+        metrics={metrics}
+        current={current}
+        windowLabel={windowLabel}
+      />
       <div className={styles.columns}>
         <Panel
           title="Where the money goes"
@@ -532,6 +513,288 @@ export function OverviewView({
           </ul>
         </Panel>
       </div>
+    </>
+  );
+}
+
+/* ---------- Charts: pick which show, compare two (owner, 19 Oct 2026) ---------- */
+
+/** Any per-day series as bars, each day's value against the window's highest. */
+function SeriesBars({ series }: { series: Series }) {
+  const peak = Math.max(0, ...series.values.map((value) => value ?? 0));
+  if (!series.days.length || peak <= 0)
+    return <Empty icon={Coins} title="Nothing to draw in this window" />;
+  const environment = series.key.startsWith("env-")
+    ? series.key.slice(4)
+    : undefined;
+  return (
+    <>
+      <div className={styles.bars} role="img" aria-label={series.label}>
+        {series.days.map((day, index) => {
+          const value = series.values[index] ?? null;
+          return (
+            <span
+              key={day}
+              className={styles.bar}
+              data-empty={value ? undefined : ""}
+              title={`${dayLabel(day)}: ${seriesValue(series.unit, value)}`}
+            >
+              {value ? (
+                <i
+                  data-env={environment}
+                  style={{ height: `${(value / peak) * 100}%` }}
+                />
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
+      <div className={styles.axis} aria-hidden="true">
+        <span>{dayLabel(series.days[0] ?? "")}</span>
+        <span>highest {seriesValue(series.unit, peak)}</span>
+        <span>{dayLabel(series.days.at(-1) ?? "")}</span>
+      </div>
+    </>
+  );
+}
+
+const LINE_W = 640;
+const LINE_H = 180;
+const LINE_PAD = 8;
+
+const peakOf = (series: Series) =>
+  Math.max(0, ...series.values.map((value) => value ?? 0));
+
+/** The polyline for one series, drawn against its own highest value. */
+function linePoints(series: Series): string {
+  const peak = peakOf(series) || 1;
+  const step =
+    series.values.length > 1
+      ? (LINE_W - 2 * LINE_PAD) / (series.values.length - 1)
+      : 0;
+  return series.values
+    .map((value, index) =>
+      value === null
+        ? null
+        : `${(LINE_PAD + index * step).toFixed(1)},${(
+            LINE_H -
+            LINE_PAD -
+            (value / peak) * (LINE_H - 2 * LINE_PAD)
+          ).toFixed(1)}`,
+    )
+    .filter((point): point is string => point !== null)
+    .join(" ");
+}
+
+/** Two series over the same days, each on its own scale, with a day-by-day table. */
+function CompareChart({ a, b }: { a: Series; b: Series }) {
+  const r = correlation(a.values, b.values);
+  const total = (series: Series) =>
+    series.unit === "perMin"
+      ? null
+      : series.values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  return (
+    <Panel
+      title={`${a.label} and ${b.label}`}
+      sub={`each on its own scale · they ${together(r)}`}
+      tools={
+        <Why detail="Both lines share the days; each is drawn against its own highest value, so their shapes compare even when the units differ. They move together when the correlation over the days both have is 0.6 or more." />
+      }
+    >
+      <svg
+        className={styles.lines}
+        viewBox={`0 0 ${LINE_W} ${LINE_H}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`${a.label} compared with ${b.label}, day by day`}
+      >
+        <polyline className={styles.lineA} points={linePoints(a)} />
+        <polyline className={styles.lineB} points={linePoints(b)} />
+      </svg>
+      <div className={styles.axis} aria-hidden="true">
+        <span>{dayLabel(a.days[0] ?? "")}</span>
+        <span>{dayLabel(a.days.at(-1) ?? "")}</span>
+      </div>
+      <div className={styles.compareLegend}>
+        {[a, b].map((series, index) => {
+          const sum = total(series);
+          return (
+            <span key={series.key} data-line={index ? "b" : "a"}>
+              <strong>{series.label}</strong> highest{" "}
+              {seriesValue(series.unit, peakOf(series))}
+              {sum !== null ? ` · total ${seriesValue(series.unit, sum)}` : ""}
+            </span>
+          );
+        })}
+      </div>
+      <details className={styles.compareDays}>
+        <summary>Day by day</summary>
+        <Table label={`${a.label} and ${b.label} by day`}>
+          <thead>
+            <tr>
+              <th scope="col">Day</th>
+              <th scope="col" data-num="">
+                {a.label}
+              </th>
+              <th scope="col" data-num="">
+                {b.label}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {a.days.map((day, index) => (
+              <tr key={day}>
+                <th scope="row">{dayLabel(day)}</th>
+                <td data-num="">
+                  {seriesValue(a.unit, a.values[index] ?? null)}
+                </td>
+                <td data-num="">
+                  {seriesValue(b.unit, b.values[index] ?? null)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </details>
+    </Panel>
+  );
+}
+
+/** The Overview's charts: a picker, an optional comparison, then the chosen charts. */
+export function ChartBoard({
+  metrics,
+  current,
+  windowLabel,
+}: {
+  metrics: Metrics;
+  current: CostFilter;
+  windowLabel: string;
+}) {
+  const o = metrics.overview;
+  const series = chartSeries(metrics);
+  const byKey = new Map(series.map((item) => [item.key, item]));
+  const shown = chartsFrom(current.charts, [...byKey.keys()]);
+  const a = current.ca ? byKey.get(current.ca) : undefined;
+  const b = current.cb ? byKey.get(current.cb) : undefined;
+  const comparing = a && b && a.key !== b.key ? { a, b } : null;
+  const link = (change: ChartView) => costQuery(current, change);
+  const options = series.map((item) => (
+    <option key={item.key} value={item.key}>
+      {item.label}
+    </option>
+  ));
+  return (
+    <>
+      <div className={styles.chartTools}>
+        <Chips
+          label="Charts"
+          items={series.map((item) => ({
+            key: item.key,
+            label: item.label,
+            href: link({ charts: toggleChart(shown, item.key) }),
+            on: shown.includes(item.key),
+          }))}
+        />
+        <form
+          className={styles.compareForm}
+          action="/usage"
+          method="get"
+          aria-label="Compare two charts"
+        >
+          {current.days !== "30" ? (
+            <input type="hidden" name="days" value={current.days} />
+          ) : null}
+          {current.env !== "all" ? (
+            <input type="hidden" name="env" value={current.env} />
+          ) : null}
+          {current.tests ? (
+            <input type="hidden" name="tests" value="1" />
+          ) : null}
+          {current.charts ? (
+            <input type="hidden" name="charts" value={current.charts} />
+          ) : null}
+          <label>
+            <span>Compare</span>
+            <select name="ca" defaultValue={comparing?.a.key ?? "spend"}>
+              {options}
+            </select>
+          </label>
+          <label>
+            <span>with</span>
+            <select name="cb" defaultValue={comparing?.b.key ?? "perMinute"}>
+              {options}
+            </select>
+          </label>
+          <Button type="submit">Compare</Button>
+          {comparing ? (
+            <Link
+              href={link({ ca: undefined, cb: undefined })}
+              scroll={false}
+              className={styles.chip}
+            >
+              Stop comparing
+            </Link>
+          ) : null}
+        </form>
+      </div>
+      {comparing ? <CompareChart a={comparing.a} b={comparing.b} /> : null}
+      {shown.length ? (
+        <div className={styles.columns}>
+          {shown.map((key) => {
+            const item = byKey.get(key);
+            if (!item) return null;
+            return (
+              <Panel
+                key={key}
+                title={item.label}
+                sub={key === "perMinute" ? "per day" : windowLabel}
+                tools={
+                  <span className={styles.legend}>
+                    {key === "spend"
+                      ? ENVIRONMENTS.map((name) => (
+                          <Env key={name} name={name} />
+                        ))
+                      : null}
+                    {key === "perMinute" ? (
+                      <Why detail="Each call's whole cost (transcription, facts, report, pointer review, repeats) on the day it was first transcribed, divided by its minutes of audio. A later backfill counts on the call's own day." />
+                    ) : null}
+                    <Link
+                      href={link({ charts: toggleChart(shown, key) })}
+                      scroll={false}
+                      className={styles.hide}
+                      aria-label={`Hide ${item.label}`}
+                      title="Hide this chart"
+                    >
+                      <X size={14} aria-hidden />
+                    </Link>
+                  </span>
+                }
+              >
+                {key === "spend" ? (
+                  o.spendWindow > 0 ? (
+                    <DailyBars metrics={metrics} />
+                  ) : (
+                    <Empty icon={Coins} title="No spend in this window" />
+                  )
+                ) : key === "perMinute" ? (
+                  o.audioMinutes > 0 ? (
+                    <PerMinuteBars metrics={metrics} />
+                  ) : (
+                    <Empty
+                      icon={Gauge}
+                      title="No audio transcribed in this window"
+                    />
+                  )
+                ) : (
+                  <SeriesBars series={item} />
+                )}
+              </Panel>
+            );
+          })}
+        </div>
+      ) : (
+        <p className={styles.hint}>All charts are hidden. Pick any above.</p>
+      )}
     </>
   );
 }

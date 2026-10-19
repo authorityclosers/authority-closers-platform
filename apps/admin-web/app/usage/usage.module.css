@@ -334,3 +334,125 @@
     gap: 1px;
   }
 }
+
+/* ---------- Chart picker and comparison (owner, 19 Oct 2026). Tokens only. ---------- */
+
+.chartTools {
+  display: grid;
+  gap: 10px;
+}
+
+.compareForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: var(--sx-text-sm);
+}
+
+.compareForm label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compareForm label > span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.compareForm select {
+  max-width: min(100%, 15rem);
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+}
+
+.hide {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--sx-muted);
+}
+
+.hide:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.hint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.lines {
+  display: block;
+  width: 100%;
+  height: 180px;
+  padding: 14px 14px 0;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.lines polyline {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.lineA {
+  stroke: var(--sx-accent);
+}
+
+.lineB {
+  stroke: var(--sx-info);
+  stroke-dasharray: 6 4;
+}
+
+.compareLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 0 14px 10px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.compareLegend span::before {
+  display: inline-block;
+  width: 16px;
+  margin-right: 6px;
+  border-top: 2px solid var(--sx-accent);
+  vertical-align: middle;
+  content: "";
+}
+
+.compareLegend span[data-line="b"]::before {
+  border-top: 2px dashed var(--sx-info);
+}
+
+.compareLegend strong {
+  color: var(--sx-ink-2);
+}
+
+.compareDays {
+  padding: 0 14px 12px;
+  font-size: var(--sx-text-sm);
+}
+
+.compareDays summary {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}

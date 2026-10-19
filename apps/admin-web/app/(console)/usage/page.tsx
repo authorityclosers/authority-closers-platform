@@ -1,6 +1,10 @@
 import { adminRead } from "@/app/lib/server-api";
 import { Page, PageHeader, QueryTabs, Unavailable } from "@/app/ui/kit";
-import { ENVIRONMENTS, normalizeMetrics } from "@/app/usage/cost-data";
+import {
+  ENVIRONMENTS,
+  chartView,
+  normalizeMetrics,
+} from "@/app/usage/cost-data";
 import {
   COST_WINDOWS,
   CallsView,
@@ -34,6 +38,9 @@ type Query = {
   tests?: string;
   a?: string;
   b?: string;
+  charts?: string;
+  ca?: string;
+  cb?: string;
 };
 
 const pick = (
@@ -61,6 +68,8 @@ export default async function UsagePage({
     ),
     env: pick(query.env, ["all", ...ENVIRONMENTS], "all"),
     tests: query.tests === "1",
+    // The Overview's chosen charts and compared pair (owner, 19 Oct 2026).
+    ...chartView(query),
   };
   const keep = [
     current.days !== "30" ? `days=${current.days}` : "",
