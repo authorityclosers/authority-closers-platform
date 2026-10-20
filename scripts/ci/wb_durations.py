@@ -18,7 +18,7 @@ seconds: dict[str, float] = {}
 tmp = Path(tempfile.mkdtemp())
 names = subprocess.run(["gh", "api", f"repos/authorityclosers/authority-closers-platform/actions/runs/{run_id}/artifacts",
                         "--jq", ".artifacts[].name"], capture_output=True, text=True, check=True).stdout.split()
-for name in [n for n in names if n.startswith("python-test-shard-") or n.startswith("wb-python-")]:
+for name in [n for n in names if n.startswith(("wb-py-", "python-test-shard-", "wb-python-"))]:
     subprocess.run(["gh", "run", "download", run_id, "-R", "authorityclosers/authority-closers-platform", "-n", name,
                     "-D", str(tmp / name)], check=True, capture_output=True)
     for testcase in ET.parse(tmp / name / "junit.xml").getroot().iter("testcase"):
