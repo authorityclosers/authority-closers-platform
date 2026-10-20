@@ -9,7 +9,6 @@ import { extractInsight } from "./calls-insights";
 ).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root;
 let host: HTMLDivElement;
-let trigger: HTMLButtonElement;
 const props = {
   id: "11111111-1111-4111-8111-111111111111",
   title: "Fictional call",
@@ -27,70 +26,67 @@ const props = {
 };
 const buttons = () =>
   Array.from(host.querySelectorAll<HTMLButtonElement>("button"));
-const copy = () =>
-  buttons().find((button) => button.textContent?.includes("Copy link"))!;
-const close = () =>
-  host.querySelector<HTMLButtonElement>('[aria-label="Close preview"]')!;
-const key = (value: string, shiftKey = false) =>
-  document.activeElement!.dispatchEvent(
-    new KeyboardEvent("keydown", {
-      key: value,
-      shiftKey,
-      bubbles: true,
-      cancelable: true,
-    }),
-  );
+const named = (text: string) =>
+  buttons().find((button) => button.textContent?.trim() === text)!;
+const dialog = () => host.querySelector("dialog")!;
 
 beforeEach(async () => {
   host = document.createElement("div");
-  trigger = document.createElement("button");
-  document.body.append(trigger, host);
-  trigger.focus();
+  document.body.append(host);
   root = createRoot(host);
   await act(async () => root.render(<CallsDrawer {...props} />));
 });
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  trigger.remove();
   vi.clearAllMocks();
 });
 
-it("focuses on opening, preserves focus through insight/callback changes, and restores on close", async () => {
-  expect(document.activeElement).toBe(close());
-  copy().focus();
-  const focused = document.activeElement;
-  const newClose = vi.fn();
-  await act(async () =>
-    root.render(
-      <CallsDrawer
-        {...props}
-        insight={extractInsight(null, { verdict: "Report arrived" })}
-        readState="ready"
-        onClose={newClose}
-      />,
-    ),
+it("opens as the kit sheet, named by the call, with its meta and actions", () => {
+  expect(dialog().open).toBe(true);
+  const title = document.getElementById(
+    dialog().getAttribute("aria-labelledby")!,
   );
-  expect(document.activeElement).toBe(focused);
-  await act(async () => key("Escape"));
-  expect(newClose).toHaveBeenCalledOnce();
-  expect(props.onClose).not.toHaveBeenCalled();
-  await act(async () => root.render(null));
-  expect(document.activeElement).toBe(trigger);
+  expect(title?.textContent).toBe("Fictional call");
+  expect(dialog().textContent).toContain("Today");
+  const footer = host.querySelector("footer")!;
+  expect(
+    Array.from(footer.querySelectorAll("button"), (button) =>
+      button.textContent?.trim(),
+    ),
+  ).toEqual(["Open full report", "Rename", "Copy link"]);
 });
 
-it("wraps Tab in both directions and prevents outside focus or background shortcuts", () => {
-  expect(key("Tab", true)).toBe(false);
-  expect(document.activeElement).toBe(copy());
-  expect(key("Tab")).toBe(false);
-  expect(document.activeElement).toBe(close());
-  trigger.focus();
-  expect(document.activeElement).toBe(close());
-  const shortcut = vi.fn();
-  window.addEventListener("keydown", shortcut);
-  key("/");
-  expect(shortcut).not.toHaveBeenCalled();
-  window.removeEventListener("keydown", shortcut);
+it("closes from Escape and from its close button, as every sheet does", async () => {
+  await act(async () => {
+    dialog().dispatchEvent(new Event("cancel", { cancelable: true }));
+  });
+  expect(props.onClose).toHaveBeenCalledOnce();
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('button[aria-label="Close"]')!
+      .click(),
+  );
+  expect(props.onClose).toHaveBeenCalledTimes(2);
+});
+
+it("keeps the call on it while it slides away", async () => {
+  await act(async () => root.render(<CallsDrawer {...props} open={false} />));
+  expect(host.textContent).toContain("Fictional call");
+  expect(props.onClose).not.toHaveBeenCalled();
+});
+
+it("lets the player scrub without dragging the sheet", () => {
+  expect(host.querySelector("audio")?.hasAttribute("data-sheet-no-drag")).toBe(
+    true,
+  );
+});
+
+it("opens the report and renames from its footer", async () => {
+  await act(async () => named("Open full report").click());
+  expect(props.onOpen).toHaveBeenCalledOnce();
+  await act(async () => named("Rename").click());
+  expect(props.onRename).toHaveBeenCalledOnce();
 });
 
 it("shows unavailable measurements without invented zeros and offers recovery", async () => {
@@ -110,10 +106,6 @@ it("shows unavailable measurements without invented zeros and offers recovery", 
     "Concerns",
   ])
     expect(host.querySelector(`[title="${title}"]`)?.textContent).toBe("—");
-  await act(async () =>
-    buttons()
-      .find((button) => button.textContent === "Retry report")!
-      .click(),
-  );
+  await act(async () => named("Retry report").click());
   expect(props.onRetry).toHaveBeenCalledOnce();
 });

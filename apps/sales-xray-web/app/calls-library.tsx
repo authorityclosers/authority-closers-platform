@@ -451,6 +451,9 @@ function CallsLibraryContent({
   };
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [previewId, setPreviewId] = useState<string | null>(null);
+  // The preview keeps its call on screen while it slides away.
+  const [shownPreviewId, setShownPreviewId] = useState<string | null>(null);
+  if (previewId && previewId !== shownPreviewId) setShownPreviewId(previewId);
   // Phones show row checkboxes only in Select mode; desktops always do.
   const [selecting, setSelecting] = useState(false);
   // Dates in the browser's language and zone; a page drawn on the server
@@ -1391,6 +1394,10 @@ function CallsLibraryContent({
   const previewSubmission = previewId
     ? (submissions.find((submission) => submission.id === previewId) ?? null)
     : null;
+  const shownPreview = shownPreviewId
+    ? (submissions.find((submission) => submission.id === shownPreviewId) ??
+      null)
+    : null;
   const loadedInsights = workspace
     ? submissions
         .map((submission) => rowInsight(submission))
@@ -1977,30 +1984,27 @@ function CallsLibraryContent({
           </section>
         </>
       )}
-      {workspace && previewSubmission ? (
-        <SectionBoundary
-          name="The call preview"
-          resetKey={previewSubmission.id}
-        >
+      {workspace && shownPreview ? (
+        <SectionBoundary name="The call preview" resetKey={shownPreview.id}>
           <CallsDrawer
-            key={previewSubmission.id}
-            id={previewSubmission.id}
-            title={titleOf(previewSubmission)}
-            meta={`${formatCreatedDate(previewSubmission.createdAt, dates)} · ${formatCreatedTime(previewSubmission.createdAt, dates)} · ${lengthOf(previewSubmission, rowInsight(previewSubmission))}`}
-            status={submissionState(previewSubmission)}
-            tone={callTone(previewSubmission)}
-            insight={rowInsight(previewSubmission)}
-            readState={statusOf(previewSubmission.id)}
+            key={shownPreview.id}
+            open={previewSubmission !== null}
+            id={shownPreview.id}
+            title={titleOf(shownPreview)}
+            meta={`${formatCreatedDate(shownPreview.createdAt, dates)} · ${formatCreatedTime(shownPreview.createdAt, dates)} · ${lengthOf(shownPreview, rowInsight(shownPreview))}`}
+            status={submissionState(shownPreview)}
+            tone={callTone(shownPreview)}
+            insight={rowInsight(shownPreview)}
+            readState={statusOf(shownPreview.id)}
             onRetry={retryInsights}
-            hasReport={previewSubmission.hasReport}
+            hasReport={shownPreview.hasReport}
             canRename={Boolean(
-              previewSubmission.label &&
-                ownsCall(previewSubmission.owner, viewerId),
+              shownPreview.label && ownsCall(shownPreview.owner, viewerId),
             )}
-            onOpen={() => openSubmission(previewSubmission)}
+            onOpen={() => openSubmission(shownPreview)}
             onRename={() => {
               setPreviewId(null);
-              setRenamingId(previewSubmission.id);
+              setRenamingId(shownPreview.id);
             }}
             onClose={() => setPreviewId(null)}
           />
