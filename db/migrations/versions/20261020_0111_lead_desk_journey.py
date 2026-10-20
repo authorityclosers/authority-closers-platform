@@ -33,6 +33,12 @@ depends_on = None
 PROVIDERS = "provider IN ('meta', 'google_ads', 'linkedin', 'tiktok', 'microsoft_ads')"
 
 
+def _stored_any(column: str, values: tuple[str, ...]) -> str:
+    """PostgreSQL's stored text for ``column IN (values)`` on a varchar column."""
+    items = ", ".join(f"('{value}'::character varying)::text" for value in values)
+    return f"({column})::text = ANY (ARRAY[{items}])"
+
+
 def upgrade() -> None:
     op.create_table(
         "lead_desk_journey_versions",
@@ -191,8 +197,22 @@ def downgrade() -> None:
     op.create_check_constraint(
         op.f("ck_lead_desk_events_lead_desk_event_kind"),
         "lead_desk_events",
-        "kind IN ('captured', 'repeat', 'assigned', 'reassigned', 'call', 'result', "
-        "'note', 'edited', 'message', 'scheduled')",
+        # Stored form, as the staging baseline holds it (see the schema gate's byte comparison).
+        _stored_any(
+            "kind",
+            (
+                "captured",
+                "repeat",
+                "assigned",
+                "reassigned",
+                "call",
+                "result",
+                "note",
+                "edited",
+                "message",
+                "scheduled",
+            ),
+        ),
     )
     op.drop_column("lead_desk_leads", "step")
     op.drop_table("lead_desk_journey_versions")

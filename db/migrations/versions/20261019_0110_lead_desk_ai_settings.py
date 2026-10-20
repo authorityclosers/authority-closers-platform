@@ -31,12 +31,24 @@ down_revision = "20261019_0109"
 branch_labels = None
 depends_on = None
 
-_OUTCOME_BEFORE = "outcome IN ('drafted', 'sent', 'handoff', 'opted_out', 'failed', 'paused')"
+
+def _stored_any(column: str, values: tuple[str, ...]) -> str:
+    """PostgreSQL's stored text for ``column IN (values)`` on a varchar column."""
+    items = ", ".join(f"('{value}'::character varying)::text" for value in values)
+    return f"({column})::text = ANY (ARRAY[{items}])"
+
+
+# Downgrade restores the constraint in PostgreSQL's stored form, as the staging baseline holds it
+# (a restored dump keeps that text; a fresh IN (...) parse stores another), so the schema gate's
+# byte comparison matches. Same meaning as the original IN list.
+_OUTCOME_BEFORE = _stored_any(
+    "outcome", ("drafted", "sent", "handoff", "opted_out", "failed", "paused")
+)
 _OUTCOME_AFTER = (
     "outcome IN ('queued', 'drafted', 'sent', 'handoff', 'opted_out', 'failed', 'paused',"
     " 'waiting')"
 )
-_MODE_BEFORE = "mode IN ('suggest', 'auto')"
+_MODE_BEFORE = _stored_any("mode", ("suggest", "auto"))
 _MODE_AFTER = "mode IN ('suggest', 'auto', 'try')"
 _LEAD = "mode = 'try' OR lead_id IS NOT NULL"
 
