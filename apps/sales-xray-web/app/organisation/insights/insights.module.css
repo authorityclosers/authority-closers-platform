@@ -248,8 +248,11 @@
   background: var(--sx-accent);
 }
 
+/* Design system v2: "other calls" is a neutral that keeps 3:1 against the
+   card in both themes (32% teal was about 1.9:1 in dark), so Won stays the
+   one coloured series. */
 .page [data-key="calls"] {
-  background: color-mix(in oklab, var(--sx-accent) 32%, var(--sx-surface));
+  background: color-mix(in oklab, var(--lx-ink) 55%, var(--sx-surface));
 }
 
 .page [data-key="observed"] {
@@ -520,11 +523,11 @@ button.barRow:focus-visible {
 }
 
 .funnelTrack i[data-key="calls"] {
-  background: color-mix(in oklab, var(--sx-accent) 32%, var(--sx-surface));
+  background: color-mix(in oklab, var(--lx-ink) 55%, var(--sx-surface));
 }
 
 .funnelTrack i[data-key="next"] {
-  background: color-mix(in oklab, var(--sx-accent) 62%, var(--sx-surface));
+  background: color-mix(in oklab, var(--sx-accent) 80%, var(--sx-surface));
 }
 
 .funnelTrack i[data-key="won"] {
