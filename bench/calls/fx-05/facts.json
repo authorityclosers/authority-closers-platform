@@ -1,0 +1,610 @@
+[
+  {
+    "id": "f01",
+    "type": "person_name",
+    "slot": "seller.sales_manager",
+    "value": "समीर देसाई",
+    "normalized": "Sameer Desai",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "समीर देसाई बोलतोय",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f02",
+    "type": "company",
+    "slot": "seller.developer",
+    "value": "महालक्ष्मी इन्फ्राव्हेंचर्स",
+    "normalized": "Mahalakshmi Infraventures",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "महालक्ष्मी इन्फ्राव्हेंचर्सच्या निसर्ग वैभव रेसिडेन्सी",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f03",
+    "type": "product",
+    "slot": "project.name",
+    "value": "निसर्ग वैभव रेसिडेन्सी",
+    "normalized": "Nisarga Vaibhav Residency",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "निसर्ग वैभव रेसिडेन्सी प्रकल्पातून",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f04",
+    "type": "person_name",
+    "slot": "prospect.name",
+    "value": "राजेश महाजन",
+    "normalized": "Rajesh Mahajan",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "महाजन सर",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f05",
+    "type": "person_name",
+    "slot": "prospect.wife",
+    "value": "सुप्रिया महाजन",
+    "normalized": "Supriya Mahajan",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "माझी पत्नी सुप्रिया महाजन",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.011,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f06",
+    "type": "person_name",
+    "slot": "prospect.mother",
+    "value": "प्रभावती महाजन",
+    "normalized": "Prabhavati Mahajan",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "आई प्रभावती महाजन",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.011,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f07",
+    "type": "location",
+    "slot": "project.location",
+    "value": "ताराराणी चौकाजवळ",
+    "normalized": "Near Tararani Chowk",
+    "turn_ids": [
+      "t003"
+    ],
+    "evidence": "ताराराणी चौकाजवळ अतिशय मोक्याच्या ठिकाणी",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.021,
+    "trap": null
+  },
+  {
+    "id": "f08",
+    "type": "location",
+    "slot": "unit.flat_number",
+    "value": "बी-७०४",
+    "normalized": "Flat B-704",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "फ्लॅट क्रमांक बी-६०४ — नाही, वरचा बी-७०४",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.032,
+    "trap": "self_correction"
+  },
+  {
+    "id": "f09",
+    "type": "quantity",
+    "slot": "unit.carpet_area",
+    "value": "आठशे पन्नास चौरस फूट",
+    "normalized": "850 sq ft carpet",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "आठशे पन्नास चौरस फूट कार्पेट असलेला",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.032,
+    "trap": null
+  },
+  {
+    "id": "f10",
+    "type": "requirement",
+    "slot": "unit.facing",
+    "value": "पूर्वमुखी",
+    "normalized": "East-facing",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "पूर्वमुखी २ बीएचके आम्हाला फायनल करायचा आहे",
+    "said_by": "S2",
+    "critical": false,
+    "needle": false,
+    "depth": 0.032,
+    "trap": null
+  },
+  {
+    "id": "f11",
+    "type": "pain_point",
+    "slot": "prospect.commute_reason",
+    "value": "शिरोली एमआयडीसी प्रवास वेळ वाचवणे",
+    "normalized": "save 2 hours commute to Shiroli MIDC",
+    "turn_ids": [
+      "t012"
+    ],
+    "evidence": "कंपनी शिरोली एमआयडीसीमध्ये असल्यामुळे रोजचा दोन तासांचा प्रवास वाचवणे हाच मुख्य हेतू",
+    "said_by": "S2",
+    "critical": false,
+    "needle": true,
+    "depth": 0.117,
+    "trap": null
+  },
+  {
+    "id": "f12",
+    "type": "duration",
+    "slot": "commute.time",
+    "value": "वीस मिनिटांत",
+    "normalized": "20 minutes to work",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "अवघ्या वीस मिनिटांत तुम्ही कामाच्या ठिकाणी",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.128,
+    "trap": null
+  },
+  {
+    "id": "f13",
+    "type": "price",
+    "slot": "seller.initial_quote",
+    "value": "सत्तावन्न लाख पन्नास हजार रुपये",
+    "normalized": "5750000 INR all inclusive",
+    "turn_ids": [
+      "t020"
+    ],
+    "evidence": "सत्तावन्न लाख पन्नास हजार रुपये कोटेशन दिले होते",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.202,
+    "trap": "alt_number_form"
+  },
+  {
+    "id": "f14",
+    "type": "budget",
+    "slot": "prospect.budget_limit",
+    "value": "बावन्न लाख रुपये",
+    "normalized": "5200000 INR strict budget ceiling",
+    "turn_ids": [
+      "t022"
+    ],
+    "evidence": "माझे कमाल बजेट हे बावन्न लाख रुपये आहे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.223,
+    "trap": null
+  },
+  {
+    "id": "f15",
+    "type": "competitor",
+    "slot": "competitor.project",
+    "value": "स्वप्ननगरी टॉवर्स",
+    "normalized": "Swapnanagari Towers",
+    "turn_ids": [
+      "t024"
+    ],
+    "evidence": "जवळच स्वप्ननगरी टॉवर्सचा प्रकल्प आहे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.245,
+    "trap": null
+  },
+  {
+    "id": "f16",
+    "type": "competitor_price",
+    "slot": "competitor.quote",
+    "value": "एक्कावन्न लाख रुपये",
+    "normalized": "5100000 INR",
+    "turn_ids": [
+      "t024"
+    ],
+    "evidence": "अंतिम कोट एक्कावन्न लाख रुपये दिला आहे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.245,
+    "trap": "competitor_price"
+  },
+  {
+    "id": "f17",
+    "type": "quantity",
+    "slot": "competitor.carpet_area",
+    "value": "सातशे ऐंशी स्क्वेअर फूट",
+    "normalized": "780 sq ft carpet",
+    "turn_ids": [
+      "t025"
+    ],
+    "evidence": "कार्पेट एरिया केवळ सातशे ऐंशी स्क्वेअर फूट आहे",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.255,
+    "trap": null
+  },
+  {
+    "id": "f18",
+    "type": "person_name",
+    "slot": "seller.director",
+    "value": "प्रमोद शिर्के",
+    "normalized": "Pramod Shirke",
+    "turn_ids": [
+      "t027"
+    ],
+    "evidence": "सेल्स डायरेक्टर प्रमोद शिर्के",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.277,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f19",
+    "type": "price",
+    "slot": "discount.floor_rise_waiver",
+    "value": "पंचाहत्तर हजार रुपये",
+    "normalized": "75000 INR floor rise waiver",
+    "turn_ids": [
+      "t032"
+    ],
+    "evidence": "फ्लोर राईज चार्ज पंचाहत्तर हजार रुपये येतो",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.33,
+    "trap": null
+  },
+  {
+    "id": "f20",
+    "type": "price",
+    "slot": "discount.parking_reduction",
+    "value": "दोन लाख रुपयांत",
+    "normalized": "200000 INR discounted parking",
+    "turn_ids": [
+      "t034"
+    ],
+    "evidence": "तीन लाख पन्नास हजारांऐवजी थेट दोन लाख रुपयांत देऊ",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.351,
+    "trap": null
+  },
+  {
+    "id": "f21",
+    "type": "price",
+    "slot": "discount.clubhouse_reduction",
+    "value": "पन्नास हजार रुपयांची सूट",
+    "normalized": "50000 INR clubhouse discount",
+    "turn_ids": [
+      "t038"
+    ],
+    "evidence": "आणखी पन्नास हजार रुपयांची सूट मंजूर करतो",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.394,
+    "trap": null
+  },
+  {
+    "id": "f22",
+    "type": "price",
+    "slot": "discount.legal_waiver",
+    "value": "पंधरा हजार रुपयांचे",
+    "normalized": "15000 INR legal fee waiver",
+    "turn_ids": [
+      "t044"
+    ],
+    "evidence": "पंधरा हजार रुपयांचे लीगल डॉक्युमेंटेशन शुल्क आम्ही पूर्णपणे माफ",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.457,
+    "trap": null
+  },
+  {
+    "id": "f23",
+    "type": "requirement",
+    "slot": "prospect.vaastu_preference",
+    "value": "स्वयंपाकघर ओटा पूर्व दिशेला",
+    "normalized": "kitchen counter east-facing for Annapurna",
+    "turn_ids": [
+      "t045"
+    ],
+    "evidence": "आईचा कटाक्ष आहे की स्वयंपाकघराचा ओटा पूर्व दिशेलाच असावा, तरच घरात अन्नपूर्णा वास करते",
+    "said_by": "S2",
+    "critical": false,
+    "needle": true,
+    "depth": 0.468,
+    "trap": null
+  },
+  {
+    "id": "f24",
+    "type": "commitment",
+    "slot": "seller.civil_alteration",
+    "value": "मोफत स्वयंपाकघर ओटा दिशा बदल",
+    "normalized": "free kitchen counter orientation change",
+    "turn_ids": [
+      "t046"
+    ],
+    "evidence": "किचन ओट्याची दिशा पूर्व दिशेला करून देऊ, त्यासाठी कोणताही अतिरिक्त बदल शुल्क आम्ही आकारणार नाही",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.479,
+    "trap": null
+  },
+  {
+    "id": "f25",
+    "type": "discount",
+    "slot": "discount.festival_offer",
+    "value": "एक लाख रुपये",
+    "normalized": "100000 INR festival discount",
+    "turn_ids": [
+      "t054"
+    ],
+    "evidence": "आणखी एक लाख रुपयांची विशेष फ्लॅट सवलत देतो",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.564,
+    "trap": null
+  },
+  {
+    "id": "f26",
+    "type": "price",
+    "slot": "negotiation.final_agreed_price",
+    "value": "५३ लाख",
+    "normalized": "5300000 INR final agreed all-inclusive",
+    "turn_ids": [
+      "t058"
+    ],
+    "evidence": "बी-७०४ साठी सर्व करांसहित ५३ लाख रुपये अंतिम",
+    "said_by": "S3",
+    "critical": true,
+    "needle": false,
+    "depth": 0.606,
+    "trap": "alt_number_form"
+  },
+  {
+    "id": "f27",
+    "type": "discount",
+    "slot": "savings.total_savings",
+    "value": "साडेचार लाख रुपये",
+    "normalized": "450000 INR total savings",
+    "turn_ids": [
+      "t059"
+    ],
+    "evidence": "एकूण साडेचार लाख रुपयांची थेट बचत झाली आहे",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.617,
+    "trap": null
+  },
+  {
+    "id": "f28",
+    "type": "timeline",
+    "slot": "agreement.deadline",
+    "value": "एकवीस दिवसांच्या आत",
+    "normalized": "within 21 days for agreement",
+    "turn_ids": [
+      "t057"
+    ],
+    "evidence": "एकवीस दिवसांच्या आत वीस टक्के डाऊन पेमेंटची रक्कम",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.596,
+    "trap": null
+  },
+  {
+    "id": "f29",
+    "type": "price",
+    "slot": "booking.token_amount",
+    "value": "एक लाख रुपयांचा चेक",
+    "normalized": "100000 INR booking token",
+    "turn_ids": [
+      "t061"
+    ],
+    "evidence": "बुकिंग टोकन म्हणून आज एक लाख रुपयांचा चेक",
+    "said_by": "S3",
+    "critical": true,
+    "needle": false,
+    "depth": 0.638,
+    "trap": null
+  },
+  {
+    "id": "f30",
+    "type": "time",
+    "slot": "token.transfer_time",
+    "value": "संध्याकाळी सहा वाजेपर्यंत",
+    "normalized": "18:00 today",
+    "turn_ids": [
+      "t062"
+    ],
+    "evidence": "आज संध्याकाळी सहा वाजेपर्यंत ऑनलाइन आरटीजीएसने",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.649,
+    "trap": null
+  },
+  {
+    "id": "f31",
+    "type": "person_name",
+    "slot": "banker.loan_officer",
+    "value": "अमित सरनाईक",
+    "normalized": "Amit Sarnaik",
+    "turn_ids": [
+      "t064"
+    ],
+    "evidence": "लोन मॅनेजर अमित सरनाईक यांना",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.67,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f32",
+    "type": "location",
+    "slot": "parking.slot_number",
+    "value": "पी-चौवीस",
+    "normalized": "Parking slot P-24",
+    "turn_ids": [
+      "t071"
+    ],
+    "evidence": "कव्हर कार पार्किंग क्रमांक पी-चौवीस असा स्पष्ट उल्लेख",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.745,
+    "trap": null
+  },
+  {
+    "id": "f33",
+    "type": "date",
+    "slot": "possession.committed_date",
+    "value": "एकतीस डिसेंबर दोन हजार सत्तावीस",
+    "normalized": "2027-12-31",
+    "turn_ids": [
+      "t075"
+    ],
+    "evidence": "एकतीस डिसेंबर दोन हजार सत्तावीस ही तारीख नमूद करणार",
+    "said_by": "S3",
+    "critical": true,
+    "needle": false,
+    "depth": 0.787,
+    "trap": null
+  },
+  {
+    "id": "f34",
+    "type": "duration",
+    "slot": "defect_liability.warranty",
+    "value": "पाच वर्षांची",
+    "normalized": "5 years defect liability warranty under RERA",
+    "turn_ids": [
+      "t079"
+    ],
+    "evidence": "पझेशनच्या तारखेपासून पाच वर्षांची स्ट्रक्चरल आणि डिफेक्ट लायबिलिटी वॉरंटी",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.83,
+    "trap": null
+  },
+  {
+    "id": "f35",
+    "type": "price",
+    "slot": "perk.kitchen_voucher",
+    "value": "पन्नास हजार रुपये",
+    "normalized": "50000 INR modular kitchen woodwork voucher",
+    "turn_ids": [
+      "t080"
+    ],
+    "evidence": "मॉड्यूलर किचनच्या लाकडी कामासाठी पन्नास हजार रुपयांचे गिफ्ट व्हाउचर",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.84,
+    "trap": null
+  },
+  {
+    "id": "f36",
+    "type": "price",
+    "slot": "advance.maintenance_deposit",
+    "value": "बावन्न हजार रुपये",
+    "normalized": "52000 INR 24 months advance maintenance",
+    "turn_ids": [
+      "t082"
+    ],
+    "evidence": "त्यानुसार अंदाजे बावन्न हजार रुपये होतात",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.862,
+    "trap": null
+  },
+  {
+    "id": "f37",
+    "type": "duration",
+    "slot": "conveyance.timeline",
+    "value": "चार महिन्यांच्या आत",
+    "normalized": "within 4 months of possession for conveyance deed",
+    "turn_ids": [
+      "t084"
+    ],
+    "evidence": "सोसायटी नोंदणी झाल्यावर चार महिन्यांच्या आत",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.883,
+    "trap": null
+  },
+  {
+    "id": "f38",
+    "type": "personal_detail",
+    "slot": "prospect.astrology_signing_day",
+    "value": "गुरुपुष्यामृत योग गुरुवारी",
+    "normalized": "auspicious Gurupushyamrut yoga on Thursday",
+    "turn_ids": [
+      "t089"
+    ],
+    "evidence": "गुरुपुष्यामृत योगावर गुरुवारीच धनादेश देणार आहोत, त्या दिवशी नवीन कामाची सुरुवात शुभ मानली जाते",
+    "said_by": "S2",
+    "critical": false,
+    "needle": true,
+    "depth": 0.936,
+    "trap": null
+  }
+]
