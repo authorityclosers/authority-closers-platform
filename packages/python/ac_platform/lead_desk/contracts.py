@@ -188,6 +188,17 @@ class RepOption(Model):
     available: bool
 
 
+class StageSuggestion(Model):
+    """Where the lead's last call says it got to (call facts), when that is further
+    than its stage. Offered with one tap; a person confirms it."""
+
+    step: str
+    label: str
+    kind: str
+    why: str
+    at: datetime
+
+
 class StageChoice(Model):
     """One of the business's own stages a seller can pick after a call that connected."""
 
@@ -213,6 +224,7 @@ class LeadDetail(Model):
     call_mode: Literal["simulated", "phone"]
     first_call_minutes: int | None = None
     stage_choices: tuple[StageChoice, ...] = ()
+    stage_suggestion: StageSuggestion | None = None
 
 
 class PhoneHealth(Model):

@@ -171,6 +171,16 @@ export type LeadDetail = {
   first_call_minutes?: number | null;
   /** The business's own stages a seller picks after a call (Lead stages). */
   stage_choices?: StageChoice[];
+  /** Where the lead's last call says it got to, when further than its stage. */
+  stage_suggestion?: StageSuggestion | null;
+};
+
+export type StageSuggestion = {
+  step: string;
+  label: string;
+  kind: Stage;
+  why: string;
+  at: string;
 };
 
 export type StageChoice = {
@@ -544,6 +554,23 @@ export function dispose(
       ...body,
     }),
   );
+}
+
+/** Move a lead to one of the business's stages without a call (Lead stages). */
+export async function moveToStage(
+  lead: Pick<LeadRow, "lead_id" | "revision">,
+  step: string,
+  command = commandId(),
+): Promise<LeadDetail> {
+  await request<unknown>(
+    `/leads/${encodeURIComponent(lead.lead_id)}/stage`,
+    json("POST", {
+      commandId: command,
+      expectedRevision: lead.revision,
+      step,
+    }),
+  );
+  return readLead(lead.lead_id);
 }
 
 /** Book the next call without a call (long-press on the list). */

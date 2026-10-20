@@ -71,12 +71,14 @@ from ac_platform.lead_desk.contracts import (
     SettingsCommand,
     SettingsView,
     StageChoice,
+    StageSuggestion,
     TakingLeads,
     Team,
     WorkHoursCommand,
     WorkHoursView,
 )
 from ac_platform.lead_desk.journey import model as journeys
+from ac_platform.lead_desk.journey import signals
 from ac_platform.lead_desk.journey.templates import MILESTONE_WORDS
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent, LeadRep
 from ac_platform.lead_desk.vocabulary import (
@@ -854,6 +856,9 @@ class LeadDesk:
     async def detail(self, lead_id: UUID) -> LeadDetail:
         lead = await self._lead(lead_id)
         journey = await self._labels()
+        suggestion = await signals.lead_suggestion(
+            self.db, self.tenant_id, lead.id, lead.stage, lead.step, journey
+        )
         events = (
             await self.db.scalars(
                 select(LeadEvent)
@@ -916,6 +921,7 @@ class LeadDesk:
             reps=reps,
             call_mode=self.call_mode,
             first_call_minutes=first_call_minutes(lead.created_at, lead.first_contact_at),
+            stage_suggestion=StageSuggestion(**suggestion) if suggestion else None,
             stage_choices=tuple(
                 StageChoice(
                     key=stage.key,

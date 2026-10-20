@@ -97,6 +97,7 @@ import {
   type SimulationPick,
   type SimulationStep,
 } from "./simulated-call";
+import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
 import styles from "./leads.module.css";
 
 // Sources whose leads arrive with a form's own answers worth showing.
@@ -333,6 +334,12 @@ export function CallOutcome({
       : null;
   const [stage, setStage] = useState<Stage | null>(lastStage);
   const [step, setStep] = useState<string | null>(lastStep);
+  // What the last call suggests, when it is one of the choices (Lead stages).
+  const suggested =
+    detail.stage_suggestion &&
+    choices.some((item) => item.step === detail.stage_suggestion?.step)
+      ? detail.stage_suggestion
+      : null;
   const [next, setNext] = useState<Pick>("morning");
   const [retry, setRetry] = useState<Pick | null>(null);
   const [custom, setCustom] = useState(() =>
@@ -498,6 +505,16 @@ export function CallOutcome({
       {talk === "talked" ? (
         <div className={styles.outcomeStep}>
           <span className={styles.stepLabel}>What happens next?</span>
+          {suggested ? (
+            <SuggestionHint
+              suggestion={suggested}
+              active={step === suggested.step}
+              onUse={() => {
+                setStage(suggested.kind);
+                setStep(suggested.step);
+              }}
+            />
+          ) : null}
           <div
             className={styles.stageGrid}
             role="group"
@@ -1673,6 +1690,7 @@ export function LeadCard({
         </div>
       </header>
       <p className={styles.why}>{whyLine(lead)}</p>
+      <SuggestedStage detail={detail} onChanged={onChanged} />
       {detail.next_action_note ? (
         <p className={styles.nextNote}>Last note: {detail.next_action_note}</p>
       ) : null}
