@@ -17,7 +17,7 @@ Apps → Sales X-Ray → Connect ──browser──▶ /connect   consent: "Con
   POST code → Pulse API ──server──▶ POST /v1/oauth/token (PKCE, client secret)
   tokens sealed in pulse_priv.sales_xray_link
 Calls / Leads tabs  ── Pulse API ──server──▶ GET /v1/api/calls, /leads …  (Bearer sxa_)
-Ask (Pulse's assistant) ── MCP ──▶ Pulse gateway ──server──▶ POST /v1/mcp (Bearer sxa_)
+Ask (Pulse's assistant, codex) ── MCP ──server──▶ POST /v1/mcp (Bearer sxa_, from its env)
 ```
 
 ## 1. How a Pulse user links their Sales X-Ray account
@@ -63,7 +63,7 @@ This is a "platform app" connection: the app has no `tenant_id` of its own.
 
 ## 3. What appears inside Pulse
 
-- **Apps** (`/apps`) lists installable apps. Sales X-Ray is the first, and the list is repo data. The company's admin turns the app on with its module switch, `sales_xray`, which on dev is server-switched by `PULSE_SALES_XRAY=1`. Each person then connects their own account.
+- **Apps** (`/apps`) lists installable apps, above Pulse's own device install guides. Sales X-Ray is the first, and the list is repo data. The company's admin turns the app on with its module switch, `sales_xray`, which on dev is server-switched by `PULSE_SALES_XRAY=1`. Each person then connects their own account.
 - **Sales X-Ray app page** (`/apps/sales-xray`):
   - **Not connected:** what it does, and a Connect button.
   - **Connected:** the Sales X-Ray account and workspace, and Disconnect. It has three tabs:
@@ -82,11 +82,14 @@ This is a "platform app" connection: the app has no `tenant_id` of its own.
   - It has seven tools: `whoami`, `list_calls`, `get_call`, `call_facts`, `list_leads`, `get_lead`, `add_lead`.
   - Each tool needs its API scope, and only the allowed tools are listed.
   - Without a token it answers 401 with `resource_metadata` (RFC 9728). Any MCP host (Claude, ChatGPT) can therefore discover Connect at `/.well-known/oauth-authorization-server`, register itself and sign the person in.
-- **Pulse's gateway.** Pulse never hands a Sales X-Ray token to a model or runner. `POST /api/v0/sales-xray/mcp` forwards one JSON-RPC message to Sales X-Ray's `/v1/mcp`, with the signed-in person's own token, refreshed as needed.
+- **Pulse's gateway.** `POST /api/v0/sales-xray/mcp` forwards one JSON-RPC message to Sales X-Ray's `/v1/mcp` with the signed-in person's own token, refreshed as needed. Any assistant inside Pulse can use Sales X-Ray this way without holding a token.
 - **Pulse's assistant ("Ask" on the app page).**
-  - Pulse has no language-model layer of its own, and its AI co-workers run `codex exec` on EA's included subscription. Ask therefore runs `codex exec` the same way: read-only, no shell, no apps, and the Sales X-Ray MCP as its only tool server.
-  - That MCP address is a Pulse gateway URL with a one-time capability: 5 minutes, one person, hashed in the database. It is not the Sales X-Ray token.
-  - The answer comes back to the page. Nothing is sent or written on the person's behalf: `add_lead` is not granted to Ask.
+  - Pulse has no language-model layer of its own; its AI co-workers run `codex exec` on EA's included subscription. Ask runs it the same way:
+    - `--ignore-user-config`, read-only, with the shell, browser, computer use, apps and skills off;
+    - Sales X-Ray's `/v1/mcp` as its only MCP server.
+  - The person's one-hour read token (`calls:read reports:read leads:read`) goes in the process environment (`bearer_token_env_var`), never in the prompt. The refresh token never leaves Pulse's API.
+  - The answer comes back to the page. Nothing is written on the person's behalf: Pulse never asks for `leads:write`, so `add_lead` is not even listed.
+  - Limits: 10 questions per person per 15 minutes, and two at a time.
   - It is off unless `PULSE_SALES_XRAY_ASK=1` (dev only first).
 
 ## 5. Plans and purchases
