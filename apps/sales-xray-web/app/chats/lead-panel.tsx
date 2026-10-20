@@ -24,6 +24,7 @@ import {
 } from "../leads/leads-client";
 import { notify } from "../notice-center";
 import { Avatar, Badge, Skeleton } from "../ui/kit";
+import { Sheet } from "../ui/sheet";
 import styles from "./chats.module.css";
 
 const NOTES_SHOWN = 5;
@@ -381,34 +382,29 @@ export function LeadPanel({
   );
 }
 
-/** On a phone: the same panel in a sheet from the bottom of the screen. */
+/**
+ * On a phone: the same panel in the kit's sheet (design system v2), which
+ * follows the finger and closes on a swipe down or a flick. Stays mounted so
+ * it can slide away; the lead loads on first opening.
+ */
 export function LeadSheetDialog({
   leadId,
+  open,
   onClose,
 }: {
   leadId: string;
+  open: boolean;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (dialog && !dialog.open) dialog.showModal();
-  }, []);
   return (
-    <dialog
-      ref={ref}
-      className={styles.sheet}
-      aria-label="Lead"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Lead"
+      hideTitle
+      closeButton={false}
     >
-      <span className={styles.sheetGrip} aria-hidden="true" />
       <LeadPanel leadId={leadId} onClose={onClose} />
-    </dialog>
+    </Sheet>
   );
 }

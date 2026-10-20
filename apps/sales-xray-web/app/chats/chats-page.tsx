@@ -350,8 +350,13 @@ export function ChatsRoute() {
           )
         }
       />
-      {narrow && leadId && sheetFor === leadId ? (
-        <LeadSheetDialog leadId={leadId} onClose={() => setSheetFor(null)} />
+      {narrow && leadId ? (
+        <LeadSheetDialog
+          key={leadId}
+          leadId={leadId}
+          open={sheetFor === leadId}
+          onClose={() => setSheetFor(null)}
+        />
       ) : null}
     </AcquisitionShell>
   );
