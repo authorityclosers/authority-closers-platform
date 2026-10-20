@@ -82,3 +82,40 @@ def test_invalid_state_refuses_without_send(tmp_path, monkeypatch):
     state.write_text('{"level": "85"}')
     with pytest.raises(ValueError, match="invalid disk alert state"):
         ALERT.check(state, {"percent": 99}, apply=True)
+
+
+@pytest.fixture
+def cache_module():
+    spec = importlib.util.spec_from_file_location(
+        "idle_next_cache", SOURCE.with_name("clear_idle_next_cache.py")
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_idle_cache_cleanup_preserves_compiled_output_and_supports_dry_run(tmp_path, cache_module):
+    cache = tmp_path / "app/.next/cache"
+    cache.mkdir(parents=True)
+    (cache / "fixture.pack").write_bytes(b"fictional cache")
+    compiled = cache.parent / "compiled.js"
+    compiled.write_text("fictional compiled output")
+    assert cache_module.clear(cache, set(), apply=False)["status"] == "eligible"
+    assert cache.exists()
+    assert cache_module.clear(cache, set(), apply=True)["status"] == "cleared"
+    assert not cache.exists()
+    assert compiled.exists()
+    assert cache_module.clear(cache, set(), apply=True)["status"] == "absent"
+
+
+def test_active_app_cache_and_symlinks_are_preserved(tmp_path, cache_module):
+    cache = tmp_path / "app/.next/cache"
+    cache.mkdir(parents=True)
+    assert cache_module.clear(cache, {tmp_path / "app"}, apply=True)["status"] == "in_use"
+    outside = tmp_path / "private"
+    outside.write_text("fictional retained data")
+    (cache / "link").symlink_to(outside)
+    with pytest.raises(ValueError, match="symlink"):
+        cache_module.clear(cache, set(), apply=True)
+    assert outside.read_text() == "fictional retained data"
