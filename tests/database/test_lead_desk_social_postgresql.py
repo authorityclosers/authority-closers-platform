@@ -458,6 +458,31 @@ def test_messenger_and_instagram_conversations_and_comment_replies(
                 assert (await deliver(_comment("777_101", "PRICE please?")))["comments"] == 0
                 assert await tick(inbox.comment_replies) == 1
                 assert await tick(inbox.comment_replies) == 0  # once per comment
+                # A comment older than Meta's 7 days gets no private reply, and says why.
+                old = _comment("777_102", "price?", user="2400000000000088")
+                value = old["entry"][0]["changes"][0]["value"]
+                value["from"]["name"] = "Mira Fictional"
+                value["created_time"] = (datetime.now(UTC) - timedelta(days=8)).strftime(
+                    "%Y-%m-%dT%H:%M:%S+0000"
+                )
+                assert (await deliver(old))["comments"] == 1
+                assert await tick(inbox.comment_replies) == 0
+                async with setup.sessions() as db:
+                    skipped = await db.scalar(
+                        select(LeadSocialMessage).where(LeadSocialMessage.comment_id == "777_102")
+                    )
+                    assert skipped is not None
+                    assert (skipped.reply_state, skipped.error_code) == ("skipped", "too_old")
+                    noted = await db.scalar(select(LeadSocialAccount))
+                    assert noted is not None and noted.config[inbox.SKIP_KEY]["why"] == "too_old"
+                # Saving the Page's settings keeps that reason for Connected apps.
+                again = await client.put(
+                    f"{BASE}/messaging/accounts/{page['id']}", json=rules, headers=WRITE
+                )
+                assert again.status_code == 200, again.text
+                async with setup.sessions() as db:
+                    noted = await db.scalar(select(LeadSocialAccount))
+                    assert noted is not None and noted.config[inbox.SKIP_KEY]["why"] == "too_old"
                 assert FakeGraph.sent[-1] == {
                     "comment": "777_101",
                     "text": "Hi Ravi, here are the prices.",

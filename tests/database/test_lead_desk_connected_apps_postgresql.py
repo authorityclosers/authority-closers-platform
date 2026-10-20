@@ -86,7 +86,7 @@ class FakeMeta:
 
 
 class SubscribedGraph(FakeGraph):
-    fields: list[str] = ["messages", "feed"]
+    fields: list[str] = list(graph.PAGE_FIELDS)
 
     async def subscribed_apps(self, page_id: str, page_token: str) -> dict[str, list[str]]:
         assert page_token == "page-token"  # noqa: S105 - the fake's own token
@@ -377,8 +377,15 @@ def test_connected_apps_health_and_real_tests(
                 # ----- Messenger: the subscription, and a test reply only when confirmed -----
                 checked = (await http.post(f"{BASE}/messenger/test", json={}, headers=WRITE)).json()
                 assert checked["status"] == "passed" and FakeGraph.sent == []
-                assert [step["state"] for step in checked["steps"]] == ["done", "done"]
+                assert [step["state"] for step in checked["steps"]] == [
+                    "done",
+                    "done",
+                    "skipped",
+                ]
                 assert checked["steps"][1]["words"].endswith("UTC")  # when it arrived
+                # The last comment not taken, and why (Meta sent no "from").
+                assert checked["steps"][2]["label"] == "Last comment"
+                assert "Meta didn't say who wrote it" in checked["steps"][2]["words"]
                 unconfirmed = await http.post(
                     f"{BASE}/messenger/test", json={"sendReply": True}, headers=WRITE
                 )
@@ -401,7 +408,15 @@ def test_connected_apps_health_and_real_tests(
                     unsubscribed["status"] == "failed"
                     and "Connect it again" in (unsubscribed["words"])
                 )
-                SubscribedGraph.fields = ["messages", "feed"]
+                # Messages come, comments and ticks don't: the step names what's missing.
+                SubscribedGraph.fields = ["messages", "message_echoes", "messaging_postbacks"]
+                partly = (await http.post(f"{BASE}/messenger/test", json={}, headers=WRITE)).json()
+                assert partly["status"] == "failed"
+                assert partly["steps"][0]["words"] == (
+                    "Meta isn't sending this Page's delivered ticks, read ticks and comments"
+                    " to Sales Xray. Connect the Page again."
+                )
+                SubscribedGraph.fields = list(graph.PAGE_FIELDS)
 
                 # ----- reports, and the apps that aren't set up here -----
                 assert (

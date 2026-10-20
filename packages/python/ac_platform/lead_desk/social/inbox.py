@@ -214,6 +214,8 @@ def save_settings(row: LeadSocialAccount, settings: Mapping[str, Any]) -> None:
                 "public_reply": public,
             }
         )
+    # The last comment not answered, and why, outlives a settings save (Connected apps).
+    skip = (row.config or {}).get(SKIP_KEY)
     row.config = {
         "messenger": settings.get("messenger") is not False,
         "instagram": settings.get("instagram") is not False,
@@ -221,6 +223,7 @@ def save_settings(row: LeadSocialAccount, settings: Mapping[str, Any]) -> None:
         "first_reply": {"on": bool(first.get("on")), "text": first["text"]},
         "out_of_hours": {"on": bool(late.get("on")), "text": late["text"]},
         "comments": rules,
+        **({SKIP_KEY: skip} if isinstance(skip, dict) else {}),
     }
 
 
@@ -967,14 +970,23 @@ async def comment_replies(
             rules[comment.rule] if comment.rule is not None and comment.rule < len(rules) else None
         )
         written = comment.meta_time or comment.created_at
-        if (
-            row is None
-            or row.status != "active"
-            or rule is None
-            or now - written > graph.COMMENT_REPLY_WINDOW
-            or comment.comment_id is None
-        ):
-            comment.reply_state = "skipped"
+        why = (
+            "page_off"
+            if row is None or row.status != "active"
+            else "rule_gone"
+            if rule is None
+            else "too_old"
+            if now - written > graph.COMMENT_REPLY_WINDOW
+            else "bad_id"
+            if comment.comment_id is None
+            else None
+        )
+        if why is not None or row is None or rule is None or comment.comment_id is None:
+            reason = why or "bad_id"
+            comment.reply_state, comment.error_code = "skipped", reason
+            if row is not None:
+                note_skip(row, comment.channel, reason, now)
+            events_log.info("lead_desk_comment_skipped", channel=comment.channel, why=reason)
             continue
         words = graph.fill(str(rule["reply"]), comment.user_name)
         reply = LeadSocialMessage(

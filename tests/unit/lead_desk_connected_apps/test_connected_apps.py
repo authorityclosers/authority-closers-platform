@@ -76,7 +76,11 @@ def test_the_lead_stages_card_says_where_stages_go_and_what_waits() -> None:
         "/leads?tab=stages",
         None,
     )
-    assert off.words.startswith("Tell Meta and Google Ads which of your leads become customers")
+    assert off.words == (
+        "Tell your ad platforms which of your leads become customers, so your ads find more"
+        " people like them."
+    )  # five platforms now; two would be named
+    assert apps._platforms(["Meta", "Google Ads"]) == "Meta and Google Ads"
     assert off.connections == [] and not off.can_test
 
     events = mapping.suggestions("meta", journey)
@@ -128,3 +132,46 @@ def test_the_lead_stages_card_says_where_stages_go_and_what_waits() -> None:
     )
     assert switched.state == "not_connected"
     assert [(c.state, c.words) for c in switched.connections] == [("off", "Switched off.")]
+
+
+def test_the_last_comment_says_what_became_of_it() -> None:
+    from datetime import timedelta
+
+    from ac_platform.lead_desk.social import inbox
+
+    at = datetime(2026, 10, 20, 5, 0, tzinfo=UTC)
+
+    def comment(state: str, **more: Any) -> Any:
+        values = {"error_title": None, "error_code": None, "meta_time": None, **more}
+        return SimpleNamespace(reply_state=state, created_at=at, **values)
+
+    page = SimpleNamespace(config={})
+    assert apps._comment_step(None, page, "messenger").words == "None yet."
+    done = apps._comment_step(comment("replied"), page, "messenger")
+    assert (done.state, done.words) == ("done", "Answered with a private message.")
+    old = apps._comment_step(comment("skipped", error_code="too_old"), page, "messenger")
+    assert old.state == "skipped" and "7 days" in (old.words or "")
+    refused = apps._comment_step(
+        comment(
+            "failed",
+            error_title="Meta doesn't allow a private reply to this comment."
+            + inbox.META_MARK
+            + "(#100) Invalid",
+        ),
+        page,
+        "messenger",
+    )
+    assert refused.state == "failed"
+    assert refused.words == (
+        "Its private message didn't go: Meta doesn't allow a private reply to this comment."
+        " Meta says: \u201c(#100) Invalid\u201d"
+    )
+    # A newer comment written as the Page itself shows instead, with how to test.
+    later = (at + timedelta(minutes=1)).isoformat()
+    page_itself = SimpleNamespace(
+        config={inbox.SKIP_KEY: {"at": later, "channel": "messenger", "why": "from_page"}}
+    )
+    shown = apps._comment_step(comment("replied"), page_itself, "messenger")
+    assert shown.state == "skipped" and "comment from a personal profile" in (shown.words or "")
+    # On Instagram, the Page's skip isn't its own.
+    assert apps._comment_step(None, page_itself, "instagram").words == "None yet."

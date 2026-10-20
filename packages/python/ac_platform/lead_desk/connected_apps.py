@@ -253,6 +253,11 @@ def _count(n: int, one: str, many: str) -> str:
     return f"{n} {one if n == 1 else many}"
 
 
+def _platforms(names: list[str]) -> str:
+    """Two platforms by name; more as "your ad platforms" (a card line stays short)."""
+    return _and(names) if len(names) <= 2 else "your ad platforms"
+
+
 def _and(names: list[str]) -> str:
     return " and ".join(names) if len(names) < 3 else ", ".join(names[:-1]) + " and " + names[-1]
 
@@ -462,10 +467,23 @@ async def _whatsapp(db: AsyncSession, tenant_id: UUID) -> AppHealth:
 # Why the Page's last comment got no private reply (social.inbox.note_skip).
 SKIP_WORDS: Final[dict[str, str]] = {
     "no_sender": "Meta didn't say who wrote it, so no private reply could go.",
-    "from_page": "It was written as the Page itself; replies only go to other people.",
+    "from_page": "It was written as the Page itself, so there's no one to message. To test,"
+    " comment from a personal profile.",
     "not_new": "It was an edit, not a new comment.",
     "bad_id": "Meta sent it in a form Sales Xray doesn't read.",
     "no_rule": "None of your comment rules' keywords was in it.",
+    "too_old": "It was more than 7 days old; Meta allows a private reply only within 7 days.",
+    "rule_gone": "Its comment rule was changed or removed before the reply went.",
+    "page_off": "The Page was disconnected before the reply went.",
+}
+# What each of the Page's webhook fields brings (graph.PAGE_FIELDS), for a missing one.
+FIELD_WORDS: Final[dict[str, str]] = {
+    "messages": "messages",
+    "feed": "comments",
+    "message_deliveries": "delivered ticks",
+    "message_reads": "read ticks",
+    "message_echoes": "replies typed in Meta's inbox",
+    "messaging_postbacks": "button taps",
 }
 
 
@@ -740,7 +758,7 @@ def lead_stages_card(
         state=_state(bool(platforms), bool(on), bool(problems)),
         words=NOT_SET_UP
         if not platforms
-        else f"Tell {_and([names[p] for p in platforms])} which of your leads become"
+        else f"Tell {_platforms([names[p] for p in platforms])} which of your leads become"
         " customers, so your ads find more people like them."
         if not on
         else problems[0].words or ""
@@ -1096,7 +1114,19 @@ async def test_social(
             words="Meta isn't sending this Page's messages to Sales Xray. Connect it again.",
             steps=steps,
         )
-    steps.append(Step(label="Meta sends this Page's events", state="done", at=desk.now))
+    # Instagram's own events come under the app's Instagram subscription, not the Page's.
+    wanted = graph.PAGE_FIELDS if channel == "messenger" else ("messages",)
+    missing = [FIELD_WORDS.get(name, name) for name in wanted if name not in fields]
+    steps.append(
+        Step(
+            label="Meta sends this Page's events",
+            state="failed",
+            words=f"Meta isn't sending this Page's {_and(missing)} to Sales Xray."
+            " Connect the Page again.",
+        )
+        if missing
+        else Step(label="Meta sends this Page's events", state="done", at=desk.now)
+    )
     newest = await desk.db.scalar(
         select(LeadSocialMessage)
         .where(
@@ -1119,6 +1149,18 @@ async def test_social(
         if newest is not None
         else Step(label="Last message received", state="skipped", words="None yet.")
     )
+    comment = await desk.db.scalar(
+        select(LeadSocialMessage)
+        .where(
+            LeadSocialMessage.tenant_id == desk.tenant_id,
+            LeadSocialMessage.account_id == account.id,
+            LeadSocialMessage.channel == channel,
+            LeadSocialMessage.kind == "comment",
+        )
+        .order_by(LeadSocialMessage.created_at.desc())
+        .limit(1)
+    )
+    steps.append(_comment_step(comment, account, channel))
     if send_reply:
         if not confirm:
             raise DeskError(422, "Confirm first: a real message goes to that person.")
@@ -1160,6 +1202,47 @@ async def test_social(
         status="failed" if failed else "passed",
         words="The connection works." + ("" if newest else " No message has arrived yet."),
         steps=steps,
+    )
+
+
+def _comment_step(
+    comment: LeadSocialMessage | None, account: LeadSocialAccount, channel: str
+) -> Step:
+    """The last comment on the Page (or its Instagram account) and what became of it; a
+    newer comment that wasn't taken shows instead, with why."""
+    label = "Last comment"
+    skip = (account.config or {}).get(social_inbox.SKIP_KEY)
+    skipped_at: datetime | None = None
+    if isinstance(skip, dict) and skip.get("channel") == channel:
+        try:
+            skipped_at = datetime.fromisoformat(str(skip.get("at")))
+        except ValueError:
+            skipped_at = None
+    if comment is None or (skipped_at is not None and skipped_at > comment.created_at):
+        return Step(
+            label=label,
+            state="skipped",
+            at=skipped_at,
+            words=_skip_words(account, channel) or "None yet.",
+        )
+    at = comment.meta_time or comment.created_at
+    if comment.reply_state == "replied":
+        return Step(label=label, state="done", at=at, words="Answered with a private message.")
+    if comment.reply_state == "pending":
+        return Step(label=label, state="waiting", at=at, words="Its private message is on its way.")
+    if comment.reply_state == "failed":
+        said = social_inbox.error_words(comment.error_title, None, manager=True)
+        return Step(
+            label=label,
+            state="failed",
+            at=at,
+            words=f"Its private message didn't go: {said or 'Meta refused it.'}",
+        )
+    return Step(
+        label=label,
+        state="skipped",
+        at=at,
+        words=SKIP_WORDS.get(comment.error_code or "", "It wasn't one to answer."),
     )
 
 
