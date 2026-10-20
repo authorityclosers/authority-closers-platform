@@ -239,8 +239,20 @@ export type Quality = {
   keys: Record<string, number>;
 };
 
-export const readQuality = (provider: string) =>
-  call<Quality | null>(`/journey/ads/${provider}/quality`);
+/** Only a real score counts; anything else means "no quality to show". */
+export function toQuality(found: unknown): Quality | null {
+  if (!found || typeof found !== "object") return null;
+  const { score, events, keys } = found as Partial<Quality>;
+  if (typeof score !== "number" || !Number.isFinite(score)) return null;
+  return {
+    score,
+    events: typeof events === "number" ? events : 0,
+    keys: keys && typeof keys === "object" ? keys : {},
+  };
+}
+
+export const readQuality = async (provider: string) =>
+  toQuality(await call<unknown>(`/journey/ads/${provider}/quality`));
 
 /** Meta's match quality in a line a business owner reads. */
 export function qualityLine(provider: string, quality: Quality): string {

@@ -5,9 +5,11 @@ import {
   drafts,
   move,
   problem,
+  qualityLine,
   reorder,
   sentLine,
   split,
+  toQuality,
   type AdsView,
   type JourneyView,
   type ProviderView,
@@ -191,5 +193,30 @@ describe("where stages go, in words", () => {
       needsCheck: 0,
       lastDeliveredAt: null,
     });
+  });
+});
+
+describe("match quality", () => {
+  it("shows nothing unless the answer has a real score", () => {
+    expect(toQuality(null)).toBeNull();
+    expect(toQuality({})).toBeNull();
+    expect(toQuality({ score: "6" })).toBeNull();
+    expect(toQuality({ score: Number.NaN })).toBeNull();
+    expect(toQuality({ score: 3.2 })).toEqual({
+      score: 3.2,
+      events: 0,
+      keys: {},
+    });
+  });
+
+  it("reads as a plain line", () => {
+    const line = qualityLine("Meta", {
+      score: 6.4,
+      events: 24,
+      keys: { email: 100, phone: 0 },
+    });
+    expect(line).toContain("Meta matches 6.4 out of 10");
+    expect(line).toContain("emails on every event");
+    expect(line).toContain("no phone numbers yet");
   });
 });

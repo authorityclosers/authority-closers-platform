@@ -152,7 +152,74 @@ export function AdPlatforms({ version }: { version: number }) {
           </small>
         </div>
       ) : null}
+      <HowItWorks />
     </div>
+  );
+}
+
+// What leaves Sales Xray for each platform, in words an owner reads.
+const SENDS: { id: string; name: string; sends: string }[] = [
+  {
+    id: "meta",
+    name: "Meta",
+    sends:
+      "Meta's own lead id, plus the email, phone, country and the lead's Sales Xray id, scrambled.",
+  },
+  {
+    id: "google_ads",
+    name: "Google Ads",
+    sends:
+      "Google's click id from your form, or the email and phone, scrambled.",
+  },
+  {
+    id: "linkedin",
+    name: "LinkedIn",
+    sends: "LinkedIn's click id from your website, or the email, scrambled.",
+  },
+  {
+    id: "tiktok",
+    name: "TikTok",
+    sends: "TikTok's lead or click id, or the email and phone, scrambled.",
+  },
+  {
+    id: "microsoft_ads",
+    name: "Microsoft Ads",
+    sends:
+      "Microsoft's click id from your website, or the email and phone, scrambled.",
+  },
+];
+
+/** A short, plain answer to "what do my ads get, and why does it help?". No prices. */
+export function HowItWorks() {
+  return (
+    <details className={styles.help}>
+      <summary>What your ads receive, and why it helps</summary>
+      <div className={styles.helpBody}>
+        <p>
+          On their own, your ads only see who filled a form, not who became a
+          customer. When a lead reaches a stage, Sales Xray tells the ad
+          platform. It then shows your ads to more people like the leads that
+          went far, and fewer like the ones that went nowhere.
+        </p>
+        <ul>
+          {SENDS.map((item) => (
+            <li key={item.id}>
+              <strong>{item.name}</strong>
+              <span>{item.sends}</span>
+            </li>
+          ))}
+        </ul>
+        <p>
+          <strong>Scrambled</strong> means one-way: the platform can match it to
+          its own users, but can&apos;t read it. Names, notes, calls and what
+          was said never leave Sales Xray.
+        </p>
+        <p>
+          Only stages you confirmed are sent. Each move waits 5 minutes first,
+          in case it&apos;s changed back.
+        </p>
+      </div>
+    </details>
   );
 }
 

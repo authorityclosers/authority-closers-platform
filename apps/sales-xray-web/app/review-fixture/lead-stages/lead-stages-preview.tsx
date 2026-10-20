@@ -405,6 +405,12 @@ function install(first: boolean) {
         },
       ]);
     if (url.endsWith("/journey/ads")) return answer(ADS);
+    if (url.endsWith("/journey/ads/meta/quality"))
+      return answer({
+        score: 6.4,
+        events: 24,
+        keys: { email: 100, phone: 92, external_id: 100, country: 92, fbc: 18 },
+      });
     if (url.endsWith("/journey/summary"))
       return answer({
         stages: 8,

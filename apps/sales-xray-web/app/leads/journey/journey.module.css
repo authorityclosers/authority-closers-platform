@@ -1250,6 +1250,65 @@ button.templateCard:focus-visible {
   color: var(--lx-danger);
 }
 
+.help {
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-fill-soft);
+}
+
+.help > summary {
+  color: var(--accent-text, var(--sx-ink));
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.help > summary:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--sx-radius-sm);
+}
+
+.helpBody {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.helpBody p,
+.helpBody ul {
+  margin: 0;
+}
+
+.helpBody ul {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.helpBody li {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.helpBody strong {
+  color: var(--sx-ink);
+  font-weight: 650;
+}
+
+@media (max-width: 599.98px) {
+  .helpBody li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
 .later {
   display: flex;
   align-items: center;
