@@ -3604,3 +3604,34 @@
     min-height: 44px;
   }
 }
+
+/* Design system v2 (20 Oct), phones: the title takes the full width with its
+   pencil beside it (it used to drop to a line of its own); the date, length
+   and language sit under it with Transcript and the menu at their end. */
+@media (max-width: 760px) {
+  .app.app[data-stage="report"] .reportHeader {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title title"
+      "meta actions";
+    align-items: center;
+    row-gap: 2px;
+  }
+  .app.app[data-stage="report"] .reportHeading {
+    display: contents;
+  }
+  .app.app[data-stage="report"] .reportTitleRow {
+    grid-area: title;
+    min-width: 0;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+  .app.app[data-stage="report"] .reportMetadata {
+    grid-area: meta;
+    margin-top: 0;
+  }
+  .app.app[data-stage="report"] .reportActions {
+    grid-area: actions;
+    align-self: center;
+  }
+}
