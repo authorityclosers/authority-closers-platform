@@ -76,12 +76,8 @@ import { CallsBodySkeleton } from "./calls-skeleton";
 // The skeletons live in a small module so loading screens load them alone.
 export { CallsBodySkeleton, CallsSkeleton } from "./calls-skeleton";
 import { CallsDrawer } from "./calls-drawer";
-import {
-  insightFromSummary,
-  needsOwnRead,
-  useCallInsights,
-  type CallInsight,
-} from "./calls-insights";
+import { useCallInsights, type CallInsight } from "./calls-insights";
+import { insightFromSummary, needsOwnRead } from "./call-summary";
 import { useRowsInView } from "./rows-in-view";
 import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";

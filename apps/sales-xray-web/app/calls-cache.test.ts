@@ -13,6 +13,7 @@ import {
 
 afterEach(() => {
   forgetCalls();
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
@@ -80,6 +81,8 @@ it("keeps only the four most recent identities", () => {
 });
 
 it("warms the list once, quietly, and never over a list already read", async () => {
+  // Shared reads are off under test unless asked for.
+  vi.stubEnv("NODE_ENV", "production");
   const fetcher = vi.fn().mockResolvedValue(Response.json(served));
   vi.stubGlobal("fetch", fetcher);
   await Promise.all([warmCallsList(one), warmCallsList(one)]);

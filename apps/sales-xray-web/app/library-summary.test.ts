@@ -2,7 +2,12 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import { parseSubmissionLibraryPage } from "./acquisition-client";
 import { forgetCalls, identityOf, readCallsList } from "./calls-cache";
-import { insightFromSummary, needsOwnRead } from "./calls-insights";
+import {
+  insightFromSummary,
+  needsOwnRead,
+  SUMMARY_OUTCOMES,
+} from "./call-summary";
+import { OUTCOME_LABEL } from "./calls-insights";
 
 afterEach(() => {
   forgetCalls();
@@ -100,7 +105,8 @@ it("reads an identity's list once however many ask at the same moment", async ()
   vi.stubEnv("NODE_ENV", "production");
   let answer: (response: Response) => void = () => {};
   const fetcher = vi.fn(
-    () => new Promise<Response>((resolve) => (answer = resolve)),
+    (_url: RequestInfo | URL, _init?: RequestInit) =>
+      new Promise<Response>((resolve) => (answer = resolve)),
   );
   vi.stubGlobal("fetch", fetcher);
   const identity = identityOf({ personId: "p", sessionId: "s", tenantId: "t" });
@@ -114,4 +120,10 @@ it("reads an identity's list once however many ask at the same moment", async ()
   expect((await calls).submissions[0].id).toBe(ID);
   expect(fetcher).toHaveBeenCalledOnce();
   expect(String(fetcher.mock.calls[0][0])).toContain("include_summary=true");
+});
+
+it("knows every outcome the Report names", () => {
+  expect([...SUMMARY_OUTCOMES].sort()).toEqual(
+    Object.keys(OUTCOME_LABEL).sort(),
+  );
 });
