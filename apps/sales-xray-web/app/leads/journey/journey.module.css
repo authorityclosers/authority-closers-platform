@@ -1135,6 +1135,11 @@ button.templateCard:focus-visible {
   cursor: pointer;
 }
 
+.moreWhere {
+  color: var(--sx-muted);
+  font-weight: 500;
+}
+
 .moreBody {
   display: grid;
   gap: 8px;

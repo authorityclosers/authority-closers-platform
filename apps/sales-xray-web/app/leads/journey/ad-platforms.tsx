@@ -678,35 +678,59 @@ function TestEvents({
   onSave: (testCode: string | null) => void;
   onChange: () => void;
 }) {
-  const [code, setCode] = useState(provider.testCode ?? "");
+  const saved = provider.testCode ?? "";
+  const [code, setCode] = useState(saved);
+  const changed = code !== saved;
   return (
     <details className={styles.more}>
       <summary>
-        {provider.destination?.name} · test events
-        {provider.testCode ? " on" : ""}
+        {saved ? `Test events on · ${saved}` : "Test events off"}
+        <small className={styles.moreWhere}>
+          {" "}
+          · {provider.destination?.name}
+        </small>
       </summary>
-      <div className={styles.moreBody}>
+      <form
+        className={styles.moreBody}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (changed && !busy) onSave(code || null);
+        }}
+      >
         <p>
-          In {provider.name} Events Manager open this{" "}
-          {provider.destinationWords}, then Test events, and copy its test code
-          here. Stages then show there as they go.
+          {saved
+            ? `Stages also show in ${provider.name} Events Manager → Test events while this code is on.`
+            : `In ${provider.name} Events Manager open this ${provider.destinationWords}, then Test events, and copy its test code here. Stages then show there as they go.`}
         </p>
         <span className={styles.testRow}>
           <input
             value={code}
             maxLength={32}
             placeholder="TEST12345"
-            aria-label="Meta test code"
+            enterKeyHint="done"
+            aria-label={`${provider.name} test code`}
             onChange={(event) => setCode(event.target.value.trim())}
           />
-          <Button disabled={busy} onClick={() => onSave(code || null)}>
-            {code ? "Use test code" : "Stop testing"}
-          </Button>
+          {changed ? (
+            <Button type="submit" variant="primary" disabled={busy}>
+              {code ? "Use test code" : "Stop testing"}
+            </Button>
+          ) : saved ? (
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setCode("");
+                onSave(null);
+              }}
+            >
+              Stop testing
+            </Button>
+          ) : null}
         </span>
         <button type="button" className={styles.linkButton} onClick={onChange}>
-          Use another dataset
+          Use another {provider.destinationWords}
         </button>
-      </div>
+      </form>
     </details>
   );
 }

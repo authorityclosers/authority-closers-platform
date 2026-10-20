@@ -6,7 +6,7 @@
  *
  * - A business picks its kind of business and has working stages at once.
  * - Its stages read as one path from enquiry to sale, with Couldn't reach and
- *   Lost beside it. Tap a stage to rename it, change its type or what it means,
+ *   Lost as other outcomes. Tap a stage to rename it, change its type or what it means,
  *   move it or archive it; add one in its own words and the page says what it
  *   probably means. Nothing is saved until Save.
  * - Beside the stages, each ad platform shows what it hears for each stage, in
@@ -352,8 +352,8 @@ function StageList({ view }: { view: JourneyView }) {
           <StageRow key={item.id} item={item} />
         ))}
       </ol>
-      <h3 className={styles.besideTitle}>Beside the way</h3>
-      <ul className={styles.path} data-beside="" aria-label="Beside the way">
+      <h3 className={styles.besideTitle}>Other outcomes</h3>
+      <ul className={styles.path} data-beside="" aria-label="Other outcomes">
         {beside.map((item) => (
           <StageRow key={item.id} item={item} />
         ))}
@@ -600,8 +600,8 @@ function StageBuilder({
       <AddStage onAdd={add} />
       <FromApps list={list} onAdd={add} />
 
-      <h3 className={styles.besideTitle}>Beside the way</h3>
-      <ul className={styles.path} data-beside="" aria-label="Beside the way">
+      <h3 className={styles.besideTitle}>Other outcomes</h3>
+      <ul className={styles.path} data-beside="" aria-label="Other outcomes">
         {beside.map((item) => (
           <StageRow
             key={item.id}
