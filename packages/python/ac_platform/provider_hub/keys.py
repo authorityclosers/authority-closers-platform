@@ -225,12 +225,13 @@ class ProviderKeys:
         self, rows: list[IntegrationSecret], actor: ActorContext, now: datetime
     ) -> None:
         by = f"settings:person:{actor.person_id}"
-        for row in rows:
-            await self.database.run_sync(
-                lambda sync, secret_id=row.id: sealed.retire(
-                    sync.connection(), secret_id, by=by, now=now
-                )
-            )
+        ids = [row.id for row in rows]
+
+        def retire(sync: Any) -> None:
+            for secret_id in ids:
+                sealed.retire(sync.connection(), secret_id, by=by, now=now)
+
+        await self.database.run_sync(retire)
 
     async def view(self, actor: ActorContext) -> dict[str, Any]:
         """Which providers have a key here: the last four characters and the last test."""
