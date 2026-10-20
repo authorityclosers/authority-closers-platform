@@ -1650,3 +1650,147 @@
     padding: 10px 16px 0;
   }
 }
+
+/* ---------- Photos, voice notes, videos and files in a bubble ----------
+   Fixed sizes while they load, so the chat never jumps (owner: no layout
+   shift). Tokens only. */
+
+.mediaPhoto,
+.mediaSticker {
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  margin: 1px -4px 2px -5px;
+  background: var(--sx-sunken);
+  cursor: zoom-in;
+}
+
+.mediaPhoto {
+  width: min(260px, 62vw);
+  aspect-ratio: 4 / 3;
+}
+
+.mediaPhoto img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mediaSticker {
+  width: 128px;
+  height: 128px;
+  margin: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.mediaSticker img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.mediaPhoto:focus-visible,
+.mediaSticker:focus-visible,
+.fileChip:focus-visible,
+.retryButton:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+.mediaViewer {
+  display: grid;
+  min-height: 40vh;
+  place-items: center;
+}
+
+.mediaViewer img {
+  max-width: 100%;
+  max-height: 78vh;
+  border-radius: var(--sx-radius-md);
+  object-fit: contain;
+}
+
+.mediaAudio {
+  display: block;
+  width: min(280px, 64vw);
+  height: 40px;
+  margin: 2px 0;
+}
+
+.mediaVideo {
+  display: block;
+  width: min(300px, 64vw);
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  margin: 1px -4px 2px -5px;
+  background: var(--sx-sunken);
+}
+
+.fileChip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  width: min(280px, 62vw);
+  min-height: 52px;
+  box-sizing: border-box;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 12px;
+  margin: 1px -2px 2px;
+  background: color-mix(in oklab, var(--sx-ink) 4%, transparent);
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.fileChip > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.fileChip strong {
+  overflow: hidden;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileChip small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.fileChip > svg:last-child {
+  color: var(--sx-muted);
+}
+
+.fileChip:hover {
+  border-color: var(--sx-line-strong);
+}
+
+.retryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in oklab, var(--sx-bad) 40%, transparent);
+  border-radius: 999px;
+  margin-left: 8px;
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+  font: inherit;
+  font-weight: 650;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.retryButton:hover {
+  border-color: var(--sx-bad);
+}

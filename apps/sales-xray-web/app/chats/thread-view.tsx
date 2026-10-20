@@ -3,7 +3,10 @@
 /**
  * One conversation, the way people know chats: bubbles, a day line between
  * days, sent / delivered / read ticks, and a reply box that knows Meta's
- * 24-hour window and says plainly why it can't send when it can't.
+ * 24-hour window and says plainly why it can't send when it can't. Photos,
+ * voice notes, videos and files show in the bubble (message-media.tsx). A
+ * message goes out as "Sending…" and turns into ticks, or into the reason it
+ * didn't go with a "Send again".
  */
 
 import {
@@ -15,6 +18,7 @@ import {
   MapPin,
   Mic,
   Paperclip,
+  RotateCcw,
   SendHorizontal,
   Smile,
   Sticker,
@@ -39,13 +43,16 @@ import {
   clockTime,
   composerState,
   dayGroups,
+  hasMedia,
   readThread,
   sendText,
+  type ChatChannel,
   type ChatDetail,
   type ChatMessage,
   type ChatThread,
 } from "./chats-client";
 import styles from "./chats.module.css";
+import { MessageMedia } from "./message-media";
 import { OptInBox, TemplateComposer } from "./template-composer";
 import { Ticks } from "./ticks";
 
@@ -78,15 +85,21 @@ const ATTACHMENT_ICONS: Record<string, typeof Paperclip> = {
 };
 
 function Bubble({
+  channel,
   message,
   first,
   last,
+  onRetry,
 }: {
+  channel: ChatChannel;
   message: ChatMessage;
   first: boolean;
   last: boolean;
+  /** A written message that didn't go: send the same words again. */
+  onRetry?: () => void;
 }) {
-  const attachment = attachmentLabel(message.kind);
+  const media = hasMedia(message);
+  const attachment = media ? null : attachmentLabel(message.kind);
   const Icon = ATTACHMENT_ICONS[message.kind] ?? Paperclip;
   const out = message.direction === "out";
   const who = message.auto
@@ -111,6 +124,7 @@ function Bubble({
         {message.template ? (
           <span className={styles.bubbleTag}>Template</span>
         ) : null}
+        {media ? <MessageMedia channel={channel} message={message} /> : null}
         {attachment ? (
           <span className={styles.attachment}>
             <Icon size={16} aria-hidden="true" />
@@ -120,7 +134,7 @@ function Bubble({
         {message.text ? (
           <p className={styles.bubbleText}>{message.text}</p>
         ) : null}
-        {!message.text && !attachment ? (
+        {!message.text && !attachment && !media ? (
           <p className={styles.bubbleText} data-quiet>
             {message.kind === "comment"
               ? "(comment removed)"
@@ -141,6 +155,16 @@ function Bubble({
       {message.status === "failed" ? (
         <p className={styles.failedLine}>
           Not sent{message.error ? `: ${message.error}` : "."}
+          {onRetry ? (
+            <button
+              type="button"
+              className={styles.retryButton}
+              onClick={onRetry}
+            >
+              <RotateCcw size={13} aria-hidden="true" />
+              Send again
+            </button>
+          ) : null}
         </p>
       ) : null}
     </li>
@@ -157,6 +181,52 @@ function MessagesSkeleton() {
       ))}
     </div>
   );
+}
+
+type Delivery = {
+  onSent: (next: ChatDetail | null) => void;
+  onPending: (message: ChatMessage | null) => void;
+};
+
+/**
+ * Send written words: a "Sending…" bubble at once, then the server's answer
+ * (queued, sent or refused, with Meta's reason). Throws when the request
+ * itself failed, after taking the bubble back.
+ */
+async function deliver(
+  leadId: string,
+  detail: ChatDetail,
+  words: string,
+  { onSent, onPending }: Delivery,
+): Promise<ChatDetail | null> {
+  onPending({
+    id: `pending-${Date.now()}`,
+    direction: "out",
+    kind: "text",
+    text: words,
+    status: "queued",
+    at: new Date().toISOString(),
+  });
+  try {
+    const next = await sendText(leadId, detail, words);
+    onSent(next);
+    return next;
+  } catch (reason) {
+    onPending(null);
+    throw reason;
+  }
+}
+
+function notSent(reason: unknown) {
+  notify({
+    id: "chats-send",
+    tone: "error",
+    title: "Not sent",
+    message:
+      reason instanceof LeadsError
+        ? reason.message
+        : "That didn't go. Try again.",
+  });
 }
 
 function Composer({
@@ -179,31 +249,13 @@ function Composer({
     if (!words || busy) return;
     setBusy(true);
     setText("");
-    onPending({
-      id: `pending-${Date.now()}`,
-      direction: "out",
-      kind: "text",
-      text: words,
-      status: "queued",
-      at: new Date().toISOString(),
-    });
     try {
-      const next = await sendText(leadId, detail, words);
+      const next = await deliver(leadId, detail, words, { onSent, onPending });
       const last = next?.messages[next.messages.length - 1];
       if (last?.direction === "out" && last.status === "failed") setText(words);
-      onSent(next);
     } catch (reason) {
       setText(words);
-      onPending(null);
-      notify({
-        id: "chats-send",
-        tone: "error",
-        title: "Not sent",
-        message:
-          reason instanceof LeadsError
-            ? reason.message
-            : "That didn't go. Try again.",
-      });
+      notSent(reason);
     } finally {
       setBusy(false);
     }
@@ -282,6 +334,7 @@ export function ThreadView({
   onLead,
   onBack,
   onChanged,
+  onSeen,
 }: {
   thread: Pick<ChatThread, "key" | "channel" | "leadId" | "accountId"> &
     Partial<Pick<ChatThread, "leadName" | "place">>;
@@ -292,6 +345,8 @@ export function ThreadView({
   onBack: () => void;
   /** Something was sent: the list reads again. */
   onChanged: () => void;
+  /** Read up to this message (its time) while on screen: the read mark. */
+  onSeen?: (at: string, accountId: string | null) => void;
 }) {
   const [detail, setDetail] = useState<ChatDetail | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -372,6 +427,18 @@ export function ThreadView({
     return () => window.clearInterval(timer);
   }, [sending]);
 
+  // The newest message on screen is read (while the page is in view).
+  const seenRef = useRef(onSeen);
+  useEffect(() => {
+    seenRef.current = onSeen;
+  });
+  const newest = detail?.messages[detail.messages.length - 1]?.at ?? null;
+  const shownAccount = detail?.accountId ?? null;
+  useEffect(() => {
+    if (newest && document.visibilityState === "visible")
+      seenRef.current?.(newest, shownAccount);
+  }, [newest, shownAccount]);
+
   const count = (detail?.messages.length ?? 0) + (pending ? 1 : 0);
   useLayoutEffect(() => {
     const box = scroller.current;
@@ -386,6 +453,23 @@ export function ThreadView({
   };
 
   const messages = [...(detail?.messages ?? []), ...(pending ? [pending] : [])];
+  const delivery: Delivery = {
+    onPending: (message) => {
+      epoch.current += 1;
+      stick.current = true;
+      setPending(message);
+    },
+    onSent: (next) => {
+      epoch.current += 1;
+      setPending(null);
+      if (next) setDetail(next);
+      onChanged();
+    },
+  };
+  const retry = (words: string) => {
+    if (!detail || !leadId || pending) return;
+    deliver(leadId, detail, words, delivery).catch(notSent);
+  };
   // Undefined while the list loads; empty when the chat is older than it.
   const name = thread.leadName;
   return (
@@ -442,9 +526,19 @@ export function ThreadView({
                   {group.items.map((item) => (
                     <Bubble
                       key={item.message.id}
+                      channel={channel}
                       message={item.message}
                       first={item.first}
                       last={item.last}
+                      onRetry={
+                        item.message.direction === "out" &&
+                        item.message.status === "failed" &&
+                        item.message.kind === "text" &&
+                        item.message.text &&
+                        !item.message.auto
+                          ? () => retry(item.message.text ?? "")
+                          : undefined
+                      }
                     />
                   ))}
                 </ol>
@@ -466,17 +560,8 @@ export function ThreadView({
         <Composer
           detail={detail}
           leadId={leadId}
-          onPending={(message) => {
-            epoch.current += 1;
-            stick.current = true;
-            setPending(message);
-          }}
-          onSent={(next) => {
-            epoch.current += 1;
-            setPending(null);
-            if (next) setDetail(next);
-            onChanged();
-          }}
+          onPending={delivery.onPending}
+          onSent={delivery.onSent}
         />
       ) : (
         <div className={styles.composer} aria-hidden="true">

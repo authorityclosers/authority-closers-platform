@@ -4,8 +4,11 @@ import {
   chatHref,
   composerState,
   dayGroups,
+  fileSize,
   filterThreads,
+  hasMedia,
   isUnread,
+  mediaUrl,
   markSeen,
   NO_FILTER,
   previewLine,
@@ -190,7 +193,33 @@ it("marks a chat seen up to its newest message, per person", () => {
   // Answered chats never show a dot; the server's own count wins.
   expect(isUnread({ ...open, waiting: false }, {})).toBe(false);
   expect(isUnread({ ...open, unread: 0 }, {})).toBe(false);
-  expect(isUnread({ ...open, waiting: false, unread: 2 }, marks)).toBe(true);
+  expect(isUnread({ ...open, waiting: false, unread: 2 }, {})).toBe(true);
+  // Read here since the server's count: read until the next count; a newer
+  // message brings it back.
+  expect(isUnread({ ...open, unread: 2 }, marks)).toBe(false);
+  expect(
+    isUnread(
+      { ...open, unread: 2, lastAt: new Date(NOW).toISOString() },
+      marks,
+    ),
+  ).toBe(true);
+});
+
+it("reads a message's file through Sales Xray, never from Meta", () => {
+  expect(mediaUrl("whatsapp", "w 1")).toBe(
+    "/v1/lead-desk/chats/media/whatsapp/w%201",
+  );
+  expect(mediaUrl("messenger", "m2", { preview: true })).toBe(
+    "/v1/lead-desk/chats/media/messenger/m2?size=preview",
+  );
+  expect(hasMedia({ id: "m2", kind: "image" })).toBe(true);
+  expect(hasMedia({ id: "m3", kind: "location" })).toBe(false);
+  // A message still on its way has no file on the server yet.
+  expect(hasMedia({ id: "pending-1", kind: "image" })).toBe(false);
+  expect(fileSize(900)).toBe("900 B");
+  expect(fileSize(245760)).toBe("240 KB");
+  expect(fileSize(2.5 * 1024 * 1024)).toBe("2.5 MB");
+  expect(fileSize(null)).toBeNull();
 });
 
 it("says how long they waited, calm, then amber, then red past the target", () => {

@@ -184,11 +184,6 @@ export function ChatsRoute() {
   const openThread =
     (opened && threads.find((thread) => sameThread(thread, opened))) ?? null;
 
-  // Opening a chat (or a new message arriving in the open one) marks it seen.
-  useEffect(() => {
-    if (personId && openThread) rememberSeen(personId, openThread);
-  }, [personId, openThread]);
-
   if (!authenticated) {
     const loading =
       !access || access.authenticated === null || access.status === "loading";
@@ -348,6 +343,11 @@ export function ChatsRoute() {
               onLead={toggleLead}
               onBack={closeChat}
               onChanged={refresh}
+              onSeen={(at, accountId) => {
+                // Read up to the newest message on screen, on every device.
+                if (personId && openThread)
+                  rememberSeen(personId, openThread, at, accountId);
+              }}
             />
           ) : (
             <PickHint />

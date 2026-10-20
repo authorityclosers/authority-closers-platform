@@ -14,6 +14,7 @@ let host: HTMLDivElement;
 let calls: { url: string; method: string; body?: Record<string, unknown> }[];
 let whatsapp: Record<string, unknown>;
 let ai: Record<string, unknown>;
+let socialMessages: Record<string, unknown>[];
 
 const json = (body: unknown, code = 200) =>
   new Response(JSON.stringify(body), {
@@ -33,6 +34,16 @@ const TEMPLATE = {
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   calls = [];
+  socialMessages = [
+    {
+      id: "m1",
+      direction: "in",
+      kind: "text",
+      text: "Can we visit on Saturday?",
+      status: "received",
+      at: ago(3),
+    },
+  ];
   whatsapp = {
     configured: true,
     connected: true,
@@ -110,6 +121,13 @@ beforeEach(() => {
         return json(whatsapp);
       }
       if (url.endsWith(`/leads/${LEAD}/whatsapp`)) return json(whatsapp);
+      if (url.endsWith("/chats/media/messenger/m4/info"))
+        return json({
+          kind: "file",
+          mime: "application/pdf",
+          name: "Price list.pdf",
+          size: 245760,
+        });
       if (url.endsWith(`/leads/${LEAD}/social`))
         return json({
           configured: true,
@@ -119,16 +137,7 @@ beforeEach(() => {
               accountId: ACCOUNT,
               channel: "messenger",
               place: "Messenger · Fictional Homes",
-              messages: [
-                {
-                  id: "m1",
-                  direction: "in",
-                  kind: "text",
-                  text: "Can we visit on Saturday?",
-                  status: "received",
-                  at: ago(3),
-                },
-              ],
+              messages: socialMessages,
               windowOpen: true,
               windowClosesAt: new Date(
                 Date.now() + 20 * 3600_000,
@@ -167,7 +176,10 @@ const type = async (field: HTMLInputElement, value: string) =>
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
-const view = (channel: "whatsapp" | "messenger") => (
+const view = (
+  channel: "whatsapp" | "messenger",
+  onSeen?: (at: string, accountId: string | null) => void,
+) => (
   <ThreadView
     thread={{
       key: `${channel}:${LEAD}`,
@@ -178,6 +190,7 @@ const view = (channel: "whatsapp" | "messenger") => (
     }}
     onBack={() => undefined}
     onChanged={() => undefined}
+    onSeen={onSeen}
   />
 );
 
@@ -269,4 +282,90 @@ it("puts the AI's suggested reply in the box to edit before sending", async () =
       (call) => call.method === "POST" && call.url.endsWith("/social"),
     ),
   ).toBe(false);
+});
+
+it("shows photos, voice notes and files through Sales Xray, never Meta's link", async () => {
+  socialMessages = [
+    ...socialMessages,
+    {
+      id: "m2",
+      direction: "in",
+      kind: "image",
+      text: null,
+      status: "received",
+      at: ago(2),
+    },
+    {
+      id: "m3",
+      direction: "in",
+      kind: "audio",
+      text: null,
+      status: "received",
+      at: ago(2),
+    },
+    {
+      id: "m4",
+      direction: "in",
+      kind: "file",
+      text: null,
+      status: "received",
+      at: ago(1),
+    },
+  ];
+  await act(async () => root.render(view("messenger")));
+  await settle();
+  const photo = host.querySelector<HTMLImageElement>("img");
+  expect(photo?.getAttribute("src")).toBe(
+    "/v1/lead-desk/chats/media/messenger/m2?size=preview",
+  );
+  expect(photo?.getAttribute("loading")).toBe("lazy");
+  const voice = host.querySelector<HTMLAudioElement>("audio");
+  expect(voice?.getAttribute("src")).toBe(
+    "/v1/lead-desk/chats/media/messenger/m3",
+  );
+  expect(voice?.getAttribute("preload")).toBe("none");
+  const chip = host.querySelector<HTMLAnchorElement>("a[download]");
+  expect(chip?.getAttribute("href")).toBe(
+    "/v1/lead-desk/chats/media/messenger/m4",
+  );
+  expect(chip?.textContent).toContain("Price list.pdf");
+  expect(chip?.textContent).toContain("240 KB");
+  // The names alone are gone: the files themselves are in the bubbles.
+  expect(host.textContent).not.toContain("Voice note");
+});
+
+it("says why a message didn't go and sends the same words again", async () => {
+  socialMessages = [
+    ...socialMessages,
+    {
+      id: "m5",
+      direction: "out",
+      kind: "text",
+      text: "See you on Saturday at 11",
+      status: "failed",
+      error: "Meta has paused messages from this Page for now.",
+      at: ago(1),
+    },
+  ];
+  await act(async () => root.render(view("messenger")));
+  await settle();
+  expect(host.textContent).toContain(
+    "Not sent: Meta has paused messages from this Page for now.",
+  );
+  const again = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Send again",
+  )!;
+  await act(async () => again.click());
+  await settle();
+  expect(
+    calls.find((call) => call.method === "POST" && call.url.endsWith("/social"))
+      ?.body,
+  ).toMatchObject({ text: "See you on Saturday at 11", accountId: ACCOUNT });
+});
+
+it("reports the newest message on screen as read", async () => {
+  const seen = vi.fn();
+  await act(async () => root.render(view("messenger", seen)));
+  await settle();
+  expect(seen).toHaveBeenCalledWith(socialMessages[0].at, ACCOUNT);
 });

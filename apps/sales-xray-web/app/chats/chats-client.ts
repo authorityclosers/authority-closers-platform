@@ -561,12 +561,101 @@ export function markSeen(
   return next;
 }
 
-/** Unread: they wrote after this person last looked (server marks win when sent). */
+/**
+ * Unread: they wrote after this person last read the chat. The server's count
+ * (read marks, every device) decides; a chat read here since that count, up to
+ * its newest message, stays read until the next count catches up. Without the
+ * server's count, this browser's marks decide.
+ */
 export function isUnread(thread: ChatThread, marks: SeenMarks): boolean {
-  if (typeof thread.unread === "number") return thread.unread > 0;
-  if (!thread.waiting) return false;
   const seen = marks[thread.key];
-  return !seen || seen < thread.lastAt;
+  const readHere = !!seen && seen >= thread.lastAt;
+  if (typeof thread.unread === "number") return thread.unread > 0 && !readHere;
+  return thread.waiting && !readHere;
+}
+
+/* ---------- Read marks on the server (every device) ---------- */
+
+/**
+ * This person read the chat up to the newest message on screen (`readTo`):
+ * the server keeps it, so the phone and the computer agree. Answers the mark
+ * that holds.
+ */
+export async function markRead(
+  thread: Pick<ChatThread, "channel" | "leadId" | "accountId">,
+  readTo: string,
+): Promise<string | null> {
+  if (!thread.leadId || !thread.accountId) return null;
+  const answer = await waCall<{ readTo?: unknown }>("/chats/read", {
+    method: "POST",
+    body: JSON.stringify({
+      channel: thread.channel,
+      leadId: thread.leadId,
+      accountId: thread.accountId,
+      readTo,
+    }),
+  });
+  return typeof answer?.readTo === "string" ? answer.readTo : null;
+}
+
+/* ---------- Photos, voice notes, videos and files ---------- */
+
+const MEDIA_KINDS = new Set([
+  "image",
+  "sticker",
+  "audio",
+  "video",
+  "document",
+  "file",
+]);
+
+/** A message whose file Sales Xray can show (fetched from Meta when opened). */
+export function hasMedia(message: Pick<ChatMessage, "id" | "kind">): boolean {
+  return MEDIA_KINDS.has(message.kind) && !message.id.startsWith("pending-");
+}
+
+/** Where the page reads a message's file: through Sales Xray, never Meta's link. */
+export function mediaUrl(
+  channel: ChatChannel,
+  messageId: string,
+  { preview = false }: { preview?: boolean } = {},
+): string {
+  const path = `/v1/lead-desk/chats/media/${channel}/${encodeURIComponent(messageId)}`;
+  return preview ? `${path}?size=preview` : path;
+}
+
+export type MediaInfo = {
+  kind: string;
+  mime: string;
+  name: string | null;
+  size: number | null;
+};
+
+/** A file's type, name and size for its chip, without fetching the file. */
+export async function readMediaInfo(
+  channel: ChatChannel,
+  messageId: string,
+  signal?: AbortSignal,
+): Promise<MediaInfo | null> {
+  const value = await waCall<Partial<MediaInfo>>(
+    `/chats/media/${channel}/${encodeURIComponent(messageId)}/info`,
+    { signal },
+  );
+  if (!value || typeof value.mime !== "string") return null;
+  return {
+    kind: typeof value.kind === "string" ? value.kind : "file",
+    mime: value.mime,
+    name: typeof value.name === "string" && value.name ? value.name : null,
+    size: typeof value.size === "number" ? value.size : null,
+  };
+}
+
+/** "820 KB", "2.4 MB". */
+export function fileSize(bytes: number | null): string | null {
+  if (bytes === null || bytes < 0) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /* ---------- Words and times ---------- */

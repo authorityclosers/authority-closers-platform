@@ -4,8 +4,9 @@
  * Unread chats: how many conversations have a message this person hasn't
  * opened yet, for the desktop rail's Chats icon and the phone's Leads tab
  * (owner, 20 Oct: five phone tabs, Chats inside Leads). The list comes from
- * the one shared reader (chats-store.ts); the seen marks live in this browser
- * until the server keeps read marks.
+ * the one shared reader (chats-store.ts) with the server's unread counts (read
+ * marks, every device); this browser's marks only bridge the moments between
+ * reading a chat and the server's next count.
  */
 
 import { MessagesSquare } from "lucide-react";
@@ -14,6 +15,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   isUnread,
+  markRead,
   markSeen,
   readSeen,
   type ChatThread,
@@ -35,16 +37,35 @@ function seenFor(personId: string | null): SeenMarks {
   return seen.marks;
 }
 
-/** A chat was opened: its dot (and the badge) go at once. */
+// The newest mark sent to the server per chat, so a chat is marked once per message.
+const posted = new Map<string, string>();
+
+/**
+ * A chat was read up to `readTo`, the newest message on screen: its dot (and
+ * the badge) go at once here, and the server keeps the mark for every device.
+ */
 export function rememberSeen(
   personId: string,
-  thread: Pick<ChatThread, "key" | "lastAt">,
+  thread: Pick<
+    ChatThread,
+    "key" | "lastAt" | "channel" | "leadId" | "accountId" | "unread"
+  >,
+  readTo: string = thread.lastAt,
+  accountId: string | null = thread.accountId ?? null,
 ): void {
   const before = seenFor(personId);
-  const marks = markSeen(personId, before, thread);
-  if (marks === before) return;
-  seen = { personId, marks };
-  seenListeners.forEach((listener) => listener());
+  const marks = markSeen(personId, before, { key: thread.key, lastAt: readTo });
+  if (marks !== before) {
+    seen = { personId, marks };
+    seenListeners.forEach((listener) => listener());
+  }
+  // A server without read marks sends no count; nothing to tell it then.
+  const sent = posted.get(`${personId}:${thread.key}`);
+  if (typeof thread.unread !== "number" || (sent && sent >= readTo)) return;
+  posted.set(`${personId}:${thread.key}`, readTo);
+  markRead({ ...thread, accountId }, readTo).catch(() =>
+    posted.delete(`${personId}:${thread.key}`),
+  );
 }
 
 function followSeen(listener: () => void): () => void {
