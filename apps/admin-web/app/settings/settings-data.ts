@@ -27,6 +27,13 @@ export type SettingsArea = {
   rows: SettingRow[];
   /** Why this area could not be read; its rows are then empty. */
   unavailable: string | null;
+  /** AI replies to leads at their cap or waiting: "Raise and resume". */
+  raise?: {
+    revision: number | null;
+    to: number;
+    atCap: boolean;
+    waiting: number;
+  };
 };
 
 type Read<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -377,4 +384,108 @@ export function reportArea(result: Read<ReportSettingsOverview>): SettingsArea {
       };
     },
   );
+}
+
+// How the cap is counted: its name, the cap's words, and this period's spend.
+const AI_PERIOD: Record<string, [string, string, string]> = {
+  daily: ["Each day", "a day", "today"],
+  monthly: ["Each month", "a month", "this month"],
+  lifetime: ["In total", "in total", "in total"],
+};
+
+/**
+ * AI replies to leads (the Lead Desk's GET /v1/admin/lead-desk-ai, 20 Oct):
+ * the switch, model, cap and how it is counted, each changed in place, with
+ * this period's spend and "Raise and resume" when it waits for budget.
+ */
+export function leadDeskAiArea(result: Read<unknown>): SettingsArea {
+  const base = {
+    key: "lead-desk-ai",
+    title: "AI replies to leads",
+    what: "Drafts and automatic replies to lead messages: switch, model and cap",
+    href: "",
+  };
+  return area(base, result, (raw: unknown) => {
+    const data = read.object(raw);
+    const config = read.object(data.config);
+    const status = read.object(data.status);
+    const models = Array.isArray(data.models) ? data.models : [];
+    const history = Array.isArray(data.history) ? data.history : [];
+    const period = typeof config.period === "string" ? config.period : "daily";
+    const [periodLabel, per, spentWhen] = AI_PERIOD[period] ?? [
+      words(period),
+      "",
+      "",
+    ];
+    const cap = typeof config.cap_inr === "number" ? config.cap_inr : null;
+    const spent = typeof status.spent_inr === "number" ? status.spent_inr : 0;
+    const atCap = status.at_cap === true;
+    const waiting = typeof status.waiting === "number" ? status.waiting : 0;
+    const model = models
+      .map((item) => read.object(item))
+      .find((item) => item.model === config.model);
+    const revision = typeof data.revision === "number" ? data.revision : null;
+    const provider =
+      typeof data.provider_label === "string"
+        ? data.provider_label
+        : "the AI provider";
+    return {
+      revision: revision !== null ? String(revision) : null,
+      changedAt: (() => {
+        const first = read.object(history[0]);
+        return typeof first.at === "string" ? first.at : null;
+      })(),
+      rows: [
+        {
+          id: "lead_desk_ai.enabled",
+          label: "AI replies to lead messages",
+          value: yesNo(config.enabled, "On", "Off"),
+          note: [
+            provider,
+            `${rupees(spent)} spent ${spentWhen}`.trim(),
+            atCap ? "cap reached" : null,
+            waiting ? `${waiting} waiting` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        },
+        {
+          id: "lead_desk_ai.model",
+          label: "AI replies: model",
+          value:
+            typeof model?.label === "string"
+              ? model.label
+              : typeof config.model === "string"
+                ? config.model
+                : "—",
+        },
+        {
+          id: "lead_desk_ai.cap_inr",
+          label: "AI replies: cap",
+          value:
+            cap === null
+              ? "—"
+              : `₹${cap.toLocaleString("en-IN")} ${per}`.trim(),
+        },
+        {
+          id: "lead_desk_ai.period",
+          label: "AI replies: cap counted",
+          value: periodLabel,
+        },
+      ],
+      ...(atCap || waiting
+        ? {
+            raise: {
+              revision,
+              to:
+                typeof status.raise_to_inr === "number"
+                  ? status.raise_to_inr
+                  : (cap ?? 0) + 100,
+              atCap,
+              waiting,
+            },
+          }
+        : {}),
+    };
+  });
 }

@@ -12,11 +12,13 @@ import {
   analysisArea,
   callDataArea,
   executionArea,
+  leadDeskAiArea,
   providerArea,
   reportArea,
   type SettingsArea,
 } from "@/app/settings/settings-data";
 import { normalizeRegistry } from "@/app/settings/registry-data";
+import { LeadAiRaise } from "@/app/settings/lead-ai-raise";
 import { SettingControl } from "@/app/settings/setting-control";
 import styles from "@/app/settings/settings.module.css";
 import { Page, PageHeader, Panel, Table, Unavailable } from "@/app/ui/kit";
@@ -38,6 +40,7 @@ export default async function SettingsPage() {
     report,
     review,
     registry,
+    leadAi,
   ] = await Promise.all([
     adminRead("/v1/admin/conversation/providers", read.object),
     adminRead("/v1/admin/conversation/analysis-settings", read.object),
@@ -53,6 +56,7 @@ export default async function SettingsPage() {
       normalizePipelineSettings,
     ),
     adminRead("/v1/admin/settings", normalizeRegistry),
+    adminRead("/v1/admin/lead-desk-ai", read.object),
   ]);
   const callData = callDataRaw.ok
     ? { ok: true as const, data: normalizeCallData(callDataRaw.data) }
@@ -66,6 +70,7 @@ export default async function SettingsPage() {
         ["/v1/admin/conversation/execution", execution],
         ["/v1/admin/conversation/budget", budget],
         ["/v1/admin/call-data", callDataRaw],
+        ["/v1/admin/lead-desk-ai", leadAi],
       ] as const
     )
       .filter(([, result]) => result.ok)
@@ -86,6 +91,7 @@ export default async function SettingsPage() {
     analysisArea(analysis),
     executionArea(execution, budget),
     callDataArea(callData),
+    leadDeskAiArea(leadAi),
     reportArea(report),
     reviewArea(review),
   ];
@@ -115,7 +121,9 @@ export default async function SettingsPage() {
             key={item.key}
             title={item.title}
             sub={item.what}
-            action={{ href: item.href, label: "Change" }}
+            action={
+              item.href ? { href: item.href, label: "Change" } : undefined
+            }
             foot={
               item.unavailable ? undefined : (
                 <span className={styles.foot}>
@@ -157,6 +165,14 @@ export default async function SettingsPage() {
                 </tbody>
               </Table>
             )}
+            {item.raise ? (
+              <LeadAiRaise
+                revision={item.raise.revision}
+                raiseTo={item.raise.to}
+                atCap={item.raise.atCap}
+                waiting={item.raise.waiting}
+              />
+            ) : null}
           </Panel>
         ))}
       </div>
