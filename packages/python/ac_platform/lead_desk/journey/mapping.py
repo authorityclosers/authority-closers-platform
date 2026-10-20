@@ -29,11 +29,20 @@ from uuid import UUID
 from ac_platform.lead_desk.journey.model import Journey, JourneyError, Stage
 from ac_platform.lead_desk.journey.providers import PROVIDERS, Spec
 from ac_platform.lead_desk.journey.providers import google_ads as google_provider
+from ac_platform.lead_desk.journey.providers import linkedin as linkedin_provider
 from ac_platform.lead_desk.journey.providers import meta as meta_provider
+from ac_platform.lead_desk.journey.providers import microsoft_ads as microsoft_provider
+from ac_platform.lead_desk.journey.providers import tiktok as tiktok_provider
 
 KEY: Final[str] = "ad_sync"
 LEGACY_META: Final[str] = "meta_conversions"
-MODULES: Final[dict[str, ModuleType]] = {"meta": meta_provider, "google_ads": google_provider}
+MODULES: Final[dict[str, ModuleType]] = {
+    "meta": meta_provider,
+    "google_ads": google_provider,
+    "linkedin": linkedin_provider,
+    "tiktok": tiktok_provider,
+    "microsoft_ads": microsoft_provider,
+}
 
 MatchState = Literal["on", "off", "new"]
 

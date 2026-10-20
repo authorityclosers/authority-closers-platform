@@ -1099,6 +1099,24 @@ button.templateCard:focus-visible {
   font: inherit;
 }
 
+.manual {
+  display: grid;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.manual input {
+  box-sizing: border-box;
+  height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font: inherit;
+}
+
 .chooserActions {
   display: flex;
   justify-content: flex-end;

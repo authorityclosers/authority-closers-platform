@@ -86,6 +86,10 @@ export type ProviderView = {
   learns: string;
   reaches: string;
   destinationWords: string;
+  /** Where the manager pastes the destination (no list from the platform). */
+  manualDestination?: string | null;
+  /** Where Connect starts for this platform. */
+  connectPath?: string | null;
   available: boolean;
   configured: boolean;
   connected: boolean;

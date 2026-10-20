@@ -28,6 +28,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
@@ -39,6 +40,7 @@ from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk.journey import catalogue, engine, mapping, signals
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey.model import Journey, JourneyError
+from ac_platform.lead_desk.journey.providers import oauth
 from ac_platform.lead_desk.journey.templates import (
     KIND_WORDS,
     MILESTONE_KIND,
@@ -194,6 +196,8 @@ class ProviderView(_View):
     learns: str
     reaches: str
     destination_words: str = Field(alias="destinationWords")
+    manual_destination: str | None = Field(default=None, alias="manualDestination")
+    connect_path: str | None = Field(default=None, alias="connectPath")
     available: bool
     configured: bool
     connected: bool
@@ -261,6 +265,13 @@ class SummaryView(_View):
     needs_check: int = Field(alias="needsCheck")
     last_delivered_at: datetime | None = Field(alias="lastDeliveredAt")
 
+
+# Where each platform's Connect starts (Meta and Google: Lead sources' own routes).
+CONNECT_PATHS: dict[str, str] = {
+    "meta": "/v1/lead-desk/meta/connect",
+    "google_ads": "/v1/lead-desk/google/connect",
+    **{provider: f"/v1/lead-desk/{slug}/connect" for provider, slug in oauth.SLUGS.items()},
+}
 
 # Planned platforms, shown as coming while their adapters are not here yet.
 _COMING: dict[str, tuple[str, str]] = {
@@ -349,11 +360,11 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @asynccontextmanager
     async def desk_for(
-        request: Request, response: Response, *, write: bool = False
+        request: Request, response: Response, *, write: bool = False, origin: bool = True
     ) -> AsyncIterator[LeadDesk]:
         response.headers.update(PRIVATE)
         same_host(request)
-        if write:
+        if write and origin:
             try:
                 require_safe_origin(request, settings)
             except DomainError:
@@ -654,6 +665,8 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                     learns=info.learns,
                     reaches=info.reaches,
                     destination_words=info.destination,
+                    manual_destination=getattr(adapter, "MANUAL", None),
+                    connect_path=CONNECT_PATHS.get(provider),
                     available=True,
                     configured=adapter.configured(),
                     connected=await mapping.is_connected(provider, desk.db, desk.tenant_id, config),
@@ -876,5 +889,83 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 needs_check=checks,
                 last_delivered_at=max(delivered, default=None),
             )
+
+    # ----- connecting LinkedIn, TikTok and Microsoft Advertising -------------------------
+
+    def app_url() -> str:
+        return str(settings.sales_xray_app_url or "").rstrip("/")
+
+    def install_connect(provider: str, slug: str) -> None:
+        adapter = mapping.module(provider)
+
+        @router.get(f"/{slug}/connect", response_model=None, name=f"{slug}_connect")
+        async def connect(request: Request, response: Response) -> Response:
+            """Start Connect: to the platform's sign-in, back to the callback."""
+            cfg = oauth.app(provider)
+            async with desk_for(request, response) as desk:
+                desk._require_manager()
+                if cfg is None:
+                    raise DeskError(404, f"{adapter.SPEC.name} isn't set up here yet.")
+                state = oauth.make_state(
+                    cfg, tenant_id=desk.tenant_id, person_id=desk.viewer.person_id
+                )
+            url = adapter.consent_url(
+                cfg, redirect_uri=f"{app_url()}/v1/lead-desk/{slug}/callback", state=state
+            )
+            return RedirectResponse(url, status_code=303, headers=PRIVATE)
+
+        @router.get(f"/{slug}/callback", response_model=None, name=f"{slug}_callback")
+        async def callback(request: Request, response: Response) -> Response:
+            """The platform sends the person back here: keep its tokens, sealed."""
+
+            def done(outcome: str) -> Response:
+                url = f"{app_url()}/leads?tab=stages&{slug}={outcome}"
+                return RedirectResponse(url, status_code=303, headers=PRIVATE)
+
+            if request.query_params.get("error"):
+                return done("cancelled")
+            params = request.query_params
+            code = params.get("code") or params.get("auth_code") or ""
+            state = params.get("state", "")
+            cfg = oauth.app(provider)
+            if not code or not state or cfg is None:
+                return done("failed")
+            async with desk_for(request, response) as desk:
+                desk._require_manager()
+                try:
+                    oauth.read_state(
+                        cfg, state, tenant_id=desk.tenant_id, person_id=desk.viewer.person_id
+                    )
+                except oauth.ConnectError:
+                    return done("failed")
+                tenant_id, person_id = desk.tenant_id, desk.viewer.person_id
+            # The platform is asked with no transaction of ours open.
+            try:
+                async with httpx.AsyncClient(timeout=20) as client:
+                    tokens, accounts = await adapter.finish(
+                        client,
+                        cfg,
+                        code=code,
+                        redirect_uri=f"{app_url()}/v1/lead-desk/{slug}/callback",
+                    )
+            except (oauth.ConnectError, httpx.HTTPError, ValueError):
+                return done("failed")
+            async with desk_for(request, response, write=True, origin=False) as desk:
+                if desk.tenant_id != tenant_id:
+                    return done("failed")
+                row = await lock_settings(desk)
+                row.config = oauth.saved(
+                    row.config or {},
+                    cfg,
+                    desk.tenant_id,
+                    tokens=tokens,
+                    accounts=accounts,
+                    by=person_id,
+                )
+                await desk.db.flush()
+            return done("connected")
+
+    for provider, slug in oauth.SLUGS.items():
+        install_connect(provider, slug)
 
     application.include_router(router)

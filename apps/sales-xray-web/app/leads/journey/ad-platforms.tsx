@@ -39,10 +39,15 @@ import styles from "./journey.module.css";
 
 type Dataset = { id: string; name: string };
 
-// Where each platform's Connect starts (the same routes as Lead sources).
-const CONNECT: Record<string, { href: string; app: ConnectProvider }> = {
-  meta: { href: "/v1/lead-desk/meta/connect", app: "meta" },
-  google_ads: { href: "/v1/lead-desk/google/connect", app: "google" },
+// Phone-app Connect (system browser) for the platforms Lead sources connects.
+const APP_CONNECT: Record<string, ConnectProvider> = {
+  meta: "meta",
+  google_ads: "google",
+};
+const RETURNS: Record<string, string> = {
+  linkedin: "LinkedIn",
+  tiktok: "TikTok",
+  microsoft: "Microsoft Ads",
 };
 type Datasets = { adAccounts: Dataset[]; datasets: Dataset[] };
 
@@ -67,6 +72,29 @@ export function AdPlatforms({ version }: { version: number }) {
       );
   }, []);
   useEffect(load, [load, version]);
+  // Back from a platform's Connect: say how it went, in a corner card.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    for (const [slug, name] of Object.entries(RETURNS)) {
+      const outcome = params.get(slug);
+      if (!outcome) continue;
+      notify({
+        id: `journey-connect-${slug}`,
+        tone: outcome === "connected" ? "success" : "error",
+        title:
+          outcome === "connected"
+            ? `${name} is connected`
+            : outcome === "cancelled"
+              ? `${name} wasn't connected`
+              : `${name} didn't finish connecting`,
+        message:
+          outcome === "connected"
+            ? "Pick where your stages go, and check the matches."
+            : "Press Connect to try again.",
+        timeout: outcome === "connected" ? 5000 : undefined,
+      });
+    }
+  }, []);
   // While stages wait to settle (5 minutes), keep the line moving.
   useEffect(() => {
     if (!ads?.settling) return;
@@ -154,8 +182,8 @@ function ProviderCard({
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [choosing, setChoosing] = useState(false);
-  const start = CONNECT[provider.id];
-  const connect = useAppConnect(start?.app ?? "meta", ({ result }) => {
+  const app = APP_CONNECT[provider.id];
+  const connect = useAppConnect(app ?? "meta", ({ result }) => {
     if (result === "connected") reload();
   });
   const run = async (work: () => Promise<AdsView>, title: string) => {
@@ -172,8 +200,12 @@ function ProviderCard({
   };
 
   const connectLink =
-    start && provider.configured && !provider.connected ? (
-      <a className={cardStyles.primary} href={start.href} onClick={connect}>
+    provider.connectPath && provider.configured && !provider.connected ? (
+      <a
+        className={cardStyles.primary}
+        href={provider.connectPath}
+        onClick={app ? connect : undefined}
+      >
         Connect {provider.name}
       </a>
     ) : null;
@@ -254,7 +286,7 @@ function ProviderCard({
               if (done) setEditing(false);
             }}
           />
-          {destination && !showChooser && provider.id === "meta" ? (
+          {destination && !showChooser && provider.naming === "stage" ? (
             <TestEvents
               provider={provider}
               busy={busy}
@@ -486,6 +518,7 @@ function DestinationChooser({
   const [found, setFound] = useState<Datasets | null>(null);
   const [picked, setPicked] = useState<Dataset | null>(current);
   const [making, setMaking] = useState(false);
+  const [typed, setTyped] = useState("");
   const [account, setAccount] = useState("");
   const [name, setName] = useState("Sales Xray lead stages");
   const meta = provider.id === "meta";
@@ -589,6 +622,22 @@ function DestinationChooser({
         >
           Make a new dataset
         </button>
+      ) : found && !found.datasets.length && provider.manualDestination ? (
+        <label className={styles.manual}>
+          <span>{provider.manualDestination}</span>
+          <input
+            value={typed}
+            maxLength={40}
+            aria-label={`${provider.name} ${provider.destinationWords} id`}
+            onChange={(event) => {
+              const id = event.target.value.trim();
+              setTyped(id);
+              setPicked(
+                id ? { id, name: `${provider.destinationWords} ${id}` } : null,
+              );
+            }}
+          />
+        </label>
       ) : found && !found.datasets.length ? (
         <p className={styles.cardNote}>
           No {provider.name} {provider.destinationWords}s are connected yet.
@@ -635,8 +684,9 @@ function TestEvents({
       </summary>
       <div className={styles.moreBody}>
         <p>
-          In Meta Events Manager open this dataset, then Test events, and copy
-          its test code here. Stages then show there as they go.
+          In {provider.name} Events Manager open this{" "}
+          {provider.destinationWords}, then Test events, and copy its test code
+          here. Stages then show there as they go.
         </p>
         <span className={styles.testRow}>
           <input
