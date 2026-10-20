@@ -393,6 +393,16 @@ function install(first: boolean) {
           kind: "interested",
           kindWords: "Hot",
         },
+        {
+          ref: "calls:proposal",
+          label: "Quote sent",
+          source: "your calls",
+          workflow: "heard in 14 calls and notes",
+          milestone: "proposal",
+          meaning: MEANINGS.proposal,
+          kind: "interested",
+          kindWords: "Hot",
+        },
       ]);
     if (url.endsWith("/journey/ads")) return answer(ADS);
     if (url.endsWith("/journey/summary"))
