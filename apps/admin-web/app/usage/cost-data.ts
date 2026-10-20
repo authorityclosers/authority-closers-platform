@@ -27,6 +27,35 @@ export const STAGE_LABEL: Record<string, string> = {
   QF: "Quote facts",
 };
 
+/** What a feature ran on in one environment, and the sheet's unit price in dollars. */
+export type Route = {
+  environment: string;
+  stage: string;
+  label: string;
+  provider: string | null;
+  model: string | null;
+  runs: number;
+  lastAt: string | null;
+  unit: {
+    basis: string;
+    usdPerHour: number | null;
+    usdPerMinute: number | null;
+    inputUsdPerMillion: number | null;
+    outputUsdPerMillion: number | null;
+  } | null;
+};
+
+/** Where in Admin each feature's provider and model are chosen. */
+export const CHANGE_AT: Record<string, { href: string; label: string }> = {
+  C2: { href: "/sales-xray/providers", label: "Providers" },
+  C4: { href: "/sales-xray/providers", label: "Providers" },
+  C5: { href: "/sales-xray/providers", label: "Providers" },
+  PR: { href: "/sales-xray/analysis", label: "Analysis settings" },
+  CDF: { href: "/sales-xray/call-data", label: "Call data" },
+  CDD: { href: "/sales-xray/call-data", label: "Call data" },
+  AR: { href: "/settings", label: "All settings · AI replies" },
+};
+
 /** How rupees were made from the dollars providers bill (one rate, and since when). */
 export type Fx = { currency: string; usdToInr: number; setOn: string | null };
 
@@ -259,6 +288,7 @@ export type Choices = {
 export type Metrics = {
   days: number;
   fx: Fx;
+  routes: Route[];
   filters: { company: string | null; stage: string | null };
   choices: Choices;
   environment: string;
@@ -395,6 +425,30 @@ export function normalizeMetrics(raw: unknown): Metrics {
   return {
     days: n(window.days, 30),
     filters: { company: os(filters.company), stage: os(filters.stage) },
+    routes: read.array(body.routes).map((item) => {
+      const row = read.object(item);
+      const stage = s(row.stage);
+      const unit = read.object(row.unit);
+      return {
+        environment: s(row.environment),
+        stage,
+        label: s(row.label, STAGE_LABEL[stage] ?? stage),
+        provider: os(row.provider),
+        model: os(row.model),
+        runs: n(row.runs),
+        lastAt: os(row.last_at),
+        unit:
+          typeof unit.basis === "string"
+            ? {
+                basis: unit.basis,
+                usdPerHour: on(unit.usd_per_hour),
+                usdPerMinute: on(unit.usd_per_minute),
+                inputUsdPerMillion: on(unit.input_usd_per_million),
+                outputUsdPerMillion: on(unit.output_usd_per_million),
+              }
+            : null,
+      };
+    }),
     choices: {
       companies: read.array(choices.companies).map((item) => {
         const row = read.object(item);
@@ -1099,4 +1153,32 @@ export function revenueWords(metrics: Metrics): string[] {
     }
   }
   return lines;
+}
+
+const RATE = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 4,
+});
+
+/** A unit price in words, dollars first: "$0.22 an hour of audio (₹22.00)". */
+export function unitWords(unit: Route["unit"], fx: Fx): string {
+  if (!unit) return "No price in the sheet: counted, not priced";
+  const both = (dollars: number) =>
+    `${RATE.format(dollars)} (${inr(dollars * fx.usdToInr)})`;
+  if (unit.basis === "per_hour" && unit.usdPerHour !== null)
+    return `${both(unit.usdPerHour)} an hour of audio`;
+  if (unit.basis === "per_minute" && unit.usdPerMinute !== null)
+    return `${both(unit.usdPerMinute)} a minute of audio`;
+  const parts = [
+    unit.inputUsdPerMillion !== null
+      ? `${both(unit.inputUsdPerMillion)} in`
+      : null,
+    unit.outputUsdPerMillion !== null
+      ? `${both(unit.outputUsdPerMillion)} out`
+      : null,
+  ].filter(Boolean);
+  return parts.length
+    ? `${parts.join(" · ")} per million tokens`
+    : "Priced per use";
 }

@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { Coins, Gauge, GitCompare, Landmark, Receipt, X } from "lucide-react";
 
 import {
+  CHANGE_AT,
   ENVIRONMENTS,
   CALL_SORTS,
   ENVIRONMENT_LABEL,
@@ -27,6 +28,7 @@ import {
   perMin,
   rateWords,
   revenueWords,
+  unitWords,
   usd,
   seconds,
   seriesValue,
@@ -1260,10 +1262,91 @@ export function RevenueView({ metrics }: { metrics: Metrics }) {
 
 /* ---------- Providers ---------- */
 
+/** A provider's mark: its initials on its own colour (no brand artwork). */
+function ProviderMark({ provider }: { provider: string | null }) {
+  const name = provider ?? "unknown";
+  return (
+    <span className={styles.mark} data-provider={name} aria-hidden="true">
+      {name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
+/** What each feature ran on, its unit price, and where it is changed (owner, 20 Oct). */
+function RoutesPanel({ metrics }: { metrics: Metrics }) {
+  return (
+    <Panel
+      title="What each feature runs on"
+      sub="per environment, from its newest run · unit prices from the price sheet"
+      tools={
+        <Why detail="What actually ran, not just what is set: a change shows here once that feature has run on it. Prices are the providers' list prices in dollars, with rupees at the sheet's one rate. Production providers change only through a release or the owner; nothing here switches anything." />
+      }
+    >
+      {metrics.routes.length ? (
+        <Table label="What each feature runs on">
+          <thead>
+            <tr>
+              <th scope="col">Feature</th>
+              <th scope="col">Where</th>
+              <th scope="col">Provider · model</th>
+              <th scope="col">Unit price</th>
+              <th scope="col" data-num="">
+                Runs
+              </th>
+              <th scope="col">Change it</th>
+            </tr>
+          </thead>
+          <tbody>
+            {metrics.routes.map((route) => {
+              const change = CHANGE_AT[route.stage];
+              return (
+                <tr key={`${route.environment}-${route.stage}`}>
+                  <th scope="row">{route.label}</th>
+                  <td>
+                    <Env name={route.environment} />
+                  </td>
+                  <td>
+                    <span className={styles.route}>
+                      <ProviderMark provider={route.provider} />
+                      <span>
+                        {route.provider ?? "Unknown"}
+                        <small className={styles.sub}>
+                          {route.model ?? "model not recorded"}
+                        </small>
+                      </span>
+                    </span>
+                  </td>
+                  <td>{unitWords(route.unit, metrics.fx)}</td>
+                  <td data-num="">
+                    {count(route.runs)}
+                    <small className={styles.sub}>
+                      last {route.lastAt ? stamp(route.lastAt) : "–"}
+                    </small>
+                  </td>
+                  <td>
+                    {change ? (
+                      <Link href={change.href}>{change.label}</Link>
+                    ) : (
+                      <span className={styles.sub}>Set in code</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      ) : (
+        <Empty icon={Coins} title="Nothing ran in this window" />
+      )}
+    </Panel>
+  );
+}
+
 export function ProvidersView({ metrics }: { metrics: Metrics }) {
   const { models, daily } = metrics.providers;
   return (
     <>
+      <RoutesPanel metrics={metrics} />
       <Panel
         title="Providers and models"
         sub="tokens, audio and cost"

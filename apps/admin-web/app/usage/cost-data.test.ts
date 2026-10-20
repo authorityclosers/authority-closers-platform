@@ -379,3 +379,57 @@ describe("revenue against cost in plain words", () => {
     expect(revenueWords(idle)[0]).toContain("no money came in");
   });
 });
+
+describe("what each feature runs on", () => {
+  it("reads each route and says its unit price in dollars and rupees", async () => {
+    const { normalizeMetrics, unitWords, CHANGE_AT } = await import(
+      "./cost-data"
+    );
+    const metrics = normalizeMetrics({
+      fx: { usd_to_inr: 100 },
+      routes: [
+        {
+          environment: "production",
+          stage: "C2",
+          provider: "elevenlabs",
+          model: "scribe_v2",
+          runs: 40,
+          last_at: "2026-10-20T10:00:00Z",
+          unit: { basis: "per_hour", usd_per_hour: 0.22 },
+        },
+        {
+          environment: "production",
+          stage: "C4",
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          runs: 40,
+          unit: {
+            basis: "tokens",
+            input_usd_per_million: 0.75,
+            output_usd_per_million: 3.75,
+          },
+        },
+        {
+          environment: "staging",
+          stage: "AR",
+          provider: "gemini",
+          model: "new-model",
+          unit: null,
+        },
+      ],
+    });
+    const [audio, facts, replies] = metrics.routes;
+    expect(audio.label).toBe("Transcription");
+    expect(unitWords(audio.unit, metrics.fx)).toBe(
+      "$0.22 (₹22.00) an hour of audio",
+    );
+    expect(unitWords(facts.unit, metrics.fx)).toBe(
+      "$0.75 (₹75.00) in · $3.75 (₹375.00) out per million tokens",
+    );
+    expect(unitWords(replies.unit, metrics.fx)).toContain(
+      "No price in the sheet",
+    );
+    expect(CHANGE_AT.CDF.href).toBe("/sales-xray/call-data");
+    expect(CHANGE_AT.QF).toBeUndefined();
+  });
+});

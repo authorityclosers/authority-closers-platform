@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 from ac_platform.conversation_intelligence.admin_pricing import (
     FX_SET_ON,
     FX_USD_TO_INR,
+    PRICING_SNAPSHOTS,
     estimate_provider_usage,
 )
 from ac_platform.conversation_intelligence.application import (
@@ -625,6 +626,60 @@ def _choices(
     }
 
 
+def _rate(value: Any) -> float | None:
+    return None if value is None else float(value)
+
+
+def _routes(steps: Iterable[Step]) -> list[dict[str, Any]]:
+    """What each feature ran on in each environment (its newest run), how many runs used that
+    provider and model in the window, and the price sheet's unit price in dollars. What ran,
+    not what is set: a change shows here once it has run."""
+
+    newest: dict[tuple[str, str], Step] = {}
+    runs: Counter[tuple[str, str, str | None, str | None]] = Counter()
+    for step in steps:
+        if step.provider in (None, "local"):
+            continue
+        key = (step.environment, step.stage)
+        if key not in newest or step.at > newest[key].at:
+            newest[key] = step
+        runs[(step.environment, step.stage, step.provider, step.model)] += 1
+    order = list(STAGE_LABELS)
+
+    def place(key: tuple[str, str]) -> tuple[int, int]:
+        environment, stage = key
+        return (
+            ENVIRONMENTS.index(environment) if environment in ENVIRONMENTS else 9,
+            order.index(stage) if stage in order else 99,
+        )
+
+    rows: list[dict[str, Any]] = []
+    for key in sorted(newest, key=place):
+        step = newest[key]
+        snapshot = PRICING_SNAPSHOTS.get((step.provider or "", step.model or ""))
+        rows.append(
+            {
+                "environment": key[0],
+                "stage": key[1],
+                "label": STAGE_LABELS.get(key[1], key[1]),
+                "provider": step.provider,
+                "model": step.model,
+                "runs": runs[(key[0], key[1], step.provider, step.model)],
+                "last_at": step.at.isoformat(),
+                "unit": None
+                if snapshot is None
+                else {
+                    "basis": snapshot.rate_basis,
+                    "usd_per_hour": _rate(snapshot.usd_per_hour),
+                    "usd_per_minute": _rate(snapshot.usd_per_minute),
+                    "input_usd_per_million": _rate(snapshot.input_usd_per_million_tokens),
+                    "output_usd_per_million": _rate(snapshot.output_usd_per_million_tokens),
+                },
+            }
+        )
+    return rows
+
+
 def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
     by_env = {export.environment: export for export in exports}
     chosen = [
@@ -979,6 +1034,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         "tests": scope.tests,
         "fx": FX,
         "filters": {"company": scope.company, "stage": scope.stage},
+        "routes": _routes(window_steps),
         "choices": choices,
         "sources": [
             {

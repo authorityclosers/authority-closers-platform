@@ -579,3 +579,16 @@ def test_filters_narrow_to_one_organisation_or_feature_and_offer_choices() -> No
     assert row["stage"] == "C2" and row["audio_minutes"] > 0 and row["input_tokens"] == 0
     facts = build_metrics([parse_export("staging", document)], _scope(stage="C4"))
     assert facts["overview"]["by_stage"][0]["input_tokens"] > 0
+
+
+def test_routes_show_what_each_feature_ran_on_and_its_unit_price() -> None:
+    metrics = build_metrics([parse_export("staging", _document())], _scope())
+    routes = {row["stage"]: row for row in metrics["routes"]}
+    assert routes["C2"]["provider"] == "elevenlabs" and routes["C2"]["model"] == "scribe_v2"
+    assert routes["C2"]["unit"]["basis"] == "per_hour" and routes["C2"]["unit"]["usd_per_hour"]
+    assert routes["C4"]["unit"]["input_usd_per_million"] == 0.75
+    assert routes["C4"]["runs"] >= 1 and routes["C4"]["environment"] == "staging"
+    assert "C1" not in routes  # our own server: no provider, no price
+    assert [row["stage"] for row in metrics["routes"]] == sorted(
+        routes, key=list(cost_metrics.STAGE_LABELS).index
+    )

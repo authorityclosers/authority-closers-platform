@@ -629,3 +629,44 @@
   font-size: var(--sx-text-sm);
   line-height: 1.45;
 }
+
+/* A provider's mark: initials on a colour of its own (no brand artwork). */
+.route {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mark {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.mark[data-provider="gemini"] {
+  background: color-mix(in oklab, var(--sx-accent) 22%, transparent);
+  color: var(--sx-accent);
+}
+
+.mark[data-provider="elevenlabs"] {
+  background: var(--sx-ink);
+  color: var(--sx-surface);
+}
+
+.mark[data-provider="openai"] {
+  background: color-mix(in oklab, var(--sx-good) 22%, transparent);
+  color: var(--sx-good);
+}
+
+.mark[data-provider="sarvam"] {
+  background: color-mix(in oklab, var(--sx-warn) 24%, transparent);
+  color: var(--sx-ink);
+}
