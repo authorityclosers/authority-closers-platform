@@ -175,13 +175,14 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
                 spent = engine.spent_today(connection, pipeline, now)
                 cap = config[pipeline]["daily_cap_inr"]
                 at_cap = config[pipeline]["enabled"] and spent >= cap
+                queue = engine.queue(connection, pipeline, now)
                 status[pipeline] = {
                     "spent_today_inr": float(spent),
                     "daily_cap_inr": cap,
                     "at_cap": bool(at_cap),
-                    "waiting": engine.waiting_for_budget(connection, pipeline, now)
-                    if config[pipeline]["enabled"]
-                    else 0,
+                    # Only calls that still run by themselves; held ones never do.
+                    "waiting": queue["new"] if config[pipeline]["enabled"] else 0,
+                    **queue,
                     "raise_to_inr": raise_to(cap),
                 }
             return {
@@ -273,7 +274,8 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
         response: Response,
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
-        """One click: raise a pipeline's daily cap; the waiting calls resume on the next pass."""
+        """One click: raise a pipeline's daily cap; calls from the last two hours resume on the
+        next pass, older ones stay held."""
         try:
             require_safe_origin(request, settings)
         except DomainError:

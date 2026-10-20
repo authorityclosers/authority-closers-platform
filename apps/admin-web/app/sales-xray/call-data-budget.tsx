@@ -3,7 +3,9 @@
 /**
  * Today's spend per pipeline, and when a cap is reached, one button: "Raise to
  * ₹X and resume" (owner, 19 Oct: "one click for admin ... getting it unstuck").
- * Nothing waits on a cap but this engine: Reports always go on.
+ * The queue in plain words (owner, 20 Oct: nothing runs or charges without an
+ * explicit action): new calls wait a short while; older ones are held and are
+ * read only by a backfill someone approves. Reports always go on.
  */
 
 import { Play } from "lucide-react";
@@ -15,6 +17,12 @@ import type { CallDataSettings } from "./call-data-model";
 import styles from "./call-data-settings.module.css";
 
 const LABEL = { fast: "Fast pipeline", deep: "Deep pipeline" } as const;
+
+const DAY = new Intl.DateTimeFormat("en-IN", {
+  day: "numeric",
+  month: "short",
+  timeZone: "Asia/Kolkata",
+});
 
 export function CallDataBudget({ settings }: { settings: CallDataSettings }) {
   const router = useRouter();
@@ -48,7 +56,9 @@ export function CallDataBudget({ settings }: { settings: CallDataSettings }) {
         );
         return;
       }
-      setMessage(`Raised to ₹${to}. Waiting calls resume within seconds.`);
+      setMessage(
+        `Raised to ₹${to}. Calls from the last ${settings.status[pipeline].freshHours} hours resume within seconds; held calls stay held.`,
+      );
       router.refresh();
     } catch {
       setMessage("Not raised. Try again.");
@@ -84,9 +94,26 @@ export function CallDataBudget({ settings }: { settings: CallDataSettings }) {
                 today
               </span>
               {on && status.waiting ? (
-                <span>{status.waiting} calls waiting</span>
+                <span>
+                  {status.waiting} new {status.waiting === 1 ? "call" : "calls"}{" "}
+                  {status.atCap ? "waiting" : "being read"}
+                </span>
               ) : null}
             </div>
+            {status.held ? (
+              <p className={styles.sub} data-held="">
+                <strong>
+                  {status.held} {status.held === 1 ? "call" : "calls"} held
+                </strong>
+                {status.oldestHeldAt
+                  ? ` since ${DAY.format(new Date(status.oldestHeldAt))}`
+                  : ""}
+                : not read because the pipeline was off, at its cap or stopped
+                by the AI spend guard. Held calls never run or charge by
+                themselves. To read them, raise the backfill cap in AI spend
+                (that is the approval) and run a backfill.
+              </p>
+            ) : null}
             <span
               className={styles.meter}
               data-full={status.atCap ? "" : undefined}
@@ -104,8 +131,9 @@ export function CallDataBudget({ settings }: { settings: CallDataSettings }) {
                   Raise to ₹{status.raiseToInr} and resume
                 </Button>
                 <span className={styles.sub}>
-                  Nothing is lost: calls wait and are read once the cap is
-                  raised. Reports are not affected.
+                  New calls wait {status.freshHours} hours: raising the cap now
+                  reads them. After that they are held and never charged unless
+                  you act. Reports are not affected.
                 </span>
               </div>
             ) : null}

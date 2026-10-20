@@ -8,6 +8,9 @@ How it runs:
 - one runner per database (a session advisory lock); ``--loop`` polls every few
   seconds for C2 transcripts saved after ``--not-before`` (automatic mode never
   backfills); our own canary and QA calls are skipped;
+- automatic mode reads only transcripts saved in the last two hours, whatever
+  ``--recent-hours`` says (owner, 20 Oct 2026: nothing old runs or charges by
+  itself); a call not read by then is held until an explicit backfill;
 - each call is admitted (consent, retention, erasure, newest transcript), then a
   'running' row is committed before the provider is called, so a crash or
   timeout still counts as a paid attempt; at most two attempts per transcript;
@@ -346,6 +349,13 @@ def process_call(
     return line
 
 
+def automatic_hours(trigger: str, requested: int) -> int:
+    """How far back a pass looks: automatic passes at most AUTO_FRESH_HOURS."""
+    from ac_platform.call_data.engine import AUTO_FRESH_HOURS
+
+    return min(requested, AUTO_FRESH_HOURS) if trigger == "auto" else requested
+
+
 def run_pass(
     sessions: Any,
     arguments: argparse.Namespace,
@@ -388,7 +398,7 @@ def run_pass(
             calls = engine.candidates(
                 connection,
                 not_before=arguments.not_before,
-                hours=arguments.recent_hours,
+                hours=automatic_hours(trigger, arguments.recent_hours),
                 limit=arguments.limit,
                 pipeline=pipeline,
                 recording_id=arguments.recording,

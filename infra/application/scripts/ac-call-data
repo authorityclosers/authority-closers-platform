@@ -7,8 +7,9 @@
 # Never backfills: the first start records a moment once
 # (/var/lib/ac-call-data/<env>.since) and only transcripts saved after it are
 # processed. Models, switches and daily rupee caps are in Admin -> Call data.
-# At a cap nothing is lost: calls wait (30 days) and the owner gets ONE alert a
-# day per pipeline; "Raise to ₹X and resume" in Admin restarts them at once.
+# At a cap the owner gets ONE alert a day per pipeline. Calls wait two hours:
+# "Raise to ₹X and resume" in Admin reads them; older ones are held and never
+# run or charge by themselves (owner, 20 Oct 2026; the runner enforces it too).
 # Reports never wait on this engine. Docs: docs/architecture/CALL_DATA_ENGINE.md
 #
 #   ac-call-data development-live | staging | production
@@ -56,7 +57,7 @@ alert_text() {
   [[ $line =~ $re_cap ]] || return 1
   pipeline=${BASH_REMATCH[1]}
   [[ $line =~ $re_spent ]] && spent=${BASH_REMATCH[1]}
-  printf 'Sales X-Ray call data (%s): the %s pipeline reached its daily cap (Rs %s spent today). New calls wait, nothing is lost and Reports are not affected. Admin -> Sales Xray setup -> Call data -> Raise and resume.' \
+  printf 'Sales X-Ray call data (%s): the %s pipeline reached its daily cap (Rs %s spent today). New calls wait two hours, then are held and never charged unless you act. Reports are not affected. Admin -> Sales Xray setup -> Call data -> Raise and resume.' \
     "$env_name" "$pipeline" "$spent"
 }
 
@@ -137,8 +138,8 @@ install -d -m 700 "$state"
 since_file=$state/$env_name.since
 [ -s "$since_file" ] || date -u +%Y-%m-%dT%H:%M:%S+00:00 > "$since_file"
 since=$(cat "$since_file")
-# 30 days: calls that waited at a cap are still read once it is raised.
-common=(--not-before "$since" --recent-hours 720 --loop --apply)
+# Two hours: a call not read by then is held (the runner caps automatic passes too).
+common=(--not-before "$since" --recent-hours 2 --loop --apply)
 
 case "$env_name" in
   development-live)
