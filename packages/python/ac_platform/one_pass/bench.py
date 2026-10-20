@@ -212,10 +212,14 @@ def classic_outcome(root: Path, call: str) -> store.Outcome | None:
     if render.exists():
         audio_ms = round(float(json.loads(render.read_text("utf-8"))["seconds"]) * 1000)
     stages: dict[str, dict[str, Any]] = {}
+    # The research re-ran some stages; its result file is the last run, so each request
+    # (call and tag) counts once, the last time it ran.
+    latest: dict[str, dict[str, Any]] = {}
     for row in _ledger(root):
         tag = str(row.get("tag", ""))
-        if row.get("call") != call or not tag.startswith(CLASSIC_PREFIX):
-            continue
+        if row.get("call") == call and tag.startswith(CLASSIC_PREFIX):
+            latest[tag] = row
+    for tag, row in latest.items():
         name = tag[len(CLASSIC_PREFIX) :].split(".")[0]
         key, label = STAGES.get(name, (name, name))
         stage = stages.setdefault(
@@ -314,6 +318,7 @@ def run(
     classic_only: bool,
     created_by: str,
     transport: Any = None,
+    classic_again: bool = False,
 ) -> Iterator[dict[str, Any]]:
     from ac_platform.one_pass.gemini import OnePassFailure, OpenRouterBench
     from ac_platform.one_pass.runner import read_call
@@ -334,7 +339,7 @@ def run(
                     )
                 )
             }
-            if ("classic", "succeeded") not in have:
+            if classic_again or ("classic", "succeeded") not in have:
                 classic = classic_outcome(root, call)
                 if classic is None:
                     line["classic"] = "missing"

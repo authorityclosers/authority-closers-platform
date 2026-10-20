@@ -76,6 +76,11 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--classic-only", action="store_true", help="bench: import the classic side only"
     )
+    parser.add_argument(
+        "--classic-again",
+        action="store_true",
+        help="bench: import the classic side again (a newer row; the newest is compared)",
+    )
     parser.add_argument(INNER, action="store_true", help=argparse.SUPPRESS)
     arguments = parser.parse_args(argv)
     if arguments.bench is None:
@@ -516,6 +521,7 @@ def _bench(arguments: argparse.Namespace) -> int:
             calls=calls or None,
             apply=arguments.apply,
             classic_only=arguments.classic_only,
+            classic_again=arguments.classic_again,
             created_by=BENCH,
         ):
             print(json.dumps(line), flush=True)
