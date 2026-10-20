@@ -685,6 +685,8 @@
   font-size: var(--sx-text-xs);
   font-weight: 600;
   text-align: right;
+  /* Owners also see the words Meta sends, which can carry a long link. */
+  overflow-wrap: anywhere;
 }
 
 .ticks {
