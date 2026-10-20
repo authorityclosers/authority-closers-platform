@@ -21,7 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PG_IMAGE: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+  # Not PG_*: the local sandbox guard (development/seed.py) refuses to run when any PG* variable is set.
+  POSTGRES_IMAGE: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
 
 jobs:
   plan:
@@ -122,12 +123,13 @@ jobs:
       AC_EMAIL_PROVIDER: fake
       AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"
     steps:
-      - name: Start PostgreSQL containers (they boot while the toolchains install)
+      - name: Start PostgreSQL containers in the background (they pull and boot while the toolchains install)
         run: |
-          docker run -d --name pg -e POSTGRES_DB=ac_platform -e POSTGRES_USER=ac_owner \
-            -e POSTGRES_PASSWORD=local-owner-only -p 5432:5432 "$PG_IMAGE" >/dev/null
-          docker run -d --name pg-recovery -e POSTGRES_DB=ac_local_sandbox -e POSTGRES_USER=ac_owner \
-            -e POSTGRES_PASSWORD=local-owner-only -p 127.0.0.1:55432:5432 "$PG_IMAGE" >/dev/null
+          ( docker run -d --name pg -e POSTGRES_DB=ac_platform -e POSTGRES_USER=ac_owner \
+              -e POSTGRES_PASSWORD=local-owner-only -p 5432:5432 "$POSTGRES_IMAGE" >/dev/null
+            docker run -d --name pg-recovery -e POSTGRES_DB=ac_local_sandbox -e POSTGRES_USER=ac_owner \
+              -e POSTGRES_PASSWORD=local-owner-only -p 127.0.0.1:55432:5432 "$POSTGRES_IMAGE" >/dev/null
+            echo done > "$RUNNER_TEMP/pg.started" ) > "$RUNNER_TEMP/pg.log" 2>&1 &
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
@@ -154,8 +156,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24.19.0
-      - name: Install locked Node dependencies
-        run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
+      - name: Install locked Node dependencies in the background
+        run: |
+          corepack enable && corepack prepare pnpm@11.19.0 --activate
+          ( pnpm install --frozen-lockfile; echo $? > "$RUNNER_TEMP/pnpm.rc" ) > "$RUNNER_TEMP/pnpm.log" 2>&1 &
       - name: Build verified AudioAtlas for conversation regressions
         run: uv run python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
       - name: Provision roles and apply the PostgreSQL migration chain
@@ -163,11 +167,18 @@ jobs:
           PGPASSWORD: local-owner-only
         run: |
           set -euo pipefail
+          for _ in $(seq 1 120); do [ -f "$RUNNER_TEMP/pg.started" ] && break; sleep 1; done
+          cat "$RUNNER_TEMP/pg.log"
           for name in pg pg-recovery; do
             for _ in $(seq 1 60); do docker exec "$name" pg_isready -U ac_owner >/dev/null 2>&1 && break; sleep 1; done
           done
           psql --set ON_ERROR_STOP=1 --host localhost --username ac_owner --dbname ac_platform --file infra/local/postgres/init/001-roles.sql
           uv run alembic upgrade head && uv run alembic check
+      - name: Wait for the Node dependencies
+        run: |
+          for _ in $(seq 1 300); do [ -f "$RUNNER_TEMP/pnpm.rc" ] && break; sleep 1; done
+          tail -5 "$RUNNER_TEMP/pnpm.log"
+          test "$(cat "$RUNNER_TEMP/pnpm.rc" 2>/dev/null)" = 0
       - name: Wait for the prerequisites
         if: steps.needs.outputs.needed == 'true'
         run: |
@@ -273,3 +284,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
         run: python3 scripts/ci/wb_checks.py summary
+

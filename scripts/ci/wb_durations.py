@@ -27,6 +27,10 @@ for name in [n for n in names if n.startswith("python-test-shard-") or n.startsw
         if path:
             seconds[path] = seconds.get(path, 0.0) + float(testcase.get("time") or 0)
 old = json.loads((WB / "scripts/ci/python-test-durations.json").read_text())["seconds_by_file"]
+try:  # the previous wb-ci measurement beats the main CI file for files this run did not time
+    old = {**old, **json.loads((WB / "scripts/ci/wb-python-durations.json").read_text())["seconds_by_file"]}
+except (OSError, ValueError, KeyError):
+    pass
 measured = len(seconds)
 costs = {}
 for path in sorted(discovered):
@@ -40,3 +44,4 @@ doc = {"schema": "ac.ci.python-durations/1",
 Path(output).write_text(json.dumps(doc, indent=1, sort_keys=False) + "\n")
 total = sum(costs.values())
 print(f"{len(costs)} files, {measured} measured, total {total/60:.1f} min, max {max(costs.values()):.0f}s; 12 shards ~{total/12:.0f}s each")
+
