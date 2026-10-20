@@ -59,7 +59,7 @@ import { phoneTabFor, shellActiveFor } from "./phone-nav";
 import { RailTip } from "./rail-tip";
 import { usePlacePrefetch, useHoverPrefetch } from "./route-prefetch";
 import { ScreenLink } from "./screen-link";
-import { useScreenMotion } from "./screen-transition";
+import { useGlide, useScreenMotion } from "./screen-transition";
 import { warmCallsList } from "../calls-cache";
 import { RouteLoading } from "./route-loading";
 import { SectionBoundary } from "../ui/section-boundary";
@@ -366,6 +366,10 @@ function LightboxShellFrame({
     pageName ?? (inSettings(shownPath) ? "Settings" : undefined),
   );
   const phoneTab = phoneTabFor(shownPath, active);
+  // The selected capsule glides to the new place, on the rail and the tabs.
+  const tabBarRef = useRef<HTMLElement | null>(null);
+  useGlide(railRef, `.${styles.stripBtnActive} .${styles.railPill}`, place);
+  useGlide(tabBarRef, `[aria-current="page"] .${styles.tabPill}`, phoneTab);
   // ...and, once quiet, the calls list Home and Calls open with.
   usePlacePrefetch(authenticated && !loading, () => {
     void warmCallsList(recentContextKey);
@@ -1365,6 +1369,7 @@ function LightboxShellFrame({
           switch; Prospects, Coaching and the organisation pages live in the
           More sheet. */}
       <nav
+        ref={tabBarRef}
         className={styles.bottomNav}
         aria-label="Mobile Sales Xray navigation"
       >

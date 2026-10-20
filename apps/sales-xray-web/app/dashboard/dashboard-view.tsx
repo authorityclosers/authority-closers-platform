@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { Allowance, LibrarySubmission } from "../acquisition-client";
+import {
+  parseSubmissionLibraryPage,
+  type Allowance,
+  type LibrarySubmission,
+} from "../acquisition-client";
 import { ConnectionNotice } from "../connection-notice";
 import { LightboxShell } from "../shell/lightbox-shell";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
@@ -163,6 +167,18 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
       }),
     [identity],
   );
+
+  // The list the server read for this page is the Calls list's first page
+  // too: Calls then opens with its rows.
+  useEffect(() => {
+    const served = seedAllowed ? initial?.recent : null;
+    if (!identity || served?.status !== 200) return;
+    try {
+      rememberCallsPage(identity, parseSubmissionLibraryPage(served.body));
+    } catch {
+      // A bad shape stays the server's problem; Calls reads for itself.
+    }
+  }, [identity, seedAllowed, initial]);
 
   // Ready panels are kept for this identity's next visit.
   useEffect(() => {

@@ -5,21 +5,31 @@
  * highly animated and made in such nice way … so that its smooth").
  *
  * A press on a tab or a rail icon answers at once: the frame swaps the page
- * area for the next screen's outline (route-loading.tsx) inside a view
- * transition, so the page area fades through with a short slide in the
- * direction of travel (right for a place further along the tabs or a step
- * deeper, left for back) while the rail, bars and tab bar stay still. The
- * router fetches the screen meanwhile; when it arrives it takes the
- * outline's place, and the content fills in.
+ * area for the next screen's outline (route-loading.tsx) and slides it in a
+ * little in the direction of travel (right for a place further along the
+ * tabs or a step deeper, left for back; a rise on wide screens), while the
+ * rail, bars and tab bar stay still and their highlight glides across
+ * (useGlide). The router fetches the screen meanwhile; when it arrives it
+ * takes the outline's place, and the content fills in.
  *
- * Reduce motion gets a short dissolve and no slide. Browsers without view
- * transitions still get the outline at once. Moves the app makes itself
- * (router.push, Back) get a fade of the page area: opacity only, because a
- * transform on the page area would carry the page's fixed bars (the call
- * player) along with it.
+ * No view transition: its overlay takes every pointer event while it runs,
+ * so a transition started on the press swallowed the click that followed
+ * (the tap never navigated). The page area is animated directly instead;
+ * while the outline stands in, the page underneath is hidden, so a moving
+ * page area carries no fixed bars with it.
+ *
+ * Reduce motion gets a short dissolve and no slide. Moves the app makes
+ * itself (router.push, Back) fade the page area: opacity only, because a
+ * transform there would carry the page's fixed bars (the call player).
  */
 import { flushSync } from "react-dom";
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 export type ScreenMove = "forward" | "back";
 
@@ -80,27 +90,51 @@ export function screenMove(
   return b.index > a.index ? "forward" : "back";
 }
 
-type ViewTransition = { finished: Promise<void> };
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (update: () => void) => ViewTransition;
-};
-
 /** Asks the frame to show the next screen's outline now. */
 export const SCREEN_GOING_EVENT = "sx:screen-going";
+/** Asks the frame to give the page back: a press that never became a tap. */
+export const SCREEN_BACK_EVENT = "sx:screen-back";
 
 /** How long an outline may stand in before the old screen comes back. */
 export const SCREEN_GIVE_UP_MS = 12_000;
+/** A press shows its outline at once; with no click by then, it lets go. */
+export const SCREEN_PRESS_HOLD_MS = 1_200;
+
+type Going = { to: string; move: ScreenMove };
 
 const reducedMotion = () =>
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+const wide = () => window.matchMedia?.("(min-width: 900px)").matches === true;
 
-let moves = 0;
+const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+/** The spring from the tokens where the browser takes linear() curves. */
+function spring(element: HTMLElement) {
+  return (
+    getComputedStyle(element).getPropertyValue("--sx-spring").trim() ||
+    EASE_OUT
+  );
+}
+
+function animate(
+  element: HTMLElement,
+  frames: Keyframe[],
+  options: KeyframeAnimationOptions,
+) {
+  if (typeof element.animate !== "function") return;
+  try {
+    element.animate(frames, options).finished.catch(() => undefined);
+  } catch {
+    element
+      .animate(frames, { ...options, easing: EASE_OUT })
+      .finished.catch(() => undefined);
+  }
+}
 
 /**
- * Moves to `to`: the frame shows its outline at once (inside a view
- * transition where the browser has them) and `navigate` asks the router
- * for it. Returns false when the move has no direction (same place, or a
- * page outside the app frame): the caller navigates as usual.
+ * Moves to `to`: the frame shows its outline at once and `navigate` asks
+ * the router for it. Returns false when the move has no direction (same
+ * place, or a page outside the app frame): the caller navigates as usual.
  */
 export function moveScreen(
   navigate: () => void,
@@ -109,42 +143,12 @@ export function moveScreen(
 ): boolean {
   const move = screenMove(from, to);
   if (!move) return false;
-  const standIn = () =>
-    window.dispatchEvent(
-      new CustomEvent<string>(SCREEN_GOING_EVENT, { detail: to }),
-    );
-  const doc = document as ViewTransitionDocument;
-  if (typeof doc.startViewTransition !== "function") {
-    standIn();
-    navigate();
-    return true;
-  }
-  const root = document.documentElement;
-  const token = (moves += 1);
-  root.dataset.sxMove = reducedMotion() ? "fade" : move;
-  try {
-    const transition = doc.startViewTransition.call(doc, () => {
-      standIn();
-      navigate();
-    });
-    void transition.finished
-      .catch(() => undefined)
-      .then(() => {
-        if (token === moves) delete root.dataset.sxMove;
-      });
-  } catch {
-    delete root.dataset.sxMove;
-    standIn();
-    navigate();
-  }
+  window.dispatchEvent(
+    new CustomEvent<Going>(SCREEN_GOING_EVENT, { detail: { to, move } }),
+  );
+  navigate();
   return true;
 }
-
-/** Asks the frame to give the page back: a press that never became a tap. */
-export const SCREEN_BACK_EVENT = "sx:screen-back";
-
-/** A press shows its outline at once; with no click by then, it lets go. */
-export const SCREEN_PRESS_HOLD_MS = 1_200;
 
 let pressed: { to: string; timer: number } | null = null;
 
@@ -202,12 +206,32 @@ export function useScreenMotion(
   const tappedFrom = useRef<string | null>(null);
   useEffect(() => {
     const onGoing = (event: Event) => {
-      const to = (event as CustomEvent<unknown>).detail;
-      if (typeof to !== "string") return;
+      const detail = (event as CustomEvent<unknown>).detail as Going | null;
+      if (!detail || typeof detail.to !== "string") return;
       const from = window.location.pathname;
       tappedFrom.current = from;
-      // Drawn before the view transition takes its "after" picture.
-      flushSync(() => setGoing({ to, from }));
+      // The outline is on screen before this returns...
+      flushSync(() => setGoing({ to: detail.to, from }));
+      // ...and slides in; the page underneath is hidden meanwhile.
+      const page = pageRef.current;
+      if (!page) return;
+      if (reducedMotion()) {
+        animate(page, [{ opacity: 0 }, { opacity: 1 }], {
+          duration: 160,
+          easing: "linear",
+        });
+        return;
+      }
+      const start = wide()
+        ? { opacity: 0, transform: "translateY(10px) scale(0.995)" }
+        : {
+            opacity: 0,
+            transform: `translateX(${detail.move === "back" ? -28 : 28}px)`,
+          };
+      animate(page, [start, { opacity: 1, transform: "none" }], {
+        duration: 280,
+        easing: EASE_OUT,
+      });
     };
     // A press that never became a tap: the page comes back.
     const onBack = (event: Event) => {
@@ -221,7 +245,7 @@ export function useScreenMotion(
       window.removeEventListener(SCREEN_GOING_EVENT, onGoing);
       window.removeEventListener(SCREEN_BACK_EVENT, onBack);
     };
-  }, []);
+  }, [pageRef]);
   // Any new address ends the stand-in, wherever the router went.
   if (going !== null && going.from !== pathname) setGoing(null);
   const standing = going !== null && going.from === pathname ? going.to : null;
@@ -244,14 +268,47 @@ export function useScreenMotion(
       tappedFrom.current = null;
       return;
     }
-    if (document.documentElement.dataset.sxMove) return;
     const page = pageRef.current;
-    if (!screenMove(from, pathname) || typeof page?.animate !== "function")
-      return;
-    page.animate([{ opacity: 0 }, { opacity: 1 }], {
+    if (!page || !screenMove(from, pathname)) return;
+    animate(page, [{ opacity: 0 }, { opacity: 1 }], {
       duration: reducedMotion() ? 120 : 220,
-      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+      easing: EASE_OUT,
     });
   }, [pageRef, pathname]);
   return standing;
+}
+
+/**
+ * The selected tab's (or rail icon's) capsule glides from where it was to
+ * where it is now, on the spring, whenever `selected` changes: a tap, Back,
+ * or a move the app made. Measured, not a view transition, so it never
+ * blocks a pointer. `selector` finds the visible capsule inside `container`.
+ */
+export function useGlide(
+  container: RefObject<HTMLElement | null>,
+  selector: string,
+  selected: unknown,
+) {
+  const last = useRef<DOMRect | null>(null);
+  useLayoutEffect(() => {
+    const pill = container.current?.querySelector<HTMLElement>(selector);
+    const now = pill?.getBoundingClientRect() ?? null;
+    const before = last.current;
+    last.current = now && now.width > 0 ? now : null;
+    if (!pill || !now || !before || now.width === 0 || reducedMotion()) return;
+    const dx = before.left - now.left;
+    const dy = before.top - now.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    animate(
+      pill,
+      [
+        {
+          opacity: 1,
+          transform: `translate(${dx}px, ${dy}px) scale(${before.width / now.width}, ${before.height / now.height})`,
+        },
+        { opacity: 1, transform: "none" },
+      ],
+      { duration: 420, easing: spring(pill) },
+    );
+  }, [container, selector, selected]);
 }

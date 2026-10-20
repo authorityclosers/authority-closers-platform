@@ -1,6 +1,6 @@
 import { act, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
   moveScreen,
@@ -11,15 +11,22 @@ import {
   SCREEN_PRESS_HOLD_MS,
   screenMove,
   takePress,
+  useGlide,
   useScreenMotion,
 } from "./screen-transition";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
+const animate = vi.fn(() => ({ finished: Promise.resolve() }));
+beforeEach(() => {
+  animate.mockClear();
+  Object.defineProperty(HTMLElement.prototype, "animate", {
+    configurable: true,
+    value: animate,
+  });
+});
 afterEach(() => {
-  delete (document as { startViewTransition?: unknown }).startViewTransition;
-  delete document.documentElement.dataset.sxMove;
   delete (HTMLElement.prototype as { animate?: unknown }).animate;
   window.history.replaceState(null, "", "/");
   vi.useRealTimers();
@@ -80,7 +87,13 @@ async function mount(pathname: string) {
   };
 }
 
-it("shows the tapped place's outline at once, until the router arrives", async () => {
+it("shows the tapped place's outline at once, sliding in, until the router arrives", async () => {
+  // A phone: the page area slides sideways (wide screens rise instead).
+  const realMatchMedia = window.matchMedia;
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: () => ({ matches: false }),
+  });
   const frame = await mount("/dashboard");
   const navigate = vi.fn();
   await act(async () => {
@@ -88,36 +101,22 @@ it("shows the tapped place's outline at once, until the router arrives", async (
   });
   expect(navigate).toHaveBeenCalledOnce();
   expect(frame.host.textContent).toBe("/leads");
+  // Slid in from the side it moves towards (a phone), never a view
+  // transition, whose overlay would take the click.
+  const [frames] = animate.mock.calls[0] as unknown as [Keyframe[]];
+  expect(frames[0]).toMatchObject({ opacity: 0, transform: "translateX(28px)" });
   await frame.render("/leads");
   expect(frame.host.textContent).toBe("page");
+  // The page taking the outline's place doesn't move again.
+  expect(animate).toHaveBeenCalledOnce();
   // Coming back later shows the page, not the old outline.
   await frame.render("/dashboard");
   expect(frame.host.textContent).toBe("page");
   await frame.unmount();
-});
-
-it("draws the outline inside a view transition, which slides the page area", async () => {
-  let update: (() => void) | null = null;
-  let finish: () => void = () => {};
-  Object.assign(document, {
-    startViewTransition: (callback: () => void) => {
-      update = callback;
-      return { finished: new Promise<void>((resolve) => (finish = resolve)) };
-    },
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: realMatchMedia,
   });
-  const frame = await mount("/analysis/calls");
-  const navigate = vi.fn();
-  moveScreen(navigate, "/analysis/calls", "/leads");
-  expect(document.documentElement.dataset.sxMove).toBe("back");
-  expect(navigate).not.toHaveBeenCalled();
-  await act(async () => update!());
-  // The outline is drawn synchronously, before the "after" picture.
-  expect(frame.host.textContent).toBe("/leads");
-  expect(navigate).toHaveBeenCalledOnce();
-  finish();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(document.documentElement.dataset.sxMove).toBeUndefined();
-  await frame.unmount();
 });
 
 it("gives the page back when the router never arrives", async () => {
@@ -134,25 +133,14 @@ it("gives the page back when the router never arrives", async () => {
   await frame.unmount();
 });
 
-it("fades the page area for a move no tap started", async () => {
-  const animate = vi.fn();
-  Object.defineProperty(HTMLElement.prototype, "animate", {
-    configurable: true,
-    value: animate,
-  });
+it("fades the page area, opacity only, for a move no tap started", async () => {
   const frame = await mount("/leads");
   expect(animate).not.toHaveBeenCalled();
   await frame.render("/analysis/calls");
   expect(animate).toHaveBeenCalledOnce();
   // Opacity only: the page's fixed bars must not move with it.
-  const [frames] = animate.mock.calls[0] as [Keyframe[]];
+  const [frames] = animate.mock.calls[0] as unknown as [Keyframe[]];
   expect(frames.every((frame) => !("transform" in frame))).toBe(true);
-  // A tapped move doesn't fade a second time when the page arrives.
-  await act(async () => {
-    moveScreen(() => {}, "/analysis/calls", "/dashboard");
-  });
-  await frame.render("/dashboard");
-  expect(animate).toHaveBeenCalledOnce();
   await frame.unmount();
 });
 
@@ -193,7 +181,43 @@ it("gives the page back when a press ends without a click", async () => {
   await frame.unmount();
 });
 
-it("never presses towards the place on screen", async () => {
+it("never presses towards the place on screen", () => {
   expect(pressScreen("/leads", "/leads")).toBe(false);
   expect(takePress("/leads")).toBe(false);
+});
+
+function Tabs({ selected }: { selected: number }) {
+  const ref = useRef<HTMLElement | null>(null);
+  useGlide(ref, "[aria-current] i", selected);
+  return (
+    <nav ref={ref}>
+      {[0, 1, 2].map((tab) => (
+        <a key={tab} aria-current={tab === selected ? "page" : undefined}>
+          <i data-tab={tab} />
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+it("glides the selected tab's capsule from where it was", async () => {
+  const rect = (left: number) =>
+    ({ left, top: 0, width: 60, height: 40 }) as DOMRect;
+  const spy = vi
+    .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: HTMLElement) {
+      return rect(Number(this.dataset.tab ?? 0) * 70);
+    });
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  await act(async () => root.render(<Tabs selected={0} />));
+  expect(animate).not.toHaveBeenCalled();
+  await act(async () => root.render(<Tabs selected={2} />));
+  expect(animate).toHaveBeenCalledOnce();
+  const [frames] = animate.mock.calls[0] as unknown as [Keyframe[]];
+  // From tab 0 (left 0) to tab 2 (left 140): it starts 140 px back.
+  expect(frames[0].transform).toBe("translate(-140px, 0px) scale(1, 1)");
+  expect(frames[1].transform).toBe("none");
+  spy.mockRestore();
+  await act(async () => root.unmount());
 });

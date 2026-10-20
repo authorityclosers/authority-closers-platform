@@ -927,7 +927,8 @@
    web. The selected tab sits in a soft capsule that glides to the next tab
    when you move (a view transition, screen-transition.ts); a press dips
    the tab with a spring. Labels and icons stay monochrome; teal marks the
-   selected icon and the one New action. */
+   selected icon and the one New action. The capsule glides by measuring
+   (screen-transition.ts useGlide). */
 
 .bottomNav {
   display: none;
@@ -991,7 +992,6 @@
 .bottomLink[aria-current="page"] .tabPill {
   opacity: 1;
   transform: none;
-  view-transition-name: sx-tab-pill;
 }
 
 .bottomLink[aria-current="page"] {
@@ -1453,7 +1453,6 @@
 .stripBtnActive .railPill {
   opacity: 1;
   transform: none;
-  view-transition-name: sx-rail-pill;
 }
 .stripBtnActive::before {
   position: absolute;
