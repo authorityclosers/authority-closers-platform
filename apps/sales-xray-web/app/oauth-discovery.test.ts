@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { GET as serverMetadata } from "./.well-known/oauth-authorization-server/route";
+import { GET as openIdMetadata } from "./.well-known/openid-configuration/route";
 import { GET as resourceMetadata } from "./.well-known/oauth-protected-resource/[[...resource]]/route";
 import {
   authorizationServerMetadata,
@@ -56,6 +57,13 @@ describe("OAuth discovery", () => {
     ).json();
     expect(served.issuer).toBe(origin);
     expect(serverMetadata(at("evil.example")).status).toBe(404);
+    const oidc = await openIdMetadata(
+      at("salesxray.authorityclosers.com"),
+    ).json();
+    expect(oidc.registration_endpoint).toBe(`${origin}/v1/oauth/register`);
+    expect(
+      protectedResourceMetadata(origin, "/v1/mcp")?.scopes_supported,
+    ).toEqual(["calls:read", "reports:read", "leads:read", "leads:write"]);
     const resource = await resourceMetadata(
       at("salesxray.authorityclosers.com"),
       { params: Promise.resolve({ resource: ["v1", "mcp"] }) },

@@ -24,8 +24,9 @@ from fastapi.responses import JSONResponse
 
 from ac_platform.http.routes import RouteContext
 from ac_platform.integrations.api_http import STAGES, ApiError, NewLeadBody, Reader, make_opener
+from ac_platform.integrations.oauth_http import DEFAULT_SCOPES
 
-PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
+PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 VERSION = "1.0.0"
 MAX_BODY = 65536
 INSTRUCTIONS = (
@@ -238,7 +239,11 @@ def install_mcp_http(application: FastAPI, ctx: RouteContext) -> None:
     settings = ctx.settings
     open_reader = make_opener(ctx)
     base = str(settings.sales_xray_app_url).rstrip("/") if settings.sales_xray_app_url else ""
-    challenge = f'resource_metadata="{base}/.well-known/oauth-protected-resource/v1/mcp"'
+    # RFC 9728 and MCP 2025-11-25: where to find Connect, and the scopes to ask for (reading).
+    challenge = (
+        f'resource_metadata="{base}/.well-known/oauth-protected-resource/v1/mcp", '
+        f'scope="{DEFAULT_SCOPES}"'
+    )
 
     def refused(error: ApiError) -> JSONResponse:
         headers = {"Cache-Control": "no-store"}

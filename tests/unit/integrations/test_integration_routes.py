@@ -34,6 +34,10 @@ PATHS = (
     "/v1/mcp",
     "/v1/me/connected-apps",
     "/v1/me/connected-apps/{grant_id}/revoke",
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/openid-configuration",
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/{path}",
 )
 
 

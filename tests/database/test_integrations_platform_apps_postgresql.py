@@ -125,6 +125,22 @@ def test_a_member_connects_a_platform_app_for_their_own_account(
                 assert meta.status_code == 200
                 assert meta.json()["registration_endpoint"].endswith("/v1/oauth/register")
                 assert meta.json()["code_challenge_methods_supported"] == ["S256"]
+                # The same discovery documents, served by the API (the dev edge sends them here).
+                for path in (
+                    "/.well-known/oauth-authorization-server",
+                    "/.well-known/openid-configuration",
+                ):
+                    found = await server.get(path)
+                    assert found.status_code == 200 and found.json() == meta.json(), path
+                prm = await server.get("/.well-known/oauth-protected-resource/v1/mcp")
+                assert prm.json()["resource"].endswith("/v1/mcp")
+                assert "webhooks:manage" not in prm.json()["scopes_supported"]
+                assert (
+                    await server.get("/.well-known/oauth-protected-resource")
+                ).status_code == 200
+                assert (
+                    await server.get("/.well-known/oauth-protected-resource/v1/admin")
+                ).status_code == 404
                 for wrong in (
                     {"client_name": "Sales X-Ray Official", "redirect_uris": [HOST_RETURN]},
                     {"client_name": "Host", "redirect_uris": ["http://mcp-host.example.test/cb"]},
@@ -205,6 +221,7 @@ def test_a_member_connects_a_platform_app_for_their_own_account(
                 challenge = bare.headers["www-authenticate"]
                 assert 'resource_metadata="' in challenge
                 assert "/.well-known/oauth-protected-resource/v1/mcp" in challenge
+                assert 'scope="calls:read reports:read leads:read"' in challenge
                 assert (await server.get("/v1/mcp", headers=bearer)).status_code == 405
                 evil = await server.post(
                     "/v1/mcp",

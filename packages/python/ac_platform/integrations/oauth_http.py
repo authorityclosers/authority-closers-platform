@@ -12,8 +12,14 @@ The app's own server (no cookies):
 - POST /v1/oauth/token               authorization_code or refresh_token (form or JSON)
 - POST /v1/oauth/revoke              RFC 7009
 - POST /v1/oauth/register            RFC 7591 dynamic client registration
-- GET  /v1/oauth/metadata            RFC 8414 server metadata (also served by the web
-                                     app at /.well-known/oauth-authorization-server)
+- GET  /v1/oauth/metadata            RFC 8414 server metadata
+
+Discovery for MCP hosts (ChatGPT, Claude, any spec client), the same documents the web app
+serves at these paths in production. On dev the edge sends them here, so a host is never kept
+waiting by the web app's development compiler:
+- GET  /.well-known/oauth-authorization-server   RFC 8414 (also at openid-configuration,
+                                                 for hosts that try OIDC discovery first)
+- GET  /.well-known/oauth-protected-resource[/v1/mcp|/v1/api]   RFC 9728
 
 The signed-in person's own connections (Settings):
 - GET  /v1/me/connected-apps                     apps they connected for themself
@@ -70,6 +76,10 @@ REGISTER_WORDS = {
 }
 # What an MCP host gets when it asks for no scope: reading, never writing.
 DEFAULT_SCOPES = "calls:read reports:read leads:read"
+# The MCP tools' scopes, which the resource metadata offers (webhooks:manage is for the CLI).
+MCP_SCOPES = ("calls:read", "reports:read", "leads:read", "leads:write")
+RESOURCES = ("/v1/mcp", "/v1/api")
+DISCOVERY = {"Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*"}
 REGISTER_EACH = RateLimitRule(
     name="oauth-register-address",
     method="POST",
@@ -165,9 +175,25 @@ def server_metadata(base: str) -> dict[str, Any]:
     }
 
 
+def protected_resource_metadata(base: str, path: str) -> dict[str, Any] | None:
+    """RFC 9728 metadata for /v1/mcp (also the bare path) or /v1/api; None for anything else."""
+    resource = "/" + path.strip("/") if path.strip("/") else "/v1/mcp"
+    if resource not in RESOURCES:
+        return None
+    return {
+        "resource": f"{base}{resource}",
+        "authorization_servers": [base],
+        "bearer_methods_supported": ["header"],
+        "scopes_supported": list(MCP_SCOPES),
+        "resource_name": "Sales X-Ray",
+        "resource_documentation": f"{base}/developers",
+    }
+
+
 def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
     router = APIRouter(prefix="/v1/oauth", tags=["oauth"])
     mine = APIRouter(prefix="/v1/me/connected-apps", tags=["oauth"])
+    discovery = APIRouter(tags=["oauth"])
     settings = ctx.settings
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
     limiter = InMemoryTokenBucketLimiter()
@@ -473,6 +499,22 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
             return _oauth_error("invalid_request", 404)
         return JSONResponse(server_metadata(base()), headers={"Cache-Control": "max-age=300"})
 
+    def not_found() -> JSONResponse:
+        return JSONResponse({"error": "not_found"}, status_code=404, headers=NO_STORE)
+
+    @discovery.get("/.well-known/oauth-authorization-server")
+    @discovery.get("/.well-known/openid-configuration")
+    async def server_discovery(request: Request) -> JSONResponse:
+        if not served(request):
+            return not_found()
+        return JSONResponse(server_metadata(base()), headers=DISCOVERY)
+
+    @discovery.get("/.well-known/oauth-protected-resource")
+    @discovery.get("/.well-known/oauth-protected-resource/{path:path}")
+    async def resource_discovery(request: Request, path: str = "") -> JSONResponse:
+        body = protected_resource_metadata(base(), path) if served(request) else None
+        return JSONResponse(body, headers=DISCOVERY) if body else not_found()
+
     @mine.get("")
     async def my_apps(request: Request, response: Response) -> dict[str, Any]:
         here(request)
@@ -527,3 +569,4 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
 
     application.include_router(router)
     application.include_router(mine)
+    application.include_router(discovery)

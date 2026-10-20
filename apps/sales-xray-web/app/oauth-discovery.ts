@@ -18,6 +18,14 @@ export const SCOPES = [
   "webhooks:manage",
 ] as const;
 
+/** What the MCP server's tools use; the resource metadata offers these (webhooks:manage is the CLI's). */
+export const MCP_SCOPES = [
+  "calls:read",
+  "reports:read",
+  "leads:read",
+  "leads:write",
+] as const;
+
 const AUTH_METHODS = ["none", "client_secret_basic", "client_secret_post"];
 const PUBLIC_HOST = /^salesxray(-[a-z0-9]+)?\.authorityclosers\.com$/;
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost)(:[0-9]{2,5})?$/;
@@ -61,7 +69,7 @@ export function protectedResourceMetadata(origin: string, path: string) {
     resource: `${origin}${resource}`,
     authorization_servers: [origin],
     bearer_methods_supported: ["header"],
-    scopes_supported: [...SCOPES],
+    scopes_supported: [...MCP_SCOPES],
     resource_name: "Sales X-Ray",
     resource_documentation: `${origin}/developers`,
   };

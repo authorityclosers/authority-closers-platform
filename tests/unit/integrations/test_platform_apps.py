@@ -11,7 +11,11 @@ import pytest
 
 from ac_platform.integrations import first_party, mcp_http, oauth, scopes
 from ac_platform.integrations.errors import IntegrationError
-from ac_platform.integrations.oauth_http import server_metadata
+from ac_platform.integrations.oauth_http import (
+    MCP_SCOPES,
+    protected_resource_metadata,
+    server_metadata,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 NOW = datetime(2026, 10, 20, tzinfo=UTC)
@@ -121,8 +125,24 @@ def test_server_metadata_describes_connect() -> None:
     assert meta["scopes_supported"] == list(scopes.SCOPES)
 
 
+def test_protected_resource_metadata_names_connect_and_the_tools_scopes() -> None:
+    base = "https://salesxray.example.test"
+    for path in ("", "v1/mcp", "/v1/mcp/"):
+        meta = protected_resource_metadata(base, path)
+        assert meta is not None and meta["resource"] == f"{base}/v1/mcp"
+        assert meta["authorization_servers"] == [base]
+        assert meta["scopes_supported"] == list(MCP_SCOPES)
+    assert protected_resource_metadata(base, "v1/api")["resource"] == f"{base}/v1/api"  # type: ignore[index]
+    assert protected_resource_metadata(base, "v1/admin") is None
+    assert set(MCP_SCOPES) <= set(scopes.SCOPES) and "webhooks:manage" not in MCP_SCOPES
+
+
+def _ts_list(source: str, name: str) -> list[str]:
+    block = source.split(f"export const {name} = [", 1)[1].split("]", 1)[0]
+    return [item.strip().strip('",') for item in block.split("\n") if item.strip()]
+
+
 def test_the_web_discovery_documents_list_the_same_scopes() -> None:
     source = (ROOT / "apps/sales-xray-web/app/oauth-discovery.ts").read_text(encoding="utf-8")
-    block = source.split("export const SCOPES = [", 1)[1].split("]", 1)[0]
-    listed = [item.strip().strip('",') for item in block.split("\n") if item.strip()]
-    assert listed == list(scopes.SCOPES)
+    assert _ts_list(source, "SCOPES") == list(scopes.SCOPES)
+    assert _ts_list(source, "MCP_SCOPES") == list(MCP_SCOPES)
