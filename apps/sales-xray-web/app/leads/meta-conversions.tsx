@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 
 import { Badge, Button, Field } from "../ui/kit";
 import { ago, LeadsError } from "./leads-client";
+import { Group, SwitchRow } from "./app-card";
 import styles from "./leads.module.css";
 
 export type MetaDataset = { id: string; name: string };
@@ -187,7 +188,9 @@ function Chooser({
       return;
     }
     if (Object.values(events).some((name) => name != null && !name.trim())) {
-      setNote("Give each ticked stage a Meta event name, or untick it.");
+      setNote(
+        "Give each stage that is switched on a Meta event name, or switch it off.",
+      );
       return;
     }
     setBusy(true);
@@ -271,42 +274,45 @@ function Chooser({
           </div>
         </details>
       ) : null}
-      <fieldset className={styles.capiStages}>
-        <legend>What each stage is called in Meta</legend>
-        {STAGES.map(([stage, label]) => (
-          <div key={stage} className={styles.capiStage}>
-            <label>
+      <Group
+        title="Which stages Meta learns from"
+        hint="Switch on the stages to send, and name each as Meta should see it. A lead that jumps ahead also sends the stages it skipped, so Meta sees the whole way from New to Won."
+      >
+        {STAGES.map(([stage, label]) => {
+          const on = events[stage] != null;
+          return (
+            <SwitchRow
+              key={stage}
+              label={label}
+              hint={
+                on
+                  ? `Sent to Meta as "${events[stage]?.trim() || "…"}"`
+                  : "Not sent to Meta"
+              }
+              checked={on}
+              onChange={(next) =>
+                setEvents((current) => ({
+                  ...current,
+                  [stage]: next ? label : null,
+                }))
+              }
+            >
               <input
-                type="checkbox"
-                checked={events[stage] != null}
+                aria-label={`Meta event for ${label}`}
+                placeholder={label}
+                value={events[stage] ?? ""}
+                maxLength={50}
                 onChange={(event) =>
                   setEvents((current) => ({
                     ...current,
-                    [stage]: event.target.checked ? label : null,
+                    [stage]: event.target.value,
                   }))
                 }
               />
-              {label}
-            </label>
-            <input
-              aria-label={`Meta event for ${label}`}
-              value={events[stage] ?? ""}
-              disabled={events[stage] == null}
-              maxLength={50}
-              onChange={(event) =>
-                setEvents((current) => ({
-                  ...current,
-                  [stage]: event.target.value,
-                }))
-              }
-            />
-          </div>
-        ))}
-        <p className={styles.hint}>
-          A lead that jumps ahead also sends the stages it skipped, so Meta sees
-          the whole way from New to Won.
-        </p>
-      </fieldset>
+            </SwitchRow>
+          );
+        })}
+      </Group>
       <details className={styles.capiNew}>
         <summary>Check it with Meta&apos;s test events</summary>
         <Field

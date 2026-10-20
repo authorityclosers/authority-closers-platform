@@ -226,7 +226,7 @@ it("says what is missing instead of doing nothing", async () => {
   );
   await act(async () => button("Send lead stages to Meta").click());
   expect(host.textContent).toContain(
-    "Give each ticked stage a Meta event name",
+    "Give each stage that is switched on a Meta event name",
   );
   expect(calls.some((call) => call.method === "PUT")).toBe(false);
   // With just one dataset, it is picked for you.
