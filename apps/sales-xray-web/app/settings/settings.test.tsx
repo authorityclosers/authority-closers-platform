@@ -50,6 +50,7 @@ import { AccountRedirect } from "./account-redirect";
 import SettingsPage from "./page";
 import { SettingsShell, currentSection } from "./settings-shell";
 import {
+  SETTINGS_LINKS,
   SETTINGS_SECTIONS,
   accountRedirect,
   isSettingsSection,
@@ -209,7 +210,7 @@ it("keeps the Settings frame while the session is checked", async () => {
   await act(async () => root.render(<SettingsSkeleton />));
   expect(host.querySelector("h1")?.textContent).toBe("Settings");
   expect(host.querySelectorAll("a[data-variant='list']")).toHaveLength(
-    SETTINGS_SECTIONS.length,
+    SETTINGS_SECTIONS.length + SETTINGS_LINKS.length,
   );
 });
 
