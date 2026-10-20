@@ -940,6 +940,13 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                     for item in network
                 ):
                     accepted_aborts.add(f"{method} {path}: net::ERR_ABORTED")
+            # Next probes each nav tab's page with HEAD; a navigation cancels the probes
+            # still in flight. Accept that for any exported page path (new tabs such as
+            # /leads/, /chats/ and /coaching/ add probes); every other failure stays fatal.
+            page_probe = re.compile(r"HEAD /(?:[a-z0-9_-]+/)*: net::ERR_ABORTED")
+            accepted_aborts.update(
+                failure for failure in request_failures if page_probe.fullmatch(failure)
+            )
             proof["navigation_cancellations"] = [
                 failure for failure in request_failures if failure in accepted_aborts
             ]
