@@ -5,6 +5,8 @@
  */
 
 .root {
+  --accent-text: color-mix(in oklab, var(--sx-accent) 78%, var(--sx-ink));
+
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -144,7 +146,7 @@
 }
 
 .profileButton small {
-  color: var(--sx-accent-ink);
+  color: var(--accent-text);
   font-size: var(--sx-text-xs);
   font-weight: 600;
 }
@@ -266,7 +268,7 @@
 
 .stageMain {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 70px;
+  grid-template-columns: minmax(0, 1fr) 104px 64px;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -443,7 +445,7 @@ button.stageMain:focus-visible {
   padding: 2px 0;
   border: 0;
   background: none;
-  color: var(--sx-accent-ink);
+  color: var(--accent-text);
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 600;
@@ -828,7 +830,7 @@ button.templateCard:focus-visible {
   border: 1px solid color-mix(in oklab, var(--sx-accent) 35%, var(--sx-line));
   border-radius: var(--sx-radius-md);
   background: var(--sx-accent-soft);
-  color: var(--sx-accent-ink);
+  color: var(--accent-text);
   font-size: var(--sx-text-sm);
   animation: rise var(--sx-dur-base) var(--sx-ease-out);
 }
@@ -1194,9 +1196,12 @@ button.templateCard:focus-visible {
   }
 
   .leadCount,
-  .moves,
-  .grip {
+  .moves {
     display: none;
+  }
+
+  .grip {
+    visibility: hidden;
   }
 
   .add {
@@ -1204,8 +1209,14 @@ button.templateCard:focus-visible {
   }
 
   .addGuess {
+    grid-row: 2;
     grid-column: 2 / -1;
     max-width: none;
+  }
+
+  .add > button {
+    grid-row: 1;
+    grid-column: 3;
   }
 
   .match {
@@ -1226,9 +1237,12 @@ button.templateCard:focus-visible {
     height: 44px;
   }
 
-  .moves,
-  .grip {
+  .moves {
     display: none;
+  }
+
+  .grip {
+    visibility: hidden;
   }
 }
 

@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -180,6 +181,11 @@ class AdEventView(_View):
     test: bool
 
 
+class OptionView(_View):
+    id: str
+    words: str
+
+
 class ProviderView(_View):
     id: str
     name: str
@@ -196,6 +202,7 @@ class ProviderView(_View):
     test_code: str | None = Field(alias="testCode")
     since: datetime | None
     matches: list[MatchView]
+    options: list[OptionView] = Field(default_factory=list)
     needs_check: int = Field(alias="needsCheck")
     confirmed_at: datetime | None = Field(alias="confirmedAt")
     counts: dict[str, int]
@@ -216,6 +223,11 @@ class DestinationCommand(_Command):
     destination_name: str = Field(alias="destinationName", min_length=1, max_length=120)
     on: bool
     test_code: str | None = Field(default=None, alias="testCode", max_length=32)
+
+
+class DestinationView(_View):
+    id: str
+    name: str
 
 
 class MatchesCommand(_Command):
@@ -252,6 +264,16 @@ def waiting_words(provider: str, code: str | None) -> str | None:
                 "Meta didn't allow sending to this dataset. Continue with Meta again and allow "
                 "your ad account and dataset."
             )
+    if provider == "google_ads":
+        if "customer_data_terms" in code or "enhanced_conversions" in code:
+            return (
+                "In Google Ads, open Goals → Settings, accept the customer data terms and "
+                "turn on enhanced conversions for leads."
+            )
+        if code in ("not_connected", "google_no_action") or "permission" in code:
+            return "Continue with Google again and allow Sales Xray to manage conversions."
+        if "developer_token" in code:
+            return "Google hasn't approved Sales Xray for live accounts yet. Test accounts work."
     if code == "not_connected":
         return "Connect it again to keep sending stages."
     return None
@@ -578,7 +600,7 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                     destination_words=info.destination,
                     available=True,
                     configured=adapter.configured(),
-                    connected=adapter.connected(config, desk.tenant_id),
+                    connected=await mapping.is_connected(provider, desk.db, desk.tenant_id, config),
                     destination={
                         "id": saved.destination_id,
                         "name": saved.destination_name or saved.destination_id,
@@ -588,6 +610,7 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                     on=saved.on,
                     test_code=saved.test_code,
                     since=_epoch(saved.since),
+                    options=[OptionView(id=item.id, words=item.words) for item in info.options],
                     matches=[
                         MatchView(
                             stage_key=item.stage.key,
@@ -682,6 +705,18 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 raise DeskError(422, f"Pick one of your {info.name} {info.destination}s.")
             if command.test_code and not adapter.TEST_CODE.fullmatch(command.test_code):
                 raise DeskError(422, "Copy the test code exactly as the platform shows it.")
+            extra: dict[str, Any] = {}
+            prepare = getattr(adapter, "prepare", None)
+            if command.on and prepare is not None:
+                # Before any lock: this asks the platform (Google makes its conversion
+                # actions in the business's account).
+                try:
+                    async with httpx.AsyncClient(timeout=20) as client:
+                        extra = await prepare(
+                            desk.db, desk.tenant_id, command.destination_id, client
+                        )
+                except ValueError as error:
+                    raise DeskError(409, str(error)) from None
             row = await lock_settings(desk)
             config = dict(row.config or {})
             if command.on and not mapping.read(config, provider).events:
@@ -703,9 +738,27 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 on=command.on,
                 test_code=command.test_code or None,
                 now=mapping.epoch(desk.now),
+                extra=extra,
             )
             await desk.db.flush()
             return await ads_view(desk)
+
+    @router.get(
+        "/journey/ads/{provider}/destinations",
+        response_model=list[DestinationView],
+        response_model_by_alias=True,
+    )
+    async def destinations(
+        provider: str, request: Request, response: Response
+    ) -> list[DestinationView]:
+        """Where this platform's events can go: Meta's datasets, Google's Ads accounts."""
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            adapter = mapping.module(provider)
+            row = await desk.db.get(LeadDeskSettings, desk.tenant_id)
+            config = dict((row.config if row else None) or {})
+            found = await adapter.destinations(desk.db, desk.tenant_id, config)
+            return [DestinationView(id=item["id"], name=item["name"]) for item in found]
 
     @router.put(
         "/journey/ads/{provider}/matches", response_model=AdsView, response_model_by_alias=True

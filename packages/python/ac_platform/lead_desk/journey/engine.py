@@ -181,7 +181,7 @@ async def _collect_one(
                 name = settings.events.get(stage_key)
                 if not name:
                     continue
-                payload = adapter.body(who, event_name=name, at=event.created_at)
+                payload = adapter.body(who, event_name=name, at=event.created_at, settings=settings)
                 inserted = await db.execute(
                     insert(LeadConversion)
                     .values(
@@ -337,6 +337,7 @@ async def deliver(
             destination=row.destination,
             payload=row.payload,
             test_code=settings.test_code,
+            db=db,
         )
         await _record(db, row, answer, started, clock())
         line.update(status=row.status, http_status=answer.http_status)

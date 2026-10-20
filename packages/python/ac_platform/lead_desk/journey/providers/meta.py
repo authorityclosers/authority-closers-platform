@@ -67,7 +67,9 @@ def identity(lead: Lead) -> dict[str, Any] | None:
     return {"lead_ref": ref, "email": lead.email, "phone": lead.phone}
 
 
-def body(who: Mapping[str, Any], *, event_name: str, at: datetime) -> dict[str, Any]:
+def body(
+    who: Mapping[str, Any], *, event_name: str, at: datetime, settings: Any = None
+) -> dict[str, Any]:
     out = meta_capi.event_body(
         meta_lead_id=str(who["lead_ref"]),
         email=who.get("email"),
@@ -87,6 +89,7 @@ async def send(
     destination: str,
     payload: Mapping[str, Any],
     test_code: str | None,
+    db: Any = None,
 ) -> Answer:
     cfg = meta.config()
     if cfg is None:
@@ -98,6 +101,16 @@ async def send(
         client, cfg, dataset_id=destination, token=token, body=payload, test_code=test_code
     )
     return Answer(said.http_status, said.error_code, said.duration_ms, said.fbtrace_id, said.wait)
+
+
+async def destinations(db: Any, tenant_id: UUID, config: Mapping[str, Any]) -> list[dict[str, str]]:
+    """The datasets of the ad accounts and businesses the organisation shared with Meta."""
+    cfg = meta.config()
+    token = meta_capi.connection_token(config, cfg, tenant_id) if cfg else None
+    if cfg is None or token is None:
+        return []
+    found = await meta.Graph(cfg).datasets(token)
+    return [{"id": str(item["id"]), "name": str(item["name"])} for item in found]
 
 
 DESTINATION: Final[re.Pattern[str]] = meta_capi.DATASET_ID

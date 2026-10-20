@@ -13,7 +13,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { notify } from "../../notice-center";
 import { Button, Skeleton } from "../../ui/kit";
-import { useAppConnect } from "../app-connect";
+import { useAppConnect, type ConnectProvider } from "../app-connect";
 import {
   AppCard,
   AppCardSkeleton,
@@ -38,6 +38,12 @@ import {
 import styles from "./journey.module.css";
 
 type Dataset = { id: string; name: string };
+
+// Where each platform's Connect starts (the same routes as Lead sources).
+const CONNECT: Record<string, { href: string; app: ConnectProvider }> = {
+  meta: { href: "/v1/lead-desk/meta/connect", app: "meta" },
+  google_ads: { href: "/v1/lead-desk/google/connect", app: "google" },
+};
 type Datasets = { adAccounts: Dataset[]; datasets: Dataset[] };
 
 const failed = (reason: unknown, title: string) =>
@@ -148,7 +154,8 @@ function ProviderCard({
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [choosing, setChoosing] = useState(false);
-  const connect = useAppConnect("meta", ({ result }) => {
+  const start = CONNECT[provider.id];
+  const connect = useAppConnect(start?.app ?? "meta", ({ result }) => {
     if (result === "connected") reload();
   });
   const run = async (work: () => Promise<AdsView>, title: string) => {
@@ -165,19 +172,14 @@ function ProviderCard({
   };
 
   const connectLink =
-    provider.id === "meta" && provider.configured && !provider.connected ? (
-      <a
-        className={cardStyles.primary}
-        href="/v1/lead-desk/meta/connect"
-        onClick={connect}
-      >
-        Connect Meta
+    start && provider.configured && !provider.connected ? (
+      <a className={cardStyles.primary} href={start.href} onClick={connect}>
+        Connect {provider.name}
       </a>
     ) : null;
 
   const destination = provider.destination;
-  const showChooser =
-    provider.connected && (choosing || !destination) && provider.id === "meta";
+  const showChooser = provider.connected && (choosing || !destination);
   return (
     <AppCard
       title={provider.name}
@@ -188,12 +190,14 @@ function ProviderCard({
     >
       {!provider.configured ? null : !provider.connected ? (
         <p className={styles.cardNote}>
-          {provider.reaches} Connect Meta with the account that runs your ads.
+          {provider.reaches} Connect {provider.name} with the account that runs
+          your ads.
         </p>
       ) : (
         <>
           {showChooser ? (
-            <DatasetChooser
+            <DestinationChooser
+              provider={provider}
               current={destination}
               busy={busy}
               onCancel={destination ? () => setChoosing(false) : undefined}
@@ -250,7 +254,7 @@ function ProviderCard({
               if (done) setEditing(false);
             }}
           />
-          {destination && !showChooser ? (
+          {destination && !showChooser && provider.id === "meta" ? (
             <TestEvents
               provider={provider}
               busy={busy}
@@ -370,7 +374,27 @@ function Matches({
                 className={styles.matchArrow}
                 aria-hidden="true"
               />
-              {editing ? (
+              {editing && provider.options?.length ? (
+                <span className={styles.matchEdit}>
+                  <select
+                    value={name ?? ""}
+                    aria-label={`What ${provider.name} hears for ${item.stageLabel}`}
+                    onChange={(event) =>
+                      setNames((all) => ({
+                        ...all,
+                        [item.stageKey]: event.target.value || null,
+                      }))
+                    }
+                  >
+                    <option value="">Not sent</option>
+                    {provider.options.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.words}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+              ) : editing ? (
                 <span className={styles.matchEdit}>
                   <input
                     value={name ?? ""}
@@ -421,14 +445,16 @@ function Matches({
   );
 }
 
-/* ---------- picking where Meta's events go ---------- */
+/* ---------- picking where a platform's events go ---------- */
 
-function DatasetChooser({
+function DestinationChooser({
+  provider,
   current,
   busy,
   onPick,
   onCancel,
 }: {
+  provider: ProviderView;
   current: { id: string; name: string } | null;
   busy: boolean;
   onPick: (dataset: Dataset) => Promise<void>;
@@ -439,19 +465,28 @@ function DatasetChooser({
   const [making, setMaking] = useState(false);
   const [account, setAccount] = useState("");
   const [name, setName] = useState("Sales Xray lead stages");
+  const meta = provider.id === "meta";
   useEffect(() => {
-    call<Datasets>("/meta/datasets")
+    const read = meta
+      ? call<Datasets>("/meta/datasets")
+      : call<Dataset[]>(`/journey/ads/${provider.id}/destinations`).then(
+          (datasets) => ({ adAccounts: [], datasets }),
+        );
+    read
       .then((data) => {
         setFound(data);
         setAccount(data.adAccounts[0]?.id ?? "");
         if (data.datasets.length === 1)
           setPicked((value) => value ?? data.datasets[0]);
-        if (!data.datasets.length) setMaking(true);
+        if (meta && !data.datasets.length) setMaking(true);
       })
       .catch((reason: unknown) =>
-        failed(reason, "Your Meta datasets didn't load"),
+        failed(
+          reason,
+          `Your ${provider.name} ${provider.destinationWords}s didn't load`,
+        ),
       );
-  }, []);
+  }, [meta, provider.id, provider.name, provider.destinationWords]);
   const create = async () => {
     try {
       const made = await call<Dataset>("/meta/datasets", {
@@ -469,7 +504,9 @@ function DatasetChooser({
   };
   return (
     <div className={styles.chooser}>
-      <h4>Which Meta dataset gets your stages?</h4>
+      <h4>
+        Which {provider.name} {provider.destinationWords} gets your stages?
+      </h4>
       {found ? (
         <ul className={styles.datasets} role="radiogroup" aria-label="Datasets">
           {found.datasets.map((dataset) => (
@@ -521,7 +558,7 @@ function DatasetChooser({
             Make dataset
           </Button>
         </div>
-      ) : found ? (
+      ) : found && meta ? (
         <button
           type="button"
           className={styles.linkButton}
@@ -529,6 +566,11 @@ function DatasetChooser({
         >
           Make a new dataset
         </button>
+      ) : found && !found.datasets.length ? (
+        <p className={styles.cardNote}>
+          No {provider.name} {provider.destinationWords}s are connected yet.
+          Connect {provider.name} in Lead sources first.
+        </p>
       ) : null}
       <div className={styles.chooserActions}>
         {onCancel ? (

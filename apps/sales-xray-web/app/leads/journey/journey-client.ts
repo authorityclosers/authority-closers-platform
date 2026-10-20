@@ -94,6 +94,8 @@ export type ProviderView = {
   testCode: string | null;
   since: string | null;
   matches: MatchView[];
+  /** A platform's own events, for platforms that don't take free names. */
+  options?: { id: string; words: string }[];
   needsCheck: number;
   confirmedAt: string | null;
   counts: Record<string, number>;

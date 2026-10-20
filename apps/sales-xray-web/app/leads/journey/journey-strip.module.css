@@ -34,7 +34,7 @@
   place-items: center;
   border-radius: 9px;
   background: var(--sx-accent-soft);
-  color: var(--sx-accent-ink);
+  color: color-mix(in oklab, var(--sx-accent) 78%, var(--sx-ink));
 }
 
 .text {

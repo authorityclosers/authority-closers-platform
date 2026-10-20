@@ -20,7 +20,7 @@ desk's six stages as the confirmed matches, and moved here on the first save.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from types import ModuleType
 from typing import Any, Final, Literal
@@ -28,11 +28,12 @@ from uuid import UUID
 
 from ac_platform.lead_desk.journey.model import Journey, JourneyError, Stage
 from ac_platform.lead_desk.journey.providers import PROVIDERS, Spec
+from ac_platform.lead_desk.journey.providers import google_ads as google_provider
 from ac_platform.lead_desk.journey.providers import meta as meta_provider
 
 KEY: Final[str] = "ad_sync"
 LEGACY_META: Final[str] = "meta_conversions"
-MODULES: Final[dict[str, ModuleType]] = {"meta": meta_provider}
+MODULES: Final[dict[str, ModuleType]] = {"meta": meta_provider, "google_ads": google_provider}
 
 MatchState = Literal["on", "off", "new"]
 
@@ -64,6 +65,7 @@ class ProviderSettings:
     confirmed_by: str | None
     test_code: str | None
     since: int
+    extra: dict[str, Any] = field(default_factory=dict)  # e.g. Google's conversion actions
 
     @property
     def ready(self) -> bool:
@@ -108,6 +110,7 @@ def read(config: Mapping[str, Any], provider: str) -> ProviderSettings:
         confirmed_by=str(value["confirmed_by"]) if value.get("confirmed_by") else None,
         test_code=value["test_code"] if isinstance(value.get("test_code"), str) else None,
         since=int(value.get("since") or 0),
+        extra=dict(value["extra"]) if isinstance(value.get("extra"), Mapping) else {},
     )
 
 
@@ -151,6 +154,7 @@ def _write(config: Mapping[str, Any], provider: str, settings: ProviderSettings)
         "confirmed_by": settings.confirmed_by,
         "test_code": settings.test_code,
         "since": settings.since,
+        "extra": settings.extra,
     }
     box["providers"] = providers
     out[KEY] = box
@@ -228,7 +232,7 @@ def clean_events(
                     "each name."
                 )
         elif info.option(value) is None:
-            raise JourneyError(f"Pick one of {info.name}'s own events for each stage.")
+            raise JourneyError(f"Pick one of the listed {info.name} events for each stage.")
         out[key] = value
     names = [name.casefold() for name in out.values() if name]
     if len(set(names)) != len(names):
@@ -261,6 +265,7 @@ def confirmed(
         confirmed_by=str(by),
         test_code=before.test_code,
         since=before.since,
+        extra=before.extra,
     )
     return _write(config, provider, settings)
 
@@ -274,6 +279,7 @@ def destination_saved(
     on: bool,
     test_code: str | None,
     now: int,
+    extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Where the platform's events go, and whether they go. Turning sending on, or a new
     destination, starts from now: earlier stages are never sent."""
@@ -290,8 +296,22 @@ def destination_saved(
         confirmed_by=before.confirmed_by,
         test_code=test_code,
         since=now if fresh or not before.since else before.since,
+        extra={**({} if fresh else before.extra), **dict(extra or {})},
     )
     return _write(config, provider, settings)
+
+
+async def is_connected(provider: str, db: Any, tenant_id: UUID, config: Mapping[str, Any]) -> bool:
+    """Whether the business connected this platform (some need the database to tell)."""
+    adapter = module(provider)
+    check = getattr(adapter, "connected_in", None)
+    if check is not None:
+        return bool(await check(db, tenant_id, config))
+    return bool(adapter.connected(config, tenant_id))
+
+
+def with_extra(settings: ProviderSettings, extra: Mapping[str, Any]) -> ProviderSettings:
+    return replace(settings, extra={**settings.extra, **dict(extra)})
 
 
 def epoch(at: datetime | None = None) -> int:
