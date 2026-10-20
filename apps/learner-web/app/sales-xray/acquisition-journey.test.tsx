@@ -203,7 +203,10 @@ beforeEach(() => {
         path.endsWith("/submissions") ||
         path.endsWith("/submissions?include_owners=true") ||
         path.endsWith("/submissions?order=reports_first") ||
-        path.endsWith("/submissions?include_owners=true&order=reports_first")
+        path.endsWith("/submissions?include_owners=true&order=reports_first") ||
+        path.endsWith(
+          "/submissions?include_owners=true&order=reports_first&include_summary=true",
+        )
       )
         return json({
           submissions: [

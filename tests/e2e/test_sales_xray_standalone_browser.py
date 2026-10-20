@@ -549,7 +549,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             workspace_menu = page.get_by_role("menu", name="Switch account")
             expect(workspace_menu.get_by_role("menuitemradio")).to_have_count(2)
             expect(
-                workspace_menu.get_by_role("menuitemradio", name="Personal Just you")
+                workspace_menu.get_by_role("menuitemradio", name=re.compile(r"Personal.*Just you"))
             ).to_have_attribute("aria-checked", "true")
             expect(
                 workspace_menu.get_by_text("Synthetic second Sales Xray workspace", exact=True)
