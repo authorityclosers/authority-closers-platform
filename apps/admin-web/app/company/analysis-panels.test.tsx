@@ -54,7 +54,9 @@ it("reads the window and maps the company view's range to days", () => {
   expect(DATA.days).toBe(30);
   expect(DATA.commitments).toEqual({ next_step: 9, follow_up: 6 });
   expect(rangeDays("30d")).toBe(30);
-  expect(rangeDays("12m")).toBe(90);
+  expect(rangeDays("12m")).toBe(365);
+  expect(rangeDays("all")).toBe(365);
+  expect(rangeDays("90d")).toBe(90);
   expect(rangeDays("900d")).toBe(365);
 });
 

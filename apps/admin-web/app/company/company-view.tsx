@@ -7,6 +7,12 @@ import Link from "next/link";
 
 import { needsWorkShare, type AnalysisInsights } from "./analysis-data";
 import { AnalysisPanels, SKILL_WHY, SkillScores } from "./analysis-panels";
+import {
+  FunnelPanel,
+  PeoplePanel,
+  SkillWeeksPanel,
+  WeeklyPanel,
+} from "./insight-trends";
 import type { CSSProperties } from "react";
 
 import {
@@ -462,7 +468,14 @@ export function CompanyView({
             )}
           </div>
           {analysis ? (
-            <AnalysisPanels data={analysis} skillsShown={Boolean(scored)} />
+            <>
+              <AnalysisPanels data={analysis} skillsShown={Boolean(scored)} />
+              <div className={styles.grid}>
+                <WeeklyPanel data={analysis} />
+                <FunnelPanel data={analysis} />
+              </div>
+              <SkillWeeksPanel data={analysis} />
+            </>
           ) : null}
           <div className={styles.grid}>
             {data.objections.length || !analysis ? (
@@ -520,6 +533,7 @@ export function CompanyView({
       ) : null}
       {view === "people" ? (
         <>
+          {analysis ? <PeoplePanel data={analysis} /> : null}
           <Panel
             title={data.teams.length ? "People (and teams)" : "People"}
             sub={`${count(data.people.length)} with calls · skill cells: share observed, amber marks gaps`}

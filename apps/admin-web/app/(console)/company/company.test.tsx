@@ -157,3 +157,47 @@ it("shows skills as the AI pointer review scored them, never every skill at 100%
   expect(html.match(/Skill scores/g)).toHaveLength(1);
   expect(html).not.toContain(">Skill scores<");
 });
+
+it("trends the analysis by week and shows salespeople and lead stages", async () => {
+  state.analysis = {
+    window: { days: 90 },
+    calls: 3,
+    calls_analysed: 2,
+    calls_scored: 1,
+    weeks: [
+      { week: "2026-10-12", calls: 3, analysed: 2, scored: 1, average: 52 },
+    ],
+    people: [
+      {
+        person_id: "p-1",
+        name: "Asha (fictional)",
+        calls: 3,
+        analysed: 2,
+        scored: 1,
+        average: 52,
+        weeks: [3],
+      },
+    ],
+    stages: { version: 0, leads: 0, funnel: [], lost: 0, unreachable: 0 },
+  };
+  const overview = renderToStaticMarkup(
+    await CompanyPage({ searchParams: Promise.resolve({ range: "12m" }) }),
+  );
+  expect(state.paths).toContain(
+    "/v1/admin/conversation/insights/analysis?organisation=00000000-0000-0000-0000-00000000b001&days=365",
+  );
+  for (const text of [
+    "Calls and scores by week",
+    "3 calls · 2 read by the engine · 1 scored",
+    "Skill scores over time",
+    "Lead stages",
+    "No leads were created in Lead Desk in this window",
+  ])
+    expect(overview).toContain(text);
+  expect(overview).not.toContain("Salespeople, from the analysis");
+  const people = renderToStaticMarkup(
+    await CompanyPage({ searchParams: Promise.resolve({ view: "people" }) }),
+  );
+  expect(people).toContain("Salespeople, from the analysis");
+  expect(people).toContain("Asha (fictional)");
+});
