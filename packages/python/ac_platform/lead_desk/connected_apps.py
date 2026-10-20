@@ -106,6 +106,9 @@ CONNECT: Final[dict[App, str]] = {
     "instagram": "/v1/lead-desk/messaging/connect",
     "google_ads": "/v1/lead-desk/google/connect",
 }
+# Started from Settings → Connected apps, a connect comes back there:
+# /settings/apps?connected=<card> or ?connect_error=<code> (connectors.app_return).
+RETURN_QUERY: Final[str] = "?return_to=%2Fsettings%2Fapps&card="
 DISCONNECT: Final[dict[App, str]] = {
     "meta_leads": "/v1/lead-desk/meta/pages/{id}/disconnect",
     "whatsapp": "/v1/lead-desk/whatsapp/numbers/{id}/disconnect",
@@ -114,6 +117,11 @@ DISCONNECT: Final[dict[App, str]] = {
     "google_ads": "/v1/lead-desk/google/accounts/{id}/disconnect",
 }
 NOT_SET_UP: Final[str] = "Not available here yet."
+# What connecting gives, for a card not connected yet (admin-2, 20 Oct: not where to go).
+GIVES: Final[dict[str, str]] = {
+    "messenger": "Answer the messages people send your Facebook Page, in Chats.",
+    "instagram": "Answer your Instagram messages, and reply to comments, in Chats.",
+}
 LEAD_WAIT: Final[timedelta] = timedelta(seconds=60)
 TEST_TEXT: Final[str] = "Test message from Sales Xray. No reply needed."
 CLEAR_LABEL: Final[str] = "Clear the form's earlier test lead"
@@ -267,7 +275,9 @@ def _card(app: AppHealth) -> AppHealth:
     return app.model_copy(
         update={
             "group": GROUPS[app.app],
-            "connect": Link(method="GET", path=connect) if connect and app.configured else None,
+            "connect": Link(method="GET", path=f"{connect}{RETURN_QUERY}{app.app}")
+            if connect and app.configured
+            else None,
             "can_test": bool(app.tests),
             "connections": connections,
         }
@@ -328,7 +338,7 @@ async def _meta_leads(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         state=state,
         words=NOT_SET_UP
         if not configured
-        else "No Page connected yet. Continue with Meta in Lead sources."
+        else "Bring in the leads from your Facebook and Instagram lead ads as they arrive."
         if not active
         else problems[0].words
         if problems
@@ -409,7 +419,7 @@ async def _whatsapp(db: AsyncSession, tenant_id: UUID) -> AppHealth:
     words = (
         NOT_SET_UP
         if not configured
-        else "No number connected yet. Connect WhatsApp in Settings."
+        else "Message leads on WhatsApp and answer their replies in Chats."
         if not rows
         else f"{_count(len(rows), 'number', 'numbers')} connected."
         + (f" Last automatic reply {auto_at:%d %b %H:%M} UTC." if auto_at else "")
@@ -501,7 +511,7 @@ async def _social(db: AsyncSession, tenant_id: UUID, channel: App) -> AppHealth:
         state=_state(configured, bool(accounts), problem is not None),
         words=NOT_SET_UP
         if not configured
-        else f"Not connected yet. Connect {where} in Settings."
+        else GIVES[channel]
         if not accounts
         else problem.words
         if problem
@@ -549,7 +559,7 @@ async def _google(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         state=_state(configured, bool(active), False),
         words=NOT_SET_UP
         if not configured
-        else "No account connected yet. Continue with Google in Lead sources."
+        else "Bring in the leads from your Google Ads lead forms as they arrive."
         if not active
         else f"{_count(len(active), 'account', 'accounts')} connected.",
         configured=configured,
@@ -606,7 +616,7 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         app="phone_calls",
         name=NAMES["phone_calls"],
         state=_state(True, bool(connections), off > 0),
-        words="No phone has set up the Sales Xray app yet."
+        words="Log your team's calls from their phones with the Sales Xray app."
         if not connections
         else f"{_count(off, 'phone has', 'phones have')} call logging off."
         if off
@@ -639,7 +649,7 @@ async def _webhook_sources(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         app="webhook_sources",
         name=NAMES["webhook_sources"],
         state=_state(True, bool(active), False),
-        words="No webhook or sheet added yet."
+        words="Send leads in from your website, your other tools or a Google Sheet."
         if not active
         else f"{_count(len(active), 'source', 'sources')} on.",
         configured=True,
@@ -667,7 +677,7 @@ async def _ai_replies(db: AsyncSession, tenant_id: UUID, *, now: datetime) -> Ap
         if not enabled
         else "Paused for now."
         if paused
-        else "On. Set the mode and your business profile in Settings → AI replies.",
+        else "On. Drafts replies to your leads from your business profile.",
         configured=enabled,
         last_event=Event(at=last, kind="ai", words="AI draft or reply") if last else None,
         tests=[TestOffer(kind="try", label="Try it", needs=["message"])]

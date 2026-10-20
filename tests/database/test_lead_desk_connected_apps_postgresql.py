@@ -233,7 +233,12 @@ def test_connected_apps_health_and_real_tests(
                 # What a Settings card needs: group, the existing connect and disconnect
                 # routes, and whether it can be tested.
                 assert (leads["group"], leads["canTest"]) == ("leads", True)
-                assert leads["connect"] == {"method": "GET", "path": "/v1/lead-desk/meta/connect"}
+                # Started from the card, the connect comes back to it.
+                assert leads["connect"] == {
+                    "method": "GET",
+                    "path": "/v1/lead-desk/meta/connect"
+                    "?return_to=%2Fsettings%2Fapps&card=meta_leads",
+                }
                 assert leads["connections"][0]["disconnect"] == {
                     "method": "POST",
                     "path": f"/v1/lead-desk/meta/pages/{PAGE}/disconnect",

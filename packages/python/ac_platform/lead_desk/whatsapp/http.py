@@ -243,6 +243,10 @@ class SlaReport(BaseModel):
     late: list[LateView] = Field(default_factory=list)
 
 
+# The Settings → Connected apps card a WhatsApp connect can come back to.
+WHATSAPP_CARDS: tuple[str, ...] = ("whatsapp",)
+
+
 def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
     router = APIRouter(prefix="/v1/lead-desk", tags=["lead-desk"])
     settings = ctx.settings
@@ -407,12 +411,19 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         response: Response,
         app_challenge: str | None = Query(default=None),
         reply: str | None = Query(default=None, alias="format"),
+        return_to: str | None = Query(default=None),
+        card: str | None = Query(default=None),
     ) -> Response:
         """Connect WhatsApp: off to Meta's Embedded Signup, back to the callback. From
-        the Sales Xray app, with ``app_challenge``, it finishes in the app (app_return)."""
+        the Sales Xray app, with ``app_challenge``, it finishes in the app (app_return);
+        from Settings → Connected apps, with ``return_to``, it comes back there."""
         cfg = whatsapp_config()
         if app_challenge is not None and not app_return.CHALLENGE.fullmatch(app_challenge):
             raise HTTPException(422, "Start again from the Sales Xray app.", headers=PRIVATE)
+        try:
+            settings_card = app_return.settings_card(return_to, card, allowed=WHATSAPP_CARDS)
+        except ValueError:
+            raise HTTPException(422, "Start again from Settings.", headers=PRIVATE) from None
         async with desk_for(request, response) as desk:
             desk._require_manager()
             state = meta.make_state(
@@ -420,6 +431,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 tenant_id=desk.tenant_id,
                 person_id=desk.viewer.person_id,
                 app_challenge=app_challenge,
+                card=settings_card,
             )
         url = cloud.dialog_url(cfg, redirect_uri=callback_url(), state=state)
         if reply == "json":
@@ -466,9 +478,11 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         cfg = whatsapp_config()
         state_value = request.query_params.get("state", "")
         try:
-            app_started = bool(meta.peek_state(cfg.app_secret, state_value).get("a"))
+            peeked = meta.peek_state(cfg.app_secret, state_value)
         except meta.MetaError:
-            app_started = False
+            peeked = {}
+        app_started = bool(peeked.get("a"))
+        card = app_return.card_of(peeked, WHATSAPP_CARDS)
         if app_started:
             # In the phone's browser, with no Sales Xray session: hand back to the app.
             params = request.query_params
@@ -486,12 +500,21 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 ),
             )
         back = f"{app_url()}/organisation?tab=integrations"
+
+        def done(outcome: str) -> Response:
+            url = (
+                app_return.settings_url(app_url(), card, outcome)
+                if card
+                else f"{back}&whatsapp={outcome}"
+            )
+            return RedirectResponse(url, status_code=303, headers=PRIVATE)
+
         if request.query_params.get("error"):
-            return RedirectResponse(f"{back}&whatsapp=cancelled", status_code=303, headers=PRIVATE)
+            return done("cancelled")
         code = request.query_params.get("code", "")
         state = request.query_params.get("state", "")
         if not code or not state:
-            return RedirectResponse(f"{back}&whatsapp=failed", status_code=303, headers=PRIVATE)
+            return done("failed")
         try:
             async with desk_for(request, response, write=True, origin=False) as desk:
                 desk._require_manager()
@@ -503,16 +526,14 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                         person_id=desk.viewer.person_id,
                     )
                 except meta.MetaError:
-                    return RedirectResponse(
-                        f"{back}&whatsapp=failed", status_code=303, headers=PRIVATE
-                    )
+                    return done("failed")
                 outcome = await finish_whatsapp(desk, cfg, code)
         except HTTPException as error:
             if error.status_code in (401, 403):
                 raise
             log.warning("whatsapp connect failed: %s", error.detail)
-            return RedirectResponse(f"{back}&whatsapp=failed", status_code=303, headers=PRIVATE)
-        return RedirectResponse(f"{back}&whatsapp={outcome}", status_code=303, headers=PRIVATE)
+            return done("failed")
+        return done(outcome)
 
     @router.post("/whatsapp/connect", response_model=WhatsAppStatus, response_model_by_alias=True)
     async def whatsapp_connect(

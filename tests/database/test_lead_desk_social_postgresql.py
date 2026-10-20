@@ -201,6 +201,22 @@ def test_messenger_and_instagram_conversations_and_comment_replies(
                     "/organisation?tab=integrations&messaging=connected"
                 )
                 assert FakeGraph.subscribed == [PAGE]
+                # Started from Settings → Connected apps (the Instagram card): back to it.
+                card = await client.get(
+                    f"{BASE}/messaging/connect",
+                    params={"return_to": "/settings/apps", "card": "instagram"},
+                )
+                card_state = parse_qs(urlparse(card.headers["location"]).query)["state"][0]
+                again = await client.get(
+                    f"{BASE}/messaging/callback", params={"code": "login-code", "state": card_state}
+                )
+                assert again.headers["location"].endswith("/settings/apps?connected=instagram")
+                stopped = await client.get(
+                    f"{BASE}/messaging/callback", params={"error": "denied", "state": card_state}
+                )
+                assert stopped.headers["location"].endswith(
+                    "/settings/apps?connect_error=cancelled"
+                )
                 status = (await client.get(f"{BASE}/messaging/status")).json()
                 [page] = status["accounts"]
                 assert (page["pageName"], page["igUsername"], page["hasInstagram"]) == (

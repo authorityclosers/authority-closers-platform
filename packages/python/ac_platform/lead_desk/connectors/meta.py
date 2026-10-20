@@ -178,9 +178,11 @@ def make_state(
     person_id: UUID,
     now: float | None = None,
     app_challenge: str | None = None,
+    card: str | None = None,
 ) -> str:
     """Signed state for a provider sign-in. ``app_challenge`` marks a Connect started
-    in the Sales Xray app, which finishes there (see ``app_return``)."""
+    in the Sales Xray app, which finishes there (see ``app_return``); ``card`` one
+    started from Settings → Connected apps, which comes back there."""
     body = {
         "t": str(tenant_id),
         "p": str(person_id),
@@ -189,6 +191,8 @@ def make_state(
     }
     if app_challenge is not None:
         body["a"] = app_challenge
+    if card is not None:
+        body["r"] = card
     raw = _b64(json.dumps(body, separators=(",", ":")).encode())
     mac = hmac.new(secret.encode(), raw.encode(), hashlib.sha256).digest()
     return f"{raw}.{_b64(mac)}"

@@ -117,3 +117,23 @@ def test_a_google_app_state_reads_back_with_google_words() -> None:
     assert gads.peek_state(cfg, state)["a"] == CHALLENGE
     with pytest.raises(gads.GoogleAdsApiError, match="Google"):
         gads.peek_state(cfg, state + "x")
+
+
+def test_a_settings_connect_comes_back_to_its_card_only() -> None:
+    from ac_platform.lead_desk.connectors.app_return import card_of, settings_card, settings_url
+
+    cards = ("messenger", "instagram")
+    assert settings_card(None, None, allowed=cards) is None  # the old destination
+    assert settings_card("/settings/apps", None, allowed=cards) == "messenger"
+    assert settings_card("/settings/apps", "instagram", allowed=cards) == "instagram"
+    for bad in (("https://elsewhere.example", None), ("/settings/apps", "whatsapp")):
+        with pytest.raises(ValueError):
+            settings_card(*bad, allowed=cards)
+    app = "https://salesxray.example"
+    assert settings_url(app, "whatsapp", "connected") == f"{app}/settings/apps?connected=whatsapp"
+    assert [
+        settings_url(app, "messenger", outcome).split("=")[-1]
+        for outcome in ("cancelled", "failed", "taken", "nopages", "noaccounts", "nonumbers", "odd")
+    ] == ["cancelled", "failed", "in_use", "no_pages", "no_accounts", "no_numbers", "failed"]
+    assert card_of({"r": "instagram"}, cards) == "instagram"
+    assert card_of({"r": "elsewhere"}, cards) is None and card_of(None, cards) is None

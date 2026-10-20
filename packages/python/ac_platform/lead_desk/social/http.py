@@ -151,6 +151,10 @@ class InboxView(BaseModel):
     owner_name: str | None = Field(default=None, alias="ownerName")
 
 
+# The Settings → Connected apps cards a Messenger/Instagram connect can come back to.
+MESSAGING_CARDS: tuple[str, ...] = ("messenger", "instagram")
+
+
 def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
     router = APIRouter(prefix="/v1/lead-desk", tags=["lead-desk"])
     settings = ctx.settings
@@ -289,12 +293,19 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
         response: Response,
         app_challenge: str | None = Query(default=None),
         reply: str | None = Query(default=None, alias="format"),
+        return_to: str | None = Query(default=None),
+        card: str | None = Query(default=None),
     ) -> Response:
         """Connect Messenger and Instagram: off to Facebook Login for Business and back.
-        From the Sales Xray app, with ``app_challenge``, it finishes in the app."""
+        From the Sales Xray app, with ``app_challenge``, it finishes in the app; from
+        Settings → Connected apps, with ``return_to``, it comes back to that card."""
         cfg = social_config()
         if app_challenge is not None and not app_return.CHALLENGE.fullmatch(app_challenge):
             raise HTTPException(422, "Start again from the Sales Xray app.", headers=PRIVATE)
+        try:
+            settings_card = app_return.settings_card(return_to, card, allowed=MESSAGING_CARDS)
+        except ValueError:
+            raise HTTPException(422, "Start again from Settings.", headers=PRIVATE) from None
         async with desk_for(request, response) as desk:
             desk._require_manager()
             state = meta.make_state(
@@ -302,6 +313,7 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                 tenant_id=desk.tenant_id,
                 person_id=desk.viewer.person_id,
                 app_challenge=app_challenge,
+                card=settings_card,
             )
         url = graph.dialog_url(cfg, redirect_uri=callback_url(), state=state)
         if reply == "json":
@@ -323,9 +335,11 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
         params = request.query_params
         state = params.get("state", "")
         try:
-            from_app = bool(meta.peek_state(cfg.app_secret, state).get("a"))
+            peeked = meta.peek_state(cfg.app_secret, state)
         except meta.MetaError:
-            from_app = False
+            peeked = {}
+        from_app = bool(peeked.get("a"))
+        card = app_return.card_of(peeked, MESSAGING_CARDS)
         if from_app:
             # In the phone's browser, with no Sales Xray session: hand back to the app.
             if params.get("error"):
@@ -339,11 +353,20 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                 ),
             )
         back = f"{app_url()}/organisation?tab=integrations"
+
+        def done(outcome: str) -> Response:
+            url = (
+                app_return.settings_url(app_url(), card, outcome)
+                if card
+                else f"{back}&messaging={outcome}"
+            )
+            return RedirectResponse(url, status_code=303, headers=PRIVATE)
+
         if params.get("error"):
-            return RedirectResponse(f"{back}&messaging=cancelled", status_code=303, headers=PRIVATE)
+            return done("cancelled")
         code = params.get("code", "")
         if not code or not state:
-            return RedirectResponse(f"{back}&messaging=failed", status_code=303, headers=PRIVATE)
+            return done("failed")
         try:
             async with desk_for(request, response, write=True, origin=False) as desk:
                 desk._require_manager()
@@ -355,16 +378,14 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                         person_id=desk.viewer.person_id,
                     )
                 except meta.MetaError:
-                    return RedirectResponse(
-                        f"{back}&messaging=failed", status_code=303, headers=PRIVATE
-                    )
+                    return done("failed")
                 outcome, _ = await finish(desk, cfg, code)
         except HTTPException as error:
             if error.status_code in (401, 403):
                 raise
             log.warning("messaging connect failed: %s", error.detail)
-            return RedirectResponse(f"{back}&messaging=failed", status_code=303, headers=PRIVATE)
-        return RedirectResponse(f"{back}&messaging={outcome}", status_code=303, headers=PRIVATE)
+            return done("failed")
+        return done(outcome)
 
     @router.post("/messaging/app-complete", response_model=AppCompleted)
     async def messaging_app_complete(
