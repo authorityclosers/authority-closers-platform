@@ -270,7 +270,9 @@ export function DashboardBody({
                     "13em",
                   )}
                 </h2>
-                <span>Last 30 days, India time</span>
+                <span className={styles.wideMeta}>
+                  Last 30 days, India time
+                </span>
               </div>
               <div className={styles.surface}>
                 {activityState.status === "loading" ? (

@@ -46,8 +46,16 @@
   grid-template-columns: minmax(0, 1fr) 128px 96px 64px 156px 16px;
 }
 
+.row {
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
 .row:hover {
-  background: var(--lx-paper-2);
+  background: var(--sx-fill-soft);
+}
+
+.row:active {
+  background: var(--sx-fill);
 }
 
 /* Whose call, as in the Calls table's Rep column. */

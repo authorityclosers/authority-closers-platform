@@ -375,6 +375,8 @@ function LightboxShellFrame({
     pageName ?? (inSettings(shownPath) ? "Settings" : undefined),
   );
   const phoneTab = phoneTabFor(shownPath, active);
+  // Phones call the dashboard Home, as its tab does (owner, 17 Oct).
+  const barTitle = place === "dashboard" && !pageName ? "Home" : pageTitle;
   // The selected capsule glides to the new place, on the rail and the tabs.
   const tabBarRef = useRef<HTMLElement | null>(null);
   useGlide(railRef, `.${styles.stripBtnActive} .${styles.railPill}`, place);
@@ -1278,7 +1280,7 @@ function LightboxShellFrame({
                       aria-hidden="true"
                     />
                   </small>
-                  <b>{pageTitle ?? workspaceLabel}</b>
+                  <b>{barTitle ?? workspaceLabel}</b>
                 </button>
               ) : (
                 <span
@@ -1291,7 +1293,7 @@ function LightboxShellFrame({
                   <small className={styles.mobileContext}>
                     {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
                   </small>
-                  <b>{pageTitle ?? workspaceLabel}</b>
+                  <b>{barTitle ?? workspaceLabel}</b>
                 </span>
               )}
             </div>

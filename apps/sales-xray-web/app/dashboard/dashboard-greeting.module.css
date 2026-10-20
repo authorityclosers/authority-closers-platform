@@ -1,4 +1,4 @@
-/* The dashboard greeting: one steady line, the same scale as other page titles. */
+/* The dashboard greeting: one steady line, the large title of Home (v2). */
 .greeting {
   display: grid;
   gap: 2px;
@@ -9,10 +9,8 @@
   overflow: hidden;
   margin: 0;
   color: var(--lx-ink);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
+  font: var(--sx-text-large);
+  letter-spacing: -0.022em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -30,11 +28,11 @@
 .subtitle {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 @media (max-width: 720px) {
   .title {
-    font-size: 20px;
+    font-size: 26px;
   }
 }
