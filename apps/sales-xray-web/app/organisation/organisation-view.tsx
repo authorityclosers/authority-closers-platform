@@ -45,6 +45,7 @@ import {
   type SalesXrayWorkspace as Workspace,
 } from "../sales-xray-workspaces";
 import { Meter, Spark } from "../ui/kit";
+import { Sheet } from "../ui/sheet";
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import { useBranding } from "../shell/branding-store";
@@ -1397,6 +1398,9 @@ function MembersPanel({
     action: () => Promise<unknown>;
     added?: boolean;
   } | null>(null);
+  // The confirmation keeps its words while its sheet slides away.
+  const [shownConfirm, setShownConfirm] = useState(confirming);
+  if (confirming && confirming !== shownConfirm) setShownConfirm(confirming);
   const additionRole = isOwner ? newRole : "member";
 
   const run = async (action: () => Promise<unknown>) => {
@@ -1546,13 +1550,18 @@ function MembersPanel({
           </p>
         ) : null}
 
-        {confirming ? (
-          <div
-            className={styles.confirm}
-            role="dialog"
-            aria-label="Confirm member change"
-          >
-            <p>{confirming.message}</p>
+        {/* Design system v2: a member change is confirmed in a sheet, a
+            card in the middle on computers and from the bottom on phones. */}
+        <Sheet
+          open={confirming !== null}
+          onClose={() => {
+            if (!busy) setConfirming(null);
+          }}
+          title="Confirm member change"
+          hideTitle
+          closeButton={false}
+          wide="center"
+          footer={
             <div className={styles.confirmActions}>
               <button
                 type="button"
@@ -1564,22 +1573,28 @@ function MembersPanel({
               </button>
               <button
                 type="button"
-                className={confirming.danger ? styles.danger : styles.primary}
-                disabled={busy}
-                onClick={() =>
-                  void run(confirming.action).then((saved) => {
+                className={
+                  shownConfirm?.danger ? styles.danger : styles.primary
+                }
+                disabled={busy || !confirming}
+                onClick={() => {
+                  const current = confirming;
+                  if (!current) return;
+                  void run(current.action).then((saved) => {
                     if (saved) {
-                      if (confirming.added) setEmail("");
+                      if (current.added) setEmail("");
                       setConfirming(null);
                     }
-                  })
-                }
+                  });
+                }}
               >
-                {busy ? "Saving…" : confirming.verb}
+                {busy ? "Saving…" : shownConfirm?.verb}
               </button>
             </div>
-          </div>
-        ) : null}
+          }
+        >
+          <p className={styles.confirmMessage}>{shownConfirm?.message}</p>
+        </Sheet>
 
         <div className={styles.memberTable} role="table" aria-label="People">
           <div className={styles.memberHead} role="row">

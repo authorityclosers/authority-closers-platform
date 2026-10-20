@@ -187,7 +187,11 @@ const click = (name: string) => act(async () => button(name).click());
 /** The confirmation's action button is named for its verb (Add, Remove…). */
 const confirm = () =>
   act(async () =>
-    [...host.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        'dialog[open] button, [role="dialog"] button',
+      ),
+    ]
       .at(-1)!
       .click(),
   );
