@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { GET as serverMetadata } from "./.well-known/oauth-authorization-server/route";
-import { GET as openIdMetadata } from "./.well-known/openid-configuration/route";
-import { GET as resourceMetadata } from "./.well-known/oauth-protected-resource/[[...resource]]/route";
+import { GET as serverMetadata } from "./.well-known/oauth-authorization-server/route.discovery";
+import { GET as openIdMetadata } from "./.well-known/openid-configuration/route.discovery";
+import { GET as resourceMetadata } from "./.well-known/oauth-protected-resource/[[...resource]]/route.discovery";
 import {
   authorizationServerMetadata,
   protectedResourceMetadata,
