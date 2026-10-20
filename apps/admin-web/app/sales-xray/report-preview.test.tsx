@@ -133,6 +133,7 @@ it("follows the style, detail, pointer list and toggles of a version", () => {
   settings = withValue(settings, "coaching.max_moments", 2);
   const host = html(settings);
   expect(host.textContent).toContain("5 of 27 pointers");
+  expect(host.textContent).toContain("Show all · 22 more");
   expect(host.textContent).not.toContain("64 / 100");
   expect(host.textContent).not.toContain("Final Call Outcome");
   expect(

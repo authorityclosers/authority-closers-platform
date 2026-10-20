@@ -156,3 +156,9 @@
   background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
   font-size: var(--sx-text-xs);
 }
+
+.more {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}

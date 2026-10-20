@@ -288,6 +288,14 @@ const count = (
 
 /** The pointers a version shows, in its order, at most its maximum. */
 export function shownPointers(settings: Record<string, unknown>): Pointer[] {
+  return chosenPointers(settings).slice(
+    0,
+    count(settings, "report.max_pointers", 27),
+  );
+}
+
+/** Every pointer a version keeps, in its order (the app shows the rest under Show all). */
+export function chosenPointers(settings: Record<string, unknown>): Pointer[] {
   const chosen = valueAt(settings, "report.pointers");
   const ids = Array.isArray(chosen)
     ? chosen.filter((id): id is string => typeof id === "string")
@@ -297,8 +305,7 @@ export function shownPointers(settings: Record<string, unknown>): Pointer[] {
   );
   return ids
     .map((id) => byId.get(id))
-    .filter((pointer): pointer is Pointer => pointer !== undefined)
-    .slice(0, count(settings, "report.max_pointers", 27));
+    .filter((pointer): pointer is Pointer => pointer !== undefined);
 }
 
 /** What a version changes from version 1 that the app does not follow yet. */
@@ -344,6 +351,8 @@ export function ReportPreview({
     ? MOMENTS.slice(0, count(settings, "coaching.max_moments", 5))
     : [];
   const pending = notInAppYet(settings, baseline, parameters);
+  // As in the app: the first pointers, then a Show all for the rest.
+  const more = chosenPointers(settings).length - pointers.length;
 
   return (
     <div className={styles.preview} aria-label="Preview on a fictional call">
@@ -419,6 +428,9 @@ export function ReportPreview({
                 ))}
               </ol>
             )}
+            {more > 0 ? (
+              <small className={styles.more}>Show all · {more} more</small>
+            ) : null}
           </div>
         ) : null}
         {parts.outcome ? (
