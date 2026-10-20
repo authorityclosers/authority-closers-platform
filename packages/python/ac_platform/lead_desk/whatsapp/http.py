@@ -33,6 +33,7 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import sla
+from ac_platform.lead_desk.chats import reads as chat_reads
 from ac_platform.lead_desk.connectors import app_return, meta
 from ac_platform.lead_desk.connectors.app_return import AppComplete, AppCompleted
 from ac_platform.lead_desk.models import LeadDeskSettings, LeadWhatsAppNumber, LeadWhatsAppTemplate
@@ -201,6 +202,8 @@ class ChatThreadView(ThreadView):
 
     key: str  # the channel, the account and a hash of the person's id: stable, opaque
     channel: Literal["whatsapp", "messenger", "instagram"]
+    # Their messages this person hasn't read yet, on any device (read marks, 0113).
+    unread: int = 0
 
 
 class ChatsSla(BaseModel):
@@ -796,6 +799,11 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response) as desk:
             _, config = await desk.settings()
             target = sla.read(config)
+            unread = await chat_reads.unread(desk)
+
+            def unread_for(channel: str, account: UUID | None, lead: UUID | None) -> int:
+                return unread.get((channel, account, lead), 0) if account and lead else 0
+
             rows: list[ChatThreadView] = [
                 ChatThreadView(
                     key=f"whatsapp:{thread.number_id}:{_person_key(desk.tenant_id, thread.wa_id)}",
@@ -815,6 +823,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     window_closes_at=thread.window_closes_at,
                     owner_id=thread.owner_id,
                     owner_name=thread.owner_name,
+                    unread=unread_for("whatsapp", thread.number_id, thread.lead_id),
                 )
                 for thread in await inbox.inbox(desk)
             ]
@@ -838,6 +847,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     window_closes_at=thread.window_closes_at,
                     owner_id=thread.owner_id,
                     owner_name=thread.owner_name,
+                    unread=unread_for(thread.channel, thread.account_id, thread.lead_id),
                 )
                 for thread in await social_inbox.inbox(desk)
             ]

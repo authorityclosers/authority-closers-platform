@@ -391,6 +391,8 @@ def test_whatsapp_conversations_from_connect_to_sla(
                 assert set(chats["sla"]) == {"on", "minutes"} and chats["generatedAt"]
                 assert {t["leadName"] for t in chats["threads"]} == {"Asha Patil", "Ravi Kumar"}
                 assert {t["channel"] for t in chats["threads"]} == {"whatsapp"}
+                # Read marks (0113): nobody here has opened these chats yet.
+                assert all(t["unread"] >= 0 for t in chats["threads"])
                 assert all(t["key"].startswith(f"whatsapp:{number_id}:") for t in chats["threads"])
                 assert "919811100011" not in str([t["key"] for t in chats["threads"]])
 
