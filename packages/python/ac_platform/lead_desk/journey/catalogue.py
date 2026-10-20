@@ -78,21 +78,26 @@ def clean(source: str, body: Mapping[str, Any], *, now: int) -> dict[str, Any]:
         steps = flow.get("steps")
         if not isinstance(steps, list) or len(steps) > MAX_STEPS:
             raise CatalogueError(f"Send up to {MAX_STEPS} steps per workflow.")
-        kept = []
+        rows: list[tuple[int, dict[str, Any]]] = []
         for index, step in enumerate(steps):
             if not isinstance(step, Mapping):
                 raise CatalogueError("Each step is an object.")
             block = step.get("block")
             position = step.get("position")
-            kept.append(
-                {
-                    "id": _ref(step.get("id")),
-                    "name": _name(step.get("name")),
-                    "block": str(block)[:40] if isinstance(block, str) else None,
-                    "position": position if isinstance(position, int) else index,
-                }
+            at = position if isinstance(position, int) else index
+            rows.append(
+                (
+                    at,
+                    {
+                        "id": _ref(step.get("id")),
+                        "name": _name(step.get("name")),
+                        "block": str(block)[:40] if isinstance(block, str) else None,
+                        "position": at,
+                    },
+                )
             )
-        kept.sort(key=lambda item: item["position"])
+        rows.sort(key=lambda row: row[0])
+        kept = [row[1] for row in rows]
         out.append({"id": _ref(flow.get("id")), "name": _name(flow.get("name")), "steps": kept})
     revision = body.get("revision")
     return {
@@ -132,7 +137,7 @@ def suggestions(config: Mapping[str, Any], journey: Journey) -> list[dict[str, A
             if ref in taken_refs or name.casefold() in taken_names or name.casefold() in seen:
                 continue
             seen.add(name.casefold())
-            kind = MILESTONE_KIND[milestone]  # type: ignore[index]
+            kind = MILESTONE_KIND[milestone]
             out.append(
                 {
                     "ref": ref,
@@ -140,7 +145,7 @@ def suggestions(config: Mapping[str, Any], journey: Journey) -> list[dict[str, A
                     "source": SOURCES.get(source, source),
                     "workflow": str(flow.get("name") or ""),
                     "milestone": milestone,
-                    "meaning": MILESTONE_WORDS[milestone],  # type: ignore[index]
+                    "meaning": MILESTONE_WORDS[milestone],
                     "kind": kind,
                     "kindWords": KIND_WORDS[kind],
                 }

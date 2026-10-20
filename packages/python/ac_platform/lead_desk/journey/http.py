@@ -36,7 +36,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.journey import catalogue, engine, mapping
+from ac_platform.lead_desk.journey import catalogue, engine, mapping, signals
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey.model import Journey, JourneyError
 from ac_platform.lead_desk.journey.templates import (
@@ -244,6 +244,14 @@ class SuggestionView(_View):
     meaning: str
     kind: str
     kind_words: str = Field(alias="kindWords")
+
+
+class LeadSuggestionView(_View):
+    step: str
+    label: str
+    kind: str
+    why: str
+    at: datetime
 
 
 class SummaryView(_View):
@@ -518,7 +526,29 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
             row = await desk.db.get(LeadDeskSettings, desk.tenant_id)
             journey = await journeys.read(desk.db, desk.tenant_id)
             found = catalogue.suggestions((row.config if row else None) or {}, journey)
+            counts, terms = await signals.heard(desk.db, desk.tenant_id, desk.now)
+            found += signals.business_suggestions(counts, terms, journey)
             return [SuggestionView(**item) for item in found]
+
+    @router.get(
+        "/leads/{lead_id}/stage-suggestion",
+        response_model=LeadSuggestionView | None,
+        response_model_by_alias=True,
+    )
+    async def lead_suggestion(
+        lead_id: UUID, request: Request, response: Response
+    ) -> LeadSuggestionView | None:
+        """Where this lead's newest call says it got to, when that is further than its
+        stage (null otherwise). Offered on the lead; a person confirms the move."""
+        async with desk_for(request, response) as desk:
+            lead = await desk._lead(lead_id)
+            if not (desk.viewer.can_manage or lead.owner_person_id == desk.viewer.person_id):
+                raise DeskError(403, "Only the lead's owner or a manager sees this.")
+            journey = await journeys.read(desk.db, desk.tenant_id)
+            found = await signals.lead_suggestion(
+                desk.db, desk.tenant_id, lead.id, lead.stage, lead.step, journey
+            )
+            return LeadSuggestionView(**found) if found else None
 
     @router.get("/journey/history", response_model=list[HistoryItem], response_model_by_alias=True)
     async def history(request: Request, response: Response) -> list[HistoryItem]:

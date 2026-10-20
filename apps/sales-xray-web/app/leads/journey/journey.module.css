@@ -485,6 +485,15 @@ button.stageMain:focus-visible {
   cursor: pointer;
 }
 
+.fromWhy {
+  color: var(--sx-muted);
+  font-weight: 500;
+}
+
+.fromWhy::before {
+  content: "· ";
+}
+
 .fromApp:hover {
   background: color-mix(in oklab, var(--tone) 16%, transparent);
 }

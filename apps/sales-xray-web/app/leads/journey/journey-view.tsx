@@ -681,9 +681,7 @@ function StageBuilder({
   );
 }
 
-/* ---------- adding a stage ---------- */
-
-/* ---------- stages the business already uses in a connected app ---------- */
+/* ---------- stages the business already uses: connected apps and its calls ---------- */
 
 function FromApps({
   list,
@@ -715,39 +713,59 @@ function FromApps({
       !taken.has(item.ref) && !taken.has(item.label.toLocaleLowerCase()),
   );
   if (!shown.length) return null;
+  const sources = [...new Set(shown.map((item) => item.source))];
   return (
-    <div className={styles.fromApps}>
-      <small>From your {shown[0].source} workflows</small>
-      <span className={styles.fromAppsList}>
-        {shown.map((item) => (
-          <button
-            key={item.ref}
-            type="button"
-            className={styles.fromApp}
-            data-kind={item.kind}
-            title={`${item.workflow}: ${item.meaning}`}
-            onClick={() =>
-              onAdd({
-                id: newId(),
-                label: item.label,
-                kind: ADDABLE.includes(item.kind) ? item.kind : "follow_up",
-                milestone: item.milestone,
-                meaning: item.meaning,
-                archived: false,
-                leads: 0,
-                origin: "pulse",
-                ref: item.ref,
-              })
-            }
-          >
-            <Plus size={12} aria-hidden="true" />
-            {item.label}
-          </button>
-        ))}
-      </span>
-    </div>
+    <>
+      {sources.map((source) => (
+        <div key={source} className={styles.fromApps}>
+          <small>
+            {source === "your calls"
+              ? "Heard in your calls and notes"
+              : `From your ${source} workflows`}
+          </small>
+          <span className={styles.fromAppsList}>
+            {shown
+              .filter((item) => item.source === source)
+              .map((item) => (
+                <button
+                  key={item.ref}
+                  type="button"
+                  className={styles.fromApp}
+                  data-kind={item.kind}
+                  title={`${item.workflow}: ${item.meaning}`}
+                  onClick={() =>
+                    onAdd({
+                      id: newId(),
+                      label: item.label,
+                      kind: ADDABLE.includes(item.kind)
+                        ? item.kind
+                        : "follow_up",
+                      milestone: item.milestone,
+                      meaning: item.meaning,
+                      archived: false,
+                      leads: 0,
+                      origin: item.ref.startsWith("pulse:")
+                        ? "pulse"
+                        : "suggested",
+                      ref: item.ref.startsWith("pulse:") ? item.ref : undefined,
+                    })
+                  }
+                >
+                  <Plus size={12} aria-hidden="true" />
+                  {item.label}
+                  {item.source === "your calls" ? (
+                    <small className={styles.fromWhy}>{item.workflow}</small>
+                  ) : null}
+                </button>
+              ))}
+          </span>
+        </div>
+      ))}
+    </>
   );
 }
+
+/* ---------- adding a stage ---------- */
 
 function AddStage({ onAdd }: { onAdd: (draft: Draft) => void }) {
   const [label, setLabel] = useState("");
