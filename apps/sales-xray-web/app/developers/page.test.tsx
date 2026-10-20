@@ -41,6 +41,12 @@ it("documents every way to connect, generically", () => {
   expect(html).toContain('href="/developers/sx.py"');
   expect(html).toContain("sxk_live_");
   expect(html).toContain('href="/settings/developers"');
+  // The remote MCP server and apps that register themselves (0370eb5a).
+  expect(html).toContain("https://salesxray.authorityclosers.com/v1/mcp");
+  expect(html).toContain("/v1/oauth/register");
+  expect(html).toContain("/.well-known/oauth-authorization-server");
+  expect(html).toContain("resource_metadata");
+  expect(html).toContain("get_call");
   for (const [, code] of ERRORS) expect(html).toContain(code);
   // Every example sends the key from the environment, never a real one.
   expect(html).not.toMatch(/Bearer sxk_(live|test)_[A-Za-z0-9]{6,}/);

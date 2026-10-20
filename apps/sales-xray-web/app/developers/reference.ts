@@ -45,7 +45,7 @@ export const ENDPOINTS: EndpointDoc[] = [
     path: "/me",
     scope: null,
     summary:
-      "Check a key: its organisation, its permissions and the environment.",
+      "Who is calling: the organisation, or for an app a person connected, that person and their workspace; with the permissions and the environment.",
     params: [],
     curl: `curl ${API}/me \\\n  ${AUTH}`,
     js: `const response = await fetch("${API}/me", {
@@ -56,15 +56,19 @@ console.log(me.organisation.name, me.key.scopes);`,
     answer: `{
   "organisation": { "id": "5b1e0c9a-…", "name": "Your organisation" },
   "key": { "prefix": "sxk_live_Ab12", "scopes": ["calls:read", "leads:read"] },
-  "environment": "production"
+  "environment": "production",
+  "reach": "organisation"
 }`,
+    notes:
+      'For an app a person connected, reach is "person", and person {id, name} and workspace {id, kind: personal | organisation, name, role} say who and where.',
   },
   {
     id: "api-calls",
     method: "GET",
     path: "/calls",
     scope: "calls:read",
-    summary: "The organisation's calls, newest first, 50 a page.",
+    summary:
+      "Calls, newest first, 50 a page, each with its title and a link to it in Sales Xray.",
     params: [
       {
         name: "before",
@@ -87,15 +91,49 @@ do {
   "calls": [
     {
       "id": "3f2b7d10-…",
+      "title": "Discovery call",
       "created_at": "2026-10-20T09:12:00+00:00",
       "duration_seconds": 1520,
-      "has_report": true
+      "has_report": true,
+      "open_url": "${HOST}/analysis/calls/3f2b7d10-…"
     }
   ],
   "next_before": "3f2b7d10-…"
 }`,
     notes:
       "next_before is null on the last page. The list follows what the library shows: deleted and expired calls are not in it.",
+  },
+  {
+    id: "api-call",
+    method: "GET",
+    path: "/calls/{id}",
+    scope: "calls:read",
+    summary:
+      "One call; with reports:read on the key, also the facts found in it.",
+    params: [
+      {
+        name: "id",
+        where: "path",
+        type: "call id",
+        text: "An id from GET /calls.",
+      },
+    ],
+    curl: `curl ${API}/calls/3f2b7d10-… \\\n  ${AUTH}`,
+    js: `const call = await (
+  await fetch(\`${API}/calls/\${callId}\`, { headers: ${HEADERS} })
+).json();
+console.log(call.title, call.open_url, call.facts?.length);`,
+    answer: `{
+  "id": "3f2b7d10-…",
+  "title": "Discovery call",
+  "created_at": "2026-10-20T09:12:00+00:00",
+  "duration_seconds": 1520,
+  "has_report": true,
+  "open_url": "${HOST}/analysis/calls/3f2b7d10-…",
+  "facts": [{ "type": "timeline", "label": "Timeline", "display": "Wants to start next month", "…": "…" }]
+}`,
+    notes:
+      "facts is null when the key lacks reports:read. A call that isn't there, or isn't yours to read, is 404 call_missing.",
   },
   {
     id: "api-facts",
@@ -361,14 +399,82 @@ export const TOKEN = `curl ${HOST}/v1/oauth/token \\
   -d code_verifier=<verifier> \\
   -u sxc_...:sxcs_...        # client secret; public apps send client_id and no secret`;
 
-export const MCP_TOOLS: [string, string][] = [
-  ["whoami", "The organisation the key belongs to and what it may do"],
-  ["list_calls", "Analysed calls, newest first"],
-  ["call_facts", "The facts found in one call, with their quotes"],
-  ["list_leads", "Leads, newest change first, by stage"],
-  ["get_lead", "One lead with its history"],
-  ["add_lead", "Add a lead (needs leads:write)"],
+export const MCP_URL = `${HOST}/v1/mcp`;
+
+export const MCP_TOOLS: [string, string, string][] = [
+  ["whoami", "any", "Who this connection reads as, and its scopes"],
+  ["list_calls", "calls:read", "Calls, newest first"],
+  ["get_call", "calls:read", "One call, with its facts when allowed"],
+  ["call_facts", "reports:read", "The facts found in one call"],
+  ["list_leads", "leads:read", "Leads, by stage"],
+  ["get_lead", "leads:read", "One lead with its history"],
+  ["add_lead", "leads:write", "Add a lead"],
 ];
+
+/** The remote MCP server in each assistant: add the address, then sign in. */
+export const REMOTE_SETUPS: {
+  key: string;
+  label: string;
+  where: string;
+  code: string;
+}[] = [
+  {
+    key: "claude-desktop",
+    label: "Claude Desktop",
+    where:
+      "Settings → Connectors → Add custom connector. Paste the address, then sign in to Sales Xray.",
+    code: MCP_URL,
+  },
+  {
+    key: "claude-code",
+    label: "Claude Code",
+    where: "Run once in a terminal, then /mcp to sign in.",
+    code: `claude mcp add --transport http sales-xray ${MCP_URL}`,
+  },
+  {
+    key: "cursor",
+    label: "Cursor",
+    where: "~/.cursor/mcp.json. Cursor asks you to sign in.",
+    code: `{
+  "mcpServers": {
+    "sales-xray": { "url": "${MCP_URL}" }
+  }
+}`,
+  },
+  {
+    key: "vscode",
+    label: "VS Code",
+    where: ".vscode/mcp.json in your project. VS Code asks you to sign in.",
+    code: `{
+  "servers": {
+    "sales-xray": { "type": "http", "url": "${MCP_URL}" }
+  }
+}`,
+  },
+  {
+    key: "key",
+    label: "With an API key",
+    where:
+      "For a server of your own: no sign-in; it reads as the key's organisation.",
+    code: `{
+  "mcpServers": {
+    "sales-xray": {
+      "url": "${MCP_URL}",
+      "headers": { "Authorization": "Bearer sxk_live_..." }
+    }
+  }
+}`,
+  },
+];
+
+export const REGISTER = `curl ${HOST}/v1/oauth/register \\
+  -H "Content-Type: application/json" \\
+  -d '{"client_name": "Your App",
+       "redirect_uris": ["https://your-app.example.com/sales-xray/callback"],
+       "grant_types": ["authorization_code", "refresh_token"],
+       "token_endpoint_auth_method": "client_secret_basic"}'
+# 201: {"client_id": "sxc_...", "client_secret": "sxcs_...", ...}
+# Apps with no server of their own send "token_endpoint_auth_method": "none".`;
 
 export const MCP_SETUPS: {
   key: string;
@@ -434,9 +540,21 @@ export const ERRORS: [number, string, string][] = [
   [401, "key_invalid", "The key is wrong, expired or revoked."],
   [403, "scope_missing", "The key lacks the permission this request needs."],
   [403, "organisation_missing", "The key's organisation is no longer active."],
+  [
+    403,
+    "access_ended",
+    "The person who connected this app no longer has access to that workspace.",
+  ],
+  [
+    403,
+    "organisation_only",
+    "Leads are kept in organisations, not in Personal.",
+  ],
+  [404, "call_missing", "That call isn't there, or isn't yours to read."],
   [404, "cursor_missing", "The before id is not in this list."],
   [404, "not_here", "The API is served on the Sales Xray address only."],
   [422, "lead_empty", "A new lead needs at least a name, phone or email."],
+  [422, "stage_unknown", "stage is not one of the stages listed above."],
   [
     429,
     "rate_limited",

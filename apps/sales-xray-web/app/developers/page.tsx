@@ -14,6 +14,9 @@ import {
   HOST,
   MCP_SETUPS,
   MCP_TOOLS,
+  MCP_URL,
+  REGISTER,
+  REMOTE_SETUPS,
   NODE_VERIFY,
   PYTHON_VERIFY,
   SCOPES,
@@ -24,7 +27,7 @@ import styles from "./developers.module.css";
 export const metadata: Metadata = {
   title: "Developers · Sales Xray",
   description:
-    "Connect your apps to Sales Xray: quick start, API keys, Connect (OAuth), every endpoint with examples, webhooks, MCP for AI assistants, limits and errors.",
+    "Connect your apps to Sales Xray: quick start, API keys, Connect (OAuth) and apps that register themselves, every endpoint with examples, webhooks, a remote MCP server for AI assistants, limits and errors.",
 };
 
 const TOC: {
@@ -117,10 +120,11 @@ export default function DevelopersPage() {
             <p>
               Read calls and the facts found in them, read and add leads, hear
               about new reports and leads the moment they happen, and let AI
-              assistants work with your data. Your organisation&apos;s owners
-              and admins set everything up themselves in{" "}
-              <b>Settings → Developers</b>: nothing to send us, no keys shared
-              by hand.
+              assistants work with your data. Keys, webhooks and your
+              organisation&apos;s own apps are set up by its owners and admins
+              in <b>Settings → Developers</b>. Apps that anyone can use register
+              themselves, and each person connects their own account. Nothing to
+              send us, no keys shared by hand.
             </p>
             <ul className={styles.cards}>
               <li>
@@ -210,12 +214,30 @@ export default function DevelopersPage() {
 
           <Section id="connect" title="Connect (OAuth 2.0)">
             <p>
-              For an app that many organisations use, don&apos;t ask each one
-              for a key: register your app once in{" "}
-              <b>Settings → Developers → Your own apps</b> and let people
-              connect it. An owner or admin approves your app for their
-              organisation on Sales Xray&apos;s consent screen; you get a
-              one-time code and swap it for tokens. Use PKCE (S256).
+              Connect signs people in with their Sales Xray account, with PKCE
+              (S256) on every request. There are two kinds of app:
+            </p>
+            <ul className={styles.facts}>
+              <li>
+                <strong>Your organisation&apos;s own app.</strong> Register it
+                in <b>Settings → Developers → Your own apps</b>. An owner or
+                admin approves it for the whole organisation.
+              </li>
+              <li>
+                <strong>An app anyone can use.</strong> It registers itself (RFC
+                7591), with no step on our side. Each person who connects it
+                approves it for their own account, in the workspace they have
+                open (Personal or an organisation), and it sees what they see.
+                The consent screen shows the address it returns to, so people
+                can check whose app it is.
+              </li>
+            </ul>
+            <CodeBlock label="Register an app" code={REGISTER} />
+            <p>
+              Every address is in the server metadata at{" "}
+              <code>{`${HOST}/.well-known/oauth-authorization-server`}</code>{" "}
+              (RFC 8414). Send people to the consent screen; they come back to
+              your address with a one-time code.
             </p>
             <CodeBlock
               label="1. Send people to the consent screen"
@@ -228,16 +250,21 @@ export default function DevelopersPage() {
               <code>sxr_…</code>) last 30 days and are replaced each time you
               use one (<code>grant_type=refresh_token</code>); using an old one
               again ends the connection. Revoke with{" "}
-              <code>POST /v1/oauth/revoke</code>.
+              <code>POST /v1/oauth/revoke</code>; people can also remove an app
+              they connected from their account.
             </p>
           </Section>
 
           <Section id="api" title="API reference">
             <p>
               Base address <code>{API}</code>. Answers are JSON. Send{" "}
-              <code>Authorization: Bearer sxk_live_…</code> (or a Connect access
-              token) with every request. Sensitive parts of calls stay withheld
-              everywhere.
+              <code>Authorization: Bearer sxk_live_…</code>, or a Connect access
+              token (<code>sxa_…</code>), with every request. A key, or an app
+              an organisation connected, sees what an organisation owner sees.
+              An app a person connected for themself sees only what that person
+              sees: their own calls and leads, or their team&apos;s when they
+              are an owner or admin, checked on every request. Sensitive parts
+              of calls always stay withheld.
             </p>
             {ENDPOINTS.map((item) => (
               <section
@@ -355,9 +382,55 @@ export default function DevelopersPage() {
 
           <Section id="mcp" title="AI assistants (MCP)">
             <p>
-              <code>sx.py</code> is an MCP server, so AI assistants can read
-              your calls and leads and add leads, with an API key. One file,
-              Python 3.10 or newer, nothing to install.
+              AI assistants and agents can use Sales Xray as a remote MCP server
+              at <code>{MCP_URL}</code> (Streamable HTTP). Add the address to
+              your assistant; it finds Connect by itself (RFC 9728), registers,
+              and asks the person to sign in. The assistant then reads as that
+              person, within the scopes they approved.
+            </p>
+            <CodeTabs
+              label="Add Sales Xray to your assistant"
+              samples={REMOTE_SETUPS.map((item) => ({
+                key: item.key,
+                label: item.label,
+                code: item.code,
+                note: item.where,
+              }))}
+            />
+            <table className={styles.table}>
+              <caption>Tools</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Tool</th>
+                  <th scope="col">Scope</th>
+                  <th scope="col">What it does</th>
+                </tr>
+              </thead>
+              <tbody>
+                {MCP_TOOLS.map(([tool, scope, text]) => (
+                  <tr key={tool}>
+                    <td>
+                      <code>{tool}</code>
+                    </td>
+                    <td>
+                      <code>{scope}</code>
+                    </td>
+                    <td>{text}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p>
+              Only the tools the connection&apos;s scopes allow are listed. A
+              request without a valid token gets 401 with{" "}
+              <code>WWW-Authenticate: Bearer resource_metadata=…</code>.
+            </p>
+            <h3 className={styles.subhead}>On your own computer (stdio)</h3>
+            <p>
+              For assistants that can&apos;t reach a remote server,{" "}
+              <code>sx.py</code> runs the same tools on your computer (all but{" "}
+              <code>get_call</code>), with an API key. One file, Python 3.10 or
+              newer, nothing to install.
             </p>
             <ol className={styles.steps}>
               <li>
@@ -379,7 +452,7 @@ export default function DevelopersPage() {
               </li>
             </ol>
             <CodeTabs
-              label="Add Sales Xray to your assistant"
+              label="Run sx.py in your assistant"
               samples={MCP_SETUPS.map((item) => ({
                 key: item.key,
                 label: item.label,
@@ -392,25 +465,6 @@ export default function DevelopersPage() {
               <code>/v1/api</code> address next to <code>SX_API_KEY</code>;
               Settings → Developers writes it for you.
             </p>
-            <table className={styles.table}>
-              <caption>Tools the assistant gets</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Tool</th>
-                  <th scope="col">What it does</th>
-                </tr>
-              </thead>
-              <tbody>
-                {MCP_TOOLS.map(([tool, text]) => (
-                  <tr key={tool}>
-                    <td>
-                      <code>{tool}</code>
-                    </td>
-                    <td>{text}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </Section>
 
           <Section id="cli" title="Command line">
