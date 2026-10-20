@@ -43,6 +43,7 @@ jobs:
     timeout-minutes: 340
     strategy:
       fail-fast: false
+      max-parallel: 6   # leave the org's 20 concurrent jobs for wb-ci
       matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
