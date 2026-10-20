@@ -767,11 +767,12 @@ def at_daily_rates(
                 unrated += 1
                 steps.append(step)
                 continue
-            paise = round(Decimal(step.paise) * found[1] / planning)
+            exact = Decimal(step.paise) * found[1] / planning
             if since is None or step.at >= since:
+                # The average comes from unrounded rupees, so dollars stay exact.
                 before += step.paise
-                after += paise
-            steps.append(replace(step, paise=paise))
+                after += exact
+            steps.append(replace(step, paise=round(exact)))
         moved.append(replace(export, steps=steps))
     latest_day = max(rates)
     latest = rates[latest_day]
