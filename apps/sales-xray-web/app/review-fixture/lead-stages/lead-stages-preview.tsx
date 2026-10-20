@@ -151,6 +151,25 @@ const match = (
   words: name ? `“${name}”` : null,
 });
 
+const GOOGLE_OPTIONS = [
+  { id: "qualified_lead", words: "a qualified lead" },
+  { id: "booked_appointment", words: "a booked meeting" },
+  { id: "requested_quote", words: "a quote sent" },
+  { id: "converted_lead", words: "a customer" },
+];
+
+const google = (
+  key: string,
+  label: string,
+  kind: string,
+  milestone: string,
+  name: string | null,
+  state: "on" | "off" | "new",
+) => ({
+  ...match(key, label, kind, milestone, name, state),
+  words: GOOGLE_OPTIONS.find((option) => option.id === name)?.words ?? null,
+});
+
 const ADS = {
   version: 3,
   settling: 1,
@@ -226,8 +245,69 @@ const ADS = {
       lastDeliveredAt: at(12),
       waitingOn: null,
     },
+    {
+      id: "google_ads",
+      name: "Google Ads",
+      brand: "googleads",
+      naming: "action",
+      learns:
+        "Google's bidding learns which clicks turn into good leads and customers, and finds more of them.",
+      reaches:
+        "Leads from your Google lead forms and website forms that keep Google's click id, and any lead with an email or phone.",
+      destinationWords: "account",
+      available: true,
+      configured: true,
+      connected: true,
+      destination: { id: "1234567890", name: "Fictional Homes (test account)" },
+      on: true,
+      testCode: null,
+      since: at(60 * 24),
+      options: GOOGLE_OPTIONS,
+      matches: [
+        google("new", "New enquiry", "new", "lead", null, "off"),
+        google("contacted", "Contacted", "follow_up", "contacted", null, "off"),
+        google(
+          "site_visit_booked",
+          "Site visit booked",
+          "interested",
+          "appointment_booked",
+          "booked_appointment",
+          "on",
+        ),
+        google(
+          "site_visit_done",
+          "Site visit done",
+          "interested",
+          "appointment_done",
+          null,
+          "off",
+        ),
+        google(
+          "negotiation",
+          "Negotiation",
+          "interested",
+          "negotiation",
+          null,
+          "off",
+        ),
+        google("booked", "Booked", "won", "won", "converted_lead", "on"),
+        google(
+          "not_connected",
+          "Couldn't reach",
+          "not_connected",
+          "unreachable",
+          null,
+          "off",
+        ),
+        google("lost", "Lost", "lost", "lost", null, "off"),
+      ],
+      needsCheck: 0,
+      confirmedAt: at(60 * 24),
+      counts: { delivered: 9 },
+      lastDeliveredAt: at(48),
+      waitingOn: null,
+    },
     ...[
-      ["google_ads", "Google Ads", "googleads"],
       ["linkedin", "LinkedIn", "linkedin"],
       ["tiktok", "TikTok", "tiktok"],
       ["microsoft_ads", "Microsoft Ads", "microsoft"],
