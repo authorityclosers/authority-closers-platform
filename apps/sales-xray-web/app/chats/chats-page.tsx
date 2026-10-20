@@ -17,7 +17,6 @@ import {
   useMemo,
   useState,
   useSyncExternalStore,
-  type ReactNode,
 } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
@@ -25,7 +24,7 @@ import { requestWorkspace } from "../call-ownership";
 import { readMe, type Desk } from "../leads/leads-client";
 import { notify, dismissNotice } from "../notice-center";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
-import { Empty, Skeleton } from "../ui/kit";
+import { Empty } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { rememberSeen, useSeenMarks } from "./chats-badge";
 import {
@@ -42,7 +41,14 @@ import {
 } from "./chats-client";
 import styles from "./chats.module.css";
 import { refreshChats, useChats } from "./chats-store";
-import { ThreadFilters, ThreadList, ThreadListSkeleton } from "./thread-list";
+import {
+  ChatsFrame,
+  ChatsSkeleton,
+  FiltersSkeleton,
+  PickHint,
+  ThreadListSkeleton,
+} from "./chats-skeleton";
+import { ThreadFilters, ThreadList } from "./thread-list";
 import { LeadPanel, LeadSheetDialog } from "./lead-panel";
 import { readPanelChoice, savePanelChoice, useMedia } from "./media";
 import { LeadsChatsSwitch } from "./leads-chats-switch";
@@ -105,85 +111,7 @@ function closeChat() {
   window.dispatchEvent(new HashChangeEvent("hashchange"));
 }
 
-/* ---------- Loading frame ---------- */
-
-function ChatsFrame({
-  list,
-  thread,
-  open,
-  panel,
-}: {
-  list: ReactNode;
-  thread: ReactNode;
-  open: boolean;
-  /** The lead beside the chat (computers only; phones use a sheet). */
-  panel?: ReactNode;
-}) {
-  return (
-    <div
-      className={styles.root}
-      data-open={open ? "thread" : "list"}
-      data-panel={panel ? "open" : undefined}
-    >
-      <aside className={styles.listPane} aria-label="Chats list">
-        {list}
-      </aside>
-      <div className={styles.threadPane}>{thread}</div>
-      {panel ? (
-        <aside className={styles.panelPane} aria-label="Lead">
-          {panel}
-        </aside>
-      ) : null}
-    </div>
-  );
-}
-
-function PickHint() {
-  return (
-    <div className={styles.pickHint}>
-      <span className={styles.emptyMark} aria-hidden="true">
-        <MessagesSquare size={20} />
-      </span>
-      <p className={styles.emptyTitle}>Pick a chat</p>
-      <p className={styles.emptyText}>
-        WhatsApp, Messenger and Instagram, all in one place. Chats waiting for a
-        reply are at the top.
-      </p>
-    </div>
-  );
-}
-
-function FiltersSkeleton() {
-  return (
-    <div className={styles.filters} aria-hidden="true">
-      <span className={styles.search} data-placeholder />
-      <div className={styles.chips}>
-        <Skeleton width={84} height={28} />
-        <Skeleton width={96} height={28} />
-      </div>
-    </div>
-  );
-}
-
-export function ChatsSkeleton() {
-  return (
-    <AcquisitionShell authenticated={false} loading active="chats" mobileFit>
-      <ChatsFrame
-        open={false}
-        list={
-          <>
-            <div className={styles.switchSlot}>
-              <LeadsChatsSwitch current="chats" />
-            </div>
-            <FiltersSkeleton />
-            <ThreadListSkeleton />
-          </>
-        }
-        thread={<PickHint />}
-      />
-    </AcquisitionShell>
-  );
-}
+export { ChatsSkeleton };
 
 /* ---------- The page ---------- */
 

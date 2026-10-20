@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
-import { ChatsRoute, ChatsSkeleton } from "./chats-page";
+import { ChatsRoute } from "./chats-page";
+import { ChatsSkeleton } from "./chats-skeleton";
 
 export default function Page() {
   return (

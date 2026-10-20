@@ -28,14 +28,7 @@ import { AcquisitionShell } from "../acquisition-shell";
 import { DeskChats } from "../chats/desk-chats";
 import { LeadsChatsSwitch } from "../chats/leads-chats-switch";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
-import {
-  Badge,
-  Button,
-  Empty,
-  PageHeader,
-  QueryTabs,
-  Skeleton,
-} from "../ui/kit";
+import { Badge, Button, Empty, PageHeader, QueryTabs } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { requestWorkspace } from "../call-ownership";
 import {
@@ -69,6 +62,7 @@ import {
 } from "./leads-client";
 import { MessageSetup } from "./message-sheet";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
+import { LeadsSkeleton } from "./leads-skeleton";
 import { ListView } from "./list-view";
 import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
@@ -94,24 +88,7 @@ const onHashChange = (change: () => void) => {
   return () => window.removeEventListener("hashchange", listener);
 };
 
-export function LeadsSkeleton() {
-  return (
-    <AcquisitionShell authenticated={false} loading active="leads">
-      <div className={styles.root} aria-busy="true" aria-label="Loading leads">
-        <div className={styles.headSkeleton}>
-          <Skeleton width={120} height={22} />
-          <Skeleton width={260} height={12} />
-        </div>
-        <div className={styles.tilesSkeleton}>
-          {[0, 1, 2, 3].map((key) => (
-            <Skeleton key={key} height={86} />
-          ))}
-        </div>
-        <Skeleton height={320} />
-      </div>
-    </AcquisitionShell>
-  );
-}
+export { LeadsSkeleton };
 
 export function LeadsRoute() {
   const access = useWorkspaceAccess();

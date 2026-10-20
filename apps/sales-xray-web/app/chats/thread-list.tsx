@@ -8,7 +8,6 @@
 
 import { Hourglass, Inbox, Search, UserRound } from "lucide-react";
 
-import { Skeleton } from "../ui/kit";
 import { ChatAvatar } from "./channel-mark";
 import {
   CHANNEL_LABEL,
@@ -36,23 +35,8 @@ const SCOPES: { key: Scope; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-/** Same rows, same heights: the list keeps its place while it loads. */
-export function ThreadListSkeleton({ rows = 8 }: { rows?: number }) {
-  return (
-    <div className={styles.listBody} aria-hidden="true">
-      {Array.from({ length: rows }, (_, index) => (
-        <div key={index} className={styles.rowSkeleton}>
-          <Skeleton width={40} height={40} />
-          <span>
-            <Skeleton width="58%" height={13} />
-            <Skeleton width="86%" height={12} />
-            <Skeleton width="40%" height={10} />
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
+// The list's skeleton lives in the light chats-skeleton.tsx (root loading).
+export { ThreadListSkeleton } from "./chats-skeleton";
 
 export function ThreadFilters({
   filter,

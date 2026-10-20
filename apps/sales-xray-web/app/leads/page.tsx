@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
-import { LeadsRoute, LeadsSkeleton } from "./leads-page";
+import { LeadsRoute } from "./leads-page";
+import { LeadsSkeleton } from "./leads-skeleton";
 
 export default function Page() {
   return (
