@@ -499,7 +499,11 @@ async def _social(db: AsyncSession, tenant_id: UUID, channel: App) -> AppHealth:
     problem = (
         Problem(
             at=failed.status_at or failed.created_at,
-            words=f"A reply didn't go: {failed.error_title or 'Meta refused it'}.",
+            words="A reply didn't go: "
+            + (
+                social_inbox.error_words(failed.error_title, failed.error_code, manager=True)
+                or "Meta refused it."
+            ),
         )
         if failed is not None and (last is None or failed.created_at >= last - timedelta(days=1))
         else None

@@ -469,7 +469,9 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                             kind=m.kind,
                             text=m.body,
                             status=m.status,
-                            error=m.error_title,
+                            error=inbox.error_words(
+                                m.error_title, m.error_code, manager=desk.viewer.can_manage
+                            ),
                             auto=m.auto,
                             human_agent=m.tag == "HUMAN_AGENT",
                             at=m.meta_time or m.created_at,

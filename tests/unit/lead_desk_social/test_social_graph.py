@@ -404,3 +404,49 @@ def test_a_refused_call_raises_plain_words() -> None:
 
     with pytest.raises(graph.SocialError, match="24 hours"):
         asyncio.run(_graph(handler).send(PAGE, "t", user_id=PSID, text="late", channel="messenger"))
+
+
+def test_meta_s_own_trouble_and_timeouts_say_so_and_keep_the_trace() -> None:
+    from ac_platform.lead_desk.social import inbox
+
+    def calling(handler: Any) -> graph.SocialError:
+        with pytest.raises(graph.SocialError) as caught:
+            asyncio.run(
+                _graph(handler).send(PAGE, "t", user_id=PSID, text="Hi", channel="messenger")
+            )
+        return caught.value
+
+    refused = calling(
+        lambda request: httpx.Response(
+            400,
+            json={
+                "error": {
+                    "code": 2022,
+                    "error_subcode": 2534099,
+                    "message": "(#2022) Something Meta says",
+                    "fbtrace_id": "AbCdEf123",
+                }
+            },
+        )
+    )
+    assert (refused.code, refused.subcode, refused.trace, refused.kind) == (
+        2022,
+        2534099,
+        "AbCdEf123",
+        None,
+    )
+    assert inbox.error_code(refused) == "2022/2534099"
+    stored = inbox.error_text(refused)
+    assert inbox.error_words(stored, "2022/2534099", manager=False) == str(refused)
+    assert inbox.error_words(stored, "2022/2534099", manager=True) == (
+        f"{refused} Meta says: \u201c(#2022) Something Meta says\u201d (code 2022/2534099)"
+    )
+    broken = calling(lambda request: httpx.Response(502, text="<html>Bad gateway</html>"))
+    assert (str(broken), broken.kind) == (graph.META_SIDE_WORDS, "meta_side")
+    assert inbox.error_code(broken) == "meta_side"
+
+    def slow(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow", request=request)
+
+    late = calling(slow)
+    assert (str(late), late.kind) == (graph.TIMEOUT_WORDS, "timeout")

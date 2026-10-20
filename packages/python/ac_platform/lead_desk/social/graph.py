@@ -73,11 +73,17 @@ class SocialError(ValueError):
         code: int | None = None,
         subcode: int | None = None,
         detail: str | None = None,
+        *,
+        kind: str | None = None,
+        trace: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.subcode = subcode
         self.detail = detail  # Meta's own words, for owners and admins
+        # "timeout" (no answer in time) or "meta_side" (Meta's own problem); None: refused.
+        self.kind = kind
+        self.trace = trace  # Meta's fbtrace_id, for asking Meta about one call
 
 
 @dataclass(frozen=True, slots=True)
@@ -485,6 +491,8 @@ class Graph:
             response = await client.request(
                 method, url, params=params or None, json=json, headers=headers
             )
+        except httpx.TimeoutException:
+            raise SocialError(TIMEOUT_WORDS, kind="timeout") from None
         except httpx.HTTPError:
             raise SocialError("Meta didn't answer. Try again in a minute.") from None
         finally:
@@ -493,10 +501,25 @@ class Graph:
         try:
             body = response.json()
         except ValueError:
-            body = {}
-        if response.status_code >= 400 or (isinstance(body, dict) and "error" in body):
-            error = body.get("error", {}) if isinstance(body, dict) else {}
-            raise refusal(error if isinstance(error, Mapping) else {})
+            body = None
+        error = body.get("error") if isinstance(body, dict) else None
+        if response.status_code >= 400 or error is not None:
+            found = refusal(error if isinstance(error, Mapping) else {})
+            if (
+                response.status_code >= 500
+                or not isinstance(error, Mapping)
+                or found.code in (1, 2)
+            ):
+                # Meta's own trouble (a 5xx, an answer that isn't Graph's, or "try again").
+                found = SocialError(
+                    META_SIDE_WORDS,
+                    found.code,
+                    found.subcode,
+                    found.detail,
+                    kind="meta_side",
+                    trace=found.trace,
+                )
+            raise found
         return body if isinstance(body, dict) else {}
 
     async def user_token(self, *, code: str, redirect_uri: str) -> str:
@@ -661,6 +684,10 @@ def _mid(reply: Mapping[str, Any]) -> str:
     return mid[:200]
 
 
+TIMEOUT_WORDS: Final[str] = "Meta didn't answer in time. Try again."
+META_SIDE_WORDS: Final[str] = "Meta had a problem sending this. Try again."
+
+
 def refusal(error: Mapping[str, Any]) -> SocialError:
     """A Messenger or Instagram error in words a seller or manager can act on."""
     raw, sub = error.get("code"), error.get("error_subcode")
@@ -669,6 +696,7 @@ def refusal(error: Mapping[str, Any]) -> SocialError:
     said = " ".join(str(error.get("error_user_msg") or error.get("message") or "").split())
     found = _refusal(code, subcode)
     found.detail = said[:300] or None
+    found.trace = str(error.get("fbtrace_id") or "")[:64] or None
     return found
 
 

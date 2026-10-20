@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from typing import Any, Final
 from uuid import UUID, uuid4
 
+import structlog
 from sqlalchemy import and_, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +44,7 @@ from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, owner_names
 
 STATUS_ORDER: Final[dict[str, int]] = {"queued": 0, "sent": 1, "delivered": 2, "read": 3}
 FIRST_REPLY_WITHIN: Final[timedelta] = timedelta(minutes=10)
+events_log = structlog.get_logger(__name__)
 OUT_OF_HOURS_EVERY: Final[timedelta] = timedelta(hours=12)
 CONVERSATION_LIMIT: Final[int] = 200
 INBOX_LIMIT: Final[int] = 100
@@ -673,11 +675,58 @@ async def send(
         message.status_at = desk.now
     except graph.SocialError as error:
         message.status = "failed"
-        message.error_code = str(error.code) if error.code is not None else "refused"
-        message.error_title = str(error)[:200]
+        message.error_code = error_code(error)
+        message.error_title = error_text(error)
+        refused(error, channel=channel, what="send")
     _record(desk, lead, message, command_id=command_id)
     await desk.db.flush()
     return message
+
+
+# Meta's own words ride after this mark in error_title: shown to owners and admins only.
+META_MARK: Final[str] = " \u2016 Meta: "
+
+
+def error_code(error: graph.SocialError) -> str:
+    """The stored code: Meta's code and subcode, or why there is none."""
+    if error.code is not None:
+        return (f"{error.code}/{error.subcode}" if error.subcode is not None else str(error.code))[
+            :32
+        ]
+    return error.kind or "refused"
+
+
+def error_text(error: graph.SocialError) -> str:
+    """Our words for everyone, then Meta's own words for owners and admins."""
+    ours = str(error)
+    if error.detail:
+        return (ours + META_MARK + error.detail)[:200]
+    return ours[:200]
+
+
+def error_words(stored: str | None, code: str | None, *, manager: bool) -> str | None:
+    """What a person sees for a message that didn't go."""
+    if not stored:
+        return None
+    ours, _, theirs = stored.partition(META_MARK)
+    if not manager:
+        return ours
+    said = f" Meta says: \u201c{theirs}\u201d" if theirs else ""
+    shown_code = f" (code {code})" if code and code[:1].isdigit() else ""
+    return f"{ours}{said}{shown_code}"
+
+
+def refused(error: graph.SocialError, *, channel: str, what: str) -> None:
+    """Every refused send in the journal: codes and Meta's trace id, never the words sent."""
+    events_log.info(
+        "lead_desk_social_send_refused",
+        what=what,
+        channel=channel,
+        code=error.code,
+        subcode=error.subcode,
+        kind=error.kind,
+        trace=error.trace,
+    )
 
 
 def _record(
@@ -892,10 +941,11 @@ async def comment_replies(
             sent += 1
         except graph.SocialError as error:
             reply.status = "failed"
-            reply.error_code = str(error.code) if error.code is not None else "refused"
-            reply.error_title = str(error)[:200]
+            reply.error_code = error_code(error)
+            reply.error_title = error_text(error)
             comment.reply_state = "failed"
-            comment.error_title = str(error)[:200]
+            comment.error_title = error_text(error)
+            refused(error, channel=comment.channel, what="private_reply")
         public = rule.get("public_reply")
         if public and reply.status == "sent":
             try:
