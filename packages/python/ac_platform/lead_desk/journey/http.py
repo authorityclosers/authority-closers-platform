@@ -229,6 +229,12 @@ class DestinationCommand(_Command):
     test_code: str | None = Field(default=None, alias="testCode", max_length=32)
 
 
+class QualityView(_View):
+    score: float
+    events: int
+    keys: dict[str, int]
+
+
 class DestinationView(_View):
     id: str
     name: str
@@ -811,6 +817,33 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
             )
             await desk.db.flush()
             return await ads_view(desk)
+
+    @router.get(
+        "/journey/ads/{provider}/quality",
+        response_model=QualityView | None,
+        response_model_by_alias=True,
+    )
+    async def ads_quality(
+        provider: str, request: Request, response: Response
+    ) -> QualityView | None:
+        """How well the platform matches this business's events (Meta's event match
+        quality, 0-10), read from the platform each time; null when it has none."""
+        adapter = mapping.module(provider)
+        read = getattr(adapter, "quality", None)
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            row = await desk.db.get(LeadDeskSettings, desk.tenant_id)
+            config = dict((row.config if row else None) or {})
+            tenant_id = desk.tenant_id
+        destination = mapping.read(config, provider).destination_id
+        if read is None or not destination:
+            return None
+        # The platform is asked with no transaction of ours open.
+        async with httpx.AsyncClient(timeout=10) as client:
+            found = await read(client, config=config, tenant_id=tenant_id, destination=destination)
+        if not found:
+            return None
+        return QualityView(score=found["score"], events=found["events"], keys=found["keys"])
 
     @router.get(
         "/journey/ads/{provider}/destinations",

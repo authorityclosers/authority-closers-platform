@@ -27,6 +27,8 @@ import {
   call,
   confirmMatches,
   readAds,
+  readQuality,
+  qualityLine,
   retryEvent,
   saveDestination,
   sentLine,
@@ -34,6 +36,7 @@ import {
   type AdsView,
   type MatchView,
   type ProviderView,
+  type Quality,
 } from "./journey-client";
 import styles from "./journey.module.css";
 
@@ -184,6 +187,20 @@ function ProviderCard({
 }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [quality, setQuality] = useState<Quality | null>(null);
+  const asksQuality = provider.id === "meta" && !!provider.destination?.id;
+  useEffect(() => {
+    if (!asksQuality) return;
+    let live = true;
+    readQuality(provider.id)
+      .then((found) => {
+        if (live) setQuality(found);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [asksQuality, provider.id]);
   const [choosing, setChoosing] = useState(false);
   const app = APP_CONNECT[provider.id];
   const connect = useAppConnect(app ?? "meta", ({ result }) => {
@@ -269,6 +286,28 @@ function ProviderCard({
                 )
               }
             />
+          ) : null}
+          {quality && destination ? (
+            <p className={styles.quality}>
+              <span
+                className={styles.qualityScore}
+                data-level={
+                  quality.score >= 6
+                    ? "good"
+                    : quality.score >= 4
+                      ? "ok"
+                      : "low"
+                }
+              >
+                {quality.score.toFixed(1)}
+              </span>
+              <span>
+                {qualityLine(provider.name, quality)}.{" "}
+                {quality.score < 6
+                  ? "Leads with an email and a phone number match best."
+                  : "Good: Meta can find people like your customers."}
+              </span>
+            </p>
           ) : null}
           {provider.waitingOn ? (
             <p className={cardStyles.problem} role="status">

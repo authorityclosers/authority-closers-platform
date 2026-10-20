@@ -233,6 +233,37 @@ export const confirmMatches = (
     body: JSON.stringify({ expectedVersion, events }),
   });
 
+export type Quality = {
+  score: number;
+  events: number;
+  keys: Record<string, number>;
+};
+
+export const readQuality = (provider: string) =>
+  call<Quality | null>(`/journey/ads/${provider}/quality`);
+
+/** Meta's match quality in a line a business owner reads. */
+export function qualityLine(provider: string, quality: Quality): string {
+  const share = (key: string) => quality.keys[key];
+  const parts = [`${provider} matches ${quality.score.toFixed(1)} out of 10`];
+  const shown: [string, string][] = [
+    ["email", "emails"],
+    ["phone", "phone numbers"],
+  ];
+  for (const [key, words] of shown) {
+    const value = share(key);
+    if (value === undefined) continue;
+    parts.push(
+      value >= 95
+        ? `${words} on every event`
+        : value <= 0
+          ? `no ${words} yet`
+          : `${words} on ${value}% of events`,
+    );
+  }
+  return parts.join(" · ");
+}
+
 export const retryEvent = (id: string) =>
   call<AdsView>(`/journey/ads/events/${encodeURIComponent(id)}/retry`, {
     method: "POST",
