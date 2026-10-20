@@ -70,11 +70,14 @@ from ac_platform.lead_desk.contracts import (
     SellerCalls,
     SettingsCommand,
     SettingsView,
+    StageChoice,
     TakingLeads,
     Team,
     WorkHoursCommand,
     WorkHoursView,
 )
+from ac_platform.lead_desk.journey import model as journeys
+from ac_platform.lead_desk.journey.templates import MILESTONE_WORDS
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent, LeadRep
 from ac_platform.lead_desk.vocabulary import (
     CHANNEL_LABELS,
@@ -330,6 +333,8 @@ class LeadDesk:
         self.sandbox = sandbox
         self.now = now or utcnow()
         self._sequence = 0
+        # The business's own stages, read once per request (lists build many rows).
+        self._journey: journeys.Journey | None = None
 
     # ----- shared reads --------------------------------------------------------
 
@@ -474,12 +479,31 @@ class LeadDesk:
         )
         return seen
 
+    async def _labels(self) -> journeys.Journey:
+        if self._journey is None:
+            self._journey = await journeys.read(self.db, self.tenant_id)
+        return self._journey
+
+    def _stage_label(self, lead: Lead) -> str:
+        """The business's own name for the lead's stage, else the desk's."""
+        if self._journey is not None:
+            label = self._journey.label(lead.stage, lead.step)
+            if label:
+                return label
+        return STAGE_LABELS[lead.stage]
+
+    def _step(self, lead: Lead) -> str | None:
+        if self._journey is None:
+            return lead.step
+        stage = self._journey.resolve(lead.stage, lead.step)
+        return stage.key if stage else lead.step
+
     # ----- rows ------------------------------------------------------------------
 
     def _why(self, lead: Lead, day_end: datetime) -> tuple[WhyKind, str]:
         source = lead.source_label or SOURCE_LABELS.get(lead.source, lead.source)
         if lead.stage in CLOSED_STAGES:
-            return "closed", STAGE_LABELS[lead.stage]
+            return "closed", self._stage_label(lead)
         if lead.owner_person_id is None:
             return "waiting", "Waiting for an owner"
         due = lead.next_action_at
@@ -494,14 +518,14 @@ class LeadDesk:
                 return "retry", f"Try again · {label.lower()} · {tries}"
             if lead.stage == "new":
                 return "due", f"Asked again · {source}" if lead.repeats else "Call booked"
-            return "due", f"{STAGE_LABELS[lead.stage]} due"
+            return "due", f"{self._stage_label(lead)} due"
         if due is not None and due <= day_end:
             if lead.stage == "new":
                 return "later", "Call booked"
             return "later", "Try again" if lead.stage == "not_connected" else "Follow-up"
         if due is not None and lead.stage == "new":
             return "open", "Call booked"
-        return "open", STAGE_LABELS[lead.stage]
+        return "open", self._stage_label(lead)
 
     def _row(self, lead: Lead, names: Mapping[UUID, str], day_end: datetime) -> LeadRow:
         kind, why = self._why(lead, day_end)
@@ -520,7 +544,8 @@ class LeadDesk:
             interest=lead.interest,
             phone_last4=lead.phone[-4:] if lead.phone else None,
             stage=lead.stage,
-            stage_label=STAGE_LABELS[lead.stage],
+            stage_label=self._stage_label(lead),
+            step=self._step(lead),
             source=lead.source,
             source_label=lead.source_label or SOURCE_LABELS.get(lead.source, lead.source),
             owner_person_id=lead.owner_person_id,
@@ -539,6 +564,7 @@ class LeadDesk:
         )
 
     async def _rows(self, leads: Sequence[Lead]) -> tuple[LeadRow, ...]:
+        await self._labels()
         names = await self._names(lead.owner_person_id for lead in leads)
         day_end = self._day_start() + timedelta(days=1)
         return tuple(self._row(lead, names, day_end) for lead in leads)
@@ -827,6 +853,7 @@ class LeadDesk:
 
     async def detail(self, lead_id: UUID) -> LeadDetail:
         lead = await self._lead(lead_id)
+        journey = await self._labels()
         events = (
             await self.db.scalars(
                 select(LeadEvent)
@@ -889,6 +916,15 @@ class LeadDesk:
             reps=reps,
             call_mode=self.call_mode,
             first_call_minutes=first_call_minutes(lead.created_at, lead.first_contact_at),
+            stage_choices=tuple(
+                StageChoice(
+                    key=stage.key,
+                    label=stage.label,
+                    kind=stage.kind,
+                    meaning=MILESTONE_WORDS[stage.milestone],
+                )
+                for stage in journey.pickable()
+            ),
         )
 
     @staticmethod
@@ -935,7 +971,9 @@ class LeadDesk:
             at=event.created_at,
             actor_name=names.get(event.actor_person_id) if event.actor_person_id else None,
             stage=stage,
-            stage_label=STAGE_LABELS.get(stage) if stage else None,
+            stage_label=data.get("step_label")
+            if isinstance(data.get("step_label"), str)
+            else (STAGE_LABELS.get(stage) if stage else None),
             reason=reason,
             reason_label=REASON_LABELS.get(reason) if reason else None,
             connected=data.get("connected") if isinstance(data.get("connected"), bool) else None,
@@ -1110,6 +1148,7 @@ class LeadDesk:
                 setattr(lead, name, getattr(found, name))
         if reopened:
             lead.stage = "new"
+            lead.step = None
         if lead.next_action_at is None or lead.next_action_at > self.now:
             lead.next_action_at = self.now
         self._event(
@@ -1296,17 +1335,27 @@ class LeadDesk:
             raise DeskError(409, "This lead changed while you were on it. Check it and try again.")
         was_due = lead.next_action_at is not None and lead.next_action_at <= self.now
         previous_stage = lead.stage
+        previous_step = lead.step
+        chosen: journeys.Stage | None = None
         lead.attempts += 1
         follow = command.follow_up_at
         if follow is not None and follow < self.now - timedelta(minutes=5):
             raise DeskError(422, "Pick a follow-up time that's still ahead.")
         if command.connected:
-            if command.stage is None:
+            if command.step is not None:
+                # One of the business's own stages: its kind is the desk's stage.
+                chosen = (await self._labels()).by_key.get(command.step)
+                if chosen is None or chosen.archived or chosen.kind not in journeys.CONNECTED_KINDS:
+                    raise DeskError(422, "Pick one of your current stages.")
+                if command.stage is not None and command.stage != chosen.kind:
+                    raise DeskError(422, "That stage changed. Reload the lead and try again.")
+            elif command.stage is None:
                 raise DeskError(422, "Choose the lead's stage: Follow-up, Interested, Won or Lost.")
-            stage = stage_after_connected(command.stage)
+            stage = stage_after_connected(chosen.kind if chosen else str(command.stage))
             if stage in NEEDS_FOLLOW_UP and follow is None:
                 raise DeskError(422, "Pick when to follow up: in one hour, tomorrow or next week.")
             lead.stage = stage
+            lead.step = chosen.key if chosen else None
             lead.last_result = stage
             lead.next_action_at = follow if stage in NEEDS_FOLLOW_UP else None
             lead.next_action_note = command.remark if stage in NEEDS_FOLLOW_UP else None
@@ -1314,6 +1363,8 @@ class LeadDesk:
             if command.reason is None:
                 raise DeskError(422, "Choose why the call didn't connect.")
             lead.stage = stage_after_not_connected(lead.stage)
+            if lead.stage != previous_stage:
+                lead.step = None
             lead.last_result = command.reason
             gap = retry_after(command.reason, lead.attempts)
             lead.next_action_at = follow or (self.now + gap if gap else None)
@@ -1329,6 +1380,9 @@ class LeadDesk:
                 "connected": command.connected,
                 "stage": lead.stage,
                 "from_stage": previous_stage,
+                "step": lead.step,
+                "from_step": previous_step,
+                "step_label": chosen.label if chosen else None,
                 "reason": command.reason,
                 "follow_up_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
                 "remark": command.remark,

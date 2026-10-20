@@ -44,6 +44,8 @@ export type LeadRow = {
   test_data: boolean;
   /** Its call is more than an hour late (a new lead counts from its arrival). */
   overdue?: boolean;
+  /** The business own stage (its key), when it has a stage list (Lead stages). */
+  step?: string | null;
   /** They called, nobody picked up, and nobody has called back yet. */
   missed_at?: string | null;
   missed_calls?: number;
@@ -111,7 +113,8 @@ export type LeadEvent = {
     | "note"
     | "edited"
     | "message"
-    | "scheduled";
+    | "scheduled"
+    | "stage";
   at: string;
   actor_name: string | null;
   stage: string | null;
@@ -166,6 +169,15 @@ export type LeadDetail = {
   }[];
   call_mode: "simulated" | "phone";
   first_call_minutes?: number | null;
+  /** The business's own stages a seller picks after a call (Lead stages). */
+  stage_choices?: StageChoice[];
+};
+
+export type StageChoice = {
+  key: string;
+  label: string;
+  kind: Stage;
+  meaning: string;
 };
 
 export type LeadPage = {
@@ -507,6 +519,8 @@ export type Disposition = {
   connected: boolean;
   reason?: string;
   stage?: Stage;
+  /** One of the business's own stages (Lead stages); its kind goes as `stage`. */
+  step?: string;
   follow_up_at?: string;
   remark?: string;
   deal_value?: string;

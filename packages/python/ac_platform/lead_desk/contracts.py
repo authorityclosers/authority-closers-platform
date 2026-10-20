@@ -97,6 +97,8 @@ class LeadRow(Model):
     last_result_label: str | None
     test_data: bool
     overdue: bool = False
+    # The business's own stage (its key) the lead is in, when it has a stage list.
+    step: str | None = None
     # They called and nobody picked up, and nobody has called them since
     # (Salestrail's missed-call queue): the newest such call and how many.
     missed_at: datetime | None = None
@@ -186,6 +188,15 @@ class RepOption(Model):
     available: bool
 
 
+class StageChoice(Model):
+    """One of the business's own stages a seller can pick after a call that connected."""
+
+    key: str
+    label: str
+    kind: str
+    meaning: str
+
+
 class LeadDetail(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     lead: LeadRow
@@ -201,6 +212,7 @@ class LeadDetail(Model):
     reps: tuple[RepOption, ...]
     call_mode: Literal["simulated", "phone"]
     first_call_minutes: int | None = None
+    stage_choices: tuple[StageChoice, ...] = ()
 
 
 class PhoneHealth(Model):
@@ -356,6 +368,8 @@ class Disposition(Command):
     connected: bool
     reason: Reason | None = None
     stage: ConnectedStage | None = None
+    # One of the business's own stages (lead_desk/journey): its kind becomes `stage`.
+    step: str | None = Field(default=None, max_length=40)
     follow_up_at: AwareDatetime | None = None
     remark: str | None = Field(default=None, max_length=1000)
     deal_value: str | None = Field(default=None, max_length=24)

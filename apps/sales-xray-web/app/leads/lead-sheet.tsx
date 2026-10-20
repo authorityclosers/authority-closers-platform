@@ -193,6 +193,39 @@ const NEXT: { key: Stage; label: string; sub: string; tone: string }[] = [
   { key: "lost", label: "Not interested", sub: "Close this lead", tone: "bad" },
 ];
 
+const TONES: Record<string, string> = {
+  interested: "warm",
+  follow_up: "later",
+  won: "good",
+  lost: "bad",
+};
+
+type Choice = {
+  id: string;
+  key: Stage;
+  step?: string;
+  label: string;
+  sub: string;
+  tone: string;
+};
+
+/** What a seller picks after a call that connected: the business's own stages
+ *  (Lead stages), else the desk's four. */
+export function stageChoices(detail: {
+  stage_choices?: LeadDetail["stage_choices"];
+}): Choice[] {
+  const own = (detail.stage_choices ?? []).filter((item) => TONES[item.kind]);
+  if (!own.length) return NEXT.map((item) => ({ ...item, id: item.key }));
+  return own.map((item) => ({
+    id: item.key,
+    key: item.kind,
+    step: item.key,
+    label: item.label,
+    sub: item.meaning,
+    tone: TONES[item.kind],
+  }));
+}
+
 /** The stage a lead already has, chosen again after "We talked" (UX study item 6). */
 export function stageAfterTalk(stage: Stage): Stage | null {
   return stage === "interested" || stage === "follow_up" ? stage : null;
@@ -291,7 +324,15 @@ export function CallOutcome({
     heard?.connected === false ? missedReason(heard.result) : null,
   );
   const lastStage = stageAfterTalk(detail.lead.stage);
+  const choices = stageChoices(detail);
+  const lastStep =
+    lastStage &&
+    detail.lead.step &&
+    choices.some((item) => item.step === detail.lead.step)
+      ? detail.lead.step
+      : null;
   const [stage, setStage] = useState<Stage | null>(lastStage);
+  const [step, setStep] = useState<string | null>(lastStep);
   const [next, setNext] = useState<Pick>("morning");
   const [retry, setRetry] = useState<Pick | null>(null);
   const [custom, setCustom] = useState(() =>
@@ -336,6 +377,7 @@ export function CallOutcome({
         connected: talk === "talked",
         reason: talk === "missed" ? (reason ?? undefined) : undefined,
         stage: talk === "talked" ? (stage ?? undefined) : undefined,
+        step: talk === "talked" ? (step ?? undefined) : undefined,
         follow_up_at: at ? at.toISOString() : undefined,
         remark: note.trim() || undefined,
         deal_value: deal.trim() || undefined,
@@ -399,6 +441,7 @@ export function CallOutcome({
           onClick={() => {
             setTalk("missed");
             setStage(null);
+            setStep(null);
           }}
         >
           <PhoneMissed size={22} aria-hidden="true" />
@@ -460,14 +503,21 @@ export function CallOutcome({
             role="group"
             aria-label="What happens next"
           >
-            {NEXT.map((item) => (
+            {choices.map((item) => (
               <button
-                key={item.key}
+                key={item.id}
                 type="button"
                 className={styles.stageTile}
                 data-tone={item.tone}
-                aria-pressed={stage === item.key}
-                onClick={() => setStage(item.key)}
+                aria-pressed={
+                  item.step
+                    ? step === item.step
+                    : stage === item.key && step === null
+                }
+                onClick={() => {
+                  setStage(item.key);
+                  setStep(item.step ?? null);
+                }}
               >
                 <strong>{item.label}</strong>
                 <small>{item.sub}</small>
@@ -716,6 +766,11 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
         title: `${who} sent ${event.channel === "SMS" ? "an SMS" : "a WhatsApp"}${
           event.template_label ? ` · ${event.template_label}` : ""
         }`,
+      };
+    case "stage":
+      return {
+        title: `${who} moved them to ${event.stage_label ?? "a new stage"}`,
+        detail: event.note ?? undefined,
       };
     case "scheduled":
       return {
