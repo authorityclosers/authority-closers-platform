@@ -21,6 +21,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -41,6 +42,28 @@ from ac_platform.lead_desk.whatsapp import cloud, inbox, runner
 from ac_platform.tenancy.models import Membership, Organisation
 
 log = logging.getLogger(__name__)
+events = structlog.get_logger(__name__)
+
+
+def signup_log(outcome: str, params: Any = None, *, detail: str | None = None) -> None:
+    """Each Embedded Signup outcome in the journal (structlog: the stdlib logger's lines
+    don't reach it): Meta's own error words when it sent any, never a code or a token."""
+    found = params if params is not None else {}
+
+    def part(name: str, limit: int) -> str | None:
+        return " ".join(str(found.get(name) or "").split())[:limit] or None
+
+    events.info(
+        "lead_desk_whatsapp_signup",
+        outcome=outcome,
+        error=part("error", 60),
+        reason=part("error_reason", 60),
+        meta_code=part("error_code", 12),
+        meta_said=part("error_description", 200) or part("error_message", 200),
+        detail=" ".join((detail or "").split())[:200] or None,
+    )
+
+
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 NO_STORE = {"Cache-Control": "no-store"}
 _MAX_WEBHOOK = 3 * 1024 * 1024  # Meta sends up to 3 MB
@@ -441,8 +464,13 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
     async def finish_whatsapp(desk: LeadDesk, cfg: cloud.WhatsAppConfig, code: str) -> str:
         """Swap Embedded Signup's code and connect every number the customer shared."""
         api = cloud.Cloud(cfg)
-        token = await api.exchange(code, redirect_uri=callback_url())
-        rows = await inbox.connect_shared(desk, cfg, api, token)
+        try:
+            token = await api.exchange(code, redirect_uri=callback_url())
+            rows = await inbox.connect_shared(desk, cfg, api, token)
+        except (HTTPException, cloud.WhatsAppError) as error:
+            signup_log("failed", detail=str(getattr(error, "detail", None) or error))
+            raise
+        signup_log("connected" if rows else "nonumbers")
         for row in rows:
             try:
                 await inbox.sync_templates(desk.db, cfg, api, row, now=desk.now)
@@ -487,8 +515,10 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
             # In the phone's browser, with no Sales Xray session: hand back to the app.
             params = request.query_params
             if params.get("error"):
+                signup_log("cancelled", params)
                 return app_return.return_page("whatsapp", result="cancelled")
             if not params.get("code"):
+                signup_log("failed", params, detail="no code from Meta")
                 return app_return.return_page("whatsapp", result="failed")
             return app_return.return_page(
                 "whatsapp",
@@ -510,10 +540,12 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
             return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
         if request.query_params.get("error"):
+            signup_log("cancelled", request.query_params)
             return done("cancelled")
         code = request.query_params.get("code", "")
         state = request.query_params.get("state", "")
         if not code or not state:
+            signup_log("failed", request.query_params, detail="no code from Meta")
             return done("failed")
         try:
             async with desk_for(request, response, write=True, origin=False) as desk:
@@ -526,6 +558,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                         person_id=desk.viewer.person_id,
                     )
                 except meta.MetaError:
+                    signup_log("failed", detail="the start doesn't match this person")
                     return done("failed")
                 outcome = await finish_whatsapp(desk, cfg, code)
         except HTTPException as error:
