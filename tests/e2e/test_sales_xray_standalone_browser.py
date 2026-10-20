@@ -565,7 +565,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             with _navigation_window(page, navigation_windows):
                 workspace_menu.get_by_role(
                     "menuitemradio",
-                    name="Synthetic second Sales Xray workspace Your organisation",
+                    name=re.compile(r"Synthetic second Sales Xray workspace.*Organisation"),
                 ).click()
                 expect(
                     page.get_by_role(
