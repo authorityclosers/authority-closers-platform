@@ -87,6 +87,8 @@ for index in 0 1 2; do
   [[ ! -e ${targets[$index]} ]] || cp -a "${targets[$index]}" "$backup/$index"
 done
 echo "rollback-directory: $backup"
+# code is assigned inside the trap body.
+# shellcheck disable=SC2154
 trap 'code=$?; trap - ERR; restore "$backup"; exit "$code"' ERR
 install -d -m 0755 /etc/systemd/system/ac-dev-live-api.service.d
 for index in 0 1 2; do
