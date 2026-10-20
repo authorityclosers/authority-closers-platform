@@ -74,7 +74,7 @@ summary.
 - **The Python shards come in two families that partition the tests:**
   - **a:** about 90 files that mention Playwright, ffmpeg, a codec or the native build. Their shards install those
     prerequisites in the background, about 60 s.
-  - **b:** everything else, with no prerequisites.
+  - **b:** everything else. It installs only the codec (ffmpeg), which database tests need when they upload audio; no browser.
   - Each family is sharded and verified by `python_test_shard.py` with its own exclusion list: the base exclusions
     plus the other family's files.
   - Shards balance by `scripts/ci/wb-python-durations.json`, measured on GitHub runners.

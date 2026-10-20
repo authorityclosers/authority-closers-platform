@@ -8,7 +8,7 @@
      "py_shards": 17, "requested_by": "..."}
 
 Python shards come in two families that partition the tests: (a) files that may need the codec/browser/native
-prerequisites, (b) the rest, which skip that 60 s install. Each family is sharded and verified on its own by
+prerequisites, (b) the rest, which install only the codec (database tests upload audio; ffprobe measures it). Each family is sharded and verified on its own by
 scripts/ci/python_test_shard.py (an exclusion file adds the other family's files).
 
 Full runs every job. Otherwise only the families the changed paths touch run (explicit `checks` force families), and

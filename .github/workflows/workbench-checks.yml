@@ -151,10 +151,11 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: wb-playwright-${{ runner.os }}-${{ hashFiles('uv.lock', 'pnpm-lock.yaml') }}
-      - name: Start codec, filesystem and browser prerequisites in the background
-        if: matrix.fam != 'b'
+      - name: Start the prerequisites in the background (family b needs the codec too, not the browser)
         run: |
-          ( uv run --frozen python scripts/ci/ci_prerequisites.py codec filesystem browser; echo $? > "$RUNNER_TEMP/prereq.rc" ) \
+          # Database tests upload audio and the server measures it with ffprobe, so every family needs the codec.
+          what="codec filesystem browser"; [ "${{ matrix.fam }}" = b ] && what="codec filesystem"
+          ( uv run --frozen python scripts/ci/ci_prerequisites.py $what; echo $? > "$RUNNER_TEMP/prereq.rc" ) \
             > "$RUNNER_TEMP/prereq.log" 2>&1 &
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -183,7 +184,6 @@ jobs:
           tail -5 "$RUNNER_TEMP/pnpm.log"
           test "$(cat "$RUNNER_TEMP/pnpm.rc" 2>/dev/null)" = 0
       - name: Wait for the prerequisites
-        if: matrix.fam != 'b'
         run: |
           for _ in $(seq 1 600); do [ -f "$RUNNER_TEMP/prereq.rc" ] && break; sleep 1; done
           cat "$RUNNER_TEMP/prereq.log"
