@@ -470,7 +470,7 @@ def test_a_refused_schema_goes_as_text_and_audio_goes_inline() -> None:
         body = json.loads(request.content)
         seen.append(body)
         if "responseJsonSchema" in body["generationConfig"]:
-            return httpx.Response(400, json={"error": {"message": "schema has too many states"}})
+            return httpx.Response(400, json={"error": {"status": "INVALID_ARGUMENT"}})
         return httpx.Response(200, json=_gemini_answer({"ok": 1}))
 
     client = httpx.Client(transport=httpx.MockTransport(handle))
@@ -528,7 +528,8 @@ def test_the_benchmark_route_stays_on_google_and_counts_audio_tokens() -> None:
     body = seen[0]
     assert body["model"] == "google/gemini-3.1-flash-lite"
     assert body["provider"] == {
-        "only": ["google-ai-studio", "google-vertex"],
+        "order": ["google-ai-studio"],
+        "allow_fallbacks": False,
         "data_collection": "deny",
     }
     assert body["messages"][1]["content"][0]["input_audio"]["format"] == "mp3"

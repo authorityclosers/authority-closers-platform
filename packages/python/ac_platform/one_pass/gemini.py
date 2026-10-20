@@ -33,7 +33,6 @@ OPENROUTER: Final = "https://openrouter.ai/api/v1/chat/completions"
 INLINE_AUDIO_BYTES: Final = 14 * 1024 * 1024  # base64 grows a third; requests stay under 20 MB
 TRANSIENT: Final = frozenset({429, 500, 502, 503, 504})
 AUDIO_TOKENS_PER_SECOND: Final = 32  # Gemini's audio tokenisation
-_SCHEMA_MARKERS: Final = (b"schema", b"too many states", b"nesting depth")
 
 
 class OnePassFailure(RuntimeError):
@@ -259,15 +258,15 @@ class GoogleGemini:
             status = response.status_code
             used = current
             if status == 400 and schema_mode == "strict" and request.schema is not None:
-                lowered = response.content[:4096].lower()
-                if any(marker in lowered for marker in _SCHEMA_MARKERS):
-                    # The structured-output schema was refused (too complex): send it as
-                    # text once, so the answer still follows it and is validated here.
-                    schema_mode = "prompt"
-                    body = self._body(request, audio_part, schema=False)
-                    response = self._post(model, body, current)
-                    attempts += 1
-                    status = response.status_code
+                # A refused request with a structured-output schema is most often the
+                # schema itself (too complex, or a keyword the route can't take; Google
+                # then says only "invalid argument"): send it as text once, so the answer
+                # still follows it and is validated here. A refused request is not billed.
+                schema_mode = "prompt"
+                body = self._body(request, audio_part, schema=False)
+                response = self._post(model, body, current)
+                attempts += 1
+                status = response.status_code
             if status == 200 or status not in TRANSIENT:
                 break
             if index + 1 < len(plan):
@@ -346,22 +345,30 @@ class OpenRouterBench:
             "max_tokens": request.max_output_tokens,
             "reasoning": {"effort": request.thinking.lower()},
             "usage": {"include": True},
-            # Google only, and no provider that keeps prompts for training.
+            # Google AI Studio only (its list prices; Vertex's differ), and no provider that
+            # keeps prompts for training.
             "provider": {
-                "only": ["google-ai-studio", "google-vertex"],
+                "order": ["google-ai-studio"],
+                "allow_fallbacks": False,
                 "data_collection": "deny",
             },
         }
         if request.temperature is not None:
             body["temperature"] = request.temperature
+        schema_mode = "strict"
         if request.schema is not None:
-            body["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {"name": "answer", "strict": False, "schema": request.schema},
-            }
+            # This route turns a structured-output schema of this size into Google's
+            # "invalid argument" (21 Oct 2026), so JSON mode with the schema as text, as the
+            # research ran it; the answer is validated here either way.
+            schema_mode = "prompt"
+            body["response_format"] = {"type": "json_object"}
+            body["messages"][0]["content"] = (
+                request.system
+                + "\n\nReturn JSON that matches this JSON schema exactly:\n"
+                + json.dumps(request.schema, separators=(",", ":"))
+            )
         clock = time.monotonic()
         attempts = 0
-        schema_mode = "strict"
         response: httpx.Response | None = None
         for index in range(4):
             attempts += 1
@@ -379,22 +386,6 @@ class OpenRouterBench:
                 raise OnePassFailure("timeout") from None
             except httpx.HTTPError:
                 raise OnePassFailure("transport_error") from None
-            if (
-                response.status_code == 400
-                and schema_mode == "strict"
-                and request.schema is not None
-                and any(m in response.content[:4096].lower() for m in _SCHEMA_MARKERS)
-            ):
-                # The route refused the structured-output schema: ask for JSON with the
-                # schema as text, once; the answer is validated here either way.
-                schema_mode = "prompt"
-                body["response_format"] = {"type": "json_object"}
-                body["messages"][0]["content"] = (
-                    request.system
-                    + "\n\nReturn JSON that matches this JSON schema exactly:\n"
-                    + json.dumps(request.schema, separators=(",", ":"))
-                )
-                continue
             if response.status_code not in TRANSIENT:
                 break
             self._sleep(min(60.0, 5.0 * (3**index)))
