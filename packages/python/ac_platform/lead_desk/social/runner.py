@@ -15,20 +15,22 @@ answer within 30 seconds. One pass at a time across API processes (lock 1802/126
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+import structlog
 from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.lead_desk.social import graph, inbox
 
-log = logging.getLogger(__name__)
+# structlog: the stdlib logger's lines don't reach the journal, so a failing pass would
+# go unseen (and people's queued messages would wait until they are too late to send).
+events = structlog.get_logger(__name__)
 
 _TICK = 10
 _LOCK = (1802, 1268)  # one pass across API processes and slots
@@ -114,7 +116,7 @@ async def _loop(
                         sessions, cfg, graph.Graph(cfg, client, timeout=8), now=datetime.now(UTC)
                     )
                 except Exception:  # noqa: BLE001 - the loop must survive a bad tick
-                    log.warning("messenger and instagram tick failed", exc_info=True)
+                    events.warning("lead_desk_social_tick_failed", exc_info=True)
             await _pause(stop, nudge, _TICK)
 
 
