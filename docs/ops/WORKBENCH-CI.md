@@ -1,68 +1,90 @@
 # Workbench CI: tests and screenshots run on GitHub, not on ac
 
-Owner order, 20 Oct 2026: heavy checks (tsc, eslint, vitest, pytest, Playwright) must not run on the ac VPS. It has
-4 cores and serves dev live, and parallel build chats pushed its load to 14 with 20–57 s dev requests. The repository
-is public, so GitHub-hosted runners cost nothing.
+Owner order, 20 Oct 2026:
+- Heavy checks (tsc, eslint, vitest, pytest, Playwright) must not run on the ac VPS. It has 4 cores and serves dev
+  live; parallel build chats pushed its load to 14 and dev requests took 20–57 s.
+- The repository is public, so GitHub-hosted runners are free. Split the work so a full run finishes in under 5 minutes.
 
 ## Use it
 
-On ac, as any user (it re-runs itself as `acdev`), or from the laptop with `ssh ac wb-ci ...`:
+On ac as any user (it re-runs itself as `acdev`), or from the laptop with `ssh ac wb-ci ...`:
 
 ```bash
-wb-ci                                   # web + python + screenshots on the workbench HEAD
-wb-ci --web --changed                   # prettier/eslint/vitest on files the HEAD commit changed, tsc of their packages
-wb-ci --py --py-tests tests/core/test_x.py   # one pytest target with PostgreSQL, instead of the 4 shards
+wb-ci                                   # default: only the jobs the HEAD commit's paths touch, scoped to its files
+wb-ci --changed <base>                  # the same for everything in <base>..HEAD
+wb-ci --full                            # every job: lint, tsc, vitest, screenshots and 16 Python shards (< 5 min)
+wb-ci --web                             # force the web jobs (scoped to the changed files unless --full)
+wb-ci --py-tests tests/core/test_x.py   # one pytest target with PostgreSQL instead of the 16 shards
 wb-ci --visual /review-fixture/shell "/?new=1&sx-fixture=auth.email"
-wb-ci --sha 1a2b3c4d --web --py         # a specific workbench commit
-wb-ci --web --include apps/sales-xray-web/app/x.tsx   # also test this uncommitted file
+wb-ci --include apps/sales-xray-web/app/x.tsx   # also test this uncommitted file
+wb-ci --sha 1a2b3c4d --full             # a specific workbench commit
 ```
 
-| option | what it does |
-|---|---|
-| `--sha <sha>` | workbench commit to test (default: HEAD of `dev/live`) |
-| `--web` | prettier, eslint, `tsc --noEmit`, vitest (as Application validation's frontend job) |
-| `--py` | ruff format, ruff check, mypy, then pytest with the PostgreSQL suites in 4 parallel shards (as Application validation) |
-| `--py-tests <paths>` | one pytest job for these paths instead of the shards |
-| `--visual [routes]` | screenshots at 390 and 1440 px, light and dark, fictional fixture data, no API; default routes are every review fixture of the Sales Xray visual advisory |
-| `--changed [<base>]` | scope prettier, eslint, vitest (`vitest related`) and ruff to files changed in `<base>..<sha>` (default: the commit itself); tsc and mypy still check whole packages |
-| `--include <paths>` | add these uncommitted workbench files to the tested tree (read only) |
-| `--no-wait`, `--keep` | return after the run starts; keep the `wb-ci/*` branch |
+**What runs.** Changed paths pick the jobs:
 
-No `--web`/`--py`/`--visual` means all three. It prints the run URL, then each job's result and duration, the failed
-steps, and artifact links (JUnit reports, screenshots with `receipt.json`). Exit code 0 only when everything passed.
-Each check's own table (pass/fail and seconds per command) is in the run summary on GitHub.
+| paths | jobs |
+|---|---|
+| `apps/`, `packages/typescript/` | lint (prettier + eslint on the changed files), tsc (affected packages), vitest (`vitest related`) |
+| `apps/sales-xray-web/`, `packages/typescript/ui/`, `packages/typescript/sales-xray-review-ui/` | the above, plus screenshots of the frames those paths affect |
+| `packages/python/`, `tests/`, `alembic`, `migrations/`, `scripts/*.py` | lint (ruff on the changed files, plus mypy) and all 16 Python shards |
+| workflow, `scripts/ci/wb*`, lockfiles, `package.json`, `pyproject.toml`, `tsconfig*` | everything, as `--full` |
+| docs only | nothing: the summary says so |
+
+`--web`, `--py` and `--visual` force those families.
+
+**What it prints:**
+- the run URL;
+- each job's result and seconds, with the failed steps;
+- links to the screenshots (`wb-screens`: PNGs plus `receipt.json`);
+- the number of Python shard reports.
+
+Exit code 0 only when everything passed. Every job writes its own check table (command, pass/fail, seconds) to the run
+summary.
 
 ## Rules for every chat and agent
 
-- **No heavy checks on ac.** Use `wb-ci`. A quick single test (`pytest -k one_test`, one `vitest` file) is fine on ac
-  only under `nice -n 19 ionice -c3`, one at a time.
+- **No heavy checks on ac.** Use `wb-ci`. A single quick test on ac is still fine under `nice -n 19 ionice -c3`, one at
+  a time.
 - Commit with `wb-commit` first, or pass `--include` for files you have not committed yet.
-- Screenshots on GitHub use fictional fixtures only (no API, no real data). Checks that need dev-live data still use
-  the dev box, briefly.
+- Screenshots on GitHub use fictional fixtures only (no API, no real data). Anything that needs dev-live data still
+  uses the dev box, briefly.
 
 ## How it works
 
-- `wb-ci` (`/usr/local/bin/wb-ci`, source `scripts/ci/wb-ci`) keeps a bare repo, `/home/acdev/src/wb-ci.git`, that
-  borrows the workbench's git objects. It builds a request commit there:
-  - the tested tree;
-  - plus any `--include` files;
-  - plus the current CI files;
-  - plus `.wb-ci/request.json`.
-- It pushes that commit to `refs/heads/wb-ci/<sha8>-<random>` and waits with `gh run watch`. Afterwards it prints the
-  summary and deletes the branch.
-- The shared checkout's files, index and branch are never touched. The git guard is not involved: the push happens
-  from the bare repo.
-- It also force-updates `wb-ci-base` to the tested workbench commit, so the next push only sends new objects.
-  `wb-ci-base` triggers no workflow.
-- `.github/workflows/workbench-checks.yml` runs only on `wb-ci/**` pushes. Its jobs:
-  - `plan`;
-  - `web`;
-  - `py-static`;
-  - `py-tests`, matrix of 4 shards with PostgreSQL service containers and throwaway local passwords;
-  - `visual`;
-  - `summary`.
-- All of it is driven by `scripts/ci/wb_checks.py` and `scripts/ci/wb_screens.mjs`. No secrets are used.
+**The helper.** `wb-ci` lives at `/usr/local/bin/wb-ci`; its source is `scripts/ci/wb-ci`.
+- It keeps a bare repo, `/home/acdev/src/wb-ci.git`, that borrows the workbench's git objects.
+- It builds a request commit: the tested tree, any `--include` files, the current CI files and `.wb-ci/request.json`.
+- It pushes that commit to `refs/heads/wb-ci/slot-<n>`, waits with `gh run watch`, prints the summary, then deletes the
+  branch.
+- One `wb-ci` holds a slot at a time (`flock`, six slots), so runs never cancel each other. Actions caches are scoped
+  to the branch name, so a fixed slot keeps its ESLint and Playwright caches warm.
+- `--no-wait` uses a unique branch instead.
+- The shared checkout's files, index and branch are never touched.
+- It also force-updates `wb-ci-base` to the tested workbench commit, so later pushes only send new objects.
+
+**The workflow.** `.github/workflows/workbench-checks.yml` runs only on `wb-ci/**` pushes.
+
+- **plan** reads the request.
+- **Full layout: 20 jobs**, the GitHub Free concurrency limit:
+  - lint: prettier, eslint, ruff and mypy;
+  - tsc;
+  - vitest;
+  - visual: 390 and 1440 px, light and dark, two pages at a time;
+  - 16 Python shards.
+- **Each Python shard:**
+  - starts two PostgreSQL containers as its first step, so they boot while uv and pnpm install;
+  - installs the ffmpeg/browser prerequisites (about 60 s) only when its assigned test files mention them. If one is
+    missed, `python_test_shard.py` fails the shard instead of skipping silently;
+  - balances its files with `scripts/ci/wb-python-durations.json`, measured on GitHub runners.
+- **summary** downloads every shard's manifest. It runs `python_test_shard.py verify` (every file in exactly one shard,
+  every shard reported) and fails on any failed job.
+
+**Refreshing the shard durations.** Do this after test files are added or grow:
+1. Run `wb-ci --refresh-durations <run-id of a full run>`.
+2. Commit with `wb-commit -- scripts/ci/wb-python-durations.json`.
+
+**Safety:**
 - No other workflow runs for `wb-ci/**` or `wb-ci-base`: every other `push` trigger is limited to `main`, and nothing
   opens a pull request. Release, image, single-track, migration-schema-publish and the lane gate are unaffected.
-- GitHub push protection (secret scanning) checks every push, because the repository is public. Never commit secrets
-  to the workbench.
+- No secrets are used.
+- GitHub push protection (secret scanning) checks every push. Never commit secrets to the workbench.
