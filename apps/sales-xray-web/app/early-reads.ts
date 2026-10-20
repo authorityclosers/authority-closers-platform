@@ -82,6 +82,8 @@ const CALL_READS = [
   ...SESSION,
   `${ACQUISITION}/entry`,
   `${ACQUISITION}/session`,
+  // How this workspace's Report shows a call (report settings version).
+  `${ACQUISITION}/report-settings`,
 ];
 
 /**

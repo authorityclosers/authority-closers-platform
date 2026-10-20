@@ -190,9 +190,9 @@ class Parameter:
     maximum: int | None = None
     # display: how the app presents a saved call; generation: how the AI writes it.
     applies: Literal["display", "generation"] = "display"
-    # True when the Sales X-Ray app already follows it; the rest is saved and
-    # used as each tab adopts it.
-    in_app: bool = False
+    # True when the Sales X-Ray app follows it (every display setting since
+    # 20 Oct); a generation setting changes how the AI writes, not the app.
+    in_app: bool = True
     tunable: bool = False
     signals: tuple[str, ...] = ()
 
@@ -405,6 +405,8 @@ PARAMETERS: tuple[Parameter, ...] = (
         "choice",
         choices=(("supportive", "Supportive"), ("direct", "Direct")),
         applies="generation",
+        # How the AI writes, not how the app shows a saved call.
+        in_app=False,
         tunable=True,
         signals=("sx.mission_completed",),
     ),

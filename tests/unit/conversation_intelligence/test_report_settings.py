@@ -54,14 +54,11 @@ def test_every_parameter_names_a_real_setting_and_back() -> None:
             assert flatten(VERSION_1)[parameter.key] in {value for value, _ in parameter.choices}
         if parameter.tunable:
             assert parameter.signals, parameter.key  # a tuner needs something to learn from
+    # The app follows every display setting; tone changes how the AI writes.
     in_app = {parameter.key for parameter in PARAMETERS if parameter.in_app}
-    assert in_app == {
-        "report.parts.overview",
-        "report.parts.analysis",
-        "report.parts.outcome",
-        "prospect.enabled",
-        "coaching.enabled",
-    }
+    assert in_app == {parameter.key for parameter in PARAMETERS if parameter.applies == "display"}
+    assert "coaching.tone" not in in_app
+    assert {"report.style", "report.pointers", "report.show_scores"} <= in_app
 
 
 def test_the_pointer_list_matches_the_app() -> None:

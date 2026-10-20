@@ -25,9 +25,21 @@ How the Report, Prospect and Coaching tabs present a call, in numbered versions 
 | Prospect | tab on/off, detail, the ten sections of the owner's Prospect design, inferred facts |
 | Coaching | tab on/off, detail, moments and how many, across-calls patterns, tone (AI wording, later) |
 
-**In the app now:** Report parts and the Prospect and Coaching tabs (`apps/sales-xray-web/app/report-settings.ts` filters the panels in `report-modes.tsx`). Any read failure, a guest or an older server falls back to version 1.
+**In the app now (20 Oct):** every display setting. `report-settings.ts` reads the workspace's version once per identity (started with the call page's early reads) and turns it into a look (`reportLook`) that the Report, Prospect and Coaching components read through `ReportLookContext`. Version 1, a guest, an older server or any read failure is today's look exactly. Nothing re-analyses a call or spends anything.
 
-The rest is saved and validated. Each tab adopts it through `useReportSettings()`, and the Admin form labels each setting "In the app now" or "Saved; each tab adopts it".
+| Setting | In the app |
+|---|---|
+| Parts, Prospect and Coaching tabs | Hidden as chosen (at least one part stays) |
+| Style | Guided is today's Report. Compact drops the part explanations and "What this evaluates", and an opened pointer says what happened. Scorecard lays the pointers out as score tiles, each opening its detail. |
+| Detail | Simple drops "Why it matters", quotes and tips. Standard is today's. Expert adds "What the analysis saw" to scored pointers. |
+| Pointers, most at once | The version's pointers in its order; past the most, a "Show all N pointers" button |
+| Scores | Off: no overall score, no pointer scores; part 1 reads "Overview" |
+| Evidence quotes, how to improve | Their blocks under each pointer (the training video goes with the tips) |
+| Prospect sections, inferred facts, detail | The ten sections one to one; inferred off hides the AI's reads (urgency, fit, suggested next action); simple drops the section explanations |
+| Coaching moments, most moments, across calls, detail | The call's moments and their number; the "across your calls" link; simple drops the focus's why lines |
+| Coaching tone | Generation: how the AI writes coaching, so not an app setting |
+
+Industry tailoring is resolved on the server: the app reads the version chosen for its organisation, its industry or everyone.
 
 ## Built for auto-tuning later (AUT-2116, not built)
 

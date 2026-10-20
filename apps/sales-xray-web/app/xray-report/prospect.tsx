@@ -41,6 +41,7 @@ import {
 import { PROSPECTS_API, editProspectField } from "../prospects-client";
 import type { ProspectSummary } from "../prospects-client";
 import type { DocumentReportData } from "../report-document-data";
+import { useReportLook } from "../report-settings";
 import { useWorkspaceAccess } from "../workspace-access";
 import { PlayChip, type Select } from "../report-visuals/visuals";
 import type { XrayView } from "./model";
@@ -312,6 +313,11 @@ function ProspectView({
   save?: (fact: ProspectFact, value: string) => Promise<void>;
   note: ReactNode;
 }) {
+  // The report settings version: which of the ten sections show, whether the
+  // AI's own reads do, and whether sections explain themselves.
+  const { prospect: look } = useReportLook();
+  const show = look.sections;
+  const plain = look.detail === "simple";
   const grid: [string, ReactNode, ProspectFact][] = [
     ["Company", <Building2 key="i" />, facts.company],
     ["Current Revenue", <ChartColumnIncreasing key="i" />, facts.revenue],
@@ -333,15 +339,23 @@ function ProspectView({
           </span>
           <div>
             <h3 id="prospect-remember">Remember Before You Call Again</h3>
-            <p>
-              The most important details to help you prepare for your next
-              conversation.
-            </p>
+            {plain ? null : (
+              <p>
+                The most important details to help you prepare for your next
+                conversation.
+              </p>
+            )}
           </div>
         </header>
         {note}
-        <div className={`${xr.card} ${styles.hero}`}>
-          <Ring score={facts.quality.score} reason={facts.quality.reason} />
+        <div
+          className={`${xr.card} ${styles.hero}`}
+          data-no-ring={show.quality ? undefined : ""}
+          data-no-facts={show.facts ? undefined : ""}
+        >
+          {show.quality ? (
+            <Ring score={facts.quality.score} reason={facts.quality.reason} />
+          ) : null}
           <div className={styles.who}>
             <h4 className={facts.name.value ? undefined : styles.unknown}>
               {facts.name.value ?? "Name not said in this call"}
@@ -354,185 +368,209 @@ function ProspectView({
               />
             ) : null}
             <p>{headline || "Role and company not said"}</p>
-            <div className={styles.chips}>
-              {facts.deal ? (
-                <span
-                  className={`${styles.chip} ${DEAL_TONE[facts.deal] ?? xr.neutral}`}
-                >
-                  {facts.deal}
-                </span>
-              ) : null}
-              {facts.urgency.value ? (
-                <span
-                  className={`${styles.chip} ${xr.amber}`}
-                  title={facts.urgency.reason ?? undefined}
-                >
-                  <Zap aria-hidden="true" />
-                  {URGENCY[facts.urgency.value]}
-                  <span className={styles.aiTag}>AI</span>
-                </span>
-              ) : null}
-              {facts.fit.value ? (
-                <span
-                  className={`${styles.chip} ${facts.fit.value === "weak" ? xr.red : xr.green}`}
-                  title={facts.fit.reason ?? undefined}
-                >
-                  <Star aria-hidden="true" />
-                  {FIT[facts.fit.value]}
-                  <span className={styles.aiTag}>AI</span>
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <dl className={styles.facts}>
-            {grid.map(([label, icon, fact]) => (
-              <div key={label} className={styles.fact}>
-                <span className={`${xr.disc} ${xr.blue}`}>{icon}</span>
-                <div>
-                  <dt>{label}</dt>
-                  <dd>
-                    <FactValue
-                      fact={fact}
-                      title={label}
-                      onSelect={onSelect}
-                      save={save}
-                    />
-                  </dd>
-                </div>
-              </div>
-            ))}
-          </dl>
-        </div>
-        <div className={styles.tiles}>
-          <Tile
-            label="The Biggest Problem"
-            tone={xr.red}
-            icon={<Target />}
-            fact={facts.problem}
-            onSelect={onSelect}
-            save={save}
-          />
-          <Tile
-            label="What They Want"
-            tone={xr.green}
-            icon={<ChartColumnIncreasing />}
-            fact={facts.wants}
-            onSelect={onSelect}
-          />
-          <Tile
-            label="What’s Stopping Them"
-            tone={xr.amber}
-            icon={<TriangleAlert />}
-            fact={facts.stopping}
-            onSelect={onSelect}
-          />
-          <Tile
-            label="Personal Context / Connection"
-            tone={xr.purple}
-            icon={<UsersRound />}
-            fact={facts.personal}
-            onSelect={onSelect}
-          />
-          <div className={`${xr.card} ${xr.tinted} ${styles.tile} ${xr.green}`}>
-            <span className={`${xr.disc} ${xr.discLg} ${xr.green}`}>
-              <CalendarClock />
-            </span>
-            <div className={styles.tileText}>
-              <span className={styles.tileLabel}>Next Follow-up</span>
-              {facts.followUp.when ? (
-                <>
-                  <span className={styles.when}>{facts.followUp.when}</span>
-                  <span className={styles.value}>
-                    {facts.followUp.about}
-                    {facts.followUp.evidence[0] ? (
-                      <PlayChip
-                        source={facts.followUp.evidence[0]}
-                        title="Next follow-up"
-                        onSelect={onSelect}
-                      />
-                    ) : null}
+            {show.chips ? (
+              <div className={styles.chips}>
+                {facts.deal ? (
+                  <span
+                    className={`${styles.chip} ${DEAL_TONE[facts.deal] ?? xr.neutral}`}
+                  >
+                    {facts.deal}
                   </span>
-                </>
-              ) : (
-                <span className={styles.unknown}>
-                  No follow-up agreed in this call
-                </span>
-              )}
-            </div>
-          </div>
-          <div
-            className={`${xr.card} ${xr.tinted} ${styles.tile} ${xr.purple}`}
-          >
-            <span className={`${xr.disc} ${xr.discLg} ${xr.purple}`}>
-              <Lightbulb />
-            </span>
-            <div className={styles.tileText}>
-              <span className={styles.tileLabel}>
-                Suggested Next Action <span className={styles.aiTag}>AI</span>
-              </span>
-              <span
-                className={
-                  facts.nextAction.value ? styles.value : styles.unknown
-                }
-              >
-                {facts.nextAction.value ?? "Appears once the call is scored"}
-              </span>
-            </div>
-            {facts.nextAction.value ? (
-              <ArrowRight className={styles.arrow} aria-hidden="true" />
+                ) : null}
+                {look.inferred && facts.urgency.value ? (
+                  <span
+                    className={`${styles.chip} ${xr.amber}`}
+                    title={facts.urgency.reason ?? undefined}
+                  >
+                    <Zap aria-hidden="true" />
+                    {URGENCY[facts.urgency.value]}
+                    <span className={styles.aiTag}>AI</span>
+                  </span>
+                ) : null}
+                {look.inferred && facts.fit.value ? (
+                  <span
+                    className={`${styles.chip} ${facts.fit.value === "weak" ? xr.red : xr.green}`}
+                    title={facts.fit.reason ?? undefined}
+                  >
+                    <Star aria-hidden="true" />
+                    {FIT[facts.fit.value]}
+                    <span className={styles.aiTag}>AI</span>
+                  </span>
+                ) : null}
+              </div>
             ) : null}
           </div>
+          {show.facts ? (
+            <dl className={styles.facts}>
+              {grid.map(([label, icon, fact]) => (
+                <div key={label} className={styles.fact}>
+                  <span className={`${xr.disc} ${xr.blue}`}>{icon}</span>
+                  <div>
+                    <dt>{label}</dt>
+                    <dd>
+                      <FactValue
+                        fact={fact}
+                        title={label}
+                        onSelect={onSelect}
+                        save={save}
+                      />
+                    </dd>
+                  </div>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </div>
+        <div className={styles.tiles}>
+          {show.problem ? (
+            <Tile
+              label="The Biggest Problem"
+              tone={xr.red}
+              icon={<Target />}
+              fact={facts.problem}
+              onSelect={onSelect}
+              save={save}
+            />
+          ) : null}
+          {show.wants ? (
+            <Tile
+              label="What They Want"
+              tone={xr.green}
+              icon={<ChartColumnIncreasing />}
+              fact={facts.wants}
+              onSelect={onSelect}
+            />
+          ) : null}
+          {show.blockers ? (
+            <Tile
+              label="What’s Stopping Them"
+              tone={xr.amber}
+              icon={<TriangleAlert />}
+              fact={facts.stopping}
+              onSelect={onSelect}
+            />
+          ) : null}
+          {show.personal ? (
+            <Tile
+              label="Personal Context / Connection"
+              tone={xr.purple}
+              icon={<UsersRound />}
+              fact={facts.personal}
+              onSelect={onSelect}
+            />
+          ) : null}
+          {show.follow_up ? (
+            <div
+              className={`${xr.card} ${xr.tinted} ${styles.tile} ${xr.green}`}
+            >
+              <span className={`${xr.disc} ${xr.discLg} ${xr.green}`}>
+                <CalendarClock />
+              </span>
+              <div className={styles.tileText}>
+                <span className={styles.tileLabel}>Next Follow-up</span>
+                {facts.followUp.when ? (
+                  <>
+                    <span className={styles.when}>{facts.followUp.when}</span>
+                    <span className={styles.value}>
+                      {facts.followUp.about}
+                      {facts.followUp.evidence[0] ? (
+                        <PlayChip
+                          source={facts.followUp.evidence[0]}
+                          title="Next follow-up"
+                          onSelect={onSelect}
+                        />
+                      ) : null}
+                    </span>
+                  </>
+                ) : (
+                  <span className={styles.unknown}>
+                    No follow-up agreed in this call
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : null}
+          {show.next_action && look.inferred ? (
+            <div
+              className={`${xr.card} ${xr.tinted} ${styles.tile} ${xr.purple}`}
+            >
+              <span className={`${xr.disc} ${xr.discLg} ${xr.purple}`}>
+                <Lightbulb />
+              </span>
+              <div className={styles.tileText}>
+                <span className={styles.tileLabel}>
+                  Suggested Next Action <span className={styles.aiTag}>AI</span>
+                </span>
+                <span
+                  className={
+                    facts.nextAction.value ? styles.value : styles.unknown
+                  }
+                >
+                  {facts.nextAction.value ?? "Appears once the call is scored"}
+                </span>
+              </div>
+              {facts.nextAction.value ? (
+                <ArrowRight className={styles.arrow} aria-hidden="true" />
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
 
-      <section
-        className={`${xr.card} ${styles.more}`}
-        aria-labelledby="prospect-more"
-      >
-        <header className={styles.sectionHead}>
-          <span className={`${xr.disc} ${xr.blue}`}>
-            <BriefcaseBusiness />
-          </span>
-          <div>
-            <h3 id="prospect-more">Additional Buyer Information</h3>
-            <p>
-              Key insights from the conversation to help you understand the
-              prospect better.
+      {show.buyer_info ? (
+        <section
+          className={`${xr.card} ${styles.more}`}
+          aria-labelledby="prospect-more"
+        >
+          <header className={styles.sectionHead}>
+            <span className={`${xr.disc} ${xr.blue}`}>
+              <BriefcaseBusiness />
+            </span>
+            <div>
+              <h3 id="prospect-more">Additional Buyer Information</h3>
+              {plain ? null : (
+                <p>
+                  Key insights from the conversation to help you understand the
+                  prospect better.
+                </p>
+              )}
+            </div>
+          </header>
+          {facts.insights.length ? (
+            <ul className={styles.insights}>
+              {facts.insights.map((item, index) => {
+                const [icon, tone] = INSIGHT_ICON[item.kind];
+                return (
+                  <li key={`${index}-${item.text}`}>
+                    <span className={`${xr.disc} ${tone}`}>{icon}</span>
+                    <span className={styles.value}>
+                      {item.text}
+                      <PlayChip
+                        source={item.evidence[0]}
+                        title="Buyer information"
+                        onSelect={onSelect}
+                      />
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className={styles.unknown}>
+              {facts.reviewed
+                ? "The call didn’t give more buyer details."
+                : "Appears once the call is scored, usually a few minutes after the report."}
             </p>
-          </div>
-        </header>
-        {facts.insights.length ? (
-          <ul className={styles.insights}>
-            {facts.insights.map((item, index) => {
-              const [icon, tone] = INSIGHT_ICON[item.kind];
-              return (
-                <li key={`${index}-${item.text}`}>
-                  <span className={`${xr.disc} ${tone}`}>{icon}</span>
-                  <span className={styles.value}>
-                    {item.text}
-                    <PlayChip
-                      source={item.evidence[0]}
-                      title="Buyer information"
-                      onSelect={onSelect}
-                    />
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className={styles.unknown}>
-            {facts.reviewed
-              ? "The call didn’t give more buyer details."
-              : "Appears once the call is scored, usually a few minutes after the report."}
-          </p>
-        )}
-      </section>
-      <p className={styles.legend}>
-        <Gauge aria-hidden="true" /> Quality, urgency, fit and the next action
-        are the AI&rsquo;s read of this call. Every other fact was said on the
-        call: tap its time to hear it.
-      </p>
+          )}
+        </section>
+      ) : null}
+      {plain ? null : (
+        <p className={styles.legend}>
+          <Gauge aria-hidden="true" /> Quality, urgency, fit and the next action
+          are the AI&rsquo;s read of this call. Every other fact was said on the
+          call: tap its time to hear it.
+        </p>
+      )}
     </div>
   );
 }

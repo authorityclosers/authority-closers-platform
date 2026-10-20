@@ -56,6 +56,7 @@ it("names each page's first reads, exactly as the page asks for them", () => {
     "/v1/me/sales-xray-workspaces",
     `${A}/entry`,
     `${A}/session`,
+    `${A}/report-settings`,
     `${A}/submissions/${id.toLowerCase()}`,
     `${A}/submissions/${id.toLowerCase()}/transcript`,
     `${A}/submissions/${id.toLowerCase()}/report`,

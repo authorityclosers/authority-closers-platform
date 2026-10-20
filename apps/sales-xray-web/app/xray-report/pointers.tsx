@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
+import { lookPointers, useReportLook } from "../report-settings";
 import { PlayChip, type Select } from "../report-visuals/visuals";
 import {
   QuoteMark,
@@ -175,6 +176,15 @@ function Detail({
   scoring?: Scoring;
   onSelect?: Select;
 }) {
+  // The report settings version (Admin): compact shows what happened; the
+  // simple detail drops why it matters, quotes and tips; expert adds what
+  // the analysis saw. Version 1 shows what it always did.
+  const look = useReportLook();
+  const compact = look.style === "compact";
+  const why = !compact && look.detail !== "simple";
+  const evidence = !compact && look.evidence;
+  const tips = !compact && look.tips;
+  const seen = !compact && look.detail === "expert" && pointer.related.length;
   if (!isScored(pointer.status)) {
     const note = scoringNote(scoring);
     const item = pointer.status
@@ -225,7 +235,7 @@ function Detail({
   }
   return (
     <div className={styles.detail}>
-      <div className={styles.detailTop}>
+      <div className={styles.detailTop} data-single={why ? undefined : ""}>
         <div className={`${styles.card} ${styles.block}`}>
           <span className={`${styles.disc} ${styles.blue}`}>
             <CircleCheck />
@@ -237,132 +247,159 @@ function Detail({
             </p>
           </div>
         </div>
-        <div
-          className={`${styles.card} ${styles.block} ${styles.why} ${styles.red}`}
-        >
-          <span className={styles.disc}>
-            <TriangleAlert />
+        {why ? (
+          <div
+            className={`${styles.card} ${styles.block} ${styles.why} ${styles.red}`}
+          >
+            <span className={styles.disc}>
+              <TriangleAlert />
+            </span>
+            <div className={styles.blockText}>
+              <h4 className={`${styles.blockTitle} ${styles.toneTitle}`}>
+                Why It Matters?
+              </h4>
+              <p className={styles.body}>
+                {pointer.whyItMatters ?? "Not stated in this report."}
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </div>
+      {seen ? (
+        <div className={`${styles.card} ${styles.block}`}>
+          <span className={`${styles.disc} ${styles.purple}`}>
+            <BookOpen />
           </span>
           <div className={styles.blockText}>
-            <h4 className={`${styles.blockTitle} ${styles.toneTitle}`}>
-              Why It Matters?
-            </h4>
-            <p className={styles.body}>
-              {pointer.whyItMatters ?? "Not stated in this report."}
-            </p>
+            <h4 className={styles.blockTitle}>What the analysis saw</h4>
+            <ul className={styles.bullets}>
+              {pointer.related.map((line, index) => (
+                <li key={`${index}-${line.text}`}>
+                  <LineWithClip
+                    line={line}
+                    title={pointer.name}
+                    onSelect={onSelect}
+                  />
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
-      </div>
-      <div className={`${styles.card} ${styles.block}`}>
-        <span className={`${styles.disc} ${styles.purple}`}>
-          <BookOpen />
-        </span>
-        <div className={styles.blockText}>
-          <h4 className={styles.blockTitle}>Evidence from the Call</h4>
-          {pointer.evidence.length ? (
-            <div className={styles.quotes}>
-              {pointer.evidence.map((quote, index) => (
-                <figure
-                  key={`${quote.at_ms}-${index}`}
-                  className={`${styles.quote} ${quote.who === "you" ? styles.green : styles.blue}`}
-                  style={{ margin: 0 }}
-                >
-                  <QuoteMark className={styles.quoteMark} />
-                  <div>
-                    <figcaption className={styles.quoteWho}>
-                      {quote.name ??
-                        (quote.who === "you"
-                          ? "You"
-                          : quote.who === "prospect"
-                            ? "Prospect"
-                            : "Speaker")}{" "}
-                      {quote.source ? (
-                        <PlayChip
-                          source={quote.source}
-                          title={pointer.name}
-                          onSelect={onSelect}
-                        />
-                      ) : (
-                        `(${clock(quote.at_ms)})`
-                      )}
-                    </figcaption>
-                    <blockquote
-                      className={styles.quoteText}
-                      style={{ margin: "2px 0 0" }}
-                    >
-                      &ldquo;{quote.text}&rdquo;
-                    </blockquote>
-                  </div>
-                </figure>
-              ))}
-            </div>
-          ) : (
-            <p className={styles.gap}>
-              No quote from the call for this pointer.
-            </p>
-          )}
-        </div>
-      </div>
-      <div
-        className={`${styles.card} ${styles.block} ${styles.improve} ${styles.purple}`}
-      >
-        <span className={styles.disc}>
-          <Lightbulb />
-        </span>
-        <div className={styles.improveRow}>
+      ) : null}
+      {evidence ? (
+        <div className={`${styles.card} ${styles.block}`}>
+          <span className={`${styles.disc} ${styles.purple}`}>
+            <BookOpen />
+          </span>
           <div className={styles.blockText}>
-            <h4 className={`${styles.blockTitle} ${styles.toneTitle}`}>
-              How to Improve?
-            </h4>
-            {pointer.howToImprove.length ? (
-              <ul className={styles.bullets}>
-                {pointer.howToImprove.map((tip) => (
-                  <li key={tip}>{tip}</li>
+            <h4 className={styles.blockTitle}>Evidence from the Call</h4>
+            {pointer.evidence.length ? (
+              <div className={styles.quotes}>
+                {pointer.evidence.map((quote, index) => (
+                  <figure
+                    key={`${quote.at_ms}-${index}`}
+                    className={`${styles.quote} ${quote.who === "you" ? styles.green : styles.blue}`}
+                    style={{ margin: 0 }}
+                  >
+                    <QuoteMark className={styles.quoteMark} />
+                    <div>
+                      <figcaption className={styles.quoteWho}>
+                        {quote.name ??
+                          (quote.who === "you"
+                            ? "You"
+                            : quote.who === "prospect"
+                              ? "Prospect"
+                              : "Speaker")}{" "}
+                        {quote.source ? (
+                          <PlayChip
+                            source={quote.source}
+                            title={pointer.name}
+                            onSelect={onSelect}
+                          />
+                        ) : (
+                          `(${clock(quote.at_ms)})`
+                        )}
+                      </figcaption>
+                      <blockquote
+                        className={styles.quoteText}
+                        style={{ margin: "2px 0 0" }}
+                      >
+                        &ldquo;{quote.text}&rdquo;
+                      </blockquote>
+                    </div>
+                  </figure>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <p className={styles.gap}>Nothing to change here.</p>
+              <p className={styles.gap}>
+                No quote from the call for this pointer.
+              </p>
             )}
           </div>
-          {pointer.training ? (
-            <div className={styles.trainingWrap}>
-              <button
-                type="button"
-                className={styles.training}
-                onClick={() => {
-                  if (pointer.training?.href) {
-                    window.open(pointer.training.href, "_blank", "noopener");
-                    return;
-                  }
-                  // Dipak's lessons and their videos live in this call's Coaching.
-                  window.dispatchEvent(
-                    new CustomEvent("ac:report-open-view", {
-                      detail: "coaching",
-                    }),
-                  );
-                }}
-              >
-                <CirclePlay aria-hidden="true" />
-                Watch Training Video
-                <ArrowRight aria-hidden="true" />
-              </button>
-              <span className={styles.trainingName}>
-                {pointer.training.title}
-                {pointer.training.minutes
-                  ? ` (${pointer.training.minutes} min)`
-                  : ""}
-              </span>
-            </div>
-          ) : null}
         </div>
-      </div>
+      ) : null}
+      {tips ? (
+        <div
+          className={`${styles.card} ${styles.block} ${styles.improve} ${styles.purple}`}
+        >
+          <span className={styles.disc}>
+            <Lightbulb />
+          </span>
+          <div className={styles.improveRow}>
+            <div className={styles.blockText}>
+              <h4 className={`${styles.blockTitle} ${styles.toneTitle}`}>
+                How to Improve?
+              </h4>
+              {pointer.howToImprove.length ? (
+                <ul className={styles.bullets}>
+                  {pointer.howToImprove.map((tip) => (
+                    <li key={tip}>{tip}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className={styles.gap}>Nothing to change here.</p>
+              )}
+            </div>
+            {pointer.training ? (
+              <div className={styles.trainingWrap}>
+                <button
+                  type="button"
+                  className={styles.training}
+                  onClick={() => {
+                    if (pointer.training?.href) {
+                      window.open(pointer.training.href, "_blank", "noopener");
+                      return;
+                    }
+                    // Dipak's lessons and their videos live in this call's Coaching.
+                    window.dispatchEvent(
+                      new CustomEvent("ac:report-open-view", {
+                        detail: "coaching",
+                      }),
+                    );
+                  }}
+                >
+                  <CirclePlay aria-hidden="true" />
+                  Watch Training Video
+                  <ArrowRight aria-hidden="true" />
+                </button>
+                <span className={styles.trainingName}>
+                  {pointer.training.title}
+                  {pointer.training.minutes
+                    ? ` (${pointer.training.minutes} min)`
+                    : ""}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 /** 2. Detailed Call Analysis (images 6, 8, 9 and 10). */
 export function CallAnalysis({
-  pointers,
+  pointers: allPointers,
   illustrative,
   aiDraft = false,
   scoring,
@@ -375,7 +412,15 @@ export function CallAnalysis({
   onSelect?: Select;
 }) {
   const note = scoringNote(scoring);
+  // The report settings version: which pointers, in which order, how many
+  // before "Show all", scores or not, and the style (version 1: all of them).
+  const look = useReportLook();
+  const pointers = useMemo(
+    () => lookPointers(allPointers, look),
+    [allPointers, look],
+  );
   const [filter, setFilter] = useState<Filter>("all");
+  const [everything, setEverything] = useState(false);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
   const counts = useMemo(() => {
     const count = (f: Filter) => pointers.filter((p) => matches(p, f)).length;
@@ -395,7 +440,13 @@ export function CallAnalysis({
       ).map((f) => [f, count(f)]),
     ) as Record<Filter, number>;
   }, [pointers]);
-  const shown = pointers.filter((pointer) => matches(pointer, filter));
+  const matching = pointers.filter((pointer) => matches(pointer, filter));
+  const capped =
+    look.maxPointers !== null &&
+    !everything &&
+    filter === "all" &&
+    matching.length > look.maxPointers;
+  const shown = capped ? matching.slice(0, look.maxPointers!) : matching;
   const anyEvaluated = pointers.some((pointer) => pointer.status !== null);
   const toggle = (id: string) =>
     setOpen((current) => {
@@ -404,9 +455,29 @@ export function CallAnalysis({
       else next.add(id);
       return next;
     });
+  const rowLabel = (pointer: Pointer, isOpen: boolean) =>
+    `${pointer.number}. ${pointer.name}: ${
+      pointer.status ? STATUS[pointer.status].label : "not evaluated yet"
+    }${look.scores && pointer.score !== null ? `, ${pointer.score} out of 100` : ""}. ${
+      isOpen ? "Hide details" : "View more"
+    }`;
+  const showAll = capped ? (
+    <button
+      type="button"
+      className={styles.showAll}
+      onClick={() => setEverything(true)}
+    >
+      Show all {matching.length} pointers
+    </button>
+  ) : null;
   return (
-    <div className={styles.xr} data-xray-part="analysis">
-      {anyEvaluated ? (
+    <div
+      className={styles.xr}
+      data-xray-part="analysis"
+      data-style={look.style === "guided" ? undefined : look.style}
+      data-scores={look.scores ? undefined : "off"}
+    >
+      {anyEvaluated && look.style === "guided" ? (
         <div className={styles.counts}>
           {UNSCORED.map((item) => (
             <button
@@ -429,7 +500,7 @@ export function CallAnalysis({
             </button>
           ))}
         </div>
-      ) : (
+      ) : anyEvaluated ? null : (
         <p
           className={`${styles.card} ${styles.empty}`}
           role={note.pending ? "status" : undefined}
@@ -456,83 +527,139 @@ export function CallAnalysis({
         ))}
         {illustrative ? <Illustrative /> : aiDraft ? <AiDraft /> : null}
       </div>
-      <div className={`${styles.card} ${styles.table}`}>
-        <div className={styles.tableHead} aria-hidden="true">
-          <span>#</span>
-          <span>Sales Conversation Pointer</span>
-          <span>What This Evaluates</span>
-          <span>Status</span>
-          <span>Score</span>
-          <span />
-        </div>
-        {shown.length ? (
-          <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {shown.map((pointer) => {
-              const isOpen = open.has(pointer.id);
-              const tone = pointer.status
-                ? STATUS[pointer.status].tone
-                : styles.neutral;
-              return (
-                <li
-                  key={pointer.id}
-                  className={styles.row}
-                  data-open={isOpen ? "" : undefined}
-                  data-pointer={pointer.id}
-                >
-                  <button
-                    type="button"
-                    className={styles.rowButton}
-                    aria-expanded={isOpen}
-                    aria-controls={`xray-pointer-${pointer.id}`}
-                    aria-label={`${pointer.number}. ${pointer.name}: ${
-                      pointer.status
-                        ? STATUS[pointer.status].label
-                        : "not evaluated yet"
-                    }${pointer.score !== null ? `, ${pointer.score} out of 100` : ""}. ${
-                      isOpen ? "Hide details" : "View more"
-                    }`}
-                    onClick={() => toggle(pointer.id)}
+      {look.style === "scorecard" ? (
+        shown.length ? (
+          <>
+            <ol className={styles.scorecard}>
+              {shown.map((pointer) => {
+                const isOpen = open.has(pointer.id);
+                const tone = pointer.status
+                  ? STATUS[pointer.status].tone
+                  : styles.neutral;
+                return (
+                  <li
+                    key={pointer.id}
+                    className={`${styles.scoreTile} ${tone}`}
+                    data-open={isOpen ? "" : undefined}
+                    data-pointer={pointer.id}
                   >
-                    <span
-                      className={`${styles.number} ${isScored(pointer.status) ? tone : styles.neutral}`}
+                    <button
+                      type="button"
+                      className={styles.scoreTileButton}
+                      aria-expanded={isOpen}
+                      aria-controls={`xray-pointer-${pointer.id}`}
+                      aria-label={rowLabel(pointer, isOpen)}
+                      onClick={() => toggle(pointer.id)}
                     >
-                      {pointer.number}
-                    </span>
-                    <span className={styles.name}>{pointer.name}</span>
-                    <span className={styles.evaluates}>
-                      {pointer.evaluates}
-                    </span>
-                    <StatusChip status={pointer.status} />
-                    {pointer.score !== null ? (
-                      <span className={`${styles.points} ${tone}`}>
-                        <strong>{pointer.score}</strong>
-                        <span>/ 100</span>
+                      <span
+                        className={`${styles.number} ${isScored(pointer.status) ? tone : styles.neutral}`}
+                      >
+                        {pointer.number}
                       </span>
-                    ) : (
-                      <span className={styles.noScore}>No score</span>
-                    )}
-                    <ChevronDown
-                      className={styles.chevron}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  {isOpen ? (
-                    <div id={`xray-pointer-${pointer.id}`}>
-                      <Detail
-                        pointer={pointer}
-                        scoring={scoring}
-                        onSelect={onSelect}
-                      />
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
+                      <span className={styles.name}>{pointer.name}</span>
+                      {look.scores && pointer.score !== null ? (
+                        <span className={`${styles.points} ${tone}`}>
+                          <strong>{pointer.score}</strong>
+                          <span>/ 100</span>
+                        </span>
+                      ) : (
+                        <StatusChip status={pointer.status} />
+                      )}
+                    </button>
+                    {isOpen ? (
+                      <div id={`xray-pointer-${pointer.id}`}>
+                        <Detail
+                          pointer={pointer}
+                          scoring={scoring}
+                          onSelect={onSelect}
+                        />
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+            {showAll}
+          </>
         ) : (
-          <p className={styles.empty}>No pointers match this filter.</p>
-        )}
-      </div>
+          <p className={`${styles.card} ${styles.empty}`}>
+            No pointers match this filter.
+          </p>
+        )
+      ) : (
+        <div className={`${styles.card} ${styles.table}`}>
+          <div className={styles.tableHead} aria-hidden="true">
+            <span>#</span>
+            <span>Sales Conversation Pointer</span>
+            <span>What This Evaluates</span>
+            <span>Status</span>
+            <span>Score</span>
+            <span />
+          </div>
+          {shown.length ? (
+            <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {shown.map((pointer) => {
+                const isOpen = open.has(pointer.id);
+                const tone = pointer.status
+                  ? STATUS[pointer.status].tone
+                  : styles.neutral;
+                return (
+                  <li
+                    key={pointer.id}
+                    className={styles.row}
+                    data-open={isOpen ? "" : undefined}
+                    data-pointer={pointer.id}
+                  >
+                    <button
+                      type="button"
+                      className={styles.rowButton}
+                      aria-expanded={isOpen}
+                      aria-controls={`xray-pointer-${pointer.id}`}
+                      aria-label={rowLabel(pointer, isOpen)}
+                      onClick={() => toggle(pointer.id)}
+                    >
+                      <span
+                        className={`${styles.number} ${isScored(pointer.status) ? tone : styles.neutral}`}
+                      >
+                        {pointer.number}
+                      </span>
+                      <span className={styles.name}>{pointer.name}</span>
+                      <span className={styles.evaluates}>
+                        {pointer.evaluates}
+                      </span>
+                      <StatusChip status={pointer.status} />
+                      {pointer.score !== null ? (
+                        <span className={`${styles.points} ${tone}`}>
+                          <strong>{pointer.score}</strong>
+                          <span>/ 100</span>
+                        </span>
+                      ) : (
+                        <span className={styles.noScore}>No score</span>
+                      )}
+                      <ChevronDown
+                        className={styles.chevron}
+                        aria-hidden="true"
+                      />
+                    </button>
+                    {isOpen ? (
+                      <div id={`xray-pointer-${pointer.id}`}>
+                        <Detail
+                          pointer={pointer}
+                          scoring={scoring}
+                          onSelect={onSelect}
+                        />
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <p className={styles.empty}>No pointers match this filter.</p>
+          )}
+          {showAll}
+        </div>
+      )}
     </div>
   );
 }
