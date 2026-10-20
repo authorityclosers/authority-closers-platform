@@ -91,11 +91,13 @@
   font-weight: 400;
 }
 
-[data-band="low"] {
+.scores [data-band="low"],
+.cell[data-band="low"] {
   background: color-mix(in oklab, var(--sx-warn) 20%, transparent);
 }
 
-[data-band="high"] {
+.scores [data-band="high"],
+.cell[data-band="high"] {
   background: color-mix(in oklab, var(--sx-good) 16%, transparent);
 }
 
