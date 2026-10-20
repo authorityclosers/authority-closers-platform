@@ -1,9 +1,11 @@
-"""The release canary runs the full analysis at most once a day (owner, 20 Oct 2026).
+"""The release canary runs the full analysis once per release and at most daily after.
 
-On 16-19 Oct every ship attempt ran the whole C1-C6 analysis of the fixture call,
-6-8 times a day per environment. Now: full when no full canary passed in the last
-24 hours, otherwise a one-paisa provider probe in the worker, and nothing at all
-after 3 failures in an hour. Docker and the notifier are local fakes.
+Owner, 20 Oct 2026: on 16-19 Oct every ship attempt ran the whole C1-C6 analysis of
+the fixture call, 6-8 times a day per environment. Now the first run on a new release
+is always full (a deploy is checked end to end); repeat runs of the same release
+within 24 hours are a one-paisa provider probe in the worker; and 3 failures of the
+same release in an hour back off without calling anyone. Docker and the notifier are
+local fakes.
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ PROBE = (
     '{"ok":true,"mode":"probe","environment":"staging","stage_reached":"probe","failure_code":null}'
 )
 FULL = '{"ok":true,"environment":"staging","stage_reached":"C6","failure_code":null}'
+RELEASE = "c17f92409da5f4c2c5246e9758bc48e1c39b9f42"
+NEXT = "15cfd962cdc8aaaabbbbccccddddeeeeffff0000"
 
 
 def _at(hours_ago: float) -> str:
@@ -33,6 +37,7 @@ def _run(
     history: list[dict[str, object]],
     *args: str,
     stdout: str = FULL,
+    release: str = RELEASE,
     probe_available: bool = True,
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]], list[dict[str, object]], list[str]]:
     bin_dir, history_dir = tmp_path / "bin", tmp_path / "history"
@@ -48,6 +53,11 @@ def _run(
         "import json, os, sys\n"
         "with open(os.environ['FAKE_CALLS'], 'a', encoding='utf-8') as f:\n"
         "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "if sys.argv[1] == 'inspect':\n"
+        "    if os.environ['FAKE_RELEASE']:\n"
+        "        print('PATH=/usr/bin')\n"
+        "        print('AC_RELEASE_ID=' + os.environ['FAKE_RELEASE'])\n"
+        "    raise SystemExit(0)\n"
         "if '-c' in sys.argv:\n"
         "    raise SystemExit(0 if os.environ['FAKE_PROBE'] == '1' else 1)\n"
         "sys.stdout.write(os.environ['FAKE_STDOUT'])\n",
@@ -72,6 +82,7 @@ def _run(
             "FAKE_CALLS": str(calls),
             "FAKE_NOTES": str(notes),
             "FAKE_STDOUT": stdout,
+            "FAKE_RELEASE": release,
             "FAKE_PROBE": "1" if probe_available else "0",
         }
     )
@@ -87,14 +98,24 @@ def _run(
     records = [json.loads(line) for line in lines[len(history) :]]
     made = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
     noted = notes.read_text().splitlines() if notes.exists() else []
-    return result, made, records, noted
+    return result, [call for call in made if call[0] == "exec"], records, noted
 
 
-def _full_ok(hours_ago: float) -> dict[str, object]:
-    return {"ok": True, "stage_reached": "C6", "checked_at": _at(hours_ago)}
+def _full_ok(hours_ago: float, release: str = RELEASE) -> dict[str, object]:
+    return {"ok": True, "stage_reached": "C6", "checked_at": _at(hours_ago), "release_id": release}
 
 
-def test_a_full_canary_today_means_a_probe_in_the_worker(tmp_path: Path) -> None:
+def _failed(minutes_ago: float, release: str = RELEASE) -> dict[str, object]:
+    return {
+        "ok": False,
+        "stage_reached": "C4",
+        "failure_code": "conversation_provider_http_402",
+        "checked_at": _at(minutes_ago / 60),
+        "release_id": release,
+    }
+
+
+def test_the_same_release_checked_today_gets_a_probe_in_the_worker(tmp_path: Path) -> None:
     result, calls, records, _ = _run(tmp_path, [_full_ok(3)], stdout=PROBE)
     assert result.returncode == 0
     assert calls[0][:2] == ["exec", "ac-application-staging-sales-xray-worker-1"]  # probe exists?
@@ -109,26 +130,31 @@ def test_a_full_canary_today_means_a_probe_in_the_worker(tmp_path: Path) -> None
     assert probe[probe.index("--environment") + 1] == "staging"
     assert len(calls) == 2
     assert records[-1]["mode"] == "probe" and records[-1]["ok"] is True
+    assert records[-1]["release_id"] == RELEASE
 
 
 @pytest.mark.parametrize(
-    "history",
+    ("history", "release"),
     [
-        [],
-        [_full_ok(25)],  # older than a day
-        [{"ok": True, "stage_reached": "probe", "mode": "probe", "checked_at": _at(1)}],
-        [{"ok": False, "stage_reached": "C4", "checked_at": _at(2)}],
+        ([], RELEASE),
+        ([_full_ok(1, release=RELEASE)], NEXT),  # a new release: always the full check
+        ([_full_ok(25)], RELEASE),  # older than a day
+        ([{"ok": True, "stage_reached": "C6", "checked_at": _at(1)}], RELEASE),  # no release kept
+        ([{**_full_ok(1), "mode": "probe", "stage_reached": "probe"}], RELEASE),
+        ([_failed(30)], RELEASE),
+        ([_full_ok(1)], ""),  # the release can't be read
     ],
 )
-def test_no_passing_full_canary_today_means_the_full_analysis(
-    tmp_path: Path, history: list[dict[str, object]]
+def test_otherwise_the_full_analysis_runs(
+    tmp_path: Path, history: list[dict[str, object]], release: str
 ) -> None:
-    result, calls, records, _ = _run(tmp_path, history)
+    result, calls, records, _ = _run(tmp_path, history, release=release)
     assert result.returncode == 0
     assert len(calls) == 1
     assert calls[0][:2] == ["exec", "ac-application-staging-api-1"]
     assert "ac_platform.conversation_intelligence.canary_cli" in calls[0]
     assert records[-1]["mode"] == "full"
+    assert records[-1]["release_id"] == (release or None)
 
 
 def test_full_by_hand_and_an_older_release_without_the_probe(tmp_path: Path) -> None:
@@ -140,26 +166,21 @@ def test_full_by_hand_and_an_older_release_without_the_probe(tmp_path: Path) -> 
     assert records[-1]["mode"] == "full"
 
 
-def test_three_failures_in_an_hour_back_off_without_calling_anyone(tmp_path: Path) -> None:
-    failed = [
-        {
-            "ok": False,
-            "stage_reached": "C4",
-            "failure_code": "conversation_provider_http_402",
-            "checked_at": _at(minutes / 60),
-        }
-        for minutes in (5, 20, 40)
-    ]
-    result, calls, records, notes = _run(tmp_path, failed)
+def test_three_failures_of_one_release_back_off_and_a_new_release_never_does(
+    tmp_path: Path,
+) -> None:
+    failed = [_failed(minutes) for minutes in (5, 20, 40)]
+    result, calls, records, notes = _run(tmp_path / "same", failed)
     assert result.returncode == 1
     assert calls == []
     assert records[-1]["failure_code"] == "canary_backoff"
     assert records[-1]["mode"] == "backoff"
     assert len(notes) == 1
+    # The next release, straight after the deploy, runs the full check.
+    result, calls, records, _ = _run(tmp_path / "next", [*failed, *records], release=NEXT)
+    assert result.returncode == 0 and len(calls) == 1 and records[-1]["mode"] == "full"
     # A hand-run probe skips the back-off.
-    result, calls, records, _ = _run(
-        tmp_path / "again", [*failed, *records], "--probe", stdout=PROBE
-    )
+    result, calls, records, _ = _run(tmp_path / "hand", failed, "--probe", stdout=PROBE)
     assert result.returncode == 0 and records[-1]["mode"] == "probe"
 
 
