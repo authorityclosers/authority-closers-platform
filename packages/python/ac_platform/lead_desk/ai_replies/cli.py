@@ -119,14 +119,31 @@ async def thinking_pass(
     *,
     now: datetime,
     limit: int = 10,
+    spend_environment: str | None = None,
 ) -> list[dict[str, Any]]:
-    """One pass: the switch, the cap, then the queued replies."""
+    """One pass: the switch, the cap, then the queued replies.
+
+    ``spend_environment`` also asks the environment's AI spend guard (owner, 20 Oct
+    2026); at its cap replies wait for budget exactly as at this feature's own cap."""
+    from ac_platform.ai_spend import guard as spend_guard
+
+    async def refused(db: AsyncSession) -> dict[str, Any] | None:
+        if spend_environment is None:
+            return None
+        refusal = await spend_guard.check_async(
+            db, "lead_desk_ai", environment=spend_environment, trigger="person", now=now
+        )
+        return None if refusal is None else refusal.line()
+
     async with sessions() as db, db.begin():
         config, _ = await admin_settings.read(db)
         if not config["enabled"]:
             return [{"stopped": "lead_desk_ai_off"}]
         if await admin_settings.capped(db, config, now):
             return [await _wait_for_budget(db, config, now)]
+        stop = await refused(db)
+        if stop is not None:
+            return [{**await _wait_for_budget(db, config, now), **stop}]
         # Under the cap: what waited for budget is asked again.
         await db.execute(
             update(LeadAiReply)
@@ -156,6 +173,11 @@ async def thinking_pass(
             if await admin_settings.capped(db, config, now):
                 async with db.begin():
                     lines.append(await _wait_for_budget(db, config, now))
+                break
+            stop = await refused(db)
+            if stop is not None:
+                async with db.begin():
+                    lines.append({**await _wait_for_budget(db, config, now), **stop})
                 break
     return lines
 
@@ -225,7 +247,12 @@ async def _answer(
     return {"reply": str(reply_id), "mode": mode, "outcome": result.outcome}
 
 
-async def _run(arguments: argparse.Namespace, model_for: ModelFactory) -> int:
+async def _run(
+    arguments: argparse.Namespace,
+    model_for: ModelFactory,
+    *,
+    spend_environment: str | None = None,
+) -> int:
     url = arguments.database_url_file.read_text().strip()
     if url.startswith("postgresql://"):
         url = "postgresql+psycopg://" + url[len("postgresql://") :]
@@ -258,7 +285,11 @@ async def _run(arguments: argparse.Namespace, model_for: ModelFactory) -> int:
             while True:
                 stops: set[str] = set()
                 for line in await thinking_pass(
-                    sessions, model_for, now=datetime.now(UTC), limit=arguments.limit
+                    sessions,
+                    model_for,
+                    now=datetime.now(UTC),
+                    limit=arguments.limit,
+                    spend_environment=spend_environment,
                 ):
                     stop = line.get("stopped")
                     if stop is not None:
@@ -297,11 +328,25 @@ async def status(sessions: async_sessionmaker[AsyncSession], *, now: datetime) -
 
 
 def _inner(arguments: argparse.Namespace) -> int:
+    from ac_platform.ai_spend import guard as spend_guard
+    from ac_platform.ai_spend.policy import SettingsError
     from ac_platform.call_data.provider import Gemini
 
     if arguments.apply and not Gemini().ready:
         raise SystemExit("lead_desk_ai_credential_missing")
-    return asyncio.run(_run(arguments, lambda config: registry.ProviderModel(config)))
+    try:
+        spend_environment = spend_guard.service_environment(
+            json.loads(arguments.service_config.read_text())
+        )
+    except SettingsError:
+        raise SystemExit("lead_desk_ai_environment_missing") from None
+    return asyncio.run(
+        _run(
+            arguments,
+            lambda config: registry.ProviderModel(config),
+            spend_environment=spend_environment,
+        )
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
