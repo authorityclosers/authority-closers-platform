@@ -3,16 +3,9 @@ import { CALLS_PATH, NEW_ANALYSIS_PATH } from "../analysis-routes";
 /**
  * The five phone tabs (owner, 17 Oct): everything else lives under More.
  * Chats lives inside Leads on phones (owner, 20 Oct: "5 tabs, Chats inside
- * Leads"); computers keep a Chats item in the rail. ("chats" stays in the type
- * only until the shell drops its phone Chats link.)
+ * Leads"); computers keep a Chats item in the rail.
  */
-export type PhoneTab =
-  | "dashboard"
-  | "leads"
-  | "chats"
-  | "calls"
-  | "new"
-  | "more";
+export type PhoneTab = "dashboard" | "leads" | "calls" | "new" | "more";
 
 export type ShellActive =
   | "dashboard"

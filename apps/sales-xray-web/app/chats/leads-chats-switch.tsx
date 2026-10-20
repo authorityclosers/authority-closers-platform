@@ -5,14 +5,15 @@
  * inside Leads"), with this switch at the top of both. Computers keep their own
  * Chats item in the rail, so the switch is hidden there.
  *
- * While the other side opens, the page under the finger stops taking taps:
- * a tap meant for a chat row can't land on the old page's buttons (the
+ * The hop is the shell's ScreenLink: the other side's outline shows at once.
+ * Until it has opened, the page under the finger takes no taps, so a tap
+ * meant for a chat row can't land on the old page's buttons (the
  * orchestrator's dev pass: a first tap opened Calling on Leads).
  */
 
-import Link from "next/link";
 import { useEffect, type MouseEvent } from "react";
 
+import { ScreenLink } from "../shell/screen-link";
 import { useWorkspaceAccess } from "../workspace-access";
 import { useUnreadChats } from "./chats-badge";
 import styles from "./leads-chats-switch.module.css";
@@ -28,14 +29,10 @@ function hold(on: boolean) {
   if (!main) return;
   if (on) {
     main.setAttribute("inert", "");
-    main.style.opacity = "0.6";
-    main.style.transition = "opacity 120ms ease";
     // Never stuck: the next page lets go, and so does this, after a while.
     release = window.setTimeout(() => hold(false), HOLD_MS);
   } else {
     main.removeAttribute("inert");
-    main.style.opacity = "";
-    main.style.transition = "";
   }
 }
 
@@ -64,15 +61,15 @@ export function LeadsChatsSwitch({ current }: { current: "leads" | "chats" }) {
 
   return (
     <nav className={styles.switch} aria-label="Leads or chats">
-      <Link
+      <ScreenLink
         href="/leads"
         prefetch={false}
         aria-current={current === "leads" ? "page" : undefined}
         onClick={(event) => leave(event, "leads")}
       >
         Leads
-      </Link>
-      <Link
+      </ScreenLink>
+      <ScreenLink
         href="/chats"
         prefetch={false}
         aria-current={current === "chats" ? "page" : undefined}
@@ -85,7 +82,7 @@ export function LeadsChatsSwitch({ current }: { current: "leads" | "chats" }) {
             <span className={styles.srOnly}>{`, ${unread} unread`}</span>
           </span>
         ) : null}
-      </Link>
+      </ScreenLink>
     </nav>
   );
 }
