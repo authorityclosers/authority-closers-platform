@@ -99,6 +99,15 @@ const HEALTH = {
       tests: [],
     },
     {
+      app: "lead_stages",
+      name: "Lead stages to your ad platforms",
+      state: "not_connected",
+      words: "Not connected yet.",
+      configured: true,
+      page: "/leads?tab=stages",
+      tests: [],
+    },
+    {
       app: "phone_calls",
       name: "Phone call logging (Sales Xray app)",
       state: "ready",
@@ -205,7 +214,7 @@ it("draws card outlines first, then one card per app with its status and one mai
   // The same groups as the cards, so nothing moves when they arrive.
   expect(
     host.querySelectorAll('[aria-busy="true"] section > div > div'),
-  ).toHaveLength(8);
+  ).toHaveLength(9);
   await act(async () => release(Response.json(HEALTH)));
   await flush();
   expect(
@@ -213,6 +222,7 @@ it("draws card outlines first, then one card per app with its status and one mai
   ).toEqual([
     "meta_leads",
     "google_ads",
+    "lead_stages",
     "whatsapp",
     "phone_calls",
     "ai_replies",
@@ -626,4 +636,27 @@ it("remembers which card a connect started from, for an error that names no app"
   });
   expect(appReturnNotice("", null)).toBeNull();
   window.sessionStorage.clear();
+});
+
+it("opens lead stages on their own page, and follows only this app's pages", async () => {
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  const link = card("lead_stages").querySelector("a")!;
+  expect(link.getAttribute("href")).toBe("/leads?tab=stages");
+  expect(link.textContent).toBe("Set up");
+  expect(link.getAttribute("data-variant")).toBe("tinted");
+  expect(card("lead_stages").textContent).toContain(
+    "Tell Meta and Google which leads became customers",
+  );
+  expect(button(card("lead_stages"), "Connect")).toBeUndefined();
+  for (const page of [
+    "https://elsewhere.example/x",
+    "//elsewhere.example",
+    "/a/../b",
+    7,
+  ])
+    expect(
+      parseHealth({ apps: [{ app: "lead_stages", state: "ready", page }] })
+        ?.apps[0].page,
+    ).toBeNull();
 });

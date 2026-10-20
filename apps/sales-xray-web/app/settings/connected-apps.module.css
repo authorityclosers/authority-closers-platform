@@ -164,6 +164,12 @@
 
 /* Connect: tinted, so one filled button per view stays the fix for a problem. */
 .actions .tinted,
+.linkButton[data-variant="primary"] {
+  border-color: transparent;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
 .linkButton[data-variant="tinted"] {
   border-color: transparent;
   background: var(--sx-accent-soft);

@@ -13,7 +13,8 @@ export type AppKey =
   | "google_ads"
   | "phone_calls"
   | "webhook_sources"
-  | "ai_replies";
+  | "ai_replies"
+  | "lead_stages";
 export type AppState =
   | "ready"
   | "problem"
@@ -47,6 +48,8 @@ export type AppHealth = {
   lastError: { at: string | null; words: string } | null;
   nextPullAt: string | null;
   lastDeliveryAt: string | null;
+  /** A page in this app where the card's setup lives (lead stages). */
+  page: string | null;
   tests: TestOffer[];
 };
 export type StepState = "done" | "waiting" | "failed" | "skipped";
@@ -78,6 +81,7 @@ const KEYS = new Set<string>([
   "phone_calls",
   "webhook_sources",
   "ai_replies",
+  "lead_stages",
 ]);
 const STATES = new Set<string>([
   "ready",
@@ -98,6 +102,17 @@ const state = (value: unknown): AppState =>
   typeof value === "string" && STATES.has(value)
     ? (value as AppState)
     : "problem";
+
+// A page of this app only: a path, never another site or a way up.
+function ownPage(value: unknown): string | null {
+  const path = text(value);
+  return path &&
+    path.startsWith("/") &&
+    !path.startsWith("//") &&
+    !path.includes("..")
+    ? path
+    : null;
+}
 
 // Only the back end's own routes are followed: same origin, under /v1/lead-desk.
 function link(value: unknown): Link | null {
@@ -141,6 +156,7 @@ function parseApp(value: unknown): AppHealth | null {
     lastDeliveryAt: isRecord(value.webhook)
       ? text(value.webhook.lastDeliveryAt)
       : null,
+    page: ownPage(value.page),
     tests: (Array.isArray(value.tests) ? value.tests : [])
       .filter(isRecord)
       .filter((item) => text(item.kind) && text(item.label))

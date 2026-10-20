@@ -23,6 +23,7 @@ import {
   PhoneCall,
   PlugZap,
   RefreshCw,
+  Route,
   Sparkles,
   Webhook,
   X,
@@ -64,6 +65,7 @@ const LOGOS: Record<AppKey, { brands?: string[]; icon?: LucideIcon }> = {
   phone_calls: { icon: PhoneCall },
   webhook_sources: { icon: Webhook },
   ai_replies: { icon: Sparkles },
+  lead_stages: { icon: Route },
 };
 
 const STATUS: Record<AppState, { label: string; tone: Tone }> = {
@@ -177,6 +179,8 @@ const GIVES: Record<AppKey, string> = {
     "Your team's calls from the Sales Xray phone app are logged on their leads.",
   webhook_sources: "Bring leads in from your website, sheets and other apps.",
   ai_replies: "Draft or send first replies to new lead messages.",
+  lead_stages:
+    "Tell Meta and Google which leads became customers, so your ads find more like them.",
 };
 
 /** The card's one line: the app's own words, or what connecting gives. */
@@ -191,13 +195,13 @@ export function cardWords(app: AppHealth): string {
 const GROUPS: { title: string; apps: AppKey[] }[] = [
   {
     title: "Leads and ads",
-    apps: ["meta_leads", "google_ads", "webhook_sources"],
+    apps: ["meta_leads", "google_ads", "lead_stages", "webhook_sources"],
   },
   { title: "Messages", apps: ["whatsapp", "messenger", "instagram"] },
   { title: "Calls and AI", apps: ["phone_calls", "ai_replies"] },
 ];
 // The outline while loading: the same groups, so nothing moves.
-const SKELETON_GROUPS = [3, 3, 2];
+const SKELETON_GROUPS = [4, 3, 2];
 
 const POLL_MS = 2000;
 const POLL_LIMIT = 45;
@@ -324,14 +328,34 @@ function AppCard({
       </div>
       <p className={styles.words}>{cardWords(app)}</p>
       <div className={styles.actions}>
-        {app.state === "problem" && app.connect ? (
+        {!app.page && app.state === "problem" && app.connect ? (
           // Its own words ask to connect again: that is the one filled button.
           <Button variant="primary" onClick={() => connectApp(app)}>
             <PlugZap size={15} aria-hidden="true" />
             Reconnect
           </Button>
         ) : null}
-        {app.state === "not_set_up" ? null : !connected &&
+        {app.page ? (
+          // Set up on its own page (lead stages live in Leads); a problem
+          // there is this card's one filled action.
+          <Link
+            href={app.page}
+            className={styles.linkButton}
+            data-variant={
+              app.state === "problem"
+                ? "primary"
+                : connected
+                  ? "secondary"
+                  : "tinted"
+            }
+          >
+            {app.state === "problem"
+              ? "Review"
+              : connected
+                ? "Manage"
+                : "Set up"}
+          </Link>
+        ) : app.state === "not_set_up" ? null : !connected &&
           app.connect &&
           app.state !== "off" ? (
           <Button
