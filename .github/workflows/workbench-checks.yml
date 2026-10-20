@@ -26,7 +26,7 @@ env:
 
 jobs:
   plan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 3
     outputs:
       web: ${{ steps.plan.outputs.web }}
@@ -49,7 +49,7 @@ jobs:
   lint:
     needs: plan
     if: needs.plan.outputs.lint == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -84,7 +84,7 @@ jobs:
   web:
     needs: plan
     if: needs.plan.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -106,7 +106,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.py == 'true'
     name: py-tests (${{ matrix.fam }} ${{ matrix.shard }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -220,7 +220,7 @@ jobs:
   visual:
     needs: plan
     if: needs.plan.outputs.visual == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -259,7 +259,7 @@ jobs:
     # up before a release cut instead of 35 minutes into one.
     needs: plan
     if: needs.plan.outputs.e2e == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     services:
       postgres:
@@ -356,7 +356,7 @@ jobs:
   summary:
     needs: [plan, lint, web, py-tests, visual, e2e]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803

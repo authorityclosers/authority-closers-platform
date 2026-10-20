@@ -44,7 +44,7 @@ concurrency:
 jobs:
   publish:
     if: github.repository == 'authorityclosers/authority-closers-platform' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       AC_RELEASE_ARTIFACT_POOL_BYTES: ${{ vars.AC_RELEASE_ARTIFACT_POOL_BYTES }}

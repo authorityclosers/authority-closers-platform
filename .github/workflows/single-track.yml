@@ -22,7 +22,7 @@ concurrency:
 jobs:
   single-track:
     if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: One task per lane, no overlapping or shared files
@@ -50,7 +50,7 @@ jobs:
 
   recheck-remaining:
     if: github.event.action == 'closed'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Re-run the single-track check of every remaining pull request

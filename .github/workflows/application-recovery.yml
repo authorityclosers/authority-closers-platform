@@ -22,7 +22,7 @@ permissions:
 jobs:
   package-release-images:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     concurrency:
       group: application-release-packaging

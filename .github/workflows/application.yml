@@ -29,7 +29,7 @@ jobs:
         run: ./scripts/Test-AcademyCapacitySimulation.ps1
 
   validate-python-static:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -50,7 +50,7 @@ jobs:
         run: uv run mypy packages/python
 
   validate-frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -82,7 +82,7 @@ jobs:
         run: pnpm -r --if-present build
 
   validate-sales-xray-acquisition-browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     services:
       postgres:
@@ -154,7 +154,7 @@ jobs:
           retention-days: 14
 
   validate-python-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -258,7 +258,7 @@ jobs:
           retention-days: 14
 
   validate-python-gates:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:
@@ -525,7 +525,7 @@ jobs:
       - validate-sales-xray-acquisition-browser
       - validate-python-tests
       - validate-python-gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -578,7 +578,7 @@ jobs:
       github.ref == 'refs/heads/main'
       && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     concurrency:
       group: application-release-packaging
