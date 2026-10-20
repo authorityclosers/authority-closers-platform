@@ -4,7 +4,8 @@
  * Staff keys (orchestrator's go, 19 Oct): a verified control account makes a
  * key for the Admin command line or MCP right after signing in, at most two
  * at a time. The key shows once, here; Admin keeps only its fingerprint. A key
- * reaches only Admin settings, and can be revoked at once.
+ * reaches Admin settings and, with admin:read, content-free reads of calls,
+ * organisations, the review queue and health; it can be revoked at once.
  */
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -32,6 +33,7 @@ export function StaffKeys({ data }: { data: StaffKeysData }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [write, setWrite] = useState(false);
+  const [reads, setReads] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [made, setMade] = useState<{ key: string; row: StaffKey } | null>(null);
@@ -45,7 +47,11 @@ export function StaffKeys({ data }: { data: StaffKeysData }) {
       "/v1/admin/staff-keys",
       {
         name: name.trim(),
-        scopes: write ? ["settings:read", "settings:write"] : ["settings:read"],
+        scopes: [
+          "settings:read",
+          ...(write ? ["settings:write"] : []),
+          ...(reads ? ["admin:read"] : []),
+        ],
       },
       newKey(),
     );
@@ -59,6 +65,7 @@ export function StaffKeys({ data }: { data: StaffKeysData }) {
     setOpen(false);
     setName("");
     setWrite(false);
+    setReads(false);
     router.refresh();
   };
 
@@ -71,8 +78,9 @@ export function StaffKeys({ data }: { data: StaffKeysData }) {
         </a>
         , make a key here within {data.limits.freshMinutes} minutes of signing
         in, then <code className={styles.code}>export AC_ADMIN_KEY=…</code>. A
-        key reaches only Admin settings, lasts {data.limits.days} days and never
-        shows again.
+        key reaches Admin settings (and, if you tick it, content-free reads of
+        calls, organisations, the review queue and health), lasts{" "}
+        {data.limits.days} days and never shows again.
       </p>
 
       {made ? (
@@ -167,6 +175,14 @@ export function StaffKeys({ data }: { data: StaffKeysData }) {
               onChange={(event) => setWrite(event.target.checked)}
             />
             May change settings
+          </label>
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              checked={reads}
+              onChange={(event) => setReads(event.target.checked)}
+            />
+            May read calls and health (no call content)
           </label>
           <button
             type="submit"

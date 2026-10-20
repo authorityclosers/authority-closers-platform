@@ -192,6 +192,11 @@ def test_mcp_lists_tools_and_changes_a_setting() -> None:
         "list_settings",
         "get_setting",
         "set_setting",
+        "list_organisations",
+        "list_calls",
+        "get_call_map",
+        "get_review_queue",
+        "get_health",
     ]
     changed = cli.handle(
         client,
@@ -226,3 +231,76 @@ def test_mcp_lists_tools_and_changes_a_setting() -> None:
     assert cli.handle(client, {"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
     with pytest.raises(cli.UsageError):
         cli.Client("sxk_live_x", "https://admin.example", _fake())
+
+
+CALL = "9dba800c-11de-4564-9e4c-e8b0f2bdfca6"
+
+
+def test_reads_are_gets_with_checked_ids_and_bounds() -> None:
+    fake = _fake(
+        **{
+            "GET /v1/platform/workspaces": (200, {"workspaces": [{"kind": "customer"}]}),
+            f"GET /v1/admin/call-data/calls/{CALL}/map": (200, {"schema": "call-data-map/1"}),
+            "GET /v1/admin/conversation/calls?status=failed&limit=5": (200, {"items": []}),
+            "GET /v1/admin/conversation/review/queue?pipeline=analysis-sales&limit=50": (
+                200,
+                {"calls": []},
+            ),
+            "GET /v1/admin/conversation/health?days=3": (200, {"by_status": {}}),
+        }
+    )
+    assert _run(["orgs"], fake)[0] == 0
+    code, out, _ = _run(["call-map", CALL.upper()], fake)
+    assert code == 0 and json.loads(out) == {"schema": "call-data-map/1"}
+    assert _run(["calls", "--status", "failed", "--limit", "5"], fake)[0] == 0
+    assert _run(["review-queue"], fake)[0] == 0
+    assert _run(["health", "--days", "3"], fake)[0] == 0
+    assert [method for method, *_ in fake.seen] == ["GET"] * 5
+    # A bad id or bound is refused before any request.
+    for argv in (
+        ["call-map", "../settings"],
+        ["health", "--days", "90"],
+        ["calls", "--organisation", "x"],
+        ["calls", "--limit", "0"],
+    ):
+        assert _run(argv, fake)[0] == 2
+    assert len(fake.seen) == 5
+
+
+def test_a_read_refused_for_want_of_admin_read_says_so() -> None:
+    fake = _fake(
+        **{
+            "GET /v1/admin/conversation/health?days=7": (
+                403,
+                {"detail": "This key does not hold admin:read."},
+            )
+        }
+    )
+    code, out, err = _run(["health"], fake)
+    assert code == 1 and out == ""
+    assert "admin:read" in err and KEY not in err
+
+
+def test_mcp_offers_the_reads_as_tools() -> None:
+    fake = _fake(**{"GET /v1/admin/conversation/health?days=7": (200, {"ok": True})})
+    client = cli.Client(KEY, "https://admin.example", fake)
+    answer = cli.handle(
+        client,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "get_health", "arguments": {}},
+        },
+    )
+    assert json.loads(answer["result"]["content"][0]["text"]) == {"ok": True}
+    refused = cli.handle(
+        client,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "get_call_map", "arguments": {"call_id": "nope"}},
+        },
+    )
+    assert refused["result"]["isError"] is True
