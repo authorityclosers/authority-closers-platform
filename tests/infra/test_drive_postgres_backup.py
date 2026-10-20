@@ -499,6 +499,10 @@ def test_canonical_capture_uses_one_exported_snapshot_for_dump_and_counts(tmp_pa
     monkeypatch.setattr(module, "prepare_directory", lambda p: p.mkdir(exist_ok=True))
     monkeypatch.setattr(module.os, "chown", lambda *a, **kw: None)
     monkeypatch.setattr(module, "is_root_owned", lambda p: True)
+    # CI runners have no acops group; chown is stubbed, so only the group lookup is faked.
+    monkeypatch.setattr(
+        module, "grp", SimpleNamespace(getgrnam=lambda name: SimpleNamespace(gr_gid=os.getgid()))
+    )
     events = []
     target = SimpleNamespace(
         environment="staging",
