@@ -154,7 +154,7 @@ it("shows skills as the AI pointer review scored them, never every skill at 100%
   expect(html).toContain("AI pointer review · 16 calls scored · weakest first");
   expect(html).not.toContain("Observed share; calls needing attention");
   // Shown once, in the Skills panel; the analysis panels leave theirs out.
-  expect(html.match(/Skill scores/g)).toHaveLength(1);
+  expect(html.match(/aria-label="Skill scores"/g)).toHaveLength(1);
   expect(html).not.toContain(">Skill scores<");
 });
 
