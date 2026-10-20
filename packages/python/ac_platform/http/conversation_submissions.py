@@ -106,6 +106,7 @@ from ac_platform.http.auth import (
     _single_raw_cookie,
     require_safe_origin,
 )
+from ac_platform.http.bounded_session import signed_in
 from ac_platform.http.conversation_imports import bind_import_request, install_import_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
@@ -117,6 +118,8 @@ _PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 _MIN_NATIVE_TIMEOUT_SECONDS = 1.0
+# Seconds the saved-calls list and summary may hold a sign-in (bounded_session).
+LIBRARY_BUDGET = 8.0
 # One service per request, bound to the caller's selected workspace: Personal
 # (the public tenant, where guests also live) or an approved organisation.
 Factory = Callable[[AsyncSession, UUID], AcquisitionSessions]
@@ -243,7 +246,10 @@ def install_submission_http(
         if queries and not (
             library
             and len({key for key, _ in queries}) == len(queries)
-            and all(key in {"before", "include_owners", "order"} for key, _ in queries)
+            and all(
+                key in {"before", "include_owners", "order", "include_summary"}
+                for key, _ in queries
+            )
         ):
             raise fail(422, "Upload access comes from your current session.")
         if write:
@@ -527,13 +533,16 @@ def install_submission_http(
         before: UUID | None = None,
         include_owners: bool = False,
         order: Literal["newest", "reports_first"] = "newest",
+        include_summary: bool = False,
     ) -> dict[str, Any]:
         host = guard(request, response, library=True)
         try:
+            # Polled by Home and Calls: sign in within a budget, so the shared
+            # identity locks never outlast a slow moment (Messenger sends, 20 Oct).
             context = (
                 learner_read_account(request)
                 if host == "learner"
-                else asynccontextmanager(read_require_actor)(request)
+                else signed_in(read_require_actor, request, LIBRARY_BUDGET)
             )
             async with context as auth:
                 return await account_library(
@@ -543,6 +552,7 @@ def install_submission_http(
                     shared_identity_locks=True,
                     include_owners=include_owners,
                     order=order,
+                    include_summary=include_summary,
                 )
         except ConversationError as error:
             raise fail(error.status, str(error)) from None
@@ -556,7 +566,7 @@ def install_submission_http(
             context = (
                 learner_read_account(request)
                 if host == "learner"
-                else asynccontextmanager(read_require_actor)(request)
+                else signed_in(read_require_actor, request, LIBRARY_BUDGET)
             )
             async with context as auth:
                 return await account_library_summary(

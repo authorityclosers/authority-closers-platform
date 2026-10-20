@@ -7,6 +7,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import Select, and_, case, func, or_, select, tuple_
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
@@ -22,13 +23,23 @@ from ac_platform.conversation_intelligence.models import (
     ConversationProcessingPlan,
     ConversationRecording,
     ConversationReportDraft,
+    ConversationRun,
 )
 from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
-from ac_platform.conversation_intelligence.submission_labels import read_submission_label
+from ac_platform.conversation_intelligence.sensitive_segment_models import (
+    ConversationSensitiveSegmentMark,
+)
+from ac_platform.conversation_intelligence.sensitive_segments import withhold
+from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
+from ac_platform.conversation_intelligence.submission_label_models import (
+    ConversationSubmissionLabelRevision,
+)
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 
 PAGE_SIZE = 20
+# How the Report's Overview says the call ended (report_overview.ObservedOutcome).
+_OUTCOMES = frozenset({"closed", "follow_up", "no_sale", "future_date", "disqualified", "unclear"})
 
 
 def _submission_owner_filter(
@@ -176,6 +187,7 @@ async def account_library(
     shared_identity_locks: bool = False,
     include_owners: bool = False,
     order: Literal["newest", "reports_first"] = "newest",
+    include_summary: bool = False,
 ) -> dict[str, Any]:
     """Read retained direct/claimed uploads without renewing or assigning ownership.
 
@@ -187,8 +199,12 @@ async def account_library(
     The cursor is a selector into the permitted immutable receipts, never an
     owner assertion. It remains usable after deletion of a previous page's last
     call. Rounded duration comes from the immutable source allowance receipt.
-    Every selected row is rechecked through the report read port. Organisation
-    owners/admins can read all account-owned calls; this grants no write/audio access.
+    The page is rechecked in one statement under the recording read fence
+    (``_page_rows``), never call by call. Organisation owners/admins can read
+    all account-owned calls; this grants no write/audio access.
+
+    ``include_summary`` adds each row's ``summary`` (``_row_summaries``): what
+    a list row shows from its Report, so a list never reads whole Reports.
     """
     now = await ownership.sessions._admit()
     await ownership.sessions._owner(
@@ -227,58 +243,269 @@ async def account_library(
     if started is not None:
         ordering = (started.desc(), *ordering)
     rows = (await ownership.database.scalars(query.order_by(*ordering).limit(PAGE_SIZE + 1))).all()
-    owners = {}
-    if include_owners and every_owner:
+    page = rows[:PAGE_SIZE]
+    current = await _page_rows(
+        ownership, actor, now, every_owner=every_owner, receipt_ids=[row.id for row in page]
+    )
+    owners = include_owners and every_owner
+    if owners:
         from ac_platform.organisations.activity import _mask_email
-
-        for receipt, person, name, email in await ownership.database.execute(
-            _account_library_query(actor, now, every_owner=True)
-            .join(
-                Person,
-                Person.id == func.coalesce(usage.person_id, ConversationVisitorClaim.person_id),
-            )
-            .where(usage.id.in_([row.id for row in rows[:PAGE_SIZE]]))
-            .with_only_columns(usage.id, Person.id, Person.display_name, Person.email)
-        ):
-            owners[receipt] = dict(
-                owner_person_id=str(person), owner_name=name or _mask_email(email)
-            )
-    reports = AcquisitionReports(ownership)
+    summaries = (
+        await _row_summaries(ownership.database, list(current.values())) if include_summary else {}
+    )
     entries = []
-    for row in rows[:PAGE_SIZE]:
-        try:
-            progress = await reports.progress(
-                row.submission_id,
-                actor=actor,
-                shared_identity_locks=shared_identity_locks,
-                allow_organisation_read=True,
-            )
-            label = await read_submission_label(
-                ownership,
-                row.submission_id,
-                actor=actor,
-                shared_identity_locks=shared_identity_locks,
-                allow_organisation_read=True,
-            )
-        except ConversationNotFound:
-            # A concurrent deletion/revocation may win before the per-record locks.
+    for row in page:
+        found = current.get(row.id)
+        if found is None:
+            # A concurrent deletion may win before the record locks.
             # Never return the stale selector; pagination still advances past it.
             continue
-        entries.append(
-            {
-                "submission_id": str(row.submission_id),
-                "created_at": row.created_at.isoformat(),
-                "duration_seconds": row.reserved_seconds,
-                "display_name": label.display_name,
-                "display_name_revision": label.revision,
-                "state": progress["state"],
-                "has_report": progress["has_report"],
-                **owners.get(row.id, {}),
-            }
-        )
+        entry: dict[str, Any] = {
+            "submission_id": str(row.submission_id),
+            "created_at": row.created_at.isoformat(),
+            "duration_seconds": row.reserved_seconds,
+            "display_name": found.display_name,
+            "display_name_revision": found.display_name_revision,
+            "state": "report_ready"
+            if found.has_report
+            else found.plan_state
+            if found.plan_state is not None
+            else found.recording_state,
+            "has_report": bool(found.has_report),
+            **(
+                dict(
+                    owner_person_id=str(found.owner_id),
+                    owner_name=found.owner_name or _mask_email(found.owner_email),
+                )
+                if owners and found.owner_id is not None
+                else {}
+            ),
+        }
+        if include_summary:
+            entry["summary"] = summaries.get(found.recording_id) if found.has_report else None
+        entries.append(entry)
     return {
         "submissions": entries,
         "next_cursor": str(rows[PAGE_SIZE - 1].submission_id) if len(rows) > PAGE_SIZE else None,
+    }
+
+
+async def _page_rows(
+    ownership: GuestOwnership,
+    actor: ActorContext,
+    now: datetime,
+    *,
+    every_owner: bool,
+    receipt_ids: list[UUID],
+) -> dict[UUID, Any]:
+    """Recheck one page under the recording read fence; one statement for every row.
+
+    The same scope as the page query is re-evaluated with each recording share-locked,
+    so a call deleted after the page was chosen drops out: deletion updates the
+    recording row, which PostgreSQL re-checks after waiting for its lock. Report
+    presence and plan state are the library summary's own columns (an unerased draft
+    or retained version counts as a report; the Report read verifies it); the call
+    name is the latest label revision (none: no name, revision 0).
+    """
+    if not receipt_ids:
+        return {}
+    usage, label = ConversationAcquisitionUsage, ConversationSubmissionLabelRevision
+    recording = ConversationRecording
+    has_report, latest_plan = _report_columns()
+
+    def latest_label(column: Any) -> Any:
+        return (
+            select(column)
+            .where(label.tenant_id == usage.tenant_id, label.submission_id == usage.submission_id)
+            .order_by(label.revision.desc())
+            .limit(1)
+            .correlate(usage)
+            .scalar_subquery()
+        )
+
+    statement = (
+        _account_library_query(actor, now, every_owner=every_owner)
+        .outerjoin(
+            Person,
+            Person.id == func.coalesce(usage.person_id, ConversationVisitorClaim.person_id),
+        )
+        .where(usage.id.in_(receipt_ids))
+        .with_only_columns(
+            usage.id.label("receipt_id"),
+            has_report.label("has_report"),
+            latest_plan.label("plan_state"),
+            recording.state.label("recording_state"),
+            recording.id.label("recording_id"),
+            recording.tenant_id.label("recording_tenant_id"),
+            recording.person_id.label("recording_person_id"),
+            recording.generation.label("generation"),
+            latest_label(label.display_name).label("display_name"),
+            func.coalesce(latest_label(label.revision), 0).label("display_name_revision"),
+            Person.id.label("owner_id"),
+            Person.display_name.label("owner_name"),
+            Person.email.label("owner_email"),
+            maintain_column_froms=True,
+        )
+        .with_for_update(read=True, of=recording)
+    )
+    return {row.receipt_id: row for row in await ownership.database.execute(statement)}
+
+
+async def _row_summaries(
+    database: AsyncSession, rows: list[Any]
+) -> dict[UUID, dict[str, Any] | None]:
+    """What each report-ready row shows from its Report, by recording, in three statements.
+
+    The source is the Report read's own (``AcquisitionReports.render_report``):
+    the latest retained version of the current generation, else the latest unerased
+    draft once its run completed for that generation (otherwise the Report read
+    answers 409, and the row has no summary). Where any sensitive-segment mark
+    names the recording or its transcript revision, the summary passes the Report's
+    own withholding, so a list never shows text the Report withholds.
+    """
+    ready = {row.recording_id: row for row in rows if row.has_report}
+    if not ready:
+        return {}
+    retained, draft, run = ConversationRetainedC5Version, ConversationReportDraft, ConversationRun
+    payloads: dict[UUID, Any] = {}
+    for recording_id, tenant_id, person_id, generation, payload in await database.execute(
+        select(
+            retained.recording_id,
+            retained.tenant_id,
+            retained.person_id,
+            retained.generation,
+            retained.payload,
+        )
+        .where(
+            retained.recording_id.in_(list(ready)),
+            retained.erased_at.is_(None),
+            retained.payload.is_not(None),
+        )
+        .order_by(retained.recording_id, retained.created_at.desc(), retained.id.desc())
+    ):
+        row = ready[recording_id]
+        if recording_id not in payloads and (tenant_id, person_id, generation) == (
+            row.recording_tenant_id,
+            row.recording_person_id,
+            row.generation,
+        ):
+            payloads[recording_id] = payload
+    drafted = [recording_id for recording_id in ready if recording_id not in payloads]
+    latest: set[UUID] = set()
+    if drafted:
+        for (
+            recording_id,
+            tenant_id,
+            person_id,
+            payload,
+            run_generation,
+            run_state,
+        ) in await database.execute(
+            select(
+                draft.recording_id,
+                draft.tenant_id,
+                draft.person_id,
+                draft.payload,
+                run.generation,
+                run.state,
+            )
+            .outerjoin(
+                run,
+                and_(
+                    run.id == draft.run_id,
+                    run.recording_id == draft.recording_id,
+                    run.tenant_id == draft.tenant_id,
+                    run.person_id == draft.person_id,
+                ),
+            )
+            .where(draft.recording_id.in_(drafted), draft.erased_at.is_(None))
+            .order_by(draft.recording_id, draft.created_at.desc(), draft.id.desc())
+        ):
+            row = ready[recording_id]
+            if recording_id in latest or (tenant_id, person_id) != (
+                row.recording_tenant_id,
+                row.recording_person_id,
+            ):
+                continue
+            latest.add(recording_id)
+            if run_state == "completed" and run_generation == row.generation:
+                payloads[recording_id] = payload
+    revisions: dict[UUID, str] = {}
+    for recording_id, payload in payloads.items():
+        revision = payload.get("transcript_revision") if isinstance(payload, dict) else None
+        if isinstance(revision, str):
+            revisions[recording_id] = revision
+    if not revisions:
+        return {}
+    mark = ConversationSensitiveSegmentMark
+    marked = {
+        (recording_id, revision)
+        for recording_id, revision in await database.execute(
+            select(mark.recording_id, mark.transcript_revision).where(
+                or_(
+                    mark.recording_id.in_(list(revisions)),
+                    mark.transcript_revision.in_(sorted(set(revisions.values()))),
+                )
+            )
+        )
+    }
+    marked_recordings = {recording_id for recording_id, _ in marked}
+    marked_revisions = {revision for _, revision in marked}
+    summaries: dict[UUID, dict[str, Any] | None] = {}
+    for recording_id, revision in revisions.items():
+        summary = library_row_summary(payloads[recording_id])
+        if summary is not None and (
+            recording_id in marked_recordings or revision in marked_revisions
+        ):
+            plan = await withheld_plan_for(
+                database, recording_id=recording_id, served_revisions=(revision,)
+            )
+            summary = withhold(summary, plan)
+        summaries[recording_id] = summary
+    return summaries
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def _count(value: Any) -> int | None:
+    return len(value) if isinstance(value, list) else None
+
+
+def library_row_summary(payload: Any) -> dict[str, Any] | None:
+    """A list row's Report facts: how the call ended, the assessment and its counts.
+
+    The same fields, in the same order of preference, as the Calls page reads
+    from the whole Report (calls-insights.ts ``extractInsight``). Null when the
+    stored Report is not an object.
+    """
+    if not isinstance(payload, dict):
+        return None
+    overview = _mapping(payload.get("overview"))
+    final = _mapping(overview.get("final_assessment"))
+    outcome = _mapping(overview.get("outcome"))
+    improvements = payload.get("improvements")
+    first = improvements[0] if isinstance(improvements, list) and improvements else None
+    next_action = _mapping(first)
+    kind = outcome.get("kind")
+    return {
+        "outcome": kind if isinstance(kind, str) and kind in _OUTCOMES else None,
+        "assessment": _text(final.get("assessment"))
+        or _text(outcome.get("text"))
+        or _text(payload.get("verdict")),
+        "fix_first": _text(final.get("fix_first")),
+        "next_focus": _text(final.get("next_focus"))
+        or _text(_mapping(overview.get("next_call_focus")).get("behavior"))
+        or _text(next_action.get("title")),
+        "strengths": _count(payload.get("strengths")),
+        "missed": _count(payload.get("missed_opportunities")),
     }
 
 

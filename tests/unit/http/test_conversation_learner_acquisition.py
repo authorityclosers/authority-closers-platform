@@ -93,6 +93,10 @@ def test_submission_install_requires_hosted_native_socket(tmp_path, environment)
 
 
 class _Database:
+    async def execute(self, statement):
+        # The bounded sign-in's SET LOCAL lock and statement timeouts.
+        return None
+
     async def scalar(self, statement):
         # A real registry query, represented by one active fictional organisation.
         tenant = statement.compile().params.get("tenant_id_1")
