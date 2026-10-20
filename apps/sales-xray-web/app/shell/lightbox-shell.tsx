@@ -24,7 +24,9 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -62,6 +64,13 @@ import { ScreenLink } from "./screen-link";
 import { useGlide, useScreenMotion } from "./screen-transition";
 import { warmCallsList } from "../calls-cache";
 import { RouteLoading } from "./route-loading";
+import {
+  claimShell,
+  releaseShell,
+  shownClaim,
+  type ShellClaim,
+  type ShellClaims,
+} from "./shell-claims";
 import { SectionBoundary } from "../ui/section-boundary";
 import {
   readAllowance,
@@ -1358,7 +1367,11 @@ function LightboxShellFrame({
           >
             {/* A tapped place shows its outline at once, while the router
                 fetches it; the page underneath stays mounted until then. */}
-            {standIn ? <RouteLoading pathname={standIn} /> : null}
+            {standIn ? (
+              <StandInContext.Provider value>
+                <RouteLoading pathname={standIn} />
+              </StandInContext.Provider>
+            ) : null}
             <div
               className={styles.pageSlot}
               data-page-slot=""
@@ -1537,9 +1550,15 @@ function LightboxShellFrame({
 
 type ShellPage = Omit<LightboxShellProps, "children">;
 
-const PersistentShellContext = createContext<
-  ((page: ShellPage) => void) | null
->(null);
+type ShellRegistry = {
+  claim: (id: string, claim: ShellClaim<ShellPage>) => void;
+  release: (id: string) => void;
+};
+
+const PersistentShellContext = createContext<ShellRegistry | null>(null);
+
+/** True inside the outline standing in for a tapped place. */
+const StandInContext = createContext(false);
 
 /**
  * One app frame (sidebar, top bar, page area) that stays mounted while the
@@ -1552,10 +1571,21 @@ export function PersistentShell({ children }: { children: ReactNode }) {
   // from what the session already knows, so a page drawn on the server with
   // its session (dev) arrives with its full bar, not loading placeholders.
   const access = useWorkspaceAccess();
-  const [page, setPage] = useState<ShellPage>(() => ({
+  const [first] = useState<ShellPage>(() => ({
     authenticated: access?.authenticated === true,
     loading: !access || access.status === "loading",
   }));
+  // Every mounted page and stand-in outline claims the frame; see
+  // shell-claims.ts for which one it shows.
+  const [claims, setClaims] = useState<ShellClaims<ShellPage>>([]);
+  const registry = useMemo<ShellRegistry>(
+    () => ({
+      claim: (id, claim) => setClaims((list) => claimShell(list, id, claim)),
+      release: (id) => setClaims((list) => releaseShell(list, id)),
+    }),
+    [],
+  );
+  const page = shownClaim(claims)?.page ?? first;
   // A loading screen can't know the session, but the frame does: once the
   // session is confirmed, a screen that is still loading never turns the
   // bar back into placeholders (no flicker between pages, owner 20 Oct).
@@ -1566,29 +1596,33 @@ export function PersistentShell({ children }: { children: ReactNode }) {
       ? { ...page, loading: false, authenticated: true }
       : page;
   return (
-    <PersistentShellContext.Provider value={setPage}>
+    <PersistentShellContext.Provider value={registry}>
       <LightboxShellFrame {...shown}>{children}</LightboxShellFrame>
     </PersistentShellContext.Provider>
   );
 }
 
 function ShellPageSettings({
-  setPage,
+  registry,
   children,
   ...page
-}: LightboxShellProps & { setPage: (page: ShellPage) => void }) {
+}: LightboxShellProps & { registry: ShellRegistry }) {
+  const id = useId();
+  const standIn = useContext(StandInContext);
   // The chrome settings are plain data, so their serialised form is both the
   // change signal and the value handed to the frame.
   const settings = JSON.stringify(page);
   // Before paint, so the frame never shows the previous page's chrome.
   useLayoutEffect(() => {
-    setPage(JSON.parse(settings) as ShellPage);
-  }, [setPage, settings]);
+    registry.claim(id, { page: JSON.parse(settings) as ShellPage, standIn });
+  }, [registry, id, settings, standIn]);
+  // Only on leaving: a settings change updates the claim in its place.
+  useLayoutEffect(() => () => registry.release(id), [registry, id]);
   return children;
 }
 
 export function LightboxShell(props: LightboxShellProps) {
-  const setPage = useContext(PersistentShellContext);
-  if (!setPage) return <LightboxShellFrame {...props} />;
-  return <ShellPageSettings setPage={setPage} {...props} />;
+  const registry = useContext(PersistentShellContext);
+  if (!registry) return <LightboxShellFrame {...props} />;
+  return <ShellPageSettings registry={registry} {...props} />;
 }
