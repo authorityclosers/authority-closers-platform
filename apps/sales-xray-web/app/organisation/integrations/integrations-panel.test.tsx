@@ -393,3 +393,21 @@ it("hands a new key to the page, places extras after a part, and reads again whe
   expect(overviewReads()).toBe(3);
   clock.mockRestore();
 });
+
+it("labels each key's values, so a phone can show every key as a small card", async () => {
+  await act(async () => root.render(<IntegrationsPanel parts={["keys"]} />));
+  await flush();
+  const row = host.querySelector("tbody tr")!;
+  expect(
+    [...row.querySelectorAll("td[data-label]")].map((cell) => [
+      cell.getAttribute("data-label"),
+      cell.textContent,
+    ]),
+  ).toEqual([
+    ["Key", "sxk_test_Ab12…"],
+    ["Permissions", "Read calls and their status"],
+    ["Last used", "Never"],
+    ["Expires", "Never"],
+    ["State", "Active"],
+  ]);
+});

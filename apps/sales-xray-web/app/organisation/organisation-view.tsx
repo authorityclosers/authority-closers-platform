@@ -267,6 +267,9 @@ export function OrganisationView({
     return isTab(value) ? value : "overview";
   });
   const shows = (id: Tab) => (sections ? sections.includes(id) : tab === id);
+  // Settings → Developers and AI replies: the section's own title is enough.
+  const integrationsOnly =
+    embedded && sections?.length === 1 && sections[0] === "integrations";
   const [missing, setMissing] = useState(false);
 
   const setTab = useCallback((next: Tab) => {
@@ -451,27 +454,29 @@ export function OrganisationView({
         />
       ) : (
         <>
-          <header className={styles.header}>
-            <span className={styles.orgTile} aria-hidden="true">
-              <OrgLogo src={branding?.logoUrl} fallback={initials(name)} />
-            </span>
-            <div className={styles.headerCopy}>
-              <h1>{name}</h1>
-              <p>
-                <span>Organisation</span>
-                {memberCount !== null ? (
-                  <span>
-                    {memberCount} {memberCount === 1 ? "person" : "people"}
-                  </span>
-                ) : null}
-                {myRole ? (
-                  <span>
-                    Your role: <b>{ROLE_LABEL[myRole]}</b>
-                  </span>
-                ) : null}
-              </p>
-            </div>
-          </header>
+          {integrationsOnly ? null : (
+            <header className={styles.header}>
+              <span className={styles.orgTile} aria-hidden="true">
+                <OrgLogo src={branding?.logoUrl} fallback={initials(name)} />
+              </span>
+              <div className={styles.headerCopy}>
+                <h1>{name}</h1>
+                <p>
+                  <span>Organisation</span>
+                  {memberCount !== null ? (
+                    <span>
+                      {memberCount} {memberCount === 1 ? "person" : "people"}
+                    </span>
+                  ) : null}
+                  {myRole ? (
+                    <span>
+                      Your role: <b>{ROLE_LABEL[myRole]}</b>
+                    </span>
+                  ) : null}
+                </p>
+              </div>
+            </header>
+          )}
 
           {sections ? null : (
             <nav className={styles.tabs} aria-label="Organisation sections">

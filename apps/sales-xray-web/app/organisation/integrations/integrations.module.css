@@ -212,3 +212,48 @@
   font-size: var(--sx-text-sm);
   resize: vertical;
 }
+
+/* On a phone each key is a small card: its name, then each value with its label. */
+@media (max-width: 599px) {
+  .keysTable thead {
+    display: none;
+  }
+
+  .keysTable table,
+  .keysTable tbody,
+  .keysTable th,
+  .keysTable td {
+    display: block;
+    width: auto;
+    min-width: 0;
+  }
+
+  .keysTable tr {
+    display: grid;
+    gap: 4px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--sx-line);
+  }
+
+  .keysTable th,
+  .keysTable td {
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .keysTable th[scope="row"] {
+    font-weight: 650;
+  }
+
+  .keysTable td[data-label]::before {
+    margin-right: 6px;
+    color: var(--sx-muted);
+    font-size: var(--sx-text-xs);
+    content: attr(data-label);
+  }
+
+  .keysTable td:empty {
+    display: none;
+  }
+}

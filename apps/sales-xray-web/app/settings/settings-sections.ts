@@ -97,7 +97,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: "developers",
     label: "Developers",
-    hint: "API keys, webhooks and app hand-over",
+    hint: "API keys, AI assistants (MCP), webhooks and the docs",
     icon: Code,
     group: "Connections",
     managers: true,

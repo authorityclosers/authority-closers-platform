@@ -114,12 +114,14 @@ export function AssistantSetup() {
       <ol className={styles.steps} data-steps="remote">
         <li>
           <strong>Add Sales Xray to your assistant</strong>
-          <Segmented
-            label="Your assistant"
-            items={ASSISTANTS.map(({ key, label }) => ({ key, label }))}
-            value={assistant}
-            onChange={setAssistant}
-          />
+          <div className={styles.picker}>
+            <Segmented
+              label="Your assistant"
+              items={ASSISTANTS.map(({ key, label }) => ({ key, label }))}
+              value={assistant}
+              onChange={setAssistant}
+            />
+          </div>
           <span>{REMOTE_WHERE[assistant]}</span>
           <Snippet
             code={remoteSnippet(assistant, origin)}

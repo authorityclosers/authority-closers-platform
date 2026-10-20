@@ -268,3 +268,21 @@
 .stdio .steps {
   padding-top: 12px;
 }
+
+/* On a phone the steps never push past the panel; the assistant picker scrolls. */
+.steps {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.steps > li {
+  min-width: 0;
+}
+
+.steps > li > * {
+  max-width: 100%;
+}
+
+.picker {
+  max-width: 100%;
+  overflow-x: auto;
+}

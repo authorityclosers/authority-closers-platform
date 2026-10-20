@@ -315,50 +315,58 @@ function KeysSection({
         </p>
       ) : null}
       {data.keys.length ? (
-        <Table label="API keys">
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Key</th>
-              <th scope="col">Permissions</th>
-              <th scope="col">Last used</th>
-              <th scope="col">Expires</th>
-              <th scope="col">State</th>
-              <th scope="col">
-                <span className={styles.hidden}>Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.keys.map((key) => (
-              <tr key={key.id}>
-                <th scope="row">{key.name}</th>
-                <td>
-                  <code>{key.prefix}…</code>
-                </td>
-                <td>{key.scopes.map(label).join(", ")}</td>
-                <td>{key.lastUsedAt ? when(key.lastUsedAt) : "Never"}</td>
-                <td>{key.expiresAt ? when(key.expiresAt) : "Never"}</td>
-                <td>
-                  <Badge tone={STATE_TONE[key.state]}>
-                    {key.state === "active"
-                      ? "Active"
-                      : key.state === "expired"
-                        ? "Expired"
-                        : "Revoked"}
-                  </Badge>
-                </td>
-                <td>
-                  {key.state === "active" ? (
-                    <Button variant="ghost" onClick={() => setRevoking(key)}>
-                      Revoke
-                    </Button>
-                  ) : null}
-                </td>
+        <div className={styles.keysTable}>
+          <Table label="API keys">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Key</th>
+                <th scope="col">Permissions</th>
+                <th scope="col">Last used</th>
+                <th scope="col">Expires</th>
+                <th scope="col">State</th>
+                <th scope="col">
+                  <span className={styles.hidden}>Actions</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </Table>
+            </thead>
+            <tbody>
+              {data.keys.map((key) => (
+                <tr key={key.id}>
+                  <th scope="row">{key.name}</th>
+                  <td data-label="Key">
+                    <code>{key.prefix}…</code>
+                  </td>
+                  <td data-label="Permissions">
+                    {key.scopes.map(label).join(", ")}
+                  </td>
+                  <td data-label="Last used">
+                    {key.lastUsedAt ? when(key.lastUsedAt) : "Never"}
+                  </td>
+                  <td data-label="Expires">
+                    {key.expiresAt ? when(key.expiresAt) : "Never"}
+                  </td>
+                  <td data-label="State">
+                    <Badge tone={STATE_TONE[key.state]}>
+                      {key.state === "active"
+                        ? "Active"
+                        : key.state === "expired"
+                          ? "Expired"
+                          : "Revoked"}
+                    </Badge>
+                  </td>
+                  <td>
+                    {key.state === "active" ? (
+                      <Button variant="ghost" onClick={() => setRevoking(key)}>
+                        Revoke
+                      </Button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
       ) : (
         <Empty
           icon={KeyRound}
