@@ -1635,10 +1635,14 @@ class AdminCostMetrics:
     async def _name_here(self, exports: Sequence[Export], now: datetime) -> None:
         """This environment's organisation and person names, read live from its own database
         for this signed-in control account; never written to the store."""
+        if self.here is None:
+            return
+        database = self.application.database
+        # This environment's pseudonym key, made here once, so its next export carries people.
+        await database.run_sync(lambda sync: pseudonyms.ensure_key(sync.connection(), now))
         mine = next((export for export in exports if export.environment == self.here), None)
         if mine is None:
             return
-        database = self.application.database
         ids = [UUID(key) for key in mine.companies if COMPANY_ID.fullmatch(key)]
         if ids:
             rows = await database.execute(select(Tenant.id, Tenant.name).where(Tenant.id.in_(ids)))

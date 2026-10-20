@@ -382,7 +382,13 @@ def test_revenue_counts_live_money_against_cost() -> None:
 async def test_summary_admits_only_operations_and_bounds_filters(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    application = SimpleNamespace(database=None, clock=lambda: NOW)
+    made: list[object] = []
+
+    class _Database:
+        async def run_sync(self, work: object) -> None:
+            made.append(work)  # the pseudonym key, made once in this environment
+
+    application = SimpleNamespace(database=_Database(), clock=lambda: NOW)
     service = AdminCostMetrics(
         application,  # type: ignore[arg-type]
         OPS,
@@ -422,7 +428,7 @@ async def test_summary_admits_only_operations_and_bounds_filters(
     (tmp_path / "staging" / "usage.json").write_text(json.dumps(_document()))
     result = await service.summary(actor, days=30)  # type: ignore[arg-type]
     assert result["available"] == ["staging"] and result["problems"] == []
-    assert result["here"] == "staging"
+    assert result["here"] == "staging" and made  # this environment's key was ensured
     assert AdminCostMetrics(application, OPS, store_root=None, here="test").here is None  # type: ignore[arg-type]
     assert result["sources"][0]["stale"] is False
     # No stored rate and no feed: the planning rate, said so.
