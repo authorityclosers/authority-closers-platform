@@ -63,6 +63,7 @@ from ac_platform.lead_desk.chats import models as lead_desk_chat_models
 from ac_platform.learning import models as learning_models
 from ac_platform.learning import planning_models
 from ac_platform.media import models as media_models
+from ac_platform.one_pass import models as one_pass_models
 from ac_platform.outbox import models as outbox_models
 from ac_platform.partner_events import models as partner_event_models
 from ac_platform.plans import models as plan_models
@@ -109,6 +110,7 @@ MODEL_MODULES = (
     partner_event_models,
     call_data_models,
     ai_spend_models,
+    one_pass_models,
     fx_models,
     usage_people_models,
     integration_models,

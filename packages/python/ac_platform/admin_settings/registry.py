@@ -30,6 +30,8 @@ CALL_DATA_SAVE = "/v1/admin/call-data/settings"
 PROVIDERS = "/v1/admin/conversation/providers"
 LEAD_DESK_AI = "/v1/admin/lead-desk-ai"
 LEAD_DESK_AI_SAVE = "/v1/admin/lead-desk-ai/settings"
+PIPELINE = "/v1/admin/analysis-pipeline"
+PIPELINE_SAVE = "/v1/admin/analysis-pipeline/settings"
 
 # Templates in a write body: the new value, the revision read with it, the reason the
 # person gave, and (for a merge) the document read with the one field set.
@@ -88,6 +90,11 @@ AREAS: tuple[dict[str, str], ...] = (
     {"key": "providers", "title": "AI providers and models", "page": "/sales-xray/providers"},
     {"key": "review", "title": "Review pipelines", "page": "/settings/review-pipelines"},
     {"key": "report", "title": "Report versions", "page": "/sales-xray/report-settings"},
+    {
+        "key": "analysis-pipeline",
+        "title": "Analysis pipeline (one-pass trial)",
+        "page": "/sales-xray/one-pass",
+    },
 )
 
 ANALYSIS_READ = {"revision": "/revision", "changed_at": "/created_at"}
@@ -139,6 +146,27 @@ def _lead_desk_ai(key: str, label: str, kind: Kind, **bounds: Any) -> Setting:
             {"expected_revision": REVISION, "config": MERGED},
             idempotency_key=False,
             merge=Merge("/config", (key,)),
+        ),
+        **bounds,
+    )
+
+
+def _pipeline(key: str, label: str, kind: Kind, **bounds: Any) -> Setting:
+    """Which analysis pipeline this environment runs: today's, or both side by side with
+    the Google-only one-pass pipeline (owner, 21 Oct 2026). Development only for now."""
+    return Setting(
+        id=f"analysis_pipeline.{key}",
+        area="analysis-pipeline",
+        label=label,
+        kind=kind,
+        read=Read(PIPELINE, f"/config/{key}", revision="/revision"),
+        write=Write(
+            "PUT",
+            PIPELINE_SAVE,
+            {"expected_revision": REVISION, "config": MERGED, "reason": REASON},
+            idempotency_key=False,
+            merge=Merge("/config", (key,)),
+            needs_reason=key == "mode",
         ),
         **bounds,
     )
@@ -288,6 +316,35 @@ SETTINGS: tuple[Setting, ...] = (
             "/current/created_at",
         ),
         why_not="Provider routes are saved and activated together on their page.",
+    ),
+    _pipeline(
+        "mode",
+        "Analysis pipeline",
+        "enum",
+        help="Both runs the Google-only one-pass pipeline beside today's on each new call; "
+        "people keep seeing today's. Its spend cap is in AI spend (One-pass trial).",
+        options_from=("/modes", "value", "label"),
+    ),
+    _pipeline(
+        "transcription_tier",
+        "One pass: transcription tier",
+        "enum",
+        help="Flex is half price and may wait minutes.",
+        options_from=("/tiers", "value", "label"),
+    ),
+    _pipeline(
+        "analysis_tier",
+        "One pass: analysis tier",
+        "enum",
+        help="Flex is half price and may wait minutes.",
+        options_from=("/tiers", "value", "label"),
+    ),
+    _pipeline(
+        "max_call_minutes",
+        "One pass: longest call (minutes)",
+        "int",
+        minimum=1,
+        maximum=120,
     ),
 )
 

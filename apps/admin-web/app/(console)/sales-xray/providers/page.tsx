@@ -31,7 +31,7 @@ const PROVIDER_ID = /^[a-z_]{1,32}$/;
 /** The hub, its keys and health here, and who does each job: read together, so the page
  * arrives whole. */
 async function readHub(chosen: string | null) {
-  const [hub, health, keys, registry, callData, leadAi, metrics] =
+  const [hub, health, keys, registry, callData, leadAi, pipeline, metrics] =
     await Promise.all([
       adminRead(
         `/v1/admin/providers/hub${chosen ? `?provider=${chosen}` : ""}`,
@@ -42,6 +42,7 @@ async function readHub(chosen: string | null) {
       adminRead("/v1/admin/settings", normalizeRegistry),
       adminRead("/v1/admin/call-data", read.object),
       adminRead("/v1/admin/lead-desk-ai", read.object),
+      adminRead("/v1/admin/analysis-pipeline", read.object),
       adminRead(
         "/v1/admin/conversation/metrics?days=30&env=all&tests=0",
         normalizeMetrics,
@@ -51,6 +52,7 @@ async function readHub(chosen: string | null) {
   const answers: Record<string, unknown> = {};
   if (callData.ok) answers["/v1/admin/call-data"] = callData.data;
   if (leadAi.ok) answers["/v1/admin/lead-desk-ai"] = leadAi.data;
+  if (pipeline.ok) answers["/v1/admin/analysis-pipeline"] = pipeline.data;
   return {
     hub,
     // An older server without the health read still shows the hub.

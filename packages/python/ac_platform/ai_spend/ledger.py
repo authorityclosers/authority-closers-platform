@@ -13,6 +13,9 @@ and model:
   outcome counts ₹2, exactly as the engine's own cap counts it).
 - AI replies: ``lead_desk_ai_replies`` (its own rupee estimate).
 - partner quote facts: ``partner_quote_facts`` (tokens).
+- the one-pass trial: ``one_pass_runs`` on real calls (its own rupee estimate), one line
+  per stage (Flash-Lite transcription, the 3.8 Flash pass); a start without an outcome
+  counts ₹2. Fictional benchmark runs are the research's money and are not here.
 
 Rupees are list-price estimates from the Admin price sheet (``admin_pricing``), never a
 charge. Nothing here reads a transcript, prompt, answer, message or name.
@@ -109,6 +112,29 @@ SPEND_SQL = text(
              coalesce(f.input_tokens, 0), coalesce(f.output_tokens, 0), 0, NULL::numeric
       FROM partner_quote_facts f
       WHERE f.created_at >= :since AND f.input_tokens IS NOT NULL
+      UNION ALL
+      SELECT 'one_pass', CASE WHEN o.trigger = 'operator' THEN 'operator' ELSE 'auto' END,
+             o.created_at, 'gemini', coalesce(o.transcription_model, ''),
+             coalesce(o.transcription_input_tokens, 0), coalesce(o.transcription_output_tokens, 0),
+             coalesce(o.audio_ms, 0), o.transcription_cost_inr
+      FROM one_pass_runs o
+      WHERE o.created_at >= :since AND o.source = 'call' AND o.state <> 'running'
+        AND o.transcription_cost_inr IS NOT NULL
+      UNION ALL
+      SELECT 'one_pass', CASE WHEN o.trigger = 'operator' THEN 'operator' ELSE 'auto' END,
+             o.created_at, 'gemini', coalesce(o.analysis_model, ''),
+             coalesce(o.analysis_input_tokens, 0), coalesce(o.analysis_output_tokens, 0), 0,
+             o.analysis_cost_inr
+      FROM one_pass_runs o
+      WHERE o.created_at >= :since AND o.source = 'call' AND o.state <> 'running'
+        AND o.analysis_cost_inr IS NOT NULL
+      UNION ALL
+      SELECT 'one_pass', CASE WHEN o.trigger = 'operator' THEN 'operator' ELSE 'auto' END,
+             o.created_at, 'gemini', coalesce(o.analysis_model, ''), 0, 0, 0,
+             {OPEN_ATTEMPT_INR}
+      FROM one_pass_runs o
+      WHERE o.created_at >= :since AND o.source = 'call' AND o.state = 'running'
+        AND NOT EXISTS (SELECT 1 FROM one_pass_runs d WHERE d.supersedes_id = o.id)
     )
     SELECT feature, trigger, (at AT TIME ZONE 'Asia/Kolkata')::date AS day, provider, model,
            count(*) AS requests, sum(input_tokens) AS input_tokens,

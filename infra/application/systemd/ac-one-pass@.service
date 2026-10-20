@@ -1,0 +1,19 @@
+[Unit]
+Description=Sales Xray one-pass trial beside today's pipeline (%i)
+Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/docs/architecture/ONE_PASS_ANALYSIS.md
+After=network-online.target docker.service
+
+[Service]
+Type=exec
+ExecStart=/usr/local/sbin/ac-one-pass %i
+Restart=always
+RestartSec=30s
+# Pick up each new release: restart at least every 30 minutes (the runner holds no state).
+RuntimeMaxSec=30min
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=512M
+CPUQuota=40%
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,103 @@
+/* Admin → One-pass trial: the pipeline switch, and today's pipeline beside the
+   Google-only one pass (two columns on desktop, one on phones). */
+
+.switch {
+  display: grid;
+  gap: var(--sx-gap);
+}
+
+.modes {
+  display: grid;
+  gap: 8px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.modes legend {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.mode {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.mode span {
+  display: grid;
+}
+
+.tiers {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.tiers label,
+.reason {
+  display: grid;
+  gap: 4px;
+  font-size: var(--sx-text-sm);
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.note {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.sides {
+  display: grid;
+  gap: var(--sx-gap);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: var(--sx-gap);
+}
+
+@media (max-width: 760px) {
+  .sides {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.checks {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: var(--sx-text-sm);
+}
+
+.points {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+  font-size: var(--sx-text-sm);
+}
+
+.pointsTitle {
+  margin: 12px 0 4px;
+  font-size: var(--sx-text-sm);
+  color: var(--sx-ink-2);
+}
+
+.coaching p {
+  margin: 8px 0;
+  font-size: var(--sx-text-sm);
+}
+
+.differs {
+  background: color-mix(in srgb, var(--sx-warn) 12%, transparent);
+}
+
+.missing {
+  color: var(--sx-muted);
+}

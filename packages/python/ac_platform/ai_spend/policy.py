@@ -41,13 +41,20 @@ FEATURES: Final[dict[str, str]] = {
     "call_data_deep": "Call data: deep pipeline",
     "lead_desk_ai": "AI replies to leads",
     "partner_quote_facts": "Partner quote facts",
+    "one_pass": "One-pass trial (Google, beside today's pipeline)",
 }
 # Customer call analysis has its own budget (Execution & budget); never capped here.
 ANALYSIS: Final[frozenset[str]] = frozenset({"call_transcription", "call_facts", "call_report"})
 # Background jobs: nobody is waiting on them, so the environment's caps stop them.
 BACKGROUND: Final[frozenset[str]] = frozenset(FEATURES) - ANALYSIS
 # Features whose own cap lives here (the call data engine and AI replies keep theirs).
-CAPPED_HERE: Final[tuple[str, ...]] = ("canary", "pointer_review", "partner_quote_facts")
+# The one-pass trial (21 Oct 2026) starts at ₹0 everywhere: raising it is the approval.
+CAPPED_HERE: Final[tuple[str, ...]] = (
+    "canary",
+    "pointer_review",
+    "partner_quote_facts",
+    "one_pass",
+)
 # Where the other features' caps live in Admin.
 CAP_ELSEWHERE: Final[dict[str, str]] = {
     "call_transcription": "/sales-xray/execution",
@@ -79,7 +86,12 @@ _DEFAULTS: Final[dict[str, dict[str, Any]]] = {
         "monthly_cap_inr": 500,
         "backfill_daily_cap_inr": 0,
         "skip_sandbox": True,
-        "feature_caps_inr": {"canary": 10, "pointer_review": 20, "partner_quote_facts": 10},
+        "feature_caps_inr": {
+            "canary": 10,
+            "pointer_review": 20,
+            "partner_quote_facts": 10,
+            "one_pass": 0,
+        },
     },
     "staging": {
         "background_enabled": True,
@@ -87,7 +99,12 @@ _DEFAULTS: Final[dict[str, dict[str, Any]]] = {
         "monthly_cap_inr": 1500,
         "backfill_daily_cap_inr": 0,
         "skip_sandbox": True,
-        "feature_caps_inr": {"canary": 10, "pointer_review": 30, "partner_quote_facts": 20},
+        "feature_caps_inr": {
+            "canary": 10,
+            "pointer_review": 30,
+            "partner_quote_facts": 20,
+            "one_pass": 0,
+        },
     },
     "production": {
         "background_enabled": True,
@@ -95,7 +112,12 @@ _DEFAULTS: Final[dict[str, dict[str, Any]]] = {
         "monthly_cap_inr": 8000,
         "backfill_daily_cap_inr": 0,
         "skip_sandbox": True,
-        "feature_caps_inr": {"canary": 10, "pointer_review": 200, "partner_quote_facts": 100},
+        "feature_caps_inr": {
+            "canary": 10,
+            "pointer_review": 200,
+            "partner_quote_facts": 100,
+            "one_pass": 0,
+        },
     },
 }
 

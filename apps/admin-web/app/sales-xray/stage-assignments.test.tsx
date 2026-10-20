@@ -132,6 +132,7 @@ it("lists every paid job once, in pipeline order", () => {
     "Call data · fast",
     "Call data · deep",
     "AI replies",
+    "Analysis pipeline (one-pass trial)",
   ]);
   expect(host.textContent).toContain("dev · last 14 days");
 });
@@ -142,7 +143,7 @@ it("gives phones one card per job, with the change on the card", () => {
   ];
   expect(
     cards.map((card) => card.querySelector("strong")?.textContent),
-  ).toHaveLength(7);
+  ).toHaveLength(8);
   const fast = cards[4] as HTMLElement;
   expect(fast.querySelector("strong")?.textContent).toBe("Call data · fast");
   expect(fast.querySelector("code")?.textContent).toBe("model-a");
@@ -203,4 +204,61 @@ it("prices a stage's tokens per audio minute at a model's list price", () => {
   expect(
     modelPrices([{ model: "x", label: "X", inputUsd: "", outputUsd: "1" }]),
   ).toEqual([]);
+});
+
+it("switches the analysis pipeline here and links to its comparison", () => {
+  const PIPELINE = "/v1/admin/analysis-pipeline";
+  const withPipeline = normalizeRegistry({
+    settings: [
+      {
+        id: "analysis_pipeline.mode",
+        area: "analysis-pipeline",
+        label: "Analysis pipeline",
+        kind: "enum",
+        read: { path: PIPELINE, value: "/config/mode", revision: "/revision" },
+        write: {
+          method: "PUT",
+          path: `${PIPELINE}/settings`,
+          body: {
+            expected_revision: "$revision",
+            config: "$merged",
+            reason: "$reason",
+          },
+          idempotency_key: false,
+          merge: { container: "/config", key: ["mode"] },
+          needs_reason: true,
+        },
+        options: [],
+        options_from: { list: "/modes", value: "value", label: "label" },
+      },
+    ],
+  }).settings;
+  const pipeline = row(
+    render({
+      settings: withPipeline,
+      answers: {
+        ...answers,
+        [PIPELINE]: {
+          revision: 2,
+          config: { mode: "both" },
+          modes: [
+            { value: "classic", label: "Today's pipeline" },
+            { value: "both", label: "Both, side by side" },
+          ],
+        },
+      },
+    }),
+    "Analysis pipeline (one-pass trial)",
+  );
+  expect(
+    pipeline.querySelector('button[aria-label="Change Analysis pipeline"]'),
+  ).not.toBeNull();
+  expect(
+    pipeline.querySelector('a[href="/sales-xray/one-pass"]')?.textContent,
+  ).toBe("Compare side by side");
+  // Without its answer the row still links to the comparison.
+  const bare = row(render(), "Analysis pipeline (one-pass trial)");
+  expect(bare.querySelector("a")?.getAttribute("href")).toBe(
+    "/sales-xray/one-pass",
+  );
 });
