@@ -348,18 +348,21 @@ function LightboxShellFrame({
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
   const pathname = usePathname();
-  const place = shellActiveFor(pathname, active);
-  // Every Settings page says Settings, even while its section loads.
-  const pageTitle = resolvePageTitle(
-    place,
-    heading,
-    pageName ?? (inSettings(pathname) ? "Settings" : undefined),
-  );
-  const phoneTab = phoneTabFor(pathname, active);
   // Moving between places animates the page area; the places one tap away
   // are made ready while the app is quiet (owner, 20 Oct).
   const pageRef = useRef<HTMLElement | null>(null);
   const standIn = useScreenMotion(pageRef, pathname);
+  // While a tapped place's outline stands in, the rail, tab bar and title
+  // already show that place, so their highlight glides with the move.
+  const shownPath = standIn ?? pathname;
+  const place = shellActiveFor(shownPath, active);
+  // Every Settings page says Settings, even while its section loads.
+  const pageTitle = resolvePageTitle(
+    place,
+    heading,
+    pageName ?? (inSettings(shownPath) ? "Settings" : undefined),
+  );
+  const phoneTab = phoneTabFor(shownPath, active);
   usePlacePrefetch(authenticated && !loading);
   useHoverPrefetch(authenticated);
 
@@ -880,6 +883,7 @@ function LightboxShellFrame({
               aria-current={place === "dashboard" ? "page" : undefined}
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Dashboard</span>
             </ScreenLink>
             <ScreenLink
@@ -894,6 +898,7 @@ function LightboxShellFrame({
                 strokeWidth={1.75}
                 live={leadsBadgeLive}
               />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Leads</span>
             </ScreenLink>
             <ScreenLink
@@ -908,6 +913,7 @@ function LightboxShellFrame({
                 strokeWidth={1.75}
                 live={leadsBadgeLive}
               />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Chats</span>
             </ScreenLink>
             <ScreenLink
@@ -918,6 +924,7 @@ function LightboxShellFrame({
               aria-current={place === "analyse" ? "page" : undefined}
             >
               <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>New analysis</span>
             </ScreenLink>
             <ScreenLink
@@ -928,6 +935,7 @@ function LightboxShellFrame({
               aria-current={place === "calls" ? "page" : undefined}
             >
               <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Calls</span>
             </ScreenLink>
             <ScreenLink
@@ -938,6 +946,7 @@ function LightboxShellFrame({
               aria-current={place === "prospects" ? "page" : undefined}
             >
               <Users size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Prospects</span>
             </ScreenLink>
             <ScreenLink
@@ -948,6 +957,7 @@ function LightboxShellFrame({
               aria-current={place === "coaching" ? "page" : undefined}
             >
               <GraduationCap size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Coaching</span>
             </ScreenLink>
             {inOrganisation || place === "organisation" ? (
@@ -959,6 +969,7 @@ function LightboxShellFrame({
                 aria-current={place === "organisation" ? "page" : undefined}
               >
                 <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.railPill} aria-hidden="true" />
                 <span style={RAIL_NAME_STYLE}>Organisation</span>
               </ScreenLink>
             ) : null}
@@ -971,6 +982,7 @@ function LightboxShellFrame({
                 aria-current={place === "insights" ? "page" : undefined}
               >
                 <BarChart3 size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.railPill} aria-hidden="true" />
                 <span style={RAIL_NAME_STYLE}>Insights</span>
               </ScreenLink>
             ) : null}

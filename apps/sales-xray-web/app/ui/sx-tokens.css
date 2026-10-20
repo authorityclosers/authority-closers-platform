@@ -227,7 +227,8 @@ html[data-sx-move]::view-transition-new(root) {
 }
 
 /* The selected tab's capsule glides to the next tab with a spring. */
-html[data-sx-move]::view-transition-group(sx-tab-pill) {
+html[data-sx-move]::view-transition-group(sx-tab-pill),
+html[data-sx-move]::view-transition-group(sx-rail-pill) {
   animation-duration: var(--sx-dur-page);
   animation-timing-function: var(--sx-spring);
 }

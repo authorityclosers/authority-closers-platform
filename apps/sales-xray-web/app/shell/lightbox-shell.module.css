@@ -1425,8 +1425,35 @@
   transform: scale(0.94);
 }
 .stripBtnActive {
-  background: var(--lx-teal-soft);
+  background: transparent;
   color: var(--lx-teal);
+}
+
+/* Design system v2: the active icon sits in a soft capsule, one element
+   named only on the active icon, so a move between places glides it from
+   one icon to the next (a view transition, screen-transition.ts). */
+.stripBtn {
+  isolation: isolate;
+}
+
+.railPill {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--lx-teal-soft);
+  opacity: 0;
+  transform: scale(0.8);
+  transition:
+    opacity var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+  pointer-events: none;
+}
+
+.stripBtnActive .railPill {
+  opacity: 1;
+  transform: none;
+  view-transition-name: sx-rail-pill;
 }
 .stripBtnActive::before {
   position: absolute;

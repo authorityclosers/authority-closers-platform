@@ -19,7 +19,7 @@
   gap: var(--lx-space-1);
   padding: var(--lx-space-1);
   border-radius: var(--lx-radius-md);
-  background: var(--lx-sunken);
+  background: var(--sx-fill);
 }
 
 .option {
@@ -52,7 +52,14 @@
   text-align: center;
   transition:
     background-color var(--lx-dur-move) var(--lx-ease-move),
-    color var(--lx-dur-quick) var(--lx-ease-quick);
+    box-shadow var(--lx-dur-move) var(--lx-ease-move),
+    color var(--lx-dur-quick) var(--lx-ease-quick),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+/* Design system v2: a press dips the segment and lets it spring back. */
+.input:active + .label {
+  transform: scale(0.96);
 }
 
 .segmented[data-density="compact"] .label,
@@ -62,9 +69,11 @@
 }
 
 .input:checked + .label {
-  background: var(--lx-surface);
+  background: var(--sx-elevated);
   color: var(--lx-ink);
-  box-shadow: var(--lx-shadow-1);
+  box-shadow:
+    0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
   font-weight: 800;
 }
 
@@ -95,5 +104,8 @@
 @media (prefers-reduced-motion: reduce) {
   .label {
     transition: none;
+  }
+  .input:active + .label {
+    transform: none;
   }
 }
