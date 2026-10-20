@@ -35,7 +35,11 @@ vi.mock("../organisation/organisation-view", () => ({
   },
 }));
 
-import { AssistantSetup, assistantSnippet } from "./assistant-setup";
+import {
+  AssistantSetup,
+  assistantSnippet,
+  remoteSnippet,
+} from "./assistant-setup";
 import { DevelopersSection } from "./developers";
 import { TryApi } from "./try-api";
 
@@ -203,11 +207,31 @@ it("writes each assistant's setup, naming the API address only off production", 
   );
 });
 
-it("walks through connecting an assistant, with the download and a copy button", async () => {
+it("writes the remote server's setup for each assistant at this site's address", () => {
+  const dev = "https://salesxray-dev.authorityclosers.com";
+  expect(remoteSnippet("claude-desktop", dev)).toBe(`${dev}/v1/mcp`);
+  expect(remoteSnippet("claude-code", dev)).toBe(
+    `claude mcp add --transport http sales-xray ${dev}/v1/mcp`,
+  );
+  expect(JSON.parse(remoteSnippet("cursor", dev))).toEqual({
+    mcpServers: { "sales-xray": { url: `${dev}/v1/mcp` } },
+  });
+  expect(JSON.parse(remoteSnippet("vscode", dev))).toEqual({
+    servers: { "sales-xray": { type: "http", url: `${dev}/v1/mcp` } },
+  });
+  // Drawn on the server first: production's address until the page knows its own.
+  expect(remoteSnippet("claude-desktop", "")).toBe(
+    "https://salesxray.authorityclosers.com/v1/mcp",
+  );
+});
+
+it("walks through connecting an assistant, remote first, with the download folded away", async () => {
   const writeText = vi.fn(async () => undefined);
   vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
   await act(async () => root.render(<AssistantSetup />));
-  expect(host.querySelectorAll("ol > li")).toHaveLength(4);
+  expect(host.querySelectorAll('[data-steps="remote"] > li')).toHaveLength(3);
+  expect(host.querySelectorAll('[data-steps="stdio"] > li')).toHaveLength(3);
+  expect(host.querySelector("details")?.hasAttribute("open")).toBe(false);
   expect(
     host.querySelector('a[href="/developers/sx.py"]')?.hasAttribute("download"),
   ).toBe(true);
@@ -215,18 +239,23 @@ it("walks through connecting an assistant, with the download and a copy button",
   const code = host.querySelector(
     '[aria-label="Claude Code setup"] code',
   )!.textContent!;
-  expect(code).toContain("claude mcp add sales-xray");
+  expect(code).toContain("claude mcp add --transport http sales-xray");
+  expect(code).toContain("/v1/mcp");
+  expect(
+    host.querySelector('[aria-label="Claude Code setup on your computer"] code')
+      ?.textContent,
+  ).toContain("-- python3 /path/to/sx.py mcp");
   await act(async () =>
     host
       .querySelector<HTMLButtonElement>(
-        '[aria-label="Copy the Claude Code setup"]',
+        '[aria-label="Copy: Claude Code setup"]',
       )!
       .click(),
   );
   await flush();
   expect(writeText).toHaveBeenCalledWith(code);
   expect(
-    host.querySelector('[aria-label="Copy the Claude Code setup: copied"]'),
+    host.querySelector('[aria-label="Copy: Claude Code setup: copied"]'),
   ).not.toBeNull();
 });
 

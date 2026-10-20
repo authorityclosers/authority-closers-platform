@@ -250,3 +250,21 @@
     justify-items: start;
   }
 }
+
+/* The stdio fallback, folded away under the remote setup. */
+.stdio {
+  margin: 0 16px 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.stdio summary {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.stdio .steps {
+  padding-top: 12px;
+}
