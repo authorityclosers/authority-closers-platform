@@ -230,6 +230,15 @@ def test_connected_apps_health_and_real_tests(
                 assert found["google_ads"]["state"] == "not_set_up"
                 assert found["phone_calls"]["state"] == "not_connected"
                 assert found["ai_replies"]["state"] == "off"
+                # Lead stages: nothing sent to an ad platform yet; set up in Leads.
+                stages = found["lead_stages"]
+                assert (stages["state"], stages["group"], stages["page"]) == (
+                    "not_connected",
+                    "ads",
+                    "/leads?tab=stages",
+                )
+                assert stages["connect"] is None and stages["canTest"] is False
+                assert found["meta_leads"]["page"] is None
                 # What a Settings card needs: group, the existing connect and disconnect
                 # routes, and whether it can be tested.
                 assert (leads["group"], leads["canTest"]) == ("leads", True)

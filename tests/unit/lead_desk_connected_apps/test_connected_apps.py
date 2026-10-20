@@ -61,3 +61,70 @@ def test_views_are_camel_case_and_name_no_amount() -> None:
     )
     assert "testId" in dumped and "leadId" in dumped
     assert all("₹" not in name for name in apps.NAMES.values())
+
+
+def test_the_lead_stages_card_says_where_stages_go_and_what_waits() -> None:
+    from ac_platform.lead_desk.journey import mapping
+    from ac_platform.lead_desk.journey.model import default_journey
+
+    journey = default_journey()
+    nothing: dict[str, Any] = {"waiting_on": {}, "last_delivered_at": {}}
+    off = apps._card(apps.lead_stages_card(journey, {}, nothing))
+    assert (off.state, off.group, off.page, off.connect) == (
+        "not_connected",
+        "ads",
+        "/leads?tab=stages",
+        None,
+    )
+    assert off.words.startswith("Tell Meta and Google Ads which of your leads become customers")
+    assert off.connections == [] and not off.can_test
+
+    events = mapping.suggestions("meta", journey)
+    meta_on = {
+        "destination": {"id": "1234567890", "name": "Fictional Homes dataset"},
+        "on": True,
+        "events": events,
+    }
+    sent = datetime(2026, 10, 20, 4, 0, tzinfo=UTC)
+    ready = apps.lead_stages_card(
+        journey,
+        {"ad_sync": {"providers": {"meta": meta_on}}},
+        {"waiting_on": {}, "last_delivered_at": {"meta": sent, "google_ads": None}},
+    )
+    assert ready.state == "ready"
+    assert ready.words == f"{len(journey.live)} stages · sent to Meta."
+    [meta] = ready.connections
+    assert (meta.id, meta.label, meta.detail, meta.state) == (
+        "meta",
+        "Meta",
+        "Fictional Homes dataset",
+        "ready",
+    )
+    assert meta.words == f"Sending {sum(1 for name in events.values() if name)} stages."
+    assert ready.last_event is not None
+    assert (ready.last_event.at, ready.last_event.words) == (sent, "Lead stage sent to Meta")
+
+    # A stage added later, with a suggestion, waits for the manager before it's sent.
+    added = next(key for key, name in events.items() if name)
+    later = {**meta_on, "events": {k: v for k, v in events.items() if k != added}}
+    check = apps.lead_stages_card(journey, {"ad_sync": {"providers": {"meta": later}}}, nothing)
+    assert check.state == "problem"
+    assert check.words == "1 new stage to confirm before Meta hears about it."
+
+    # A stage Meta hasn't taken yet is tried again; the card says so.
+    retrying = apps.lead_stages_card(
+        journey,
+        {"ad_sync": {"providers": {"meta": meta_on}}},
+        {"waiting_on": {"meta": "190"}, "last_delivered_at": {}},
+    )
+    assert retrying.state == "problem" and retrying.last_error is not None
+    assert retrying.words == "A stage didn't reach Meta yet. Sales Xray tries again."
+    assert retrying.last_error.words == "A stage didn't reach Meta yet."
+
+    switched = apps.lead_stages_card(
+        journey,
+        {"ad_sync": {"providers": {"meta": {**meta_on, "on": False}}}},
+        nothing,
+    )
+    assert switched.state == "not_connected"
+    assert [(c.state, c.words) for c in switched.connections] == [("off", "Switched off.")]

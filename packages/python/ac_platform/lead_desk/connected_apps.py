@@ -16,6 +16,8 @@ The tests are real:
   Xray; only with an explicit confirm, a short test message goes into the latest
   conversation (inside Meta's 24-hour window);
 - Google Ads: "Check now".
+Lead stages (which of the business's stages its ad platforms hear about) have a card
+too, read from the lead journey; they are set up on their own page in Leads.
 Words are plain and never name a price or an amount.
 """
 
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final, Literal
 from uuid import UUID, uuid4
@@ -37,6 +40,9 @@ from ac_platform.identity.models import Person
 from ac_platform.lead_desk.ai_replies import admin_settings
 from ac_platform.lead_desk.connectors import google_ads_api as gads
 from ac_platform.lead_desk.connectors import google_pull, meta, meta_pull
+from ac_platform.lead_desk.journey import engine as journey_engine
+from ac_platform.lead_desk.journey import mapping as journey_mapping
+from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import (
     Lead,
     LeadAiReply,
@@ -59,6 +65,7 @@ App = Literal[
     "messenger",
     "instagram",
     "google_ads",
+    "lead_stages",
     "phone_calls",
     "webhook_sources",
     "ai_replies",
@@ -73,6 +80,7 @@ APPS: Final[tuple[App, ...]] = (
     "messenger",
     "instagram",
     "google_ads",
+    "lead_stages",
     "phone_calls",
     "webhook_sources",
     "ai_replies",
@@ -83,6 +91,7 @@ NAMES: Final[dict[App, str]] = {
     "messenger": "Messenger",
     "instagram": "Instagram messages",
     "google_ads": "Google Ads lead forms",
+    "lead_stages": "Lead stages",
     "phone_calls": "Phone call logging (Sales Xray app)",
     "webhook_sources": "Webhooks and sheets",
     "ai_replies": "AI replies",
@@ -93,6 +102,7 @@ GROUPS: Final[dict[App, Group]] = {
     "messenger": "messaging",
     "instagram": "messaging",
     "google_ads": "ads",
+    "lead_stages": "ads",
     "phone_calls": "calls",
     "webhook_sources": "leads",
     "ai_replies": "automation",
@@ -122,6 +132,8 @@ GIVES: Final[dict[str, str]] = {
     "messenger": "Answer the messages people send your Facebook Page, in Chats.",
     "instagram": "Answer your Instagram messages, and reply to comments, in Chats.",
 }
+# A Sales Xray page where an app is set up, for a card with nothing to connect here.
+PAGES: Final[dict[App, str]] = {"lead_stages": "/leads?tab=stages"}
 LEAD_WAIT: Final[timedelta] = timedelta(seconds=60)
 TEST_TEXT: Final[str] = "Test message from Sales Xray. No reply needed."
 CLEAR_LABEL: Final[str] = "Clear the form's earlier test lead"
@@ -137,7 +149,7 @@ class _View(BaseModel):
 
 class Event(_View):
     at: datetime
-    kind: Literal["lead", "message", "status", "comment", "call", "ai"]
+    kind: Literal["lead", "message", "status", "comment", "call", "ai", "stage"]
     words: str
 
 
@@ -181,6 +193,7 @@ class AppHealth(_View):
     words: str
     configured: bool
     connect: Link | None = None
+    page: str | None = None  # a Sales Xray page (a web path), opened in the app
     can_test: bool = False
     connections: list[Connection] = []
     last_event: Event | None = None
@@ -240,6 +253,10 @@ def _count(n: int, one: str, many: str) -> str:
     return f"{n} {one if n == 1 else many}"
 
 
+def _and(names: list[str]) -> str:
+    return " and ".join(names) if len(names) < 3 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
 # ----- health -------------------------------------------------------------------------
 
 
@@ -250,6 +267,7 @@ async def health(db: AsyncSession, tenant_id: UUID, *, now: datetime) -> Health:
         await _social(db, tenant_id, "messenger"),
         await _social(db, tenant_id, "instagram"),
         await _google(db, tenant_id),
+        await _lead_stages(db, tenant_id, now=now),
         await _phones(db, tenant_id),
         await _webhook_sources(db, tenant_id),
         await _ai_replies(db, tenant_id, now=now),
@@ -278,6 +296,7 @@ def _card(app: AppHealth) -> AppHealth:
             "connect": Link(method="GET", path=f"{connect}{RETURN_QUERY}{app.app}")
             if connect and app.configured
             else None,
+            "page": PAGES.get(app.app),
             "can_test": bool(app.tests),
             "connections": connections,
         }
@@ -664,6 +683,99 @@ async def _webhook_sources(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         webhook=Webhook(last_delivery_at=last) if active else None,
         tests=[TestOffer(kind="report", label="Check deliveries", needs=[])] if active else [],
     )
+
+
+async def _lead_stages(db: AsyncSession, tenant_id: UUID, *, now: datetime) -> AppHealth:
+    """The same facts as GET /v1/lead-desk/journey/summary (the lead journey's own)."""
+    row = await db.get(LeadDeskSettings, tenant_id)
+    return lead_stages_card(
+        await journeys.read(db, tenant_id),
+        dict((row.config if row else None) or {}),
+        await journey_engine.summary(db, tenant_id, now),
+    )
+
+
+def lead_stages_card(
+    journey: journeys.Journey, config: Mapping[str, Any], facts: Mapping[str, Any]
+) -> AppHealth:
+    """Which ad platforms hear about the stages, what waits for the manager (a new stage
+    to confirm), and a stage that hasn't reached a platform yet (it is tried again)."""
+    platforms = journey_mapping.available()
+    names = {p: journey_mapping.spec(p).name for p in platforms}
+    settings = {p: journey_mapping.read(config, p) for p in platforms}
+    on = [p for p in platforms if settings[p].ready]
+    matches = {p: journey_mapping.matches(p, journey, settings[p]) for p in on}
+    to_check = {
+        p: sum(1 for m in matches[p] if m.state == "new" and m.suggested is not None) for p in on
+    }
+    waiting = facts.get("waiting_on") or {}
+    retrying = [p for p in on if p in waiting]
+    connections = []
+    for p in platforms:
+        mine = settings[p]
+        if not mine.destination_id:
+            continue
+        new = to_check.get(p, 0)
+        connections.append(
+            Connection(
+                id=p,
+                label=names[p],
+                detail=mine.destination_name,
+                state="problem" if p in retrying or new else "ready" if mine.ready else "off",
+                words=_platform_words(
+                    names[p],
+                    mine,
+                    retrying=p in retrying,
+                    new=new,
+                    sending=sum(m.state == "on" for m in matches.get(p, [])),
+                ),
+            )
+        )
+    problems = [c for c in connections if c.state == "problem"]
+    delivered = {p: at for p, at in (facts.get("last_delivered_at") or {}).items() if at}
+    newest = max(delivered, key=lambda p: delivered[p], default=None)
+    return AppHealth(
+        app="lead_stages",
+        name=NAMES["lead_stages"],
+        state=_state(bool(platforms), bool(on), bool(problems)),
+        words=NOT_SET_UP
+        if not platforms
+        else f"Tell {_and([names[p] for p in platforms])} which of your leads become"
+        " customers, so your ads find more people like them."
+        if not on
+        else problems[0].words or ""
+        if problems
+        else f"{_count(len(journey.live), 'stage', 'stages')}"
+        f" · sent to {_and([names[p] for p in on])}.",
+        configured=bool(platforms),
+        connections=connections,
+        last_event=Event(
+            at=delivered[newest],
+            kind="stage",
+            words=f"Lead stage sent to {names.get(newest, newest)}",
+        )
+        if newest is not None
+        else None,
+        last_error=Problem(words=f"A stage didn't reach {names[retrying[0]]} yet.")
+        if retrying
+        else None,
+    )
+
+
+def _platform_words(
+    name: str, mine: journey_mapping.ProviderSettings, *, retrying: bool, new: int, sending: int
+) -> str:
+    if retrying:
+        return f"A stage didn't reach {name} yet. Sales Xray tries again."
+    if new:
+        them = "it" if new == 1 else "them"
+        stages = _count(new, "new stage", "new stages")
+        return f"{stages} to confirm before {name} hears about {them}."
+    if not mine.on:
+        return "Switched off."
+    if not mine.ready:
+        return "No stages confirmed yet."
+    return f"Sending {_count(sending, 'stage', 'stages')}."
 
 
 async def _ai_replies(db: AsyncSession, tenant_id: UUID, *, now: datetime) -> AppHealth:
