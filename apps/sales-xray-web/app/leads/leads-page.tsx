@@ -63,13 +63,14 @@ import {
 import { MessageSetup } from "./message-sheet";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
+import { JourneyTab } from "./journey/journey-view";
 import { ListView } from "./list-view";
 import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
 import styles from "./leads.module.css";
 
-type Tab = "desk" | "all" | "team" | "sources";
+type Tab = "desk" | "all" | "team" | "sources" | "stages";
 
 // The desk reads itself again when the app comes back, and every minute.
 const REFRESH_EVERY_MS = 60 * 1000;
@@ -248,6 +249,7 @@ export function LeadsRoute() {
   const can = current && desk ? desk.me.can_manage : false;
   const tab: Tab =
     requested === "all" ||
+    requested === "stages" ||
     (can && (requested === "team" || requested === "sources"))
       ? (requested as Tab)
       : "desk";
@@ -344,6 +346,12 @@ export function LeadsRoute() {
             note: "Meta, forms, sheets",
             href: `${LEADS_PATH}?tab=sources`,
           },
+          {
+            key: "stages",
+            label: "Lead stages",
+            note: "Your steps from enquiry to sale",
+            href: `${LEADS_PATH}?tab=stages`,
+          },
         ]
       : []),
     {
@@ -365,6 +373,7 @@ export function LeadsRoute() {
             count: desk.counts.unassigned || undefined,
           },
           { key: "sources", label: "Lead sources" },
+          { key: "stages", label: "Lead stages" },
         ]
       : []),
   ];
@@ -472,6 +481,8 @@ export function LeadsRoute() {
             />
           ) : tab === "team" ? (
             <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
+          ) : tab === "stages" ? (
+            <JourneyTab canManage={can} />
           ) : (
             <SourcesView
               sandbox={desk.sandbox}

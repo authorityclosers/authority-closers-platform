@@ -1,0 +1,639 @@
+"use client";
+
+/**
+ * Where a business's lead stages go: one card per ad platform. Sales Xray
+ * matches each stage to the platform's own events; the card says each match in
+ * plain words ("Site visit booked → Meta hears “Site visit booked”") and one tap
+ * confirms them. Only the platform's own lead or click id and scrambled contact
+ * details leave Sales Xray. No prices or costs anywhere.
+ */
+
+import { ArrowRight, Pencil, RotateCw, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+
+import { notify } from "../../notice-center";
+import { Button, Skeleton } from "../../ui/kit";
+import { useAppConnect } from "../app-connect";
+import {
+  AppCard,
+  AppCardSkeleton,
+  AppLogo,
+  StatusPill,
+  SwitchRow,
+  cardStyles,
+} from "../app-card";
+import { ago, LeadsError } from "../leads-client";
+import {
+  call,
+  confirmMatches,
+  readAds,
+  retryEvent,
+  saveDestination,
+  sentLine,
+  STATUS_WORDS,
+  type AdsView,
+  type MatchView,
+  type ProviderView,
+} from "./journey-client";
+import styles from "./journey.module.css";
+
+type Dataset = { id: string; name: string };
+type Datasets = { adAccounts: Dataset[]; datasets: Dataset[] };
+
+const failed = (reason: unknown, title: string) =>
+  notify({
+    id: "journey-ads-error",
+    tone: "error",
+    title,
+    message:
+      reason instanceof LeadsError
+        ? reason.message
+        : "Check your connection and try again.",
+  });
+
+export function AdPlatforms({ version }: { version: number }) {
+  const [ads, setAds] = useState<AdsView | null>(null);
+  const load = useCallback(() => {
+    readAds()
+      .then(setAds)
+      .catch((reason: unknown) =>
+        failed(reason, "Your ad platforms didn't load"),
+      );
+  }, []);
+  useEffect(load, [load, version]);
+  // While stages wait to settle (5 minutes), keep the line moving.
+  useEffect(() => {
+    if (!ads?.settling) return;
+    const timer = setInterval(load, 30_000);
+    return () => clearInterval(timer);
+  }, [ads?.settling, load]);
+
+  const ready = ads?.providers.filter((item) => item.available) ?? [];
+  const later = ads?.providers.filter((item) => !item.available) ?? [];
+  return (
+    <div className={styles.ads}>
+      <header className={styles.paneHead}>
+        <div>
+          <h2>Where your stages go</h2>
+          <p>
+            Your ads learn which leads became customers and find more like them.
+            Sales Xray matches your stages for you.
+          </p>
+        </div>
+      </header>
+      {ads ? (
+        ready.map((provider) => (
+          <ProviderCard
+            key={provider.id}
+            provider={provider}
+            ads={ads}
+            version={ads.version}
+            onChange={setAds}
+            reload={load}
+          />
+        ))
+      ) : (
+        <AppCardSkeleton
+          title="Meta"
+          logo={<AppLogo brands={["meta"]} />}
+          lines={3}
+        />
+      )}
+      {later.length ? (
+        <div className={styles.later}>
+          <span className={styles.laterLogos} aria-hidden="true">
+            {later.map((item) => (
+              <AppLogo key={item.id} brands={[item.brand]} size={28} />
+            ))}
+          </span>
+          <small>
+            {later.map((item) => item.name).join(", ")}: being connected next.
+            Your stages will match them the same way.
+          </small>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function statusOf(provider: ProviderView) {
+  if (!provider.configured) return <StatusPill>Not set up here yet</StatusPill>;
+  if (!provider.connected) return <StatusPill>Not connected</StatusPill>;
+  if (!provider.destination)
+    return (
+      <StatusPill tone="warn">Pick a {provider.destinationWords}</StatusPill>
+    );
+  if (provider.waitingOn) return <StatusPill tone="bad">Needs you</StatusPill>;
+  if (!provider.on) return <StatusPill tone="warn">Switched off</StatusPill>;
+  if (provider.needsCheck)
+    return (
+      <StatusPill tone="accent">{provider.needsCheck} to check</StatusPill>
+    );
+  return <StatusPill tone="good">Sending</StatusPill>;
+}
+
+function ProviderCard({
+  provider,
+  ads,
+  version,
+  onChange,
+  reload,
+}: {
+  provider: ProviderView;
+  ads: AdsView;
+  version: number;
+  onChange: (next: AdsView) => void;
+  reload: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const connect = useAppConnect("meta", ({ result }) => {
+    if (result === "connected") reload();
+  });
+  const run = async (work: () => Promise<AdsView>, title: string) => {
+    setBusy(true);
+    try {
+      onChange(await work());
+      return true;
+    } catch (reason) {
+      failed(reason, title);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const connectLink =
+    provider.id === "meta" && provider.configured && !provider.connected ? (
+      <a
+        className={cardStyles.primary}
+        href="/v1/lead-desk/meta/connect"
+        onClick={connect}
+      >
+        Connect Meta
+      </a>
+    ) : null;
+
+  const destination = provider.destination;
+  const showChooser =
+    provider.connected && (choosing || !destination) && provider.id === "meta";
+  return (
+    <AppCard
+      title={provider.name}
+      logo={<AppLogo brands={[provider.brand]} />}
+      status={statusOf(provider)}
+      summary={provider.learns}
+      action={connectLink}
+    >
+      {!provider.configured ? null : !provider.connected ? (
+        <p className={styles.cardNote}>
+          {provider.reaches} Connect Meta with the account that runs your ads.
+        </p>
+      ) : (
+        <>
+          {showChooser ? (
+            <DatasetChooser
+              current={destination}
+              busy={busy}
+              onCancel={destination ? () => setChoosing(false) : undefined}
+              onPick={async (picked) => {
+                const done = await run(
+                  () =>
+                    saveDestination(provider.id, {
+                      destinationId: picked.id,
+                      destinationName: picked.name,
+                      on: true,
+                      testCode: provider.testCode,
+                    }),
+                  "That dataset wasn't saved",
+                );
+                if (done) setChoosing(false);
+              }}
+            />
+          ) : destination ? (
+            <SwitchRow
+              label={`Send lead stages to ${provider.name}`}
+              hint={sentLine(provider, ads)}
+              checked={provider.on}
+              disabled={busy}
+              onChange={(on) =>
+                void run(
+                  () =>
+                    saveDestination(provider.id, {
+                      destinationId: destination.id,
+                      destinationName: destination.name,
+                      on,
+                      testCode: provider.testCode,
+                    }),
+                  on ? "Sending didn't start" : "Sending didn't stop",
+                )
+              }
+            />
+          ) : null}
+          {provider.waitingOn ? (
+            <p className={cardStyles.problem} role="status">
+              {provider.waitingOn}
+            </p>
+          ) : null}
+          <Matches
+            provider={provider}
+            editing={editing}
+            busy={busy}
+            onEdit={() => setEditing(true)}
+            onCancel={() => setEditing(false)}
+            onConfirm={async (events) => {
+              const done = await run(
+                () => confirmMatches(provider.id, version, events),
+                "Those matches weren't saved",
+              );
+              if (done) setEditing(false);
+            }}
+          />
+          {destination && !showChooser ? (
+            <TestEvents
+              provider={provider}
+              busy={busy}
+              onSave={(testCode) =>
+                void run(
+                  () =>
+                    saveDestination(provider.id, {
+                      destinationId: destination.id,
+                      destinationName: destination.name,
+                      on: provider.on,
+                      testCode,
+                    }),
+                  "The test code wasn't saved",
+                )
+              }
+              onChange={() => setChoosing(true)}
+            />
+          ) : null}
+          <Recent
+            provider={provider}
+            ads={ads}
+            onRetry={(id) =>
+              void run(() => retryEvent(id), "That event wasn't tried again")
+            }
+          />
+        </>
+      )}
+    </AppCard>
+  );
+}
+
+/* ---------- what each stage becomes ---------- */
+
+const shown = (item: MatchView) =>
+  item.state === "new" ? item.suggested : item.saved;
+
+function Matches({
+  provider,
+  editing,
+  busy,
+  onEdit,
+  onCancel,
+  onConfirm,
+}: {
+  provider: ProviderView;
+  editing: boolean;
+  busy: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onConfirm: (events: Record<string, string | null>) => Promise<void>;
+}) {
+  const [names, setNames] = useState<Record<string, string | null>>({});
+  const edit = () => {
+    setNames(
+      Object.fromEntries(
+        provider.matches.map((item) => [item.stageKey, shown(item)]),
+      ),
+    );
+    onEdit();
+  };
+
+  const fresh = provider.matches.filter(
+    (item) => item.state === "new" && item.suggested,
+  );
+  const sentAll = provider.matches.every((item) => item.state !== "new");
+  return (
+    <div className={styles.matches}>
+      <div className={styles.matchesHead}>
+        <h4>What {provider.name} hears</h4>
+        {editing ? null : (
+          <Button variant="ghost" onClick={edit} disabled={busy}>
+            <Pencil size={13} aria-hidden="true" />
+            Edit
+          </Button>
+        )}
+      </div>
+      {fresh.length && !editing && provider.destination ? (
+        <div className={styles.check}>
+          <Sparkles size={15} aria-hidden="true" />
+          <span>
+            {fresh.length === 1
+              ? `“${fresh[0].stageLabel}” is new.`
+              : `${fresh.length} stages are new.`}{" "}
+            Sales Xray matched {fresh.length === 1 ? "it" : "them"} for you.
+          </span>
+          <Button
+            variant="primary"
+            disabled={busy}
+            onClick={() =>
+              void onConfirm(
+                Object.fromEntries(
+                  fresh.map((item) => [item.stageKey, item.suggested]),
+                ),
+              )
+            }
+          >
+            Looks right
+          </Button>
+        </div>
+      ) : null}
+      <ol className={styles.matchList}>
+        {provider.matches.map((item) => {
+          const name = editing ? (names[item.stageKey] ?? null) : shown(item);
+          return (
+            <li
+              key={item.stageKey}
+              className={styles.match}
+              data-state={editing ? "edit" : item.state}
+              data-off={name ? undefined : ""}
+            >
+              <span className={styles.matchStage} data-kind={item.kind}>
+                <span aria-hidden="true" />
+                {item.stageLabel}
+              </span>
+              <ArrowRight
+                size={13}
+                className={styles.matchArrow}
+                aria-hidden="true"
+              />
+              {editing ? (
+                <span className={styles.matchEdit}>
+                  <input
+                    value={name ?? ""}
+                    maxLength={50}
+                    placeholder="Not sent"
+                    aria-label={`What ${provider.name} hears for ${item.stageLabel}`}
+                    onChange={(event) =>
+                      setNames((all) => ({
+                        ...all,
+                        [item.stageKey]: event.target.value || null,
+                      }))
+                    }
+                  />
+                </span>
+              ) : (
+                <span className={styles.matchName}>
+                  {name ? (item.words ?? `“${name}”`) : "Not sent"}
+                  {item.state === "new" && name ? (
+                    <em className={styles.newChip}>New</em>
+                  ) : null}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {editing ? (
+        <div className={styles.matchActions}>
+          <small>Leave a name empty to send nothing for that stage.</small>
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={busy}
+            onClick={() => void onConfirm(names)}
+          >
+            Save names
+          </Button>
+        </div>
+      ) : sentAll && provider.confirmedAt ? (
+        <small className={styles.matchFoot}>
+          Confirmed {ago(provider.confirmedAt)}. A lead that skips ahead also
+          sends the stages it skipped, so {provider.name} sees the whole way.
+        </small>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------- picking where Meta's events go ---------- */
+
+function DatasetChooser({
+  current,
+  busy,
+  onPick,
+  onCancel,
+}: {
+  current: { id: string; name: string } | null;
+  busy: boolean;
+  onPick: (dataset: Dataset) => Promise<void>;
+  onCancel?: () => void;
+}) {
+  const [found, setFound] = useState<Datasets | null>(null);
+  const [picked, setPicked] = useState<Dataset | null>(current);
+  const [making, setMaking] = useState(false);
+  const [account, setAccount] = useState("");
+  const [name, setName] = useState("Sales Xray lead stages");
+  useEffect(() => {
+    call<Datasets>("/meta/datasets")
+      .then((data) => {
+        setFound(data);
+        setAccount(data.adAccounts[0]?.id ?? "");
+        if (data.datasets.length === 1)
+          setPicked((value) => value ?? data.datasets[0]);
+        if (!data.datasets.length) setMaking(true);
+      })
+      .catch((reason: unknown) =>
+        failed(reason, "Your Meta datasets didn't load"),
+      );
+  }, []);
+  const create = async () => {
+    try {
+      const made = await call<Dataset>("/meta/datasets", {
+        method: "POST",
+        body: JSON.stringify({ adAccountId: account, name: name.trim() }),
+      });
+      setFound((value) =>
+        value ? { ...value, datasets: [made, ...value.datasets] } : value,
+      );
+      setPicked(made);
+      setMaking(false);
+    } catch (reason) {
+      failed(reason, "The dataset wasn't made");
+    }
+  };
+  return (
+    <div className={styles.chooser}>
+      <h4>Which Meta dataset gets your stages?</h4>
+      {found ? (
+        <ul className={styles.datasets} role="radiogroup" aria-label="Datasets">
+          {found.datasets.map((dataset) => (
+            <li key={dataset.id}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={picked?.id === dataset.id}
+                onClick={() => setPicked(dataset)}
+              >
+                <strong>{dataset.name}</strong>
+                <small>{dataset.id}</small>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Skeleton height={44} />
+      )}
+      {making && found ? (
+        <div className={styles.makeDataset}>
+          <label>
+            <span>Name</span>
+            <input
+              value={name}
+              maxLength={60}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          {found.adAccounts.length > 1 ? (
+            <label>
+              <span>Ad account</span>
+              <select
+                value={account}
+                onChange={(event) => setAccount(event.target.value)}
+              >
+                {found.adAccounts.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <Button
+            onClick={() => void create()}
+            disabled={!account || !name.trim()}
+          >
+            Make dataset
+          </Button>
+        </div>
+      ) : found ? (
+        <button
+          type="button"
+          className={styles.linkButton}
+          onClick={() => setMaking(true)}
+        >
+          Make a new dataset
+        </button>
+      ) : null}
+      <div className={styles.chooserActions}>
+        {onCancel ? (
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+        ) : null}
+        <Button
+          variant="primary"
+          disabled={!picked || busy}
+          onClick={() => picked && void onPick(picked)}
+        >
+          Looks right, start sending
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Meta's test events ---------- */
+
+function TestEvents({
+  provider,
+  busy,
+  onSave,
+  onChange,
+}: {
+  provider: ProviderView;
+  busy: boolean;
+  onSave: (testCode: string | null) => void;
+  onChange: () => void;
+}) {
+  const [code, setCode] = useState(provider.testCode ?? "");
+  return (
+    <details className={styles.more}>
+      <summary>
+        {provider.destination?.name} · test events
+        {provider.testCode ? " on" : ""}
+      </summary>
+      <div className={styles.moreBody}>
+        <p>
+          In Meta Events Manager open this dataset, then Test events, and copy
+          its test code here. Stages then show there as they go.
+        </p>
+        <span className={styles.testRow}>
+          <input
+            value={code}
+            maxLength={32}
+            placeholder="TEST12345"
+            aria-label="Meta test code"
+            onChange={(event) => setCode(event.target.value.trim())}
+          />
+          <Button disabled={busy} onClick={() => onSave(code || null)}>
+            {code ? "Use test code" : "Stop testing"}
+          </Button>
+        </span>
+        <button type="button" className={styles.linkButton} onClick={onChange}>
+          Use another dataset
+        </button>
+      </div>
+    </details>
+  );
+}
+
+/* ---------- what went lately ---------- */
+
+function Recent({
+  provider,
+  ads,
+  onRetry,
+}: {
+  provider: ProviderView;
+  ads: AdsView;
+  onRetry: (id: string) => void;
+}) {
+  const items = ads.recent.filter((item) => item.provider === provider.id);
+  if (!items.length) return null;
+  return (
+    <details className={styles.more}>
+      <summary>What went lately ({items.length})</summary>
+      <ul className={styles.recent}>
+        {items.map((item) => (
+          <li key={item.id} data-status={item.status}>
+            <span>
+              <strong>{item.leadName}</strong>
+              <small>
+                {item.stageLabel} · {ago(item.eventTime)}
+                {item.test ? " · test" : ""}
+              </small>
+            </span>
+            <span className={styles.recentStatus}>
+              {STATUS_WORDS[item.status]}
+              {item.status === "rejected" || item.status === "dead_letter" ? (
+                <Button
+                  variant="icon"
+                  aria-label={`Try ${item.leadName}'s stage again`}
+                  onClick={() => onRetry(item.id)}
+                >
+                  <RotateCw size={13} />
+                </Button>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}

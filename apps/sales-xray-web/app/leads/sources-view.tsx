@@ -44,7 +44,7 @@ import {
 } from "./leads-client";
 import styles from "./leads.module.css";
 import { SpendSummary } from "./ad-spend";
-import { MetaConversions } from "./meta-conversions";
+import { JourneyStrip } from "./journey/journey-strip";
 
 /* ---------- Meta connector API (lead_desk/connectors) ---------- */
 
@@ -682,11 +682,7 @@ function MetaTile() {
       {status?.configured && status.pages.length ? <SpendSummary /> : null}
       {status?.configured ? <LeadAccessSteps open={blocked} /> : null}
       {status?.configured && status.pages.length ? (
-        <MetaConversions
-          key={appConnected}
-          returned={params.get("meta") === "connected" || appConnected > 0}
-          onConnect={connect}
-        />
+        <JourneyStrip key={appConnected} />
       ) : null}
     </SourceRow>
   );
