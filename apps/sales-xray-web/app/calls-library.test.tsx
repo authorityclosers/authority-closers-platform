@@ -143,7 +143,7 @@ const ok = (body: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 const LIST =
-  "GET /v1/conversation/acquisition/submissions?include_owners=true&order=reports_first";
+  "GET /v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true";
 const insightPath = (id: string, kind: string) =>
   `GET /v1/conversation/acquisition/submissions/${id}/${kind}`;
 const measuredRecord = {
@@ -694,7 +694,7 @@ it("loads every server listed state without auto claiming or processing", async 
   expect(host.textContent).toContain("Report ready");
   expect(fetchMock).toHaveBeenCalledOnce();
   expect(fetchMock.mock.calls[0][0]).toBe(
-    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true",
   );
   expect(fetchMock.mock.calls[0][1]).toEqual(
     expect.objectContaining({
@@ -730,7 +730,7 @@ it("only remembers and navigates on explicit row activation, then paginates by c
   );
   await flush();
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&before=${cursor}`,
   );
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
   await act(async () =>
@@ -766,7 +766,7 @@ it("keeps pagination available when concurrent erasure empties a page", async ()
     host.querySelector(`[data-submission-id="${secondId}"]`),
   ).not.toBeNull();
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&before=${cursor}`,
   );
 });
 
@@ -840,7 +840,7 @@ it("refreshes the visible library after a background upload and shows its ready 
 
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(fetchMock.mock.calls[1][0]).toBe(
-    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true",
   );
   expect(
     host.querySelector(`[data-submission-id="${secondId}"]`)?.textContent,
@@ -1262,7 +1262,7 @@ it("keeps the loaded cursor when a status-only refresh leaves page membership un
   await flush();
 
   expect(fetchMock.mock.calls[2][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&before=${cursor}`,
   );
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
 });
@@ -1468,7 +1468,7 @@ it("settles a timed-out next-page read and leaves its cursor retryable", async (
     "Saved calls could not be loaded",
   );
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&before=${cursor}`,
   );
 });
 

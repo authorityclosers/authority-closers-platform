@@ -13,6 +13,8 @@ import {
   AcquisitionError,
   acquisition,
   submissionPath,
+  type LibrarySubmission,
+  type RowSummary,
 } from "./acquisition-client";
 import { parseCallRecord, type CallRecord } from "./call-record-contract";
 import { insightShelf } from "./calls-cache";
@@ -190,6 +192,37 @@ export function extractInsight(
     outcome: outcomeOf(obj(overview.outcome).kind),
     moments,
   };
+}
+
+/**
+ * A row's insight from the list's summary (include_summary=true): the
+ * Report's assessment, what to fix first and next, strengths, missed chances
+ * and outcome, with no read of the row's Report. What only the full Report
+ * or the call record carries (length, speakers, moments) stays empty.
+ */
+export function insightFromSummary(summary: RowSummary): CallInsight {
+  return {
+    durationMs: null,
+    speakers: [],
+    questions: null,
+    callType: null,
+    signals: { commitments: null, business: null, concerns: null },
+    assessment: summary.assessment,
+    fixFirst: summary.fixFirst,
+    nextFocus: summary.nextFocus,
+    strengths: summary.strengths,
+    missed: summary.missed,
+    outcome:
+      summary.outcome !== null && summary.outcome in OUTCOME_LABEL
+        ? (summary.outcome as OutcomeKind)
+        : null,
+    moments: [],
+  };
+}
+
+/** Rows whose list entry has no summary key (an older server) read their own. */
+export function needsOwnRead(submission: LibrarySubmission): boolean {
+  return submission.hasReport && submission.summary === undefined;
 }
 
 async function readJson(path: string, signal: AbortSignal) {

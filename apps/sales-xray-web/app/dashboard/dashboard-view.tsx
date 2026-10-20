@@ -17,7 +17,6 @@ import {
   readAllowance,
   readCallActivity,
   readCallSummary,
-  readRecentCalls,
   readSandboxFacts,
   settle,
   type CallActivity,
@@ -38,6 +37,7 @@ import {
   cachedCallsPage,
   cachedPanel,
   identityOf,
+  readCallsList,
   rememberCallsPage,
   rememberPanel,
 } from "../calls-cache";
@@ -159,8 +159,8 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
   const loadRecent = useCallback(
     (signal?: AbortSignal) =>
       void settle(
-        readRecentCalls(signal, 5, true, (page) =>
-          rememberCallsPage(identity, page),
+        readCallsList(identity, signal).then((page) =>
+          page.submissions.slice(0, 5),
         ),
       ).then((result) => {
         if (!signal?.aborted) setRecentState(toState(result));

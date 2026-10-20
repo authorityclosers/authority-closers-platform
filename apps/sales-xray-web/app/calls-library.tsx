@@ -45,7 +45,11 @@ import {
   type SubmissionLibraryPage,
 } from "./acquisition-client";
 import { seededLibraryPage } from "./calls-seed";
-import { cachedCallsPage, rememberCallsPage } from "./calls-cache";
+import {
+  cachedCallsPage,
+  readCallsList,
+  rememberCallsPage,
+} from "./calls-cache";
 import { useServerSeedAllowed } from "./initial-session";
 import type { ServerRead } from "./server-reads";
 import { SectionBoundary } from "./ui/section-boundary";
@@ -72,7 +76,12 @@ import { CallsBodySkeleton } from "./calls-skeleton";
 // The skeletons live in a small module so loading screens load them alone.
 export { CallsBodySkeleton, CallsSkeleton } from "./calls-skeleton";
 import { CallsDrawer } from "./calls-drawer";
-import { useCallInsights, type CallInsight } from "./calls-insights";
+import {
+  insightFromSummary,
+  needsOwnRead,
+  useCallInsights,
+  type CallInsight,
+} from "./calls-insights";
 import { useRowsInView } from "./rows-in-view";
 import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
@@ -243,7 +252,8 @@ const FILTERS: { id: "all" | CallTone; label: string }[] = [
 ];
 
 /** The Calls page reads calls with Reports before never-analysed ones. */
-const LIST_PATH = "/submissions?include_owners=true&order=reports_first";
+const LIST_PATH =
+  "/submissions?include_owners=true&order=reports_first&include_summary=true";
 
 /** A saved call whose analysis never started (the server orders these last). */
 function notAnalysed(submission: LibrarySubmission) {
@@ -635,11 +645,15 @@ function CallsLibraryContent({
     activeRequestKind.current = "initial";
     const generation = ++requestGeneration.current;
     mounted.current = true;
-    void acquisition(preview ? "/submissions" : LIST_PATH, {
-      signal: controller.signal,
-    })
-      .then((value) => {
-        const page = parseSubmissionLibraryPage(value);
+    // The full list is read once for this identity, however many ask now.
+    void (
+      preview
+        ? acquisition("/submissions", { signal: controller.signal }).then(
+            parseSubmissionLibraryPage,
+          )
+        : readCallsList(identityKey, controller.signal)
+    )
+      .then((page) => {
         if (
           controller.signal.aborted ||
           !mounted.current ||
@@ -999,18 +1013,18 @@ function CallsLibraryContent({
     sort,
   );
   const workspace = insights && !preview;
-  // Reports are read only for ready rows that have come on screen, and the
-  // one opened, never for the whole page; each once for this identity
-  // (calls-cache.ts). Without a way to tell what is on screen, the first
-  // screens' rows count as seen, as before.
+  // Rows show the Report's facts the list sends (include_summary=true):
+  // no per-row reads. The full Report and call record are read for the call
+  // opened in the drawer (its moments), and for rows from a server without
+  // summaries, only once they come on screen; each once for this identity
+  // (calls-cache.ts).
   const { seen: rowsSeen, observeRow } = useRowsInView(workspace);
   const insightIds = visibleSubmissions
     .filter(
       (submission) =>
-        submission.hasReport &&
-        (rowsSeen === null ||
-          rowsSeen.has(submission.id) ||
-          submission.id === previewId),
+        submission.id === previewId ||
+        (needsOwnRead(submission) &&
+          (rowsSeen === null || rowsSeen.has(submission.id))),
     )
     .slice(0, 24)
     .map((submission) => submission.id);
@@ -1023,6 +1037,19 @@ function CallsLibraryContent({
     workspace && access?.authenticated === true,
     identityKey,
   );
+  // A row's insight: its own read when there is one, else the list's
+  // summary; and how far its facts are.
+  const rowInsight = (submission: LibrarySubmission) =>
+    insightOf(submission.id) ??
+    (workspace && submission.summary
+      ? insightFromSummary(submission.summary)
+      : null);
+  const rowStatus = (submission: LibrarySubmission) =>
+    submission.summary !== undefined && !insightOf(submission.id)
+      ? submission.summary
+        ? ("ready" as const)
+        : ("unavailable" as const)
+      : statusOf(submission.id);
   useEffect(() => {
     if (!workspace) return;
     const onKey = (event: KeyboardEvent) => {
@@ -1076,7 +1103,7 @@ function CallsLibraryContent({
           "Link",
         ],
         ...rows.map((submission) => {
-          const insight = insightOf(submission.id);
+          const insight = rowInsight(submission);
           return [
             titleOf(submission),
             formatCreatedDate(submission.createdAt, dates),
@@ -1180,9 +1207,9 @@ function CallsLibraryContent({
     const isOpening = openingId === submission.id;
     const isSelected =
       submission.id === selectedId || selectedSubmission?.id === submission.id;
-    const insight = workspace ? insightOf(submission.id) : null;
+    const insight = workspace ? rowInsight(submission) : null;
     const read =
-      workspace && submission.hasReport ? statusOf(submission.id) : null;
+      workspace && submission.hasReport ? rowStatus(submission) : null;
     const title = titleOf(submission);
     const label = submission.label;
     const length = lengthCell(submission, insight);
@@ -1370,13 +1397,13 @@ function CallsLibraryContent({
     : null;
   const loadedInsights = workspace
     ? submissions
-        .map((submission) => insightOf(submission.id))
+        .map((submission) => rowInsight(submission))
         .filter((insight): insight is CallInsight => insight !== null)
     : [];
   // Call time: the length measured at upload, as Organisation counts it.
   const time = { calls: 0, ms: 0 };
   for (const submission of submissions) {
-    const measuredMs = workspace ? insightOf(submission.id)?.durationMs : null;
+    const measuredMs = workspace ? rowInsight(submission)?.durationMs : null;
     if (measuredMs || hasRecordedLength(submission)) {
       time.calls += 1;
       time.ms += measuredMs || submission.durationSeconds * 1000;
@@ -1469,9 +1496,7 @@ function CallsLibraryContent({
   };
   const insightErrors =
     workspace &&
-    visibleSubmissions.some(
-      (submission) => statusOf(submission.id) === "error",
-    );
+    visibleSubmissions.some((submission) => rowStatus(submission) === "error");
 
   const content = (
     <div
@@ -1965,10 +1990,10 @@ function CallsLibraryContent({
             key={previewSubmission.id}
             id={previewSubmission.id}
             title={titleOf(previewSubmission)}
-            meta={`${formatCreatedDate(previewSubmission.createdAt, dates)} · ${formatCreatedTime(previewSubmission.createdAt, dates)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
+            meta={`${formatCreatedDate(previewSubmission.createdAt, dates)} · ${formatCreatedTime(previewSubmission.createdAt, dates)} · ${lengthOf(previewSubmission, rowInsight(previewSubmission))}`}
             status={submissionState(previewSubmission)}
             tone={callTone(previewSubmission)}
-            insight={insightOf(previewSubmission.id)}
+            insight={rowInsight(previewSubmission)}
             readState={statusOf(previewSubmission.id)}
             onRetry={retryInsights}
             hasReport={previewSubmission.hasReport}

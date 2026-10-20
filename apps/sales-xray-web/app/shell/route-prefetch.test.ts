@@ -40,7 +40,7 @@ it("starts a pressed tab's first reads, never the session's again", () => {
   prefetchPlace({ prefetch: vi.fn() }, "/analysis/calls", true);
   const urls = fetch.mock.calls.map(([url]) => String(url));
   expect(urls).toEqual([
-    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true",
   ]);
   // Pressed again at once: the answer on its way is used.
   prefetchPlace({ prefetch: vi.fn() }, "/analysis/calls", true);

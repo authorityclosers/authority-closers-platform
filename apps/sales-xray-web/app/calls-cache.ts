@@ -21,7 +21,7 @@ import {
 
 /** The Calls list's first read (and Home's, with owners). */
 export const CALLS_LIST_READ =
-  "/submissions?include_owners=true&order=reports_first";
+  "/submissions?include_owners=true&order=reports_first&include_summary=true";
 
 const MAX_IDENTITIES = 4;
 
@@ -108,7 +108,65 @@ export function forgetCalls() {
   shelves.clear();
 }
 
-const warming = new Set<string>();
+const reading = new Map<string, Promise<SubmissionLibraryPage>>();
+
+function abortable<T>(shared: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return shared;
+  if (signal.aborted)
+    return Promise.reject(
+      new DOMException("The read was cancelled.", "AbortError"),
+    );
+  return new Promise<T>((resolve, reject) => {
+    const stop = () =>
+      reject(new DOMException("The read was cancelled.", "AbortError"));
+    signal.addEventListener("abort", stop, { once: true });
+    shared.then(
+      (value) => {
+        signal.removeEventListener("abort", stop);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", stop);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * The identity's Calls list, read once however many ask at the same moment
+ * (Calls, Home and the warm-up asked two to four times per load; the
+ * speed-up session's measurements, 20 Oct). Each caller may give up with its
+ * own signal; the shared read finishes for the others and fills the cache.
+ * Under test, every read is its own, so tests see their own request.
+ */
+export function readCallsList(
+  identity: string | null | undefined,
+  signal?: AbortSignal,
+): Promise<SubmissionLibraryPage> {
+  const read = () =>
+    acquisition(CALLS_LIST_READ).then((value) => {
+      const page = parseSubmissionLibraryPage(value);
+      rememberCallsPage(identity, page);
+      return page;
+    });
+  if (!isIdentity(identity) || process.env.NODE_ENV === "test")
+    return acquisition(CALLS_LIST_READ, { signal }).then((value) => {
+      const page = parseSubmissionLibraryPage(value);
+      rememberCallsPage(identity, page);
+      return page;
+    });
+  let shared = reading.get(identity);
+  if (!shared) {
+    shared = read();
+    reading.set(identity, shared);
+    const done = () => {
+      if (reading.get(identity) === shared) reading.delete(identity);
+    };
+    shared.then(done, done);
+  }
+  return abortable(shared, signal);
+}
 
 /**
  * Reads the calls list once for an identity that has none yet, when the app
@@ -116,19 +174,10 @@ const warming = new Set<string>();
  * page reads for itself as before.
  */
 export async function warmCallsList(identity: string | null | undefined) {
-  if (
-    !isIdentity(identity) ||
-    cachedCallsPage(identity) ||
-    warming.has(identity)
-  )
-    return;
-  warming.add(identity);
+  if (!isIdentity(identity) || cachedCallsPage(identity)) return;
   try {
-    const page = parseSubmissionLibraryPage(await acquisition(CALLS_LIST_READ));
-    if (!cachedCallsPage(identity)) rememberCallsPage(identity, page);
+    await readCallsList(identity);
   } catch {
     // Only a head start; the page reads for itself.
-  } finally {
-    warming.delete(identity);
   }
 }
