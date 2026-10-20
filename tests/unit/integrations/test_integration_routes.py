@@ -26,6 +26,14 @@ PATHS = (
     "/v1/admin/integrations/connections/{grant_id}/revoke",
     "/v1/sales-xray/integrations/handover",
     "/v1/sales-xray/integrations/handover/disable",
+    "/v1/api/calls/{call_id}",
+    "/v1/api/calls/{call_id}/facts",
+    "/v1/api/leads/{lead_id}",
+    "/v1/oauth/register",
+    "/v1/oauth/metadata",
+    "/v1/mcp",
+    "/v1/me/connected-apps",
+    "/v1/me/connected-apps/{grant_id}/revoke",
 )
 
 

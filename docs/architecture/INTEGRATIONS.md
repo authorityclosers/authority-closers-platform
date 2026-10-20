@@ -6,6 +6,7 @@ Owner order, 19 Oct 2026: connecting any app to Sales X-Ray must be as simple as
 1. **API keys, the webhook and the hand-over in Organisation → Integrations.** Built (migration 0103).
 2. **Connect:** "Connect to Sales X-Ray", OAuth 2.0 authorisation code with PKCE, a consent screen and scopes. Built.
 3. **A command line and an MCP server** on the same API (`/developers/sx.py`), with the public `/developers` page. Built.
+4. **Platform apps and the remote MCP** (20 Oct): apps register themselves (RFC 7591), each person connects their own account, and `/v1/mcp` serves the same tools over HTTP with Connect sign-in. Built; Pulse is the first such app (`SALES_XRAY_IN_PULSE.md`).
 
 ## Who
 Integrations are for active owners and admins of a registered organisation. The live membership is checked on every request. Members and personal accounts do not see the tab. Platform admins see every organisation's integrations in Admin (`GET /v1/admin/integrations`) and can revoke a key.
@@ -26,14 +27,17 @@ Integrations are for active owners and admins of a registered organisation. The 
 ## The API (`/v1/api`, `Authorization: Bearer sxk_…`)
 | Route | Scope | What |
 |---|---|---|
-| `GET /me` | any | The key's organisation, scopes and environment |
-| `GET /calls?before=` | `calls:read` | Calls newest first, 50 a page. The same visibility as an owner's library: retention, deletion and test calls apply |
+| `GET /me` | any | The organisation (or workspace), scopes, environment and reach; for a person's connection also the person and their role |
+| `GET /calls?before=` | `calls:read` | Calls newest first, 50 a page, with each call's title and report link. The same visibility as the library: retention, deletion and test calls apply |
+| `GET /calls/{id}` | `calls:read` | One call; with `reports:read` also its facts |
 | `GET /calls/{id}/facts` | `reports:read` | The facts found in a call (`prospect-facts/1`). Withheld segments are never quoted |
 | `GET /leads?stage=&offset=` | `leads:read` | Leads (`lead-desk/1` page) |
 | `GET /leads/{id}` | `leads:read` | One lead |
 | `POST /leads` | `leads:write` | Adds a lead through Lead Desk's own ingest (source `webhook`, label `API key <prefix>`). The same `external_id` again changes nothing |
 
 Errors are `{"error": {"code", "message"}}`. A 401 carries `WWW-Authenticate: Bearer` and a 429 carries `Retry-After`.
+
+**Reach.** An API key, or a token from an organisation's own app, sees what an owner sees. A token from a platform app acts as the person who connected it: their own calls and leads (a member), their team's (an owner or admin), or their own calls in a Personal workspace (leads answer `organisation_only`). The membership is read on every request; a person who left gets `403 access_ended`.
 
 ## Secrets the app keeps (`integration_secrets`)
 - **Sealing.** AES-256-GCM under one platform key per environment, `AC_INTEGRATIONS_SEAL_KEY` (32 random bytes, base64url, in Infisical). Root sets it once per environment and gives it to the API and the partner-events runner. Nothing is set per customer.
@@ -64,8 +68,16 @@ When a lead is won, Sales X-Ray calls the organisation's own app (`POST <app>/ap
 - **Codes and tokens.** Codes are single-use for 10 minutes and bound to the client, address and PKCE S256 verifier. `sxa_` access tokens last 1 hour on `/v1/api`; `sxr_` refresh tokens last 30 days and are replaced on use. A code or refresh token used twice ends the connection. `POST /v1/oauth/token` and `POST /v1/oauth/revoke` (RFC 7009). Everything is stored as SHA-256.
 - **Disconnect.** In Integrations, or by a platform admin.
 
+### Platform apps (20 Oct)
+- **Self-registration.** `POST /v1/oauth/register` (RFC 7591): `client_name`, `redirect_uris`, `token_endpoint_auth_method` (`none` for a public client, otherwise a secret is returned once), `grant_types`. Names that read as Sales X-Ray or Authority Closers are refused; 10 registrations an hour per address and 200 in all.
+- **Discovery.** `GET /v1/oauth/metadata`, and the web app serves the same at `/.well-known/oauth-authorization-server` (RFC 8414) and `/.well-known/oauth-protected-resource/v1/mcp` (RFC 9728), only on Sales X-Ray's own hosts.
+- **Consent.** Any signed-in person approves a platform app for their own account in the workspace they have open (Personal or an organisation; not the operations workspace). The screen says whether the app is checked: a first-party app (`first_party.py`, Pulse) only on its own host for this environment; any other shows a caution and its return host. An MCP host that asks for no scope gets `calls:read reports:read leads:read`.
+- **Safety.** A replayed code ends only that person's connection. People list and remove their own connections at `GET /v1/me/connected-apps` and `POST /v1/me/connected-apps/{id}/revoke` (audited as `integration.app_disconnected`); owners and admins still see every connection in Integrations.
+
 ## Command line and MCP
 `/developers/sx.py` is one Python file, standard library only, that reads the key from `SX_API_KEY`. Commands: `me`, `calls`, `facts`, `leads`, `lead` and `add-lead`. `sx.py mcp` is an MCP server on stdio with tools `whoami`, `list_calls`, `call_facts`, `list_leads`, `get_lead` and `add_lead`. The public `/developers` page documents everything above, with signature checks in Node.js and Python.
+
+**Remote MCP (`/v1/mcp`).** Streamable HTTP (MCP 2025-06-18; 2025-03-26 and 2024-11-05 accepted), one JSON answer per message, 202 for a notification, 405 on GET (no server stream). Bearer `sxa_` or `sxk_`; without one, 401 with `resource_metadata`. A foreign `Origin` is refused. Tools: `whoami`, `list_calls`, `get_call`, `call_facts`, `list_leads`, `get_lead`, `add_lead`, each needing its API scope and listed only when allowed; they read through the same `Reader` as `/v1/api`, so reach and withheld segments are identical.
 
 ## Admin
 `GET /v1/admin/integrations` (`sx-integrations-admin/2`) returns:
@@ -75,6 +87,7 @@ When a lead is won, Sales X-Ray calls the organisation's own app (`POST <app>/ap
 Platform admins can revoke a key, turn off a webhook or disconnect an app. Each action is audited in the organisation's own chain and answers with the updated row.
 
 ## Not yet
-- A remote MCP server with Connect sign-in, which needs dynamic client registration (RFC 7591) and `/.well-known/oauth-authorization-server`.
+- Chats and coaching through the API and MCP (`chats:read`, `coaching:read`), for the Pulse app's next tabs.
+- A Settings screen for the person's own connected apps (the API is there).
 - Webhook management through the API (`webhooks:manage`).
 - More than one webhook per organisation: 0096 keeps one active endpoint.

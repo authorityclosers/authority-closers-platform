@@ -8,7 +8,7 @@ import styles from "./developers.module.css";
 export const metadata: Metadata = {
   title: "Developers · Sales X-Ray",
   description:
-    "Connect your apps to Sales X-Ray: API keys, webhooks, Connect (OAuth), a command line and an MCP server.",
+    "Connect your apps to Sales X-Ray: API keys, webhooks, Connect (OAuth), a remote MCP server and a command line.",
 };
 
 const HOST = "https://salesxray.authorityclosers.com";
@@ -23,12 +23,23 @@ const SCOPES: [string, string][] = [
 ];
 
 const ENDPOINTS: [string, string, string, string][] = [
-  ["GET", "/me", "any", "The key's organisation and scopes"],
+  [
+    "GET",
+    "/me",
+    "any",
+    "Who is calling: the organisation or workspace, the person and the scopes",
+  ],
   [
     "GET",
     "/calls?before=<call id>",
     "calls:read",
-    "Calls, newest first, 50 a page",
+    "Calls, newest first, 50 a page, each with its title and a link to its report",
+  ],
+  [
+    "GET",
+    "/calls/{id}",
+    "calls:read",
+    "One call; with reports:read also the facts found in it",
   ],
   [
     "GET",
@@ -108,6 +119,42 @@ const MCP = `{
   }
 }`;
 
+const MCP_URL = `${HOST}/v1/mcp`;
+
+const REMOTE_MCP = `{
+  "mcpServers": {
+    "sales-xray": { "url": "${MCP_URL}" }
+  }
+}`;
+
+const REMOTE_MCP_KEY = `{
+  "mcpServers": {
+    "sales-xray": {
+      "url": "${MCP_URL}",
+      "headers": { "Authorization": "Bearer sxk_live_..." }
+    }
+  }
+}`;
+
+const REGISTER = `curl ${HOST}/v1/oauth/register \\
+  -H "Content-Type: application/json" \\
+  -d '{"client_name": "Your App",
+       "redirect_uris": ["https://your-app.example.com/sales-xray/callback"],
+       "grant_types": ["authorization_code", "refresh_token"],
+       "token_endpoint_auth_method": "client_secret_basic"}'
+# 201: {"client_id": "sxc_...", "client_secret": "sxcs_...", ...}
+# Apps with no server of their own send "token_endpoint_auth_method": "none".`;
+
+const TOOLS: [string, string, string][] = [
+  ["whoami", "any", "Who this connection reads as, and its scopes"],
+  ["list_calls", "calls:read", "Calls, newest first"],
+  ["get_call", "calls:read", "One call, with its facts when allowed"],
+  ["call_facts", "reports:read", "The facts found in one call"],
+  ["list_leads", "leads:read", "Leads, by stage"],
+  ["get_lead", "leads:read", "One lead with its history"],
+  ["add_lead", "leads:write", "Add a lead"],
+];
+
 function Code({ children, label }: { children: string; label: string }) {
   return (
     <pre className={styles.code} aria-label={label} tabIndex={0}>
@@ -129,10 +176,11 @@ export default function DevelopersPage() {
         <p className={policy.eyebrow}>Sales Xray</p>
         <h1>Developers</h1>
         <p className={policy.intro}>
-          Connect your own apps to Sales X-Ray. Everything is set up by your
-          organisation&apos;s owners and admins in{" "}
-          <b>Organisation → Integrations</b>: no forms to send us and no keys
-          shared by hand.
+          Connect your own apps to Sales X-Ray. Keys, webhooks and your
+          organisation&apos;s own apps are set up by its owners and admins in{" "}
+          <b>Organisation → Integrations</b>. Apps that anyone can use register
+          themselves, and each person connects their own account. No forms to
+          send us and no keys shared by hand.
         </p>
         <nav className={styles.toc} aria-label="On this page">
           <a href="#keys">API keys</a>
@@ -140,6 +188,7 @@ export default function DevelopersPage() {
           <a href="#webhooks">Webhooks</a>
           <a href="#handover">Hand-over</a>
           <a href="#connect">Connect (OAuth)</a>
+          <a href="#mcp">Remote MCP</a>
           <a href="#cli">Command line and MCP</a>
         </nav>
 
@@ -177,8 +226,13 @@ export default function DevelopersPage() {
           <h2>API</h2>
           <p>
             Base address <code>{API}</code>. Send the key as{" "}
-            <code>Authorization: Bearer sxk_live_…</code>. A key sees what an
-            organisation owner sees, and sensitive parts of calls stay withheld.
+            <code>Authorization: Bearer sxk_live_…</code>, or a Connect access
+            token (<code>sxa_…</code>). A key, or an app an organisation
+            connected, sees what an organisation owner sees. An app a person
+            connected for themself sees only what that person sees: their own
+            calls and leads, or their team&apos;s when they are an owner or
+            admin, checked on every request. Sensitive parts of calls always
+            stay withheld.
           </p>
           <table className={styles.table}>
             <caption>Endpoints</caption>
@@ -258,10 +312,29 @@ export default function DevelopersPage() {
         <section id="connect">
           <h2>Connect (OAuth 2.0)</h2>
           <p>
-            For an app many organisations use, register it in Integrations →
-            Register your own app. Send people to the consent screen with PKCE
-            (S256); an owner or admin approves it for their organisation and
-            comes back to your address with a one-time code.
+            Connect signs people in with their Sales X-Ray account, with PKCE
+            (S256) on every request. There are two kinds of app:
+          </p>
+          <ul>
+            <li>
+              <b>Your organisation&apos;s own app.</b> Register it in
+              Integrations → Register your own app. An owner or admin approves
+              it for the whole organisation.
+            </li>
+            <li>
+              <b>An app anyone can use.</b> It registers itself (RFC 7591), with
+              no step on our side. Each person who connects it approves it for
+              their own account, in the workspace they have open (Personal or an
+              organisation), and it sees what they see. The consent screen shows
+              the address it returns to, so people can check whose app it is.
+            </li>
+          </ul>
+          <Code label="Register an app">{REGISTER}</Code>
+          <p>
+            Every address is in the server metadata at{" "}
+            <code>{`${HOST}/.well-known/oauth-authorization-server`}</code> (RFC
+            8414). Send people to the consent screen; they come back to your
+            address with a one-time code.
           </p>
           <Code label="Consent screen address">{CONNECT_URL}</Code>
           <Code label="Swap the code for tokens">{TOKEN}</Code>
@@ -270,7 +343,50 @@ export default function DevelopersPage() {
             API within the approved scopes. Refresh tokens (<code>sxr_…</code>)
             last 30 days and are replaced each time you use one (
             <code>grant_type=refresh_token</code>); using an old one again ends
-            the connection. Revoke with <code>POST /v1/oauth/revoke</code>.
+            the connection. Revoke with <code>POST /v1/oauth/revoke</code>;
+            people can also remove an app they connected from their account.
+          </p>
+        </section>
+
+        <section id="mcp">
+          <h2>Remote MCP</h2>
+          <p>
+            AI assistants and agents can use Sales X-Ray as an MCP server at{" "}
+            <code>{MCP_URL}</code> (Streamable HTTP). Add the address to your
+            assistant; it finds Connect by itself (RFC 9728), registers, and
+            asks the person to sign in. The assistant then reads as that person,
+            within the scopes they approved.
+          </p>
+          <Code label="Remote MCP with sign-in">{REMOTE_MCP}</Code>
+          <p>For a server of your own, an API key works too:</p>
+          <Code label="Remote MCP with an API key">{REMOTE_MCP_KEY}</Code>
+          <table className={styles.table}>
+            <caption>Tools</caption>
+            <thead>
+              <tr>
+                <th scope="col">Tool</th>
+                <th scope="col">Scope</th>
+                <th scope="col">Does</th>
+              </tr>
+            </thead>
+            <tbody>
+              {TOOLS.map(([tool, scope, text]) => (
+                <tr key={tool}>
+                  <td>
+                    <code>{tool}</code>
+                  </td>
+                  <td>
+                    <code>{scope}</code>
+                  </td>
+                  <td>{text}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p>
+            Only the tools the connection&apos;s scopes allow are listed. A
+            request without a valid token gets 401 with{" "}
+            <code>WWW-Authenticate: Bearer resource_metadata=…</code>.
           </p>
         </section>
 
@@ -289,8 +405,9 @@ python3 sx.py calls
 python3 sx.py facts <call id>
 python3 sx.py add-lead --name "Asha Rao" --phone +919800000000 --external-id crm-42`}</Code>
           <p>
-            <code>sx.py mcp</code> is an MCP server, so AI assistants can read
-            your calls and leads. Add it to your assistant&apos;s MCP settings:
+            <code>sx.py mcp</code> runs the same tools on your own computer
+            (stdio), for assistants that can&apos;t reach a remote server. Add
+            it to your assistant&apos;s MCP settings:
           </p>
           <Code label="MCP settings">{MCP}</Code>
         </section>
