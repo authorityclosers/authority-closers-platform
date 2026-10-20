@@ -1,0 +1,230 @@
+{
+ "call_id": "fx-07",
+ "turns": [
+  {
+   "id": "t001",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "Hello, रोहित sir? अमन बोल रहा हूँ, Raftaar Pre-Owned Motors से। कल Pravah XT के लिए call किया था आपने?",
+   "tts": "हेलो, रोहित सर? अमन बोल रहा हूँ, रफ़्तार प्री-ओन्ड मोटर्स से। कल प्रवाह एक्सटी के लिए कॉल किया था आपने?",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t002",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "हाँ, बोलो। Meeting में हूँ, जल्दी बताओ।",
+   "tts": "हाँ, बोलो। मीटिंग में हूँ, जल्दी बताओ।",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t003",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "जी sir। Test drive Saturday 24 को, सुबह ग्यारह बजे— sorry, ग्यारह already book है, साढ़े ग्यारह कर दूँ?",
+   "tts": "जी सर। टेस्ट ड्राइव सैटरडे चौबीस को, सुबह ग्यारह बजे— सॉरी, ग्यारह ऑलरेडी बुक है, साढ़े ग्यारह कर दूँ?",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t004",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "चलो ठीक है। Wife काव्या भी आएगी, वो भी चला के देखेगी।",
+   "tts": "चलो ठीक है। वाइफ़ काव्या भी आएगी, वो भी चला के देखेगी।",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t005",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "बिल्कुल sir, बीस-पच्चीस मिनट का drive करवा देंगे, highway तक।",
+   "tts": "बिल्कुल सर, बीस-पच्चीस मिनट का ड्राइव करवा देंगे, हाईवे तक।",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t006",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "2019 model है ना? White वाली?",
+   "tts": "टू थाउज़ेंड नाइनटीन मॉडल है ना? व्हाइट वाली?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t007",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "हाँ sir, 2019 का diesel, white, अड़तालीस हज़ार चला है। First owner।",
+   "tts": "हाँ सर, दो हज़ार उन्नीस का डीज़ल, व्हाइट, अड़तालीस हज़ार चला है। फ़र्स्ट ओनर।",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t008",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "Price सात लाख पचासी बोला था ना... थोड़ा ज़्यादा है yaar।",
+   "tts": "प्राइस सात लाख पचासी बोला था ना... थोड़ा ज़्यादा है यार।",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t009",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "जी, 7.85 listed है, but आप आइए तो, थोड़ा बहुत हो जाएगा।",
+   "tts": "जी, सेवन पॉइंट एट फ़ाइव लिस्टेड है, बट आप आइए तो, थोड़ा बहुत हो जाएगा।",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t010",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "Speedline Car Bazaar वाले same model 7.4 में दे रहे हैं।",
+   "tts": "स्पीडलाइन कार बाज़ार वाले सेम मॉडल सात चार में दे रहे हैं।",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t011",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "Sir उसका insurance check कर लेना, हमारी का March 2027 तक valid है। Service history भी पूरी है— actually sir, service record file में check करके बताता हूँ, अभी पक्का नहीं बोलूँगा।",
+   "tts": "सर उसका इंश्योरेंस चेक कर लेना, हमारी का मार्च दो हज़ार सत्ताईस तक वैलिड है। सर्विस हिस्ट्री भी पूरी है— ऐक्चुअली सर, सर्विस रिकॉर्ड फ़ाइल में चेक करके बताता हूँ, अभी पक्का नहीं बोलूँगा।",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t012",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "हाँ check करो, वो important है। और मेरी पुरानी 2014 की Chirag LX है, petrol, exchange में लोगे?",
+   "tts": "हाँ चेक करो, वो इम्पॉर्टेंट है। और मेरी पुरानी दो हज़ार चौदह की चिराग एलएक्स है, पेट्रोल, एक्सचेंज में लोगे?",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t013",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "हाँ sir, होता है। कितनी चली है?",
+   "tts": "हाँ सर, होता है। कितनी चली है?",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t014",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "बानवे हज़ार के आस-पास।",
+   "tts": "बानवे हज़ार के आस-पास।",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t015",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "Hello? आवाज़ break हो रही है... बानवे?",
+   "tts": "हेलो? आवाज़ ब्रेक हो रही है... बानवे?",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t016",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "हाँ हाँ, ninety-two thousand।",
+   "tts": "हाँ हाँ, नाइंटी-टू थाउज़ेंड।",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t017",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "ठीक है, Saturday को ले आइए, evaluator वहीं quote दे देगा।",
+   "tts": "ठीक है, सैटरडे को ले आइए, इवैल्यूएटर वहीं कोट दे देगा।",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t018",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "Loan होगा? पूरा cash नहीं दूँगा।",
+   "tts": "लोन होगा? पूरा कैश नहीं दूँगा।",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t019",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "हो जाएगा sir, minimum डेढ़ लाख down payment, बाकी पाँच साल तक का loan।",
+   "tts": "हो जाएगा सर, मिनिमम डेढ़ लाख डाउन पेमेंट, बाकी पाँच साल तक का लोन।",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t020",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "ठीक है, location भेज दो।",
+   "tts": "ठीक है, लोकेशन भेज दो।",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t021",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "अभी WhatsApp करता हूँ, Ring Road वाला showroom, कमला petrol pump के सामने। Driving licence original ले आना sir।",
+   "tts": "अभी व्हाट्सऐप करता हूँ, रिंग रोड वाला शोरूम, कमला पेट्रोल पंप के सामने। ड्राइविंग लाइसेंस ओरिजिनल ले आना सर।",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t022",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "और दिन में call मत करना, सात बजे के बाद करो या WhatsApp कर दो।",
+   "tts": "और दिन में कॉल मत करना, सात बजे के बाद करो या व्हाट्सऐप कर दो।",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t023",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "Noted sir। तो Saturday साढ़े ग्यारह confirm?",
+   "tts": "नोटेड सर। तो सैटरडे साढ़े ग्यारह कन्फ़र्म?",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t024",
+   "speaker": "S2",
+   "lang": "hi-en",
+   "text": "हाँ confirm है। Bye।",
+   "tts": "हाँ कन्फ़र्म है। बाय।",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t025",
+   "speaker": "S1",
+   "lang": "hi-en",
+   "text": "Thank you sir, Saturday मिलते हैं।",
+   "tts": "थैंक यू सर, सैटरडे मिलते हैं।",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  }
+ ]
+}

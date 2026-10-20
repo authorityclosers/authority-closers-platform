@@ -1,0 +1,923 @@
+[
+ {
+  "id": "f01",
+  "type": "person_name",
+  "slot": "salesperson.name",
+  "value": "Tanvi",
+  "normalized": "Tanvi",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "this is Tanvi from IronLeaf Fitness",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.02,
+  "trap": null
+ },
+ {
+  "id": "f02",
+  "type": "company",
+  "slot": "seller.company",
+  "value": "IronLeaf Fitness",
+  "normalized": "IronLeaf Fitness",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "IronLeaf Fitness",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.02,
+  "trap": null
+ },
+ {
+  "id": "f03",
+  "type": "person_name",
+  "slot": "prospect.name",
+  "value": "Sudhir Nair",
+  "normalized": "Sudhir Nair",
+  "turn_ids": [
+   "t001"
+  ],
+  "evidence": "Mr. Sudhir Nair",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.0,
+  "trap": null
+ },
+ {
+  "id": "f04",
+  "type": "company",
+  "slot": "prospect.company",
+  "value": "Quillstone Analytics",
+  "normalized": "Quillstone Analytics",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "Quillstone Analytics",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.02,
+  "trap": null
+ },
+ {
+  "id": "f05",
+  "type": "time",
+  "slot": "prospect.next_commitment",
+  "value": "Has another call at 11:15",
+  "normalized": "11:15",
+  "turn_ids": [
+   "t004"
+  ],
+  "evidence": "I've got a call at eleven-fifteen",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.03,
+  "trap": null
+ },
+ {
+  "id": "f06",
+  "type": "personal_detail",
+  "slot": "prospect.personal_injury",
+  "value": "Tore his knee ligament playing badminton last year",
+  "normalized": "Tore his knee ligament playing badminton last year",
+  "turn_ids": [
+   "t010"
+  ],
+  "evidence": "I tore my knee ligament playing badminton last year",
+  "said_by": "S2",
+  "critical": false,
+  "needle": true,
+  "depth": 0.08,
+  "trap": null
+ },
+ {
+  "id": "f07",
+  "type": "personal_detail",
+  "slot": "prospect.company_business",
+  "value": "Data analytics for retail clients abroad",
+  "normalized": "Data analytics for retail clients abroad",
+  "turn_ids": [
+   "t008"
+  ],
+  "evidence": "Data analytics, mostly for retail clients abroad",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.06,
+  "trap": null
+ },
+ {
+  "id": "f08",
+  "type": "pain_point",
+  "slot": "prospect.employee_health",
+  "value": "Staff sit 9-10 hours at screens; back and neck pain complaints",
+  "normalized": "Staff sit 9-10 hours at screens; back and neck pain complaints",
+  "turn_ids": [
+   "t008"
+  ],
+  "evidence": "Back pain, neck pain, everybody complains",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.06,
+  "trap": null
+ },
+ {
+  "id": "f09",
+  "type": "location",
+  "slot": "seller.centres",
+  "value": "4 centres: Sector 21, Ring Road, Old Market, IT park",
+  "normalized": "4 centres: Sector 21, Ring Road, Old Market, IT park",
+  "turn_ids": [
+   "t013",
+   "t015"
+  ],
+  "evidence": "Sector 21, Ring Road, Old Market, and the newest one inside the IT park",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.11,
+  "trap": null
+ },
+ {
+  "id": "f10",
+  "type": "location",
+  "slot": "seller.nearest_centre",
+  "value": "Sector 21 centre",
+  "normalized": "Sector 21 centre",
+  "turn_ids": [
+   "t013"
+  ],
+  "evidence": "the nearest to your office is our Sector 21 centre",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.11,
+  "trap": null
+ },
+ {
+  "id": "f11",
+  "type": "price",
+  "slot": "seller.annual_plan_price",
+  "value": "₹1,800 per head per month (annual corporate plan)",
+  "normalized": "1800 INR/head/month",
+  "turn_ids": [
+   "t013",
+   "t018"
+  ],
+  "evidence": "1.8k",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.11,
+  "trap": "alt_number_form"
+ },
+ {
+  "id": "f12",
+  "type": "quantity",
+  "slot": "seller.minimum_heads",
+  "value": "Minimum 25 heads",
+  "normalized": "25",
+  "turn_ids": [
+   "t013"
+  ],
+  "evidence": "Minimum twenty-five heads.",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.11,
+  "trap": null
+ },
+ {
+  "id": "f13",
+  "type": "quantity",
+  "slot": "prospect.headcount",
+  "value": "40 people",
+  "normalized": "40",
+  "turn_ids": [
+   "t018"
+  ],
+  "evidence": "We're forty people in total",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.16,
+  "trap": null
+ },
+ {
+  "id": "f14",
+  "type": "price",
+  "slot": "deal.full_team_estimate",
+  "value": "₹72,000 a month for all 40, nearly ₹9 lakh a year",
+  "normalized": "72000 INR/month",
+  "turn_ids": [
+   "t018"
+  ],
+  "evidence": "that's ₹72,000 a month",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.16,
+  "trap": null
+ },
+ {
+  "id": "f15",
+  "type": "product",
+  "slot": "seller.inclusions",
+  "value": "Classes booked on app; quarterly diet consultation included",
+  "normalized": "Classes booked on app; quarterly diet consultation included",
+  "turn_ids": [
+   "t017"
+  ],
+  "evidence": "every member gets a diet consultation once a quarter",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.15,
+  "trap": null
+ },
+ {
+  "id": "f16",
+  "type": "objection",
+  "slot": "prospect.objection_budget",
+  "value": "Wellness budget spent on a health insurance top-up this year",
+  "normalized": "Wellness budget spent on a health insurance top-up this year",
+  "turn_ids": [
+   "t020"
+  ],
+  "evidence": "we already gave everyone a health insurance top-up",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.17,
+  "trap": null
+ },
+ {
+  "id": "f17",
+  "type": "timeline",
+  "slot": "prospect.budget_cycle",
+  "value": "Next budget cycle in April; CFO can approve small items mid-year",
+  "normalized": "Next budget cycle in April; CFO can approve small items mid-year",
+  "turn_ids": [
+   "t022"
+  ],
+  "evidence": "Technically April",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.19,
+  "trap": null
+ },
+ {
+  "id": "f18",
+  "type": "competitor",
+  "slot": "competitor.previous_vendor",
+  "value": "FlexZone, gym tie-up two years ago",
+  "normalized": "FlexZone, gym tie-up two years ago",
+  "turn_ids": [
+   "t026"
+  ],
+  "evidence": "we did exactly this with FlexZone",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.23,
+  "trap": "third_party_name"
+ },
+ {
+  "id": "f19",
+  "type": "pain_point",
+  "slot": "prospect.past_low_uptake",
+  "value": "Paid for all 40 for a year; only 9 were going after two months",
+  "normalized": "9 of 40",
+  "turn_ids": [
+   "t026"
+  ],
+  "evidence": "only nine people were actually going. Nine out of forty",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.23,
+  "trap": null
+ },
+ {
+  "id": "f20",
+  "type": "pain_point",
+  "slot": "prospect.past_vendor_issues",
+  "value": "Crowded evenings, trainers kept changing, no tracking until renewal",
+  "normalized": "Crowded evenings, trainers kept changing, no tracking until renewal",
+  "turn_ids": [
+   "t028"
+  ],
+  "evidence": "Trainers kept changing",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.25,
+  "trap": null
+ },
+ {
+  "id": "f21",
+  "type": "product",
+  "slot": "seller.usage_report",
+  "value": "Monthly usage report: visits, centre, classes",
+  "normalized": "Monthly usage report: visits, centre, classes",
+  "turn_ids": [
+   "t029"
+  ],
+  "evidence": "You get a monthly usage report",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.26,
+  "trap": null
+ },
+ {
+  "id": "f22",
+  "type": "price",
+  "slot": "seller.pay_per_visit",
+  "value": "₹180 per visit, billed monthly",
+  "normalized": "180 INR/visit",
+  "turn_ids": [
+   "t033"
+  ],
+  "evidence": "₹180 per visit",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.29,
+  "trap": null
+ },
+ {
+  "id": "f23",
+  "type": "payment_terms",
+  "slot": "seller.pay_per_visit_minimum",
+  "value": "Minimum billing ₹30,000 a month",
+  "normalized": "30000 INR/month",
+  "turn_ids": [
+   "t033"
+  ],
+  "evidence": "minimum billing of ₹30,000 a month",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.29,
+  "trap": null
+ },
+ {
+  "id": "f24",
+  "type": "objection",
+  "slot": "prospect.objection_distance",
+  "value": "Sector 21 is 3.5 km away, about 25 minutes in evening traffic",
+  "normalized": "3.5 km",
+  "turn_ids": [
+   "t038"
+  ],
+  "evidence": "three and a half kilometres from us",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.34,
+  "trap": null
+ },
+ {
+  "id": "f25",
+  "type": "person_name",
+  "slot": "prospect.colleague",
+  "value": "Ankita (employee engagement)",
+  "normalized": "Ankita (employee engagement)",
+  "turn_ids": [
+   "t040"
+  ],
+  "evidence": "Let me add Ankita, she handles employee engagement",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.36,
+  "trap": null
+ },
+ {
+  "id": "f26",
+  "type": "requirement",
+  "slot": "prospect.shift_pattern",
+  "value": "About 25 on the US shift (2 to 11), 15 on regular 9 to 6",
+  "normalized": "About 25 on the US shift (2 to 11), 15 on regular 9 to 6",
+  "turn_ids": [
+   "t043",
+   "t045"
+  ],
+  "evidence": "twenty-five people are on the US shift, two to eleven",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.39,
+  "trap": null
+ },
+ {
+  "id": "f27",
+  "type": "time",
+  "slot": "seller.weekday_opening",
+  "value": "Opens 6 a.m. on weekdays (5:30 only on weekends); closes 11 p.m.",
+  "normalized": "06:00-23:00 weekdays",
+  "turn_ids": [
+   "t046"
+  ],
+  "evidence": "sorry, six. Six a.m. on weekdays, five-thirty is only Saturday-Sunday",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.41,
+  "trap": "self_correction"
+ },
+ {
+  "id": "f28",
+  "type": "product",
+  "slot": "seller.parking",
+  "value": "Free basement parking for members, two-wheelers and cars",
+  "normalized": "Free basement parking for members, two-wheelers and cars",
+  "turn_ids": [
+   "t050"
+  ],
+  "evidence": "Parking is free for members",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.45,
+  "trap": null
+ },
+ {
+  "id": "f29",
+  "type": "product",
+  "slot": "seller.trial_sessions",
+  "value": "Three free trial sessions per employee before opting in",
+  "normalized": "Three free trial sessions per employee before opting in",
+  "turn_ids": [
+   "t052"
+  ],
+  "evidence": "three free trial sessions",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.47,
+  "trap": null
+ },
+ {
+  "id": "f30",
+  "type": "requirement",
+  "slot": "prospect.women_only_batch",
+  "value": "12 women in the team; some want a ladies-only batch",
+  "normalized": "12",
+  "turn_ids": [
+   "t053"
+  ],
+  "evidence": "We have twelve women in the team",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.48,
+  "trap": null
+ },
+ {
+  "id": "f31",
+  "type": "product",
+  "slot": "seller.women_only_slots",
+  "value": "Women-only slots 7-9 a.m. and 6-8 p.m. with a female trainer",
+  "normalized": "Women-only slots 7-9 a.m. and 6-8 p.m. with a female trainer",
+  "turn_ids": [
+   "t054"
+  ],
+  "evidence": "seven to nine in the morning and six to eight in the evening",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.49,
+  "trap": null
+ },
+ {
+  "id": "f32",
+  "type": "objection",
+  "slot": "prospect.objection_home_yoga",
+  "value": "Some staff do yoga at home with videos and won't pay for a gym",
+  "normalized": "Some staff do yoga at home with videos and won't pay for a gym",
+  "turn_ids": [
+   "t057"
+  ],
+  "evidence": "Some of our people do yoga at home with videos",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.51,
+  "trap": null
+ },
+ {
+  "id": "f33",
+  "type": "timeline",
+  "slot": "prospect.office_relocation",
+  "value": "Office moves in January to a new tower opposite the metro depot",
+  "normalized": "2027-01",
+  "turn_ids": [
+   "t059"
+  ],
+  "evidence": "Come January we'll be sitting in the new tower opposite the metro depot",
+  "said_by": "S2",
+  "critical": true,
+  "needle": true,
+  "depth": 0.53,
+  "trap": null
+ },
+ {
+  "id": "f34",
+  "type": "competitor",
+  "slot": "competitor.name",
+  "value": "PulseHub",
+  "normalized": "PulseHub",
+  "turn_ids": [
+   "t061"
+  ],
+  "evidence": "a quote from PulseHub",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.55,
+  "trap": null
+ },
+ {
+  "id": "f35",
+  "type": "competitor_price",
+  "slot": "competitor.price",
+  "value": "₹1,350 per head per month at PulseHub, same 25 minimum (not our price)",
+  "normalized": "1350 INR/head/month",
+  "turn_ids": [
+   "t061"
+  ],
+  "evidence": "₹1,350 per head per month",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.55,
+  "trap": "competitor_price"
+ },
+ {
+  "id": "f36",
+  "type": "competitor",
+  "slot": "competitor.facilities",
+  "value": "Withdrawn: Tanvi's claim that PulseHub lacks showers and lockers; prospect says they renovated",
+  "normalized": "Withdrawn: Tanvi's claim that PulseHub lacks showers and lockers; prospect says they renovated",
+  "turn_ids": [
+   "t062",
+   "t064"
+  ],
+  "evidence": "my information is old, my mistake, sir, I take that back",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.56,
+  "trap": "retracted"
+ },
+ {
+  "id": "f37",
+  "type": "discount",
+  "slot": "deal.pilot_offer",
+  "value": "3-month pilot, 20 people, ₹1,600 per head per month, no lock-in",
+  "normalized": "1600 INR/head/month x 20 x 3 months",
+  "turn_ids": [
+   "t070"
+  ],
+  "evidence": "Twenty people, ₹1,600 per head per month, no lock-in",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.63,
+  "trap": null
+ },
+ {
+  "id": "f38",
+  "type": "price",
+  "slot": "deal.pilot_total",
+  "value": "₹32,000 a month; ₹96,000 for the whole pilot",
+  "normalized": "96000 INR",
+  "turn_ids": [
+   "t071",
+   "t072"
+  ],
+  "evidence": "ninety-six thousand for the whole pilot",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.64,
+  "trap": null
+ },
+ {
+  "id": "f39",
+  "type": "payment_terms",
+  "slot": "deal.gst",
+  "value": "Prices are plus 18% GST",
+  "normalized": "18% GST extra",
+  "turn_ids": [
+   "t074"
+  ],
+  "evidence": "Plus GST, sir, eighteen percent",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.67,
+  "trap": null
+ },
+ {
+  "id": "f40",
+  "type": "objection",
+  "slot": "prospect.objection_attrition",
+  "value": "Attrition: paying for people who resign",
+  "normalized": "Attrition: paying for people who resign",
+  "turn_ids": [
+   "t075"
+  ],
+  "evidence": "Someone resigns in the second month, I've paid for nothing",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.68,
+  "trap": null
+ },
+ {
+  "id": "f41",
+  "type": "product",
+  "slot": "seller.membership_transfer",
+  "value": "Membership transferable to a new joiner at no charge",
+  "normalized": "Membership transferable to a new joiner at no charge",
+  "turn_ids": [
+   "t076"
+  ],
+  "evidence": "The membership can be transferred to a new joiner",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.69,
+  "trap": null
+ },
+ {
+  "id": "f42",
+  "type": "objection",
+  "slot": "prospect.objection_lockin",
+  "value": "A 12-month lock-in is a deal-breaker",
+  "normalized": "A 12-month lock-in is a deal-breaker",
+  "turn_ids": [
+   "t077"
+  ],
+  "evidence": "A twelve-month lock-in is a deal-breaker for us",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.7,
+  "trap": null
+ },
+ {
+  "id": "f43",
+  "type": "commitment",
+  "slot": "seller.post_pilot_term",
+  "value": "Will try for a 6-month term after the pilot; needs approval, not committed",
+  "normalized": "Will try for a 6-month term after the pilot; needs approval, not committed",
+  "turn_ids": [
+   "t078"
+  ],
+  "evidence": "I can try for a six-month term for you",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.71,
+  "trap": null
+ },
+ {
+  "id": "f44",
+  "type": "payment_terms",
+  "slot": "deal.copay",
+  "value": "50-50 co-pay; employee half through payroll deduction",
+  "normalized": "50-50 co-pay; employee half through payroll deduction",
+  "turn_ids": [
+   "t080"
+  ],
+  "evidence": "Company pays half, the employee pays half through payroll deduction",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.72,
+  "trap": null
+ },
+ {
+  "id": "f45",
+  "type": "requirement",
+  "slot": "prospect.mandatory_participation",
+  "value": "Withdrawn: idea of making it mandatory dropped; participation stays voluntary",
+  "normalized": "Withdrawn: idea of making it mandatory dropped; participation stays voluntary",
+  "turn_ids": [
+   "t082"
+  ],
+  "evidence": "no, scratch that. We can't force anyone to go to a gym",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.74,
+  "trap": "retracted"
+ },
+ {
+  "id": "f46",
+  "type": "objection",
+  "slot": "prospect.objection_liability",
+  "value": "Liability if an employee is injured",
+  "normalized": "Liability if an employee is injured",
+  "turn_ids": [
+   "t084"
+  ],
+  "evidence": "If someone hurts himself on your machine, what happens?",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.76,
+  "trap": null
+ },
+ {
+  "id": "f47",
+  "type": "product",
+  "slot": "seller.waiver",
+  "value": "Member waiver at joining; certified, first-aid trained trainers; waiver format to be sent",
+  "normalized": "Member waiver at joining; certified, first-aid trained trainers; waiver format to be sent",
+  "turn_ids": [
+   "t085"
+  ],
+  "evidence": "Every member signs our waiver at joining",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.77,
+  "trap": null
+ },
+ {
+  "id": "f48",
+  "type": "requirement",
+  "slot": "prospect.data_privacy",
+  "value": "Company sees only aggregate numbers; individual results only to the employee",
+  "normalized": "Company sees only aggregate numbers; individual results only to the employee",
+  "turn_ids": [
+   "t086",
+   "t087"
+  ],
+  "evidence": "The company gets only aggregate numbers",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.78,
+  "trap": null
+ },
+ {
+  "id": "f49",
+  "type": "budget",
+  "slot": "prospect.budget_ceiling",
+  "value": "Under ₹50,000 a month can be tabled with the CFO",
+  "normalized": "50000 INR/month",
+  "turn_ids": [
+   "t088"
+  ],
+  "evidence": "If the monthly number is under fifty thousand",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.8,
+  "trap": null
+ },
+ {
+  "id": "f50",
+  "type": "price",
+  "slot": "deal.company_share",
+  "value": "Company share ₹16,000 a month with co-pay",
+  "normalized": "16000 INR/month",
+  "turn_ids": [
+   "t089"
+  ],
+  "evidence": "the company's share is only sixteen thousand",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.81,
+  "trap": null
+ },
+ {
+  "id": "f51",
+  "type": "decision_maker",
+  "slot": "prospect.final_approver",
+  "value": "Harish Bhat, CFO, has the final say",
+  "normalized": "Harish Bhat, CFO, has the final say",
+  "turn_ids": [
+   "t092"
+  ],
+  "evidence": "Our CFO, Harish Bhat",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.83,
+  "trap": "third_party_name"
+ },
+ {
+  "id": "f52",
+  "type": "date",
+  "slot": "prospect.budget_review",
+  "value": "Budget review next Tuesday",
+  "normalized": "Budget review next Tuesday",
+  "turn_ids": [
+   "t092"
+  ],
+  "evidence": "We have a budget review next Tuesday",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.83,
+  "trap": null
+ },
+ {
+  "id": "f53",
+  "type": "next_step",
+  "slot": "next_step.proposal",
+  "value": "Proposal by Thursday: pilot and pay-per-visit options, co-pay, waiver; page one with sample usage report and pilot exit clause",
+  "normalized": "Proposal by Thursday: pilot and pay-per-visit options, co-pay, waiver; page one with sample usage report and pilot exit clause",
+  "turn_ids": [
+   "t093",
+   "t099"
+  ],
+  "evidence": "I'll send a proposal by Thursday with two options",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.84,
+  "trap": null
+ },
+ {
+  "id": "f54",
+  "type": "next_step",
+  "slot": "next_step.reference_call",
+  "value": "Reference call with Bluefern Design Studio's admin manager this week",
+  "normalized": "Reference call with Bluefern Design Studio's admin manager this week",
+  "turn_ids": [
+   "t095",
+   "t096"
+  ],
+  "evidence": "I can set up a call with their admin manager this week",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.86,
+  "trap": null
+ },
+ {
+  "id": "f55",
+  "type": "next_step",
+  "slot": "next_step.fitness_camp",
+  "value": "Free on-site fitness assessment camp, Friday 6 November (tentative)",
+  "normalized": "2026-11-06",
+  "turn_ids": [
+   "t103",
+   "t104"
+  ],
+  "evidence": "How about Friday, the sixth of November?",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.94,
+  "trap": null
+ },
+ {
+  "id": "f56",
+  "type": "quantity",
+  "slot": "prospect.headcount_growth",
+  "value": "About 15 freshers joining in February",
+  "normalized": "+15 in 2027-02",
+  "turn_ids": [
+   "t100"
+  ],
+  "evidence": "We're taking a batch of freshers in February, fifteen more chairs",
+  "said_by": "S2",
+  "critical": true,
+  "needle": true,
+  "depth": 0.91,
+  "trap": null
+ },
+ {
+  "id": "f57",
+  "type": "contact_preference",
+  "slot": "prospect.contact_preference",
+  "value": "Coordinate with Ankita; no calls to Sudhir before 11 a.m.; email preferred",
+  "normalized": "Coordinate with Ankita; no calls to Sudhir before 11 a.m.; email preferred",
+  "turn_ids": [
+   "t105"
+  ],
+  "evidence": "Don't call me before eleven, I'm in stand-ups all morning. Email is better.",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.95,
+  "trap": null
+ }
+]

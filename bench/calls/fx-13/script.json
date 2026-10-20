@@ -1,0 +1,995 @@
+{
+ "call_id": "fx-13",
+ "turns": [
+  {
+   "id": "t001",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Hello, good morning, am I speaking with Mr. Sudhir Nair?",
+   "tts": "Hello, good morning, am I speaking with Mr. Sudhir Nair?",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t002",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Yes, speaking. Who's this?",
+   "tts": "Yes, speaking. Who's this?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t003",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Hi sir, this is Tanvi from IronLeaf Fitness. I had emailed you last week about a corporate wellness tie-up for Quillstone Analytics. Is this a good time, just a few minutes?",
+   "tts": "Hi sir, this is Tanvi from IronLeaf Fitness. I had emailed you last week about a corporate wellness tie-up for Quillstone Analytics. Is this a good time, just a few minutes?",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t004",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Few minutes, okay. I've got a call at eleven-fifteen. Go ahead, but I'll tell you upfront, I'm not very convinced about gym tie-ups.",
+   "tts": "Few minutes, okay. I've got a call at eleven-fifteen. Go ahead, but I'll tell you upfront, I'm not very convinced about gym tie-ups.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t005",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That's totally fine, sir, I'd actually love to know why. Most HR heads I speak to say the same thing.",
+   "tts": "That's totally fine, sir, I'd actually love to know why. Most HR heads I speak to say the same thing.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t006",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "I'll come to that. First tell me what exactly you're offering.",
+   "tts": "I'll come to that. First tell me what exactly you're offering.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t007",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sure sir. But just so I pitch the right thing, what kind of work does the team do? I saw analytics on the website.",
+   "tts": "Sure sir. But just so I pitch the right thing, what kind of work does the team do? I saw analytics on the website.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t008",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Data analytics, mostly for retail clients abroad. Dashboards, reports, that kind of thing. So people are sitting nine, ten hours in front of screens. Back pain, neck pain, everybody complains.",
+   "tts": "Data analytics, mostly for retail clients abroad. Dashboards, reports, that kind of thing. So people are sitting nine, ten hours in front of screens. Back pain, neck pain, everybody complains.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t009",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That's exactly the kind of team where we see the biggest difference, honestly. And you yourself, sir, do you work out?",
+   "tts": "That's exactly the kind of team where we see the biggest difference, honestly. And you yourself, sir, do you work out?",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t010",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Me? No. Personally I'm not a gym person. I tore my knee ligament playing badminton last year, so treadmills and I are not friends. But that's me. For the company the problem is different.",
+   "tts": "Me? No. Personally I'm not a gym person. I tore my knee ligament playing badminton last year, so treadmills and I are not friends. But that's me. For the company the problem is different.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t011",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Ouch, okay sir. Then let me quickly tell you what we do, and you tell me where it doesn't fit.",
+   "tts": "Ouch, okay sir. Then let me quickly tell you what we do, and you tell me where it doesn't fit.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t012",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Haan, go on.",
+   "tts": "Haan, go on.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t013",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "So IronLeaf has four centres in the city, and the nearest to your office is our Sector 21 centre. For corporates we have an annual plan, ₹1,800 per head per month. All-centre access, group classes, and one trainer assessment every month. Minimum twenty-five heads.",
+   "tts": "So IronLeaf has four centres in the city, and the nearest to your office is our Sector twenty-one centre. For corporates we have an annual plan, eighteen hundred rupees per head per month. All-centre access, group classes, and one trainer assessment every month. Minimum twenty-five heads.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t014",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Four centres where?",
+   "tts": "Four centres where?",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t015",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sector 21, Ring Road, Old Market, and the newest one inside the IT park. Members can use any of the four.",
+   "tts": "Sector twenty-one, Ring Road, Old Market, and the newest one inside the IT park. Members can use any of the four.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t016",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And what's the catch? Every gym says all-access, then the classes are full and the trainers are never there.",
+   "tts": "And what's the catch? Every gym says all-access, then the classes are full and the trainers are never there.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t017",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "No catch, sir. Classes are booked on our app, so nobody walks in to a full room. And every member gets a diet consultation once a quarter, that's included.",
+   "tts": "No catch, sir. Classes are booked on our app, so nobody walks in to a full room. And every member gets a diet consultation once a quarter, that's included.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t018",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "We're forty people in total. So you're saying 1.8k into forty, that's ₹72,000 a month? Nearly nine lakh a year?",
+   "tts": "We're forty people in total. So you're saying one point eight k into forty, that's seventy-two thousand a month? Nearly nine lakh a year?",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t019",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Not necessarily all forty, sir. Minimum is twenty-five, and you choose who opts in.",
+   "tts": "Not necessarily all forty, sir. Minimum is twenty-five, and you choose who opts in.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t020",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Tanvi, honestly, the budget is gone. This year we already gave everyone a health insurance top-up, and that ate up the whole wellness line.",
+   "tts": "Tanvi, honestly, the budget is gone. This year we already gave everyone a health insurance top-up, and that ate up the whole wellness line.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t021",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Understood, sir. Can I ask, when does the next budget cycle open?",
+   "tts": "Understood, sir. Can I ask, when does the next budget cycle open?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t022",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Technically April. But if something is small, our CFO can approve it mid-year.",
+   "tts": "Technically April. But if something is small, our CFO can approve it mid-year.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t023",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Okay, that's good to know. Small we can definitely do.",
+   "tts": "Okay, that's good to know. Small we can definitely do.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t024",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "I'll be honest with you. After the last time, my CFO laughs when I say the word gym.",
+   "tts": "I'll be honest with you. After the last time, my CFO laughs when I say the word gym.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t025",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Haha, I can imagine, sir. What happened last time?",
+   "tts": "Haha, I can imagine, sir. What happened last time?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t026",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Because of the bigger issue. Two years back we did exactly this with FlexZone. Paid for all forty for a full year. After two months, only nine people were actually going. Nine out of forty. Rest of the money, gone.",
+   "tts": "Because of the bigger issue. Two years back we did exactly this with FlexZone. Paid for all forty for a full year. After two months, only nine people were actually going. Nine out of forty. Rest of the money, gone.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t027",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sir, can I ask, why did people stop going? Was it the centre, the timing, or something else?",
+   "tts": "Sir, can I ask, why did people stop going? Was it the centre, the timing, or something else?",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t028",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Everything, yaar. Evenings their place was packed, machines always occupied. Trainers kept changing. And nobody tracked anything, I came to know only at renewal that nine people were going.",
+   "tts": "Everything, yaar. Evenings their place was packed, machines always occupied. Trainers kept changing. And nobody tracked anything, I came to know only at renewal that nine people were going.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t029",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That last part we solve directly. You get a monthly usage report, how many visits, which centre, which classes. You'll know in the first month itself, not at renewal.",
+   "tts": "That last part we solve directly. You get a monthly usage report, how many visits, which centre, which classes. You'll know in the first month itself, not at renewal.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t030",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm. Tracking is one thing. But I still paid for forty.",
+   "tts": "Hmm. Tracking is one thing. But I still paid for forty.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t031",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That's a real problem, sir, and honestly it happens a lot with flat corporate plans. That's exactly why we also have a pay-per-visit model.",
+   "tts": "That's a real problem, sir, and honestly it happens a lot with flat corporate plans. That's exactly why we also have a pay-per-visit model.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t032",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Meaning what, exactly?",
+   "tts": "Meaning what, exactly?",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t033",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Meaning you pay only when someone actually walks in. ₹180 per visit, billed monthly, with a minimum billing of ₹30,000 a month. So if only nine people go, you're not paying for forty.",
+   "tts": "Meaning you pay only when someone actually walks in. one eighty per visit, billed monthly, with a minimum billing of thirty thousand a month. So if only nine people go, you're not paying for forty.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t034",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Thirty thousand minimum. Hmm. So if nobody goes, I still pay thirty thousand.",
+   "tts": "Thirty thousand minimum. Hmm. So if nobody goes, I still pay thirty thousand.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t035",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes sir, that's the floor. But thirty thousand covers about a hundred and sixty-six visits a month. Ten regular people going four times a week roughly covers it.",
+   "tts": "Yes sir, that's the floor. But thirty thousand covers about a hundred and sixty-six visits a month. Ten regular people going four times a week roughly covers it.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t036",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Ten regular people. From my lot? We'll see.",
+   "tts": "Ten regular people. From my lot? We'll see.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t037",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Fair enough, sir. What else is bothering you?",
+   "tts": "Fair enough, sir. What else is bothering you?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t038",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Okay, second thing. Sector 21 is what, three and a half kilometres from us? In evening traffic that's twenty-five minutes. Nobody is going to go there after a nine-hour day.",
+   "tts": "Okay, second thing. Sector twenty-one is what, three and a half kilometres from us? In evening traffic that's twenty-five minutes. Nobody is going to go there after a nine-hour day.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t039",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Fair, sir. That's why most of our corporate members go in the morning, before office, when there's no traffic.",
+   "tts": "Fair, sir. That's why most of our corporate members go in the morning, before office, when there's no traffic.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t040",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Morning? Half my team works US shifts. They log off at eleven at night, sometimes midnight. Let me add Ankita, she handles employee engagement, she knows the shift patterns better. Ankita, can you join?",
+   "tts": "Morning? Half my team works US shifts. They log off at eleven at night, sometimes midnight. Let me add Ankita, she handles employee engagement, she knows the shift patterns better. Ankita, can you join?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t041",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Hi, hi Tanvi. Ankita here.",
+   "tts": "Hi, hi Tanvi. Ankita here.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t042",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Hi Ankita! Thanks for joining.",
+   "tts": "Hi Ankita! Thanks for joining.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t043",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "So see, roughly twenty-five people are on the US shift, two to eleven. The other fifteen are on regular...",
+   "tts": "So see, roughly twenty-five people are on the US shift, two to eleven. The other fifteen are on regular...",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t044",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sorry Ankita, you broke in between. Twenty-five on the US shift and the rest?",
+   "tts": "Sorry Ankita, you broke in between. Twenty-five on the US shift and the rest?",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t045",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Fifteen on regular, nine to six. Can you hear me now? What are your centre timings?",
+   "tts": "Fifteen on regular, nine to six. Can you hear me now? What are your centre timings?",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t046",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes, clear now. Centre opens at five-thirty in the morning... sorry, six. Six a.m. on weekdays, five-thirty is only Saturday-Sunday. And it closes at eleven p.m.",
+   "tts": "Yes, clear now. Centre opens at five-thirty in the morning... sorry, six. Six a.m. on weekdays, five-thirty is only Saturday-Sunday. And it closes at eleven p.m.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t047",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Eleven p.m. close doesn't help the US shift people. They'd have to go before two, so morning or noon.",
+   "tts": "Eleven p.m. close doesn't help the US shift people. They'd have to go before two, so morning or noon.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t048",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Exactly, so for them late morning is perfect. The centre is almost empty between ten and one, they'd get the trainers to themselves.",
+   "tts": "Exactly, so for them late morning is perfect. The centre is almost empty between ten and one, they'd get the trainers to themselves.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t049",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And parking? Most of them come on bikes.",
+   "tts": "And parking? Most of them come on bikes.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t050",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Parking is free for members, there's a basement, two-wheelers and cars both.",
+   "tts": "Parking is free for members, there's a basement, two-wheelers and cars both.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t051",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And can people try it before they opt in? Nobody wants to sign up blind.",
+   "tts": "And can people try it before they opt in? Nobody wants to sign up blind.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t052",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes, every employee gets three free trial sessions before they opt in. No commitment.",
+   "tts": "Yes, every employee gets three free trial sessions before they opt in. No commitment.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t053",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And for the women? We have twelve women in the team. A few of them asked me if there's a ladies-only batch, they're not comfortable on a crowded floor.",
+   "tts": "And for the women? We have twelve women in the team. A few of them asked me if there's a ladies-only batch, they're not comfortable on a crowded floor.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t054",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes, we have women-only slots, seven to nine in the morning and six to eight in the evening, with a female trainer.",
+   "tts": "Yes, we have women-only slots, seven to nine in the morning and six to eight in the evening, with a female trainer.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t055",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Okay, that's good, actually. Last month itself half the girls asked me if the company could do something for a gym.",
+   "tts": "Okay, that's good, actually. Last month itself half the girls asked me if the company could do something for a gym.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t056",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Great! And sir, the group classes, we have yoga, functional training, dance fitness, spin...",
+   "tts": "Great! And sir, the group classes, we have yoga, functional training, dance fitness, spin...",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t057",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Yoga is one thing. Some of our people do yoga at home with videos. They won't pay for a gym.",
+   "tts": "Yoga is one thing. Some of our people do yoga at home with videos. They won't pay for a gym.",
+   "pause_before_ms": 0,
+   "overlap_prev_ms": 250
+  },
+  {
+   "id": "t058",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That's the beauty, sir. Yoga is included in the same membership, and it's a live class with correction. A video can't correct your posture.",
+   "tts": "That's the beauty, sir. Yoga is included in the same membership, and it's a live class with correction. A video can't correct your posture.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t059",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm. Anyway, location also I'm not sure about. Come January we'll be sitting in the new tower opposite the metro depot anyway, so who knows what's near then.",
+   "tts": "Hmm. Anyway, location also I'm not sure about. Come January we'll be sitting in the new tower opposite the metro depot anyway, so who knows what's near then.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t060",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Right, right. Sir, coming to the investment part...",
+   "tts": "Right, right. Sir, coming to the investment part...",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t061",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Investment, okay. So honestly, we've got a quote from PulseHub also. ₹1,350 per head per month. Same twenty-five minimum.",
+   "tts": "Investment, okay. So honestly, we've got a quote from PulseHub also. thirteen fifty per head per month. Same twenty-five minimum.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t062",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "PulseHub... sir, with respect, they don't even have proper showers or lockers at their Sector 18 branch.",
+   "tts": "PulseHub... sir, with respect, they don't even have proper showers or lockers at their Sector eighteen branch.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t063",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "They do, Tanvi. I went there last week myself. They've renovated.",
+   "tts": "They do, Tanvi. I went there last week myself. They've renovated.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t064",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Oh, okay, then my information is old, my mistake, sir, I take that back. But what I can say is, at thirteen fifty, please check if group classes and the monthly trainer assessment are included. With us they are.",
+   "tts": "Oh, okay, then my information is old, my mistake, sir, I take that back. But what I can say is, at thirteen fifty, please check if group classes and the monthly trainer assessment are included. With us they are.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t065",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Classes, I think, are extra there. I'll check.",
+   "tts": "Classes, I think, are extra there. I'll check.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t066",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Please do check, sir, it makes a big difference.",
+   "tts": "Please do check, sir, it makes a big difference.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t067",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "But tell me straight. Can you match thirteen fifty?",
+   "tts": "But tell me straight. Can you match thirteen fifty?",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t068",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "On the annual plan, I can't match thirteen fifty, sir, I'd be lying if I said yes. But I have something that takes the risk off you.",
+   "tts": "On the annual plan, I can't match thirteen fifty, sir, I'd be lying if I said yes. But I have something that takes the risk off you.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t069",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "What is it?",
+   "tts": "What is it?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t070",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "A pilot, sir. Instead of committing a full year, let's do a three-month pilot. Twenty people, ₹1,600 per head per month, no lock-in. If usage is bad, you walk away after three months.",
+   "tts": "A pilot, sir. Instead of committing a full year, let's do a three-month pilot. Twenty people, sixteen hundred per head per month, no lock-in. If usage is bad, you walk away after three months.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t071",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Sixteen hundred for twenty. That's thirty-two thousand a month.",
+   "tts": "Sixteen hundred for twenty. That's thirty-two thousand a month.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t072",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes sir, ninety-six thousand for the whole pilot.",
+   "tts": "Yes sir, ninety-six thousand for the whole pilot.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t073",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And this sixteen hundred, is it plus GST or including?",
+   "tts": "And this sixteen hundred, is it plus GST or including?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t074",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Plus GST, sir, eighteen percent, same as all our corporate plans. I'll show it separately in the proposal so there's no confusion.",
+   "tts": "Plus GST, sir, eighteen percent, same as all our corporate plans. I'll show it separately in the proposal so there's no confusion.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t075",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And people leave, Tanvi. Our attrition is not small. Someone resigns in the second month, I've paid for nothing.",
+   "tts": "And people leave, Tanvi. Our attrition is not small. Someone resigns in the second month, I've paid for nothing.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t076",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "The membership can be transferred to a new joiner, sir, no charge. The seat stays with the company, not the person.",
+   "tts": "The membership can be transferred to a new joiner, sir, no charge. The seat stays with the company, not the person.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t077",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And after three months? Then you'll push the twelve-month lock-in. That I'm not signing. A twelve-month lock-in is a deal-breaker for us.",
+   "tts": "And after three months? Then you'll push the twelve-month lock-in. That I'm not signing. A twelve-month lock-in is a deal-breaker for us.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t078",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "After the pilot, if you continue, the standard plan is a twelve-month term, but I can try for a six-month term for you. I'll have to get it approved, I can't commit that today.",
+   "tts": "After the pilot, if you continue, the standard plan is a twelve-month term, but I can try for a six-month term for you. I'll have to get it approved, I can't commit that today.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t079",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm. And who pays? Company pays full, or employees also?",
+   "tts": "Hmm. And who pays? Company pays full, or employees also?",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t080",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Many companies do a co-pay, sir. Fifty-fifty. Company pays half, the employee pays half through payroll deduction. The moment people pay even eight hundred from their own pocket, they actually go.",
+   "tts": "Many companies do a co-pay, sir. Fifty-fifty. Company pays half, the employee pays half through payroll deduction. The moment people pay even eight hundred from their own pocket, they actually go.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t081",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "That's true, honestly. When something is free, nobody values it.",
+   "tts": "That's true, honestly. When something is free, nobody values it.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t082",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Or we could make it mandatory for the... no, scratch that. We can't force anyone to go to a gym. HR nightmare.",
+   "tts": "Or we could make it mandatory for the... no, scratch that. We can't force anyone to go to a gym. HR nightmare.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t083",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Haha, no sir, voluntary is better. Co-pay does the job.",
+   "tts": "Haha, no sir, voluntary is better. Co-pay does the job.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t084",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "One more. Liability. If someone hurts himself on your machine, what happens? I don't want the company in the middle.",
+   "tts": "One more. Liability. If someone hurts himself on your machine, what happens? I don't want the company in the middle.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t085",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Every member signs our waiver at joining, sir, and all our trainers are certified and first-aid trained. Liability stays between the member and us, the company is not involved. I'll send you the waiver format with the proposal.",
+   "tts": "Every member signs our waiver at joining, sir, and all our trainers are certified and first-aid trained. Liability stays between the member and us, the company is not involved. I'll send you the waiver format with the proposal.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t086",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And the health data from the assessments? People won't like it if HR sees their weight and all.",
+   "tts": "And the health data from the assessments? People won't like it if HR sees their weight and all.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t087",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Individual results go only to the employee, Ankita. The company gets only aggregate numbers, like average attendance, never anyone's personal data.",
+   "tts": "Individual results go only to the employee, Ankita. The company gets only aggregate numbers, like average attendance, never anyone's personal data.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t088",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Okay. See, I'll be very straight. If the monthly number is under fifty thousand, I can at least table it with our CFO. Above that, don't even bother.",
+   "tts": "Okay. See, I'll be very straight. If the monthly number is under fifty thousand, I can at least table it with our CFO. Above that, don't even bother.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t089",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Pilot is thirty-two thousand, sir, well under fifty. And with co-pay, the company's share is only sixteen thousand.",
+   "tts": "Pilot is thirty-two thousand, sir, well under fifty. And with co-pay, the company's share is only sixteen thousand.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t090",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm. That I can maybe sell.",
+   "tts": "Hmm. That I can maybe sell.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t091",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Who else would be part of the decision, sir?",
+   "tts": "Who else would be part of the decision, sir?",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t092",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Our CFO, Harish Bhat. He has the final say. We have a budget review next Tuesday. If you send me something by Thursday, I can put it in the deck.",
+   "tts": "Our CFO, Harish Bhat. He has the final say. We have a budget review next Tuesday. If you send me something by Thursday, I can put it in the deck.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t093",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Done, sir. I'll send a proposal by Thursday with two options, the pilot at sixteen hundred and the pay-per-visit, plus the co-pay structure.",
+   "tts": "Done, sir. I'll send a proposal by Thursday with two options, the pilot at sixteen hundred and the pay-per-visit, plus the co-pay structure.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t094",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Also, do you have any company like ours using this? I'd like to speak to someone.",
+   "tts": "Also, do you have any company like ours using this? I'd like to speak to someone.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t095",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes sir, Bluefern Design Studio, around forty people, they've been with us eight months. I can set up a call with their admin manager this week.",
+   "tts": "Yes sir, Bluefern Design Studio, around forty people, they've been with us eight months. I can set up a call with their admin manager this week.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t096",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Okay, set that up. A ten-minute call is enough.",
+   "tts": "Okay, set that up. A ten-minute call is enough.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t097",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sure, I will fix it for this week itself.",
+   "tts": "Sure, I will fix it for this week itself.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t098",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And one thing. Harish will ask me only one question: how do I know the FlexZone story won't repeat? Give me that answer on page one.",
+   "tts": "And one thing. Harish will ask me only one question: how do I know the FlexZone story won't repeat? Give me that answer on page one.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t099",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Done, sir. Page one will have a sample usage report and the pilot exit clause. Everything else after that.",
+   "tts": "Done, sir. Page one will have a sample usage report and the pilot exit clause. Everything else after that.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t100",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And Tanvi, keep some room in the numbers. We're taking a batch of freshers in February, fifteen more chairs, so if the pilot works it won't stay at twenty.",
+   "tts": "And Tanvi, keep some room in the numbers. We're taking a batch of freshers in February, fifteen more chairs, so if the pilot works it won't stay at twenty.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t101",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Noted, sir, I'll keep that in mind.",
+   "tts": "Noted, sir, I'll keep that in mind.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t102",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Tanvi, can you also do something in the office? Like a fitness check-up camp? People get more interested when they see it.",
+   "tts": "Tanvi, can you also do something in the office? Like a fitness check-up camp? People get more interested when they see it.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t103",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Absolutely. We do a free on-site fitness assessment, body composition, BP, flexibility. Our team comes for half a day. How about Friday, the sixth of November?",
+   "tts": "Absolutely. We do a free on-site fitness assessment, body composition, BP, flexibility. Our team comes for half a day. How about Friday, the sixth of November?",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t104",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Sixth November... Diwali weekend is right after, but the sixth should be okay. Let me check the calendar, but tentatively yes.",
+   "tts": "Sixth November... Diwali weekend is right after, but the sixth should be okay. Let me check the calendar, but tentatively yes.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t105",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And coordinate the details with Ankita. Don't call me before eleven, I'm in stand-ups all morning. Email is better.",
+   "tts": "And coordinate the details with Ankita. Don't call me before eleven, I'm in stand-ups all morning. Email is better.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t106",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sure sir. Ankita, I'll WhatsApp you for the camp, and email the proposal to both of you.",
+   "tts": "Sure sir. Ankita, I'll WhatsApp you for the camp, and email the proposal to both of you.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t107",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Sounds good, Tanvi.",
+   "tts": "Sounds good, Tanvi.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t108",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "So, recap. Proposal by Thursday with the pilot and pay-per-visit options, the co-pay structure and the waiver format. Sudhir sir takes it to Mr. Bhat in Tuesday's budget review. And the fitness camp tentatively on the sixth of November.",
+   "tts": "So, recap. Proposal by Thursday with the pilot and pay-per-visit options, the co-pay structure and the waiver format. Sudhir sir takes it to Mr. Bhat in Tuesday's budget review. And the fitness camp tentatively on the sixth of November.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t109",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Fine. Let's see how it goes. Thanks Tanvi.",
+   "tts": "Fine. Let's see how it goes. Thanks Tanvi.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t110",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Thank you sir, thank you Ankita. Have a great day!",
+   "tts": "Thank you sir, thank you Ankita. Have a great day!",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  }
+ ]
+}

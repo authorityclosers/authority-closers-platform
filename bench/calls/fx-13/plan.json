@@ -1,0 +1,210 @@
+{
+ "call_id": "fx-13",
+ "call_type": "objection_heavy",
+ "language_mix": "en-IN",
+ "target_minutes": 15,
+ "scenario": "gym corporate membership for an office of 40",
+ "seller": {
+  "company": "IronLeaf Fitness",
+  "product": "Corporate wellness membership (4 centres, group classes, monthly trainer assessment)",
+  "price_list": [
+   "Corporate annual plan ₹1,800 per head per month, minimum 25 heads, 12-month term",
+   "Pay-per-visit ₹180 per visit, minimum billing ₹30,000 per month",
+   "3-month pilot: 20 heads at ₹1,600 per head per month, no lock-in",
+   "Free on-site fitness assessment camp"
+  ]
+ },
+ "speakers": [
+  {
+   "id": "S1",
+   "role": "salesperson",
+   "name": "Tanvi Malhotra",
+   "gender": "f",
+   "age_band": "20s",
+   "style": "corporate partnerships executive, upbeat, persistent, quick with options, sometimes pitches past what she hears"
+  },
+  {
+   "id": "S2",
+   "role": "prospect",
+   "name": "Sudhir Nair",
+   "gender": "m",
+   "age_band": "40s",
+   "style": "HR head of Quillstone Analytics, sceptical, burned by a past tie-up, very direct about money"
+  },
+  {
+   "id": "S3",
+   "role": "prospect",
+   "name": "Ankita Joshi",
+   "gender": "f",
+   "age_band": "20s",
+   "style": "HR executive for employee engagement, practical, knows shift patterns and staff requests"
+  }
+ ],
+ "sections": [
+  {
+   "name": "opening",
+   "minutes": 1.6,
+   "facts": [
+    "f01",
+    "f02",
+    "f03",
+    "f04",
+    "f05",
+    "f06",
+    "f07",
+    "f08"
+   ],
+   "turns": [
+    "t001",
+    "t012"
+   ]
+  },
+  {
+   "name": "pitch_and_budget",
+   "minutes": 3.5,
+   "facts": [
+    "f09",
+    "f10",
+    "f11",
+    "f12",
+    "f13",
+    "f14",
+    "f15",
+    "f16",
+    "f17",
+    "f18",
+    "f19",
+    "f20",
+    "f21",
+    "f22",
+    "f23"
+   ],
+   "turns": [
+    "t013",
+    "t037"
+   ]
+  },
+  {
+   "name": "logistics",
+   "minutes": 3.0,
+   "facts": [
+    "f24",
+    "f25",
+    "f26",
+    "f27",
+    "f28",
+    "f29",
+    "f30",
+    "f31",
+    "f32",
+    "f33"
+   ],
+   "turns": [
+    "t038",
+    "t060"
+   ]
+  },
+  {
+   "name": "price_and_competitor",
+   "minutes": 4.0,
+   "facts": [
+    "f34",
+    "f35",
+    "f36",
+    "f37",
+    "f38",
+    "f39",
+    "f40",
+    "f41",
+    "f42",
+    "f43",
+    "f44",
+    "f45",
+    "f46",
+    "f47",
+    "f48",
+    "f49",
+    "f50"
+   ],
+   "turns": [
+    "t061",
+    "t091"
+   ]
+  },
+  {
+   "name": "next_steps",
+   "minutes": 2.6,
+   "facts": [
+    "f51",
+    "f52",
+    "f53",
+    "f54",
+    "f55",
+    "f56",
+    "f57"
+   ],
+   "turns": [
+    "t092",
+    "t110"
+   ]
+  }
+ ],
+ "coaching_truths": [
+  {
+   "id": "k01",
+   "kind": "good_objection_handling",
+   "turn_ids": [
+    "t027",
+    "t029",
+    "t033"
+   ],
+   "statement": "On the low-uptake story from the previous gym she asked why people stopped going, then answered with a monthly usage report and a pay-per-visit model."
+  },
+  {
+   "id": "k02",
+   "kind": "wrong_info_given",
+   "turn_ids": [
+    "t062",
+    "t063",
+    "t064"
+   ],
+   "statement": "She claimed PulseHub had no proper showers or lockers; the prospect had visited himself and contradicted her, and she had to take it back."
+  },
+  {
+   "id": "k03",
+   "kind": "ignored_buying_signal",
+   "turn_ids": [
+    "t055",
+    "t056"
+   ],
+   "statement": "Ankita said half the women had asked for a gym last month; Tanvi went on listing classes instead of building the pilot around that demand."
+  },
+  {
+   "id": "k04",
+   "kind": "missed_discovery",
+   "turn_ids": [
+    "t059",
+    "t060"
+   ],
+   "statement": "The HR head said the office moves to a new tower in January, which changes the nearest centre; Tanvi skipped past it to pricing."
+  },
+  {
+   "id": "k05",
+   "kind": "good_objection_handling",
+   "turn_ids": [
+    "t067",
+    "t068",
+    "t070"
+   ],
+   "statement": "Asked to match the competitor price, she refused honestly and offered a no-lock-in pilot that removed the risk instead of cutting the annual price."
+  },
+  {
+   "id": "k06",
+   "kind": "other",
+   "turn_ids": [
+    "t046"
+   ],
+   "statement": "She misstated the weekday opening time as 5:30 and corrected it to 6 a.m. in the middle of a timing objection, which costs credibility."
+  }
+ ]
+}
