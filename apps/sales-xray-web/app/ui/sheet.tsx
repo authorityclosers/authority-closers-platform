@@ -34,6 +34,13 @@ export const SHEET_DISMISS_SHARE = 0.32;
 const DISMISS_MIN_PX = 96;
 /** A flick down faster than this (px per ms) closes it from anywhere. */
 export const SHEET_FLICK = 0.55;
+/**
+ * Pointer clicks this soon after opening are ignored: the second half of a
+ * double tap, or a ghost click, on the control that opened the sheet would
+ * otherwise land on whatever row has just risen under the finger (the More
+ * tab opened Settings that way in the orchestrator's pane, 20 Oct).
+ */
+export const SHEET_SETTLE_MS = 350;
 
 const matches = (query: string) =>
   typeof window !== "undefined" && window.matchMedia?.(query).matches === true;
@@ -179,6 +186,8 @@ export function Sheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // When it last opened: pointer clicks right after are not meant for it.
+  const openedAt = useRef(-Infinity);
   // The content stays while the sheet slides away.
   const [shown, setShown] = useState(open);
   if (open && !shown) setShown(true);
@@ -199,6 +208,7 @@ export function Sheet({
       }
       dialog.showModal?.();
       if (!dialog.open) dialog.setAttribute("open", "");
+      openedAt.current = performance.now();
       enter(panel, scrim, wide);
       return;
     }
@@ -396,6 +406,17 @@ export function Sheet({
         event.preventDefault();
         onClose();
       }}
+      onClickCapture={(event) => {
+        // Pointer clicks only (detail counts the presses): a keyboard's
+        // Enter or Space is always meant.
+        if (
+          event.detail > 0 &&
+          performance.now() - openedAt.current < SHEET_SETTLE_MS
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
     >
       <div
         ref={scrimRef}
@@ -404,7 +425,11 @@ export function Sheet({
         onClick={onClose}
       />
       <div ref={panelRef} className={styles.panel}>
-        <span className={styles.grabber} data-sheet-grip="" aria-hidden="true" />
+        <span
+          className={styles.grabber}
+          data-sheet-grip=""
+          aria-hidden="true"
+        />
         {shown ? (
           <>
             {head ? (

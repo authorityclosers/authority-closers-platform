@@ -116,7 +116,11 @@ const warming = new Set<string>();
  * page reads for itself as before.
  */
 export async function warmCallsList(identity: string | null | undefined) {
-  if (!isIdentity(identity) || cachedCallsPage(identity) || warming.has(identity))
+  if (
+    !isIdentity(identity) ||
+    cachedCallsPage(identity) ||
+    warming.has(identity)
+  )
     return;
   warming.add(identity);
   try {

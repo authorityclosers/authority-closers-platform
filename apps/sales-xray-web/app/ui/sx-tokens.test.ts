@@ -34,10 +34,16 @@ it("allows three text sizes plus title and figure styles", () => {
 
 it("keeps glass on one material with solid fallbacks (design system v2)", () => {
   const code = tokens.replace(/\/\*[\s\S]*?\*\//g, "");
-  expect(code).toMatch(/\.sx-glass\s*\{[^}]*backdrop-filter:\s*var\(--sx-glass-blur\)/);
+  expect(code).toMatch(
+    /\.sx-glass\s*\{[^}]*backdrop-filter:\s*var\(--sx-glass-blur\)/,
+  );
   expect(code).toMatch(/@supports not \(\s*\(backdrop-filter/);
-  expect(code).toMatch(/prefers-reduced-transparency: reduce[^@]*--sx-glass: var\(--sx-elevated\)/);
-  expect(code).toMatch(/prefers-contrast: more[^@]*--sx-glass: var\(--sx-elevated\)/);
+  expect(code).toMatch(
+    /prefers-reduced-transparency: reduce[^@]*--sx-glass: var\(--sx-elevated\)/,
+  );
+  expect(code).toMatch(
+    /prefers-contrast: more[^@]*--sx-glass: var\(--sx-elevated\)/,
+  );
 });
 
 it("gives motion springs and a reduced-motion answer", () => {

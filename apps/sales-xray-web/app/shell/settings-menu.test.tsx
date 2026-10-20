@@ -99,9 +99,7 @@ it("opens as a sheet on a phone, named Account, which swipes away", async () => 
   asPhone(true);
   const sheet = await open();
   expect(sheet.tagName).toBe("DIALOG");
-  const title = document.getElementById(
-    sheet.getAttribute("aria-labelledby")!,
-  );
+  const title = document.getElementById(sheet.getAttribute("aria-labelledby")!);
   expect(title?.textContent).toBe("Account");
   expect(sheet.textContent).toContain("Fictional User");
   expect(sheet.textContent).toContain("Log out");
@@ -140,8 +138,8 @@ it.each<[Allowance, string | null]>([
 it("lists only what a person needs: Settings, Plan & usage, What's new, Help", async () => {
   asPhone(false);
   const menu = await open({ organisation: true });
-  const rows = [...menu.querySelectorAll<HTMLElement>("a, button")].map(
-    (row) => row.textContent?.trim(),
+  const rows = [...menu.querySelectorAll<HTMLElement>("a, button")].map((row) =>
+    row.textContent?.trim(),
   );
   expect(rows).toEqual(
     expect.arrayContaining([
@@ -417,7 +415,9 @@ it("offers Phone setup in the More sheet inside the phone app only", async () =>
 
 it("asks the server for nothing while closed, though it stays mounted", async () => {
   asPhone(false);
-  const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(new Response(null, { status: 503 }));
   vi.stubGlobal("fetch", fetcher);
   await open(
     { open: false },

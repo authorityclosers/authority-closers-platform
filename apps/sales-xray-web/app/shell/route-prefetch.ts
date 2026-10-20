@@ -72,7 +72,10 @@ function savingData() {
 }
 
 type IdleWindow = Window & {
-  requestIdleCallback?: (run: () => void, options?: { timeout: number }) => number;
+  requestIdleCallback?: (
+    run: () => void,
+    options?: { timeout: number },
+  ) => number;
   cancelIdleCallback?: (handle: number) => void;
 };
 

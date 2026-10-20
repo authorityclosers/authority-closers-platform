@@ -4,8 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { Sheet, SHEET_PHONE_QUERY } from "./sheet";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 let phone = true;
 beforeEach(() => {
@@ -56,8 +57,7 @@ async function mount(onClose?: () => void) {
 
 /** The sheet's panel: the box around its body. */
 const panelOf = (dialog: HTMLDialogElement) =>
-  [...dialog.querySelectorAll("p")]
-    .find((p) => p.textContent === "Sheet body")!
+  [...dialog.querySelectorAll("p")].find((p) => p.textContent === "Sheet body")!
     .parentElement!.parentElement!;
 
 function touch(type: string, target: Element, y: number, at: number) {
@@ -87,11 +87,12 @@ it("closes from the close button, Escape and a tap on the dimmed page", async ()
     const { dialog, root } = await mount(onClose);
     await act(async () => {
       if (how === "button")
-        dialog.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click();
+        dialog
+          .querySelector<HTMLButtonElement>('[aria-label="Close"]')!
+          .click();
       if (how === "escape")
         dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
-      if (how === "scrim")
-        (dialog.firstElementChild as HTMLElement).click();
+      if (how === "scrim") (dialog.firstElementChild as HTMLElement).click();
     });
     expect(onClose, how).toHaveBeenCalledOnce();
     // It slides away first, then closes.
@@ -221,4 +222,36 @@ it("lets a mouse select the body's words: only the grip drags", async () => {
     pointer("pointerup", body, 500, 40);
   });
   expect(onClose).not.toHaveBeenCalled();
+});
+
+it("ignores a pointer click that lands while it is still rising (a double tap's second half)", async () => {
+  const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+  const onClose = vi.fn();
+  const { dialog } = await mount(onClose);
+  const close = dialog.querySelector<HTMLButtonElement>(
+    '[aria-label="Close"]',
+  )!;
+  now.mockReturnValue(1_100);
+  await act(async () => {
+    close.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+  });
+  expect(onClose).not.toHaveBeenCalled();
+  // A keyboard's Enter is always meant.
+  await act(async () => close.click());
+  expect(onClose).toHaveBeenCalledOnce();
+  now.mockRestore();
+});
+
+it("takes a tap once it has settled", async () => {
+  const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+  const onClose = vi.fn();
+  const { dialog } = await mount(onClose);
+  now.mockReturnValue(1_400);
+  await act(async () => {
+    dialog
+      .querySelector('[aria-label="Close"]')!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+  });
+  expect(onClose).toHaveBeenCalledOnce();
+  now.mockRestore();
 });

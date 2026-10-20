@@ -1012,7 +1012,8 @@
   border-radius: var(--sx-radius-pill);
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
-  box-shadow: 0 4px 12px -4px color-mix(in oklab, var(--sx-accent) 70%, transparent);
+  box-shadow: 0 4px 12px -4px
+    color-mix(in oklab, var(--sx-accent) 70%, transparent);
   transition: transform var(--sx-dur-base) var(--sx-spring);
 }
 

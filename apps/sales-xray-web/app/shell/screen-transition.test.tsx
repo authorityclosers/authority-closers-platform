@@ -15,8 +15,9 @@ import {
   useScreenMotion,
 } from "./screen-transition";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const animate = vi.fn(() => ({ finished: Promise.resolve() }));
 beforeEach(() => {
@@ -104,7 +105,10 @@ it("shows the tapped place's outline at once, sliding in, until the router arriv
   // Slid in from the side it moves towards (a phone), never a view
   // transition, whose overlay would take the click.
   const [frames] = animate.mock.calls[0] as unknown as [Keyframe[]];
-  expect(frames[0]).toMatchObject({ opacity: 0, transform: "translateX(28px)" });
+  expect(frames[0]).toMatchObject({
+    opacity: 0,
+    transform: "translateX(28px)",
+  });
   await frame.render("/leads");
   expect(frame.host.textContent).toBe("page");
   // The page taking the outline's place doesn't move again.

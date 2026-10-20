@@ -111,8 +111,7 @@ const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
 /** The spring from the tokens where the browser takes linear() curves. */
 function spring(element: HTMLElement) {
   return (
-    getComputedStyle(element).getPropertyValue("--sx-spring").trim() ||
-    EASE_OUT
+    getComputedStyle(element).getPropertyValue("--sx-spring").trim() || EASE_OUT
   );
 }
 
@@ -199,9 +198,7 @@ export function useScreenMotion(
   pageRef: RefObject<HTMLElement | null>,
   pathname: string | null,
 ): string | null {
-  const [going, setGoing] = useState<{ to: string; from: string } | null>(
-    null,
-  );
+  const [going, setGoing] = useState<{ to: string; from: string } | null>(null);
   // The address a tap moved away from: its arrival needs no second motion.
   const tappedFrom = useRef<string | null>(null);
   useEffect(() => {

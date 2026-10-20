@@ -4,8 +4,9 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import { useRowsInView } from "./rows-in-view";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -26,8 +27,9 @@ it("counts every row where nothing can tell what is on screen (and under test)",
 
 it("adds a row once it comes on screen, and only then", async () => {
   vi.stubEnv("NODE_ENV", "production");
-  let report: (entries: { isIntersecting: boolean; target: Element }[]) => void =
-    () => {};
+  let report: (
+    entries: { isIntersecting: boolean; target: Element }[],
+  ) => void = () => {};
   const observed: Element[] = [];
   vi.stubGlobal(
     "IntersectionObserver",

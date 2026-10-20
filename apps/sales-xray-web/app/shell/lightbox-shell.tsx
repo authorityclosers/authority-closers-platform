@@ -1263,7 +1263,11 @@ function LightboxShellFrame({
                 >
                   <small className={styles.mobileContext}>
                     {workspaceLabel}
-                    <ChevronDown size={12} strokeWidth={2.5} aria-hidden="true" />
+                    <ChevronDown
+                      size={12}
+                      strokeWidth={2.5}
+                      aria-hidden="true"
+                    />
                   </small>
                   <b>{pageTitle ?? workspaceLabel}</b>
                 </button>

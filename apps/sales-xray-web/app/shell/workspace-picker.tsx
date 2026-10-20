@@ -116,8 +116,7 @@ export function WorkspacePicker({
   personName?: string | null;
 }) {
   const current =
-    workspaces.find((workspace) => workspace.tenant_id === currentId) ??
-    null;
+    workspaces.find((workspace) => workspace.tenant_id === currentId) ?? null;
   const others = workspaces.filter(
     (workspace) => workspace.tenant_id !== current?.tenant_id,
   );
