@@ -10,7 +10,11 @@ import type { ApiResult } from "@/app/lib/server-api";
 
 import sandbox from "../../../../sales-xray-web/app/review-fixture/insights/sandbox.json";
 
-const state = vi.hoisted(() => ({ ok: true, paths: [] as string[] }));
+const state = vi.hoisted(() => ({
+  ok: true,
+  paths: [] as string[],
+  analysis: null as unknown,
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -34,6 +38,8 @@ vi.mock("@/app/lib/server-api", async (original) => {
         };
       if (path.startsWith("/v1/admin/conversation/insights/calls"))
         return { ok: true, status: 200, data: normalize(sandbox.calls) };
+      if (path.startsWith("/v1/admin/conversation/insights/analysis"))
+        return { ok: true, status: 200, data: normalize(state.analysis ?? {}) };
       return {
         ok: true,
         status: 200,
@@ -62,6 +68,7 @@ import CompanyPage from "./page";
 beforeEach(() => {
   state.ok = true;
   state.paths = [];
+  state.analysis = null;
 });
 
 it("shows the organisation's calls combined, labelled synthetic", async () => {
@@ -127,4 +134,26 @@ it("ignores an organisation that isn't an id", async () => {
     }),
   );
   expect(state.paths[0]).toBe("/v1/admin/conversation/insights");
+});
+
+it("shows skills as the AI pointer review scored them, never every skill at 100%", async () => {
+  state.analysis = {
+    window: { days: 90 },
+    calls_analysed: 20,
+    calls_scored: 16,
+    skills: [
+      { label: "Discovery", calls: 16, average: 41, needs_work_share: 0.75 },
+      { label: "Rapport", calls: 4, average: 82, needs_work_share: 0 },
+    ],
+  };
+  const html = renderToStaticMarkup(
+    await CompanyPage({ searchParams: Promise.resolve({}) }),
+  );
+  expect(html).toContain("Skills needing work");
+  expect(html).toContain("60%"); // (16 × 0.75 + 4 × 0) / 20 calls
+  expect(html).toContain("AI pointer review · 16 calls scored · weakest first");
+  expect(html).not.toContain("Observed share; calls needing attention");
+  // Shown once, in the Skills panel; the analysis panels leave theirs out.
+  expect(html.match(/Skill scores/g)).toHaveLength(1);
+  expect(html).not.toContain(">Skill scores<");
 });

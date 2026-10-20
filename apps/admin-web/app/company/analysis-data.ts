@@ -72,3 +72,16 @@ export function rangeDays(range: string): number {
   const match = /^(\d{1,3})d$/.exec(range);
   return match ? Math.max(1, Math.min(365, Number(match[1]))) : 90;
 }
+
+/**
+ * How often the AI pointer review did not mark a skill good, over every
+ * skill and scored call (weighted by calls); null when nothing was scored.
+ */
+export function needsWorkShare(skills: readonly SkillScore[]): number | null {
+  const calls = skills.reduce((sum, skill) => sum + skill.calls, 0);
+  if (!calls) return null;
+  return (
+    skills.reduce((sum, skill) => sum + skill.needsWorkShare * skill.calls, 0) /
+    calls
+  );
+}

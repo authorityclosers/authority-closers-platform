@@ -5,8 +5,8 @@
  */
 import Link from "next/link";
 
-import type { AnalysisInsights } from "./analysis-data";
-import { AnalysisPanels } from "./analysis-panels";
+import { needsWorkShare, type AnalysisInsights } from "./analysis-data";
+import { AnalysisPanels, SKILL_WHY, SkillScores } from "./analysis-panels";
 import type { CSSProperties } from "react";
 
 import {
@@ -240,6 +240,8 @@ export function CompanyView({
 }) {
   const { totals, previous } = data;
   const value = rupees(totals.wonValue);
+  // The AI pointer review's skill scores, when this window has any.
+  const scored = analysis?.skills.length ? analysis.skills : null;
   const outcomes = data.outcomes
     .filter((row) => row.calls > 0)
     .sort((a, b) => b.calls - a.calls)
@@ -342,15 +344,25 @@ export function CompanyView({
               : percent(totals.winShare)
           }
         />
-        <Kpi
-          label="Skills needing attention"
-          value={percent(totals.needsAttentionShare)}
-          delta={points(
-            totals.needsAttentionShare,
-            previous?.needsAttentionShare ?? null,
-          )}
-          note="Lower is better"
-        />
+        {scored ? (
+          // The reports mark nearly every skill observed (owner 19 Oct: "every
+          // skill reads 100%"); the AI pointer review says how often it fell short.
+          <Kpi
+            label="Skills needing work"
+            value={percent(needsWorkShare(scored))}
+            note={`AI pointer review · ${count(analysis?.callsScored ?? 0)} calls · lower is better`}
+          />
+        ) : (
+          <Kpi
+            label="Skills needing attention"
+            value={percent(totals.needsAttentionShare)}
+            delta={points(
+              totals.needsAttentionShare,
+              previous?.needsAttentionShare ?? null,
+            )}
+            note="Lower is better"
+          />
+        )}
       </Tiles>
       {view === "overview" ? (
         <>
@@ -397,53 +409,61 @@ export function CompanyView({
                 <Bars rows={outcomes} />
               </div>
             </Panel>
-            <Panel
-              title="Skills across the calls"
-              sub={
-                analysis?.skills.length
-                  ? "What each report marks (observed or not), not quality: see Skill scores"
-                  : "Observed share; calls needing attention"
-              }
-            >
-              <div className={styles.inset}>
-                <ul className={styles.skills}>
-                  {data.skills.map((skill) => {
-                    const observed = skill.strong + skill.observed;
-                    const whole =
-                      observed + skill.needsAttention + skill.unknown;
-                    return (
-                      <li key={skill.id}>
-                        <span>{skill.label}</span>
-                        <span className={styles.split} aria-hidden="true">
-                          <i
-                            data-key="observed"
-                            style={{ flexGrow: observed }}
-                          />
-                          <i
-                            data-key="attention"
-                            style={{ flexGrow: skill.needsAttention }}
-                          />
-                          <i
-                            data-key="unknown"
-                            style={{ flexGrow: skill.unknown }}
-                          />
-                        </span>
-                        <span className={styles.value}>
-                          {percent(whole ? observed / whole : null)}
-                          <small>
-                            {skill.needsAttention
-                              ? `${count(skill.needsAttention)} need work`
-                              : "—"}
-                          </small>
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            </Panel>
+            {scored ? (
+              <Panel
+                title="Skills across the calls"
+                sub={`AI pointer review · ${count(analysis?.callsScored ?? 0)} calls scored · weakest first`}
+                tools={<Why detail={SKILL_WHY} />}
+              >
+                <SkillScores skills={scored} />
+              </Panel>
+            ) : (
+              <Panel
+                title="Skills across the calls"
+                sub="Observed share; calls needing attention"
+              >
+                <div className={styles.inset}>
+                  <ul className={styles.skills}>
+                    {data.skills.map((skill) => {
+                      const observed = skill.strong + skill.observed;
+                      const whole =
+                        observed + skill.needsAttention + skill.unknown;
+                      return (
+                        <li key={skill.id}>
+                          <span>{skill.label}</span>
+                          <span className={styles.split} aria-hidden="true">
+                            <i
+                              data-key="observed"
+                              style={{ flexGrow: observed }}
+                            />
+                            <i
+                              data-key="attention"
+                              style={{ flexGrow: skill.needsAttention }}
+                            />
+                            <i
+                              data-key="unknown"
+                              style={{ flexGrow: skill.unknown }}
+                            />
+                          </span>
+                          <span className={styles.value}>
+                            {percent(whole ? observed / whole : null)}
+                            <small>
+                              {skill.needsAttention
+                                ? `${count(skill.needsAttention)} need work`
+                                : "—"}
+                            </small>
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </Panel>
+            )}
           </div>
-          {analysis ? <AnalysisPanels data={analysis} /> : null}
+          {analysis ? (
+            <AnalysisPanels data={analysis} skillsShown={Boolean(scored)} />
+          ) : null}
           <div className={styles.grid}>
             {data.objections.length || !analysis ? (
               <Panel title="Objections" sub="What prospects pushed back on">

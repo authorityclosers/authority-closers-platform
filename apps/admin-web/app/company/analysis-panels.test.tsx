@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
-import { normalizeAnalysis, rangeDays } from "./analysis-data";
+import { needsWorkShare, normalizeAnalysis, rangeDays } from "./analysis-data";
 import { AnalysisPanels } from "./analysis-panels";
 
 (
@@ -74,4 +74,24 @@ it("shows what buyers said, commitments and skill scores weakest first", async (
   expect(skills[0]).toContain("Purpose & Agenda Setting");
   expect(skills[0]).toContain("75%");
   expect(skills[1]).toContain("Active Listening");
+});
+
+it("leaves the skill scores out when the company view already shows them", async () => {
+  await act(async () =>
+    root.render(<AnalysisPanels data={DATA} skillsShown />),
+  );
+  expect(host.textContent).not.toContain("Skill scores");
+  expect(host.textContent).toContain("Commitments and readings");
+  expect(host.querySelectorAll("tbody tr")).toHaveLength(0);
+});
+
+it("weighs the needs-work share by the calls each skill was scored on", () => {
+  expect(needsWorkShare(DATA.skills)).toBeCloseTo(0.425);
+  expect(
+    needsWorkShare([
+      { label: "A", calls: 3, average: 40, needsWorkShare: 1 },
+      { label: "B", calls: 1, average: 90, needsWorkShare: 0 },
+    ]),
+  ).toBe(0.75);
+  expect(needsWorkShare([])).toBeNull();
 });
