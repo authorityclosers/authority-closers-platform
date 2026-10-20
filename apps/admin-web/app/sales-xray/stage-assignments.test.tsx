@@ -133,8 +133,24 @@ it("lists every paid job once, in pipeline order", () => {
     "Call data · deep",
     "AI replies",
   ]);
-  expect(host.textContent).toContain("Changes here apply to dev");
-  expect(host.textContent).toContain("costs from the last 14 days");
+  expect(host.textContent).toContain("dev · last 14 days");
+});
+
+it("gives phones one card per job, with the change on the card", () => {
+  const cards = [
+    ...render().querySelectorAll('[role="list"] [role="listitem"]'),
+  ];
+  expect(
+    cards.map((card) => card.querySelector("strong")?.textContent),
+  ).toHaveLength(7);
+  const fast = cards[4] as HTMLElement;
+  expect(fast.querySelector("strong")?.textContent).toBe("Call data · fast");
+  expect(fast.querySelector("code")?.textContent).toBe("model-a");
+  expect(fast.textContent).toContain("₹0.05 a min");
+  expect(fast.querySelectorAll("li")).toHaveLength(2);
+  expect(cards[0]?.querySelector("a")?.getAttribute("href")).toBe(
+    "/sales-xray/providers?tab=providers",
+  );
 });
 
 it("shows this environment's model, its cost, and an estimate for every model", () => {
@@ -174,8 +190,7 @@ it("still offers the change without metrics, and leaves out estimates it cannot 
   const fast = row(host, "Call data · fast");
   expect(fast.querySelector("code")?.textContent).toBe("model-a");
   expect(fast.querySelector("ul")).toBeNull();
-  expect(host.textContent).toContain("Changes here apply to this environment");
-  expect(host.textContent).toContain("costs from the last 30 days");
+  expect(host.textContent).toContain("This environment · last 30 days");
 });
 
 it("prices a stage's tokens per audio minute at a model's list price", () => {

@@ -382,3 +382,17 @@
 .estimates li[data-current] b {
   color: var(--sx-accent);
 }
+
+/* Phones: one card per job; what it runs on beside its cost, the change below. */
+.cardLine {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardLine > span:last-child {
+  color: var(--sx-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

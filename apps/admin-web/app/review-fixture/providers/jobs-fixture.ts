@@ -113,7 +113,7 @@ const stage = (code: string, perMinute: number, input = 0, output = 0) => ({
 export const jobsMetrics = normalizeMetrics({
   window: { days: 30 },
   here: "dev",
-  fx: { currency: "USD", usd_to_inr: 88, set_on: "2026-09-19" },
+  fx: { currency: "USD", usd_to_inr: 100, set_on: "2026-09-19" },
   routes: [
     route("C2", "sarvam", "saaras:v3"),
     route("C4", "gemini", "gemini-3.8-flash"),
@@ -129,8 +129,8 @@ export const jobsMetrics = normalizeMetrics({
       stage("C4", 0.06, 2_400_000, 180_000),
       stage("C5", 0.21, 1_900_000, 260_000),
       stage("PR", 0.03, 1_100_000, 90_000),
-      stage("CDF", 0.008, 2_600_000, 120_000),
-      stage("CDD", 0.09, 2_800_000, 300_000),
+      stage("CDF", 0.008, 720_000, 60_000),
+      stage("CDD", 0.09, 720_000, 18_000),
     ],
   },
 });
