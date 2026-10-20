@@ -67,10 +67,17 @@ PAGE_FIELDS: Final[tuple[str, ...]] = (
 class SocialError(ValueError):
     """Something about Messenger or Instagram failed; the message is safe to show."""
 
-    def __init__(self, message: str, code: int | None = None, subcode: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        code: int | None = None,
+        subcode: int | None = None,
+        detail: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.subcode = subcode
+        self.detail = detail  # Meta's own words, for owners and admins
 
 
 @dataclass(frozen=True, slots=True)
@@ -659,6 +666,13 @@ def refusal(error: Mapping[str, Any]) -> SocialError:
     raw, sub = error.get("code"), error.get("error_subcode")
     code = raw if isinstance(raw, int) and not isinstance(raw, bool) else None
     subcode = sub if isinstance(sub, int) and not isinstance(sub, bool) else None
+    said = " ".join(str(error.get("error_user_msg") or error.get("message") or "").split())
+    found = _refusal(code, subcode)
+    found.detail = said[:300] or None
+    return found
+
+
+def _refusal(code: int | None, subcode: int | None) -> SocialError:
     if code in (190, 102):
         return SocialError("Meta ended this connection. Connect the Page again.", code, subcode)
     if subcode == 2018278 or (code == 10 and subcode in (2018065, 2534022)):

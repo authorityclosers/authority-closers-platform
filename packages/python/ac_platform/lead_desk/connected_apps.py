@@ -116,6 +116,9 @@ DISCONNECT: Final[dict[App, str]] = {
 NOT_SET_UP: Final[str] = "Not available here yet."
 LEAD_WAIT: Final[timedelta] = timedelta(seconds=60)
 TEST_TEXT: Final[str] = "Test message from Sales Xray. No reply needed."
+CLEAR_LABEL: Final[str] = "Clear the form's earlier test lead"
+ASK_LABEL: Final[str] = "Ask Meta for a test lead"
+WAIT_LABEL: Final[str] = "Wait for it in Leads"
 _LEAD_TEST = re.compile(r"^lead-([0-9]{5,32})-([0-9]{9,11})$")
 _WA_TEST = re.compile(r"^wa-([0-9a-f-]{36})$")
 
@@ -676,6 +679,22 @@ async def _ai_replies(db: AsyncSession, tenant_id: UUID, *, now: datetime) -> Ap
 # ----- tests ----------------------------------------------------------------------------
 
 
+def meta_said(error: Exception) -> str:
+    """Our words, then Meta's own and its code (owners and admins only see this)."""
+    words = str(error)
+    detail = getattr(error, "detail", None)
+    code, subcode = getattr(error, "code", None), getattr(error, "subcode", None)
+    if detail:
+        words += f" Meta says: \u201c{detail}\u201d"
+    if code is not None:
+        words += f" (code {code}{f', subcode {subcode}' if subcode is not None else ''})"
+    return words
+
+
+def at_words(value: datetime | None) -> str | None:
+    return f"{value:%d %b, %H:%M} UTC" if value is not None else None
+
+
 def _require(configured: object) -> Any:
     if configured is None:
         raise DeskError(409, "This app isn't available here yet.")
@@ -683,7 +702,8 @@ def _require(configured: object) -> Any:
 
 
 async def test_lead(desk: LeadDesk, page_id: str, form_id: str, *, api: Any = None) -> TestResult:
-    """Meta makes a test lead on the form; Sales Xray then waits for it in Leads."""
+    """Meta makes a test lead on the form (its earlier one deleted first: Meta keeps one
+    at a time); Sales Xray then waits for it in Leads."""
     cfg = _require(meta.config())
     if not re.fullmatch(r"[0-9]{5,32}", form_id):
         raise DeskError(422, "Pick one of the Page's forms.")
@@ -699,17 +719,46 @@ async def test_lead(desk: LeadDesk, page_id: str, form_id: str, *, api: Any = No
         raise DeskError(404, "That Page isn't connected here.")
     token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
     client = api or meta.Graph(cfg)
+    clear = CLEAR_LABEL
+    try:
+        earlier = await client.test_leads(form_id, token)
+        for lead_id in earlier:
+            await client.delete_lead(lead_id, token)
+    except meta.MetaError as error:
+        return TestResult(
+            app="meta_leads",
+            status="failed",
+            words=f"Couldn't clear the form's earlier test lead. {meta_said(error)}",
+            steps=[
+                Step(label=clear, state="failed", words=meta_said(error)),
+                Step(label=ASK_LABEL, state="skipped"),
+                Step(label=WAIT_LABEL, state="skipped"),
+            ],
+        )
+    cleared = Step(
+        label=clear,
+        state="done" if earlier else "skipped",
+        at=desk.now,
+        words=f"Deleted {_count(len(earlier), 'test lead', 'test leads')}."
+        if earlier
+        else "There was none.",
+    )
     try:
         lead_id = await client.create_test_lead(form_id, token)
     except meta.MetaError as error:
         return TestResult(
             app="meta_leads",
             status="failed",
-            words=f"Meta didn't make the test lead: {error}",
-            steps=[Step(label="Meta made the test lead", state="failed", words=str(error))],
+            words=f"Meta didn't make the test lead. {meta_said(error)}",
+            steps=[
+                cleared,
+                Step(label=ASK_LABEL, state="failed", words=meta_said(error)),
+                Step(label=WAIT_LABEL, state="skipped"),
+            ],
         )
     started = int(time.time())
-    return await lead_status(desk, f"lead-{lead_id}-{started}")
+    result = await lead_status(desk, f"lead-{lead_id}-{started}")
+    return result.model_copy(update={"steps": [cleared, *result.steps]})
 
 
 async def lead_status(desk: LeadDesk, test_id: str) -> TestResult:
@@ -722,14 +771,22 @@ async def lead_status(desk: LeadDesk, test_id: str) -> TestResult:
             Lead.tenant_id == desk.tenant_id, Lead.source == "meta", Lead.source_ref == lead_id
         )
     )
-    made = Step(label="Meta made the test lead", state="done", at=started)
+    made = Step(label=ASK_LABEL, state="done", at=started, words=at_words(started))
     if lead is not None:
         return TestResult(
             test_id=test_id,
             app="meta_leads",
             status="passed",
             words="The test lead reached Leads. Delete it from Leads when you're done.",
-            steps=[made, Step(label="It reached Leads", state="done", at=lead.created_at)],
+            steps=[
+                made,
+                Step(
+                    label=WAIT_LABEL,
+                    state="done",
+                    at=lead.created_at,
+                    words=f"Arrived {at_words(lead.created_at)}",
+                ),
+            ],
             lead_id=lead.id,
         )
     if desk.now - started > LEAD_WAIT:
@@ -742,14 +799,14 @@ async def lead_status(desk: LeadDesk, test_id: str) -> TestResult:
                 " sending this Page's leads to Sales Xray. The 10-minute check will still"
                 " bring it in."
             ),
-            steps=[made, Step(label="It reached Leads", state="failed")],
+            steps=[made, Step(label=WAIT_LABEL, state="failed", words="Not here after a minute.")],
         )
     return TestResult(
         test_id=test_id,
         app="meta_leads",
         status="waiting",
         words="Test lead made at Meta. Waiting for it to reach Leads (up to a minute).",
-        steps=[made, Step(label="It reached Leads", state="waiting")],
+        steps=[made, Step(label=WAIT_LABEL, state="waiting")],
     )
 
 
@@ -837,6 +894,7 @@ def whatsapp_view(message: LeadWhatsAppMessage) -> TestResult:
             label=label,
             state="done" if reached >= i else "failed" if message.status == "failed" else "waiting",
             at=message.status_at if reached == i else None,
+            words=at_words(message.status_at) if reached == i else None,
         )
         for i, label in enumerate(("Sent to WhatsApp", "Delivered to the phone", "Read"))
     ]
@@ -899,8 +957,10 @@ async def test_social(
     try:
         apps = await client.subscribed_apps(account.page_id, token)
     except graph.SocialError as error:
-        steps.append(Step(label="Meta sends this Page's events", state="failed", words=str(error)))
-        return TestResult(app=channel, status="failed", words=str(error), steps=steps)
+        steps.append(
+            Step(label="Meta sends this Page's events", state="failed", words=meta_said(error))
+        )
+        return TestResult(app=channel, status="failed", words=meta_said(error), steps=steps)
     fields = apps.get(cfg.app_id, [])
     if "messages" not in fields:
         steps.append(Step(label="Meta sends this Page's events", state="failed"))
@@ -924,7 +984,12 @@ async def test_social(
         .limit(1)
     )
     steps.append(
-        Step(label="Last message received", state="done", at=newest.created_at)
+        Step(
+            label="Last message received",
+            state="done",
+            at=newest.created_at,
+            words=at_words(newest.meta_time or newest.created_at),
+        )
         if newest is not None
         else Step(label="Last message received", state="skipped", words="None yet.")
     )
@@ -1001,7 +1066,7 @@ async def test_google(
         return TestResult(
             app="google_ads",
             status="failed",
-            words=f"Google Ads didn't answer the check: {error}",
+            words=f"Google Ads didn't answer the check: {meta_said(error)}",
             steps=[Step(label="Checked Google Ads", state="failed", words=str(error))],
         )
     source.updated_at = desk.now

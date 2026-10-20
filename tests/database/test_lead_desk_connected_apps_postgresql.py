@@ -60,9 +60,22 @@ def postgres_harness() -> Any:
 
 class FakeMeta:
     made: list[str] = []
+    earlier: list[str] = []  # the form's test lead from before (Meta keeps one)
+    deleted: list[str] = []
 
     def __init__(self, cfg: meta.MetaConfig, client: Any = None, *, timeout: float = 20) -> None:
         pass
+
+    async def test_leads(self, form_id: str, page_token: str) -> list[str]:
+        if form_id == "888888888":
+            raise meta.MetaError(
+                "Meta refused the request.", code=100, detail="(#100) Unsupported get request"
+            )
+        return list(FakeMeta.earlier)
+
+    async def delete_lead(self, lead_id: str, page_token: str) -> None:
+        FakeMeta.deleted.append(lead_id)
+        FakeMeta.earlier.remove(lead_id)
 
     async def create_test_lead(self, form_id: str, page_token: str) -> str:
         assert page_token == "leads-page-token"  # noqa: S105 - the fake's own token
@@ -89,6 +102,7 @@ def test_connected_apps_health_and_real_tests(
     monkeypatch.setattr(cloud, "Cloud", FakeCloud)
     monkeypatch.setattr(graph, "Graph", SubscribedGraph)
     FakeCloud.sent, FakeGraph.sent, FakeMeta.made = [], [], []
+    FakeMeta.earlier, FakeMeta.deleted = ["5550000000000"], []
     meta_cfg, wa_cfg, social_cfg = meta.config(), cloud.config(), graph.config()
     assert meta_cfg is not None and wa_cfg is not None and social_cfg is not None
 
@@ -247,6 +261,14 @@ def test_connected_apps_health_and_real_tests(
                 )
                 assert made.status_code == 200, made.text
                 assert made.json()["status"] == "waiting" and FakeMeta.made == [FORM]
+                # Meta keeps one test lead per form: the earlier one is deleted first.
+                assert FakeMeta.deleted == ["5550000000000"]
+                assert [(s["label"], s["state"]) for s in made.json()["steps"]] == [
+                    ("Clear the form's earlier test lead", "done"),
+                    ("Ask Meta for a test lead", "done"),
+                    ("Wait for it in Leads", "waiting"),
+                ]
+                assert made.json()["steps"][0]["words"] == "Deleted 1 test lead."
                 test_id = made.json()["testId"]
                 assert (await http.get(f"{BASE}/tests/{test_id}")).json()["status"] == "waiting"
                 async with setup.sessions() as db, db.begin():
@@ -272,6 +294,19 @@ def test_connected_apps_health_and_real_tests(
                     )
                 ).json()
                 assert refused["status"] == "failed" and "admin of this Page" in refused["words"]
+                assert [s["state"] for s in refused["steps"]] == ["skipped", "failed", "skipped"]
+                unlisted = (
+                    await http.post(
+                        f"{BASE}/meta_leads/test",
+                        json={"pageId": PAGE, "formId": "888888888"},
+                        headers=WRITE,
+                    )
+                ).json()
+                # Meta's own words and code, not only "refused".
+                assert unlisted["status"] == "failed"
+                assert "(#100) Unsupported get request" in unlisted["words"]
+                assert "(code 100)" in unlisted["words"]
+                assert unlisted["steps"][0]["state"] == "failed"
                 assert (
                     await http.post(
                         f"{BASE}/meta_leads/test",
@@ -329,6 +364,7 @@ def test_connected_apps_health_and_real_tests(
                 checked = (await http.post(f"{BASE}/messenger/test", json={}, headers=WRITE)).json()
                 assert checked["status"] == "passed" and FakeGraph.sent == []
                 assert [step["state"] for step in checked["steps"]] == ["done", "done"]
+                assert checked["steps"][1]["words"].endswith("UTC")  # when it arrived
                 unconfirmed = await http.post(
                     f"{BASE}/messenger/test", json={"sendReply": True}, headers=WRITE
                 )
