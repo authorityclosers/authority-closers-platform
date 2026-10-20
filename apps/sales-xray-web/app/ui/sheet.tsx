@@ -216,7 +216,9 @@ export function Sheet({
     };
   }, [open, shown, wide]);
 
-  // Phones: the sheet follows the finger.
+  // Phones: the sheet follows the finger, a mouse or a pen. A finger drags
+  // from anywhere (the body only once it is scrolled to the top); a mouse or
+  // a pen drags from the grabber and the head, as a finger would.
   useEffect(() => {
     const panel = panelRef.current;
     const scrim = scrimRef.current;
@@ -227,55 +229,54 @@ export function Sheet({
         DISMISS_MIN_PX,
         panel.getBoundingClientRect().height * SHEET_DISMISS_SHARE,
       );
-    const start = (event: TouchEvent) => {
+    const begin = (y: number, at: number, target: Element | null) => {
       drag = null;
-      if (!matches(SHEET_PHONE_QUERY) || event.touches.length !== 1) return;
-      const target = event.target as Element | null;
+      if (!matches(SHEET_PHONE_QUERY)) return false;
       if (
         target?.closest?.(
           "input, textarea, select, [contenteditable], [data-sheet-no-drag]",
         )
       )
-        return;
+        return false;
       drag = {
-        y: event.touches[0].clientY,
+        y,
         scroller: scrollerFor(target, panel),
         dragging: null,
         offset: 0,
         past: false,
-        samples: [],
+        samples: [{ y, t: at }],
       };
+      return true;
     };
-    const move = (event: TouchEvent) => {
-      if (!drag) return;
-      const y = event.touches[0].clientY;
+    const follow = (y: number, at: number) => {
+      if (!drag) return false;
       const dy = y - drag.y;
       if (drag.dragging === null) {
-        if (Math.abs(dy) < 6) return;
+        if (Math.abs(dy) < 6) return false;
         drag.dragging = dy > 0 && (drag.scroller?.scrollTop ?? 0) <= 0;
         if (!drag.dragging) {
           drag = null;
-          return;
+          return false;
         }
         settle(panel, scrim);
       }
-      if (event.cancelable) event.preventDefault();
-      // Down follows the finger; up gives a little, like a rubber band.
+      // Down follows the pointer; up gives a little, like a rubber band.
       drag.offset = dy > 0 ? dy : dy / 6;
       panel.style.transform = `translate3d(0, ${drag.offset}px, 0)`;
       const height = panel.getBoundingClientRect().height || 1;
       scrim.style.opacity = String(
         Math.max(0, 1 - Math.max(0, drag.offset) / height),
       );
-      const now = event.timeStamp;
-      drag.samples = [...drag.samples, { y, t: now }].filter(
-        (sample) => now - sample.t <= 100,
+      drag.samples = [...drag.samples, { y, t: at }].filter(
+        (sample, index, all) =>
+          index === all.length - 1 || at - sample.t <= 100,
       );
       const past = drag.offset > limit();
       if (past !== drag.past) {
         drag.past = past;
         if (past) tick();
       }
+      return true;
     };
     const springBack = () => {
       const from = panel.style.transform;
@@ -293,10 +294,11 @@ export function Sheet({
         easing: "linear",
       });
     };
-    const end = () => {
+    const finish = () => {
       const done = drag;
       drag = null;
       if (!done?.dragging) return;
+      // Speed over the last moments; a single big jump counts by distance.
       const [first, last] = [done.samples[0], done.samples.at(-1)];
       const speed =
         first && last && last.t > first.t
@@ -313,15 +315,73 @@ export function Sheet({
       }
       springBack();
     };
-    panel.addEventListener("touchstart", start, { passive: true });
-    panel.addEventListener("touchmove", move, { passive: false });
-    panel.addEventListener("touchend", end);
-    panel.addEventListener("touchcancel", end);
+
+    const touchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        drag = null;
+        return;
+      }
+      begin(
+        event.touches[0].clientY,
+        event.timeStamp,
+        event.target as Element | null,
+      );
+    };
+    const touchMove = (event: TouchEvent) => {
+      if (!drag) return;
+      if (follow(event.touches[0].clientY, event.timeStamp) && event.cancelable)
+        event.preventDefault();
+    };
+
+    let pointer: number | null = null;
+    const pointerDown = (event: PointerEvent) => {
+      if (event.pointerType === "touch" || event.button !== 0) return;
+      const target = event.target as Element | null;
+      // A mouse or a pen holds the sheet by its grabber or its head.
+      if (
+        !target?.closest?.("[data-sheet-grip]") ||
+        target.closest("button, a, input, select, textarea")
+      )
+        return;
+      if (!begin(event.clientY, event.timeStamp, target)) return;
+      pointer = event.pointerId;
+      // No text selection while dragging.
+      event.preventDefault();
+      try {
+        panel.setPointerCapture(event.pointerId);
+      } catch {
+        // Capture is a nicety; the move events still arrive.
+      }
+    };
+    const pointerMove = (event: PointerEvent) => {
+      if (event.pointerId !== pointer) return;
+      follow(event.clientY, event.timeStamp);
+    };
+    const pointerUp = (event: PointerEvent) => {
+      if (event.pointerId !== pointer) return;
+      pointer = null;
+      // A fast mouse can jump far between its last move and the release.
+      follow(event.clientY, event.timeStamp);
+      finish();
+    };
+
+    panel.addEventListener("touchstart", touchStart, { passive: true });
+    panel.addEventListener("touchmove", touchMove, { passive: false });
+    panel.addEventListener("touchend", finish);
+    panel.addEventListener("touchcancel", finish);
+    panel.addEventListener("pointerdown", pointerDown);
+    panel.addEventListener("pointermove", pointerMove);
+    panel.addEventListener("pointerup", pointerUp);
+    panel.addEventListener("pointercancel", pointerUp);
     return () => {
-      panel.removeEventListener("touchstart", start);
-      panel.removeEventListener("touchmove", move);
-      panel.removeEventListener("touchend", end);
-      panel.removeEventListener("touchcancel", end);
+      panel.removeEventListener("touchstart", touchStart);
+      panel.removeEventListener("touchmove", touchMove);
+      panel.removeEventListener("touchend", finish);
+      panel.removeEventListener("touchcancel", finish);
+      panel.removeEventListener("pointerdown", pointerDown);
+      panel.removeEventListener("pointermove", pointerMove);
+      panel.removeEventListener("pointerup", pointerUp);
+      panel.removeEventListener("pointercancel", pointerUp);
     };
   }, [shown]);
 
@@ -344,11 +404,11 @@ export function Sheet({
         onClick={onClose}
       />
       <div ref={panelRef} className={styles.panel}>
-        <span className={styles.grabber} aria-hidden="true" />
+        <span className={styles.grabber} data-sheet-grip="" aria-hidden="true" />
         {shown ? (
           <>
             {head ? (
-              <header className={styles.head}>
+              <header className={styles.head} data-sheet-grip="">
                 {lead ? <span className={styles.lead}>{lead}</span> : null}
                 <span className={styles.titles}>
                   <h2

@@ -166,6 +166,15 @@
   text-decoration: none;
 }
 
+/* Touch screens: a 44 px target around the small link, with no room taken
+   (the negative margins give back what the height adds). */
+@media (pointer: coarse) {
+  .panelAction {
+    min-height: 44px;
+    margin-block: -12.5px;
+  }
+}
+
 .panelFoot {
   padding: 10px 14px;
   border-top: 1px solid var(--sx-line);

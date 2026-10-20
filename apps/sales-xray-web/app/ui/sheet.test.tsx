@@ -177,3 +177,48 @@ it("lets a scrolled body scroll instead of closing, and never drags on computers
   });
   expect(onClose).not.toHaveBeenCalled();
 });
+
+function pointer(type: string, target: Element, y: number, at: number) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    pointerType: { value: "mouse" },
+    button: { value: 0 },
+    pointerId: { value: 1 },
+    clientY: { value: y },
+    timeStamp: { value: at },
+  });
+  target.dispatchEvent(event);
+  return event;
+}
+
+it("closes on a mouse drag from the grabber, even one big jump, without selecting text", async () => {
+  const onClose = vi.fn();
+  const { dialog } = await mount(onClose);
+  const panel = panelOf(dialog);
+  vi.spyOn(panel, "getBoundingClientRect").mockReturnValue({
+    height: 600,
+  } as DOMRect);
+  const grip = dialog.querySelector("[data-sheet-grip]")!;
+  await act(async () => {
+    const down = pointer("pointerdown", grip, 62, 0);
+    // No text selection starts under a mouse drag.
+    expect(down.defaultPrevented).toBe(true);
+    pointer("pointerup", grip, 650, 40);
+  });
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
+it("lets a mouse select the body's words: only the grip drags", async () => {
+  const onClose = vi.fn();
+  const { dialog } = await mount(onClose);
+  const body = [...dialog.querySelectorAll("p")].find(
+    (p) => p.textContent === "Sheet body",
+  )!;
+  await act(async () => {
+    const down = pointer("pointerdown", body, 100, 0);
+    expect(down.defaultPrevented).toBe(false);
+    pointer("pointermove", body, 500, 30);
+    pointer("pointerup", body, 500, 40);
+  });
+  expect(onClose).not.toHaveBeenCalled();
+});

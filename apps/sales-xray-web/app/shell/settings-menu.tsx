@@ -213,7 +213,9 @@ export function SettingsMenu({
     null,
   );
   const card = useRef<HTMLDivElement>(null);
-  const updates = useShellUpdates();
+  // Read only while open: the menu stays mounted (so its sheet can slide
+  // away), and a closed menu must not ask the server for anything.
+  const updates = useShellUpdates(true, open);
   const { markSeen } = updates;
   const unseen = updates.unseen_count;
   const displayedKeys = useMemo(

@@ -80,6 +80,8 @@ import {
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
+import { WorkspacePicker } from "./workspace-picker";
+import { Sheet } from "../ui/sheet";
 import { allowEarlyConversationReads, dropEarlyReads } from "../early-reads";
 import { CreateOrganisationDialog } from "./create-organisation-dialog";
 import { dropInvite, refreshInvites, useInvites } from "./invites-store";
@@ -672,6 +674,7 @@ function LightboxShellFrame({
     setJoining(null);
   }
   const [createOpen, setCreateOpen] = useState(false);
+  const [workspaceSheetOpen, setWorkspaceSheetOpen] = useState(false);
 
   // Phones: the avatar in the top bar and More in the tab bar open one sheet.
   function toggleAccountSheet(event: MouseEvent<HTMLElement>) {
@@ -762,6 +765,16 @@ function LightboxShellFrame({
       ? "Personal"
       : currentWorkspace.name
     : null;
+  // Phones: the bar's workspace name opens the Workspace sheet when there
+  // is another workspace, an invitation or Create to offer.
+  const switchable = workspaces.filter(
+    (workspace) => workspace.sales_xray_enabled,
+  );
+  const canSwitchHere =
+    authenticated &&
+    !chromePending &&
+    Boolean(workspaceLabel) &&
+    (switchable.length > 1 || invites.invites.length > 0 || invites.live);
   const personalWorkspace = workspaces.find(
     (workspace) =>
       workspace.kind === "personal" && workspace.sales_xray_enabled,
@@ -1227,18 +1240,39 @@ function LightboxShellFrame({
                   </span>
                 </button>
               )}
-              <span
-                title={
-                  workspaceLabel ? `Workspace: ${workspaceLabel}` : undefined
-                }
-              >
-                {/* Two lines from the first paint: the workspace line is a
-                    placeholder while it loads, so the title never drops. */}
-                <small className={styles.mobileContext}>
-                  {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
-                </small>
-                <b>{pageTitle ?? workspaceLabel}</b>
-              </span>
+              {/* Where you are. Tapping it switches workspace in one
+                  step when there is anywhere else to go (owner, 20 Oct:
+                  "workspaces shifter needs to be made in a far better way"). */}
+              {canSwitchHere ? (
+                <button
+                  type="button"
+                  className={styles.mobilePlace}
+                  onClick={() => setWorkspaceSheetOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={workspaceSheetOpen}
+                  aria-label={`Workspace: ${workspaceLabel}. Switch workspace`}
+                  title={`Workspace: ${workspaceLabel}`}
+                >
+                  <small className={styles.mobileContext}>
+                    {workspaceLabel}
+                    <ChevronDown size={12} strokeWidth={2.5} aria-hidden="true" />
+                  </small>
+                  <b>{pageTitle ?? workspaceLabel}</b>
+                </button>
+              ) : (
+                <span
+                  title={
+                    workspaceLabel ? `Workspace: ${workspaceLabel}` : undefined
+                  }
+                >
+                  {/* Two lines from the first paint: the workspace line is a
+                      placeholder while it loads, so the title never drops. */}
+                  <small className={styles.mobileContext}>
+                    {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
+                  </small>
+                  <b>{pageTitle ?? workspaceLabel}</b>
+                </span>
+              )}
             </div>
           ) : (
             <BrandLockup href={homeHref} />
@@ -1428,6 +1462,37 @@ function LightboxShellFrame({
         openNews={openNews}
         openEvent={navigateEvent}
       />
+      {authenticated ? (
+        <Sheet
+          open={workspaceSheetOpen}
+          onClose={() => setWorkspaceSheetOpen(false)}
+          title="Workspace"
+          description="Where your calls, leads and reports live."
+        >
+          <WorkspacePicker
+            workspaces={switchable}
+            currentId={effectiveTenantId}
+            branding={branding}
+            personName={profileName}
+            onSelect={(tenantId) => {
+              setWorkspaceSheetOpen(false);
+              void handleSelectWorkspace(tenantId);
+            }}
+            onKeep={() => setWorkspaceSheetOpen(false)}
+            invites={invites.invites}
+            joining={joining}
+            onJoin={(invite) => void joinInvite(invite)}
+            onCreate={
+              invites.live
+                ? () => {
+                    setWorkspaceSheetOpen(false);
+                    setCreateOpen(true);
+                  }
+                : undefined
+            }
+          />
+        </Sheet>
+      ) : null}
       {/* Mounted while signed in, so the phone sheet can slide away. */}
       {authenticated ? (
         <SettingsMenu

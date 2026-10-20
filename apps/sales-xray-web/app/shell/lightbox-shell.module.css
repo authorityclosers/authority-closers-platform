@@ -1725,10 +1725,44 @@
   margin-left: -2px;
 }
 
-.mobileWorkspace > span {
+.mobileWorkspace > span,
+.mobilePlace {
   display: grid;
   min-width: 0;
   line-height: 1.15;
+}
+
+/* The same two lines as a button: the workspace switch, one tap away. */
+.mobilePlace {
+  justify-items: start;
+  min-height: 44px;
+  align-content: center;
+  margin: 0;
+  padding: 0 8px 0 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.mobilePlace:active {
+  transform: scale(0.97);
+}
+
+.mobilePlace:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.mobilePlace small {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .mobileWorkspace small {

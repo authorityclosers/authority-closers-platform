@@ -4,7 +4,7 @@
  * Moving between screens (owner, 20 Oct: "this gap between loading should be
  * highly animated and made in such nice way … so that its smooth").
  *
- * A tap on a tab or a rail icon answers at once: the frame swaps the page
+ * A press on a tab or a rail icon answers at once: the frame swaps the page
  * area for the next screen's outline (route-loading.tsx) inside a view
  * transition, so the page area fades through with a short slide in the
  * direction of travel (right for a place further along the tabs or a step
@@ -140,6 +140,50 @@ export function moveScreen(
   return true;
 }
 
+/** Asks the frame to give the page back: a press that never became a tap. */
+export const SCREEN_BACK_EVENT = "sx:screen-back";
+
+/** A press shows its outline at once; with no click by then, it lets go. */
+export const SCREEN_PRESS_HOLD_MS = 1_200;
+
+let pressed: { to: string; timer: number } | null = null;
+
+/**
+ * A press began on a link to `to` (pointer down): its outline shows now, so
+ * nothing waits for the click, let alone the router (orchestrator's target:
+ * under 100 ms). The click that follows navigates (takePress); a press that
+ * ends without one gives the page back (releasePress).
+ */
+export function pressScreen(from: string, to: string): boolean {
+  if (pressed?.to === to) return true;
+  releasePress();
+  if (!moveScreen(() => {}, from, to)) return false;
+  pressed = {
+    to,
+    timer: window.setTimeout(() => releasePress(to), SCREEN_PRESS_HOLD_MS),
+  };
+  return true;
+}
+
+/** The click arrived: true when its press already moved the screen. */
+export function takePress(to: string): boolean {
+  if (pressed?.to !== to) return false;
+  window.clearTimeout(pressed.timer);
+  pressed = null;
+  return true;
+}
+
+/** No click came (a long press, a drag away): give the page back. */
+export function releasePress(to?: string) {
+  if (!pressed || (to !== undefined && pressed.to !== to)) return;
+  window.clearTimeout(pressed.timer);
+  const back = pressed.to;
+  pressed = null;
+  window.dispatchEvent(
+    new CustomEvent<string>(SCREEN_BACK_EVENT, { detail: back }),
+  );
+}
+
 /**
  * The frame's half. Returns the address whose outline stands in for the
  * page right now (null: the page itself shows). The outline goes as soon
@@ -165,8 +209,18 @@ export function useScreenMotion(
       // Drawn before the view transition takes its "after" picture.
       flushSync(() => setGoing({ to, from }));
     };
+    // A press that never became a tap: the page comes back.
+    const onBack = (event: Event) => {
+      const to = (event as CustomEvent<unknown>).detail;
+      tappedFrom.current = null;
+      setGoing((current) => (current && current.to === to ? null : current));
+    };
     window.addEventListener(SCREEN_GOING_EVENT, onGoing);
-    return () => window.removeEventListener(SCREEN_GOING_EVENT, onGoing);
+    window.addEventListener(SCREEN_BACK_EVENT, onBack);
+    return () => {
+      window.removeEventListener(SCREEN_GOING_EVENT, onGoing);
+      window.removeEventListener(SCREEN_BACK_EVENT, onBack);
+    };
   }, []);
   // Any new address ends the stand-in, wherever the router went.
   if (going !== null && going.from !== pathname) setGoing(null);

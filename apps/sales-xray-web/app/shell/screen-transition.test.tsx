@@ -5,8 +5,12 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   moveScreen,
   placeOf,
+  pressScreen,
+  releasePress,
   SCREEN_GIVE_UP_MS,
+  SCREEN_PRESS_HOLD_MS,
   screenMove,
+  takePress,
   useScreenMotion,
 } from "./screen-transition";
 
@@ -150,4 +154,46 @@ it("fades the page area for a move no tap started", async () => {
   await frame.render("/dashboard");
   expect(animate).toHaveBeenCalledOnce();
   await frame.unmount();
+});
+
+it("shows the outline on the press, and the click only navigates", async () => {
+  const frame = await mount("/dashboard");
+  await act(async () => {
+    expect(pressScreen("/dashboard", "/leads")).toBe(true);
+  });
+  // On the press itself, before any click or router.
+  expect(frame.host.textContent).toBe("/leads");
+  expect(takePress("/leads")).toBe(true);
+  // Taken once: a second click would run its own move.
+  expect(takePress("/leads")).toBe(false);
+  await frame.render("/leads");
+  expect(frame.host.textContent).toBe("page");
+  await frame.unmount();
+});
+
+it("gives the page back when a press ends without a click", async () => {
+  const frame = await mount("/dashboard");
+  await act(async () => {
+    pressScreen("/dashboard", "/prospects");
+  });
+  expect(frame.host.textContent).toBe("/prospects");
+  await act(async () => releasePress("/prospects"));
+  expect(frame.host.textContent).toBe("page");
+  // A press held past the hold time lets go by itself.
+  vi.useFakeTimers();
+  await act(async () => {
+    pressScreen("/dashboard", "/prospects");
+  });
+  expect(frame.host.textContent).toBe("/prospects");
+  await act(async () => {
+    vi.advanceTimersByTime(SCREEN_PRESS_HOLD_MS);
+  });
+  expect(frame.host.textContent).toBe("page");
+  expect(takePress("/prospects")).toBe(false);
+  await frame.unmount();
+});
+
+it("never presses towards the place on screen", async () => {
+  expect(pressScreen("/leads", "/leads")).toBe(false);
+  expect(takePress("/leads")).toBe(false);
 });

@@ -414,3 +414,19 @@ it("offers Phone setup in the More sheet inside the phone app only", async () =>
     delete bridge.SXPhone;
   }
 });
+
+it("asks the server for nothing while closed, though it stays mounted", async () => {
+  asPhone(false);
+  const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
+  vi.stubGlobal("fetch", fetcher);
+  await open(
+    { open: false },
+    {
+      status: "ready",
+      authenticated: true,
+      context: { personId: "fictional-closed", sessionId: "s", tenantId: "t" },
+      retry: () => {},
+    },
+  );
+  expect(fetcher).not.toHaveBeenCalled();
+});
