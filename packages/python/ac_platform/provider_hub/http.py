@@ -3,6 +3,8 @@
 - GET /v1/admin/providers/hub[?provider=<id>]: every provider with what it is for, whether
   the pipeline can call it and how many models it offers; with ``provider``, that one's
   models (context, inputs, structured output, list prices, the stages it can run here).
+- GET /v1/admin/providers/health: each provider's spend in this environment (today, this
+  month, 30 days) and its failures (last 24 hours, 7 days, the latest in plain words).
 
 Operations admins (the Sales X-Ray control accounts) only, on the Admin host. It reads
 OpenRouter's public catalogue (no key) and never holds, prints or sends a key.
@@ -10,11 +12,13 @@ OpenRouter's public catalogue (no key) and never holds, prints or sends a key.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
 
+from ac_platform.ai_spend import policy
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
@@ -22,6 +26,7 @@ from ac_platform.conversation_intelligence.application import (
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.http.auth import AuthenticatedTransaction, require_admin_surface
 from ac_platform.http.routes import RouteContext
+from ac_platform.provider_hub import health
 from ac_platform.provider_hub.catalogue import BY_ID
 from ac_platform.provider_hub.models import CATALOGUE, Fetch, hub_view
 
@@ -40,6 +45,7 @@ def install_provider_hub_http(
     application: FastAPI, ctx: RouteContext, *, fetch: Fetch = fetch_json
 ) -> None:
     settings = ctx.settings
+    environment = policy.environment_name(settings.environment)
     dependency = Depends(ctx.require_actor, scope="function")
     router = APIRouter(tags=["provider-hub"])
 
@@ -77,5 +83,19 @@ def install_provider_hub_http(
             problem=CATALOGUE.problem,
             selected=provider,
         )
+
+    @router.get("/v1/admin/providers/health")
+    async def provider_health(
+        request: Request, response: Response, auth: AuthenticatedTransaction = dependency
+    ) -> dict[str, Any]:
+        """Each provider's spend and failures here; counts and codes, never content."""
+        await admit(request, response, auth)
+        if request.query_params:
+            raise HTTPException(422, "Provider health takes no parameters.")
+        now = datetime.now(UTC)
+        result: dict[str, Any] = await auth.database.run_sync(
+            lambda sync: health.read(sync.connection(), environment, now)
+        )
+        return result
 
     application.include_router(router)

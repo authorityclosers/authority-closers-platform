@@ -396,3 +396,67 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* Health and spend here (slice 4): plain numbers, the latest failure and what fixes it. */
+.health {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 12px;
+}
+
+.health[data-state="attention"] {
+  border-color: var(--sx-warn);
+}
+
+.health h3 {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.spend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.spend dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.spend dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.spend small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.failures {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.latest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.latest p {
+  flex: 1 1 260px;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}

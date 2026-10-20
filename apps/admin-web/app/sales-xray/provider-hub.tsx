@@ -5,7 +5,8 @@
  * and boom it's there, and all its models listed"). Type to find a provider; pick it to
  * see every model it offers with context, inputs, JSON support, list prices and the
  * pipeline stages it can run here. Searching filters as you type; the chosen provider is
- * in the link, so a page can be shared. Keys arrive in the next step (sealed, write-only).
+ * in the link, so a page can be shared. Each provider shows its spend here and its failures,
+ * the latest in plain words with what fixes it. Keys arrive next (sealed, write-only).
  */
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -14,15 +15,20 @@ import { Badge } from "../ui/kit";
 import {
   NO_MODEL_FILTER,
   PIPELINE_WORDS,
+  agoWords,
   contextWords,
+  failureCountWords,
   filterModels,
   priceWords,
   rupeeWords,
   searchProviders,
+  spendWords,
   type Hub,
   type HubProvider,
   type KindFilter,
   type ModelFilter,
+  type ProviderHealth,
+  type ProviderHealthRow,
 } from "./provider-hub-data";
 import styles from "./provider-hub.module.css";
 
@@ -76,7 +82,106 @@ export function ProviderMark({ id, name }: { id: string; name: string }) {
 const tone = (state: HubProvider["pipeline"]) =>
   state === "ready" ? "good" : state === "planned" ? "warn" : "neutral";
 
-export function ProviderHub({ hub }: { hub: Hub }) {
+/** A provider's line in the list: failing today, and this month's spend here. */
+function ListHealth({ row }: { row: ProviderHealthRow | undefined }) {
+  if (!row) return null;
+  return (
+    <>
+      {row.state === "attention" ? (
+        <Badge tone="warn">Failing today</Badge>
+      ) : null}
+      {row.spend?.monthInr ? (
+        <span>{spendWords(row.spend.monthInr)} this month</span>
+      ) : null}
+    </>
+  );
+}
+
+/** The chosen provider in this environment: spend, failures, and what fixes the latest. */
+function HealthHere({
+  provider,
+  health,
+}: {
+  provider: HubProvider;
+  health: ProviderHealth;
+}) {
+  const row = health.providers[provider.id];
+  const latest = row?.failures?.latest ?? null;
+  return (
+    <section
+      className={styles.health}
+      aria-label={`${provider.name} in ${health.environment}`}
+      data-state={row?.state ?? "idle"}
+    >
+      <h3>Here in {health.environment}</h3>
+      {row?.spend ? (
+        <dl className={styles.spend}>
+          <div>
+            <dt>Today</dt>
+            <dd>{spendWords(row.spend.todayInr)}</dd>
+          </div>
+          <div>
+            <dt>This month</dt>
+            <dd>{spendWords(row.spend.monthInr)}</dd>
+          </div>
+          <div>
+            <dt>Last {health.windowDays} days</dt>
+            <dd>
+              {spendWords(row.spend.windowInr)}{" "}
+              <small>
+                {row.spend.requests}{" "}
+                {row.spend.requests === 1 ? "request" : "requests"}
+              </small>
+            </dd>
+          </div>
+        </dl>
+      ) : (
+        <p className={styles.muted}>
+          Not used here in the last {health.windowDays} days.
+        </p>
+      )}
+      <p className={styles.failures}>
+        {row
+          ? failureCountWords(row, health.failureDays)
+          : `No failures in the last ${health.failureDays} days.`}
+      </p>
+      {latest ? (
+        <div className={styles.latest}>
+          <p>
+            <strong suppressHydrationWarning>
+              Latest {agoWords(latest.at)}
+            </strong>
+            , in {latest.featureLabel}
+            {latest.status ? ` (HTTP ${latest.status})` : ""}: {latest.words}
+          </p>
+          {latest.fix === "console" && provider.console ? (
+            <a
+              href={provider.console}
+              target="_blank"
+              rel="noreferrer"
+              className={styles.console}
+            >
+              {latest.status === 402 ? "Top up credit" : "Open the console"}
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+      <small className={styles.source}>
+        All AI here this month: {spendWords(health.month.spentInr)} of the{" "}
+        {spendWords(health.month.capInr)} cap. List-price estimates, never a
+        charge. <Link href="/ai-spend">AI spend</Link>
+      </small>
+    </section>
+  );
+}
+
+export function ProviderHub({
+  hub,
+  health = null,
+}: {
+  hub: Hub;
+  health?: ProviderHealth | null;
+}) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
   const [filter, setFilter] = useState<ModelFilter>(NO_MODEL_FILTER);
@@ -143,6 +248,7 @@ export function ProviderHub({ hub }: { hub: Hub }) {
                           ? `${provider.models} ${provider.models === 1 ? "model" : "models"}`
                           : "models after its key is added"}
                       </span>
+                      <ListHealth row={health?.providers[provider.id]} />
                     </span>
                   </span>
                 </Link>
@@ -196,6 +302,7 @@ export function ProviderHub({ hub }: { hub: Hub }) {
               Adding a key here is the next step: it will be sealed for this
               environment and never shown again.
             </p>
+            {health ? <HealthHere provider={chosen} health={health} /> : null}
             <div className={styles.modelTools}>
               <input
                 type="search"

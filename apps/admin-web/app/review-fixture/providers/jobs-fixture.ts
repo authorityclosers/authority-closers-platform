@@ -134,3 +134,71 @@ export const jobsMetrics = normalizeMetrics({
     ],
   },
 });
+
+/** Fictional GET /v1/admin/providers/health: Gemini refused for credit an hour ago. */
+export function jobsHealth(now: Date) {
+  const ago = (hours: number) =>
+    new Date(now.getTime() - hours * 3_600_000).toISOString();
+  return {
+    environment: "dev",
+    window_days: 30,
+    failure_days: 7,
+    month: { spent_inr: 412.6, cap_inr: 500 },
+    providers: [
+      {
+        id: "gemini",
+        state: "attention",
+        spend: {
+          today_inr: 18.4,
+          month_inr: 371.2,
+          window_inr: 402.9,
+          requests: 2140,
+        },
+        failures: {
+          last_7_days: 6,
+          last_24_hours: 4,
+          latest: {
+            at: ago(1),
+            status: 402,
+            category: null,
+            feature: "call_data_fast",
+            feature_label: "Call data: fast pipeline",
+            words:
+              "Out of credit, or billing is not set up. Top up in the provider's console.",
+            fix: "console",
+          },
+        },
+      },
+      {
+        id: "sarvam",
+        state: "ok",
+        spend: {
+          today_inr: 2.1,
+          month_inr: 41.4,
+          window_inr: 44,
+          requests: 96,
+        },
+        failures: null,
+      },
+      {
+        id: "elevenlabs",
+        state: "idle",
+        spend: null,
+        failures: {
+          last_7_days: 1,
+          last_24_hours: 0,
+          latest: {
+            at: ago(70),
+            status: 503,
+            category: null,
+            feature: "call_analysis",
+            feature_label: "Call analysis",
+            words:
+              "The provider had trouble on its side. It retries by itself.",
+            fix: "wait",
+          },
+        },
+      },
+    ],
+  };
+}

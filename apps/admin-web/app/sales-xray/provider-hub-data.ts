@@ -294,3 +294,145 @@ const PAISE = new Intl.NumberFormat("en-IN", {
 /** "₹0.084 a min", or "–". */
 export const rupeesPerMinute = (value: number | null) =>
   value === null ? "–" : `${PAISE.format(value)} a min`;
+
+/* ---------- health and spend here (slice 4) ---------- */
+
+/** What fixes a failure: the provider's console, a new key, another model, an engineer, or
+ * nothing (it retries by itself). */
+export type HealthFix = "console" | "key" | "model" | "engineer" | "wait";
+export type HealthState = "attention" | "ok" | "idle";
+
+export type ProviderHealthRow = {
+  id: string;
+  state: HealthState;
+  spend: {
+    todayInr: number;
+    monthInr: number;
+    windowInr: number;
+    requests: number;
+  } | null;
+  failures: {
+    last7Days: number;
+    last24Hours: number;
+    latest: {
+      at: string;
+      status: number | null;
+      featureLabel: string;
+      words: string;
+      fix: HealthFix;
+    } | null;
+  } | null;
+};
+
+export type ProviderHealth = {
+  environment: string;
+  windowDays: number;
+  failureDays: number;
+  month: { spentInr: number; capInr: number };
+  providers: Record<string, ProviderHealthRow>;
+};
+
+const FIXES: readonly HealthFix[] = [
+  "console",
+  "key",
+  "model",
+  "engineer",
+  "wait",
+];
+const HEALTH_STATES: readonly HealthState[] = ["attention", "ok", "idle"];
+
+/** GET /v1/admin/providers/health: spend and failures per provider in this environment. */
+export function normalizeHealth(raw: unknown): ProviderHealth {
+  const body = read.object(raw);
+  const month = read.object(body.month);
+  const providers: Record<string, ProviderHealthRow> = {};
+  for (const item of read.array(body.providers)) {
+    const row = read.object(item);
+    const id = read.string(row.id);
+    if (!id) continue;
+    const state = read.string(row.state);
+    const spend = row.spend ? read.object(row.spend) : null;
+    const failures = row.failures ? read.object(row.failures) : null;
+    const latest = failures?.latest ? read.object(failures.latest) : null;
+    const fix = latest ? read.string(latest.fix) : "";
+    providers[id] = {
+      id,
+      state: (HEALTH_STATES as readonly string[]).includes(state)
+        ? (state as HealthState)
+        : "idle",
+      spend: spend
+        ? {
+            todayInr: read.number(spend.today_inr),
+            monthInr: read.number(spend.month_inr),
+            windowInr: read.number(spend.window_inr),
+            requests: read.number(spend.requests),
+          }
+        : null,
+      failures: failures
+        ? {
+            last7Days: read.number(failures.last_7_days),
+            last24Hours: read.number(failures.last_24_hours),
+            latest: latest
+              ? {
+                  at: read.string(latest.at),
+                  status: read.optionalNumber(latest.status),
+                  featureLabel: read.string(
+                    latest.feature_label,
+                    read.string(latest.feature),
+                  ),
+                  words: read.string(latest.words),
+                  fix: (FIXES as readonly string[]).includes(fix)
+                    ? (fix as HealthFix)
+                    : "engineer",
+                }
+              : null,
+          }
+        : null,
+    };
+  }
+  return {
+    environment: read.string(body.environment),
+    windowDays: read.number(body.window_days, 30),
+    failureDays: read.number(body.failure_days, 7),
+    month: {
+      spentInr: read.number(month.spent_inr),
+      capInr: read.number(month.cap_inr),
+    },
+    providers,
+  };
+}
+
+const SPEND = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** "₹1.50" (a list-price estimate, never a charge). */
+export const spendWords = (rupees: number) => SPEND.format(rupees);
+
+/** "just now", "40 min ago", "3 h ago", "2 days ago". */
+export function agoWords(at: string, now: Date = new Date()): string {
+  const minutes = Math.round((now.getTime() - new Date(at).getTime()) / 60_000);
+  if (!Number.isFinite(minutes)) return "";
+  if (minutes < 2) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
+
+/** "3 failures in the last 7 days, 1 in the last 24 hours", or "No failures in …". */
+export function failureCountWords(
+  row: ProviderHealthRow,
+  days: number,
+): string {
+  const failures = row.failures;
+  if (!failures || failures.last7Days === 0)
+    return `No failures in the last ${days} days.`;
+  const total = `${failures.last7Days} ${failures.last7Days === 1 ? "failure" : "failures"} in the last ${days} days`;
+  return failures.last24Hours
+    ? `${total}, ${failures.last24Hours} in the last 24 hours.`
+    : `${total}, none in the last 24 hours.`;
+}

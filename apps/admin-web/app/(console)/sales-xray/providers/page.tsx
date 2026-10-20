@@ -6,7 +6,11 @@ import { normalizeCallData } from "@/app/sales-xray/call-data-model";
 import { ControlCenterPanel } from "@/app/sales-xray/control-center";
 import { ProviderControlsPanel } from "@/app/sales-xray/provider-controls";
 import { ProviderHub } from "@/app/sales-xray/provider-hub";
-import { modelPrices, normalizeHub } from "@/app/sales-xray/provider-hub-data";
+import {
+  modelPrices,
+  normalizeHealth,
+  normalizeHub,
+} from "@/app/sales-xray/provider-hub-data";
 import { StageAssignments } from "@/app/sales-xray/stage-assignments";
 import { normalizeRegistry } from "@/app/settings/registry-data";
 import { QueryTabs, Unavailable } from "@/app/ui/kit";
@@ -23,13 +27,14 @@ const TABS = [
 
 const PROVIDER_ID = /^[a-z_]{1,32}$/;
 
-/** The hub, and who does each job: read together so the page arrives whole. */
+/** The hub, its health here, and who does each job: read together so the page arrives whole. */
 async function readHub(chosen: string | null) {
-  const [hub, registry, callData, leadAi, metrics] = await Promise.all([
+  const [hub, health, registry, callData, leadAi, metrics] = await Promise.all([
     adminRead(
       `/v1/admin/providers/hub${chosen ? `?provider=${chosen}` : ""}`,
       normalizeHub,
     ),
+    adminRead("/v1/admin/providers/health", normalizeHealth),
     adminRead("/v1/admin/settings", normalizeRegistry),
     adminRead("/v1/admin/call-data", read.object),
     adminRead("/v1/admin/lead-desk-ai", read.object),
@@ -44,6 +49,8 @@ async function readHub(chosen: string | null) {
   if (leadAi.ok) answers["/v1/admin/lead-desk-ai"] = leadAi.data;
   return {
     hub,
+    // An older server without the health read still shows the hub.
+    health: health.ok ? health.data : null,
     settings: registry.ok ? registry.data.settings : [],
     answers,
     prices: callData.ok
@@ -78,7 +85,7 @@ export default async function ProvidersPage({
             prices={data.prices}
           />
           {data.hub.ok ? (
-            <ProviderHub hub={data.hub.data} />
+            <ProviderHub hub={data.hub.data} health={data.health} />
           ) : (
             <Unavailable title="The Providers hub" reason={data.hub.error} />
           )}
