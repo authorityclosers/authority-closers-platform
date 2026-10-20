@@ -12,6 +12,7 @@ import {
   CreditCard,
   Code,
   LifeBuoy,
+  Route,
   ShieldCheck,
   Smartphone,
   UsersRound,
@@ -122,6 +123,28 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "First call guide and support",
     icon: LifeBuoy,
     group: "This device",
+  },
+];
+
+/**
+ * Settings that live with their own work and are listed here so they are easy
+ * to find; each opens its own page. Lead stages live in Leads (lead journey
+ * session, 20 Oct).
+ */
+export type SettingsLink = Omit<SettingsSection, "id"> & {
+  key: string;
+  href: string;
+};
+
+export const SETTINGS_LINKS: readonly SettingsLink[] = [
+  {
+    key: "lead-stages",
+    label: "Lead stages",
+    hint: "Your stages from an industry template, and what each tells your ad platforms",
+    icon: Route,
+    group: "Organisation",
+    managers: true,
+    href: "/leads?tab=stages",
   },
 ];
 

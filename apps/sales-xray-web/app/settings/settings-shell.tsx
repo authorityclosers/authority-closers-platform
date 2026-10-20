@@ -8,10 +8,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 
 import {
   SETTINGS_GROUPS,
+  SETTINGS_LINKS,
   SETTINGS_SECTIONS,
   isSettingsSection,
   sectionById,
@@ -65,6 +66,41 @@ export function SectionList({
                         className={styles.chevron}
                       />
                     ) : null}
+                  </Link>
+                </li>
+              ),
+            )}
+            {SETTINGS_LINKS.filter((item) => item.group === group).map(
+              ({ key, href, label, hint, icon: Icon }) => (
+                <li key={key}>
+                  <Link
+                    href={href}
+                    className={styles.item}
+                    data-variant={variant}
+                    data-elsewhere=""
+                  >
+                    <span className={styles.icon} aria-hidden="true">
+                      <Icon size={17} />
+                    </span>
+                    <span className={styles.text}>
+                      <span className={styles.label}>{label}</span>
+                      {variant === "list" ? (
+                        <span className={styles.hint}>{hint}</span>
+                      ) : null}
+                    </span>
+                    {variant === "list" ? (
+                      <ChevronRight
+                        size={16}
+                        aria-hidden="true"
+                        className={styles.chevron}
+                      />
+                    ) : (
+                      <ArrowUpRight
+                        size={14}
+                        aria-hidden="true"
+                        className={styles.chevron}
+                      />
+                    )}
                   </Link>
                 </li>
               ),

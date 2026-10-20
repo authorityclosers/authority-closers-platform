@@ -212,3 +212,20 @@ it("keeps the Settings frame while the session is checked", async () => {
     SETTINGS_SECTIONS.length,
   );
 });
+
+it("lists settings that live elsewhere in their group, opening their own page", async () => {
+  nav.pathname = "/settings";
+  await act(async () =>
+    root.render(<SettingsShell>{<SettingsPage />}</SettingsShell>),
+  );
+  const stages = [
+    ...host.querySelectorAll<HTMLAnchorElement>('a[href="/leads?tab=stages"]'),
+  ];
+  // Once in the side list, once as a card on the overview.
+  expect(stages).toHaveLength(2);
+  expect(
+    stages.every((link) => link.closest('section[aria-label="Organisation"]')),
+  ).toBe(true);
+  expect(stages[0].textContent).toContain("Lead stages");
+  expect(stages.some((link) => link.getAttribute("aria-current"))).toBe(false);
+});
