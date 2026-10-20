@@ -196,7 +196,8 @@
     top: 12px;
     right: 12px;
     bottom: 12px;
-    width: min(480px, calc(100vw - 24px));
+    /* A sheet may ask for more room (Leads: 560 px). */
+    width: min(var(--sx-sheet-width, 480px), calc(100vw - 24px));
     max-height: none;
   }
 

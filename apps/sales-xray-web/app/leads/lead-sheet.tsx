@@ -98,6 +98,7 @@ import {
   type SimulationStep,
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
+import { Sheet as KitSheet } from "../ui/sheet";
 import styles from "./leads.module.css";
 
 // Sources whose leads arrive with a form's own answers worth showing.
@@ -111,6 +112,11 @@ const NO_RETRY = new Set([
 
 /* ---------- Sheet ---------- */
 
+/**
+ * Every Leads sheet is the kit Sheet (design system v2): phones swipe it away
+ * from the top, computers get the floating panel on the right. The label
+ * names the dialog; the content brings its own heading.
+ */
 export function Sheet({
   open,
   label,
@@ -122,40 +128,27 @@ export function Sheet({
   onClose: () => void;
   children: ReactNode;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
   return (
-    <dialog
-      ref={ref}
+    <KitSheet
+      open={open}
+      onClose={onClose}
+      title={label}
+      hideTitle
+      closeButton={false}
       className={styles.sheet}
-      aria-label={label}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
     >
-      {open ? (
-        <div className={styles.sheetBody}>
-          <button
-            type="button"
-            className={styles.sheetClose}
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-          {children}
-        </div>
-      ) : null}
-    </dialog>
+      <div className={styles.sheetBody}>
+        <button
+          type="button"
+          className={styles.sheetClose}
+          onClick={onClose}
+          aria-label="Close"
+        >
+          <X size={18} aria-hidden="true" />
+        </button>
+        {children}
+      </div>
+    </KitSheet>
   );
 }
 
