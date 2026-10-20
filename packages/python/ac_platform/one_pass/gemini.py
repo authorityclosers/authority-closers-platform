@@ -357,16 +357,10 @@ class OpenRouterBench:
             body["temperature"] = request.temperature
         schema_mode = "strict"
         if request.schema is not None:
-            # This route turns a structured-output schema of this size into Google's
-            # "invalid argument" (21 Oct 2026), so JSON mode with the schema as text, as the
-            # research ran it; the answer is validated here either way.
-            schema_mode = "prompt"
-            body["response_format"] = {"type": "json_object"}
-            body["messages"][0]["content"] = (
-                request.system
-                + "\n\nReturn JSON that matches this JSON schema exactly:\n"
-                + json.dumps(request.schema, separators=(",", ":"))
-            )
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "answer", "strict": False, "schema": request.schema},
+            }
         clock = time.monotonic()
         attempts = 0
         response: httpx.Response | None = None
@@ -386,6 +380,19 @@ class OpenRouterBench:
                 raise OnePassFailure("timeout") from None
             except httpx.HTTPError:
                 raise OnePassFailure("transport_error") from None
+            if response.status_code == 400 and schema_mode == "strict" and request.schema:
+                # Through this route Google AI Studio answers "invalid argument" to the
+                # one pass's combined schema (21 Oct 2026; the transcript's small schema is
+                # taken): JSON mode with the schema as text, once, as the research ran it.
+                # The answer is validated here either way; a refused request is not billed.
+                schema_mode = "prompt"
+                body["response_format"] = {"type": "json_object"}
+                body["messages"][0]["content"] = (
+                    request.system
+                    + "\n\nReturn JSON that matches this JSON schema exactly:\n"
+                    + json.dumps(request.schema, separators=(",", ":"))
+                )
+                continue
             if response.status_code not in TRANSIENT:
                 break
             self._sleep(min(60.0, 5.0 * (3**index)))

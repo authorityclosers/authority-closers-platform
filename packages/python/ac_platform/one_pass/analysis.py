@@ -421,18 +421,34 @@ def map_outputs(
     checks["prospect_facts"] = "ok"
 
     report = answer.get("report")
+    report = report if isinstance(report, Mapping) else {}
     summary = ""
     try:
         draft_report = reports.parse_report_draft(
-            report if isinstance(report, Mapping) else {},
-            transcript,
-            coaching_prompt_revision=COACHING_REVISION,
+            report, transcript, coaching_prompt_revision=COACHING_REVISION
         )
         outputs["c5"] = draft_report.model_dump(mode="json", by_alias=True)
         summary = draft_report.summary
         checks["c5"] = "ok"
     except reports.ReportError as error:
         checks["c5"] = str(error)[:64]
+        if str(error).startswith("report_overview") and "overview" in report:
+            # The detailed overview is optional in the C5 contract: when only it fails
+            # (seen without a strict schema), the report and coaching stand without it.
+            # Marked, so it never counts as a full pass.
+            try:
+                bare = reports.parse_report_draft(
+                    {key: value for key, value in report.items() if key != "overview"},
+                    transcript,
+                    coaching_prompt_revision=COACHING_REVISION,
+                )
+            except reports.ReportError:
+                pass
+            else:
+                outputs["c5"] = bare.model_dump(mode="json", by_alias=True)
+                summary = bare.summary
+                checks["c5"] = "ok_without_overview"
+                checks["c5_overview"] = str(error)[:64]
 
     try:
         outputs["c4"] = fact_packet(

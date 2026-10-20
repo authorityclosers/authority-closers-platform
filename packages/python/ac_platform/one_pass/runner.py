@@ -162,15 +162,27 @@ def read_call(
     was measured and spent). Raises ``OnePassFailure`` with a fixed code."""
     from ac_platform.one_pass import analysis, pricing, transcription
     from ac_platform.one_pass import settings as choices
+    from ac_platform.one_pass.gemini import OnePassFailure
 
     started = clock()
     outcome.audio_ms = duration_ms
     tier = settings["transcription_tier"]
-    heard = transport.generate(
-        model=choices.TRANSCRIPTION_MODEL,
-        request=transcription.request(audio, mime, duration_ms),
-        tier=tier,
-    )
+    try:
+        heard = transport.generate(
+            model=choices.TRANSCRIPTION_MODEL,
+            request=transcription.request(audio, mime, duration_ms),
+            tier=tier,
+        )
+    except OnePassFailure as failure:
+        # An answer cut short or unreadable was still billed: keep what it used.
+        if failure.usage is not None:
+            outcome.transcription_tier = tier
+            outcome.transcription_input_tokens = failure.usage.prompt
+            outcome.transcription_output_tokens = failure.usage.billed_output
+            outcome.transcription_cost_inr = pricing.cost_inr(
+                choices.TRANSCRIPTION_MODEL, failure.usage, tier=tier
+            )
+        raise
     paid_tier = "standard" if heard.tier_used != "flex" else "flex"
     outcome.transcription_tier = heard.tier_used
     outcome.transcription_input_tokens = heard.usage.prompt
@@ -208,7 +220,17 @@ def read_call(
     usage["transcription"]["dropped"] = dropped
     tier = settings["analysis_tier"]
     request = analysis.request(transcript, call_date=call_date)
-    answered = transport.generate(model=choices.ANALYSIS_MODEL, request=request, tier=tier)
+    try:
+        answered = transport.generate(model=choices.ANALYSIS_MODEL, request=request, tier=tier)
+    except OnePassFailure as failure:
+        if failure.usage is not None:
+            outcome.analysis_tier = tier
+            outcome.analysis_input_tokens = failure.usage.prompt
+            outcome.analysis_output_tokens = failure.usage.billed_output
+            outcome.analysis_cost_inr = pricing.cost_inr(
+                choices.ANALYSIS_MODEL, failure.usage, tier=tier
+            )
+        raise
     paid_tier = "standard" if answered.tier_used != "flex" else "flex"
     outcome.analysis_tier = answered.tier_used
     outcome.analysis_input_tokens = answered.usage.prompt

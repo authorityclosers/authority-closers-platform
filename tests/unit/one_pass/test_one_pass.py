@@ -621,3 +621,13 @@ def test_differences_match_facts_by_wording_and_compare_pointers_and_dimensions(
     assert summary["one_pass"]["contracts_passed"] == 6
     assert summary["agreement"]["pointer_status"] == pytest.approx(0.6667, abs=1e-3)
     assert compare.compare(None, one)["one_pass"] is one
+
+
+def test_a_report_whose_overview_alone_fails_stands_without_it_and_is_marked() -> None:
+    answer = _answer()
+    answer["report"]["overview"] = {**answer["report"]["overview"], "progress": "doing well"}
+    outputs, checks = analysis.map_outputs(answer, _transcript())
+    assert checks["c5"] == "ok_without_overview"
+    assert checks["c5_overview"].startswith("report_overview")
+    assert "overview" not in outputs["c5"] and outputs["c5"]["summary"]
+    assert analysis.contracts_ok(checks) == 5  # never counted as a full pass

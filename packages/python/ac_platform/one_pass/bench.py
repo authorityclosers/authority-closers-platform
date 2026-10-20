@@ -276,15 +276,17 @@ class LedgeredTransport:
             raise OnePassFailure("bench_budget_reached")
         clock = time.monotonic()
         stage = "transcription" if request.audio is not None else "analysis"
-        status, reply = 200, None
+        status, reply, usage = 200, None, None
         try:
             reply = self.inner.generate(model=model, request=request, tier=tier)
+            usage = reply.usage
             return reply
         except Exception as error:
             status = 0
+            # A failed answer (cut short, unreadable) was still billed: count what it used.
+            usage = getattr(error, "usage", None)
             raise error
         finally:
-            usage = reply.usage if reply is not None else None
             from ac_platform.one_pass import pricing
 
             row = {

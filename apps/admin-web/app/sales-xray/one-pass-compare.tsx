@@ -253,9 +253,21 @@ function SideCard({ title, side }: { title: string; side: Side | null }) {
             return (
               <li key={contract.key}>
                 <Badge
-                  tone={value === "ok" ? "good" : value ? "bad" : "neutral"}
+                  tone={
+                    value === "ok"
+                      ? "good"
+                      : value === "ok_without_overview"
+                        ? "warn"
+                        : value
+                          ? "bad"
+                          : "neutral"
+                  }
                 >
-                  {value === "ok" ? "passes" : (value ?? "not checked")}
+                  {value === "ok"
+                    ? "passes"
+                    : value === "ok_without_overview"
+                      ? "passes without the detailed overview"
+                      : (value ?? "not checked")}
                 </Badge>{" "}
                 {contract.label}
               </li>
