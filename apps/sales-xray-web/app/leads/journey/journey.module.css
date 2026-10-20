@@ -14,25 +14,62 @@
   margin: 0;
 }
 
-/* Stage types: one tone each. */
-[data-kind="new"] {
+/* Stage types: one tone each (local classes only: CSS modules need them). */
+.stage[data-kind="new"],
+.kindChip[data-kind="new"],
+.kindPicker button[data-kind="new"],
+.preview li[data-kind="new"],
+.matchStage[data-kind="new"] {
   --tone: var(--lx-info);
 }
-[data-kind="follow_up"] {
+
+.stage[data-kind="follow_up"],
+.kindChip[data-kind="follow_up"],
+.kindPicker button[data-kind="follow_up"],
+.preview li[data-kind="follow_up"],
+.matchStage[data-kind="follow_up"] {
   --tone: var(--lx-teal);
 }
-[data-kind="interested"] {
+
+.stage[data-kind="interested"],
+.kindChip[data-kind="interested"],
+.kindPicker button[data-kind="interested"],
+.preview li[data-kind="interested"],
+.matchStage[data-kind="interested"] {
   --tone: var(--lx-warning);
 }
-[data-kind="won"] {
+
+.stage[data-kind="won"],
+.kindChip[data-kind="won"],
+.kindPicker button[data-kind="won"],
+.preview li[data-kind="won"],
+.matchStage[data-kind="won"] {
   --tone: var(--lx-success);
 }
-[data-kind="lost"] {
+
+.stage[data-kind="lost"],
+.kindChip[data-kind="lost"],
+.kindPicker button[data-kind="lost"],
+.preview li[data-kind="lost"],
+.matchStage[data-kind="lost"] {
   --tone: var(--lx-danger);
 }
-[data-kind="not_connected"],
-[data-kind="skeleton"],
-[data-kind="hint"] {
+
+.stage[data-kind="not_connected"],
+.kindChip[data-kind="not_connected"],
+.kindPicker button[data-kind="not_connected"],
+.preview li[data-kind="not_connected"],
+.matchStage[data-kind="not_connected"],
+.stage[data-kind="skeleton"],
+.kindChip[data-kind="skeleton"],
+.kindPicker button[data-kind="skeleton"],
+.preview li[data-kind="skeleton"],
+.matchStage[data-kind="skeleton"],
+.stage[data-kind="hint"],
+.kindChip[data-kind="hint"],
+.kindPicker button[data-kind="hint"],
+.preview li[data-kind="hint"],
+.matchStage[data-kind="hint"] {
   --tone: var(--sx-muted);
 }
 
