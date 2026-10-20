@@ -859,7 +859,8 @@ class LeadConversion(Base):
     stage_key: Mapped[str] = mapped_column(String(40))
     event_name: Mapped[str] = mapped_column(String(100))
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # None is SQL NULL (an emptied body), never JSON null: the erasure check reads it.
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     payload_sha256: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16))
     attempts: Mapped[int] = mapped_column(Integer)

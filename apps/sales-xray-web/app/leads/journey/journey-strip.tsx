@@ -30,6 +30,24 @@ const NAMES: Record<string, string> = {
   microsoft_ads: "Microsoft Ads",
 };
 
+/** Only the fields the line needs; anything else (or nothing) shows the plain line. */
+export function readSummary(value: unknown): JourneySummary | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<JourneySummary>;
+  if (typeof item.stages !== "number" || !Array.isArray(item.providersOn))
+    return null;
+  return {
+    stages: item.stages,
+    industry: typeof item.industry === "string" ? item.industry : null,
+    providersOn: item.providersOn.filter(
+      (id): id is string => typeof id === "string",
+    ),
+    needsCheck: typeof item.needsCheck === "number" ? item.needsCheck : 0,
+    lastDeliveredAt:
+      typeof item.lastDeliveredAt === "string" ? item.lastDeliveredAt : null,
+  };
+}
+
 export function stripLine(summary: JourneySummary): string {
   const parts = [`${summary.stages} stages`];
   if (summary.providersOn.length)
@@ -50,9 +68,9 @@ export function JourneyStrip() {
   );
   useEffect(() => {
     let live = true;
-    call<JourneySummary>("/journey/summary")
+    call<unknown>("/journey/summary")
       .then((next) => {
-        if (live) setSummary(next);
+        if (live) setSummary(readSummary(next));
       })
       .catch(() => {
         if (live) setSummary(null);

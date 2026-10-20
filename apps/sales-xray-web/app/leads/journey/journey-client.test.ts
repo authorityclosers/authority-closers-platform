@@ -12,7 +12,7 @@ import {
   type JourneyView,
   type ProviderView,
 } from "./journey-client";
-import { stripLine } from "./journey-strip";
+import { readSummary, stripLine } from "./journey-strip";
 
 const stage = (
   key: string,
@@ -179,5 +179,17 @@ describe("where stages go, in words", () => {
         lastDeliveredAt: null,
       }),
     ).toBe("6 stages · not going to your ads yet");
+  });
+
+  it("ignores an answer without the fields the line needs", () => {
+    expect(readSummary({})).toBeNull();
+    expect(readSummary(null)).toBeNull();
+    expect(readSummary({ stages: 7, providersOn: ["meta", 3] })).toEqual({
+      stages: 7,
+      industry: null,
+      providersOn: ["meta"],
+      needsCheck: 0,
+      lastDeliveredAt: null,
+    });
   });
 });

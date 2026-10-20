@@ -16,11 +16,11 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import Engine, inspect
 from sqlalchemy.exc import IntegrityError
-from tests.database.conversation_harness import conversation_harness
 
 from ac_platform.db.models import model_metadata
 from ac_platform.lead_desk.models import LeadConversion, LeadJourneyVersion
 from ac_platform.tenancy.models import Tenant
+from tests.database.conversation_harness import conversation_harness
 
 ROOT = Path(__file__).resolve().parents[2]
 REVISION, DOWN = "20261020_0111", "20261019_0110"
