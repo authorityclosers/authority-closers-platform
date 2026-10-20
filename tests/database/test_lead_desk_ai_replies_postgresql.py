@@ -1,14 +1,18 @@
 """AI replies on PostgreSQL, with Meta and the model faked.
 
-In auto mode a lead's WhatsApp or Messenger question about the business is answered
-once, through the channel's own send, marked as an AI reply (which doesn't stop the
-first-response clock), with the model, tokens and cost kept; a request for a person
-is handed to the seller and the hand-off clears when the seller answers; STOP is the
-person's recorded no and nothing automatic goes to them after; in suggest mode the
-seller gets a draft and nothing is sent; a lead that leaves takes the drafts with it.
+Nothing happens while Admin has AI replies switched off. Once on: in auto mode a lead's
+WhatsApp or Messenger question about the business is queued by the API, answered by
+the AI replies runner (the only part that asks a model), and sent once by the API
+through the channel's own send, marked as an AI reply (which doesn't stop the
+first-response clock), with the model, tokens and cost kept. What the rules settle
+needs no model: a request for a person is handed to the seller (the hand-off clears
+when the seller answers), and STOP is the person's recorded no, with nothing automatic
+after. At Admin's cap automatic replies wait for budget and suggestions pause, until
+"Raise and resume". In suggest mode the seller gets a draft and nothing is sent. A lead
+that leaves takes the drafts with it. Every Admin change is audited.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -17,8 +21,9 @@ import httpx
 import pytest
 from sqlalchemy import delete, func, select, update
 
+from ac_platform.audit.models import AuditEvent
 from ac_platform.http.routes import RouteContext
-from ac_platform.lead_desk.ai_replies import registry, rules, runner
+from ac_platform.lead_desk.ai_replies import admin_http, cli, rules, runner
 from ac_platform.lead_desk.ai_replies.http import install_ai_replies_http
 from ac_platform.lead_desk.models import (
     Lead,
@@ -48,6 +53,7 @@ from tests.unit.lead_desk_whatsapp.test_whatsapp_cloud import ENV as WHATSAPP_EN
 
 WRITE = {"Origin": ORIGIN, "Content-Type": "application/json"}
 BASE = "/v1/lead-desk"
+ADMIN = "/v1/admin/lead-desk-ai"
 ENV = {**WHATSAPP_ENV, "AC_MESSAGING_LOGIN_CONFIG_ID": "5550001"}
 CALLER = "919876543210"
 PSID = "2400000000000001"
@@ -59,18 +65,27 @@ def postgres_harness() -> Any:
     yield from cast(Any, _postgres_harness).__wrapped__()
 
 
-def test_ai_replies_answer_hand_off_and_stop(
+class _Admitted:
+    """The operations-control check (its own tests cover it); here everyone is staff."""
+
+    def __init__(self, application: Any) -> None:
+        pass
+
+    async def admit(self, actor: Any) -> None:
+        return None
+
+
+def test_ai_replies_answer_hand_off_stop_and_wait_for_budget(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for name, value in ENV.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(cloud, "Cloud", FakeCloud)
     monkeypatch.setattr(graph, "Graph", FakeGraph)
+    monkeypatch.setattr(admin_http, "ConversationProviderAdmin", _Admitted)
+    monkeypatch.setattr(admin_http, "require_admin_surface", lambda request, settings: None)
     FakeCloud.sent, FakeGraph.sent = [], []
     model = ScriptedModel()
-    monkeypatch.setattr(registry, "model_for", lambda sessions: model)
-    # The provider gate and key are Root's; here they are taken as cleared.
-    monkeypatch.setattr(registry, "available", lambda **kwargs: (True, None))
     wa_cfg, social_cfg = cloud.config(), graph.config()
     assert wa_cfg is not None and social_cfg is not None
 
@@ -78,11 +93,18 @@ def test_ai_replies_answer_hand_off_and_stop(
         setup = await _setup(postgres_harness, tmp_path)
         try:
             await _organisation(setup)
+            tenant, me = setup.state.tenant_id, setup.state.person_id
             settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
             context = RouteContext(settings, setup.require_actor, setup.sessions)
             install_ai_replies_http(setup.app, context)
             install_whatsapp_http(setup.app, context)
-            tenant, me = setup.state.tenant_id, setup.state.person_id
+            # Admin answers to the operations workspace; here that is the test's own.
+            staff = RouteContext(
+                settings.model_copy(update={"operations_tenant_id": tenant}),
+                setup.require_actor,
+                setup.sessions,
+            )
+            admin_http.install_ai_replies_admin_http(setup.app, staff)
             now = datetime.now(UTC)
 
             async with setup.sessions() as db, db.begin():
@@ -160,56 +182,149 @@ def test_ai_replies_answer_hand_off_and_stop(
                     db.add(row)
                 return row.id
 
-            async def messenger_in(text: str) -> None:
+            async def messenger_in(text: str) -> UUID:
                 async with setup.sessions() as db, db.begin():
-                    db.add(
-                        LeadSocialMessage(
-                            id=uuid4(),
-                            tenant_id=tenant,
-                            account_id=ids["page"],
-                            lead_id=ids["ravi"],
-                            channel="messenger",
-                            user_id=PSID,
-                            direction="in",
-                            mid=f"m.{uuid4().hex}",
-                            kind="text",
-                            body=text,
-                            status="received",
-                            meta_time=datetime.now(UTC),
-                            created_at=datetime.now(UTC),
-                        )
+                    row = LeadSocialMessage(
+                        id=uuid4(),
+                        tenant_id=tenant,
+                        account_id=ids["page"],
+                        lead_id=ids["ravi"],
+                        channel="messenger",
+                        user_id=PSID,
+                        direction="in",
+                        mid=f"m.{uuid4().hex}",
+                        kind="text",
+                        body=text,
+                        status="received",
+                        meta_time=datetime.now(UTC),
+                        created_at=datetime.now(UTC),
                     )
+                    db.add(row)
+                return row.id
+
+            lines: list[dict[str, Any]] = []
+
+            async def think() -> None:
+                lines.extend(
+                    await cli.thinking_pass(
+                        setup.sessions, lambda config: model, now=datetime.now(UTC)
+                    )
+                )
 
             async def tick() -> dict[str, int]:
+                """The API claims, the runner answers, the API acts."""
                 async with httpx.AsyncClient() as client:
-                    return await runner.auto_pass(
-                        setup.sessions, model, client, None, now=datetime.now(UTC)
+                    first = await runner.tick(setup.sessions, client, None, now=datetime.now(UTC))
+                    await think()
+                    second = await runner.tick(setup.sessions, client, None, now=datetime.now(UTC))
+                return {
+                    key: first.get(key, 0) + second.get(key, 0)
+                    for key in ("claimed", "sent", "handoff", "stopped", "failed")
+                }
+
+            async def outcome(message_id: UUID) -> LeadAiReply:
+                async with setup.sessions() as db:
+                    row = await db.scalar(
+                        select(LeadAiReply).where(LeadAiReply.message_id == message_id)
                     )
+                assert row is not None
+                return row
 
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as http:
                 http.cookies.set(setup.settings.session_cookie_name, setup.token)
 
-                # ----- auto: a question about the business is answered once -----
+                # ----- switched off in Admin (the start): nothing is asked or queued -----
+                admin = (await http.get(ADMIN)).json()
+                assert admin["config"]["enabled"] is False and admin["revision"] is None
+                assert admin["config"]["cap_inr"] == 100 and admin["presets_inr"] == [100, 300, 400]
+                assert admin["provider_label"] == "Google Gemini"
+                assert "GEMINI" not in str(admin)  # the key is never named or shown
                 first = await whatsapp_in("Can I come for a site visit on Sunday?")
+                assert (await tick())["claimed"] == 0
+                assert lines[-1] == {"stopped": "lead_desk_ai_off"}
+                state = (await http.get(f"{BASE}/leads/{ids['asha']}/ai")).json()
+                assert state["available"] is False
+                refused = await http.post(
+                    f"{BASE}/leads/{ids['asha']}/ai-draft",
+                    json={"channel": "whatsapp"},
+                    headers=WRITE,
+                )
+                assert refused.status_code == 409
+
+                on = await http.put(
+                    f"{ADMIN}/settings",
+                    json={
+                        "expected_revision": None,
+                        "config": {**admin["config"], "enabled": True},
+                    },
+                    headers=WRITE,
+                )
+                assert on.status_code == 200, on.text
+                assert on.json()["revision"] == 1 and on.json()["config"]["enabled"] is True
+                stale = await http.put(
+                    f"{ADMIN}/settings",
+                    json={"expected_revision": None, "config": admin["config"]},
+                    headers=WRITE,
+                )
+                assert stale.status_code == 409  # someone changed them meanwhile
+
+                # ----- Try it: a draft for a sample message, nothing sent -----
+                tried = await http.post(
+                    f"{BASE}/ai-replies/try",
+                    json={"message": "Are site visits possible on Sunday?"},
+                    headers=WRITE,
+                )
+                assert tried.status_code == 200, tried.text
+                assert tried.json()["status"] == "queued"
+                status = f"{BASE}/ai-replies/try/{tried.json()['replyId']}"
+                await think()
+                done_try = (await http.get(status)).json()
+                assert done_try["status"] == "drafted" and done_try["draft"]
+                assert "Are site visits possible on Sunday?" in model.asked[-1][1]
+                assert FakeCloud.sent == [] and FakeGraph.sent == []
+                stop_try = (
+                    await http.post(
+                        f"{BASE}/ai-replies/try", json={"message": "STOP"}, headers=WRITE
+                    )
+                ).json()
+                # Settled by the rules at once; a sample records nobody's stop.
+                assert (stop_try["status"], stop_try["reason"]) == ("handoff", "opt_out")
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(LeadAiReply)
+                        .where(LeadAiReply.mode == "try")
+                        .values(created_at=datetime.now(UTC) - timedelta(days=2))
+                    )
+                async with setup.sessions() as db, db.begin():
+                    from ac_platform.lead_desk.ai_replies import service as ai_service
+
+                    assert await ai_service.erasure_sweep(db, datetime.now(UTC)) == 2
+                async with setup.sessions() as db:
+                    kept = await db.scalar(
+                        select(func.count())
+                        .select_from(LeadAiReply)
+                        .where(LeadAiReply.mode == "try", LeadAiReply.sample.is_not(None))
+                    )
+                    assert kept == 0  # samples and drafts emptied after a day
+
+                # ----- auto: a question about the business is answered once -----
                 done = await tick()
                 assert (done["claimed"], done["sent"]) == (1, 1)
                 assert (await tick())["claimed"] == 0  # one try per message
                 assert FakeCloud.sent[-1] == {"to": CALLER, "text": "Yes, every day 10am to 7pm."}
                 system, user = model.asked[-1]
                 assert "Fictional Homes" in system and "site visit on Sunday" in user
+                reply = await outcome(first)
+                assert (reply.mode, reply.outcome, reply.model, reply.input_tokens) == (
+                    "auto",
+                    "sent",
+                    "fake-small",
+                    420,
+                )
+                assert reply.settled_at is not None
                 async with setup.sessions() as db:
-                    reply = await db.scalar(
-                        select(LeadAiReply).where(LeadAiReply.message_id == first)
-                    )
-                    assert reply is not None
-                    assert (reply.mode, reply.outcome, reply.model, reply.input_tokens) == (
-                        "auto",
-                        "sent",
-                        "fake-small",
-                        420,
-                    )
                     out = await db.scalar(
                         select(LeadWhatsAppMessage).where(
                             LeadWhatsAppMessage.id == reply.sent_message_id
@@ -227,13 +342,14 @@ def test_ai_replies_answer_hand_off_and_stop(
                     assert event is not None and event.actor_person_id is None
                     assert event.data["auto"] == "ai_reply"
 
-                # ----- they ask for a person: handed to the seller, no reply -----
+                # ----- they ask for a person: handed to the seller, no model, no reply -----
                 asked = len(model.asked)
                 await whatsapp_in("Please call me, I want to talk to someone")
                 assert (await tick())["handoff"] == 1
                 assert len(model.asked) == asked and len(FakeCloud.sent) == 1
                 state = (await http.get(f"{BASE}/leads/{ids['asha']}/ai")).json()
                 assert state["mode"] == "auto" and state["ready"] is True
+                assert state["available"] is True and state["paused"] is False
                 assert [(h["channel"], h["reason"]) for h in state["handoffs"]] == [
                     ("whatsapp", "human")
                 ]
@@ -257,6 +373,7 @@ def test_ai_replies_answer_hand_off_and_stop(
                 await whatsapp_in("Is parking covered?")
                 assert (await tick())["handoff"] == 1
                 assert len(FakeCloud.sent) == 2  # only the seller's own reply went after
+                assert len(model.asked) == asked
 
                 # ----- Messenger, the same way -----
                 await messenger_in("Parking milegi kya?")
@@ -265,6 +382,55 @@ def test_ai_replies_answer_hand_off_and_stop(
                     FakeGraph.sent[-1]["to"] == PSID
                     and FakeGraph.sent[-1]["channel"] == "messenger"
                 )
+
+                # ----- at the cap: automatic replies wait for budget -----
+                admin = (await http.get(ADMIN)).json()
+                assert admin["status"]["spent_inr"] == pytest.approx(0.0246)
+                capped = await http.put(
+                    f"{ADMIN}/settings",
+                    json={"expected_revision": 1, "config": {**admin["config"], "cap_inr": 0}},
+                    headers=WRITE,
+                )
+                assert capped.status_code == 200, capped.text
+                sent_before, asked = len(FakeGraph.sent), len(model.asked)
+                held = await messenger_in("Is there a gym in the society?")
+                assert (await tick())["sent"] == 0
+                assert (await outcome(held)).outcome == "waiting"
+                assert len(FakeGraph.sent) == sent_before and len(model.asked) == asked
+                stop = next(line for line in reversed(lines) if line.get("stopped"))
+                assert stop["stopped"] == "lead_desk_ai_cap" and stop["waiting"] == 1
+                assert stop["period"] == "daily" and stop["cap_inr"] == "0"
+                admin = (await http.get(ADMIN)).json()
+                assert admin["status"]["at_cap"] is True and admin["status"]["waiting"] == 1
+                assert admin["status"]["raise_to_inr"] == 100
+                state = (await http.get(f"{BASE}/leads/{ids['ravi']}/ai")).json()
+                assert state["paused"] is True
+
+                # ----- Raise and resume: one click, and the waiting reply goes -----
+                raised = await http.post(
+                    f"{ADMIN}/raise", json={"expected_revision": 2}, headers=WRITE
+                )
+                assert raised.status_code == 200, raised.text
+                assert raised.json()["config"]["cap_inr"] == 100
+                assert raised.json()["revision"] == 3
+                assert (await tick())["sent"] == 1
+                assert (await outcome(held)).outcome == "sent"
+                assert len(FakeGraph.sent) == sent_before + 1
+                async with setup.sessions() as db:
+                    audited = (
+                        await db.execute(
+                            select(AuditEvent.action, AuditEvent.payload)
+                            .where(AuditEvent.resource_type == "lead_desk_ai_settings")
+                            .order_by(AuditEvent.sequence_no)
+                        )
+                    ).all()
+                assert [action for action, _ in audited] == [
+                    "lead_desk_ai.settings_saved",
+                    "lead_desk_ai.settings_saved",
+                    "lead_desk_ai.cap_raised",
+                ]
+                assert audited[-1][1]["old"]["cap_inr"] == 0
+                assert audited[-1][1]["new"]["cap_inr"] == 100
 
                 # ----- suggest: a draft for the seller, nothing sent -----
                 saved = await http.put(
@@ -277,15 +443,22 @@ def test_ai_replies_answer_hand_off_and_stop(
                 await messenger_in("Is there a loan facility?")
                 assert (await tick())["claimed"] == 0
                 sent_before = len(FakeGraph.sent)
-                draft = await http.post(
+                asked_for = await http.post(
                     f"{BASE}/leads/{ids['ravi']}/ai-draft",
                     json={"channel": "messenger"},
                     headers=WRITE,
                 )
-                assert draft.status_code == 200, draft.text
-                assert draft.json()["handoff"] is False and draft.json()["draft"]
+                assert asked_for.status_code == 200, asked_for.text
+                queued = asked_for.json()
+                assert queued["status"] == "queued" and queued["handoff"] is False
+                status = f"{BASE}/leads/{ids['ravi']}/ai-draft/{queued['replyId']}"
+                assert (await http.get(status)).json()["status"] == "queued"
+                await think()
+                ready = (await http.get(status)).json()
+                assert ready["status"] == "drafted" and ready["draft"]
                 assert len(FakeGraph.sent) == sent_before
                 await messenger_in("What is the price of a 3 BHK?")
+                asked = len(model.asked)
                 priced = (
                     await http.post(
                         f"{BASE}/leads/{ids['ravi']}/ai-draft",
@@ -293,8 +466,9 @@ def test_ai_replies_answer_hand_off_and_stop(
                         headers=WRITE,
                     )
                 ).json()
-                assert priced["handoff"] is True and priced["reason"] == "price"
-                assert "price" in priced["words"]
+                # Settled by the rules at once, no model.
+                assert priced["status"] == "handoff" and priced["reason"] == "price"
+                assert "price" in priced["words"] and len(model.asked) == asked
                 async with setup.sessions() as db:
                     suggested = await db.scalar(
                         select(func.count())
@@ -305,18 +479,50 @@ def test_ai_replies_answer_hand_off_and_stop(
                     )
                     assert suggested == 2
 
+                # ----- at the cap, suggestions pause -----
+                admin = (await http.get(ADMIN)).json()
+                await http.put(
+                    f"{ADMIN}/settings",
+                    json={"expected_revision": 3, "config": {**admin["config"], "cap_inr": 0}},
+                    headers=WRITE,
+                )
+                await messenger_in("Is there a clubhouse?")
+                paused = (
+                    await http.post(
+                        f"{BASE}/leads/{ids['ravi']}/ai-draft",
+                        json={"channel": "messenger"},
+                        headers=WRITE,
+                    )
+                ).json()
+                assert paused["status"] == "paused" and paused["words"] == (
+                    "AI replies are paused for now."
+                )
+                assert "₹" not in str(paused)  # no amount is ever shown to sellers
+
+                # ----- switched off again in Admin: no drafts at all -----
+                admin = (await http.get(ADMIN)).json()
+                await http.put(
+                    f"{ADMIN}/settings",
+                    json={"expected_revision": 4, "config": {**admin["config"], "enabled": False}},
+                    headers=WRITE,
+                )
+                assert (
+                    await http.post(
+                        f"{BASE}/leads/{ids['ravi']}/ai-draft",
+                        json={"channel": "messenger"},
+                        headers=WRITE,
+                    )
+                ).status_code == 409
+                assert (
+                    await http.post(f"{BASE}/ai-replies/try", json={"message": "Hi"}, headers=WRITE)
+                ).status_code == 409
+
                 off = await http.put(
                     f"{BASE}/ai-replies/settings",
                     json={**_view(HOMES), "mode": "off"},
                     headers=WRITE,
                 )
                 assert off.status_code == 200
-                refused = await http.post(
-                    f"{BASE}/leads/{ids['ravi']}/ai-draft",
-                    json={"channel": "messenger"},
-                    headers=WRITE,
-                )
-                assert refused.status_code == 409
 
                 # ----- a lead that leaves takes the drafts -----
                 async with setup.sessions() as db, db.begin():

@@ -247,6 +247,21 @@ def test_refusals_in_plain_words() -> None:
     assert "can't get messages" in str(graph.refusal({"code": 551}))
     assert "permission" in str(graph.refusal({"code": 200}))
     assert str(graph.refusal({})) == "Meta refused the message. Try again."
+    # Meta's own table: the subcode says more than the code.
+    for code, subcode, words in (
+        (2022, None, graph.PAUSED_WORDS),
+        (10, 1893063, graph.PAUSED_WORDS),
+        (200, 2018028, graph.REVIEW_WORDS),
+        (10, 2018108, graph.AWAY_WORDS),
+        (10, 2018300, graph.OTHER_APP_WORDS),
+        (100, 2018001, graph.GONE_WORDS),
+        (613, 2534040, graph.LIMIT_WORDS),
+    ):
+        found = graph.refusal({"code": code, "error_subcode": subcode})
+        assert (str(found), found.code, found.subcode) == (words, code, subcode)
+    assert "private reply" in str(graph.refusal({"code": 100, "error_subcode": 2534025}))
+    assert "Meta allows one" in str(graph.refusal({"code": 10900}))
+    assert "Allow access to messages" in str(graph.refusal({"code": 200, "error_subcode": 2534041}))
 
 
 def _graph(handler: Any) -> graph.Graph:
@@ -284,6 +299,45 @@ def test_sending_answers_or_uses_the_human_agent_tag() -> None:
     }
     assert seen[1]["messaging_type"] == "MESSAGE_TAG" and seen[1]["tag"] == "HUMAN_AGENT"
     assert len(seen[1]["message"]["text"]) == 1000  # Instagram's limit
+
+
+def test_a_comment_not_taken_says_why_without_its_content() -> None:
+    def change(**value: object) -> dict[str, object]:
+        return {"field": "feed", "value": {"item": "comment", "comment_id": "777_900", **value}}
+
+    page = graph.parse(
+        {
+            "object": "page",
+            "entry": [
+                {
+                    "id": PAGE,
+                    "changes": [
+                        change(verb="add", message="qatest"),  # Meta sent no from
+                        change(verb="add", **{"from": {"id": PAGE, "name": "The Page"}}),
+                        change(verb="edited", **{"from": {"id": PSID}}),
+                        change(verb="add", **{"from": {"id": "not-an-id"}}),
+                        {"field": "feed", "value": {"item": "reaction", "verb": "add"}},
+                    ],
+                }
+            ],
+        }
+    )
+    assert page.comments == []
+    assert [(s.channel, s.account_id, s.reason) for s in page.skipped] == [
+        ("messenger", PAGE, "no_sender"),
+        ("messenger", PAGE, "from_page"),
+        ("messenger", PAGE, "not_new"),
+        ("messenger", PAGE, "bad_id"),
+    ]
+    # Field names only: never the words or who wrote them.
+    assert page.skipped[0].fields == ("comment_id", "item", "message", "verb")
+    insta = graph.parse(
+        {
+            "object": "instagram",
+            "entry": [{"id": IG, "changes": [{"field": "comments", "value": {"id": "18000002"}}]}],
+        }
+    )
+    assert [s.reason for s in insta.skipped] == ["no_sender"]
 
 
 def test_a_comment_gets_a_private_and_a_public_reply() -> None:
@@ -365,3 +419,69 @@ def test_a_refused_call_raises_plain_words() -> None:
 
     with pytest.raises(graph.SocialError, match="24 hours"):
         asyncio.run(_graph(handler).send(PAGE, "t", user_id=PSID, text="late", channel="messenger"))
+
+
+def test_meta_s_own_trouble_and_timeouts_say_so_and_keep_the_trace() -> None:
+    from ac_platform.lead_desk.social import inbox
+
+    def calling(handler: Any) -> graph.SocialError:
+        with pytest.raises(graph.SocialError) as caught:
+            asyncio.run(
+                _graph(handler).send(PAGE, "t", user_id=PSID, text="Hi", channel="messenger")
+            )
+        return caught.value
+
+    refused = calling(
+        lambda request: httpx.Response(
+            400,
+            json={
+                "error": {
+                    "code": 2022,
+                    "error_subcode": 2534099,
+                    "message": "(#2022) Something Meta says",
+                    "fbtrace_id": "AbCdEf123",
+                }
+            },
+        )
+    )
+    assert (refused.code, refused.subcode, refused.trace, refused.kind) == (
+        2022,
+        2534099,
+        "AbCdEf123",
+        None,
+    )
+    assert inbox.error_code(refused) == "2022/2534099"
+    stored = inbox.error_text(refused)
+    assert inbox.error_words(stored, "2022/2534099", manager=False) == str(refused)
+    assert inbox.error_words(stored, "2022/2534099", manager=True) == (
+        f"{refused} Meta says: \u201c(#2022) Something Meta says\u201d (code 2022/2534099)"
+    )
+    broken = calling(lambda request: httpx.Response(502, text="<html>Bad gateway</html>"))
+    assert (str(broken), broken.kind) == (graph.META_SIDE_WORDS, "meta_side")
+    assert inbox.error_code(broken) == "meta_side"
+
+    def slow(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow", request=request)
+
+    late = calling(slow)
+    assert (str(late), late.kind) == (graph.TIMEOUT_WORDS, "timeout")
+
+
+def test_an_instagram_read_receipt_names_the_message() -> None:
+    delivery = graph.parse(
+        _messaging(
+            "instagram",
+            IG,
+            [
+                {
+                    "sender": {"id": IGSID},
+                    "recipient": {"id": IG},
+                    "timestamp": 1792440000000,
+                    "read": {"mid": "ig.out1"},
+                }
+            ],
+        )
+    )
+    assert [(s.channel, s.user_id, s.status, s.mids, s.until) for s in delivery.seen] == [
+        ("instagram", IGSID, "read", ("ig.out1",), None)
+    ]

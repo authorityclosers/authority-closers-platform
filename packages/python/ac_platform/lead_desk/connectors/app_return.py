@@ -32,6 +32,7 @@ import json
 import re
 import secrets
 import time
+from collections.abc import Mapping
 from typing import Any, Final, Literal
 from urllib.parse import quote
 
@@ -165,3 +166,45 @@ def return_page(
 
 def _quote(path: str) -> str:
     return quote(path, safe="/")
+
+
+# ----- Settings → Connected apps: back to the card that started the connect --------------
+
+SETTINGS_APPS: Final[str] = "/settings/apps"
+# What a provider's answer means for the card (the query the page reads).
+_CONNECT_ERRORS: Final[dict[str, str]] = {
+    "cancelled": "cancelled",
+    "failed": "failed",
+    "taken": "in_use",
+    "nopages": "no_pages",
+    "noaccounts": "no_accounts",
+    "nonumbers": "no_numbers",
+}
+
+
+def settings_card(
+    return_to: str | None, card: str | None, *, allowed: tuple[str, ...]
+) -> str | None:
+    """The Connected apps card a connect comes back to, or None for the old destination.
+    Only Settings → Connected apps is offered, so nothing can send a person elsewhere."""
+    if return_to is None:
+        return None
+    if return_to != SETTINGS_APPS:
+        raise ValueError("return_to")
+    chosen = card or allowed[0]
+    if chosen not in allowed:
+        raise ValueError("card")
+    return chosen
+
+
+def settings_url(app_url: str, card: str, outcome: str) -> str:
+    """``?connected=<card>``, or ``?connect_error=<code>``, on the Connected apps page."""
+    if outcome == "connected":
+        return f"{app_url}{SETTINGS_APPS}?connected={card}"
+    return f"{app_url}{SETTINGS_APPS}?connect_error={_CONNECT_ERRORS.get(outcome, 'failed')}"
+
+
+def card_of(body: Mapping[str, Any] | None, allowed: tuple[str, ...]) -> str | None:
+    """The card a (signed, checked) state asks to come back to."""
+    card = body.get("r") if body else None
+    return card if isinstance(card, str) and card in allowed else None

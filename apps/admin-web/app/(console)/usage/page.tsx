@@ -4,6 +4,7 @@ import {
   ENVIRONMENTS,
   chartView,
   normalizeMetrics,
+  scopeView,
 } from "@/app/usage/cost-data";
 import {
   COST_WINDOWS,
@@ -14,6 +15,7 @@ import {
   PipelinesView,
   ProvidersView,
   RevenueView,
+  ScopeFilters,
   Sources,
   type CostFilter,
 } from "@/app/usage/cost-views";
@@ -42,6 +44,8 @@ type Query = {
   ca?: string;
   cb?: string;
   sort?: string;
+  org?: string;
+  feature?: string;
 };
 
 const pick = (
@@ -71,11 +75,15 @@ export default async function UsagePage({
     tests: query.tests === "1",
     // The Overview's chosen charts and compared pair (owner, 19 Oct 2026).
     ...chartView(query),
+    // One organisation and one feature (owner, 20 Oct 2026).
+    ...scopeView(query),
   };
   const keep = [
     current.days !== "30" ? `days=${current.days}` : "",
     current.env !== "all" ? `env=${current.env}` : "",
     current.tests ? "tests=1" : "",
+    current.org ? `org=${current.org}` : "",
+    current.feature ? `feature=${current.feature}` : "",
   ]
     .filter(Boolean)
     .join("&");
@@ -87,6 +95,8 @@ export default async function UsagePage({
           current.tab === "calls"
             ? `&sort=${current.sort ?? "newest"}&steps=1`
             : ""
+        }${current.org ? `&company=${current.org}` : ""}${
+          current.feature ? `&stage=${current.feature}` : ""
         }`,
         normalizeMetrics,
       );
@@ -109,6 +119,7 @@ export default async function UsagePage({
       {metrics ? (
         <>
           <Sources metrics={metrics} />
+          <ScopeFilters metrics={metrics} current={current} />
           {current.tab === "overview" ? (
             <OverviewView metrics={metrics} current={current} />
           ) : null}

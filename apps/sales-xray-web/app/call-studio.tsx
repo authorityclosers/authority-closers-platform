@@ -2042,7 +2042,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
         </details>
         {!embedded && (
           <footer className="studio-footer">
-            <span>Dipak’s Sales Xray · Authority Closers</span>
+            <span>Sales Xray · Authority Closers</span>
           </footer>
         )}
       </Main>

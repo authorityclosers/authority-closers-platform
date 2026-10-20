@@ -1,10 +1,17 @@
 """Connect: OAuth 2.0 authorisation code with PKCE (RFC 6749, 7636; OAuth 2.1 rules).
 
-An app (a "client") sends an organisation's owner or admin to Sales X-Ray's consent
-screen. On approval Sales X-Ray returns a one-time code to the app's registered
-address; the app swaps it, with its PKCE verifier, for an access token (1 hour) and a
-refresh token (30 days, replaced on every use). Tokens act for that one organisation,
-within the scopes approved, until the connection is removed.
+An app (a "client") sends a person to Sales X-Ray's consent screen. On approval Sales
+X-Ray returns a one-time code to the app's registered address; the app swaps it, with
+its PKCE verifier, for an access token (1 hour) and a refresh token (30 days, replaced
+on every use).
+
+Two kinds of app, two reaches:
+- An app an organisation registered in Integrations (``tenant_id`` set). Its owner or
+  admin connects the whole organisation; tokens see what an owner sees.
+- A platform app (``tenant_id`` NULL): one that registered itself (RFC 7591) or a
+  first-party app such as Pulse. Any signed-in person connects their own account in
+  the workspace they have open (Personal or an organisation). Tokens act as that
+  person and see what they see in Sales X-Ray, checked live on every request.
 
 Rules:
 - PKCE S256 for every client; the plain method is refused.
@@ -60,12 +67,21 @@ CODES = cast(Table, IntegrationOAuthCode.__table__)
 TOKENS = cast(Table, IntegrationOAuthToken.__table__)
 
 
+AUTH_METHODS = ("none", "client_secret_basic", "client_secret_post")
+GRANT_TYPES = ("authorization_code", "refresh_token")
+# Names a self-registered app may not take: they would read as Sales X-Ray's own.
+_RESERVED = re.compile(r"sales\s*-?\s*x\s*-?\s*ray|salesxray|authority\s*closers", re.IGNORECASE)
+
+
 @dataclass(frozen=True, slots=True)
 class TokenContext:
     grant_id: UUID
     tenant_id: UUID
     client_id: str
     scopes: frozenset[str]
+    person_id: UUID | None = None
+    # A platform app's connection acts as one person (see the module docstring).
+    personal: bool = False
 
 
 def _random(prefix: str, size: int) -> str:
@@ -154,6 +170,69 @@ def register_client(
     }
     connection.execute(insert(CLIENTS).values(**row))
     return client_view(SimpleNamespace(**row)), secret
+
+
+def is_platform(client: Any) -> bool:
+    """A platform app (self-registered or first-party) connects one person, not an
+    organisation."""
+    return client.tenant_id is None
+
+
+def register_dynamic(connection: Any, metadata: object, *, now: datetime) -> dict[str, Any]:
+    """RFC 7591 dynamic client registration, for MCP hosts and partner apps.
+
+    Accepts ``client_name``, ``redirect_uris``, ``token_endpoint_auth_method``
+    (``none`` for a public client that relies on PKCE alone; the default
+    ``client_secret_basic`` gets a secret), ``grant_types`` and ``response_types``.
+    Other fields are ignored. Raises ``IntegrationError`` with an RFC 7591 code.
+    """
+    if not isinstance(metadata, dict):
+        raise IntegrationError("invalid_client_metadata")
+    name = metadata.get("client_name")
+    if not isinstance(name, str) or _RESERVED.search(name):
+        raise IntegrationError("invalid_client_metadata")
+    method = metadata.get("token_endpoint_auth_method", "client_secret_basic")
+    grants = metadata.get("grant_types", ["authorization_code"])
+    responses = metadata.get("response_types", ["code"])
+    if (
+        method not in AUTH_METHODS
+        or not isinstance(grants, list)
+        or not grants
+        or any(grant not in GRANT_TYPES for grant in grants)
+        or "authorization_code" not in grants
+        or responses != ["code"]
+    ):
+        raise IntegrationError("invalid_client_metadata")
+    uris = metadata.get("redirect_uris")
+    if not isinstance(uris, list):
+        raise IntegrationError("invalid_redirect_uri")
+    try:
+        view, secret = register_client(
+            connection,
+            tenant_id=None,
+            person_id=None,
+            name=name,
+            redirect_uris=uris,
+            confidential=method != "none",
+            now=now,
+        )
+    except IntegrationError as error:
+        raise IntegrationError(
+            "invalid_redirect_uri" if error.code == "redirect_uris" else "invalid_client_metadata"
+        ) from None
+    answer: dict[str, Any] = {
+        "client_id": view["client_id"],
+        "client_id_issued_at": int(now.timestamp()),
+        "client_name": view["name"],
+        "redirect_uris": view["redirect_uris"],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": method,
+    }
+    if secret is not None:
+        answer["client_secret"] = secret
+        answer["client_secret_expires_at"] = 0
+    return answer
 
 
 def find_client(connection: Any, client_id: str) -> Any:
@@ -302,8 +381,15 @@ def exchange_code(
         or not hmac.compare_digest(challenge_for(code_verifier), row.code_challenge)
     ):
         if row is not None and row.used_at is not None:
-            # A code used twice: end what the first use made (RFC 6749 §4.1.2).
-            _end_grants(connection, client_id, row.tenant_id, now)
+            # A code used twice: end what the first use made (RFC 6749 §4.1.2). A
+            # platform app's connections belong to people, so only this person's end.
+            _end_grants(
+                connection,
+                client_id,
+                row.tenant_id,
+                now,
+                person_id=row.person_id if is_platform(client) else None,
+            )
         raise IntegrationError("invalid_grant", 400)
     connection.execute(update(CODES).where(CODES.c.id == row.id).values(used_at=now))
     grant_id = uuid4()
@@ -323,17 +409,22 @@ def exchange_code(
     return _tokens(connection, grant_id=grant_id, now=now)
 
 
-def _end_grants(connection: Any, client_id: str, tenant_id: UUID, now: datetime) -> None:
-    ids = [
-        row.id
-        for row in connection.execute(
-            select(GRANTS.c.id).where(
-                GRANTS.c.client_id == client_id,
-                GRANTS.c.tenant_id == tenant_id,
-                GRANTS.c.revoked_at.is_(None),
-            )
-        )
-    ]
+def _end_grants(
+    connection: Any,
+    client_id: str,
+    tenant_id: UUID,
+    now: datetime,
+    *,
+    person_id: UUID | None = None,
+) -> None:
+    query = select(GRANTS.c.id).where(
+        GRANTS.c.client_id == client_id,
+        GRANTS.c.tenant_id == tenant_id,
+        GRANTS.c.revoked_at.is_(None),
+    )
+    if person_id is not None:
+        query = query.where(GRANTS.c.person_id == person_id)
+    ids = [row.id for row in connection.execute(query)]
     for grant_id in ids:
         revoke_grant(connection, grant_id=grant_id, by="security:replay", now=now)
 
@@ -380,8 +471,11 @@ def authenticate(connection: Any, presented: str, *, now: datetime) -> TokenCont
             GRANTS.c.scopes,
             GRANTS.c.revoked_at.label("grant_revoked"),
             GRANTS.c.last_used_at,
+            GRANTS.c.person_id,
+            CLIENTS.c.tenant_id.label("client_tenant_id"),
         )
         .join(GRANTS, GRANTS.c.id == TOKENS.c.grant_id)
+        .join(CLIENTS, CLIENTS.c.client_id == GRANTS.c.client_id)
         .where(TOKENS.c.token_sha256 == digest(presented), TOKENS.c.kind == "access")
     ).first()
     if (
@@ -399,7 +493,14 @@ def authenticate(connection: Any, presented: str, *, now: datetime) -> TokenCont
         )
         .values(last_used_at=now)
     )
-    return TokenContext(row.grant_id, row.tenant_id, row.client_id, frozenset(row.scopes))
+    return TokenContext(
+        row.grant_id,
+        row.tenant_id,
+        row.client_id,
+        frozenset(row.scopes),
+        person_id=row.person_id,
+        personal=row.client_tenant_id is None,
+    )
 
 
 def revoke_grant(connection: Any, *, grant_id: UUID, by: str, now: datetime) -> bool:
@@ -479,6 +580,34 @@ def connection_row(connection: Any, grant_id: UUID) -> dict[str, Any] | None:
         .where(GRANTS.c.id == grant_id)
     ).first()
     return None if row is None else {**_connection_view(row), "tenant_id": str(row.tenant_id)}
+
+
+def person_connections(connection: Any, person_id: UUID) -> list[dict[str, Any]]:
+    """The apps one person connected for themself (platform apps), newest first."""
+    rows = connection.execute(
+        select(GRANTS, CLIENTS.c.name)
+        .join(CLIENTS, CLIENTS.c.client_id == GRANTS.c.client_id)
+        .where(GRANTS.c.person_id == person_id, CLIENTS.c.tenant_id.is_(None))
+        .order_by(GRANTS.c.created_at.desc())
+        .limit(200)
+    ).all()
+    return [{**_connection_view(row), "tenant_id": str(row.tenant_id)} for row in rows]
+
+
+def revoke_person_grant(connection: Any, *, person_id: UUID, grant_id: UUID, now: datetime) -> bool:
+    """A person removes an app they connected. Another person's connection is not found."""
+    row = connection.execute(
+        select(GRANTS.c.id)
+        .join(CLIENTS, CLIENTS.c.client_id == GRANTS.c.client_id)
+        .where(
+            GRANTS.c.id == grant_id,
+            GRANTS.c.person_id == person_id,
+            CLIENTS.c.tenant_id.is_(None),
+        )
+    ).first()
+    if row is None:
+        raise IntegrationError("not_found", 404)
+    return revoke_grant(connection, grant_id=grant_id, by=f"person:{person_id}", now=now)
 
 
 def tenant_clients(connection: Any, tenant_id: UUID) -> list[dict[str, Any]]:

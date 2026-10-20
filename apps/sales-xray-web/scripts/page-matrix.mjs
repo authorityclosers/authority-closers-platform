@@ -54,11 +54,13 @@ const PARAMS = {
   callId: CALL_ID,
   prospectId: PROSPECT_ID,
   personId: PERSON_ID,
+  // Settings sections (20 Oct): one address each; the matrix opens Profile.
+  section: "profile",
 };
 
 /** Pages drawn in the app shell (navigation rail on wide windows). */
 export const SHELL_PAGE =
-  /^\/(dashboard|analysis(\/.*)?|calls|organisation(\/.*)?|account(\/.*)?|prospects(\/.*)?|coaching)?$/;
+  /^\/(dashboard|analysis(\/.*)?|calls|organisation(\/.*)?|account(\/.*)?|settings(\/.*)?|prospects(\/.*)?|coaching)?$/;
 
 /** The audit must fail these with every stylesheet blocked (its proof). */
 export const NEGATIVE_CONTROL = ["/dashboard", "/analysis/calls", "/login"];

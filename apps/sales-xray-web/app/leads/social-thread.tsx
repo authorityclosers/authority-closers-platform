@@ -8,8 +8,10 @@
  */
 
 import { AtSign, MessageSquare } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { chatHref } from "../chats/chats-client";
 import { Button } from "../ui/kit";
 import { AiHelp, useLeadAi } from "./ai-replies";
 import type { AiLeadState } from "./ai-replies-client";
@@ -33,6 +35,9 @@ const STATUS: Record<string, string> = {
   read: "Read",
   failed: "Not sent",
 };
+// The drawer keeps the latest few; the whole chat lives in Chats (owner, 20 Oct).
+const RECENT = 3;
+
 const AUTO: Record<string, string> = {
   first_reply: "Automatic first reply",
   out_of_hours: "Automatic after-hours reply",
@@ -166,6 +171,8 @@ export function SocialThread({
     <>
       {chat.threads.map((thread) => {
         const Icon = thread.channel === "instagram" ? AtSign : MessageSquare;
+        const shown = thread.messages.slice(-RECENT);
+        const earlier = thread.messages.length - shown.length;
         return (
           <section
             key={`${thread.accountId}|${thread.channel}|${thread.messages[0]?.id}`}
@@ -175,9 +182,21 @@ export function SocialThread({
             <div className={styles.waHead}>
               <Icon size={16} aria-hidden="true" />
               <h3 className={styles.stepLabel}>{thread.place}</h3>
+              <Link
+                className={styles.openChats}
+                href={chatHref(thread.channel, leadId, thread.accountId)}
+                prefetch={false}
+              >
+                Open in Chats
+              </Link>
             </div>
+            {earlier ? (
+              <p className={styles.hint}>
+                {earlier} earlier message{earlier === 1 ? "" : "s"} in Chats
+              </p>
+            ) : null}
             <ol className={styles.waMessages}>
-              {thread.messages.map((message) => (
+              {shown.map((message) => (
                 <Bubble key={message.id} message={message} />
               ))}
             </ol>

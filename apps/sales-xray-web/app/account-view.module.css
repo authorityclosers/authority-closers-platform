@@ -236,6 +236,32 @@
   overflow-y: auto;
 }
 
+/* Inside the Settings frame (20 Oct): its panes as cards, the page scrolls. */
+.settings[data-variant="embedded"] {
+  display: block;
+  max-width: none;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.settings[data-variant="embedded"] .content {
+  display: grid;
+  gap: 16px;
+  overflow: visible;
+}
+
+.settings[data-variant="embedded"] .pane {
+  padding: 14px 18px 18px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-surface);
+}
+
 .pane {
   display: grid;
   align-content: start;

@@ -6,8 +6,8 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-# Which environments this host exports. Production joins when its Admin mounts the store.
-Environment="AC_METRICS_ENVIRONMENTS=development staging"
+# Export every environment to the read-only metrics store mounted by production Admin.
+Environment="AC_METRICS_ENVIRONMENTS=development staging production"
 ExecStart=/usr/local/sbin/ac-metrics-collect
 # AI budget alerts from the fresh export: owner's AC Pulse task, one Telegram line,
 # a Telegram line per ceiling or period change. Production only unless set (19 Oct 2026).

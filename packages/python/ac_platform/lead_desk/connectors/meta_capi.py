@@ -29,20 +29,19 @@ back as state. Bodies are emptied after 90 days.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
 import re
 import time
-from collections.abc import AsyncIterator, Mapping
-from contextlib import asynccontextmanager, suppress
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 from uuid import UUID, uuid4
 
 import httpx
+import structlog
 from fastapi import FastAPI
 from sqlalchemy import and_, cast, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, insert
@@ -58,6 +57,7 @@ from ac_platform.lead_desk.models import (
 )
 
 log = logging.getLogger(__name__)
+events_log = structlog.get_logger(__name__)  # stdlib info lines don't reach the journal
 
 KEY: Final[str] = "meta_conversions"
 CONNECTION: Final[str] = "meta_connection"
@@ -675,63 +675,79 @@ async def tick(
         swept = await erasure_sweep(db, now)
     delivered = sum(1 for line in lines if line.get("status") == "delivered")
     if lines:
-        log.info("meta conversions: %d made, %d tried, %d delivered", made, len(lines), delivered)
+        events_log.info(
+            "lead_desk_meta_conversions", made=made, tried=len(lines), delivered=delivered
+        )
     return {"made": made, "sent": len(lines), "delivered": delivered, "swept": swept}
-
-
-async def run_sender(
-    sessions: async_sessionmaker[AsyncSession],
-    stop: asyncio.Event,
-    *,
-    environment: str,
-    first_delay: int = _TICK,
-) -> None:
-    """Every minute, while Meta is set up, send lead stages. Survives a bad tick."""
-    with suppress(TimeoutError):
-        await asyncio.wait_for(stop.wait(), timeout=first_delay)
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        while not stop.is_set():
-            cfg = meta.config()
-            if cfg is not None:
-                try:
-                    await tick(sessions, cfg, client, environment=environment)
-                except Exception:  # noqa: BLE001 - the loop must survive a bad tick
-                    log.warning("meta conversions tick failed", exc_info=True)
-            with suppress(TimeoutError):
-                await asyncio.wait_for(stop.wait(), timeout=_TICK)
 
 
 def attach(
     application: FastAPI, sessions: async_sessionmaker[AsyncSession], environment: str
 ) -> None:
-    """Run the sender for the API's lifetime by wrapping the app's own lifespan."""
-    if environment in {"local", "test"}:
-        return
-    inner = application.router.lifespan_context
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
-        async with inner(app) as state:
-            stop = asyncio.Event()
-            task = asyncio.create_task(
-                run_sender(sessions, stop, environment=environment), name="meta-conversions"
-            )
-            try:
-                yield state
-            finally:
-                stop.set()
-                task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await task
-
-    application.router.lifespan_context = lifespan
+    """Nothing to start: the lead-stage engine (``lead_desk/journey/engine.py``, 20 Oct
+    2026) sends Meta's events now, with the other ad platforms', and moves each
+    organisation's waiting events and settings over from here. Kept so the connectors'
+    installer needs no change."""
+    del application, sessions, environment
 
 
 # ----- what the page shows ------------------------------------------------------------
 
 
-async def summary(db: AsyncSession, tenant_id: UUID, now: datetime) -> dict[str, Any]:
-    """Counts for the last 7 days, the last delivery, and the 20 newest events."""
+async def settling(
+    db: AsyncSession, tenant_id: UUID, settings: Settings, now: datetime
+) -> tuple[int, datetime | None]:
+    """The stages that will go to Meta once their stage changes settle (5 minutes, in case
+    the seller changes it back), and when the first goes."""
+    floor = max(datetime.fromtimestamp(settings.since, UTC), now - MAX_AGE)
+    query = (
+        select(LeadEvent.kind, LeadEvent.data, LeadEvent.created_at, Lead.id, Lead.source_ref)
+        .join(Lead, and_(Lead.tenant_id == LeadEvent.tenant_id, Lead.id == LeadEvent.lead_id))
+        .where(
+            LeadEvent.tenant_id == tenant_id,
+            LeadEvent.kind.in_(("captured", "repeat", "result")),
+            LeadEvent.created_at >= floor,
+            Lead.source == "meta",
+            Lead.source_ref.is_not(None),
+        )
+        .order_by(LeadEvent.created_at, LeadEvent.id)
+        .limit(COLLECT_LIMIT)
+    )
+    if settings.cursor is not None:
+        at, after = settings.cursor
+        query = query.where(
+            or_(LeadEvent.created_at > at, and_(LeadEvent.created_at == at, LeadEvent.id > after))
+        )
+    pairs: dict[tuple[UUID, str], datetime] = {}
+    for kind, data, at, lead_id, ref in (await db.execute(query)).tuples():
+        reached = stages_reached(kind, data if isinstance(data, dict) else {})
+        if reached is None or not META_LEAD_ID.fullmatch(str(ref or "")):
+            continue
+        for stage in with_earlier(reached):
+            name = settings.events.get(stage)
+            if name:
+                pairs.setdefault((lead_id, name), at)
+    if pairs:
+        made = (
+            await db.execute(
+                select(LeadMetaConversion.lead_id, LeadMetaConversion.event_name).where(
+                    LeadMetaConversion.tenant_id == tenant_id,
+                    LeadMetaConversion.dataset_id == settings.dataset_id,
+                    LeadMetaConversion.lead_id.in_({lead for lead, _ in pairs}),
+                )
+            )
+        ).tuples()
+        for done in made:
+            pairs.pop((done[0], done[1]), None)
+    first = min(pairs.values(), default=None)
+    return len(pairs), first + SETTLE if first is not None else None
+
+
+async def summary(
+    db: AsyncSession, tenant_id: UUID, now: datetime, settings: Settings | None = None
+) -> dict[str, Any]:
+    """Counts for the last 7 days, the last delivery, the 20 newest events, and what is
+    still settling before it goes."""
     week = now - timedelta(days=7)
     counts = {
         status: int(count)
@@ -776,10 +792,17 @@ async def summary(db: AsyncSession, tenant_id: UUID, now: datetime) -> dict[str,
         .order_by(LeadMetaConversion.next_attempt_at.desc())
         .limit(1)
     )
+    waits, sends_at = (
+        await settling(db, tenant_id, settings, now)
+        if settings is not None and settings.on
+        else (0, None)
+    )
     return {
         "counts": counts,
         "last_delivered_at": last,
         "waiting_on": waiting,
+        "settling": waits,
+        "sends_at": sends_at,
         "recent": [
             {
                 "id": row.id,

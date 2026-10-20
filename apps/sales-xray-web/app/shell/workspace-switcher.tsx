@@ -1,34 +1,26 @@
 "use client";
 
-import {
-  Building2,
-  Check,
-  ChevronsUpDown,
-  LogIn,
-  MailOpen,
-  Plus,
-} from "lucide-react";
+import { ChevronsUpDown, LogIn } from "lucide-react";
 import Link from "next/link";
 import type { MouseEvent, RefObject } from "react";
 import type { PendingInvite } from "../organisation/organisation-api";
 import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 import type { Branding } from "./branding-store";
-import { OrgLogo } from "./org-logo";
-
+import {
+  WorkspacePicker,
+  WorkspaceTile,
+  workspaceLine,
+  workspaceName,
+  type PickerWorkspace,
+} from "./workspace-picker";
 import styles from "./workspace-switcher.module.css";
 
-type WorkspaceKind = SalesXrayWorkspace["kind"];
 type Workspace = SalesXrayWorkspace;
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return (name.slice(0, 2) || "·").toUpperCase();
-}
-
 /**
- * The sidebar's account switcher: Personal (your own account) and the
- * organisations you belong to, each clearly marked.
+ * The sidebar's switcher (design system v2): the current workspace, what it
+ * is and your role, and one click to the list (workspace-picker.tsx):
+ * others one tap away, invitations, and Create apart.
  */
 export function WorkspaceSwitcher({
   workspaces,
@@ -67,59 +59,18 @@ export function WorkspaceSwitcher({
     workspaces.find((workspace) => workspace.tenant_id === currentId) ??
     workspaces[0] ??
     null;
-  const kind = current?.kind ?? "personal";
   const you = personName || "Your account";
-  const title = current?.name ?? you;
-  const subtitle = kind === "personal" ? "Personal account" : "Organisation";
-  const personal = workspaces.filter(
-    (workspace) => workspace.kind === "personal",
-  );
-  const organisations = workspaces.filter(
-    (workspace) => workspace.kind === "organisation",
-  );
-
-  const waiting = invites.length;
-  const logoFor = (tenantId: string | undefined) =>
-    branding && branding.tenantId === tenantId ? branding.logoUrl : null;
-
-  const item = (workspace: Workspace, itemKind: WorkspaceKind) => {
-    const selected = workspace.tenant_id === current?.tenant_id;
-    const name = workspace.name;
-    return (
-      <button
-        key={workspace.tenant_id}
-        type="button"
-        role="menuitemradio"
-        aria-checked={selected}
-        className={styles.item}
-        data-selected={selected ? "" : undefined}
-        onClick={() => onSelect(workspace.tenant_id)}
-      >
-        <span className={styles.tile} data-kind={itemKind} aria-hidden="true">
-          <OrgLogo
-            src={logoFor(workspace.tenant_id)}
-            fallback={
-              itemKind === "organisation" ? (
-                <Building2 size={14} />
-              ) : (
-                initials(name)
-              )
-            }
-          />
-        </span>
-        <span className={styles.itemCopy}>
-          <b>{name}</b>
-          <small>
-            {itemKind === "personal" ? "Just you" : "Your organisation"}
-          </small>
-        </span>
-        {selected ? (
-          <Check size={15} className={styles.check} aria-hidden="true" />
-        ) : null}
-      </button>
-    );
+  const shown: PickerWorkspace = current ?? {
+    tenant_id: "",
+    kind: "personal",
+    name: you,
   };
-
+  const title = current?.name ?? you;
+  const waiting = invites.length;
+  const logo =
+    branding && current && branding.tenantId === current.tenant_id
+      ? branding.logoUrl
+      : null;
   return (
     <div className={styles.container} ref={containerRef}>
       <button
@@ -136,22 +87,18 @@ export function WorkspaceSwitcher({
         }`}
         title={title}
       >
-        <span className={styles.tile} data-kind={kind} aria-hidden="true">
-          <OrgLogo
-            src={logoFor(current?.tenant_id)}
-            fallback={
-              kind === "organisation" ? (
-                <Building2 size={15} />
-              ) : (
-                initials(title)
-              )
-            }
+        <span className={styles.tileWrap}>
+          <WorkspaceTile
+            workspace={shown}
+            logoUrl={logo}
+            size="sm"
+            personName={personName}
           />
           {waiting ? <i className={styles.dot} /> : null}
         </span>
         <span className={styles.copy}>
-          <b>{title}</b>
-          <small>{subtitle}</small>
+          <b>{workspaceName(shown)}</b>
+          <small>{workspaceLine(shown)}</small>
         </span>
         <ChevronsUpDown
           size={14}
@@ -159,80 +106,21 @@ export function WorkspaceSwitcher({
           aria-hidden="true"
         />
       </button>
-
       {open && (
         <div className={styles.menu} role="menu" aria-label="Switch account">
-          {personal.length > 0 && (
-            <>
-              <p className={styles.group}>Personal</p>
-              {personal.map((workspace) => item(workspace, "personal"))}
-            </>
-          )}
-          <p className={styles.group}>Organisations</p>
-          {organisations.length > 0 ? (
-            organisations.map((workspace) => item(workspace, "organisation"))
-          ) : waiting ? null : (
-            <p className={styles.empty}>You are not in an organisation yet.</p>
-          )}
-          {waiting > 0 && onJoin ? (
-            <>
-              <p className={styles.group}>Invitations</p>
-              {invites.map((invite) => (
-                <button
-                  key={invite.inviteId}
-                  type="button"
-                  role="menuitem"
-                  className={styles.item}
-                  disabled={joining !== null}
-                  aria-label={`Join ${invite.organisationName} as ${
-                    invite.role === "admin" ? "an admin" : "a member"
-                  }`}
-                  onClick={() => onJoin(invite)}
-                >
-                  <span
-                    className={styles.tile}
-                    data-kind="invite"
-                    aria-hidden="true"
-                  >
-                    <MailOpen size={14} />
-                  </span>
-                  <span className={styles.itemCopy}>
-                    <b>{invite.organisationName}</b>
-                    <small>
-                      Invited as {invite.role === "admin" ? "admin" : "member"}
-                    </small>
-                  </span>
-                  <span className={styles.join} aria-hidden="true">
-                    {joining === invite.inviteId ? "Joining…" : "Join"}
-                  </span>
-                </button>
-              ))}
-            </>
-          ) : null}
-          {/* Create appears only where the server can do it (AUT-1694): the
-              menu never shows a promise it cannot keep. */}
-          {onCreate ? (
-            <>
-              <hr className={styles.divider} />
-              <button
-                type="button"
-                role="menuitem"
-                className={styles.item}
-                onClick={onCreate}
-              >
-                <span
-                  className={styles.tile}
-                  data-kind="action"
-                  aria-hidden="true"
-                >
-                  <Plus size={14} />
-                </span>
-                <span className={styles.itemCopy}>
-                  <b>Create an organisation</b>
-                </span>
-              </button>
-            </>
-          ) : null}
+          <WorkspacePicker
+            menu
+            workspaces={workspaces}
+            currentId={current?.tenant_id ?? null}
+            onSelect={onSelect}
+            onKeep={() => setOpen(false)}
+            branding={branding}
+            invites={invites}
+            joining={joining}
+            onJoin={onJoin}
+            onCreate={onCreate}
+            personName={personName}
+          />
         </div>
       )}
     </div>

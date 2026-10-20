@@ -108,7 +108,12 @@ it("shows each campaign's spend, its leads here and what each cost", async () =>
     b.textContent?.includes("Check now"),
   ) as HTMLButtonElement;
   await act(async () => check.click());
-  expect(calls[1]).toEqual({
+  // The card's logo reads the brand library too; find the refresh itself.
+  expect(
+    calls.find((call) =>
+      call.url.startsWith("/v1/lead-desk/meta/spend/refresh"),
+    ),
+  ).toEqual({
     url: "/v1/lead-desk/meta/spend/refresh?days=30",
     method: "POST",
   });

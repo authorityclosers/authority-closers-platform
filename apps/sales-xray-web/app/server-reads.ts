@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 
 import { serverDisplayDates as displayDatesFor } from "./display-dates";
+import { serverGet } from "./server-get";
 import type { DisplayDates } from "./display-dates";
 
 /**
@@ -71,23 +72,20 @@ export async function serverReads(
   const entries = await Promise.all(
     paths.map(async (path): Promise<[string, ServerRead]> => {
       try {
-        const response = await fetch(`${origin}${path}`, {
-          method: "GET",
-          headers: { accept: "application/json", cookie, host },
-          cache: "no-store",
-          redirect: "error",
+        // serverGet, not fetch(): fetch drops the host header (server-get.ts).
+        const answer = await serverGet(
+          `${origin}${path}`,
+          { accept: "application/json", cookie, host },
           signal,
-        });
-        const json = response.headers
-          .get("content-type")
-          ?.includes("application/json");
-        return [
-          path,
-          {
-            status: response.status,
-            body: json ? await response.json().catch(() => null) : null,
-          },
-        ];
+        );
+        let body: unknown = null;
+        if (answer.contentType?.includes("application/json"))
+          try {
+            body = JSON.parse(answer.text);
+          } catch {
+            body = null;
+          }
+        return [path, { status: answer.status, body }];
       } catch {
         return [path, null];
       }

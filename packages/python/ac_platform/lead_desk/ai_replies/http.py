@@ -3,11 +3,18 @@
 - ``/ai-replies/settings``: off, suggest or auto, the channels, price answers, and the
   business profile the AI answers from (owners and admins).
 - ``/leads/{id}/ai``: this lead's AI state (mode, channels, recent hand-offs).
-- ``/leads/{id}/ai-draft``: a draft for the seller to read and send, or why a person
-  should answer instead (suggest).
+- ``/leads/{id}/ai-draft``: ask for a draft (suggest). What the rules settle comes back
+  at once; anything else is queued for the AI replies runner, and
+  ``/leads/{id}/ai-draft/{reply_id}`` says when the draft is ready, or why a person
+  should answer instead.
+- ``/ai-replies/try``: "Try it" (owners and admins): a draft for a sample message the
+  business types, from its profile, never sent; ``/ai-replies/try/{reply_id}`` says
+  when it is ready.
 
-Same workspace rule as the CRM's own routes. No price is shown to anyone here; each
-reply's model, tokens and cost are kept for Admin (``lead_desk_ai_replies``).
+Nothing is drafted while Admin has AI replies switched off for this environment, or
+while its cap is reached (suggestions pause). Same workspace rule as the CRM's own
+routes. No price or cost is shown to anyone here; each reply's model, tokens and cost
+are kept for Admin (``lead_desk_ai_replies``).
 """
 
 from __future__ import annotations
@@ -21,14 +28,15 @@ from uuid import UUID
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.ai_replies import registry, rules, runner, service
-from ac_platform.lead_desk.models import Lead, LeadDeskSettings
+from ac_platform.lead_desk.ai_replies import admin_settings, rules, runner, service
+from ac_platform.lead_desk.models import LeadAiReply, LeadDeskSettings
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership, Organisation
 
@@ -47,7 +55,19 @@ WORDS: dict[str, str] = {
     "no_profile": "Add your business profile in Settings → Integrations → AI replies.",
     "blocked_reply": "The draft said something your profile doesn't, so it wasn't used.",
     "budget": "AI replies are paused for now.",
+    "off": "AI replies are switched off for now.",
     "failed": "The AI couldn't answer just now.",
+}
+DraftStatus = Literal["queued", "drafted", "handoff", "paused", "failed"]
+_STATUS: dict[str, DraftStatus] = {
+    "queued": "queued",
+    "waiting": "queued",
+    "drafted": "drafted",
+    "sent": "drafted",
+    "handoff": "handoff",
+    "opted_out": "handoff",
+    "paused": "paused",
+    "failed": "failed",
 }
 
 
@@ -86,7 +106,8 @@ class AiSettingsView(BaseModel):
     faqs: list[Faq]
     notes: str
     ready: bool
-    available: bool
+    available: bool  # switched on in Admin for this environment
+    paused: bool  # at Admin's cap: no suggestions until it is raised
 
 
 class HandoffView(BaseModel):
@@ -102,6 +123,7 @@ class LeadAiView(BaseModel):
     channels: list[str]
     ready: bool
     available: bool
+    paused: bool
     handoffs: list[HandoffView]
 
 
@@ -110,13 +132,42 @@ class DraftCommand(_Command):
     account_id: UUID | None = Field(default=None, alias="accountId")
 
 
+class TryCommand(_Command):
+    message: str = Field(min_length=1, max_length=500)
+    channel: Channel = "whatsapp"
+
+
 class DraftView(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     reply_id: UUID = Field(alias="replyId")
+    status: DraftStatus
     draft: str | None = None
-    handoff: bool
+    handoff: bool  # a person should answer (or no draft is coming)
     reason: str | None = None
     words: str
+
+
+def draft_view(row: LeadAiReply, *, enabled: bool) -> DraftView:
+    status = _STATUS.get(row.outcome, "failed")
+    reason = row.reason
+    if status == "queued" and not enabled:
+        status, reason = "paused", "off"
+    if status == "failed":
+        words = WORDS["failed"]
+    elif status == "paused":
+        words = WORDS["off" if reason == "off" else "budget"]
+    elif status == "handoff":
+        words = WORDS.get(reason or "", WORDS["unsure"])
+    else:
+        words = ""
+    return DraftView(
+        reply_id=row.id,
+        status=status,
+        draft=row.draft if status == "drafted" else None,
+        handoff=status not in ("queued", "drafted"),
+        reason=None if status in ("queued", "drafted") else reason,
+        words=words,
+    )
 
 
 def install_ai_replies_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -192,7 +243,14 @@ def install_ai_replies_http(application: FastAPI, ctx: RouteContext) -> None:
         except DomainError:
             raise HTTPException(401, "Sign in to see your leads.", headers=PRIVATE) from None
 
-    def settings_view(value: rules.Settings) -> AiSettingsView:
+    async def switch(db: AsyncSession) -> tuple[bool, bool]:
+        """Admin's switch for this environment, and whether its cap is reached."""
+        config, _ = await admin_settings.read(db)
+        if not config["enabled"]:
+            return False, False
+        return True, await admin_settings.capped(db, config, datetime.now(UTC))
+
+    def settings_view(value: rules.Settings, available: bool, paused: bool) -> AiSettingsView:
         return AiSettingsView(
             mode=value.mode,
             channels=list(value.channels),
@@ -203,7 +261,8 @@ def install_ai_replies_http(application: FastAPI, ctx: RouteContext) -> None:
             faqs=[Faq(question=q, answer=a) for q, a in value.faqs],
             notes=value.notes,
             ready=value.has_profile,
-            available=registry.available()[0],
+            available=available,
+            paused=paused,
         )
 
     @router.get("/ai-replies/settings", response_model=AiSettingsView, response_model_by_alias=True)
@@ -211,7 +270,9 @@ def install_ai_replies_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response) as desk:
             desk._require_manager()
             row = await desk.db.get(LeadDeskSettings, desk.tenant_id)
-            return settings_view(rules.read((row.config if row else None) or {}))
+            return settings_view(
+                rules.read((row.config if row else None) or {}), *await switch(desk.db)
+            )
 
     @router.put("/ai-replies/settings", response_model=AiSettingsView, response_model_by_alias=True)
     async def save_ai_settings(
@@ -246,7 +307,7 @@ def install_ai_replies_http(application: FastAPI, ctx: RouteContext) -> None:
             # Its own part of the settings: the team settings form's revision stays.
             row.config = {**(row.config or {}), rules.KEY: rules.as_config(value)}
             await desk.db.flush()
-            return settings_view(value)
+            return settings_view(value, *await switch(desk.db))
 
     @router.get("/leads/{lead_id}/ai", response_model=LeadAiView, response_model_by_alias=True)
     async def lead_ai(lead_id: UUID, request: Request, response: Response) -> LeadAiView:
@@ -255,11 +316,13 @@ def install_ai_replies_http(application: FastAPI, ctx: RouteContext) -> None:
             row = await desk.db.get(LeadDeskSettings, desk.tenant_id)
             value = rules.read((row.config if row else None) or {})
             handoffs = await service.recent_handoffs(desk.db, lead.id, now=desk.now)
+            available, paused = await switch(desk.db)
             return LeadAiView(
                 mode=value.mode,
                 channels=list(value.channels),
                 ready=value.has_profile,
-                available=registry.available()[0],
+                available=available,
+                paused=paused,
                 handoffs=[
                     HandoffView(
                         channel=item.channel, reason=item.reason or "unsure", at=item.created_at
@@ -274,40 +337,102 @@ def install_ai_replies_http(application: FastAPI, ctx: RouteContext) -> None:
     async def lead_ai_draft(
         lead_id: UUID, command: DraftCommand, request: Request, response: Response
     ) -> DraftView:
-        """A draft for the seller to read and send, or why a person should answer."""
-
+        """Ask for a draft: settled by the rules at once, or queued for the runner."""
         async with desk_for(request, response, write=True) as desk:
             lead = await service.lead_for(desk, lead_id)
+            available, paused = await switch(desk.db)
+            if not available:
+                raise DeskError(409, "AI replies are switched off for now.")
             ready = await service.prepare(
                 desk.db, lead, command.channel, account_id=command.account_id, now=desk.now
             )
-            if not registry.available()[0]:
-                raise DeskError(409, "AI replies aren't switched on for Sales Xray yet.")
             if ready.settings.mode == "off":
                 raise DeskError(409, "AI replies are off. A manager turns them on in Settings.")
             if command.channel not in ready.settings.channels:
                 raise DeskError(409, "AI replies are off for this channel.")
-            person = desk.viewer.person_id
-        # The model is asked with no transaction of this request open.
-        result = await service.think(registry.model_for(ctx.sessions), ready)
-        now = datetime.now(UTC)
-        async with ctx.sessions() as db, db.begin():
-            row = service.audit(ready, result, mode="suggest", now=now, by=person)
-            db.add(row)
-            if result.outcome == "opted_out":
-                lead_row = await db.get(Lead, lead_id, with_for_update=True)
-                if lead_row is not None:
-                    await service.record_stop(
-                        service.system_desk(db, lead_row, now), lead_row, command.channel
-                    )
-        handoff = result.outcome != "drafted"
-        return DraftView(
-            reply_id=row.id,
-            draft=result.draft if not handoff else None,
-            handoff=handoff,
-            reason=result.reason,
-            words="" if not handoff else WORDS.get(result.reason or "", WORDS["unsure"]),
-        )
+            settled = service.decide(ready)
+            if settled is None and paused:
+                settled = service.Outcome("paused", "budget")
+            row = service.audit(
+                ready,
+                settled or service.Outcome("queued"),
+                mode="suggest",
+                now=desk.now,
+                by=desk.viewer.person_id,
+            )
+            if settled is not None:
+                row.settled_at = desk.now
+            desk.db.add(row)
+            if row.outcome == "opted_out":
+                await service.record_stop(
+                    service.system_desk(desk.db, lead, desk.now), lead, command.channel
+                )
+            await desk.db.flush()
+            return draft_view(row, enabled=True)
+
+    @router.get(
+        "/leads/{lead_id}/ai-draft/{reply_id}",
+        response_model=DraftView,
+        response_model_by_alias=True,
+    )
+    async def lead_ai_draft_status(
+        lead_id: UUID, reply_id: UUID, request: Request, response: Response
+    ) -> DraftView:
+        """Whether the draft is ready yet (the web asks every couple of seconds)."""
+        async with desk_for(request, response) as desk:
+            lead = await service.lead_for(desk, lead_id)
+            row = await desk.db.get(LeadAiReply, reply_id)
+            if (
+                row is None
+                or row.tenant_id != desk.tenant_id
+                or row.lead_id != lead.id
+                or row.mode != "suggest"
+            ):
+                raise DeskError(404, "That draft isn't here.")
+            available, _ = await switch(desk.db)
+            return draft_view(row, enabled=available)
+
+    @router.post("/ai-replies/try", response_model=DraftView, response_model_by_alias=True)
+    async def ai_try(command: TryCommand, request: Request, response: Response) -> DraftView:
+        """Try it: the reply the AI would draft for this message. Nothing is sent."""
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            available, paused = await switch(desk.db)
+            if not available:
+                raise DeskError(409, "AI replies are switched off for now.")
+            ready = await service.prepare_try(
+                desk.db, desk.tenant_id, command.channel, command.message
+            )
+            settled = service.decide(ready)
+            if settled is not None and settled.outcome == "opted_out":
+                settled = service.Outcome("handoff", "opt_out")  # a sample records no stop
+            if settled is None and paused:
+                settled = service.Outcome("paused", "budget")
+            row = service.audit(
+                ready,
+                settled or service.Outcome("queued"),
+                mode="try",
+                now=desk.now,
+                by=desk.viewer.person_id,
+            )
+            row.sample = command.message
+            if settled is not None:
+                row.settled_at = desk.now
+            desk.db.add(row)
+            await desk.db.flush()
+            return draft_view(row, enabled=True)
+
+    @router.get(
+        "/ai-replies/try/{reply_id}", response_model=DraftView, response_model_by_alias=True
+    )
+    async def ai_try_status(reply_id: UUID, request: Request, response: Response) -> DraftView:
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            row = await desk.db.get(LeadAiReply, reply_id)
+            if row is None or row.tenant_id != desk.tenant_id or row.mode != "try":
+                raise DeskError(404, "That try isn't here.")
+            available, _ = await switch(desk.db)
+            return draft_view(row, enabled=available)
 
     application.include_router(router)
     runner.attach(application, ctx.sessions, settings.environment)

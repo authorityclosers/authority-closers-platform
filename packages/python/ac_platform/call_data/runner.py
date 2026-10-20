@@ -8,6 +8,9 @@ How it runs:
 - one runner per database (a session advisory lock); ``--loop`` polls every few
   seconds for C2 transcripts saved after ``--not-before`` (automatic mode never
   backfills); our own canary and QA calls are skipped;
+- automatic mode reads only transcripts saved in the last two hours, whatever
+  ``--recent-hours`` says (owner, 20 Oct 2026: nothing old runs or charges by
+  itself); a call not read by then is held until an explicit backfill;
 - each call is admitted (consent, retention, erasure, newest transcript), then a
   'running' row is committed before the provider is called, so a crash or
   timeout still counts as a paid attempt; at most two attempts per transcript;
@@ -16,7 +19,11 @@ How it runs:
   objects, decisions and lead fills are saved;
 - the Admin settings choose the model, switch the pipeline off and set a daily
   rupee cap (list-price estimate); the provider key lives only in the
-  ``infisical run`` child this command re-executes itself into.
+  ``infisical run`` child this command re-executes itself into;
+- before every call the environment's AI spend guard is asked too (``ai_spend``,
+  owner 20 Oct 2026): development's background AI is off until switched on, the
+  deep pipeline never runs by itself there and backfills never run there; a
+  backfill needs its own cap; sandbox and load-test organisations are skipped.
 
     python -m ac_platform.call_data.runner \\
         --service-config /etc/authority-closers/development/service-live.json \\
@@ -342,6 +349,13 @@ def process_call(
     return line
 
 
+def automatic_hours(trigger: str, requested: int) -> int:
+    """How far back a pass looks: automatic passes at most AUTO_FRESH_HOURS."""
+    from ac_platform.call_data.engine import AUTO_FRESH_HOURS
+
+    return min(requested, AUTO_FRESH_HOURS) if trigger == "auto" else requested
+
+
 def run_pass(
     sessions: Any,
     arguments: argparse.Namespace,
@@ -349,12 +363,25 @@ def run_pass(
     *,
     created_by: str,
     storage_root: Path | None = None,
+    spend_environment: str | None = None,
 ) -> list[dict[str, Any]]:
+    """One pass. ``spend_environment`` turns the AI spend guard on (the real runner
+    always passes it; tests with a fake model may leave it out)."""
+    from ac_platform.ai_spend import guard as spend_guard
     from ac_platform.call_data import engine
     from ac_platform.call_data.deep_runner import process_deep_call
 
     pipelines = ("fast", "deep") if arguments.pipeline == "both" else (arguments.pipeline,)
     trigger = "backfill" if arguments.backfill else "operator" if arguments.recording else "auto"
+
+    def refused(connection: Any, pipeline: str) -> dict[str, Any] | None:
+        if spend_environment is None:
+            return None
+        refusal = spend_guard.check(
+            connection, f"call_data_{pipeline}", environment=spend_environment, trigger=trigger
+        )
+        return None if refusal is None else refusal.line()
+
     lines: list[dict[str, Any]] = []
     for pipeline in pipelines:
         with sessions() as session:
@@ -371,13 +398,20 @@ def run_pass(
             calls = engine.candidates(
                 connection,
                 not_before=arguments.not_before,
-                hours=arguments.recent_hours,
+                hours=automatic_hours(trigger, arguments.recent_hours),
                 limit=arguments.limit,
                 pipeline=pipeline,
                 recording_id=arguments.recording,
                 include_done=bool(arguments.force),
             )
             test_sources = engine.test_source_shas(connection) if calls else set()
+            if calls and spend_environment is not None:
+                skipped = spend_guard.skipped_tenants(connection, spend_environment)
+                calls = [call for call in calls if call.tenant_id not in skipped]
+            stop = refused(connection, pipeline) if calls else None
+            if stop is not None:
+                lines.append(stop)
+                continue
         for call in calls:
             if pipeline == "fast":
                 line = process_call(
@@ -405,8 +439,12 @@ def run_pass(
             lines.append(line)
             with sessions() as session:
                 spent = engine.spent_today(session.connection(), pipeline, datetime.now(UTC))
+                stop = refused(session.connection(), pipeline)
             if spent >= settings[pipeline]["daily_cap_inr"]:
                 lines.append({"stopped": f"{pipeline}_daily_cap", "spent_inr": str(spent)})
+                break
+            if stop is not None:
+                lines.append(stop)
                 break
     return lines
 
@@ -427,6 +465,16 @@ def _inner(arguments: argparse.Namespace, model_client: Any = None) -> int:
     service = json.loads(arguments.service_config.read_text())
     root = service.get("sales_xray_storage_root")
     storage_root = Path(root) if isinstance(root, str) and root else None
+    # A real model is always behind the AI spend guard (owner, 20 Oct 2026).
+    spend_environment = None
+    if model_client is None:
+        from ac_platform.ai_spend import guard as spend_guard
+        from ac_platform.ai_spend.policy import SettingsError
+
+        try:
+            spend_environment = spend_guard.service_environment(service)
+        except SettingsError:
+            raise SystemExit("call_data_environment_missing") from None
     try:
         with database.connect() as lock:
             if arguments.apply:
@@ -443,7 +491,12 @@ def _inner(arguments: argparse.Namespace, model_client: Any = None) -> int:
             while True:
                 stops: set[str] = set()
                 for line in run_pass(
-                    sessions, arguments, client, created_by=created_by, storage_root=storage_root
+                    sessions,
+                    arguments,
+                    client,
+                    created_by=created_by,
+                    storage_root=storage_root,
+                    spend_environment=spend_environment,
                 ):
                     stop = line.get("stopped")
                     if stop is not None:

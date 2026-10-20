@@ -1015,6 +1015,11 @@ describe("Apple and Facebook next to Google", () => {
       expect(host.querySelector('p[role="alert"]')?.textContent).toContain(
         words,
       );
+      // Staff never get email codes, so the card names no sign-in method.
+      if (result === "account_exists")
+        expect(
+          host.querySelector('p[role="alert"]')?.textContent,
+        ).not.toContain("email code");
     }
   });
 });

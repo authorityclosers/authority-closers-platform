@@ -26,9 +26,11 @@ let root: Root;
 let host: HTMLDivElement;
 let calls: { url: string; method: string; body?: Record<string, unknown> }[];
 let draft: Record<string, unknown>;
+let later: Record<string, unknown>[];
 
 beforeEach(() => {
   calls = [];
+  later = [];
   draft = {
     replyId: "r1",
     draft: "Yes, every day 10am to 7pm.",
@@ -46,9 +48,11 @@ beforeEach(() => {
         ? method === "PUT"
           ? { ...SETTINGS, ...body, ready: true }
           : SETTINGS
-        : url.endsWith("/ai-draft")
+        : url.endsWith("/ai-draft") || url.endsWith("/ai-replies/try")
           ? draft
-          : { detail: "not here" };
+          : url.includes("/ai-draft/") || url.includes("/ai-replies/try/")
+            ? (later.shift() ?? draft)
+            : { detail: "not here" };
       return new Response(JSON.stringify(reply), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -112,6 +116,109 @@ it("puts the AI's draft in the reply box for the seller to send", async () => {
   expect(host.textContent).toContain("AI draft: read it");
 });
 
+it("waits for a draft written in the background", async () => {
+  vi.useFakeTimers();
+  try {
+    draft = { replyId: "r3", status: "queued", handoff: false, words: "" };
+    later = [
+      { replyId: "r3", status: "queued", handoff: false, words: "" },
+      {
+        replyId: "r3",
+        status: "drafted",
+        draft: "Yes, there is covered parking.",
+        handoff: false,
+        words: "",
+      },
+    ];
+    const drafts: string[] = [];
+    await act(async () =>
+      root.render(
+        <SuggestReply
+          leadId="l1"
+          channel="instagram"
+          onDraft={(text) => drafts.push(text)}
+        />,
+      ),
+    );
+    await act(async () => button("Suggest a reply").click());
+    expect(host.textContent).toContain("Thinking…");
+    await act(async () => vi.advanceTimersByTimeAsync(1500));
+    expect(drafts).toEqual([]);
+    await act(async () => vi.advanceTimersByTimeAsync(1500));
+    expect(drafts).toEqual(["Yes, there is covered parking."]);
+    expect(calls.map((call) => call.url)).toEqual([
+      "/v1/lead-desk/leads/l1/ai-draft",
+      "/v1/lead-desk/leads/l1/ai-draft/r3",
+      "/v1/lead-desk/leads/l1/ai-draft/r3",
+    ]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("says plainly when AI replies are paused, with no amount", async () => {
+  draft = {
+    replyId: "r4",
+    status: "paused",
+    handoff: true,
+    reason: "budget",
+    words: "AI replies are paused for now.",
+  };
+  await act(async () =>
+    root.render(
+      <SuggestReply leadId="l1" channel="whatsapp" onDraft={() => {}} />,
+    ),
+  );
+  await act(async () => button("Suggest a reply").click());
+  expect(host.textContent).toContain("AI replies are paused for now.");
+  expect(host.textContent).not.toContain("person should answer");
+  expect(host.textContent).not.toMatch(/₹|Rs|INR/);
+});
+
+it("tries a sample message in Settings, sending nothing", async () => {
+  vi.useFakeTimers();
+  try {
+    draft = { replyId: "t1", status: "queued", handoff: false, words: "" };
+    later = [
+      {
+        replyId: "t1",
+        status: "drafted",
+        draft: "Yes, site visits run every day.",
+        handoff: false,
+        words: "",
+      },
+    ];
+    await act(async () => root.render(<AiRepliesSettings />));
+    const box = [...host.querySelectorAll("textarea")].at(
+      -1,
+    ) as HTMLTextAreaElement;
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )?.set;
+      set?.call(box, "Sunday visit?");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button("Try it").click());
+    await act(async () => vi.advanceTimersByTimeAsync(1500));
+    expect(host.textContent).toContain(
+      "AI draft: Yes, site visits run every day.",
+    );
+    expect(host.textContent).toContain("Nothing is sent to anyone.");
+    const tried = calls.find((call) => call.url.endsWith("/ai-replies/try"));
+    expect(tried).toMatchObject({
+      method: "POST",
+      body: { message: "Sunday visit?" },
+    });
+    expect(
+      calls.some((call) => call.url === "/v1/lead-desk/ai-replies/try/t1"),
+    ).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("says why a person should answer instead", async () => {
   draft = {
     replyId: "r2",
@@ -173,6 +280,19 @@ it("shows a hand-off on the channel, and nothing when AI replies are off", async
     ),
   );
   expect(host.textContent).toBe("");
+  // Paused: the hand-off note stays, suggestions stop.
+  await act(async () =>
+    root.render(
+      <AiHelp
+        ai={{ ...ai, paused: true }}
+        leadId="l1"
+        channel="whatsapp"
+        onDraft={() => {}}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("A person should answer");
+  expect(button("Suggest a reply")).toBeUndefined();
 });
 
 it("stays out of the reply box until Sales Xray's AI is switched on", async () => {

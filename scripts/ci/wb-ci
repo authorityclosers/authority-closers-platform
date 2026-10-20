@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# wb-ci: run workbench checks on GitHub-hosted runners instead of on ac (owner, 20 Oct 2026; full run < 5 min).
+#
+#   wb-ci [--sha <sha>] [--changed [<base>] | --full] [--web] [--py] [--visual [route ...]]
+#         [--py-tests <path> ...] [--include <path> ...] [--no-wait] [--keep]
+#   wb-ci --refresh-durations <run-id>[,<run-id>...]   rebalance the Python shards (per-file mean over the runs)
+#
+#   default      --changed: only the jobs the commit's paths touch; lint, tsc, vitest and ruff on the changed files
+#   --changed B  changed files in B..<sha> (default B = <sha>^)        --full   every job (20 jobs: lint+tsc, vitest, visual, 17 Python shards; < 5 min)
+#   --web/--py/--visual   force these families (with the scope above); --visual takes optional routes
+#   --py-tests   one pytest job for these paths instead of the 17 shards
+#   --include    also test these uncommitted workbench files (read only; nothing in the checkout changes)
+#   --no-wait    print the run URL and return     --keep    keep the wb-ci branch after the run
+# Exit 0 only when the run succeeded. See docs/ops/WORKBENCH-CI.md.
+#
+# How: a bare repo (~/src/wb-ci.git) borrows the workbench's objects and builds a request commit (the tested tree plus
+# .wb-ci/request.json and the current CI files). It is pushed to refs/heads/wb-ci/slot-<n>; one wb-ci holds a slot at
+# a time (flock), so runs never cancel each other and each slot's Actions caches stay warm. The shared checkout's
+# files, index and branch are never touched.
+set -euo pipefail
+
+if [ "$(id -un)" != acdev ]; then exec sudo -n -u acdev "$0" "$@"; fi
+export PATH="/home/acdev/.local/bin:/usr/local/bin:/usr/bin:/bin"
+# The caller's folder may be unreadable for acdev (git then fails with "Permission denied"); work from a known one.
+cd /home/acdev/src
+die() { echo "wb-ci: $*" >&2; exit 2; }
+REPO=authorityclosers/authority-closers-platform
+URL="https://github.com/$REPO.git"
+WB=/home/acdev/src/dev-live/authority-closers-platform
+BARE=/home/acdev/src/wb-ci.git
+LOCKS=/home/acdev/src/.wb-ci-slots
+SLOTS=6
+G=/usr/bin/git
+CI_FILES=(.github/workflows/workbench-checks.yml scripts/ci/wb_checks.py scripts/ci/wb_screens.mjs
+          scripts/ci/wb-python-durations.json)
+
+if [ "${1:-}" = --refresh-durations ]; then
+  [ -n "${2:-}" ] || { echo "usage: wb-ci --refresh-durations <run-id>" >&2; exit 2; }
+  source_sha=$(gh api "repos/$REPO/actions/runs/${2%%,*}" --jq .head_sha)  # several runs: comma-separated, averaged
+  python3 "$WB/scripts/ci/wb_durations.py" "$2" "$source_sha" "$WB/scripts/ci/wb-python-durations.json"
+  echo "Now commit it: wb-commit -m 'wb-ci: shard durations from run $2' -- scripts/ci/wb-python-durations.json"
+  exit 0
+fi
+
+sha="" base="" full=0 wait=1 keep=0
+checks=() routes=() py_tests=() include=()
+mode=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --sha) sha="$2"; shift 2; mode="" ;;
+    --full) full=1; shift; mode="" ;;
+    --changed) full=0; shift; mode=base ;;
+    --web) checks+=(web); shift; mode="" ;;
+    --py) checks+=(py); shift; mode="" ;;
+    --visual) checks+=(visual); shift; mode=routes ;;
+    --py-tests) checks+=(py); shift; mode=py_tests ;;
+    --include) shift; mode=include ;;
+    --no-wait) wait=0; shift; mode="" ;;
+    --keep) keep=1; shift; mode="" ;;
+    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    --*) echo "wb-ci: unknown option $1" >&2; exit 2 ;;
+    *)
+      case "$mode" in
+        routes) routes+=("$1") ;;
+        py_tests) py_tests+=("$1") ;;
+        include) include+=("$1") ;;
+        base) base="$1"; mode="" ;;
+        *) echo "wb-ci: unexpected argument $1" >&2; exit 2 ;;
+      esac
+      shift ;;
+  esac
+done
+
+mkdir -p "$LOCKS"
+exec 8>"$LOCKS/init.lock"
+flock 8
+if [ ! -d "$BARE" ]; then
+  $G init -q --bare "$BARE"
+  echo "$WB/.git/objects" > "$BARE/objects/info/alternates"
+fi
+flock -u 8
+export GIT_DIR="$BARE"
+
+wanted=${sha:-HEAD}
+sha=$($G --git-dir="$WB/.git" rev-parse --verify "$wanted^{commit}") || die "cannot resolve the commit '$wanted'"
+short=${sha:0:8}
+changed_files=()
+if [ "$full" = 0 ]; then
+  wanted=${base:-$sha^}
+  base=$($G --git-dir="$WB/.git" rev-parse --verify "$wanted^{commit}") || die "cannot resolve the base '$wanted'"
+  # Never let a failed diff look like "nothing changed" (a run must not go green having tested nothing).
+  diff_out=$($G --git-dir="$WB/.git" diff --name-only "$base" "$sha") || die "cannot diff ${base:0:8}..$short"
+  [ -z "$diff_out" ] || mapfile -t changed_files <<< "$diff_out"
+  changed_files+=("${include[@]}")
+  if [ ${#changed_files[@]} -eq 0 ] && [ ${#py_tests[@]} -eq 0 ] && [ ${#routes[@]} -eq 0 ]; then
+    die "no files changed in ${base:0:8}..$short, so a scoped run would test nothing. Did you wb-commit? Use --changed <base>, --include <files>, or --full."
+  fi
+fi
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+export GIT_INDEX_FILE="$tmp/index"
+$G read-tree "$sha"
+for path in "${include[@]}"; do
+  if [ -e "$WB/$path" ]; then $G --work-tree="$WB" add -f -- "$path"; else $G rm -q --cached --ignore-unmatch -- "$path"; fi
+done
+wb_head=$($G --git-dir="$WB/.git" rev-parse HEAD)
+for path in "${CI_FILES[@]}"; do
+  if blob=$($G --git-dir="$WB/.git" rev-parse -q --verify "$wb_head:$path" 2>/dev/null); then
+    $G update-index --add --cacheinfo "100644,$blob,$path"
+  fi
+done
+printf '%s\n' "${changed_files[@]}" > "$tmp/changed"
+printf '%s\n' "${routes[@]}" > "$tmp/routes"
+printf '%s\n' "${py_tests[@]}" > "$tmp/py_tests"
+printf '%s\n' "${include[@]}" > "$tmp/include"
+python3 - "$tmp" "$sha" "$full" "${checks[*]}" <<'PY'
+import json, os, socket, sys
+tmp, sha, full, checks = sys.argv[1:5]
+read = lambda name: [x for x in open(f"{tmp}/{name}").read().splitlines() if x.strip()]
+json.dump({"schema": "wb-ci/2", "source_sha": sha, "full": full == "1", "checks": sorted(set(checks.split())),
+           "changed_files": None if full == "1" else sorted(set(read("changed"))),
+           "routes": read("routes"), "py_tests": read("py_tests"), "include_paths": read("include"), "py_shards": 17,
+           "requested_by": f"{os.environ.get('SUDO_USER') or os.environ.get('USER', '?')}@{socket.gethostname()}"},
+          open(f"{tmp}/request.json", "w"), indent=2)
+PY
+blob=$($G hash-object -w "$tmp/request.json")
+$G update-index --add --cacheinfo "100644,$blob,.wb-ci/request.json"
+tree=$($G write-tree)
+scope=$([ "$full" = 1 ] && echo full || echo "changed: ${#changed_files[@]} files")
+request=$(GIT_AUTHOR_NAME="wb-ci" GIT_AUTHOR_EMAIL="workbench@authorityclosers.com" \
+  GIT_COMMITTER_NAME="wb-ci" GIT_COMMITTER_EMAIL="workbench@authorityclosers.com" \
+  $G commit-tree "$tree" -p "$sha" -m "wb-ci: ${checks[*]:-auto} ($scope) for $short")
+unset GIT_INDEX_FILE
+
+# A slot per concurrent run. --no-wait does not hold one: it gets a unique branch instead (no warm cache).
+if [ "$wait" = 1 ]; then
+  slot=""
+  for _ in $(seq 1 120); do
+    for n in $(seq 1 $SLOTS); do
+      exec 9>"$LOCKS/slot-$n.lock"
+      if flock -n 9; then slot=$n; break 2; fi
+      exec 9>&-
+    done
+    sleep 10
+  done
+  [ -n "$slot" ] || { echo "wb-ci: all $SLOTS slots busy for 20 min" >&2; exit 1; }
+  branch="wb-ci/slot-$slot"
+else
+  branch="wb-ci/$short-$(head -c4 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+fi
+
+push() { $G -c credential.helper= -c 'credential.helper=!gh auth git-credential' push -q "$URL" "$@" 2>&1 | grep -v '^remote:' || true; }
+started=$(date +%s)
+# wb-ci-base keeps later pushes small (the remote then already has the workbench history). It triggers no workflow.
+push "+$request:refs/heads/$branch" "+$sha:refs/heads/wb-ci-base"
+echo "wb-ci: pushed $branch (request ${request:0:8} on $short; $scope; checks: ${checks[*]:-by path})"
+cleanup() { [ "$keep" = 1 ] || push ":refs/heads/$branch" >/dev/null 2>&1 || true; }
+
+run=""
+for _ in $(seq 1 60); do
+  # The branch is reused by slot; match the exact request commit.
+  run=$(gh run list -R "$REPO" --branch "$branch" --limit 5 --json databaseId,headSha,workflowName \
+        --jq ".[] | select(.headSha==\"$request\" and .workflowName==\"Workbench checks\") | .databaseId" 2>/dev/null | head -1)
+  [ -n "$run" ] && break
+  sleep 3
+done
+if [ -z "$run" ]; then echo "wb-ci: no run started for $branch after 3 min" >&2; cleanup; exit 1; fi
+url="https://github.com/$REPO/actions/runs/$run"
+echo "wb-ci: run $url"
+[ "$wait" = 1 ] || { echo "wb-ci: not waiting (--no-wait); delete the branch later: git push origin :$branch"; exit 0; }
+
+gh run watch "$run" -R "$REPO" --interval 3 --exit-status >"$tmp/watch.log" 2>&1 || true
+elapsed=$(( $(date +%s) - started ))
+gh run view "$run" -R "$REPO" --json conclusion,jobs --jq '
+  def secs(a; b): if a and b and (b|startswith("0001")|not) then ((b|fromdate) - (a|fromdate)) else null end;
+  "result: \(.conclusion)",
+  (.jobs[] | select(.conclusion != "skipped") | "  \(.name | .[0:24]) \(.conclusion // .status) \(secs(.startedAt; .completedAt) // "?")s"
+     + (if .conclusion == "failure" then " — failed: " + ([.steps[] | select(.conclusion=="failure") | .name] | join(", ")) else "" end))' \
+  > "$tmp/summary.txt" 2>/dev/null || echo "result: unknown (gh run view failed)" > "$tmp/summary.txt"
+cat "$tmp/summary.txt"
+gh api "repos/$REPO/actions/runs/$run/artifacts?per_page=100" --jq "
+  (.artifacts[] | select(.name | startswith(\"wb-py-\") | not)
+     | \"  artifact \(.name) (\(.size_in_bytes/1024|floor) KB): $url/artifacts/\(.id)\"),
+  ([.artifacts[] | select(.name | startswith(\"wb-py-\"))] | select(length > 0)
+     | \"  python shard reports (manifest + JUnit): \(length) artifacts in the run\")" 2>/dev/null || true
+echo "wb-ci: $(( elapsed / 60 ))m$(( elapsed % 60 ))s from push to result; check tables per job: $url"
+cleanup
+grep -q '^result: success$' "$tmp/summary.txt"
+

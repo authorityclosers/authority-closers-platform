@@ -14,6 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy import MetaData
 
 from ac_platform.admin_settings import models as admin_settings_models
+from ac_platform.ai_spend import models as ai_spend_models
 from ac_platform.app_updates import models as app_update_models
 from ac_platform.audit import models as audit_models
 from ac_platform.authorization import models as authorization_models
@@ -57,6 +58,7 @@ from ac_platform.identity import models as identity_models
 from ac_platform.integrations import models as integration_models
 from ac_platform.knowledge import models as knowledge_models
 from ac_platform.lead_desk import models as lead_desk_models
+from ac_platform.lead_desk.chats import models as lead_desk_chat_models
 from ac_platform.learning import models as learning_models
 from ac_platform.learning import planning_models
 from ac_platform.media import models as media_models
@@ -101,8 +103,10 @@ MODEL_MODULES = (
     pointer_review_models,
     prospect_call_outcome_models,
     lead_desk_models,
+    lead_desk_chat_models,
     partner_event_models,
     call_data_models,
+    ai_spend_models,
     integration_models,
     admin_settings_models,
     authorization_models,

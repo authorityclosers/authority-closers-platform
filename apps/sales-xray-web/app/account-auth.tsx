@@ -252,7 +252,9 @@ export function signInProblem(
 ) {
   const label = providerLabel(provider);
   if (result === "account_exists")
-    return "This email already has an Authority Closers account. Sign in the way you did before, or with your password or an email code.";
+    // No method hints: staff never get email codes, and naming staff here would
+    // tell anyone with that email which kind of account it is.
+    return "This email already has an Authority Closers account. Sign in the way you did before.";
   if (result === "no_email")
     return `${label} didn’t share your email address. Allow email access, or choose another way to sign in.`;
   if (result === "review_terms")

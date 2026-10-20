@@ -48,6 +48,13 @@ def test_one_organisations_current_objects_in_the_window(postgres_harness: Engin
     assert found["calls_scored"] == 0 and found["skills"] == []
     assert set(found["said"]) == {"objections", "questions", "pains", "goals"}
     assert all(item["calls"] == 1 for items in found["said"].values() for item in items)
+    # Trends: the call is in this week, under its seller; no leads, so an empty funnel.
+    assert found["calls"] == 1
+    assert sum(week["calls"] for week in found["weeks"]) == 1
+    assert sum(week["analysed"] for week in found["weeks"]) == 1
+    assert [row["calls"] for row in found["people"]] == [1]
+    assert found["people"][0]["name"]
+    assert found["stages"]["leads"] == 0 and found["stages"]["version"] == 0
     # Another organisation, or a window before the call, sees nothing.
     assert _read(postgres_harness.url, uuid4(), days=30)["calls_analysed"] == 0
     past = datetime.now(UTC) + timedelta(days=60)

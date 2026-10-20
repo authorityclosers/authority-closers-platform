@@ -187,7 +187,11 @@ const click = (name: string) => act(async () => button(name).click());
 /** The confirmation's action button is named for its verb (Add, Remove…). */
 const confirm = () =>
   act(async () =>
-    [...host.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        'dialog[open] button, [role="dialog"] button',
+      ),
+    ]
       .at(-1)!
       .click(),
   );
@@ -289,7 +293,7 @@ it.each([
     await render();
     await click("Members");
     await action();
-    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(host.querySelector('dialog[open], [role="dialog"]')).not.toBeNull();
     expect(writes()).toHaveLength(0);
     await confirm();
     expect(writes()).toHaveLength(1);
@@ -300,7 +304,10 @@ it.each([
     expect(new Headers(init.headers).get("Idempotency-Key")).toMatch(
       /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/,
     );
-    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    // The confirmation sheet slides away, then closes.
+    await vi.waitFor(() =>
+      expect(host.querySelector('dialog[open], [role="dialog"]')).toBeNull(),
+    );
     for (const read of ["/v1/organisation", "/v1/organisation/members"])
       expect(
         fetchMock.mock.calls.filter(([url]) => url === read).length,
@@ -428,7 +435,7 @@ it.each([
   // Errors are corner cards, never banners inside the page.
   expect(noticeText()).toContain(detail);
   expect(host.querySelector('[role="alert"]')).toBeNull();
-  expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(host.querySelector('dialog[open], [role="dialog"]')).not.toBeNull();
 });
 it("hides Organisation after a Personal 404 on a write", async () => {
   writeStatus = 404;

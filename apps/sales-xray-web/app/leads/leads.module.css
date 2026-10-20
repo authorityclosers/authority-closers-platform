@@ -334,42 +334,13 @@
 
 /* ---------- Sheet ---------- */
 
+/* The kit Sheet draws the frame (design system v2); a lead gets 560 px. */
 .sheet {
-  width: min(560px, 100vw);
-  max-width: 100vw;
-  height: 100dvh;
-  max-height: 100dvh;
-  margin: 0 0 0 auto;
-  padding: 0;
-  border: 0;
-  border-left: 1px solid var(--sx-line);
-  background: var(--sx-paper);
+  --sx-sheet-width: 560px;
   color: var(--sx-ink);
   font-family: var(--lx-font-ui);
   font-size: var(--sx-text-sm);
   line-height: 1.5;
-  box-shadow: var(--sx-shadow-float);
-}
-
-.sheet::backdrop {
-  background: var(--sx-scrim);
-}
-
-.sheet[open] {
-  animation: sheetIn var(--lx-dur-move) var(--lx-ease-move);
-}
-
-@keyframes sheetIn {
-  from {
-    transform: translateX(24px);
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sheet[open] {
-    animation: none;
-  }
 }
 
 .sheetBody {
@@ -377,9 +348,8 @@
   display: grid;
   align-content: start;
   gap: 14px;
-  min-height: 100%;
   box-sizing: border-box;
-  padding: 18px 20px 32px;
+  padding: 6px 4px 16px;
 }
 
 .sheetClose {
@@ -1133,13 +1103,8 @@
     padding: 12px var(--sx-gutter) 24px;
   }
 
-  .sheet {
-    width: 100vw;
-    border-left: 0;
-  }
-
   .sheetBody {
-    padding: 14px var(--sx-gutter) 28px;
+    padding: 2px 0 12px;
   }
 
   .fields,
@@ -4013,4 +3978,82 @@
     width: 32px;
     height: 32px;
   }
+}
+
+/* Owner, 20 Oct: the whole chat lives in Chats; the drawer links there. */
+.openChats {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: var(--sx-control-h);
+  margin-left: auto;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.openChats:hover {
+  background: color-mix(in oklab, var(--sx-accent) 18%, transparent);
+}
+
+.openChats:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* ---------- Lead sources as cards (owner, 20 Oct: "a far better UI") ----------
+   Each source is its own card (app-card.tsx); each Page or account inside it
+   a soft sub-card with its counts as small facts. */
+
+.sourceCards {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.pageList {
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+}
+
+.pageRow {
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-sunken) 55%, var(--sx-surface));
+}
+
+.pageRow + .pageRow {
+  border-top: 1px solid var(--sx-line);
+}
+
+.pageName {
+  gap: 6px;
+}
+
+.pageName strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+.capi {
+  margin-top: 0;
+  padding: 14px 16px;
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-sunken) 55%, var(--sx-surface));
+}
+
+.otherWays {
+  border-radius: var(--lx-radius-lg);
+  box-shadow: var(--lx-shadow-1);
 }

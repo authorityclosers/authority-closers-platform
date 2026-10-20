@@ -1,0 +1,32 @@
+/* An app's logo on a tile (Settings: sign-in methods, connected apps). Tokens only. */
+
+.tile {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--tile, 36px);
+  height: var(--tile, 36px);
+  box-sizing: border-box;
+  border: 1px solid var(--sx-line);
+  border-radius: calc(var(--tile, 36px) * 0.3);
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+}
+
+.tile[data-kind="icon"] {
+  border-color: transparent;
+  background: var(--sx-accent-soft);
+}
+
+.corner {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  padding: 2px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sx-surface);
+  box-shadow: 0 0 0 1px var(--sx-line);
+}

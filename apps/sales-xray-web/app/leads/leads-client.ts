@@ -44,6 +44,8 @@ export type LeadRow = {
   test_data: boolean;
   /** Its call is more than an hour late (a new lead counts from its arrival). */
   overdue?: boolean;
+  /** The business own stage (its key), when it has a stage list (Lead stages). */
+  step?: string | null;
   /** They called, nobody picked up, and nobody has called back yet. */
   missed_at?: string | null;
   missed_calls?: number;
@@ -111,7 +113,8 @@ export type LeadEvent = {
     | "note"
     | "edited"
     | "message"
-    | "scheduled";
+    | "scheduled"
+    | "stage";
   at: string;
   actor_name: string | null;
   stage: string | null;
@@ -166,6 +169,25 @@ export type LeadDetail = {
   }[];
   call_mode: "simulated" | "phone";
   first_call_minutes?: number | null;
+  /** The business's own stages a seller picks after a call (Lead stages). */
+  stage_choices?: StageChoice[];
+  /** Where the lead's last call says it got to, when further than its stage. */
+  stage_suggestion?: StageSuggestion | null;
+};
+
+export type StageSuggestion = {
+  step: string;
+  label: string;
+  kind: Stage;
+  why: string;
+  at: string;
+};
+
+export type StageChoice = {
+  key: string;
+  label: string;
+  kind: Stage;
+  meaning: string;
 };
 
 export type LeadPage = {
@@ -507,6 +529,8 @@ export type Disposition = {
   connected: boolean;
   reason?: string;
   stage?: Stage;
+  /** One of the business's own stages (Lead stages); its kind goes as `stage`. */
+  step?: string;
   follow_up_at?: string;
   remark?: string;
   deal_value?: string;
@@ -530,6 +554,23 @@ export function dispose(
       ...body,
     }),
   );
+}
+
+/** Move a lead to one of the business's stages without a call (Lead stages). */
+export async function moveToStage(
+  lead: Pick<LeadRow, "lead_id" | "revision">,
+  step: string,
+  command = commandId(),
+): Promise<LeadDetail> {
+  await request<unknown>(
+    `/leads/${encodeURIComponent(lead.lead_id)}/stage`,
+    json("POST", {
+      commandId: command,
+      expectedRevision: lead.revision,
+      step,
+    }),
+  );
+  return readLead(lead.lead_id);
 }
 
 /** Book the next call without a call (long-press on the list). */

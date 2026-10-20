@@ -93,6 +93,7 @@ export function FocusHero({
   explanation,
   why,
   reason,
+  brief = false,
   evidenceAnchor,
   lessonAnchor,
   mission,
@@ -105,6 +106,8 @@ export function FocusHero({
   explanation: string;
   why: string;
   reason: string;
+  /** Simple detail (report settings): the focus and the mission, no why. */
+  brief?: boolean;
   /** Existing source moments behind this focus, when available. */
   evidenceAnchor?: string;
   /** Only provided when this view contains the current focus's lesson. */
@@ -144,25 +147,27 @@ export function FocusHero({
         </button>
       ) : null}
       {children}
-      <div className={styles.pair}>
-        <div className={styles.fact}>
-          <CardLabel>{FOCUS.whyMatters}</CardLabel>
-          <p>{why}</p>
+      {brief ? null : (
+        <div className={styles.pair}>
+          <div className={styles.fact}>
+            <CardLabel>{FOCUS.whyMatters}</CardLabel>
+            <p>{why}</p>
+          </div>
+          <div className={styles.fact}>
+            <CardLabel>{FOCUS.whyFocus}</CardLabel>
+            <p>{reason}</p>
+            {evidenceAnchor ? (
+              <a
+                className={styles.jump}
+                href={`#${evidenceAnchor}`}
+                aria-controls={evidenceAnchor}
+              >
+                {FOCUS.seeMoments} <ArrowDown size={13} aria-hidden="true" />
+              </a>
+            ) : null}
+          </div>
         </div>
-        <div className={styles.fact}>
-          <CardLabel>{FOCUS.whyFocus}</CardLabel>
-          <p>{reason}</p>
-          {evidenceAnchor ? (
-            <a
-              className={styles.jump}
-              href={`#${evidenceAnchor}`}
-              aria-controls={evidenceAnchor}
-            >
-              {FOCUS.seeMoments} <ArrowDown size={13} aria-hidden="true" />
-            </a>
-          ) : null}
-        </div>
-      </div>
+      )}
       <div className={styles.nextCall}>
         <p>
           <span>{they ? THEIR.onNextCall : FOCUS.onNextCall}</span>

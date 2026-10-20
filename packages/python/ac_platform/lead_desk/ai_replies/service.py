@@ -1,19 +1,23 @@
 """AI replies: drafting for a seller, answering by itself, and handing to a person.
 
-Each reply runs in three steps so no database lock is held while the model thinks:
+Each reply runs in steps so no database lock is held while the model thinks, and so
+only the AI replies runner (``ai_replies.cli``, inside ``infisical run``) ever holds a
+model key:
 
 1. ``prepare`` (in a transaction): the organisation's settings, the lead, this
    channel's last messages, and whether Meta's 24-hour window is open.
-2. The rules (``rules.before``) decide without a model: a stop, a hand-off, or go. Only
-   then is the model asked (``Model.complete``), through the AI provider registry and
-   its budget caps; then ``rules.after`` checks the draft.
-3. ``record`` (another transaction): the audit row (``lead_desk_ai_replies``: outcome,
-   reason, model, tokens, cost), and in auto mode the send itself, through the
-   channel's own send (WhatsApp or Messenger/Instagram, ``auto="ai_reply"``).
+2. The rules (``rules.before``, ``decide``) settle what needs no model: a stop or a
+   hand-off. Everything else is queued (``lead_desk_ai_replies``, outcome "queued").
+3. The runner asks the model Admin chose (``Model.complete``) within Admin's cap, then
+   ``rules.after`` checks the draft, and ``apply`` writes the outcome, model, tokens and
+   cost onto the row.
+4. The API acts on it (``runner``): a suggestion is shown to the seller; an automatic
+   reply goes through the channel's own send (``auto="ai_reply"``) unless someone
+   answered meanwhile; a hand-off alerts the lead's seller.
 
-A hand-off alerts the lead's seller. A stop marks the person's no on WhatsApp (so no
-template goes to them either) and no automatic AI reply goes to them on that channel
-again. AI replies never stop the first-response clock: they are automatic.
+A stop marks the person's no on WhatsApp (so no template goes to them either) and no
+automatic AI reply goes to them on that channel again. AI replies never stop the
+first-response clock: they are automatic.
 """
 
 from __future__ import annotations
@@ -50,11 +54,11 @@ HANDOFF_LOOK_BACK: Final[timedelta] = timedelta(days=2)
 
 
 class ModelUnavailable(Exception):
-    """No AI provider is set up for Sales Xray, or the budget cap is reached."""
+    """The model couldn't answer (``reason``: "budget" or "failed")."""
 
     def __init__(self, reason: str, message: str) -> None:
         super().__init__(message)
-        self.reason = reason  # "budget" or "failed"
+        self.reason = reason
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +73,7 @@ class Completion:
 
 
 class Model(Protocol):
-    """A text model behind the AI provider registry and its budget caps."""
+    """The text model Admin chose (``registry.ProviderModel``)."""
 
     async def complete(self, *, tenant_id: UUID, system: str, user: str) -> Completion: ...
 
@@ -80,10 +84,9 @@ class Model(Protocol):
 @dataclass(slots=True)
 class Prepared:
     tenant_id: UUID
-    lead_id: UUID
+    lead_id: UUID | None  # None: "Try it", a sample message with no lead
     lead_name: str
     owner_person_id: UUID | None
-    payload: Any
     channel: str
     account_id: UUID | None
     settings: rules.Settings
@@ -91,6 +94,7 @@ class Prepared:
     last_in_id: UUID | None = None
     last_in_text: str | None = None
     window_open: bool = False
+    answered: bool = False  # something went to them after their last message
 
 
 async def _settings(db: AsyncSession, tenant_id: UUID) -> rules.Settings:
@@ -111,9 +115,9 @@ async def prepare(
     out = Prepared(
         tenant_id=lead.tenant_id,
         lead_id=lead.id,
-        lead_name=lead.name,
+        # A name from Meta lead ads never goes to an AI provider (the Leads app's review).
+        lead_name="" if lead.source == "meta" else lead.name,
         owner_person_id=lead.owner_person_id,
-        payload=lead.payload,
         channel=channel,
         account_id=account_id,
         settings=settings,
@@ -146,9 +150,11 @@ async def prepare(
         kinds_ok = {"text", "postback"}
     ordered = list(reversed(rows))
     for row in ordered:
-        if row.body:
+        # Filled-in templates can carry lead-ads details (a first reply's name): left out.
+        if row.body and row.kind != "template":
             out.turns.append(prompt.Turn(row.direction, row.body))
     last_in = next((row for row in reversed(ordered) if row.direction == "in"), None)
+    out.answered = bool(ordered) and ordered[-1].direction == "out"
     if last_in is not None:
         at = last_in.meta_time or last_in.created_at
         out.last_in_id = last_in.id
@@ -165,25 +171,32 @@ async def prepare(
 
 @dataclass(slots=True)
 class Outcome:
-    outcome: str  # drafted, sent, handoff, opted_out, failed, paused
+    outcome: str  # queued, drafted, sent, handoff, opted_out, failed, paused, waiting
     reason: str | None = None
     draft: str | None = None
     completion: Completion | None = None
     notes: list[str] = field(default_factory=list)
 
 
-async def think(model: Model, ready: Prepared) -> Outcome:
-    """The rules, then (only if they allow) the model, then the rules on its draft."""
+def decide(ready: Prepared) -> Outcome | None:
+    """What the rules settle without any model: a stop or a hand-off (None: ask it)."""
     decided = rules.before(ready.last_in_text, ready.settings, window_open=ready.window_open)
     if decided.stop:
         return Outcome("opted_out", "opt_out")
     if not decided.go:
         return Outcome("handoff", decided.reason)
+    return None
+
+
+async def think(model: Model, ready: Prepared) -> Outcome:
+    """The rules, then (only if they allow) the model, then the rules on its draft."""
+    settled = decide(ready)
+    if settled is not None:
+        return settled
     system, user = prompt.build(
         ready.settings,
         channel=ready.channel,
         lead_name=ready.lead_name,
-        payload=ready.payload,
         turns=ready.turns,
     )
     try:
@@ -217,7 +230,7 @@ def audit(
         message_id=ready.last_in_id,
         mode=mode,
         outcome=result.outcome,
-        reason=result.reason,
+        reason=result.reason[:24] if result.reason else None,
         draft=(result.draft or None) if result.outcome in ("drafted", "sent") else None,
         sent_message_id=sent_message_id,
         provider=done.provider[:64] if done else None,
@@ -229,6 +242,71 @@ def audit(
         requested_by_person_id=by,
         created_at=now,
     )
+
+
+FIELDS: Final[tuple[str, ...]] = (
+    "outcome",
+    "reason",
+    "draft",
+    "sent_message_id",
+    "provider",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "cost_inr",
+    "usage_ref",
+)
+
+
+def apply(row: LeadAiReply, ready: Prepared, result: Outcome, *, now: datetime) -> None:
+    """Write an outcome onto a queued row (its id, mode and requester stay)."""
+    final = audit(ready, result, mode=row.mode, now=now)
+    for name in FIELDS:
+        setattr(row, name, getattr(final, name))
+
+
+async def prepare_try(db: AsyncSession, tenant_id: UUID, channel: str, sample: str) -> Prepared:
+    """ "Try it": the business's own sample message, as if a person had just sent it."""
+    return Prepared(
+        tenant_id=tenant_id,
+        lead_id=None,
+        lead_name="",
+        owner_person_id=None,
+        channel=channel,
+        account_id=None,
+        settings=await _settings(db, tenant_id),
+        turns=[prompt.Turn("in", sample)],
+        last_in_text=sample,
+        window_open=True,
+    )
+
+
+async def prepare_row(db: AsyncSession, row: LeadAiReply, *, now: datetime) -> Prepared | None:
+    """The reply a queued row asks for, read again (None: the lead has left)."""
+    if row.mode == "try":
+        if not row.sample:
+            return None
+        return await prepare_try(db, row.tenant_id, row.channel, row.sample)
+    if row.lead_id is None:
+        return None
+    lead = await db.get(Lead, row.lead_id)
+    if lead is None:
+        return None
+    account_id: UUID | None = None
+    if row.channel != "whatsapp" and row.message_id is not None:
+        message = await db.get(LeadSocialMessage, row.message_id)
+        account_id = message.account_id if message is not None else None
+    return await prepare(db, lead, row.channel, account_id=account_id, now=now)
+
+
+def gone_by(row: LeadAiReply, ready: Prepared) -> str | None:
+    """Why an automatic reply must no longer go: answered meanwhile, or a newer message
+    (which has its own row)."""
+    if ready.answered:
+        return "answered"
+    if ready.last_in_id != row.message_id:
+        return "superseded"
+    return None
 
 
 async def opted_out(db: AsyncSession, lead_id: UUID, channel: str) -> bool:
@@ -384,19 +462,30 @@ _GONE = """
     UPDATE lead_desk_ai_replies r SET draft = NULL, erased_at = :now
     WHERE r.id IN (
       SELECT x.id FROM lead_desk_ai_replies x
-      WHERE x.erased_at IS NULL AND x.draft IS NOT NULL
+      WHERE x.erased_at IS NULL AND x.draft IS NOT NULL AND x.mode <> 'try'
         AND NOT EXISTS (
           SELECT 1 FROM lead_desk_leads l WHERE l.tenant_id = x.tenant_id AND l.id = x.lead_id
         )
       LIMIT 500
     )
 """
+_TRIED = """
+    UPDATE lead_desk_ai_replies r SET draft = NULL, sample = NULL, erased_at = :now
+    WHERE r.id IN (
+      SELECT x.id FROM lead_desk_ai_replies x
+      WHERE x.mode = 'try' AND x.erased_at IS NULL AND x.created_at < :before
+      LIMIT 500
+    )
+"""
+TRY_KEPT: Final[timedelta] = timedelta(days=1)
 
 
 async def erasure_sweep(db: AsyncSession, now: datetime) -> int:
-    """A lead that leaves Lead Desk takes the AI's drafts for them with it."""
-    result = await db.execute(text(_GONE), {"now": now})
-    return int(getattr(result, "rowcount", 0) or 0)
+    """A lead that leaves Lead Desk takes the AI's drafts for them with it, and a "Try
+    it" sample and its draft are emptied after a day."""
+    gone = await db.execute(text(_GONE), {"now": now})
+    tried = await db.execute(text(_TRIED), {"now": now, "before": now - TRY_KEPT})
+    return int(getattr(gone, "rowcount", 0) or 0) + int(getattr(tried, "rowcount", 0) or 0)
 
 
 async def recent_handoffs(db: AsyncSession, lead_id: UUID, *, now: datetime) -> list[LeadAiReply]:

@@ -337,3 +337,17 @@ def test_a_lost_connection_is_not_hidden_by_the_lead_access_check() -> None:
     with pytest.raises(meta.MetaError) as caught:
         _access({"error": {"code": 190, "message": "expired"}}, 400)
     assert caught.value.kind == "token"
+
+
+def test_meta_s_own_words_and_code_are_kept_for_managers() -> None:
+    from ac_platform.lead_desk.connected_apps import meta_said
+
+    error = meta.graph_error(
+        {"code": 100, "error_subcode": 33, "message": "(#100) Unsupported post  request"}, 400
+    )
+    assert (error.code, error.subcode, error.detail) == (100, 33, "(#100) Unsupported post request")
+    said = meta_said(error)
+    assert said.startswith("Meta refused the request.")
+    assert "Meta says: “(#100) Unsupported post request”" in said
+    assert said.endswith("(code 100, subcode 33)")
+    assert meta.graph_error({"code": 190, "message": "expired"}, 400).kind == "token"

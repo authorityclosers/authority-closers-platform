@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { UUID } from "../../../acquisition-client";
 import { AcquisitionStudio } from "../../../acquisition-studio";
+import { ReportSettingsWarmUp } from "../../../report-settings-warm";
 
 // The static preview build needs one concrete path; real calls render on
 // demand and any other id is not found.
@@ -16,5 +17,11 @@ export default async function CallAnalysisPage({
 }) {
   const { callId } = await params;
   if (!UUID.test(callId)) notFound();
-  return <AcquisitionStudio requestedCallId={callId} />;
+  return (
+    <>
+      {/* The Report's settings version is read beside the call's reads. */}
+      <ReportSettingsWarmUp />
+      <AcquisitionStudio requestedCallId={callId} />
+    </>
+  );
 }

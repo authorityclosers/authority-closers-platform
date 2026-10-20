@@ -29,6 +29,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import conv
 
 from ac_platform.db.base import Base
 
@@ -93,6 +94,9 @@ class Lead(Base):
     language: Mapped[str | None] = mapped_column(String(40), nullable=True)
     interest: Mapped[str | None] = mapped_column(String(200), nullable=True)
     stage: Mapped[str] = mapped_column(String(16))
+    # The business's own stage a seller picked (0111); None: the business's
+    # stage for this desk stage (lead_desk/journey/model.py).
+    step: Mapped[str | None] = mapped_column(String(40), nullable=True)
     owner_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     owner_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -129,7 +133,7 @@ class LeadEvent(Base):
         ),
         CheckConstraint(
             "kind IN ('captured', 'repeat', 'assigned', 'reassigned', 'call', 'result', 'note',"
-            " 'edited', 'message', 'scheduled')",
+            " 'edited', 'message', 'scheduled', 'stage')",
             name="lead_desk_event_kind",
         ),
         Index("ix_lead_desk_event_lead", "tenant_id", "lead_id", "created_at"),
@@ -712,9 +716,12 @@ class LeadAiReply(Base):
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_ai_reply_tenant"),
         CheckConstraint("channel IN ('whatsapp', 'messenger', 'instagram')", name="channel"),
-        CheckConstraint("mode IN ('suggest', 'auto')", name="mode"),
+        CheckConstraint("mode IN ('suggest', 'auto', 'try')", name="mode"),
+        # "Try it" drafts a reply for a sample message: no lead.
+        CheckConstraint("mode = 'try' OR lead_id IS NOT NULL", name="lead"),
         CheckConstraint(
-            "outcome IN ('drafted', 'sent', 'handoff', 'opted_out', 'failed', 'paused')",
+            "outcome IN ('queued', 'drafted', 'sent', 'handoff', 'opted_out', 'failed', 'paused',"
+            " 'waiting')",
             name="outcome",
         ),
         CheckConstraint(
@@ -733,10 +740,12 @@ class LeadAiReply(Base):
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
-    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     channel: Mapped[str] = mapped_column(String(16))
     message_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     mode: Mapped[str] = mapped_column(String(8))
+    # "Try it" only: the sample message the business typed (emptied after a day).
+    sample: Mapped[str | None] = mapped_column(String(500), nullable=True)
     outcome: Mapped[str] = mapped_column(String(16))
     reason: Mapped[str | None] = mapped_column(String(24), nullable=True)
     draft: Mapped[str | None] = mapped_column(String(1000), nullable=True)
@@ -749,4 +758,157 @@ class LeadAiReply(Base):
     usage_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requested_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # When the API finished acting on the row: the reply sent, or the seller alerted.
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadAiSettings(Base):
+    """One saved revision of AI replies' Admin settings for this environment (newest
+    wins): the switch, the provider and model, and the cap with its period."""
+
+    __tablename__ = "lead_desk_ai_settings"
+    __table_args__ = (
+        UniqueConstraint("revision", name="uq_lead_desk_ai_settings_revision"),
+        CheckConstraint("revision >= 1", name="revision"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    config: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadJourneyVersion(Base):
+    """One saved list of a business's own lead stages (migration 0111). Never changed
+    after it is written; the newest version is the list in use."""
+
+    __tablename__ = "lead_desk_journey_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_journey_version_tenant"
+        ),
+        CheckConstraint("version >= 1", name="lead_desk_journey_version_number"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    industry: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    stages: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    note: Mapped[str] = mapped_column(String(200))
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadConversion(Base):
+    """One lead stage told to one ad platform (migration 0111). Built once from Lead
+    Desk's history and frozen, so a retry sends the same event. The payload holds only
+    what the platform matches on (its own lead or click id, hashed contact details); it
+    is emptied after 90 days. Lead Desk's history stays the record of the stage."""
+
+    __tablename__ = "lead_desk_conversions"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_conversion_tenant"),
+        CheckConstraint(
+            "status IN ('pending', 'delivered', 'rejected', 'dead_letter', 'dropped')",
+            name="lead_desk_conversion_status",
+        ),
+        CheckConstraint(
+            "provider IN ('meta', 'google_ads', 'linkedin', 'tiktok', 'microsoft_ads')",
+            name="lead_desk_conversion_provider",
+        ),
+        CheckConstraint("length(trim(destination)) > 0", name="lead_desk_conversion_destination"),
+        CheckConstraint("length(trim(event_name)) > 0", name="lead_desk_conversion_event_name"),
+        CheckConstraint(
+            "(payload IS NULL) = (erased_at IS NOT NULL)", name="lead_desk_conversion_erasure"
+        ),
+        CheckConstraint(
+            "(status = 'delivered') = (delivered_at IS NOT NULL)",
+            name="lead_desk_conversion_delivered",
+        ),
+        CheckConstraint("attempts >= 0", name="lead_desk_conversion_attempts"),
+        CheckConstraint("length(payload_sha256) = 64", name="lead_desk_conversion_digest"),
+        CheckConstraint(
+            "last_http_status IS NULL OR last_http_status BETWEEN 100 AND 599",
+            name="lead_desk_conversion_http_status",
+        ),
+        Index(
+            "uq_lead_desk_conversion_event",
+            "tenant_id",
+            "provider",
+            "destination",
+            "lead_id",
+            "event_name",
+            unique=True,
+        ),
+        Index(
+            "ix_lead_desk_conversion_due",
+            "next_attempt_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_lead_desk_conversion_recent", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    source_event_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    provider: Mapped[str] = mapped_column(String(24))
+    destination: Mapped[str] = mapped_column(String(64))
+    stage_key: Mapped[str] = mapped_column(String(40))
+    event_name: Mapped[str] = mapped_column(String(100))
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # None is SQL NULL (an emptied body), never JSON null: the erasure check reads it.
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    payload_sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))
+    attempts: Mapped[int] = mapped_column(Integer)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    test: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadConversionAttempt(Base):
+    """One send of one lead stage to an ad platform (append-only delivery log). Its
+    checks' names were too long for PostgreSQL and were shortened when 0111 made
+    them; they are named here as the database has them."""
+
+    __tablename__ = "lead_desk_conversion_attempts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["conversion_id"],
+            ["lead_desk_conversions.id"],
+            name="fk_lead_desk_conversion_attempt_conversion",
+        ),
+        CheckConstraint(
+            "attempt >= 1",
+            name=conv("ck_lead_desk_conversion_attempts_lead_desk_conversion_a_e7b7"),
+        ),
+        CheckConstraint(
+            "duration_ms >= 0 AND finished_at >= started_at",
+            name=conv("ck_lead_desk_conversion_attempts_lead_desk_conversion_a_96be"),
+        ),
+        CheckConstraint(
+            "http_status IS NULL OR http_status BETWEEN 100 AND 599",
+            name=conv("ck_lead_desk_conversion_attempts_lead_desk_conversion_a_0612"),
+        ),
+        CheckConstraint(
+            "http_status IS NOT NULL OR error_code IS NOT NULL",
+            name=conv("ck_lead_desk_conversion_attempts_lead_desk_conversion_a_84b4"),
+        ),
+    )
+
+    conversion_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    attempt: Mapped[int] = mapped_column(Integer, primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer)

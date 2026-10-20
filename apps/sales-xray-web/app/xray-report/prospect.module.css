@@ -48,6 +48,18 @@
   min-height: 168px;
 }
 
+/* A report settings version may hide the quality ring or the facts grid. */
+.hero[data-no-ring] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+}
+.hero[data-no-facts] {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.hero[data-no-ring][data-no-facts] {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
 .ring {
   position: relative;
   display: grid;

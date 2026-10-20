@@ -124,7 +124,8 @@ it("makes the sidebar search open Calls with the typed text", () => {
   expect(form?.querySelector("kbd")?.textContent).toBe("Ctrl K");
 });
 
-it("keeps the phone tab bar to five tabs, plus a dev settings control", () => {
+// Owner, 17 Oct: five tabs; 20 Oct: "5 tabs, Chats inside Leads".
+it("keeps the phone tab bar to its five tabs, plus a dev settings control", () => {
   for (const liveData of [false, true]) {
     const shell = (
       <AcquisitionShell authenticated active="dashboard">
@@ -148,6 +149,8 @@ it("keeps the phone tab bar to five tabs, plus a dev settings control", () => {
     // Owner, 17 Oct: Prospects and Coaching open from the More sheet.
     expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
     expect(nav.querySelector('a[href="/coaching"]')).toBeNull();
+    // Chats opens from the Leads | Chats switch, not its own tab.
+    expect(nav.querySelector('a[href="/chats"]')).toBeNull();
     const more = Array.from(nav.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "More",
     );
@@ -224,8 +227,12 @@ it("names the current workspace in the phone header and the desktop top bar", ()
   expect(
     host.querySelectorAll('[title="Workspace: Authority Closers"]'),
   ).toHaveLength(2);
-  // Phones: the workspace sits on a small line above the page title (r17).
-  const phone = host.querySelector("header span[title] b")?.parentElement;
+  // Phones: the workspace sits on a small line above the page title (r17),
+  // and with another workspace to go to, a tap there switches (design
+  // system v2, owner 20 Oct).
+  const phone = host.querySelector("header [title] b")?.parentElement;
+  expect(phone?.tagName).toBe("BUTTON");
+  expect(phone?.getAttribute("aria-haspopup")).toBe("dialog");
   expect(phone?.querySelector("small")?.textContent).toBe("Authority Closers");
   expect(phone?.querySelector("b")?.textContent).toBe("Calls");
 });

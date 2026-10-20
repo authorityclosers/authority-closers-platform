@@ -68,8 +68,12 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
   const shell = container.querySelector("[data-lightbox-shell]");
   expect(shell?.getAttribute("data-mobile-fit")).toBe("true");
   const studioMain = report?.closest(".studio-main");
-  expect(studioMain?.parentElement?.classList.contains("xray-app")).toBe(true);
-  expect(studioMain?.parentElement?.parentElement?.id).toBe("main-content");
+  const app = studioMain?.parentElement;
+  expect(app?.classList.contains("xray-app")).toBe(true);
+  // The shell's page slot draws no box (display: contents), so main still
+  // lays the report app out (design system v2's stand-in outline, 20 Oct).
+  expect(app?.parentElement?.hasAttribute("data-page-slot")).toBe(true);
+  expect(app?.parentElement?.parentElement?.id).toBe("main-content");
   expect(studioMain?.querySelector("[data-report-nav]")).not.toBeNull();
   expect(report?.getAttribute("data-lx-surface")).toBe("light");
   expect(report?.querySelector("h1")?.textContent).toBe("Untitled call");

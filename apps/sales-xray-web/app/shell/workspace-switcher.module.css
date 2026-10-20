@@ -1,6 +1,8 @@
-/* Sidebar account switcher: Personal and Organisations, clearly marked. */
+/* The sidebar's workspace switcher (design system v2): the current place,
+   what it is and your role; the list opens as a glass popover. The rows
+   themselves are workspace-picker.module.css. */
 .container {
-  position: relative;
+  position: static;
   flex: 1;
   min-width: 0;
 }
@@ -8,19 +10,20 @@
 .trigger {
   display: flex;
   width: 100%;
-  min-height: var(--lx-control-compact-h, 32px);
+  min-height: max(var(--lx-control-compact-h, 32px), 40px);
   align-items: center;
-  gap: 9px;
-  padding: 5px 6px;
+  gap: 10px;
+  padding: 6px 8px 6px 6px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--sx-radius-md);
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 160ms ease,
-    box-shadow 160ms ease;
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
 }
 
 /* Signed out the trigger is a sign-in link: same row, no underline. */
@@ -30,114 +33,88 @@ a.trigger {
 
 .trigger:hover,
 .trigger[aria-expanded="true"] {
-  background: var(--lx-surface);
-  box-shadow: var(--lx-shadow-1);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.trigger:active {
+  transform: scale(0.985);
 }
 
 .trigger:focus-visible {
-  outline: 2px solid var(--lx-teal);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }
 
+.tileWrap {
+  position: relative;
+  display: grid;
+  flex: none;
+}
+
+/* The guest's sign-in tile. */
 .tile {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   flex: none;
   place-items: center;
-  border-radius: 8px;
-  color: var(--lx-on-teal);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  border-radius: 7px;
+  background: var(--lx-gradient-primary, var(--sx-accent));
+  color: var(--sx-accent-ink);
 }
 
-.tile[data-kind="personal"] {
-  background: var(--lx-gradient-primary, var(--lx-teal));
-}
-
-.tile[data-kind="organisation"] {
-  background: var(--lx-ink);
-  color: var(--lx-surface);
-}
-
-/* Invitations and "Create": quiet tiles, so only workspaces carry colour. */
-.tile[data-kind="invite"],
-.tile[data-kind="action"] {
-  border: 1px dashed var(--lx-line-strong);
-  background: transparent;
-  color: var(--lx-ink-2);
-}
-
-.tile[data-kind="invite"] {
-  border-style: solid;
-  color: var(--lx-teal);
-}
-
-/* Something waits in the menu: an invitation. */
-.trigger .tile {
-  position: relative;
-}
-
+/* Something waits in the list: an invitation. */
 .dot {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 8px;
-  height: 8px;
-  border: 2px solid var(--lx-paper);
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--sx-paper);
   border-radius: 50%;
-  background: var(--lx-teal);
+  background: var(--sx-accent);
 }
 
 .copy {
   display: grid;
   min-width: 0;
   flex: 1;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
-.copy b,
-.itemCopy b {
+.copy b {
   overflow: hidden;
-  color: var(--lx-ink);
-  font-size: 13px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.copy small,
-.itemCopy small {
+.copy small {
   overflow: hidden;
-  color: var(--lx-muted);
-  font-size: 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .chevron {
   flex: none;
-  color: var(--lx-muted);
-  transition: transform 200ms var(--lx-ease-pop, ease);
+  color: var(--sx-muted);
 }
 
-.trigger[aria-expanded="true"] .chevron {
-  transform: rotate(180deg);
-}
-
-/* Loading: the same shape, shimmering. */
-.trigger[data-loading] .tile {
-  background: var(--lx-sunken);
+/* Loading: the same shape, shimmering, so nothing moves when it arrives. */
+.trigger[data-loading] .tileWrap > span {
+  background: var(--sx-sunken);
   color: transparent;
 }
 
-/* Each bar sits inside its line's own box (no margins), so the loaded name
-   takes exactly the same height and the panel below never moves. */
 .trigger[data-loading] .copy b,
 .trigger[data-loading] .copy small {
   width: 92px;
-  background: linear-gradient(var(--lx-sunken), var(--lx-sunken)) left center /
+  background: linear-gradient(var(--sx-sunken), var(--sx-sunken)) left center /
     100% 72% no-repeat;
   color: transparent;
   animation: loading 1.4s ease-in-out infinite;
@@ -147,114 +124,31 @@ a.trigger {
   width: 64px;
 }
 
-/* ---------- Menu ---------- */
+/* ---------- The list: a glass popover under the header row ---------- */
 .menu {
   position: absolute;
   z-index: 60;
   top: calc(100% + 6px);
-  left: 0;
-  display: grid;
-  width: 256px;
-  gap: 1px;
-  padding: 6px;
-  border: 1px solid var(--lx-line);
-  border-radius: 14px;
-  background: var(--lx-surface);
-  box-shadow: var(--lx-shadow-2);
-  transform-origin: top left;
-  animation: menu-in 200ms var(--lx-ease-pop, ease) both;
-}
-
-.group {
-  margin: 6px 8px 3px;
-  color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.group:first-child {
-  margin-top: 2px;
-}
-
-.item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: var(--lx-control-compact-h, 32px);
-  padding: 6px 8px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 120ms ease;
-}
-
-.item:hover,
-.item:focus-visible {
-  background: var(--lx-sunken);
-  outline: none;
-}
-
-.item[data-selected] {
-  background: var(--lx-teal-soft);
-}
-
-.itemCopy {
-  display: grid;
-  min-width: 0;
-  flex: 1;
-  line-height: 1.2;
-}
-
-.check {
-  flex: none;
-  color: var(--lx-teal);
-  animation: check-in 260ms var(--lx-ease-pop, ease) both;
-}
-
-.item:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.join {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--lx-teal-soft);
-  color: var(--lx-teal);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.divider {
-  height: 1px;
-  margin: 4px 2px;
-  border: 0;
-  background: var(--lx-line);
-}
-
-.empty {
-  margin: 2px 8px 4px;
-  color: var(--lx-muted);
-  font-size: 12px;
+  left: 8px;
+  right: 8px;
+  box-sizing: border-box;
+  max-height: min(520px, calc(100dvh - 120px));
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
+  transform-origin: top center;
+  animation: menu-in var(--sx-dur-base) var(--sx-spring-calm) both;
 }
 
 @keyframes menu-in {
   from {
     opacity: 0;
-    transform: translateY(-4px) scale(0.97);
-  }
-}
-
-@keyframes check-in {
-  from {
-    transform: scale(0);
+    transform: translateY(-6px) scale(0.97);
   }
 }
 
@@ -266,25 +160,14 @@ a.trigger {
 
 @media (prefers-reduced-motion: reduce) {
   .menu,
-  .check,
   .trigger[data-loading] .copy b,
   .trigger[data-loading] .copy small {
     animation: none;
   }
 }
 
-/* The sidebar clips sideways: the menu spans the header row, never past it. */
-.container {
-  position: static;
-}
-.menu {
-  right: 0;
-  width: auto;
-}
-
 @media (pointer: coarse) {
-  .trigger,
-  .item {
+  .trigger {
     min-height: var(--lx-row-min-h, 44px);
   }
 }

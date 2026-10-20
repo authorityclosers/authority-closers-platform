@@ -25,15 +25,10 @@ import {
 } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
+import { DeskChats } from "../chats/desk-chats";
+import { LeadsChatsSwitch } from "../chats/leads-chats-switch";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
-import {
-  Badge,
-  Button,
-  Empty,
-  PageHeader,
-  QueryTabs,
-  Skeleton,
-} from "../ui/kit";
+import { Badge, Button, Empty, PageHeader, QueryTabs } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { requestWorkspace } from "../call-ownership";
 import {
@@ -47,8 +42,6 @@ import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
 import { PhoneSetupBar } from "./phone-setup";
 import { UnknownCallsCard } from "./unknown-calls-card";
-import { SocialInbox } from "./social-inbox";
-import { WhatsAppInbox } from "./whatsapp-inbox";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { DeskView, dueNow, type DeskLink, type RowActions } from "./desk-view";
@@ -69,13 +62,15 @@ import {
 } from "./leads-client";
 import { MessageSetup } from "./message-sheet";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
+import { LeadsSkeleton } from "./leads-skeleton";
+import { JourneyTab } from "./journey/journey-view";
 import { ListView } from "./list-view";
 import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
 import styles from "./leads.module.css";
 
-type Tab = "desk" | "all" | "team" | "sources";
+type Tab = "desk" | "all" | "team" | "sources" | "stages";
 
 // The desk reads itself again when the app comes back, and every minute.
 const REFRESH_EVERY_MS = 60 * 1000;
@@ -94,24 +89,7 @@ const onHashChange = (change: () => void) => {
   return () => window.removeEventListener("hashchange", listener);
 };
 
-export function LeadsSkeleton() {
-  return (
-    <AcquisitionShell authenticated={false} loading active="leads">
-      <div className={styles.root} aria-busy="true" aria-label="Loading leads">
-        <div className={styles.headSkeleton}>
-          <Skeleton width={120} height={22} />
-          <Skeleton width={260} height={12} />
-        </div>
-        <div className={styles.tilesSkeleton}>
-          {[0, 1, 2, 3].map((key) => (
-            <Skeleton key={key} height={86} />
-          ))}
-        </div>
-        <Skeleton height={320} />
-      </div>
-    </AcquisitionShell>
-  );
-}
+export { LeadsSkeleton };
 
 export function LeadsRoute() {
   const access = useWorkspaceAccess();
@@ -271,6 +249,7 @@ export function LeadsRoute() {
   const can = current && desk ? desk.me.can_manage : false;
   const tab: Tab =
     requested === "all" ||
+    requested === "stages" ||
     (can && (requested === "team" || requested === "sources"))
       ? (requested as Tab)
       : "desk";
@@ -367,6 +346,12 @@ export function LeadsRoute() {
             note: "Meta, forms, sheets",
             href: `${LEADS_PATH}?tab=sources`,
           },
+          {
+            key: "stages",
+            label: "Lead stages",
+            note: "Your steps from enquiry to sale",
+            href: `${LEADS_PATH}?tab=stages`,
+          },
         ]
       : []),
     {
@@ -388,6 +373,7 @@ export function LeadsRoute() {
             count: desk.counts.unassigned || undefined,
           },
           { key: "sources", label: "Lead sources" },
+          { key: "stages", label: "Lead stages" },
         ]
       : []),
   ];
@@ -403,6 +389,8 @@ export function LeadsRoute() {
             className={styles.pullSpinner}
             aria-hidden="true"
           />
+          {/* Phones: Leads | Chats (owner, 20 Oct: Chats inside Leads). */}
+          <LeadsChatsSwitch current="leads" />
           <PhoneSetupBar />
           <div className={styles.wideOnly}>
             <PageHeader
@@ -479,8 +467,8 @@ export function LeadsRoute() {
                   <AlertsCard />
                   <PhoneLogCard />
                   <UnknownCallsCard onSave={setUnknownLead} />
-                  <WhatsAppInbox onOpen={(leadId) => open(leadId)} />
-                  <SocialInbox onOpen={(leadId) => open(leadId)} />
+                  {/* Owner, 20 Oct: chats live in Chats; the desk links there. */}
+                  <DeskChats />
                 </>
               }
             />
@@ -493,6 +481,8 @@ export function LeadsRoute() {
             />
           ) : tab === "team" ? (
             <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
+          ) : tab === "stages" ? (
+            <JourneyTab canManage={can} />
           ) : (
             <SourcesView
               sandbox={desk.sandbox}

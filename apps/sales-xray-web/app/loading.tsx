@@ -1,8 +1,12 @@
 "use client";
 
-import { NewAnalysisSkeleton } from "./analysis/new/new-analysis-skeleton";
+import { RouteLoading } from "./shell/route-loading";
 
-/** Shown by Next.js while the root (studio) page suspends. */
+/**
+ * Shown by Next.js around every top-level page while it loads: the outline
+ * of the screen being opened, never New analysis for another page (owner,
+ * 20 Oct).
+ */
 export default function Loading() {
-  return <NewAnalysisSkeleton />;
+  return <RouteLoading />;
 }

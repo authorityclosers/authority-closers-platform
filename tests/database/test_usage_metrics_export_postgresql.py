@@ -48,6 +48,7 @@ def test_export_reads_a_real_step_and_its_open_hold_read_only(
         document = raw if isinstance(raw, dict) else json.loads(raw)
         assert document["schema"] == SCHEMA and document["environment"] == "staging"
         assert document["window_days"] == 30
+        assert document["ai_work"] == []  # every paid AI feature is read; none ran here
 
         export = parse_export("staging", document)
         call_id = str(prepared.recording_id)

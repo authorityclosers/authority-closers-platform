@@ -341,50 +341,64 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
-    if message.template == "identity-provider-linked":
+    if message.template in {
+        "identity-provider-linked",
+        "identity-provider-removed",
+        "identity-provider-connected",
+    }:
+        added = message.template != "identity-provider-removed"
         if message.communication_class != "verification_security":
             raise PermanentProviderError("sign-in notice has the wrong communication class")
         provider = _required_text(message.variables, "provider", maximum=20)
-        if provider not in {"Google", "Apple"}:
+        by_email = message.template == "identity-provider-linked"
+        if provider not in ({"Google", "Apple"} if by_email else {"Google", "Apple", "Facebook"}):
             raise PermanentProviderError("sign-in notice names an unsupported provider")
         support = _required_text(message.variables, "support_email", maximum=120)
         try:
-            linked = datetime.fromisoformat(
-                _required_text(message.variables, "linked_at", maximum=64).replace("Z", "+00:00")
+            changed = datetime.fromisoformat(
+                _required_text(message.variables, "changed_at", maximum=64).replace("Z", "+00:00")
             )
         except ValueError as error:
             raise PermanentProviderError("sign-in notice time must be ISO-8601") from error
-        if linked.tzinfo is None:
+        if changed.tzinfo is None:
             raise PermanentProviderError("sign-in notice time must include a timezone")
-        when = linked.astimezone(UTC).strftime("%d %b %Y at %H:%M UTC")
+        when = changed.astimezone(UTC).strftime("%d %b %Y at %H:%M UTC")
         link = _action_link(message.variables)
         safe_link = html.escape(link, quote=True)
         safe_support = html.escape(support)
+        if added:
+            subject = f"{provider} sign-in was added to your Sales Xray account"
+            what = f"{provider} sign-in was added to your Authority Closers account on {when}, " + (
+                f"because that {provider} account uses the same verified email."
+                if by_email
+                else "from Settings in Sales Xray."
+            )
+            next_line = f"You can now sign in to Sales Xray with {provider}."
+            not_you = (
+                f"Not you? Remove {provider} in Settings → Security → Sign-in methods, or "
+                f"write to {support} at once and we will remove it for you."
+            )
+        else:
+            subject = f"{provider} sign-in was removed from your Sales Xray account"
+            what = f"{provider} sign-in was removed from your Authority Closers account on {when}."
+            next_line = f"You can no longer sign in to Sales Xray with {provider}."
+            not_you = (
+                "Not you? Sign in another way and check Settings → Security → Sign-in "
+                f"methods, or write to {support} at once."
+            )
         return RenderedEmail(
-            subject=f"{provider} sign-in was added to your Sales Xray account",
-            text=(
-                f"Hi {first_name},\n\n{provider} sign-in was added to your Authority Closers "
-                f"account on {when}, because that {provider} account uses the same verified "
-                f"email. You can now sign in to Sales Xray with {provider}.\n\n"
-                f"Not you? Write to {support} at once and we will remove {provider} sign-in "
-                f"from your account:\n{link}"
-            ),
+            subject=subject,
+            text=f"Hi {first_name},\n\n{what} {next_line}\n\n{not_you}\n{link}",
             html=_email_layout(
-                preheader=f"{provider} sign-in was added to your account.",
+                preheader=html.escape(subject) + ".",
                 eyebrow="Account security",
-                heading=f"{provider} sign-in was added to your account.",
+                heading=html.escape(subject) + ".",
                 greeting=f"Hi {safe_name},",
-                paragraphs=(
-                    f"{provider} sign-in was added to your Authority Closers account on "
-                    f"{html.escape(when)}, because that {provider} account uses the same "
-                    "verified email.",
-                    f"You can now sign in to Sales Xray with {provider}.",
-                ),
-                action_label="Contact us",
+                paragraphs=(html.escape(what), html.escape(next_line)),
+                action_label="Review your sign-in methods",
                 action_link=safe_link,
-                security_note=(
-                    f"Not you? Write to {safe_support} at once and we will remove "
-                    f"{provider} sign-in from your account."
+                security_note=html.escape(not_you).replace(
+                    html.escape(support), f"<strong>{safe_support}</strong>"
                 ),
             ),
         )

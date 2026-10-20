@@ -12,8 +12,8 @@ REAL_NOTIFY = "/usr/local/sbin/ac-notify-owner"
 def test_wrapper_parses_and_never_backfills() -> None:
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True, timeout=30)  # noqa: S603, S607
     text = SCRIPT.read_text()
-    # Automatic mode: a since-marker recorded once; calls waiting at a cap stay 30 days.
-    assert '--not-before "$since" --recent-hours 720 --loop --apply' in text
+    # Automatic mode: a since-marker recorded once; a call not read in two hours is held.
+    assert '--not-before "$since" --recent-hours 2 --loop --apply' in text
     assert "--recording" not in text and "--backfill" not in text
     # The provider key only ever lives in the runner's own infisical child.
     assert "GEMINI_API_KEY" not in text
@@ -77,10 +77,12 @@ def test_a_reached_cap_tells_the_owner_once_a_day_per_pipeline(tmp_path: Path) -
     sent = record.read_text().splitlines()
     assert sent == [
         "Sales X-Ray call data (staging): the fast pipeline reached its daily cap (Rs 150.1234 "
-        "spent today). New calls wait, nothing is lost and Reports are not affected. "
+        "spent today). New calls wait two hours, then are held "
+        "and never charged unless you act. Reports are not affected. "
         "Admin -> Sales Xray setup -> Call data -> Raise and resume.",
         "Sales X-Ray call data (staging): the deep pipeline reached its daily cap (Rs 300 spent "
-        "today). New calls wait, nothing is lost and Reports are not affected. "
+        "today). New calls wait two hours, then are held "
+        "and never charged unless you act. Reports are not affected. "
         "Admin -> Sales Xray setup -> Call data -> Raise and resume.",
     ]
 

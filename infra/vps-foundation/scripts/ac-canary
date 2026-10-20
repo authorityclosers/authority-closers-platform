@@ -2,25 +2,127 @@
 set -u
 
 usage() {
-  printf 'Usage: %s {staging|production}\n' "$0" >&2
+  printf 'Usage: %s {staging|production} [--full|--probe]\n' "$0" >&2
   exit 2
 }
 
-[[ $# -eq 1 ]] || usage
+[[ $# -ge 1 && $# -le 2 ]] || usage
 environment="$1"
 [[ "$environment" == staging || "$environment" == production ]] || usage
+requested="${2:-auto}"
+case "$requested" in
+  auto | --full | --probe) ;;
+  *) usage ;;
+esac
+
+history_dir="${AC_CANARY_HISTORY_DIR:-/var/lib/authority-closers/canary}"
+full_every_hours="${AC_CANARY_FULL_EVERY_HOURS:-24}"
+[[ "$full_every_hours" =~ ^[0-9]{1,3}$ ]] || full_every_hours=24
+
+api="ac-application-${environment}-api-1"
+# The release the API container runs (its baked AC_RELEASE_ID, else the image's
+# revision label); empty when it can't be read, which always means a full run.
+release=""
+if command -v docker >/dev/null 2>&1; then
+  release="$(timeout 15 docker inspect "$api" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
+    | sed -n 's/^AC_RELEASE_ID=//p' | sed -n 1p)"
+  [[ "$release" =~ ^[0-9a-f]{7,64}$ ]] \
+    || release="$(timeout 15 docker inspect "$api" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null)"
+fi
+[[ "$release" =~ ^[0-9a-f]{7,64}$ ]] || release=""
+
+# What this run does (owner, 20 Oct 2026: no full analysis "each time a new update
+# goes for no reason"). On 16-19 Oct every ship attempt ran the whole analysis, 6-8
+# times a day per environment, at about Rs 2-3.4 each.
+# - full: the whole C1-C6 analysis of the fixture call. Always the first run on a new
+#   release (a deploy is checked end to end), and again after a day
+#   (AC_CANARY_FULL_EVERY_HOURS);
+# - probe: only when this same release already passed a full canary within that
+#   time: each provider is proven with one tiny request (about one paisa); a 402 or a
+#   dead key still fails;
+# - backoff: after 3 failed runs of this same release in the last hour nothing is
+#   called (no retry storm). A new release never backs off.
+# --full or --probe chooses the mode by hand and skips the backoff.
+mode="$(python3 - "$history_dir/$environment.jsonl" "$full_every_hours" "$requested" "$release" <<'PY'
+import json
+import sys
+from datetime import datetime, timedelta, timezone
+
+path, hours, requested, release = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+if requested != "auto":
+    print(requested.lstrip("-"))
+    raise SystemExit
+if not release:
+    print("full")
+    raise SystemExit
+now = datetime.now(timezone.utc)
+last_full = None
+failures = 0
+try:
+    with open(path, encoding="utf-8") as source:
+        lines = source.read().splitlines()[-500:]
+except OSError:
+    lines = []
+for line in lines:
+    try:
+        record = json.loads(line)
+        at = datetime.fromisoformat(str(record["checked_at"]).replace("Z", "+00:00"))
+    except (ValueError, KeyError, TypeError, AttributeError):
+        continue
+    if not isinstance(record, dict) or at.tzinfo is None:
+        continue
+    if record.get("release_id") != release:
+        continue  # another release (or a record from before releases were kept)
+    kind = record.get("mode", "full")
+    if record.get("ok") is True and kind == "full" and record.get("stage_reached") == "C6":
+        last_full = at if last_full is None or at > last_full else last_full
+    if (
+        record.get("ok") is not True
+        and kind != "backoff"
+        and record.get("stage_reached") != "disabled"
+        and timedelta(0) <= now - at <= timedelta(hours=1)
+    ):
+        failures += 1
+if failures >= 3:
+    print("backoff")
+elif last_full is not None and timedelta(0) <= now - last_full <= timedelta(hours=hours):
+    print("probe")
+else:
+    print("full")
+PY
+)" || mode=full
+case "$mode" in
+  full | probe | backoff) ;;
+  *) mode=full ;;
+esac
+
+worker="ac-application-${environment}-sales-xray-worker-1"
+if [[ "$mode" == probe ]] \
+  && ! docker exec "$worker" python -c "import ac_platform.ai_spend.probe_cli" >/dev/null 2>&1; then
+  # A release from before the probe existed: the full canary, as before.
+  mode=full
+fi
 
 stdout_file="$(mktemp)" || exit 1
 trap 'rm -f -- "$stdout_file"' EXIT
 
-docker_args=(
-  exec "ac-application-${environment}-api-1"
-  python -m ac_platform.conversation_intelligence.canary_cli
-  --environment "$environment"
-  --json
-)
-if [[ "$environment" == production ]]; then
-  docker_args+=(--allow-production)
+if [[ "$mode" == probe ]]; then
+  docker_args=(
+    exec "$worker"
+    python -m ac_platform.ai_spend.probe_cli
+    --service-config /run/ac-sales-xray/service.json
+    --environment "$environment"
+  )
+else
+  docker_args=(
+    exec "$api"
+    python -m ac_platform.conversation_intelligence.canary_cli
+    --environment "$environment"
+    --json
+  )
+  if [[ "$environment" == production ]]; then
+    docker_args+=(--allow-production)
+  fi
 fi
 
 docker_pid=""
@@ -37,7 +139,11 @@ handle_timeout() {
 }
 trap handle_timeout TERM INT
 
-if command -v docker >/dev/null 2>&1; then
+if [[ "$mode" == backoff ]]; then
+  printf '{"ok":false,"environment":"%s","mode":"backoff","stage_reached":null,"failure_code":"canary_backoff"}' \
+    "$environment" >"$stdout_file"
+  canary_exit_code=1
+elif command -v docker >/dev/null 2>&1; then
   docker "${docker_args[@]}" >"$stdout_file" 2>/dev/null &
   docker_pid=$!
   wait "$docker_pid"
@@ -56,8 +162,7 @@ if (( canary_timed_out )); then
 fi
 trap - TERM INT
 
-history_dir="${AC_CANARY_HISTORY_DIR:-/var/lib/authority-closers/canary}"
-metadata="$(python3 - "$stdout_file" "$history_dir" "$environment" "$canary_exit_code" "$canary_timed_out" <<'PY'
+metadata="$(python3 - "$stdout_file" "$history_dir" "$environment" "$canary_exit_code" "$canary_timed_out" "$mode" "$release" <<'PY'
 from __future__ import annotations
 
 import json
@@ -67,7 +172,7 @@ import stat
 import sys
 from datetime import datetime, timezone
 
-stdout_path, history_dir, environment, exit_code_text, timed_out_text = sys.argv[1:]
+stdout_path, history_dir, environment, exit_code_text, timed_out_text, mode, release = sys.argv[1:]
 exit_code = int(exit_code_text)
 
 def reject_constant(value: str) -> None:
@@ -97,6 +202,9 @@ except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
         "failure_code": "canary_timeout" if timed_out_text == "1" else "canary_no_result",
     }
 
+record.setdefault("mode", mode)
+# The release this result belongs to: the next run compares it (full on a new release).
+record["release_id"] = release or None
 record["checked_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 record["exit_code"] = exit_code
 

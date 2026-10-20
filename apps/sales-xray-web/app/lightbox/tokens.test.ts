@@ -170,8 +170,9 @@ describe("Lightbox token derivative", () => {
   it("keeps every source token except the documented corrections", () => {
     const changedLight = new Map([
       ["muted-2", "#646d7f"],
-      // r17 phone shell: a 56 px tab bar, as in Pulse (was 76 px).
-      ["bottom-nav-h", "56px"],
+      // Design system v2: a 60 px floating glass tab bar, 8 px above the
+      // edge (r17 had a 56 px bar on the edge; the source 76 px).
+      ["bottom-nav-h", "68px"],
       // One teal accent (owner, 11 Oct 2026): info is slate, not blue.
       ["info", "#56637a"],
       ["info-soft", "#eceff4"],
@@ -196,7 +197,27 @@ describe("Lightbox token derivative", () => {
       "density-panel-head",
       "density-tile-min",
     ]);
+    // Design system v2 (owner, 20 Oct 2026): a graphite dark ladder, no navy.
+    const changedDark = new Map([
+      ["ink", "#f4f5f7"],
+      ["ink-2", "#e3e5e9"],
+      ["ink-3", "#c3c7ce"],
+      ["muted", "#9ea3ac"],
+      ["muted-2", "#8e939c"],
+      ["line", "#26272c"],
+      ["line-soft", "#1d1e22"],
+      ["line-strong", "#36383e"],
+      ["paper", "#0b0c0e"],
+      ["paper-2", "#111215"],
+      ["surface", "#17181b"],
+      ["sunken", "#0f1012"],
+    ]);
     const addedDark = new Set([
+      "film",
+      "film-2",
+      "film-text-2",
+      "film-text-3",
+      "film-wave",
       "on-teal",
       "strength-ink",
       "objection-ink",
@@ -218,7 +239,10 @@ describe("Lightbox token derivative", () => {
     ).toEqual(addedLight);
 
     for (const [name, value] of sourceDark)
-      expect([name, appDarkOverrides.get(name)]).toEqual([name, value]);
+      expect([name, appDarkOverrides.get(name)]).toEqual([
+        name,
+        changedDark.get(name) ?? value,
+      ]);
     expect(
       new Set(
         [...appDarkOverrides.keys()].filter((name) => !sourceDark.has(name)),
@@ -466,6 +490,11 @@ describe("Lightbox token derivative", () => {
       join(appDir, "shell/workspace-switcher.module.css"),
       "utf8",
     );
+    // The switcher's rows live in the shared picker (design system v2).
+    const pickerCss = readFileSync(
+      join(appDir, "shell/workspace-picker.module.css"),
+      "utf8",
+    );
     const profileCss = readFileSync(
       join(appDir, "profile-menu.module.css"),
       "utf8",
@@ -566,7 +595,12 @@ describe("Lightbox token derivative", () => {
 
       testCoarseStyles(switcherCss, {
         trigger: { minHeight: 44 },
+      });
+
+      testCoarseStyles(pickerCss, {
         item: { minHeight: 44 },
+        current: { minHeight: 44 },
+        create: { minHeight: 44 },
       });
 
       testCoarseStyles(themeToggleCss, {

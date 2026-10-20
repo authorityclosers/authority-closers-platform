@@ -59,6 +59,7 @@ import { useFirstCallGuideSwitch } from "./guide-toggle";
 import { notify, dismissNotice } from "./notice-center";
 import { PROFILE_UPDATED_EVENT } from "./profile-menu";
 import { AccountAvatarImage } from "./speaker-avatar";
+import { SignInMethods } from "./sign-in-methods";
 import {
   analysedTrend,
   readCallActivity,
@@ -142,11 +143,17 @@ export function AccountSettings({
   variant = "page",
   onClose,
   billing,
+  only,
 }: {
   billing?: SettingsBillingProps;
   hashPrefix?: string;
   variant?: "page" | "dialog";
   onClose?: () => void;
+  /**
+   * Settings (20 Oct): show just these panes, stacked, without this list;
+   * the Settings frame has its own sections and its own way back.
+   */
+  only?: readonly SectionId[];
 }) {
   const [profile, setProfile] = useState<LoadedProfile>({
     state: "loading",
@@ -156,9 +163,10 @@ export function AccountSettings({
   });
   const [editing, setEditing] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [section, setSection] = useState<SectionId>("general");
-  const liveBilling = useBillingAccount(!billing && section === "billing");
-  const [stage, setStage] = useState<"list" | "pane">("list");
+  const [section, setSection] = useState<SectionId>(only?.[0] ?? "general");
+  const shows = (id: SectionId) => (only ? only.includes(id) : section === id);
+  const liveBilling = useBillingAccount(!billing && shows("billing"));
+  const [stage, setStage] = useState<"list" | "pane">(only ? "pane" : "list");
   const [selectedTopUp, setSelectedTopUp] = useState<DisplayTopUpPack | null>(
     null,
   );
@@ -179,6 +187,7 @@ export function AccountSettings({
 
   // The URL hash keeps the open section across reloads and shared links.
   useEffect(() => {
+    if (only) return;
     const sync = () => {
       const hashId = sectionFromHash(window.location.hash, hashPrefix);
       const searchParams = new URLSearchParams(window.location.search);
@@ -193,7 +202,7 @@ export function AccountSettings({
     sync();
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
-  }, [hashPrefix]);
+  }, [hashPrefix, only]);
 
   const open = useCallback(
     (id: SectionId, focus = false) => {
@@ -267,65 +276,79 @@ export function AccountSettings({
   const who = profile.state === "ready" ? profile.value : null;
 
   return (
-    <div className={styles.settings} data-variant={variant} data-stage={stage}>
-      <aside className={styles.nav}>
-        <header className={styles.navHead}>
-          <span className={styles.navMark} aria-hidden="true">
-            <AccountAvatarImage key={who?.email} photoUrl={who?.photo_url}>
-              {who ? initials(who.name) || <CircleUserRound size={18} /> : null}
-            </AccountAvatarImage>
-          </span>
-          <div className={styles.navWho}>
-            {variant === "dialog" ? <h2>Settings</h2> : <h1>Account</h1>}
-            <p>{who?.email ?? "Sales Xray settings"}</p>
+    <div
+      className={styles.settings}
+      data-variant={only ? "embedded" : variant}
+      data-stage={stage}
+    >
+      {only ? null : (
+        <aside className={styles.nav}>
+          <header className={styles.navHead}>
+            <span className={styles.navMark} aria-hidden="true">
+              <AccountAvatarImage key={who?.email} photoUrl={who?.photo_url}>
+                {who
+                  ? initials(who.name) || <CircleUserRound size={18} />
+                  : null}
+              </AccountAvatarImage>
+            </span>
+            <div className={styles.navWho}>
+              {variant === "dialog" ? <h2>Settings</h2> : <h1>Account</h1>}
+              <p>{who?.email ?? "Sales Xray settings"}</p>
+            </div>
+            {onClose ? (
+              <button
+                type="button"
+                className={styles.close}
+                aria-label="Close settings"
+                onClick={onClose}
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            ) : null}
+          </header>
+          <div
+            className={styles.tabs}
+            role="tablist"
+            aria-label="Account settings"
+            aria-orientation="vertical"
+            onKeyDown={onTabKey}
+          >
+            {SECTIONS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                ref={(node) => {
+                  tabs.current[id] = node;
+                }}
+                type="button"
+                role="tab"
+                id={`account-tab-${id}`}
+                aria-selected={section === id}
+                aria-controls={`account-pane-${id}`}
+                tabIndex={section === id ? 0 : -1}
+                className={styles.tab}
+                onClick={() => open(id)}
+              >
+                <Icon size={17} aria-hidden="true" />
+                <span>{label}</span>
+                <ChevronRight
+                  size={16}
+                  aria-hidden="true"
+                  className={styles.tabChevron}
+                />
+              </button>
+            ))}
           </div>
-          {onClose ? (
-            <button
-              type="button"
-              className={styles.close}
-              aria-label="Close settings"
-              onClick={onClose}
-            >
-              <X size={18} aria-hidden="true" />
-            </button>
-          ) : null}
-        </header>
-        <div
-          className={styles.tabs}
-          role="tablist"
-          aria-label="Account settings"
-          aria-orientation="vertical"
-          onKeyDown={onTabKey}
-        >
-          {SECTIONS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              ref={(node) => {
-                tabs.current[id] = node;
-              }}
-              type="button"
-              role="tab"
-              id={`account-tab-${id}`}
-              aria-selected={section === id}
-              aria-controls={`account-pane-${id}`}
-              tabIndex={section === id ? 0 : -1}
-              className={styles.tab}
-              onClick={() => open(id)}
-            >
-              <Icon size={17} aria-hidden="true" />
-              <span>{label}</span>
-              <ChevronRight
-                size={16}
-                aria-hidden="true"
-                className={styles.tabChevron}
-              />
-            </button>
-          ))}
-        </div>
-      </aside>
+        </aside>
+      )}
 
       <div className={styles.content}>
-        <Pane id="general" title="General" active={section} onBack={back}>
+        <Pane
+          id="general"
+          title="General"
+          active={section}
+          only={only}
+          onBack={back}
+        >
           <ThemeRow />
           <Row
             label="App language"
@@ -340,6 +363,7 @@ export function AccountSettings({
           id="profile"
           title="Profile"
           active={section}
+          only={only}
           onBack={back}
           action={
             profile.state === "ready" && !editing ? (
@@ -396,11 +420,10 @@ export function AccountSettings({
           id="usage"
           title="Usage & activity"
           active={section}
+          only={only}
           onBack={back}
         >
-          {section === "usage" ? (
-            <CallActivitySummary variant={variant} />
-          ) : null}
+          {shows("usage") ? <CallActivitySummary variant={variant} /> : null}
           <AllowanceSummary allowance={allowance} onRetry={retry} />
           <div className={styles.row}>
             <div className={styles.rowText}>
@@ -415,6 +438,12 @@ export function AccountSettings({
                 type="button"
                 className={styles.secondary}
                 onClick={() => {
+                  if (only?.includes("billing")) {
+                    document
+                      .getElementById("account-pane-billing")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    return;
+                  }
                   setSection("billing");
                   if (typeof window !== "undefined")
                     window.location.hash = "billing";
@@ -430,11 +459,12 @@ export function AccountSettings({
           id="billing"
           title="Plan & billing"
           active={section}
+          only={only}
           onBack={back}
         >
           <PlanAndBillingPane
             {...(billing ?? liveBilling)}
-            active={section === "billing"}
+            active={shows("billing")}
             allowance={
               billing || !liveBilling.usage
                 ? allowance
@@ -462,11 +492,18 @@ export function AccountSettings({
           />
         </Pane>
 
-        <Pane id="security" title="Security" active={section} onBack={back}>
+        <Pane
+          id="security"
+          title="Security"
+          active={section}
+          only={only}
+          onBack={back}
+        >
           <Row
             label="Privacy"
             hint="Calls and reports stay private to your account and selected workspace."
           />
+          <SignInMethods active={shows("security")} />
           <Row
             label="Log out of this device"
             hint="End your Sales Xray session in this browser."
@@ -488,7 +525,13 @@ export function AccountSettings({
           ) : null}
         </Pane>
 
-        <Pane id="help" title="Help & support" active={section} onBack={back}>
+        <Pane
+          id="help"
+          title="Help & support"
+          active={section}
+          only={only}
+          onBack={back}
+        >
           <FirstCallGuideRow onStart={onClose} />
           <Row
             label="Contact support"
@@ -548,6 +591,7 @@ function Pane({
   id,
   title,
   active,
+  only,
   action,
   onBack,
   children,
@@ -555,6 +599,8 @@ function Pane({
   id: SectionId;
   title: string;
   active: SectionId;
+  /** Shown inside the Settings frame: these panes together, no back control. */
+  only?: readonly SectionId[];
   action?: ReactNode;
   onBack: () => void;
   children: ReactNode;
@@ -562,23 +608,28 @@ function Pane({
   return (
     <section
       id={`account-pane-${id}`}
-      role="tabpanel"
-      aria-labelledby={`account-tab-${id}`}
-      hidden={active !== id}
+      role={only ? undefined : "tabpanel"}
+      aria-labelledby={only ? undefined : `account-tab-${id}`}
+      aria-label={only ? title : undefined}
+      hidden={only ? !only.includes(id) : active !== id}
       className={styles.pane}
     >
-      <div className={styles.paneHead}>
-        <button
-          type="button"
-          className={styles.back}
-          aria-label="Back to settings"
-          onClick={onBack}
-        >
-          <ChevronLeft size={20} aria-hidden="true" />
-        </button>
-        <h2>{title}</h2>
-        <span className={styles.paneAction}>{action}</span>
-      </div>
+      {only?.length === 1 && !action ? null : (
+        <div className={styles.paneHead}>
+          {only ? null : (
+            <button
+              type="button"
+              className={styles.back}
+              aria-label="Back to settings"
+              onClick={onBack}
+            >
+              <ChevronLeft size={20} aria-hidden="true" />
+            </button>
+          )}
+          <h2>{title}</h2>
+          <span className={styles.paneAction}>{action}</span>
+        </div>
+      )}
       <div className={styles.rows}>{children}</div>
     </section>
   );

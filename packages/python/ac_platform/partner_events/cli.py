@@ -398,8 +398,21 @@ async def _one_pass(
     ``MAX_PAGES`` pages). Our own test sources are filtered in the query
     (looked up once per run).
     """
+    from ac_platform.ai_spend import guard as spend_guard
     from ac_platform.partner_events import pipeline
     from ac_platform.partner_events.delivery import deliver_one, erasure_sweep
+
+    async def spend_refused() -> bool:
+        """The AI spend guard before a real model call (owner, 20 Oct 2026); said once."""
+        async with sessions() as session:
+            refusal = await spend_guard.check_async(
+                session, "partner_quote_facts", environment=environment, now=clock()
+            )
+        line = None if refusal is None else refusal.line()
+        if line is not None and cache.get("spend_stop") != line["stopped"]:
+            _print(line)
+        cache["spend_stop"] = None if line is None else line["stopped"]
+        return line is not None
 
     async with sessions() as session:
         active = await pipeline.active_endpoints(session)
@@ -419,8 +432,17 @@ async def _one_pass(
                     tests=tests,
                     after=after,
                 )
+            stopped = False
             for candidate in page:
                 after = (candidate.created_at, candidate.draft_id)
+                if (
+                    call_provider is None
+                    and arguments.apply
+                    and candidate.skip is None
+                    and await spend_refused()
+                ):
+                    stopped = True  # waits for the next pass; deliveries still go
+                    break
                 line = await _settle(
                     sessions,
                     candidate,
@@ -435,7 +457,7 @@ async def _one_pass(
                     continue
                 _print(line)
                 acted += "error" not in line
-            if len(page) < arguments.limit or acted >= arguments.limit:
+            if stopped or len(page) < arguments.limit or acted >= arguments.limit:
                 break
             if time.monotonic() >= deadline:
                 break

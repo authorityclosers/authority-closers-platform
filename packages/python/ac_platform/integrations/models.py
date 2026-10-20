@@ -68,7 +68,8 @@ class IntegrationSecret(Base):
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_integration_secret_tenant"),
         CheckConstraint(
-            "purpose IN ('webhook_signing', 'partner_key')", name="integration_secret_purpose"
+            "purpose IN ('webhook_signing', 'partner_key', 'provider_key')",
+            name="integration_secret_purpose",
         ),
         CheckConstraint("length(seal_key_id) = 16", name="integration_secret_seal_key"),
         CheckConstraint(

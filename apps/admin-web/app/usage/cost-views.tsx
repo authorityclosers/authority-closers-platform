@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { Coins, Gauge, GitCompare, Landmark, Receipt, X } from "lucide-react";
 
 import {
+  CHANGE_AT,
   ENVIRONMENTS,
   CALL_SORTS,
   ENVIRONMENT_LABEL,
@@ -22,8 +23,13 @@ import {
   dayLabel,
   inr,
   minutes,
+  money,
   pct,
   perMin,
+  rateWords,
+  revenueWords,
+  unitWords,
+  usd,
   seconds,
   seriesValue,
   stamp,
@@ -95,6 +101,83 @@ function Chips({
         </Link>
       ))}
     </nav>
+  );
+}
+
+/**
+ * One organisation and one feature (owner, 20 Oct 2026: "filters per organisation,
+ * per user, per call and per feature"). A plain form, so it works without script;
+ * the Per call tab lists each call of the choice.
+ */
+export function ScopeFilters({
+  metrics,
+  current,
+}: {
+  metrics: Metrics;
+  current: CostFilter;
+}) {
+  const { companies, stages } = metrics.choices;
+  const chosenOrg = companies.find((item) => item.id === current.org);
+  const chosenStage = stages.find((item) => item.stage === current.feature);
+  const keep: Record<string, string | undefined> = {
+    tab: current.tab !== "overview" ? current.tab : undefined,
+    days: current.days !== "30" ? current.days : undefined,
+    env: current.env !== "all" ? current.env : undefined,
+    tests: current.tests ? "1" : undefined,
+    charts: current.charts,
+    ca: current.ca,
+    cb: current.cb,
+    sort: current.sort,
+  };
+  return (
+    <form className={styles.scope} method="get" action="/usage">
+      {Object.entries(keep).map(([name, value]) =>
+        value ? (
+          <input key={name} type="hidden" name={name} value={value} />
+        ) : null,
+      )}
+      <label>
+        Organisation
+        <select name="org" defaultValue={current.org ?? ""}>
+          <option value="">All organisations</option>
+          {companies.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name} ·{" "}
+              {ENVIRONMENT_LABEL[item.environment] ?? item.environment} ·{" "}
+              {money(item.rupees, metrics.fx)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Feature
+        <select name="feature" defaultValue={current.feature ?? ""}>
+          <option value="">All features</option>
+          {stages.map((item) => (
+            <option key={item.stage} value={item.stage}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" className={styles.scopeButton}>
+        Show
+      </button>
+      {current.org || current.feature ? (
+        <span className={styles.scopeNow}>
+          Showing {chosenOrg?.name ?? "one organisation"}
+          {current.org && current.feature ? " · " : ""}
+          {current.feature ? (chosenStage?.label ?? current.feature) : ""}
+          {" · "}
+          <Link
+            href={costQuery(current, { org: undefined, feature: undefined })}
+            scroll={false}
+          >
+            Show everything
+          </Link>
+        </span>
+      ) : null}
+    </form>
   );
 }
 
@@ -190,7 +273,9 @@ export function Sources({ metrics }: { metrics: Metrics }) {
           </span>
         );
       })}
-      <Why detail="Every 15 minutes each environment exports usage numbers only (no call content) into a separate metrics store, read-only. Rupees are list prices from the price sheet (₹100 per US dollar), not invoices. Calls copied from one database to another count once, in the environment they ran in. Days are India time." />
+      <Why
+        detail={`Every 15 minutes each environment exports usage numbers only (no call content) into a separate metrics store, read-only. Money is list prices from the price sheet, in the dollars providers bill; rupees use one rate, ${rateWords(metrics.fx)} (a card's rate differs). Calls copied from one database to another count once, in the environment they ran in. Days are India time. "Late" means that environment's export is old: its numbers are as of the time shown.`}
+      />
     </div>
   );
 }
@@ -290,8 +375,8 @@ export function OverviewView({
       <Tiles label="Spend">
         <Kpi
           label="Spent this month"
-          value={inr(o.spendMonth)}
-          note={`Today ${inr(o.spendToday)} · ${scope}`}
+          value={usd(o.spendMonth, metrics.fx)}
+          note={`${inr(o.spendMonth)} at ${rateWords(metrics.fx)} · today ${money(o.spendToday, metrics.fx)} · ${scope} · every environment and feature`}
           spark={
             <Spark
               values={o.daily.map((day) => day.spend)}
@@ -319,21 +404,21 @@ export function OverviewView({
           label="Test runs"
           value={count(o.testRuns)}
           tone={o.testsWindow > o.spendWindow ? "warn" : undefined}
-          note={`${inr(o.testsWindow)} on canaries and QA · ${windowLabel}`}
+          note={`${money(o.testsWindow, metrics.fx)} on canaries and QA · ${windowLabel}`}
         />
       </Tiles>
       <Panel
         title="By environment"
         sub={windowLabel}
         tools={
-          <Why detail="Each environment's own spend. Today and this month are India time. Upload to report is the median from the upload to the report being ready." />
+          <Why detail="Each environment's own spend: production, staging and development share one provider account, so all three count against its credit. Dollars are what providers bill; rupees are those dollars at the price sheet's one rate. Today and this month are India time. Upload to report is the median from the upload to the report being ready." />
         }
       >
         <Table
           label="Spend by environment"
           cards={o.environments.map((row) => (
             <div key={row.environment} role="listitem">
-              <Env name={row.environment} /> · {inr(row.window)} ·{" "}
+              <Env name={row.environment} /> · {money(row.window, metrics.fx)} ·{" "}
               {perMin(row.perMinute)} · {count(row.calls)} calls
             </div>
           ))}
@@ -376,9 +461,9 @@ export function OverviewView({
                 <th scope="row">
                   <Env name={row.environment} />
                 </th>
-                <td data-num="">{inr(row.today)}</td>
-                <td data-num="">{inr(row.month)}</td>
-                <td data-num="">{inr(row.window)}</td>
+                <td data-num="">{money(row.today, metrics.fx)}</td>
+                <td data-num="">{money(row.month, metrics.fx)}</td>
+                <td data-num="">{money(row.window, metrics.fx)}</td>
                 <td data-num="">{perMin(row.perMinute)}</td>
                 <td data-num="">{count(row.calls)}</td>
                 <td data-num="">{count(row.reports)}</td>
@@ -403,7 +488,7 @@ export function OverviewView({
           title="Where the money goes"
           sub={`${inr(o.spendWindow)} · ${scope}`}
           tools={
-            <Why detail="Spend per pipeline step. Audio check runs on our own server and costs nothing." />
+            <Why detail="Spend per feature: transcription is priced by audio minutes; the model steps (facts, report, pointer review, call data, AI replies, quote facts) by input and output tokens. Audio check runs on our own server and costs nothing." />
           }
         >
           {o.byStage.length ? (
@@ -415,8 +500,12 @@ export function OverviewView({
                   max={1}
                   label={`${pct(row.share)} of spend`}
                 />
-                <strong>{inr(row.rupees)}</strong>
-                <small>{perMin(row.perMinute)}</small>
+                <strong>{money(row.rupees, metrics.fx)}</strong>
+                <small>
+                  {row.audioMinutes
+                    ? `${minutes(row.audioMinutes)} of audio · ${perMin(row.perMinute)}`
+                    : `${tokens(row.inputTokens)} in · ${tokens(row.outputTokens)} out tokens`}
+                </small>
               </div>
             ))
           ) : (
@@ -1043,8 +1132,23 @@ export function CallsView({
 export function RevenueView({ metrics }: { metrics: Metrics }) {
   const revenue = metrics.revenue;
   const totals = ENVIRONMENTS.filter((name) => revenue.totals[name]);
+  const words = revenueWords(metrics);
   return (
     <>
+      {words.length ? (
+        <Panel title="In plain words" sub={`last ${metrics.days} days`}>
+          <ul className={styles.plain}>
+            {words.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className={styles.note}>
+            Revenue is live payments and subscription charges minus refunds.
+            Cost is what the AI providers charge at list price, nothing else:
+            hosting, staff and payment fees are not in it.
+          </p>
+        </Panel>
+      ) : null}
       <Tiles label="Revenue against cost">
         {totals.map((name) => {
           const value = revenue.totals[name] ?? {
@@ -1158,10 +1262,91 @@ export function RevenueView({ metrics }: { metrics: Metrics }) {
 
 /* ---------- Providers ---------- */
 
+/** A provider's mark: its initials on its own colour (no brand artwork). */
+function ProviderMark({ provider }: { provider: string | null }) {
+  const name = provider ?? "unknown";
+  return (
+    <span className={styles.mark} data-provider={name} aria-hidden="true">
+      {name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
+/** What each feature ran on, its unit price, and where it is changed (owner, 20 Oct). */
+function RoutesPanel({ metrics }: { metrics: Metrics }) {
+  return (
+    <Panel
+      title="What each feature runs on"
+      sub="per environment, from its newest run · unit prices from the price sheet"
+      tools={
+        <Why detail="What actually ran, not just what is set: a change shows here once that feature has run on it. Prices are the providers' list prices in dollars, with rupees at the sheet's one rate. Production providers change only through a release or the owner; nothing here switches anything." />
+      }
+    >
+      {metrics.routes.length ? (
+        <Table label="What each feature runs on">
+          <thead>
+            <tr>
+              <th scope="col">Feature</th>
+              <th scope="col">Where</th>
+              <th scope="col">Provider · model</th>
+              <th scope="col">Unit price</th>
+              <th scope="col" data-num="">
+                Runs
+              </th>
+              <th scope="col">Change it</th>
+            </tr>
+          </thead>
+          <tbody>
+            {metrics.routes.map((route) => {
+              const change = CHANGE_AT[route.stage];
+              return (
+                <tr key={`${route.environment}-${route.stage}`}>
+                  <th scope="row">{route.label}</th>
+                  <td>
+                    <Env name={route.environment} />
+                  </td>
+                  <td>
+                    <span className={styles.route}>
+                      <ProviderMark provider={route.provider} />
+                      <span>
+                        {route.provider ?? "Unknown"}
+                        <small className={styles.sub}>
+                          {route.model ?? "model not recorded"}
+                        </small>
+                      </span>
+                    </span>
+                  </td>
+                  <td>{unitWords(route.unit, metrics.fx)}</td>
+                  <td data-num="">
+                    {count(route.runs)}
+                    <small className={styles.sub}>
+                      last {route.lastAt ? stamp(route.lastAt) : "–"}
+                    </small>
+                  </td>
+                  <td>
+                    {change ? (
+                      <Link href={change.href}>{change.label}</Link>
+                    ) : (
+                      <span className={styles.sub}>Set in code</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      ) : (
+        <Empty icon={Coins} title="Nothing ran in this window" />
+      )}
+    </Panel>
+  );
+}
+
 export function ProvidersView({ metrics }: { metrics: Metrics }) {
   const { models, daily } = metrics.providers;
   return (
     <>
+      <RoutesPanel metrics={metrics} />
       <Panel
         title="Providers and models"
         sub="tokens, audio and cost"

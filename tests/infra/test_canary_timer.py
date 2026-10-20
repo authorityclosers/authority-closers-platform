@@ -190,6 +190,8 @@ def test_docker_uses_live_container_and_production_flag_only(
 
     assert result.returncode == 0
     calls = [json.loads(line) for line in docker_args.read_text(encoding="utf-8").splitlines()]
+    # Before the run it reads the deployed release (docker inspect); then one exec.
+    calls = [call for call in calls if call[0] == "exec"]
     assert len(calls) == 1
     args = calls[0]
     assert args[:3] == ["exec", f"ac-application-{environment}-api-1", "python"]
@@ -258,7 +260,9 @@ def test_sigterm_records_timeout_alerts_once_and_stops_docker(tmp_path: Path) ->
     make_command(
         bin_dir / "docker",
         "#!/usr/bin/env python3\n"
-        "import os, time\n"
+        "import os, sys, time\n"
+        "if sys.argv[1] == 'inspect':\n"
+        "    raise SystemExit(0)\n"
         "with open(os.environ['FAKE_DOCKER_PID'], 'w', encoding='utf-8') as f:\n"
         "    f.write(str(os.getpid()))\n"
         "time.sleep(30)\n",

@@ -249,6 +249,10 @@ def test_deep_waits_for_fast_then_supersedes_labels_and_measures(postgres_harnes
     edges = {(e["from"], e["to"]): e for e in dense["edges"]}
     assert edges[("better_transcript", "deep")]["branch"] == "deep"
     assert edges[("fast", "objects")]["status"] == "done"
+    keys = [s["key"] for s in dense["stages"]]
+    assert {"alignment", "facts", "coaching", "published", "review"} <= set(keys)
+    assert "report" not in keys  # C3 to C6 are their own nodes now
+    assert next(s for s in dense["stages"] if s["key"] == "review")["status"] == "waiting"
     assert len(dense["segments"]) == 5 and dense["voice"] is not None
     # Read once: the same transcript is not read again.
     assert _deep(postgres_harness, seeded, DeepModel()) == {"no_candidate": True}

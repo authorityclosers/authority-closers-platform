@@ -11,6 +11,11 @@
   settings:read, the registry's change routes with settings:write. Billing, payment, plan
   prices, credit balances and secrets stay browser-only. At most 60 requests a minute.
   Every change made with a key is also audited as admin.staff_key_used with its prefix.
+- With admin:read (Phase 6, orchestrator 20 Oct: AI agents operate Admin), a key also
+  makes content-free reads: organisations, the calls list, one call's stage map, the
+  review queue and analysis health. Ids, states, times, counts, costs and model names
+  only; transcripts, quotes, facts' values and report text stay in the browser, behind
+  their own audited reads.
 """
 
 from __future__ import annotations
@@ -43,7 +48,26 @@ from ac_platform.identity.application import AsyncIdentityApplication, ResolvedA
 from ac_platform.identity.models import Session
 from ac_platform.kernel.authz import ActorContext
 
-SCOPES = ("settings:read", "settings:write")
+SCOPES = ("settings:read", "settings:write", "admin:read")
+READ_SCOPE = "admin:read"
+_ID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+# The one-click raises Admin offers beside the settings: each saves through its own
+# area, audited there as a cap raise; a key needs settings:write, as for any change.
+ONE_CLICK: tuple[tuple[str, str], ...] = (
+    ("POST", "/v1/admin/call-data/raise"),
+    ("POST", "/v1/admin/lead-desk-ai/raise"),
+)
+# GET only, and content-free by design (see the module note).
+READS: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"^/v1/platform/workspaces$",
+        r"^/v1/admin/conversation/calls$",
+        rf"^/v1/admin/call-data/calls/{_ID}/map$",
+        r"^/v1/admin/conversation/review/queue$",
+        r"^/v1/admin/conversation/health$",
+    )
+)
 MAX_ACTIVE = 2
 LIFETIME = timedelta(days=30)
 FRESH_SIGN_IN = timedelta(minutes=10)
@@ -66,6 +90,16 @@ CREATED, REVOKED, USED = (
 )
 
 
+def route_scope(routes: dict[tuple[str, str], str], method: str, path: str) -> str | None:
+    """The scope a key needs for this request, or None when no key may make it."""
+    if BLOCKED.search(path):
+        return None
+    scope = routes.get((method, path))
+    if scope is None and method == "GET" and any(read.match(path) for read in READS):
+        return READ_SCOPE
+    return scope
+
+
 def digest(key: str) -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
@@ -77,6 +111,8 @@ def key_routes() -> dict[tuple[str, str], str]:
         routes[("GET", item.read.path)] = "settings:read"
         if item.write is not None and not BLOCKED.search(item.write.path):
             routes[(item.write.method, item.write.path)] = "settings:write"
+    for route in ONE_CLICK:
+        routes[route] = "settings:write"
     return {route: scope for route, scope in routes.items() if not BLOCKED.search(route[1])}
 
 
@@ -136,7 +172,10 @@ class StaffKeys:
             raise ConversationError("Name the key (1 to 80 characters).")
         chosen = sorted(set(scopes))
         if not chosen or not set(chosen) <= set(SCOPES) or "settings:read" not in chosen:
-            raise ConversationError("Choose settings:read, with settings:write if it may change.")
+            raise ConversationError(
+                "Choose settings:read, with settings:write if it may change settings and"
+                " admin:read if it may read calls, organisations, the review queue and health."
+            )
         active = await self.database.scalar(
             select(func.count())
             .select_from(AdminStaffKey)
@@ -262,10 +301,12 @@ class StaffKeyGuard:
                 429, "Too many requests with this key.", headers={"Retry-After": str(retry)}
             )
         method, path = request.method.upper(), request.url.path
-        scope = self.routes.get((method, path))
-        if scope is None or BLOCKED.search(path):
+        scope = route_scope(self.routes, method, path)
+        if scope is None:
             raise HTTPException(
-                403, "A staff key reaches only Admin settings; this stays in the browser."
+                403,
+                "A staff key reaches only Admin settings and content-free reads;"
+                " this stays in the browser.",
             )
         if scope not in row.scopes:
             raise HTTPException(403, f"This key does not hold {scope}.")

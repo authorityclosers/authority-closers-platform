@@ -61,7 +61,61 @@ export type LibrarySubmission = {
   label: CallLabel | null;
   /** Returned only when the server authorises organisation rep metadata. */
   owner?: { personId: string; name: string };
+  /**
+   * The Report's own facts for the row (include_summary=true): null without
+   * a readable Report; absent from a server that doesn't send them.
+   */
+  summary?: RowSummary | null;
 };
+
+/** A row's Report facts, as the list sends them (include_summary=true). */
+export type RowSummary = {
+  outcome: string | null;
+  assessment: string | null;
+  fixFirst: string | null;
+  nextFocus: string | null;
+  strengths: number | null;
+  missed: number | null;
+};
+
+const SUMMARY_KEYS = [
+  "outcome",
+  "assessment",
+  "fix_first",
+  "next_focus",
+  "strengths",
+  "missed",
+];
+
+/** A row's summary, checked: null, or exactly its six nullable fields. */
+export function parseRowSummary(value: unknown): RowSummary | null {
+  if (value === null) return null;
+  const summary = record(value);
+  const text = (key: string) => {
+    const field = summary[key];
+    if (field === null || field === undefined) return null;
+    if (typeof field !== "string" || field.length > 4000)
+      throw new ReportContractError("acquisition_library_summary");
+    return field;
+  };
+  const count = (key: string) => {
+    const field = summary[key];
+    if (field === null || field === undefined) return null;
+    if (!Number.isSafeInteger(field) || (field as number) < 0)
+      throw new ReportContractError("acquisition_library_summary");
+    return field as number;
+  };
+  if (Object.keys(summary).some((key) => !SUMMARY_KEYS.includes(key)))
+    throw new ReportContractError("acquisition_library_summary");
+  return {
+    outcome: text("outcome"),
+    assessment: text("assessment"),
+    fixFirst: text("fix_first"),
+    nextFocus: text("next_focus"),
+    strengths: count("strengths"),
+    missed: count("missed"),
+  };
+}
 export type SubmissionLibraryPage = {
   submissions: LibrarySubmission[];
   nextCursor: string | null;
@@ -487,6 +541,7 @@ export function parseSubmissionLibraryPage(
             "display_name_revision",
             "owner_person_id",
             "owner_name",
+            "summary",
           ].includes(key),
       ) ||
       typeof submission.submission_id !== "string" ||
@@ -532,6 +587,9 @@ export function parseSubmissionLibraryPage(
               name: submission.owner_name as string,
             },
           }
+        : {}),
+      ...("summary" in submission
+        ? { summary: parseRowSummary(submission.summary) }
         : {}),
     });
   }

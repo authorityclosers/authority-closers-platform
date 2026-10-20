@@ -15,6 +15,7 @@ import {
   submissionPath,
 } from "./acquisition-client";
 import { parseCallRecord, type CallRecord } from "./call-record-contract";
+import { insightShelf } from "./calls-cache";
 
 export type CallMoment = { label: string; startMs: number };
 
@@ -221,12 +222,25 @@ async function loadInsight(id: string, signal: AbortSignal) {
   } as InsightRead;
 }
 
-/** Insights for the given report-ready call ids; loads lazily, three at a time. */
-export function useCallInsights(ids: string[], enabled: boolean) {
-  const [reads, setReads] = useState(new Map<string, InsightRead>());
+/**
+ * Insights for the given report-ready call ids; loads lazily, three at a
+ * time. A read is kept for this identity (person, session, workspace) for
+ * the tab's life (calls-cache.ts), so a return visit reads nothing again;
+ * another identity never shares it. Under test each mount starts afresh.
+ */
+export function useCallInsights(
+  ids: string[],
+  enabled: boolean,
+  identity: string | null = null,
+) {
+  const [shelf] = useState(() =>
+    process.env.NODE_ENV === "test"
+      ? new Map<string, InsightRead>()
+      : insightShelf<InsightRead>(identity),
+  );
+  const cache = useRef(shelf);
+  const [reads, setReads] = useState(() => new Map(shelf));
   const [attempt, setAttempt] = useState(0);
-  // CallsLibrary remounts on person/session/workspace changes. Never share reads globally.
-  const cache = useRef(new Map<string, InsightRead>());
   const key = ids.join(",");
   useEffect(() => {
     if (!enabled) return;

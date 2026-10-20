@@ -140,10 +140,19 @@ def unseal(key: bytes, box: object, *, customer_id: str, what: str) -> str:
 
 
 def make_state(
-    cfg: GoogleAdsConfig, *, tenant_id: UUID, person_id: UUID, app_challenge: str | None = None
+    cfg: GoogleAdsConfig,
+    *,
+    tenant_id: UUID,
+    person_id: UUID,
+    app_challenge: str | None = None,
+    card: str | None = None,
 ) -> str:
     return meta.make_state(
-        cfg.client_secret, tenant_id=tenant_id, person_id=person_id, app_challenge=app_challenge
+        cfg.client_secret,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        app_challenge=app_challenge,
+        card=card,
     )
 
 

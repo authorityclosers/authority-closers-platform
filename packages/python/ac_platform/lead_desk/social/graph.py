@@ -67,10 +67,23 @@ PAGE_FIELDS: Final[tuple[str, ...]] = (
 class SocialError(ValueError):
     """Something about Messenger or Instagram failed; the message is safe to show."""
 
-    def __init__(self, message: str, code: int | None = None, subcode: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        code: int | None = None,
+        subcode: int | None = None,
+        detail: str | None = None,
+        *,
+        kind: str | None = None,
+        trace: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.subcode = subcode
+        self.detail = detail  # Meta's own words, for owners and admins
+        # "timeout" (no answer in time) or "meta_side" (Meta's own problem); None: refused.
+        self.kind = kind
+        self.trace = trace  # Meta's fbtrace_id, for asking Meta about one call
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +222,17 @@ class Comment:
     at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class Skipped:
+    """A comment Sales Xray didn't take, and why. No content: the reason, and the names of
+    the fields Meta sent (to see, for instance, that it sent no ``from``)."""
+
+    channel: Channel
+    account_id: str
+    reason: str  # no_sender, from_page, not_new, bad_id
+    fields: tuple[str, ...]
+
+
 @dataclass(slots=True)
 class Delivery:
     inbound: list[Inbound] = field(default_factory=list)
@@ -216,6 +240,7 @@ class Delivery:
     seen: list[Seen] = field(default_factory=list)
     comments: list[Comment] = field(default_factory=list)
     unsent: list[str] = field(default_factory=list)  # message ids the person took back
+    skipped: list[Skipped] = field(default_factory=list)
 
 
 def _time(value: Any) -> datetime:
@@ -334,10 +359,39 @@ def parse(payload: Mapping[str, Any]) -> Delivery:
             if not isinstance(change, Mapping) or not isinstance(change.get("value"), Mapping):
                 continue
             value = change["value"]
-            found = _comment(channel, account, str(change.get("field") or ""), value)
+            name = str(change.get("field") or "")
+            found = _comment(channel, account, name, value)
             if found is not None:
                 out.comments.append(found)
+                continue
+            why = _why_not(channel, account, name, value)
+            if why is not None:
+                fields = tuple(sorted(str(key) for key in value)[:20])
+                out.skipped.append(Skipped(channel, account, why, fields))
     return out
+
+
+def _why_not(channel: Channel, account: str, name: str, value: Mapping[str, Any]) -> str | None:
+    """Why a comment isn't one to answer (None: the change isn't a comment at all)."""
+    if channel == "messenger":
+        if name != "feed" or value.get("item") != "comment":
+            return None  # posts, reactions, likes
+        if value.get("verb") != "add":
+            return "not_new"
+        comment_id = value.get("comment_id")
+    else:
+        if name != "comments":
+            return None
+        comment_id = value.get("id")
+    sender = value.get("from") if isinstance(value.get("from"), Mapping) else {}
+    user = str(sender.get("id") or "") if isinstance(sender, Mapping) else ""
+    if not user:
+        return "no_sender"
+    if user == account:
+        return "from_page"
+    if not COMMENT_ID.fullmatch(str(comment_id or "")) or not SCOPED_ID.fullmatch(user):
+        return "bad_id"
+    return None
 
 
 def _comment(channel: Channel, account: str, name: str, value: Mapping[str, Any]) -> Comment | None:
@@ -437,6 +491,8 @@ class Graph:
             response = await client.request(
                 method, url, params=params or None, json=json, headers=headers
             )
+        except httpx.TimeoutException:
+            raise SocialError(TIMEOUT_WORDS, kind="timeout") from None
         except httpx.HTTPError:
             raise SocialError("Meta didn't answer. Try again in a minute.") from None
         finally:
@@ -445,10 +501,25 @@ class Graph:
         try:
             body = response.json()
         except ValueError:
-            body = {}
-        if response.status_code >= 400 or (isinstance(body, dict) and "error" in body):
-            error = body.get("error", {}) if isinstance(body, dict) else {}
-            raise refusal(error if isinstance(error, Mapping) else {})
+            body = None
+        error = body.get("error") if isinstance(body, dict) else None
+        if response.status_code >= 400 or error is not None:
+            found = refusal(error if isinstance(error, Mapping) else {})
+            if (
+                response.status_code >= 500
+                or not isinstance(error, Mapping)
+                or found.code in (1, 2)
+            ):
+                # Meta's own trouble (a 5xx, an answer that isn't Graph's, or "try again").
+                found = SocialError(
+                    META_SIDE_WORDS,
+                    found.code,
+                    found.subcode,
+                    found.detail,
+                    kind="meta_side",
+                    trace=found.trace,
+                )
+            raise found
         return body if isinstance(body, dict) else {}
 
     async def user_token(self, *, code: str, redirect_uri: str) -> str:
@@ -528,6 +599,16 @@ class Graph:
         if body.get("success") not in (True, "true"):
             raise SocialError("Facebook didn't switch on messages for this Page. Try again.")
 
+    async def subscribed_apps(self, page_id: str, page_token: str) -> dict[str, list[str]]:
+        """The apps this Page sends its events to, and which fields (Connected apps)."""
+        body = await self._call("GET", f"{page_id}/subscribed_apps", token=page_token)
+        out: dict[str, list[str]] = {}
+        for row in body.get("data") or []:
+            if isinstance(row, Mapping) and row.get("id"):
+                fields = row.get("subscribed_fields")
+                out[str(row["id"])] = [str(f) for f in fields] if isinstance(fields, list) else []
+        return out
+
     async def profile(self, channel: str, user_id: str, page_token: str) -> str | None:
         """The person's name (Messenger) or @username (Instagram), if Meta shares it."""
         try:
@@ -603,25 +684,83 @@ def _mid(reply: Mapping[str, Any]) -> str:
     return mid[:200]
 
 
+TIMEOUT_WORDS: Final[str] = "Meta didn't answer in time. Try again."
+META_SIDE_WORDS: Final[str] = "Meta had a problem sending this. Try again."
+
+
 def refusal(error: Mapping[str, Any]) -> SocialError:
     """A Messenger or Instagram error in words a seller or manager can act on."""
     raw, sub = error.get("code"), error.get("error_subcode")
     code = raw if isinstance(raw, int) and not isinstance(raw, bool) else None
     subcode = sub if isinstance(sub, int) and not isinstance(sub, bool) else None
-    if code in (190, 102):
-        return SocialError("Meta ended this connection. Connect the Page again.", code, subcode)
-    if subcode == 2018278 or (code == 10 and subcode in (2018065, 2534022)):
-        return SocialError(
-            "It's more than 24 hours since their last message, so Meta won't deliver this.",
-            code,
-            subcode,
-        )
-    if code in (551, 1545041) or subcode == 1545041:
-        return SocialError("This person can't get messages from you right now.", code, subcode)
-    if code in (4, 17, 32, 613) or (code is not None and 80000 <= code < 80100):
-        return SocialError("Meta is limiting messages right now. Try again later.", code, subcode)
-    if code in (10, 200, 3, 230) or (code is not None and 200 <= code < 300):
-        return SocialError(
-            "Meta didn't give permission for this. Connect the Page again.", code, subcode
-        )
-    return SocialError("Meta refused the message. Try again.", code, subcode)
+    said = " ".join(str(error.get("error_user_msg") or error.get("message") or "").split())
+    found = _refusal(code, subcode)
+    found.detail = said[:300] or None
+    found.trace = str(error.get("fbtrace_id") or "")[:64] or None
+    return found
+
+
+WINDOW_WORDS: Final[str] = (
+    "It's more than 24 hours since their last message, so Meta won't deliver this."
+)
+AWAY_WORDS: Final[str] = "This person can't get messages from you right now."
+LIMIT_WORDS: Final[str] = "Meta is limiting messages right now. Try again later."
+PAUSED_WORDS: Final[str] = (
+    "Meta has paused messages from this Page for now. Check the Page in Meta Business Suite."
+)
+REVIEW_WORDS: Final[str] = (
+    "Until Meta approves Sales Xray's app, it can only message people with a role on the app."
+)
+OTHER_APP_WORDS: Final[str] = (
+    "Another app has this conversation right now. Hand it back to Sales Xray in Meta"
+    " Business Suite."
+)
+GONE_WORDS: Final[str] = "Meta can't find this person any more."
+PERMISSION_WORDS: Final[str] = "Meta didn't give permission for this. Connect the Page again."
+# Meta's Messenger and Instagram codes (developers.facebook.com/docs/messenger-platform/
+# error-codes), in words a seller or manager can act on: a subcode first, then the code.
+_BY_SUBCODE: Final[dict[int, str]] = {
+    2018278: WINDOW_WORDS,
+    2018065: WINDOW_WORDS,
+    2534022: WINDOW_WORDS,
+    1545041: AWAY_WORDS,
+    2018108: AWAY_WORDS,
+    2018028: REVIEW_WORDS,
+    2018001: GONE_WORDS,
+    2534014: GONE_WORDS,
+    2018300: OTHER_APP_WORDS,
+    2534037: OTHER_APP_WORDS,
+    1893063: PAUSED_WORDS,
+    2534040: LIMIT_WORDS,
+    2534025: "Meta doesn't allow a private reply to this comment.",
+    2534013: "This Page has no Instagram account linked. Link one in Meta Business Suite.",
+    2534077: "Meta says the Instagram account isn't linked to this Page, or its two-step"
+    " sign-in is off. Fix it in Meta Business Suite.",
+    2534041: "This Instagram account doesn't let apps answer its messages. Turn on"
+    " \u201cAllow access to messages\u201d in Instagram's settings.",
+    2534029: "Meta has blocked this business from Instagram messaging.",
+}
+_BY_CODE: Final[dict[int, str]] = {
+    190: "Meta ended this connection. Connect the Page again.",
+    102: "Meta ended this connection. Connect the Page again.",
+    551: AWAY_WORDS,
+    1545041: AWAY_WORDS,
+    2022: PAUSED_WORDS,
+    10900: "This comment already had its private reply. Meta allows one.",
+    4: LIMIT_WORDS,
+    17: LIMIT_WORDS,
+    32: LIMIT_WORDS,
+    613: LIMIT_WORDS,
+}
+
+
+def _refusal(code: int | None, subcode: int | None) -> SocialError:
+    words = _BY_SUBCODE.get(subcode) if subcode is not None else None
+    if words is None and code is not None:
+        words = _BY_CODE.get(code)
+    if words is None and code is not None:
+        if 80000 <= code < 80100:
+            words = LIMIT_WORDS
+        elif code in (10, 3, 230) or 200 <= code < 300:
+            words = PERMISSION_WORDS
+    return SocialError(words or "Meta refused the message. Try again.", code, subcode)

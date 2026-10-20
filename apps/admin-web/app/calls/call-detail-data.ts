@@ -20,6 +20,8 @@ const BRANCHES: readonly Branch[] = ["main", "fast", "deep", "report"];
 export type DetailStage = {
   key: string;
   label: string;
+  /** The main analysis stage it is, C1 to C6; null for the call-data and review stages. */
+  code: string | null;
   status: StageStatus;
   startedAt: string | null;
   finishedAt: string | null;
@@ -200,6 +202,7 @@ export function normalizeCallDetail(raw: unknown): CallDetail {
       return {
         key: read.string(stage.key),
         label: read.string(stage.label, read.string(stage.key, "Stage")),
+        code: s(stage.code),
         status: status(stage.status),
         startedAt: s(stage.started_at),
         finishedAt: s(stage.finished_at),
@@ -293,22 +296,41 @@ export function normalizeCallDetail(raw: unknown): CallDetail {
 
 /* ---------- The graph's layout ---------- */
 
-/** Where each known stage sits: column left to right, lane top to bottom. */
+/**
+ * Where each known stage sits: column left to right, lane top to bottom. The
+ * main analysis follows its checkpoints (C1 and C2, then C3 → C4 → C5 → C6);
+ * the fast and deep reads branch off the transcript; review comes last.
+ */
 export const LAYOUT: Readonly<Record<string, { col: number; lane: number }>> = {
   received: { col: 0, lane: 1 },
   audio_check: { col: 1, lane: 0 },
   transcription: { col: 1, lane: 1 },
+  alignment: { col: 2, lane: 0 },
   fast: { col: 2, lane: 1 },
-  objects: { col: 3, lane: 1 },
   better_transcript: { col: 2, lane: 2 },
+  objects: { col: 3, lane: 1 },
   deep: { col: 3, lane: 2 },
+  facts: { col: 3, lane: 3 },
   objects_updated: { col: 4, lane: 2 },
-  report: { col: 2, lane: 3 },
-  pointer_review: { col: 3, lane: 3 },
-  prospect: { col: 4, lane: 3 },
+  coaching: { col: 4, lane: 3 },
+  // Older servers sent C4 to C6 as one "report" stage.
+  report: { col: 4, lane: 3 },
+  published: { col: 5, lane: 3 },
+  review: { col: 5, lane: 4 },
+  prospect: { col: 6, lane: 3 },
+  pointer_review: { col: 6, lane: 4 },
 };
 
-export const LANES = ["Checks", "Main · fast", "Deep read", "Report"] as const;
+export const LANES = [
+  "Checks",
+  "Main · fast",
+  "Deep read",
+  "Analysis",
+  "Review",
+] as const;
+
+export const COLUMNS =
+  Math.max(...Object.values(LAYOUT).map((place) => place.col)) + 1;
 
 /** Stages with a place on the graph, and any new stage the layout doesn't know yet. */
 export function placeStages(stages: readonly DetailStage[]) {
@@ -329,4 +351,61 @@ export function objectFacets(objects: readonly DetailObject[]) {
     types: [...types.entries()].sort((a, b) => b[1] - a[1]),
     states: [...states.entries()],
   };
+}
+
+/* ---------- Timings ---------- */
+
+/** Stages people do, often days later: shown with their time, kept off the bar's scale. */
+export const LATER = new Set(["review", "prospect"]);
+
+export type StageTime = {
+  /** When it started, in ms after the call arrived; null when not recorded. */
+  startMs: number | null;
+  endMs: number | null;
+};
+
+const instant = (value: string | null) => {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+};
+
+/**
+ * Every stage's start and end in ms after the call arrived (the earliest time
+ * any stage recorded), and the span the machine stages took, which scales the
+ * timing bars. Pure.
+ */
+export function stageTimeline(stages: readonly DetailStage[]) {
+  const known = stages
+    .flatMap((stage) => [instant(stage.startedAt), instant(stage.finishedAt)])
+    .filter((value): value is number => value !== null);
+  const origin = known.length ? Math.min(...known) : null;
+  const times = new Map<string, StageTime>();
+  let spanMs = 0;
+  for (const stage of stages) {
+    const start = instant(stage.startedAt);
+    const end = instant(stage.finishedAt);
+    const time = {
+      startMs: origin === null || start === null ? null : start - origin,
+      endMs: origin === null || end === null ? null : end - origin,
+    };
+    times.set(stage.key, time);
+    if (!LATER.has(stage.key))
+      spanMs = Math.max(spanMs, time.endMs ?? time.startMs ?? 0);
+  }
+  return { spanMs, times };
+}
+
+/** "+42 s", "+3:05", "+2 h 05 min", "+3 days": how long after the call arrived. */
+export function after(ms: number | null): string {
+  if (ms === null) return "";
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `+${seconds} s`;
+  if (seconds < 3600)
+    return `+${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 24 * 60)
+    return `+${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
+  const days = Math.round(minutes / (24 * 60));
+  return `+${days} day${days === 1 ? "" : "s"}`;
 }

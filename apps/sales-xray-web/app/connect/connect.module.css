@@ -149,3 +149,34 @@
     animation: none;
   }
 }
+
+.verified,
+.caution {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.verified {
+  color: var(--sx-good);
+}
+
+.caution {
+  align-items: flex-start;
+  color: var(--sx-ink-2);
+  font-weight: 500;
+}
+
+.caution svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--sx-warn, var(--sx-ink-2));
+}
+
+.role {
+  color: var(--sx-muted);
+  font-weight: 500;
+}

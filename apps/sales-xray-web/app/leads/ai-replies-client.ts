@@ -20,11 +20,21 @@ export type AiSettings = {
   faqs: Faq[];
   notes: string;
   ready: boolean;
-  /** Sales Xray's AI is switched on for messages (the provider gate and key). */
+  /** Sales Xray's AI is switched on for messages (in Admin, per environment). */
   available: boolean;
+  /** Paused for now: no drafts until Sales Xray resumes them. */
+  paused?: boolean;
 };
+export type AiDraftStatus =
+  | "queued"
+  | "drafted"
+  | "handoff"
+  | "paused"
+  | "failed";
 export type AiDraft = {
   replyId?: string | null;
+  /** Older answers had no status: a draft or a hand-off at once. */
+  status?: AiDraftStatus;
   draft?: string | null;
   handoff: boolean;
   reason?: string | null;
@@ -35,8 +45,10 @@ export type AiLeadState = {
   channels: AiChannel[];
   mode: AiMode;
   ready: boolean;
-  /** Sales Xray's AI is switched on for messages (the provider gate and key). */
+  /** Sales Xray's AI is switched on for messages (in Admin, per environment). */
   available: boolean;
+  /** Paused for now: no drafts until Sales Xray resumes them. */
+  paused?: boolean;
   handoffs: AiHandoff[];
 };
 
@@ -56,6 +68,7 @@ export const HANDOFF_WORDS: Record<string, string> = {
   blocked_reply:
     "The draft said something your profile doesn't, so it wasn't used.",
   budget: "AI replies are paused for now.",
+  off: "AI replies are switched off for now.",
   failed: "The AI couldn't answer just now.",
 };
 
@@ -67,6 +80,26 @@ export function draftReply(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/** "Try it": the reply the AI would draft for a sample message (nothing is sent). */
+export function tryReply(body: {
+  message: string;
+  channel?: AiChannel;
+}): Promise<AiDraft> {
+  return waCall<AiDraft>("/ai-replies/try", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function tryStatus(replyId: string): Promise<AiDraft> {
+  return waCall<AiDraft>(`/ai-replies/try/${replyId}`);
+}
+
+/** Whether a queued draft is ready yet. */
+export function draftStatus(leadId: string, replyId: string): Promise<AiDraft> {
+  return waCall<AiDraft>(`/leads/${leadId}/ai-draft/${replyId}`);
 }
 
 export function leadAi(leadId: string): Promise<AiLeadState> {

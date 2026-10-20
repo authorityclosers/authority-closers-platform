@@ -38,6 +38,7 @@ import { CoachingSkeleton } from "./coaching/coaching-skeleton";
 import { PersonSkeleton } from "./organisation/people/person-skeleton";
 import { InvitesSkeleton } from "./organisation/invites/invites-view";
 import { InsightsSkeleton } from "./organisation/insights/insights-view";
+import { SettingsSkeleton } from "./settings/settings-skeleton";
 import { ConnectionNotice } from "./connection-notice";
 import {
   WorkspaceAccessProvider,
@@ -336,7 +337,12 @@ function StandaloneStudioView({
       callIdFromPath(path) !== null
     )
       return "calls";
-    if (path === "/account") return "account";
+    if (
+      path === "/account" ||
+      path === "/settings" ||
+      path.startsWith("/settings/")
+    )
+      return "account";
     return "analyse";
   };
   const skeletonVariant = (
@@ -736,7 +742,15 @@ function StandaloneStudioView({
       <WorkspaceAccessProvider value={accessValue}>
         <AppFrame embedded={embedded}>
           {view.kind === "ready" && !salesXrayEnabled ? (
-            <AcquisitionShell authenticated active={activeFor(pathname)}>
+            <AcquisitionShell
+              authenticated
+              active={activeFor(pathname)}
+              pageName={
+                pathname === "/settings" || pathname?.startsWith("/settings/")
+                  ? "Settings"
+                  : undefined
+              }
+            >
               <WorkspaceNoAccess workspace={null} />
             </AcquisitionShell>
           ) : (
@@ -761,6 +775,11 @@ function StandaloneStudioView({
             active={activeFor(pathname)}
             mobileFit={studioPath || callPath}
             heroStage={studioPath ? "welcome" : undefined}
+            pageName={
+              pathname === "/settings" || pathname?.startsWith("/settings/")
+                ? "Settings"
+                : undefined
+            }
           >
             {/* The page's own skeleton where it has one, so nothing moves. */}
             {pathname === "/organisation" ? (
@@ -775,6 +794,9 @@ function StandaloneStudioView({
               <DashboardSkeleton />
             ) : pathname === "/coaching" ? (
               <CoachingSkeleton />
+            ) : pathname === "/settings" ||
+              pathname?.startsWith("/settings/") ? (
+              <SettingsSkeleton />
             ) : studioPath ? (
               <NewAnalysisSkeletonContent />
             ) : callPath ? (

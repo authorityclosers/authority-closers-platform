@@ -107,6 +107,21 @@ const policyRoutes: PolicySlug[] = [
   "data-deletion",
 ];
 
+it("names Google (Gemini) for AI-drafted replies, and what is never sent", () => {
+  const markup = renderToStaticMarkup(
+    <PolicyPage slug="privacy" pricingPlans={samplePlans} />,
+  );
+  expect(markup).toContain("AI replies to messages");
+  expect(markup).toContain("Google (the Gemini API, provided by Google LLC)");
+  expect(markup).toContain(
+    "up to the last 10 messages in that one conversation",
+  );
+  expect(markup).toContain(
+    "does not send Google the answers given in Facebook or Instagram lead forms",
+  );
+  expect(markup).toContain('dateTime="2026-10-20"');
+});
+
 for (const slug of policyRoutes) {
   it("snapshots the " + slug + " policy page", () => {
     const markup = renderToStaticMarkup(

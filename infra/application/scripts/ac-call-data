@@ -7,8 +7,9 @@
 # Never backfills: the first start records a moment once
 # (/var/lib/ac-call-data/<env>.since) and only transcripts saved after it are
 # processed. Models, switches and daily rupee caps are in Admin -> Call data.
-# At a cap nothing is lost: calls wait (30 days) and the owner gets ONE alert a
-# day per pipeline; "Raise to ₹X and resume" in Admin restarts them at once.
+# At a cap the owner gets ONE alert a day per pipeline. Calls wait two hours:
+# "Raise to ₹X and resume" in Admin reads them; older ones are held and never
+# run or charge by themselves (owner, 20 Oct 2026; the runner enforces it too).
 # Reports never wait on this engine. Docs: docs/architecture/CALL_DATA_ENGINE.md
 #
 #   ac-call-data development-live | staging | production
@@ -42,10 +43,21 @@ notify() {
 alert_text() {
   local env_name=$1 line=$2 pipeline spent="?"
   local re_cap='"stopped": "(fast|deep)_daily_cap"' re_spent='"spent_inr": "([0-9]{1,5}(\.[0-9]{1,4})?)"'
+  local re_spend='"stopped": "ai_spend_(daily|monthly)_cap"'
+  # The environment's AI spend cap (owner, 20 Oct 2026): an incident only on
+  # production; on staging and development it shows in Admin -> AI spend alone.
+  if [[ $line =~ $re_spend ]]; then
+    [[ $env_name == production ]] || return 1
+    pipeline=${BASH_REMATCH[1]}
+    [[ $line =~ $re_spent ]] && spent=${BASH_REMATCH[1]}
+    printf 'Sales X-Ray (production): AI spend reached its %s cap (Rs %s). Background AI jobs wait, nothing is lost and customer calls are not affected. Admin -> AI spend -> Raise.' \
+      "$pipeline" "$spent"
+    return 0
+  fi
   [[ $line =~ $re_cap ]] || return 1
   pipeline=${BASH_REMATCH[1]}
   [[ $line =~ $re_spent ]] && spent=${BASH_REMATCH[1]}
-  printf 'Sales X-Ray call data (%s): the %s pipeline reached its daily cap (Rs %s spent today). New calls wait, nothing is lost and Reports are not affected. Admin -> Sales Xray setup -> Call data -> Raise and resume.' \
+  printf 'Sales X-Ray call data (%s): the %s pipeline reached its daily cap (Rs %s spent today). New calls wait two hours, then are held and never charged unless you act. Reports are not affected. Admin -> Sales Xray setup -> Call data -> Raise and resume.' \
     "$env_name" "$pipeline" "$spent"
 }
 
@@ -53,12 +65,13 @@ alert_text() {
 # the owner one message per pipeline per day when a cap is reached.
 forward_alerts() {
   local env_name=$1 line text pipeline mark today
-  local re_cap='"stopped": "(fast|deep)_daily_cap"'
+  local re_cap='"stopped": "(fast|deep)_daily_cap"' re_spend='"stopped": "(ai_spend_(daily|monthly))_cap"'
   today=$(date -u +%F)
   while IFS= read -r line || [[ -n $line ]]; do
     printf '%s\n' "$line"
     text=$(alert_text "$env_name" "$line") || continue
     [[ $line =~ $re_cap ]] && pipeline=${BASH_REMATCH[1]}
+    [[ $line =~ $re_spend ]] && pipeline=${BASH_REMATCH[1]}
     mark="$state/$env_name.$pipeline.alerted"
     [[ "$(cat "$mark" 2>/dev/null)" == "$today" ]] && continue
     notify "$text"
@@ -125,8 +138,8 @@ install -d -m 700 "$state"
 since_file=$state/$env_name.since
 [ -s "$since_file" ] || date -u +%Y-%m-%dT%H:%M:%S+00:00 > "$since_file"
 since=$(cat "$since_file")
-# 30 days: calls that waited at a cap are still read once it is raised.
-common=(--not-before "$since" --recent-hours 720 --loop --apply)
+# Two hours: a call not read by then is held (the runner caps automatic passes too).
+common=(--not-before "$since" --recent-hours 2 --loop --apply)
 
 case "$env_name" in
   development-live)

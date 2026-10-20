@@ -436,9 +436,18 @@ async def _review_one(
     return line
 
 
-async def _inner_async(arguments: argparse.Namespace, call_provider: Any = None) -> int:
+async def _inner_async(
+    arguments: argparse.Namespace,
+    call_provider: Any = None,
+    *,
+    spend_environment: str | None = None,
+) -> int:
+    """``spend_environment`` turns the AI spend guard on (owner, 20 Oct 2026): the real
+    runner always passes it; tests with a fake provider may leave it out. Operator runs
+    for a workspace are bulk re-scores, so they need the backfill cap."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+    from ac_platform.ai_spend import guard as spend_guard
     from ac_platform.conversation_intelligence import pointer_review_admission as admission
     from ac_platform.conversation_intelligence.pointer_review import (
         erase_reviews_of_erased_calls,
@@ -494,15 +503,39 @@ async def _inner_async(arguments: argparse.Namespace, call_provider: Any = None)
                     test_sources = await session.run_sync(
                         lambda sync: _test_source_shas(sync.connection())
                     )
+                    skipped_tenants = (
+                        await session.run_sync(
+                            lambda sync: spend_guard.skipped_tenants(
+                                sync.connection(), spend_environment
+                            )
+                        )
+                        if spend_environment is not None
+                        else set()
+                    )
                 found = len(reports)
                 reports = [r for r in reports if r["source_sha256"] not in test_sources]
                 print(json.dumps({"reports": len(reports), "apply": arguments.apply}))
                 if found > len(reports):
                     print(json.dumps({"test_reports_skipped": found - len(reports)}))
+                sandbox = [r for r in reports if r["tenant_id"] in skipped_tenants]
+                if sandbox:
+                    reports = [r for r in reports if r["tenant_id"] not in skipped_tenants]
+                    print(json.dumps({"sandbox_reports_skipped": len(sandbox)}))
                 dispatched = 0
                 for report in reports:
                     if dispatched >= arguments.limit:
                         break
+                    if spend_environment is not None and arguments.apply:
+                        async with sessions() as session:
+                            refusal = await spend_guard.check_async(
+                                session,
+                                "pointer_review",
+                                environment=spend_environment,
+                                trigger="auto" if automatic else "backfill",
+                            )
+                        if refusal is not None:
+                            print(json.dumps(refusal.line()))
+                            break
                     line = await _review_one(
                         sessions,
                         report,
@@ -530,7 +563,16 @@ async def _inner_async(arguments: argparse.Namespace, call_provider: Any = None)
 def _inner(arguments: argparse.Namespace) -> int:
     import asyncio
 
-    return asyncio.run(_inner_async(arguments))
+    from ac_platform.ai_spend import guard as spend_guard
+    from ac_platform.ai_spend.policy import SettingsError
+
+    try:
+        spend_environment = spend_guard.service_environment(
+            json.loads(arguments.service_config.read_text())
+        )
+    except SettingsError:
+        raise SystemExit("pointer_review_environment_missing") from None
+    return asyncio.run(_inner_async(arguments, spend_environment=spend_environment))
 
 
 def main(argv: list[str] | None = None) -> int:

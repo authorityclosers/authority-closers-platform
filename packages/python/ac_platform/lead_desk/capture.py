@@ -176,6 +176,11 @@ def language_name(raw: object) -> str | None:
     return _LANGUAGE_NAMES.get(text.lower(), text[:1].upper() + text[1:])
 
 
+# A source's own reference for the lead (Meta's leadgen id, Google's lead id, a form's
+# submission id): it keeps a lead from being added twice, and is never shown to people.
+REFERENCE_KEYS: tuple[str, ...] = ("leadgen_id", "lead_id", "id", "submission_id", "entry_id")
+
+
 def flatten(record: Mapping[str, Any]) -> dict[str, Any]:
     """One flat reading of a record: Meta ``field_data``, nested ``data``/``fields``."""
     flat: dict[str, Any] = {}

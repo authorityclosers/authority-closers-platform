@@ -1,0 +1,303 @@
+name: Workbench checks
+
+# Owner, 20 Oct 2026: tests and emulations run on GitHub-hosted runners, not on the 4-core ac VPS that serves dev, and
+# a full run finishes in under 5 minutes. `wb-ci` on ac pushes a request commit (a workbench commit plus
+# `.wb-ci/request.json`) to refs/heads/wb-ci/slot-<n>, waits for this run, prints the result and deletes the branch.
+# Fixed slot names keep each slot's caches warm (Actions caches are scoped to the branch name).
+# No secrets, no deploys, no real databases: PostgreSQL runs in throwaway containers with local passwords, as in
+# Application validation. Full layout: lint, tsc, vitest, visual and 16 Python shards = 20 jobs (the plan's limit).
+# See docs/ops/WORKBENCH-CI.md.
+on:
+  push:
+    branches:
+      - "wb-ci/**"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: workbench-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Not PG_*: the local sandbox guard (development/seed.py) refuses to run when any PG* variable is set.
+  POSTGRES_IMAGE: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      web: ${{ steps.plan.outputs.web }}
+      py: ${{ steps.plan.outputs.py }}
+      lint: ${{ steps.plan.outputs.lint }}
+      visual: ${{ steps.plan.outputs.visual }}
+      web_matrix: ${{ steps.plan.outputs.web_matrix }}
+      py_matrix: ${{ steps.plan.outputs.py_matrix }}
+      py_count_a: ${{ steps.plan.outputs.py_count_a }}
+      py_count_b: ${{ steps.plan.outputs.py_count_b }}
+      scope: ${{ steps.plan.outputs.scope }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - id: plan
+        run: python3 scripts/ci/wb_checks.py plan
+
+  lint:
+    needs: plan
+    if: needs.plan.outputs.lint == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - if: needs.plan.outputs.web == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - if: needs.plan.outputs.web == 'true'
+        name: Install locked Node dependencies
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
+      - if: needs.plan.outputs.web == 'true'
+        name: Restore the ESLint caches
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            apps/*/node_modules/.cache/eslint
+            packages/typescript/*/node_modules/.cache/eslint
+          key: wb-eslint-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: wb-eslint-${{ hashFiles('pnpm-lock.yaml') }}-
+      - if: needs.plan.outputs.py == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - if: needs.plan.outputs.py == 'true'
+        name: Install locked Python dependencies
+        run: python -m pip install --disable-pip-version-check uv==0.12.7 && uv sync --frozen
+      - name: Prettier, ESLint, ruff, mypy (and tsc in a full run) (${{ needs.plan.outputs.scope }})
+        run: python3 scripts/ci/wb_checks.py web --task lint
+
+  web:
+    needs: plan
+    if: needs.plan.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        task: ${{ fromJSON(needs.plan.outputs.web_matrix) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Install locked Node dependencies
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
+      - name: ${{ matrix.task }} (${{ needs.plan.outputs.scope }})
+        run: python3 scripts/ci/wb_checks.py web --task ${{ matrix.task }}
+
+  py-tests:
+    needs: plan
+    if: needs.plan.outputs.py == 'true'
+    name: py-tests (${{ matrix.fam }} ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 17
+      # Family a: test files that may need the codec/browser/native prerequisites; family b: the rest (no 60 s install).
+      matrix: ${{ fromJSON(needs.plan.outputs.py_matrix) }}
+    # Same databases, roles and environment as Application validation's Python test shards. PostgreSQL starts as
+    # plain containers in the first step so it boots while the toolchains install.
+    env:
+      AC_ENVIRONMENT: test
+      AC_RELEASE_ID: wb-ci-${{ github.sha }}
+      AC_DATABASE_URL: postgresql+psycopg://ac_runtime:local-runtime-only@localhost:5432/ac_platform
+      AC_DATABASE_MIGRATOR_URL: postgresql+psycopg://ac_migrator:local-migrator-only@localhost:5432/ac_platform
+      AC_TEST_DATABASE_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_local_sandbox
+      AC_OPERATIONS_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      AC_EXTERNAL_SIDE_EFFECTS_HOLD: "true"
+      AC_EMAIL_PROVIDER: fake
+      AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"
+    steps:
+      - name: Start PostgreSQL containers in the background (they pull and boot while the toolchains install)
+        run: |
+          ( docker run -d --name pg -e POSTGRES_DB=ac_platform -e POSTGRES_USER=ac_owner \
+              -e POSTGRES_PASSWORD=local-owner-only -p 5432:5432 "$POSTGRES_IMAGE" >/dev/null
+            docker run -d --name pg-recovery -e POSTGRES_DB=ac_local_sandbox -e POSTGRES_USER=ac_owner \
+              -e POSTGRES_PASSWORD=local-owner-only -p 127.0.0.1:55432:5432 "$POSTGRES_IMAGE" >/dev/null
+            echo done > "$RUNNER_TEMP/pg.started" ) > "$RUNNER_TEMP/pg.log" 2>&1 &
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install locked Python dependencies
+        run: python -m pip install --disable-pip-version-check uv==0.12.7 && uv sync --frozen
+      - name: This family's exclusion list (base exclusions plus the other family)
+        if: matrix.fam != 'targeted'
+        run: python3 scripts/ci/wb_checks.py py-family --fam ${{ matrix.fam }} --out "$RUNNER_TEMP/exclusions.txt"
+      - name: Restore Playwright browsers
+        if: matrix.fam != 'b'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.cache/ms-playwright
+          key: wb-playwright-${{ runner.os }}-${{ hashFiles('uv.lock', 'pnpm-lock.yaml') }}
+      - name: Start the prerequisites in the background (family b needs the codec too, not the browser)
+        run: |
+          # Database tests upload audio and the server measures it with ffprobe, so every family needs the codec.
+          what="codec filesystem browser"; [ "${{ matrix.fam }}" = b ] && what="codec filesystem"
+          ( uv run --frozen python scripts/ci/ci_prerequisites.py $what; echo $? > "$RUNNER_TEMP/prereq.rc" ) \
+            > "$RUNNER_TEMP/prereq.log" 2>&1 &
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Install locked Node dependencies in the background
+        run: |
+          corepack enable && corepack prepare pnpm@11.19.0 --activate
+          ( pnpm install --frozen-lockfile; echo $? > "$RUNNER_TEMP/pnpm.rc" ) > "$RUNNER_TEMP/pnpm.log" 2>&1 &
+      - name: Build verified AudioAtlas for conversation regressions
+        run: uv run python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
+      - name: Provision roles and apply the PostgreSQL migration chain
+        env:
+          PGPASSWORD: local-owner-only
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 120); do [ -f "$RUNNER_TEMP/pg.started" ] && break; sleep 1; done
+          cat "$RUNNER_TEMP/pg.log"
+          for name in pg pg-recovery; do
+            for _ in $(seq 1 60); do docker exec "$name" pg_isready -U ac_owner >/dev/null 2>&1 && break; sleep 1; done
+          done
+          psql --set ON_ERROR_STOP=1 --host localhost --username ac_owner --dbname ac_platform --file infra/local/postgres/init/001-roles.sql
+          uv run alembic upgrade head && uv run alembic check
+      - name: Wait for the Node dependencies
+        run: |
+          for _ in $(seq 1 300); do [ -f "$RUNNER_TEMP/pnpm.rc" ] && break; sleep 1; done
+          tail -5 "$RUNNER_TEMP/pnpm.log"
+          test "$(cat "$RUNNER_TEMP/pnpm.rc" 2>/dev/null)" = 0
+      - name: Wait for the prerequisites
+        run: |
+          for _ in $(seq 1 600); do [ -f "$RUNNER_TEMP/prereq.rc" ] && break; sleep 1; done
+          cat "$RUNNER_TEMP/prereq.log"
+          test "$(cat "$RUNNER_TEMP/prereq.rc" 2>/dev/null)" = 0
+      - name: Run Python tests (family ${{ matrix.fam }}, shard ${{ matrix.shard }} of ${{ matrix.count }})
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/python-test-shard-${{ matrix.shard }}"
+          mkdir -p "$out"
+          if [ "${{ matrix.fam }}" = targeted ]; then
+            mapfile -t tests < <(python3 -c 'import json; print("\n".join(json.load(open(".wb-ci/request.json"))["py_tests"]))')
+            uv run pytest -q --junitxml "$out/junit.xml" --basetemp "${RUNNER_TEMP}/wb-python-basetemp" "${tests[@]}"
+          else
+            uv run python scripts/ci/python_test_shard.py run \
+              --root "${GITHUB_WORKSPACE}" \
+              --duration-file scripts/ci/wb-python-durations.json \
+              --shard-index "${{ matrix.shard }}" \
+              --shard-count "${{ matrix.count }}" \
+              --exclude-file "$RUNNER_TEMP/exclusions.txt" \
+              --manifest "$out/manifest.json" \
+              --junitxml "$out/junit.xml" \
+              --basetemp "${RUNNER_TEMP}/wb-python-basetemp-${{ matrix.shard }}"
+          fi
+      - name: Keep the shard's manifest and JUnit report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-py-${{ matrix.fam }}-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/python-test-shard-${{ matrix.shard }}
+          if-no-files-found: warn
+          retention-days: 3
+
+  visual:
+    needs: plan
+    if: needs.plan.outputs.visual == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Install locked Node dependencies
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
+      - name: Restore Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.cache/ms-playwright
+          key: wb-playwright-node-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright Chromium
+        timeout-minutes: 4
+        run: pnpm exec playwright install --with-deps chromium --only-shell
+      - name: Screenshots at 390 and 1440, light and dark, fictional data only (${{ needs.plan.outputs.scope }})
+        timeout-minutes: 10
+        run: node scripts/ci/wb_screens.mjs "$RUNNER_TEMP/wb-screens" .wb-ci/request.json
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-screens
+          path: |
+            ${{ runner.temp }}/wb-screens/*.png
+            ${{ runner.temp }}/wb-screens/receipt.json
+          if-no-files-found: warn
+          retention-days: 3
+
+  summary:
+    needs: [plan, lint, web, py-tests, visual]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Download Python shard evidence
+        if: needs.py-tests.result != 'skipped' && !contains(needs.plan.outputs.py_matrix, 'targeted')
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: wb-py-*-${{ github.sha }}-*
+          path: ${{ runner.temp }}/wb-py
+          merge-multiple: false
+      - name: Verify every Python shard reported, family by family (the families partition the tests)
+        id: verify
+        if: needs.py-tests.result != 'skipped' && !contains(needs.plan.outputs.py_matrix, 'targeted')
+        env:
+          COUNT_A: ${{ needs.plan.outputs.py_count_a }}
+          COUNT_B: ${{ needs.plan.outputs.py_count_b }}
+        run: |
+          set -euo pipefail
+          for fam in a b; do
+            count=COUNT_${fam^^}
+            dir="$RUNNER_TEMP/verify-$fam"
+            mkdir -p "$dir"
+            for src in "$RUNNER_TEMP"/wb-py/wb-py-"$fam"-*; do
+              [ -d "$src" ] && mv "$src" "$dir/python-test-shard-${src##*/wb-py-$fam-}"
+            done
+            python3 scripts/ci/wb_checks.py py-family --fam "$fam" --out "$RUNNER_TEMP/exclusions-$fam.txt"
+            python3 scripts/ci/python_test_shard.py verify \
+              --root "${GITHUB_WORKSPACE}" \
+              --duration-file scripts/ci/wb-python-durations.json \
+              --shard-count "${!count}" \
+              --exclude-file "$RUNNER_TEMP/exclusions-$fam.txt" \
+              --manifest-dir "$dir" \
+              --sha "${{ github.sha }}" \
+              --run-attempt "${{ github.run_attempt }}"
+          done
+      - name: Results and artifact links
+        if: always()
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: python3 scripts/ci/wb_checks.py summary
+

@@ -22,6 +22,7 @@ import {
   type HumanCallOutcome,
 } from "../report-call-outcome-contract";
 import { GUEST, OUTCOME_RECORD } from "../report-copy";
+import { useReportLook } from "../report-settings";
 import { UnlockButton } from "../report-sections/shared";
 import { useCallOutcome } from "../report-outcome-context";
 import type { Line } from "../report-story-model";
@@ -544,6 +545,8 @@ export function OverviewScore({
   const { summary, score, stats, strength, improvement } = view.overview;
   const scoring = scoringNote(view.scoring);
   const band = score ? scoreBand(score.value) : null;
+  // A report settings version may hide scores; version 1 shows them.
+  const { scores } = useReportLook();
   return (
     <div className={styles.xr} data-xray-part="overview">
       <section
@@ -571,51 +574,55 @@ export function OverviewScore({
 
       <section
         className={`${styles.card} ${styles.scoreCard}`}
-        aria-label="Overall score"
+        aria-label={scores ? "Overall score" : "Call statistics"}
       >
-        <div
-          className={`${styles.score} ${band ? BAND_TONE[band] : styles.neutral}`}
-        >
-          <span className={styles.eyebrow}>
-            Overall Score{" "}
-            {view.illustrative ? (
-              <Illustrative />
-            ) : view.aiDraft && score ? (
-              <AiDraft />
-            ) : null}
-          </span>
-          {score ? (
-            <>
-              <span className={styles.scoreLine}>
-                <span className={styles.scoreValue}>{score.value}</span>
-                <span className={styles.scoreOf}>/100</span>
+        {scores ? (
+          <>
+            <div
+              className={`${styles.score} ${band ? BAND_TONE[band] : styles.neutral}`}
+            >
+              <span className={styles.eyebrow}>
+                Overall Score{" "}
+                {view.illustrative ? (
+                  <Illustrative />
+                ) : view.aiDraft && score ? (
+                  <AiDraft />
+                ) : null}
               </span>
-              <span className={`${styles.pill} ${styles.scoreBadge}`}>
-                {score.label}
-              </span>
-              <p className={styles.body}>{score.line}</p>
-            </>
-          ) : (
-            <>
-              <span className={styles.scoreLine}>
-                <span className={styles.scoreEmpty}>&ndash;</span>
-                <span className={styles.scoreOf}>/100</span>
-              </span>
-              <span className={`${styles.pill} ${styles.scoreBadge}`}>
-                {scoring.pending ? scoring.title : "Not scored yet"}
-              </span>
-              <p
-                className={styles.body}
-                role={scoring.pending ? "status" : undefined}
-              >
-                {scoring.pending
-                  ? scoring.body
-                  : "The score appears when this call’s pointers are evaluated."}
-              </p>
-            </>
-          )}
-        </div>
-        <hr className={styles.rule} />
+              {score ? (
+                <>
+                  <span className={styles.scoreLine}>
+                    <span className={styles.scoreValue}>{score.value}</span>
+                    <span className={styles.scoreOf}>/100</span>
+                  </span>
+                  <span className={`${styles.pill} ${styles.scoreBadge}`}>
+                    {score.label}
+                  </span>
+                  <p className={styles.body}>{score.line}</p>
+                </>
+              ) : (
+                <>
+                  <span className={styles.scoreLine}>
+                    <span className={styles.scoreEmpty}>&ndash;</span>
+                    <span className={styles.scoreOf}>/100</span>
+                  </span>
+                  <span className={`${styles.pill} ${styles.scoreBadge}`}>
+                    {scoring.pending ? scoring.title : "Not scored yet"}
+                  </span>
+                  <p
+                    className={styles.body}
+                    role={scoring.pending ? "status" : undefined}
+                  >
+                    {scoring.pending
+                      ? scoring.body
+                      : "The score appears when this call’s pointers are evaluated."}
+                  </p>
+                </>
+              )}
+            </div>
+            <hr className={styles.rule} />
+          </>
+        ) : null}
         <div className={styles.statsHead}>
           <h3 className={styles.cardTitle}>Call Statistics</h3>
           <button

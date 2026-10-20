@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const incoming = vi.hoisted(() => ({ value: new Headers() }));
+const api = vi.hoisted(() => ({
+  get: null as unknown as (...args: unknown[]) => Promise<unknown>,
+}));
 vi.mock("next/headers", () => ({ headers: async () => incoming.value }));
+vi.mock("./server-get", () => ({
+  serverGet: (...args: unknown[]) => api.get(...args),
+}));
 
 import {
   serverApiOrigin,
@@ -14,21 +20,27 @@ import { seededChoices } from "./standalone-studio";
 
 let network: ReturnType<typeof vi.fn>;
 
+/** One API answer, as server-get.ts gives it. */
+const json = (body: unknown, status = 200) => ({
+  status,
+  contentType: "application/json",
+  text: JSON.stringify(body),
+});
+
 beforeEach(() => {
   incoming.value = new Headers({
     cookie: "ac_session=opaque",
     host: "salesxray-dev.example.test",
   });
   network = vi.fn(async (url: string) =>
-    Response.json({ url }, { status: url.includes("/me/") ? 200 : 404 }),
+    json({ url }, url.includes("/me/") ? 200 : 404),
   );
-  vi.stubGlobal("fetch", network);
+  api.get = network as unknown as typeof api.get;
   vi.stubEnv("AC_CONVERSATION_API_ORIGIN", "http://127.0.0.1:8100");
   vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "");
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
 
@@ -63,16 +75,25 @@ it("asks the API as this request (its cookie and host), GET only, together", asy
     },
     "/v1/x/y": { status: 404, body: { url: "http://127.0.0.1:8100/v1/x/y" } },
   });
-  for (const [, init] of network.mock.calls)
-    expect(init).toMatchObject({
-      method: "GET",
-      cache: "no-store",
-      redirect: "error",
-      headers: {
-        cookie: "ac_session=opaque",
-        host: "salesxray-dev.example.test",
-      },
+  for (const [, sent, signal] of network.mock.calls) {
+    expect(sent).toEqual({
+      accept: "application/json",
+      cookie: "ac_session=opaque",
+      host: "salesxray-dev.example.test",
     });
+    expect(signal).toBeInstanceOf(AbortSignal);
+  }
+});
+
+it("keeps a failed or non-JSON read null, never the page", async () => {
+  network.mockImplementation(async (url: string) => {
+    if (url.endsWith("/a")) throw new Error("refused");
+    return { status: 200, contentType: "text/html", text: "<html>" };
+  });
+  expect(await serverReads(["/v1/a", "/v1/b"])).toEqual({
+    "/v1/a": null,
+    "/v1/b": { status: 200, body: null },
+  });
 });
 
 it("leaves reading to the browser without a session cookie, a sane host, an origin or a full page load", async () => {
@@ -121,7 +142,7 @@ it("starts the app ready only from a full, selected server session", async () =>
     ],
   };
   network.mockImplementation(async (url: string) =>
-    Response.json(url.endsWith(SESSION_PATHS[0]) ? identity : directory),
+    json(url.endsWith(SESSION_PATHS[0]) ? identity : directory),
   );
   const session = await serverSession();
   expect(seededChoices(session)).toMatchObject({
@@ -139,7 +160,7 @@ it("starts the app ready only from a full, selected server session", async () =>
   ).toBeNull();
   expect(seededChoices({ identity: { nope: 1 }, directory })).toBeNull();
   expect(seededChoices(null)).toBeNull();
-  network.mockImplementation(async () => new Response("{}", { status: 401 }));
+  network.mockImplementation(async () => json({}, 401));
   expect(await serverSession()).toBeNull();
 });
 

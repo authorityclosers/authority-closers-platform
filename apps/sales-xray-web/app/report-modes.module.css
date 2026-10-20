@@ -1519,3 +1519,93 @@
     white-space: nowrap;
   }
 }
+
+/* ---------- Design system v2 (20 Oct), phones ----------
+   Report, Prospect and Coaching are the top-level pages: one full-width
+   segmented control, the current page a raised capsule, as in the
+   computer's top bar. The Report's parts below it are tabs, an icon over a
+   short name, with a teal line under the current one, so the two rows never
+   read as the same kind of control. */
+@media (max-width: 760px) {
+  .navRow:not([data-placement="toolbar"]) .toolbar[data-labelled] {
+    flex: 1 1 100%;
+    gap: 2px;
+    padding: 3px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--sx-fill);
+  }
+  .navRow:not([data-placement="toolbar"]) .toolbar[data-labelled] > button {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    min-height: 36px;
+    margin: 0;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--report-muted);
+    transition:
+      background-color var(--sx-dur-fast) var(--sx-ease-out),
+      color var(--sx-dur-fast) var(--sx-ease-out),
+      box-shadow var(--sx-dur-fast) var(--sx-ease-out),
+      transform var(--sx-dur-fast) var(--sx-ease-out);
+  }
+  .navRow:not([data-placement="toolbar"])
+    .toolbar[data-labelled]
+    > button[aria-pressed="true"] {
+    background: var(--sx-elevated);
+    color: var(--report-ink);
+    box-shadow:
+      0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
+      0 0 0 0.5px var(--sx-hairline);
+  }
+  .navRow:not([data-placement="toolbar"])
+    .toolbar[data-labelled]
+    > button:active {
+    transform: scale(var(--sx-press-scale));
+  }
+}
+
+@media (max-width: 760px) and (pointer: coarse) {
+  .navRow:not([data-placement="toolbar"]) .toolbar[data-labelled] > button {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 540px) {
+  .workspace[data-view="story"]
+    .navRow:not([data-placement="toolbar"])
+    .contents {
+    padding: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .workspace[data-view="story"]
+    .navRow:not([data-placement="toolbar"])
+    .contents
+    a {
+    border-radius: 0;
+    transition:
+      color var(--sx-dur-fast) var(--sx-ease-out),
+      border-color var(--sx-dur-fast) var(--sx-ease-out);
+  }
+  .workspace[data-view="story"]
+    .navRow:not([data-placement="toolbar"])
+    .contents
+    a[aria-current="location"] {
+    background: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navRow:not([data-placement="toolbar"]) .toolbar[data-labelled] > button {
+    transition: none;
+  }
+  .navRow:not([data-placement="toolbar"])
+    .toolbar[data-labelled]
+    > button:active {
+    transform: none;
+  }
+}

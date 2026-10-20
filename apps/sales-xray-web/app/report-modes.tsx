@@ -36,7 +36,12 @@ import {
   FixtureCallOutcomeProvider,
 } from "./report-outcome-context";
 import { ReportReadingProvider } from "./report-reading-context";
-import { applyReportSettings, useReportSettings } from "./report-settings";
+import {
+  ReportLookContext,
+  applyReportSettings,
+  reportLook,
+  useReportSettings,
+} from "./report-settings";
 import styles from "./report-modes.module.css";
 import { TargetArrow } from "./xray-report/icons";
 import type { XrayView } from "./xray-report/model";
@@ -642,6 +647,10 @@ export function ReportModes({
   /** Told which view shows, so the page header can follow it (owner, 19 Oct). */
   onViewChange?: (view: View) => void;
 }) {
+  // This workspace's report settings version (Admin, 19 Oct 2026), read once
+  // per workspace; version 1, an older server or any failure is today's look.
+  const reportSettings = useReportSettings(!fixture);
+  const look = reportLook(reportSettings);
   const allStoryPanels =
     // A guest preview gets the Report too when the caller asks for pillars;
     // its locked items show as "more after you sign in".
@@ -650,6 +659,7 @@ export function ReportModes({
       ? xrayReportPanels(documentData, onSelectEvidence, {
           callId: boundCallId ?? null,
           illustration: fixture ? illustration : null,
+          look,
         })
       : [];
   // Owner 19 Oct: Prospect's Information is its own top tab, like Coaching.
@@ -677,9 +687,7 @@ export function ReportModes({
           },
         ]
       : [];
-  // The Report parts and tabs this workspace's report settings version shows
-  // (Admin, 19 Oct 2026). Version 1, an older server or any read failure shows all.
-  const reportSettings = useReportSettings(!fixture);
+  // The Report parts and tabs this version shows (all of them in version 1).
   const {
     story: storyPanels,
     prospect: prospectPanels,
@@ -1539,8 +1547,13 @@ export function ReportModes({
     </div>
   );
   // Fixtures keep the outcome in memory; a guest preview reads none.
+  const shown = (
+    <ReportLookContext.Provider value={look}>
+      {report}
+    </ReportLookContext.Provider>
+  );
   return fixture && !documentData?.report?.preview ? (
-    <FixtureCallOutcomeProvider>{report}</FixtureCallOutcomeProvider>
+    <FixtureCallOutcomeProvider>{shown}</FixtureCallOutcomeProvider>
   ) : (
     <CallOutcomeProvider
       callId={
@@ -1549,7 +1562,7 @@ export function ReportModes({
           : null
       }
     >
-      {report}
+      {shown}
     </CallOutcomeProvider>
   );
 }

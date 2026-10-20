@@ -45,10 +45,10 @@ it("names each page's first reads, exactly as the page asks for them", () => {
     `${A}/submissions/summary`,
     `${A}/activity`,
     `${A}/session`,
-    `${A}/submissions?include_owners=true&order=reports_first`,
+    `${A}/submissions?include_owners=true&order=reports_first&include_summary=true`,
   ]);
   expect(earlyReadsFor("/analysis/calls/")).toContain(
-    `${A}/submissions?include_owners=true&order=reports_first`,
+    `${A}/submissions?include_owners=true&order=reports_first&include_summary=true`,
   );
   const id = "0000000A-0000-4000-8000-000000000500";
   expect(earlyReadsFor(`/analysis/calls/${id}`)).toEqual([
@@ -56,6 +56,7 @@ it("names each page's first reads, exactly as the page asks for them", () => {
     "/v1/me/sales-xray-workspaces",
     `${A}/entry`,
     `${A}/session`,
+    `${A}/report-settings`,
     `${A}/submissions/${id.toLowerCase()}`,
     `${A}/submissions/${id.toLowerCase()}/transcript`,
     `${A}/submissions/${id.toLowerCase()}/report`,
@@ -117,7 +118,7 @@ it("keeps the server's headers on the answer it hands out", async () => {
   );
   boot("/analysis/calls");
   const response = await earlyFetch(
-    `${A}/submissions?include_owners=true&order=reports_first`,
+    `${A}/submissions?include_owners=true&order=reports_first&include_summary=true`,
   );
   expect(response.headers.get("x-request-id")).toBe("req-1");
   expect(response.headers.get("content-type")).toContain("application/json");
@@ -134,7 +135,7 @@ it("starts only the session reads until this tab has seen Sales Xray on", () => 
 
 it("answers the page's read from the early one, once", async () => {
   boot("/analysis/calls");
-  const url = `${A}/submissions?include_owners=true&order=reports_first`;
+  const url = `${A}/submissions?include_owners=true&order=reports_first&include_summary=true`;
   const first = await earlyFetch(url, { method: "GET" });
   expect(await first.json()).toEqual({ url });
   expect(network).toHaveBeenCalledTimes(3);
@@ -145,7 +146,7 @@ it("answers the page's read from the early one, once", async () => {
 
 it("keeps the answer for the next reader when the first is cancelled (double mount)", async () => {
   boot("/analysis/calls");
-  const url = `${A}/submissions?include_owners=true&order=reports_first`;
+  const url = `${A}/submissions?include_owners=true&order=reports_first&include_summary=true`;
   const cancelled = new AbortController();
   const read = earlyFetch(url, { signal: cancelled.signal });
   cancelled.abort();

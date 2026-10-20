@@ -120,18 +120,23 @@
   width: 100%;
   height: 36px;
   padding: 0 12px 0 36px;
-  background: var(--lx-paper-2);
-  border: 1px solid var(--lx-line);
+  /* Design system v2: a filled search field, like Calls. */
+  background: var(--sx-fill);
+  border: 1px solid transparent;
   border-radius: var(--lx-radius-pill);
   font-size: 13px;
   color: var(--lx-ink);
   outline: none;
-  transition: border-color var(--lx-dur-quick) var(--lx-ease-quick);
+  transition:
+    border-color var(--sx-dur-fast) var(--sx-ease-out),
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out);
 }
 
 .searchInput:focus {
   border-color: var(--lx-teal);
   background: var(--lx-surface);
+  box-shadow: 0 0 0 3px var(--lx-teal-soft);
 }
 
 .filterGroup {

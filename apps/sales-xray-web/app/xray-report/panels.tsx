@@ -9,6 +9,12 @@ import { Component, useMemo, type ReactNode } from "react";
 
 import { computeCallMetrics } from "../call-metrics";
 import type { DocumentReportData } from "../report-document-data";
+import {
+  VERSION_1_LOOK,
+  lookPointers,
+  useReportLook,
+  type ReportLook,
+} from "../report-settings";
 import { useStory, type Select } from "../report-sections/shared";
 import { TargetArrow } from "./icons";
 import {
@@ -193,7 +199,8 @@ function ProspectSection(props: PartProps) {
 
 function AnalysisProgress(props: PartProps) {
   const view = useXrayView(props.data, props.callId, props.illustration);
-  return <PointerProgress pointers={view.pointers} />;
+  const look = useReportLook();
+  return <PointerProgress pointers={lookPointers(view.pointers, look)} />;
 }
 
 function OutcomePart(props: PartProps) {
@@ -217,6 +224,8 @@ export function PartHead({
   aside?: ReactNode;
   headingId: string;
 }) {
+  // Guided (version 1) explains each part; compact and scorecard just name it.
+  const look = useReportLook();
   return (
     <header className={`${styles.xr} ${styles.partHead}`}>
       <div className={styles.head}>
@@ -229,7 +238,9 @@ export function PartHead({
           <h2 id={headingId} tabIndex={-1} className={styles.headTitle}>
             {number}. {title}
           </h2>
-          <p className={styles.headSub}>{summary}</p>
+          {look.style === "guided" ? (
+            <p className={styles.headSub}>{summary}</p>
+          ) : null}
         </div>
       </div>
       {aside}
@@ -240,9 +251,15 @@ export function PartHead({
 export function xrayReportPanels(
   data: DocumentReportData,
   onSelect?: Select,
-  options: { callId?: string | null; illustration?: XrayView | null } = {},
+  options: {
+    callId?: string | null;
+    illustration?: XrayView | null;
+    /** The report settings version's look (names and counts follow it). */
+    look?: ReportLook;
+  } = {},
 ): XrayPanel[] {
   if (!data.report) return [];
+  const look = options.look ?? VERSION_1_LOOK;
   const props: PartProps = {
     data,
     callId: options.callId ?? null,
@@ -252,7 +269,7 @@ export function xrayReportPanels(
   return [
     {
       id: "overview",
-      label: "Overview & Score",
+      label: look.scores ? "Overview & Score" : "Overview",
       compactLabel: "Overview",
       summary: "A quick snapshot of the call.",
       icon: <ChartNoAxesColumnIncreasing />,
@@ -266,7 +283,7 @@ export function xrayReportPanels(
       id: "analysis",
       label: "Detailed Call Analysis",
       compactLabel: "Analysis",
-      summary: `Analysis based on ${unscoredPointers().length} key sales conversation pointers. Expand each one to see detailed feedback, examples, and recommendations.`,
+      summary: `Analysis based on ${lookPointers(unscoredPointers(), look).length} key sales conversation pointers. Expand each one to see detailed feedback, examples, and recommendations.`,
       icon: <ListChecks />,
       aside: <AnalysisProgress {...props} />,
       content: (

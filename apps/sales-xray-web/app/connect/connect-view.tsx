@@ -2,12 +2,24 @@
 
 /**
  * "Connect to Sales X-Ray": the consent screen of Connect (OAuth 2.0 + PKCE).
- * An app sends an organisation's owner or admin here; Allow returns them to the
- * app with a one-time code, Cancel with access_denied. A wrong app or return
- * address is shown here and never redirected, so this page cannot bounce
- * people elsewhere.
+ * An organisation's own app is approved by its owner or admin for the whole
+ * organisation. A platform app (one that registered itself, or a first-party
+ * app such as Pulse) is approved by any signed-in person for their own account
+ * in the workspace they have open; it then sees what they see. Allow returns
+ * them to the app with a one-time code, Cancel with access_denied. A wrong app
+ * or return address is shown here and never redirected, so this page cannot
+ * bounce people elsewhere.
  */
-import { Building2, Check, Link2, ShieldCheck } from "lucide-react";
+import {
+  BadgeCheck,
+  Building2,
+  Check,
+  Link2,
+  ShieldAlert,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import styles from "./connect.module.css";
@@ -25,17 +37,42 @@ const FIELDS = [
 type Ask = Partial<Record<(typeof FIELDS)[number], string>>;
 
 type Consent = {
-  app: { name: string; client_id: string };
+  app: {
+    name: string;
+    client_id: string;
+    verified?: boolean;
+    maker?: string | null;
+    self_registered?: boolean;
+  };
+  reach?: "organisation" | "person";
   returns_to: string | null;
   organisation: { id: string; name: string };
+  workspace?: {
+    id: string;
+    kind: "personal" | "organisation";
+    name: string;
+    role: string | null;
+  };
   scopes: { key: string; label: string }[];
 };
 
 type View =
   | { kind: "loading" }
   | { kind: "ready"; consent: Consent }
-  | { kind: "problem"; title: string; text: string; organisation?: boolean }
+  | {
+      kind: "problem";
+      title: string;
+      text: string;
+      organisation?: boolean;
+      workspace?: boolean;
+    }
   | { kind: "leaving" };
+
+const ROLE: Record<string, string> = {
+  owner: "owner",
+  admin: "admin",
+  member: "member",
+};
 
 export function readAsk(search: string): Ask {
   const params = new URLSearchParams(search);
@@ -57,7 +94,8 @@ async function post(path: string, body: unknown) {
     body: JSON.stringify(body),
   });
   const data: unknown = await response.json().catch(() => null);
-  return { status: response.status, data };
+  const reach = response.headers.get("x-connect-reach");
+  return { status: response.status, data, reach };
 }
 
 const detail = (data: unknown) =>
@@ -78,7 +116,7 @@ export function ConnectView() {
   useEffect(() => {
     let live = true;
     post("/v1/oauth/authorize/check", ask).then(
-      ({ status, data }) => {
+      ({ status, data, reach }) => {
         if (!live) return;
         if (status === 401) {
           const back = `${window.location.pathname}${window.location.search}`;
@@ -86,7 +124,16 @@ export function ConnectView() {
           // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           window.location.assign(`/login?next=${encodeURIComponent(back)}`);
           setView({ kind: "leaving" });
-        } else if (status === 403)
+        } else if (status === 403 && reach === "person")
+          setView({
+            kind: "problem",
+            title: "Choose a workspace",
+            text:
+              detail(data) ??
+              "Open your Personal workspace or an organisation you belong to, then try again.",
+            workspace: true,
+          });
+        else if (status === 403)
           setView({
             kind: "problem",
             title: "Choose your organisation",
@@ -175,7 +222,14 @@ export function ConnectView() {
                 Open my organisation
               </a>
             ) : null}
+            {view.workspace ? (
+              <Link className={styles.primary} href="/">
+                Open Sales X-Ray
+              </Link>
+            ) : null}
           </>
+        ) : view.consent.reach === "person" ? (
+          <PersonConsent consent={view.consent} busy={busy} decide={decide} />
         ) : (
           <>
             <span className={styles.icon} aria-hidden="true">
@@ -228,5 +282,91 @@ export function ConnectView() {
         )}
       </section>
     </main>
+  );
+}
+
+/** A platform app connects one person's account: it sees what they see. */
+function PersonConsent({
+  consent,
+  busy,
+  decide,
+}: {
+  consent: Consent;
+  busy: boolean;
+  decide: (approve: boolean) => void;
+}) {
+  const { app, workspace } = consent;
+  const personal = workspace?.kind === "personal";
+  const role = workspace?.role ? ROLE[workspace.role] : null;
+  return (
+    <>
+      <span className={styles.icon} aria-hidden="true">
+        <ShieldCheck size={20} />
+      </span>
+      <h1>
+        Connect <b>{app.name}</b> to your Sales X-Ray account?
+      </h1>
+      {app.verified && app.maker ? (
+        <p className={styles.verified}>
+          <BadgeCheck size={14} aria-hidden="true" />
+          Made by {app.maker}
+        </p>
+      ) : (
+        <p className={styles.caution}>
+          <ShieldAlert size={14} aria-hidden="true" />
+          <span>
+            Sales X-Ray hasn&apos;t checked this app. Allow it only if you trust{" "}
+            <b>{consent.returns_to ?? "it"}</b>.
+          </span>
+        </p>
+      )}
+      <p className={styles.org}>
+        {personal ? (
+          <UserRound size={14} aria-hidden="true" />
+        ) : (
+          <Building2 size={14} aria-hidden="true" />
+        )}
+        {workspace?.name ?? consent.organisation.name}
+        {role ? <span className={styles.role}>· {role}</span> : null}
+      </p>
+      <p className={styles.text}>
+        It will see what you see in this workspace, and be able to:
+      </p>
+      <ul className={styles.scopes}>
+        {consent.scopes.map((scope) => (
+          <li key={scope.key}>
+            <Check size={14} aria-hidden="true" />
+            {scope.label}
+          </li>
+        ))}
+      </ul>
+      <p className={styles.small}>
+        You can disconnect it any time from {app.name}.
+        {consent.returns_to ? (
+          <>
+            {" "}
+            You will go back to <b>{consent.returns_to}</b>.
+          </>
+        ) : null}
+      </p>
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.secondary}
+          disabled={busy}
+          onClick={() => decide(false)}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={styles.primary}
+          disabled={busy}
+          onClick={() => decide(true)}
+        >
+          Allow
+        </button>
+      </div>
+    </>
   );
 }

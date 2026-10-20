@@ -20,7 +20,7 @@ import { DisplayDatesProvider } from "./display-clock";
 import { serverDisplayDates, serverSession } from "./server-reads";
 import { NoticeCenter } from "./notice-center";
 export const metadata: Metadata = {
-  title: "Dipak’s Sales Xray · Authority Closers",
+  title: "Sales Xray · Authority Closers",
   description:
     "Review the conversation. Understand the evidence. Practice with purpose.",
   robots: { index: false, follow: false },
@@ -37,7 +37,7 @@ export const viewport: Viewport = {
   interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f4f6fb" },
-    { media: "(prefers-color-scheme: dark)", color: "#060a14" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0c0e" },
   ],
 };
 export default async function Layout({

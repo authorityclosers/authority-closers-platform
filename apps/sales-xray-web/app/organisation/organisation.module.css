@@ -955,25 +955,27 @@
   outline: none;
 }
 
-.confirm {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--lx-teal-edge);
-  background: var(--lx-teal-tint);
-}
-
-.confirm p {
-  min-width: 0;
-  font-weight: 600;
+/* The member-change confirmation (a kit Sheet): the question, then Cancel
+   and the verb, side by side across the sheet on phones. */
+.confirmMessage {
+  margin: 18px 4px 6px;
+  color: var(--lx-ink);
+  font: var(--sx-text-headline);
+  overflow-wrap: anywhere;
 }
 
 .confirmActions {
   display: flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
   gap: 8px;
+}
+
+@media (max-width: 899px) {
+  .confirmActions > button {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
 }
 
 .memberHead,

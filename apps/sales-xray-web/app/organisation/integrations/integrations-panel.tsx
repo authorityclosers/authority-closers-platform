@@ -15,7 +15,7 @@ import {
   Send,
   Webhook as WebhookIcon,
 } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { notify } from "../../notice-center";
 import {
@@ -283,9 +283,11 @@ function NewKeyDialog({
 function KeysSection({
   data,
   onChange,
+  onKeyMade,
 }: {
   data: Integrations;
   onChange: (keys: ApiKey[]) => void;
+  onKeyMade?: (key: string) => void;
 }) {
   const [creating, setCreating] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
@@ -313,50 +315,58 @@ function KeysSection({
         </p>
       ) : null}
       {data.keys.length ? (
-        <Table label="API keys">
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Key</th>
-              <th scope="col">Permissions</th>
-              <th scope="col">Last used</th>
-              <th scope="col">Expires</th>
-              <th scope="col">State</th>
-              <th scope="col">
-                <span className={styles.hidden}>Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.keys.map((key) => (
-              <tr key={key.id}>
-                <th scope="row">{key.name}</th>
-                <td>
-                  <code>{key.prefix}…</code>
-                </td>
-                <td>{key.scopes.map(label).join(", ")}</td>
-                <td>{key.lastUsedAt ? when(key.lastUsedAt) : "Never"}</td>
-                <td>{key.expiresAt ? when(key.expiresAt) : "Never"}</td>
-                <td>
-                  <Badge tone={STATE_TONE[key.state]}>
-                    {key.state === "active"
-                      ? "Active"
-                      : key.state === "expired"
-                        ? "Expired"
-                        : "Revoked"}
-                  </Badge>
-                </td>
-                <td>
-                  {key.state === "active" ? (
-                    <Button variant="ghost" onClick={() => setRevoking(key)}>
-                      Revoke
-                    </Button>
-                  ) : null}
-                </td>
+        <div className={styles.keysTable}>
+          <Table label="API keys">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Key</th>
+                <th scope="col">Permissions</th>
+                <th scope="col">Last used</th>
+                <th scope="col">Expires</th>
+                <th scope="col">State</th>
+                <th scope="col">
+                  <span className={styles.hidden}>Actions</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </Table>
+            </thead>
+            <tbody>
+              {data.keys.map((key) => (
+                <tr key={key.id}>
+                  <th scope="row">{key.name}</th>
+                  <td data-label="Key">
+                    <code>{key.prefix}…</code>
+                  </td>
+                  <td data-label="Permissions">
+                    {key.scopes.map(label).join(", ")}
+                  </td>
+                  <td data-label="Last used">
+                    {key.lastUsedAt ? when(key.lastUsedAt) : "Never"}
+                  </td>
+                  <td data-label="Expires">
+                    {key.expiresAt ? when(key.expiresAt) : "Never"}
+                  </td>
+                  <td data-label="State">
+                    <Badge tone={STATE_TONE[key.state]}>
+                      {key.state === "active"
+                        ? "Active"
+                        : key.state === "expired"
+                          ? "Expired"
+                          : "Revoked"}
+                    </Badge>
+                  </td>
+                  <td>
+                    {key.state === "active" ? (
+                      <Button variant="ghost" onClick={() => setRevoking(key)}>
+                        Revoke
+                      </Button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
       ) : (
         <Empty
           icon={KeyRound}
@@ -373,6 +383,7 @@ function KeysSection({
           setCreating(false);
           onChange([key, ...data.keys]);
           setSecret(made);
+          onKeyMade?.(made);
         }}
       />
       <SecretOnce
@@ -1207,61 +1218,170 @@ function AppsSection({
   );
 }
 
-export function IntegrationsPanel() {
+/** The parts Settings shows in its own sections (20 Oct): apps, AI replies, developers. */
+export type IntegrationPart =
+  | "whatsapp"
+  | "social"
+  | "ai"
+  | "keys"
+  | "webhook"
+  | "handover"
+  | "apps";
+const ALL_PARTS: readonly IntegrationPart[] = [
+  "whatsapp",
+  "social",
+  "ai",
+  "keys",
+  "webhook",
+  "handover",
+  "apps",
+];
+const DEVELOPER_PARTS: ReadonlySet<IntegrationPart> = new Set([
+  "keys",
+  "webhook",
+  "handover",
+  "apps",
+]);
+
+export type IntegrationsPanelOptions = {
+  /** Shown right after a part (Settings → Developers: Try it after the keys). */
+  extras?: Partial<Record<IntegrationPart, ReactNode>>;
+  /** A new key, the moment it is made; the caller keeps it in memory only. */
+  onKeyMade?: (key: string) => void;
+  /** Changed by the caller to read again (a key was just used). */
+  refresh?: number;
+};
+
+export function IntegrationsPanel({
+  parts = ALL_PARTS,
+  extras,
+  onKeyMade,
+  refresh = 0,
+}: {
+  parts?: readonly IntegrationPart[];
+} & IntegrationsPanelOptions) {
   const [data, setData] = useState<Integrations | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // Keys, the webhook, hand-over and apps share one read; the rest read their own.
+  const needsData = parts.some((part) => DEVELOPER_PARTS.has(part));
+  // Read again when asked (a key was just used) and when the page is back in
+  // view (at most every 15 s), so "Last used" is current. A later read that
+  // fails keeps what is shown and says nothing.
+  const shown = useRef(false);
   useEffect(() => {
+    if (!needsData) return;
     const controller = new AbortController();
     readIntegrations(controller.signal).then(
       (value) => {
+        shown.current = true;
         setData(value);
         setFailed(false);
       },
       (error: unknown) => {
+        if (shown.current || controller.signal.aborted) return;
         problem(error, "Integrations did not load");
         setFailed(true);
       },
     );
     return () => controller.abort();
-  }, [attempt]);
-  if (failed && !data)
+  }, [attempt, needsData, refresh]);
+  useEffect(() => {
+    if (!needsData) return;
+    let last = Date.now();
+    const again = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - last < 15_000) return;
+      last = Date.now();
+      setAttempt((n) => n + 1);
+    };
+    window.addEventListener("focus", again);
+    document.addEventListener("visibilitychange", again);
+    return () => {
+      window.removeEventListener("focus", again);
+      document.removeEventListener("visibilitychange", again);
+    };
+  }, [needsData]);
+  const shows = (part: IntegrationPart) => parts.includes(part);
+  const own = (
+    <>
+      {shows("whatsapp") ? (
+        <>
+          <WhatsAppSettings />
+          {extras?.whatsapp}
+        </>
+      ) : null}
+      {shows("social") ? (
+        <>
+          <SocialSettings />
+          {extras?.social}
+        </>
+      ) : null}
+      {shows("ai") ? (
+        <>
+          <AiRepliesSettings />
+          {extras?.ai}
+        </>
+      ) : null}
+    </>
+  );
+  if (needsData && failed && !data)
     return (
-      <Empty
-        icon={KeyRound}
-        title="Integrations did not load"
-        action={{ onClick: () => setAttempt((n) => n + 1), label: "Try again" }}
-      />
+      <div className={styles.stack}>
+        {own}
+        <Empty
+          icon={KeyRound}
+          title="Integrations did not load"
+          action={{
+            onClick: () => setAttempt((n) => n + 1),
+            label: "Try again",
+          }}
+        />
+      </div>
     );
-  if (!data)
+  if (needsData && !data)
     return (
-      <div className={styles.skeletons} aria-busy="true">
-        <Skeleton height={120} />
-        <Skeleton height={160} />
+      <div className={styles.stack}>
+        {own}
+        <div className={styles.skeletons} aria-busy="true">
+          <Skeleton height={120} />
+          <Skeleton height={160} />
+        </div>
       </div>
     );
   return (
     <div className={styles.stack}>
-      <WhatsAppSettings />
-      <SocialSettings />
-      <AiRepliesSettings />
-      <KeysSection
-        data={data}
-        onChange={(keys) => setData({ ...data, keys })}
-      />
-      <WebhookSection
-        data={data}
-        onChange={(webhook) => setData({ ...data, webhook })}
-      />
-      <HandoverSection
-        data={data}
-        onChange={(handover) => setData({ ...data, handover })}
-      />
-      <AppsSection
-        data={data}
-        onApps={(apps) => setData({ ...data, apps })}
-        onConnections={(connections) => setData({ ...data, connections })}
-      />
+      {own}
+      {data && shows("keys") ? (
+        <KeysSection
+          data={data}
+          onKeyMade={onKeyMade}
+          onChange={(keys) => setData({ ...data, keys })}
+        />
+      ) : null}
+      {data && shows("keys") ? extras?.keys : null}
+      {data && shows("webhook") ? (
+        <WebhookSection
+          data={data}
+          onChange={(webhook) => setData({ ...data, webhook })}
+        />
+      ) : null}
+      {data && shows("webhook") ? extras?.webhook : null}
+      {data && shows("handover") ? (
+        <HandoverSection
+          data={data}
+          onChange={(handover) => setData({ ...data, handover })}
+        />
+      ) : null}
+      {data && shows("handover") ? extras?.handover : null}
+      {data && shows("apps") ? (
+        <AppsSection
+          data={data}
+          onApps={(apps) => setData({ ...data, apps })}
+          onConnections={(connections) => setData({ ...data, connections })}
+        />
+      ) : null}
+      {data && shows("apps") ? extras?.apps : null}
     </div>
   );
 }

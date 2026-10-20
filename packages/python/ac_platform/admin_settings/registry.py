@@ -28,6 +28,8 @@ ANALYSIS = "/v1/admin/conversation/analysis-settings"
 CALL_DATA = "/v1/admin/call-data"
 CALL_DATA_SAVE = "/v1/admin/call-data/settings"
 PROVIDERS = "/v1/admin/conversation/providers"
+LEAD_DESK_AI = "/v1/admin/lead-desk-ai"
+LEAD_DESK_AI_SAVE = "/v1/admin/lead-desk-ai/settings"
 
 # Templates in a write body: the new value, the revision read with it, the reason the
 # person gave, and (for a merge) the document read with the one field set.
@@ -82,6 +84,7 @@ AREAS: tuple[dict[str, str], ...] = (
     {"key": "execution", "title": "Running and AI budget", "page": "/sales-xray/execution"},
     {"key": "analysis", "title": "Analysis engine", "page": "/sales-xray/analysis"},
     {"key": "call-data", "title": "Call data engine", "page": "/sales-xray/call-data"},
+    {"key": "lead-desk-ai", "title": "AI replies to leads", "page": "/settings#lead-desk-ai"},
     {"key": "providers", "title": "AI providers and models", "page": "/sales-xray/providers"},
     {"key": "review", "title": "Review pipelines", "page": "/settings/review-pipelines"},
     {"key": "report", "title": "Report versions", "page": "/sales-xray/report-settings"},
@@ -117,6 +120,25 @@ def _call_data(pipeline: str, key: str, label: str, kind: Kind, **bounds: Any) -
             {"expected_revision": REVISION, "config": MERGED},
             idempotency_key=False,
             merge=Merge("/config", (pipeline, key)),
+        ),
+        **bounds,
+    )
+
+
+def _lead_desk_ai(key: str, label: str, kind: Kind, **bounds: Any) -> Setting:
+    """AI replies to lead messages: the Lead Desk's own switch, model and cap (20 Oct)."""
+    return Setting(
+        id=f"lead_desk_ai.{key}",
+        area="lead-desk-ai",
+        label=label,
+        kind=kind,
+        read=Read(LEAD_DESK_AI, f"/config/{key}", revision="/revision"),
+        write=Write(
+            "PUT",
+            LEAD_DESK_AI_SAVE,
+            {"expected_revision": REVISION, "config": MERGED},
+            idempotency_key=False,
+            merge=Merge("/config", (key,)),
         ),
         **bounds,
     )
@@ -237,6 +259,21 @@ SETTINGS: tuple[Setting, ...] = (
                 maximum=120,
             ),
         )
+    ),
+    _lead_desk_ai(
+        "enabled",
+        "AI replies to lead messages",
+        "bool",
+        labels=ON_OFF,
+        help="Lead messages go to the AI provider only while this is on, in this environment.",
+    ),
+    _lead_desk_ai("model", "AI replies: model", "enum", options_from=MODEL_MENU),
+    _lead_desk_ai("cap_inr", "AI replies: cap (₹)", "int", minimum=0, maximum=50_000),
+    _lead_desk_ai(
+        "period",
+        "AI replies: cap counted",
+        "enum",
+        options=(("daily", "Each day"), ("monthly", "Each month"), ("lifetime", "In total")),
     ),
     Setting(
         id="providers.paid_allowed",

@@ -573,3 +573,100 @@
     text-align: left;
   }
 }
+
+/* One organisation and one feature: two dropdowns and a button. */
+.scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  font-size: var(--sx-text-sm);
+}
+
+.scope label {
+  display: grid;
+  gap: 4px;
+  min-width: min(100%, 240px);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.scope select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: 8px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.scopeButton {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.scopeNow {
+  align-self: center;
+  color: var(--sx-ink-2);
+}
+
+.plain {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 14px 0 30px;
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+/* A provider's mark: initials on a colour of its own (no brand artwork). */
+.route {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mark {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.mark[data-provider="gemini"] {
+  background: color-mix(in oklab, var(--sx-accent) 22%, transparent);
+  color: var(--sx-accent);
+}
+
+.mark[data-provider="elevenlabs"] {
+  background: var(--sx-ink);
+  color: var(--sx-surface);
+}
+
+.mark[data-provider="openai"] {
+  background: color-mix(in oklab, var(--sx-good) 22%, transparent);
+  color: var(--sx-good);
+}
+
+.mark[data-provider="sarvam"] {
+  background: color-mix(in oklab, var(--sx-warn) 24%, transparent);
+  color: var(--sx-ink);
+}

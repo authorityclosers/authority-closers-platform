@@ -3,8 +3,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: router.replace,
+    prefetch: vi.fn(),
+  }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/dashboard",
 }));
@@ -44,6 +49,7 @@ vi.mock("next/link", () => ({
 }));
 
 import { SettingsDialogHost } from "./settings-dialog";
+import { AccountSettings } from "./account-settings";
 import { ProfileMenu } from "./profile-menu";
 import { invalidateShellProfile } from "./shell/profile-store";
 import { closeSettings, openSettings } from "./settings-open";
@@ -69,18 +75,6 @@ function json(body: unknown, status = 200) {
 async function flush() {
   await act(async () => {
     for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    if (host.querySelector("dialog"))
-      await vi.waitFor(
-        () => {
-          const dialog = host.querySelector("dialog");
-          expect(
-            dialog === null ||
-              dialog.querySelector('[role="tab"][aria-selected="true"]') !==
-                null,
-          ).toBe(true);
-        },
-        { timeout: 3000 },
-      );
   });
 }
 
@@ -88,6 +82,7 @@ async function render(
   authenticated: boolean,
   personId: string | null = "p",
   withProfileMenu = false,
+  withHelp = false,
 ) {
   await act(async () =>
     root.render(
@@ -107,6 +102,7 @@ async function render(
             <ProfileMenu authenticated={authenticated} accountHref="/account" />
           ) : null}
           <SettingsDialogHost />
+          {withHelp ? <AccountSettings only={["help"]} /> : null}
         </WorkspaceAccessProvider>
       </UploadSessionProvider>,
     ),
@@ -115,6 +111,7 @@ async function render(
 }
 
 beforeEach(() => {
+  router.replace.mockReset();
   localStorage.clear();
   window.history.replaceState(null, "", "/dashboard");
   host = document.createElement("div");
@@ -144,59 +141,72 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("floats settings over the current page and closes back to it", async () => {
+it("opens each section of Settings in place of the entry that opened it", async () => {
   await render(true);
-  expect(host.querySelector("dialog")).toBeNull();
   await act(async () => openSettings("profile"));
   await flush();
-  const dialog = host.querySelector("dialog")!;
-  expect(dialog).not.toBeNull();
-  expect(window.location.pathname).toBe("/dashboard");
-  expect(window.location.hash).toBe("#settings/profile");
-  expect(
-    dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
-  ).toContain("Profile");
-  expect(dialog.textContent).toContain("Asha Rao");
-  await act(async () => closeSettings("replace"));
+  expect(router.replace).toHaveBeenLastCalledWith("/settings/profile");
+  await act(async () => openSettings("billing"));
   await flush();
+  expect(router.replace).toHaveBeenLastCalledWith("/settings/plan");
+  await act(async () => openSettings());
+  await flush();
+  expect(router.replace).toHaveBeenLastCalledWith("/settings");
   expect(host.querySelector("dialog")).toBeNull();
-  expect(window.location.hash).toBe("");
+  await act(async () => closeSettings("replace"));
 });
 
-it("never opens account settings for a signed-out visitor", async () => {
+it("follows an old #settings link to its section", async () => {
+  window.history.replaceState(null, "", "/dashboard#settings/security");
+  await render(true);
+  expect(router.replace).toHaveBeenLastCalledWith("/settings/security");
+});
+
+it("keeps a sign-in provider's way back when it follows an old link", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/?connect_error=in_use&other=1#settings/security",
+  );
+  await render(true);
+  expect(router.replace).toHaveBeenLastCalledWith(
+    "/settings/security?connect_error=in_use",
+  );
+});
+
+it("never sends a signed-out visitor to Settings", async () => {
   await render(false);
   await act(async () => openSettings());
   await flush();
-  expect(host.querySelector("dialog")).toBeNull();
+  expect(router.replace).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
 });
 
-it("restarts the dismissed guide from Help and closes Settings so it can be seen", async () => {
+it("restarts the dismissed guide from Help & support", async () => {
   new GuideProgressStore("p", FIRST_CALL_GUIDE).update({
     stepId: "moments",
     status: "skipped",
   });
-  await render(true);
-  await act(async () => openSettings("help"));
-  await flush();
+  await render(true, "p", false, true);
   const toggle = host.querySelector<HTMLButtonElement>(
     '[role="switch"][aria-label="First call guide"]',
   )!;
   expect(toggle.getAttribute("aria-checked")).toBe("false");
+  // One pane inside a Settings section: the section's title names it, so
+  // the pane draws no second title.
+  expect(
+    host.querySelector('section[aria-label="Help & support"] h2'),
+  ).toBeNull();
   await act(async () => toggle.click());
   await flush();
-  expect(host.querySelector("dialog")).toBeNull();
-  expect(window.location.hash).toBe("");
   expect(new GuideProgressStore("p", FIRST_CALL_GUIDE).getSnapshot()).toEqual({
     stepId: "welcome",
     status: "active",
   });
 });
 
-it("keeps Help open when switching the guide off, remembers it, and isolates accounts", async () => {
-  await render(true);
-  await act(async () => openSettings("help"));
-  await flush();
+it("switches the guide off, remembers it, and isolates accounts", async () => {
+  await render(true, "p", false, true);
   const getToggle = () =>
     host.querySelector<HTMLButtonElement>(
       '[role="switch"][aria-label="First call guide"]',
@@ -205,70 +215,21 @@ it("keeps Help open when switching the guide off, remembers it, and isolates acc
   await act(async () => getToggle().click());
   await flush();
   expect(getToggle().getAttribute("aria-checked")).toBe("false");
-  expect(host.querySelector("dialog")).not.toBeNull();
-  await act(async () => closeSettings("replace"));
-  await act(async () => openSettings("help"));
-  await flush();
-  expect(getToggle().getAttribute("aria-checked")).toBe("false");
-  await render(true, "q");
+  await render(true, "q", false, true);
   expect(getToggle().getAttribute("aria-checked")).toBe("true");
-  await render(true, "p");
+  await render(true, "p", false, true);
   expect(getToggle().getAttribute("aria-checked")).toBe("false");
 });
 
 it("hides the guide switch until the signed-in account identity is known", async () => {
-  await render(true, null);
-  await act(async () => openSettings("help"));
-  await flush();
-  expect(host.querySelector("dialog")).not.toBeNull();
+  await render(true, null, false, true);
   expect(host.querySelector('[aria-label="First call guide"]')).toBeNull();
   expect(
     host.querySelector('#account-pane-help a[href^="mailto:"]'),
   ).not.toBeNull();
 });
 
-it("replaces the settings entry with an internal destination", async () => {
-  await render(true);
-  const initialLength = window.history.length;
-  await act(async () => openSettings("usage"));
-  await flush();
-  expect(window.history.length).toBe(initialLength + 1);
-  const link = host.querySelector<HTMLAnchorElement>('a[href="/dashboard"]')!;
-  await act(async () => link.click());
-  await flush();
-  expect(window.location.pathname).toBe("/dashboard");
-  expect(window.location.hash).toBe("");
-  expect(window.history.length).toBe(initialLength + 1);
-  expect(host.querySelector("dialog")).toBeNull();
-});
-
-it.each(["ctrl", "meta", "shift", "blank", "download"])(
-  "preserves the open settings entry for a %s link click",
-  async (kind) => {
-    await render(true);
-    await act(async () => openSettings("usage"));
-    await flush();
-    const link = host.querySelector<HTMLAnchorElement>('a[href="/dashboard"]')!;
-    if (kind === "blank") link.target = "_blank";
-    if (kind === "download") link.download = "report";
-    await act(async () =>
-      link.dispatchEvent(
-        new MouseEvent("click", {
-          bubbles: true,
-          cancelable: true,
-          ctrlKey: kind === "ctrl",
-          metaKey: kind === "meta",
-          shiftKey: kind === "shift",
-        }),
-      ),
-    );
-    expect(window.location.pathname).toBe("/dashboard");
-    expect(window.location.hash).toBe("#settings/usage");
-    expect(host.querySelector("dialog")).not.toBeNull();
-  },
-);
-
-it("opens Profile from the pop-up without leaving the current call and returns focus", async () => {
+it("opens Profile from the pop-up in Settings", async () => {
   invalidateShellProfile();
   window.history.replaceState(
     null,
@@ -283,24 +244,9 @@ it("opens Profile from the pop-up without leaving the current call and returns f
   const profileLink = host.querySelector<HTMLAnchorElement>(
     '[aria-label="Profile actions"] a[href="/account#profile"]',
   )!;
-  profileLink.focus();
   await act(async () => profileLink.click());
   await flush();
   expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
-  expect(window.location.pathname + window.location.search).toBe(
-    "/analysis/calls/fictional-call?view=report",
-  );
-  expect(window.location.hash).toBe("#settings/profile");
-  const dialog = host.querySelector("dialog")!;
-  expect(
-    dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
-  ).toContain("Profile");
-  expect(dialog.querySelector("#account-pane-profile")?.textContent).toContain(
-    "asha@example.invalid",
-  );
-  await act(async () => closeSettings("replace"));
-  await flush();
-  expect(host.querySelector("dialog")).toBeNull();
-  expect(document.activeElement).toBe(trigger);
+  expect(router.replace).toHaveBeenLastCalledWith("/settings/profile");
   invalidateShellProfile();
 });

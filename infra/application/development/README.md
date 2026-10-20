@@ -416,3 +416,24 @@ The [AUT-1156 released-runner runbook](../../../docs/evidence/20261005_AUT1156_B
 specifies Root installation, the immutable API executable, dev network and
 input boundaries, access-manager prerequisites, preview/apply and rollback.
 Actual fixture application stays on [AUT-959](/AUT/issues/AUT-959).
+
+## Admin dev server watchdog (acdev user units)
+
+`acdev-admin-dev-watchdog.sh` probes `http://127.0.0.1:3028/login` (Host
+`admin-dev.authorityclosers.com`) every 30 seconds from acdev's user timer. A
+5xx, no answer or a 20-second timeout starts a "bad since" clock in
+`~/.local/state/acdev-admin-dev-watchdog/`; a good answer clears it. Two minutes
+bad restarts `acdev-admin-dev.service`, at most once every five minutes, with
+one journal line. It was added after Turbopack hung compiling a new route on
+20 Oct 2026 and every page failed until a manual restart. These are acdev's own
+user units, not system services: no Root step.
+
+Install or update, as acdev:
+
+```bash
+install -m 755 infra/application/development/acdev-admin-dev-watchdog.sh ~/.local/bin/acdev-admin-dev-watchdog
+install -m 644 infra/application/development/acdev-admin-dev-watchdog.service infra/application/development/acdev-admin-dev-watchdog.timer ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now acdev-admin-dev-watchdog.timer
+```
+
+Watch it with `journalctl --user -u acdev-admin-dev-watchdog.service`.

@@ -5,7 +5,7 @@
  * score, weakest first. Internal reads of AI output, never an official score.
  */
 import { Meter, Panel, Table, Why } from "../ui/kit";
-import type { AnalysisInsights, Said } from "./analysis-data";
+import type { AnalysisInsights, Said, SkillScore } from "./analysis-data";
 import styles from "./analysis-panels.module.css";
 
 const SAID_TITLE: Record<keyof AnalysisInsights["said"], string> = {
@@ -14,6 +14,9 @@ const SAID_TITLE: Record<keyof AnalysisInsights["said"], string> = {
   pains: "Pains",
   goals: "Goals",
 };
+
+export const SKILL_WHY =
+  "Each call's newest AI pointer review: the average score per skill and how often it was not marked good. The reports' own skill states mark every skill observed, which says nothing about quality.";
 
 const COMMITMENT_LABEL: Record<string, string> = {
   next_step: "Next step agreed",
@@ -51,7 +54,53 @@ function SaidList({ title, items }: { title: string; items: Said[] }) {
   );
 }
 
-export function AnalysisPanels({ data }: { data: AnalysisInsights }) {
+/** Each skill's AI pointer score, weakest first: the table, or a line when none. */
+export function SkillScores({ skills }: { skills: readonly SkillScore[] }) {
+  return skills.length ? (
+    <Table label="Skill scores">
+      <thead>
+        <tr>
+          <th scope="col">Skill</th>
+          <th scope="col">Average</th>
+          <th scope="col" data-num="">
+            Needs work
+          </th>
+          <th scope="col" data-num="">
+            Calls
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {skills.map((skill) => (
+          <tr key={skill.label}>
+            <th scope="row">{skill.label}</th>
+            <td className={styles.score}>
+              <Meter
+                value={skill.average}
+                max={100}
+                label={`${skill.label}: ${skill.average} of 100`}
+              />
+              <span>{skill.average}</span>
+            </td>
+            <td data-num="">{Math.round(skill.needsWorkShare * 100)}%</td>
+            <td data-num="">{skill.calls}</td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  ) : (
+    <p className={styles.none}>No AI pointer reviews in this window yet.</p>
+  );
+}
+
+export function AnalysisPanels({
+  data,
+  skillsShown = false,
+}: {
+  data: AnalysisInsights;
+  /** The company view already shows the skill scores in its own Skills panel. */
+  skillsShown?: boolean;
+}) {
   const readings = Object.entries(data.readings).filter(
     ([, items]) => items.length,
   );
@@ -77,53 +126,15 @@ export function AnalysisPanels({ data }: { data: AnalysisInsights }) {
         </div>
       </Panel>
       <div className={styles.pair}>
-        <Panel
-          title="Skill scores"
-          sub={`AI pointer review · ${data.callsScored} calls scored · weakest first`}
-          tools={
-            <Why detail="Each call's newest AI pointer review: the average score per skill and how often it was not marked good. The reports' own skill states mark every skill observed, which says nothing about quality." />
-          }
-        >
-          {data.skills.length ? (
-            <Table label="Skill scores">
-              <thead>
-                <tr>
-                  <th scope="col">Skill</th>
-                  <th scope="col">Average</th>
-                  <th scope="col" data-num="">
-                    Needs work
-                  </th>
-                  <th scope="col" data-num="">
-                    Calls
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.skills.map((skill) => (
-                  <tr key={skill.label}>
-                    <th scope="row">{skill.label}</th>
-                    <td className={styles.score}>
-                      <Meter
-                        value={skill.average}
-                        max={100}
-                        label={`${skill.label}: ${skill.average} of 100`}
-                      />
-                      <span>{skill.average}</span>
-                    </td>
-                    <td data-num="">
-                      {Math.round(skill.needsWorkShare * 100)}%
-                    </td>
-                    <td data-num="">{skill.calls}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          ) : (
-            <p className={styles.none}>
-              No AI pointer reviews in this window yet.
-            </p>
-          )}
-        </Panel>
+        {skillsShown ? null : (
+          <Panel
+            title="Skill scores"
+            sub={`AI pointer review · ${data.callsScored} calls scored · weakest first`}
+            tools={<Why detail={SKILL_WHY} />}
+          >
+            <SkillScores skills={data.skills} />
+          </Panel>
+        )}
         <Panel
           title="Commitments and readings"
           sub="Calls with each, from the engine"

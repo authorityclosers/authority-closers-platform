@@ -1,0 +1,125 @@
+/* Admin → AI spend: caps with their bar and one-click raise; spend by day as
+   stacked bars, one colour per feature; tables collapse to cards on phones. */
+
+.grid {
+  columns: 2 440px;
+  column-gap: var(--sx-gap);
+}
+
+.grid > * {
+  margin-bottom: var(--sx-gap);
+  break-inside: avoid;
+}
+
+.note {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.capRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--sx-line);
+}
+
+.capRow:first-child {
+  border-top: 0;
+}
+
+.capRow > :first-child {
+  min-width: 0;
+}
+
+.capText {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 8px;
+  font-size: var(--sx-text-sm);
+}
+
+.control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.changed {
+  color: var(--sx-good, var(--sx-muted));
+  font-size: var(--sx-text-xs);
+}
+
+.days {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 140px;
+  padding-top: 8px;
+}
+
+.day {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column-reverse;
+}
+
+.slice {
+  display: block;
+  width: 100%;
+  min-height: 1px;
+}
+
+.dayLabels {
+  display: flex;
+  gap: 4px;
+  color: var(--sx-muted);
+  font-size: 10px;
+}
+
+.dayLabels > span {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+  font-size: var(--sx-text-xs);
+}
+
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 2px;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rules {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--sx-text-sm);
+}
+
+.rules li + li {
+  margin-top: 4px;
+}

@@ -271,3 +271,165 @@ describe("charts the owner picks and compares", () => {
     expect(seriesValue("inr", 4.73)).toBe("₹4.73");
   });
 });
+
+describe("money in dollars and rupees", () => {
+  it("shows dollars first, rupees beside them, and names the one rate", async () => {
+    const { money, normalizeMetrics, rateWords, usd, STAGE_LABEL } =
+      await import("./cost-data");
+    const metrics = normalizeMetrics({
+      fx: { currency: "USD", usd_to_inr: 100, set_on: "2026-09-19" },
+    });
+    expect(metrics.fx).toEqual({
+      currency: "USD",
+      usdToInr: 100,
+      setOn: "2026-09-19",
+    });
+    expect(usd(533, metrics.fx)).toBe("$5.33");
+    expect(money(533, metrics.fx)).toBe("$5.33 · ₹533.00");
+    expect(money(null, metrics.fx)).toBe("–");
+    expect(rateWords(metrics.fx)).toMatch(/^₹100 per \$1, set 19 Sept? 2026$/);
+    // An older server sends no rate: the sheet's ₹100 is assumed, no date claimed.
+    const older = normalizeMetrics({});
+    expect(older.fx.usdToInr).toBe(100);
+    expect(rateWords(older.fx)).toBe("₹100 per $1");
+    expect(STAGE_LABEL.CDF).toBe("Call data · fast");
+    expect(STAGE_LABEL.AR).toBe("AI replies");
+  });
+});
+
+describe("organisation and feature filters", () => {
+  it("reads the choices and keeps a valid choice in every link", async () => {
+    const { costQuery, normalizeMetrics, scopeView } = await import(
+      "./cost-data"
+    );
+    const metrics = normalizeMetrics({
+      filters: { company: null, stage: "CDF" },
+      choices: {
+        companies: [
+          {
+            id: "4a1b2c3d-0000-4000-8000-00000000c0de",
+            name: "Fictional Co",
+            environment: "production",
+            rupees: 12.5,
+          },
+        ],
+        stages: [{ stage: "C2", label: "Transcription" }, { stage: "CDF" }],
+      },
+      overview: {
+        by_stage: [
+          { stage: "C4", rupees: 1, input_tokens: 9000, output_tokens: 1200 },
+          { stage: "C2", rupees: 3, audio_minutes: 12.5 },
+        ],
+      },
+    });
+    expect(metrics.filters).toEqual({ company: null, stage: "CDF" });
+    expect(metrics.choices.stages[1]).toEqual({
+      stage: "CDF",
+      label: "Call data · fast",
+    });
+    expect(metrics.overview.byStage[0]).toMatchObject({
+      inputTokens: 9000,
+      outputTokens: 1200,
+    });
+    expect(metrics.overview.byStage[1].audioMinutes).toBe(12.5);
+    const org = "4a1b2c3d-0000-4000-8000-00000000c0de";
+    expect(scopeView({ org, feature: "AR" })).toEqual({ org, feature: "AR" });
+    expect(scopeView({ org: "../x", feature: "nope" })).toEqual({
+      org: undefined,
+      feature: undefined,
+    });
+    const link = costQuery(
+      {
+        tab: "overview",
+        days: "30",
+        env: "all",
+        tests: false,
+        org,
+        feature: "AR",
+      },
+      { days: "7" },
+    );
+    expect(link).toBe(`/usage?days=7&org=${org}&feature=AR`);
+  });
+});
+
+describe("revenue against cost in plain words", () => {
+  it("says what came in, what the AI cost and what is left", async () => {
+    const { normalizeMetrics, revenueWords } = await import("./cost-data");
+    const metrics = normalizeMetrics({
+      window: { days: 30 },
+      fx: { usd_to_inr: 100, set_on: "2026-09-19" },
+      revenue: {
+        totals: {
+          production: { revenue: 5000, cost: 700, margin: 4300 },
+          staging: { revenue: 100, cost: 250, margin: -150 },
+        },
+      },
+    });
+    const [production, staging] = revenueWords(metrics);
+    expect(production).toContain("customers paid ₹5,000 in the last 30 days");
+    expect(production).toContain("cost $7.00 · ₹700.00");
+    expect(production).toContain("86% of what came in");
+    expect(staging).toContain("test money");
+    const idle = normalizeMetrics({
+      revenue: {
+        totals: { production: { revenue: 0, cost: 12, margin: -12 } },
+      },
+    });
+    expect(revenueWords(idle)[0]).toContain("no money came in");
+  });
+});
+
+describe("what each feature runs on", () => {
+  it("reads each route and says its unit price in dollars and rupees", async () => {
+    const { normalizeMetrics, unitWords, CHANGE_AT } = await import(
+      "./cost-data"
+    );
+    const metrics = normalizeMetrics({
+      fx: { usd_to_inr: 100 },
+      routes: [
+        {
+          environment: "production",
+          stage: "C2",
+          provider: "elevenlabs",
+          model: "scribe_v2",
+          runs: 40,
+          last_at: "2026-10-20T10:00:00Z",
+          unit: { basis: "per_hour", usd_per_hour: 0.22 },
+        },
+        {
+          environment: "production",
+          stage: "C4",
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          runs: 40,
+          unit: {
+            basis: "tokens",
+            input_usd_per_million: 0.75,
+            output_usd_per_million: 3.75,
+          },
+        },
+        {
+          environment: "staging",
+          stage: "AR",
+          provider: "gemini",
+          model: "new-model",
+          unit: null,
+        },
+      ],
+    });
+    const [audio, facts, replies] = metrics.routes;
+    expect(audio.label).toBe("Transcription");
+    expect(unitWords(audio.unit, metrics.fx)).toBe(
+      "$0.22 (₹22.00) an hour of audio",
+    );
+    expect(unitWords(facts.unit, metrics.fx)).toBe(
+      "$0.75 (₹75.00) in · $3.75 (₹375.00) out per million tokens",
+    );
+    expect(unitWords(replies.unit, metrics.fx)).toContain(
+      "No price in the sheet",
+    );
+    expect(CHANGE_AT.CDF.href).toBe("/sales-xray/call-data");
+    expect(CHANGE_AT.QF).toBeUndefined();
+  });
+});

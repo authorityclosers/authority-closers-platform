@@ -22,9 +22,14 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { BRANDS, type Brand } from "../brands/brand-registry";
-import { BrandMark } from "../report-entities";
-import { Badge, Button, Field, kitStyles } from "../ui/kit";
+import { Badge, Button, Field } from "../ui/kit";
+import {
+  AppCard,
+  AppCardSkeleton,
+  AppLogo,
+  cardStyles,
+  StatusPill,
+} from "./app-card";
 import { useAppConnect } from "./app-connect";
 import {
   addSource,
@@ -39,7 +44,7 @@ import {
 } from "./leads-client";
 import styles from "./leads.module.css";
 import { SpendSummary } from "./ad-spend";
-import { MetaConversions } from "./meta-conversions";
+import { JourneyStrip } from "./journey/journey-strip";
 
 /* ---------- Meta connector API (lead_desk/connectors) ---------- */
 
@@ -263,22 +268,26 @@ function GoogleTile() {
       kind="google"
       title="Google Ads"
       text="Leads from your lead form ads, without copying anything."
+      loading={status === null}
       status={
-        status === null ? (
-          <Badge>Checking…</Badge>
-        ) : !status.configured ? (
-          <Badge>Coming soon</Badge>
+        !status ? null : !status.configured ? (
+          <StatusPill>Coming soon</StatusPill>
         ) : live ? (
-          <Badge tone="good">Connected</Badge>
+          <StatusPill tone="good">
+            {live} account{live === 1 ? "" : "s"} on
+          </StatusPill>
         ) : status.accounts.length ? (
-          <Badge>Switched off</Badge>
-        ) : null
+          <StatusPill tone="warn">Switched off</StatusPill>
+        ) : (
+          <StatusPill>Not connected</StatusPill>
+        )
       }
       action={
         status?.configured ? (
           <a
-            className={kitStyles.button}
-            data-variant={status.accounts.length ? undefined : "primary"}
+            className={
+              status.accounts.length ? cardStyles.secondary : cardStyles.primary
+            }
             href={`${GOOGLE}/connect`}
             onClick={connect}
           >
@@ -348,35 +357,14 @@ function GoogleTile() {
   );
 }
 
-/* ---------- Brand marks (our own public/brands files) ---------- */
+/* ---------- One card per source ---------- */
 
-const brand = (key: string): Brand =>
-  BRANDS.find((item) => item.key === key) as Brand;
-
-/**
- * The official marks from our own brand files (Simple Icons, CC0). Instagram's
- * colour file is a black glyph that vanishes in dark mode, so it uses its
- * one-colour mark in Instagram's colour instead.
- */
-function SourceLogo({ kind }: { kind: "meta" | "google" | "linkedin" }) {
-  if (kind === "meta")
-    return (
-      <span className={styles.sourceLogo} aria-hidden="true">
-        <BrandMark brand={brand("facebook")} size={26} />
-        <span className={styles.sourceLogoBadge}>
-          <BrandMark brand={{ ...brand("instagram"), logo: false }} size={14} />
-        </span>
-      </span>
-    );
-  return (
-    <span className={styles.sourceLogo} aria-hidden="true">
-      <BrandMark
-        brand={brand(kind === "google" ? "googleads" : "linkedin")}
-        size={24}
-      />
-    </span>
-  );
-}
+const LOGOS: Record<"meta" | "google" | "linkedin", string[]> = {
+  // Instagram rides on the Facebook mark: one source, both apps.
+  meta: ["facebook", "instagram"],
+  google: ["googleads"],
+  linkedin: ["linkedin"],
+};
 
 function SourceRow({
   kind,
@@ -384,6 +372,7 @@ function SourceRow({
   text,
   status,
   action,
+  loading,
   children,
 }: {
   kind: "meta" | "google" | "linkedin";
@@ -391,21 +380,27 @@ function SourceRow({
   text: string;
   status?: ReactNode;
   action?: ReactNode;
+  /** The status is still loading: the same card, drawn in its final size. */
+  loading?: boolean;
   children?: ReactNode;
 }) {
+  const logo = <AppLogo brands={LOGOS[kind]} />;
   return (
-    <article className={styles.sourceRow} data-brand={kind}>
-      <SourceLogo kind={kind} />
-      <div className={styles.sourceMain}>
-        <div className={styles.sourceTitle}>
-          <h3>{title}</h3>
-          {status}
-        </div>
-        <p>{text}</p>
-      </div>
-      {action ? <div className={styles.sourceAction}>{action}</div> : null}
-      {children ? <div className={styles.sourceMore}>{children}</div> : null}
-    </article>
+    <div data-brand={kind}>
+      {loading ? (
+        <AppCardSkeleton title={title} logo={logo} />
+      ) : (
+        <AppCard
+          logo={logo}
+          title={title}
+          status={status}
+          summary={text}
+          action={action}
+        >
+          {children}
+        </AppCard>
+      )}
+    </div>
   );
 }
 
@@ -570,22 +565,26 @@ function MetaTile() {
       kind="meta"
       title="Facebook & Instagram"
       text="Leads from your Instant Form ads arrive here in seconds."
+      loading={status === null}
       status={
-        status === null ? (
-          <Badge>Checking…</Badge>
-        ) : !status.configured ? (
-          <Badge>Coming soon</Badge>
+        !status ? null : !status.configured ? (
+          <StatusPill>Coming soon</StatusPill>
         ) : live ? (
-          <Badge tone="good">Connected</Badge>
+          <StatusPill tone="good">
+            {live} Page{live === 1 ? "" : "s"} on
+          </StatusPill>
         ) : status.pages.length ? (
-          <Badge>Switched off</Badge>
-        ) : null
+          <StatusPill tone="warn">Switched off</StatusPill>
+        ) : (
+          <StatusPill>Not connected</StatusPill>
+        )
       }
       action={
         status?.configured ? (
           <a
-            className={kitStyles.button}
-            data-variant={status.pages.length ? undefined : "primary"}
+            className={
+              status.pages.length ? cardStyles.secondary : cardStyles.primary
+            }
             href={`${META}/connect`}
             onClick={connect}
           >
@@ -611,18 +610,20 @@ function MetaTile() {
             >
               <span className={styles.pageName}>
                 <strong>{page.name}</strong>
-                <small>
-                  {page.active
-                    ? [
-                        `${page.received} lead${page.received === 1 ? "" : "s"}`,
-                        page.lastPulledAt
-                          ? `checked ${ago(page.lastPulledAt)}`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : "Switched off: no new leads come in"}
-                </small>
+                {page.active ? (
+                  <span className={cardStyles.facts}>
+                    <span className={cardStyles.fact} data-tone="good">
+                      {page.received} lead{page.received === 1 ? "" : "s"}
+                    </span>
+                    {page.lastPulledAt ? (
+                      <span className={cardStyles.fact}>
+                        Checked {ago(page.lastPulledAt)}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : (
+                  <small>Switched off: no new leads come in</small>
+                )}
                 {page.active ? (
                   <small className={styles.pageForms}>{formsLine(page)}</small>
                 ) : null}
@@ -635,7 +636,7 @@ function MetaTile() {
                   </small>
                 ) : null}
                 {page.active && (page.problem || page.backfill?.error) ? (
-                  <small className={styles.pageProblem} role="alert">
+                  <small className={cardStyles.problem} role="status">
                     {page.problem?.text ?? page.backfill?.error}
                   </small>
                 ) : null}
@@ -681,11 +682,7 @@ function MetaTile() {
       {status?.configured && status.pages.length ? <SpendSummary /> : null}
       {status?.configured ? <LeadAccessSteps open={blocked} /> : null}
       {status?.configured && status.pages.length ? (
-        <MetaConversions
-          key={appConnected}
-          returned={params.get("meta") === "connected" || appConnected > 0}
-          onConnect={connect}
-        />
+        <JourneyStrip key={appConnected} />
       ) : null}
     </SourceRow>
   );
@@ -990,7 +987,7 @@ export function SourcesView({
   return (
     <div className={styles.sourcesGrid}>
       <section
-        className={styles.sourceList}
+        className={styles.sourceCards}
         aria-label="Connect where your leads come from"
       >
         <MetaTile />
@@ -999,7 +996,7 @@ export function SourcesView({
           kind="linkedin"
           title="LinkedIn"
           text="Leads from your Lead Gen Form ads."
-          status={<Badge>Coming soon</Badge>}
+          status={<StatusPill>Coming soon</StatusPill>}
         />
       </section>
       <OtherWays sandbox={sandbox} onChanged={onChanged} onImport={onImport} />

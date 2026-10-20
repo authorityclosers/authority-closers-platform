@@ -24,7 +24,9 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -57,6 +59,18 @@ import { AllowanceRing } from "./allowance-ring";
 import { MinutesMeter } from "./minutes-meter";
 import { phoneTabFor, shellActiveFor } from "./phone-nav";
 import { RailTip } from "./rail-tip";
+import { usePlacePrefetch, useHoverPrefetch } from "./route-prefetch";
+import { ScreenLink } from "./screen-link";
+import { useGlide, useScreenMotion } from "./screen-transition";
+import { warmCallsList } from "../calls-cache";
+import { RouteLoading } from "./route-loading";
+import {
+  claimShell,
+  releaseShell,
+  shownClaim,
+  type ShellClaim,
+  type ShellClaims,
+} from "./shell-claims";
 import { SectionBoundary } from "../ui/section-boundary";
 import {
   readAllowance,
@@ -76,6 +90,8 @@ import {
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
+import { WorkspacePicker } from "./workspace-picker";
+import { Sheet } from "../ui/sheet";
 import { allowEarlyConversationReads, dropEarlyReads } from "../early-reads";
 import { CreateOrganisationDialog } from "./create-organisation-dialog";
 import { dropInvite, refreshInvites, useInvites } from "./invites-store";
@@ -94,6 +110,7 @@ import {
   isRelativeUpdateHref,
   type UpdateNotification,
 } from "./updates-client";
+import { ChatsTabIcon } from "../chats/chats-badge";
 import { LeadsTabIcon } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import styles from "./lightbox-shell.module.css";
@@ -107,6 +124,7 @@ export type LightboxShellProps = {
   active?:
     | "dashboard"
     | "leads"
+    | "chats"
     | "analyse"
     | "calls"
     | "account"
@@ -169,6 +187,7 @@ function resolvePageTitle(
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
   if (active === "leads") return "Leads";
+  if (active === "chats") return "Chats";
   if (active === "prospects") return "Prospects";
   if (active === "coaching") return "Coaching";
   if (active === "account") return "Account";
@@ -180,6 +199,9 @@ function resolvePageTitle(
   if (active === "analyse") return "New analysis";
   return null;
 }
+
+const inSettings = (pathname: string | null) =>
+  pathname === "/settings" || (pathname?.startsWith("/settings/") ?? false);
 
 const subscribeNothing = () => () => {};
 
@@ -338,9 +360,32 @@ function LightboxShellFrame({
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
   const pathname = usePathname();
-  const place = shellActiveFor(pathname, active);
-  const pageTitle = resolvePageTitle(place, heading, pageName);
-  const phoneTab = phoneTabFor(pathname, active);
+  // Moving between places animates the page area; the places one tap away
+  // are made ready while the app is quiet (owner, 20 Oct).
+  const pageRef = useRef<HTMLElement | null>(null);
+  const standIn = useScreenMotion(pageRef, pathname);
+  // While a tapped place's outline stands in, the rail, tab bar and title
+  // already show that place, so their highlight glides with the move.
+  const shownPath = standIn ?? pathname;
+  const place = shellActiveFor(shownPath, active);
+  // Every Settings page says Settings, even while its section loads.
+  const pageTitle = resolvePageTitle(
+    place,
+    heading,
+    pageName ?? (inSettings(shownPath) ? "Settings" : undefined),
+  );
+  const phoneTab = phoneTabFor(shownPath, active);
+  // Phones call the dashboard Home, as its tab does (owner, 17 Oct).
+  const barTitle = place === "dashboard" && !pageName ? "Home" : pageTitle;
+  // The selected capsule glides to the new place, on the rail and the tabs.
+  const tabBarRef = useRef<HTMLElement | null>(null);
+  useGlide(railRef, `.${styles.stripBtnActive} .${styles.railPill}`, place);
+  useGlide(tabBarRef, `[aria-current="page"] .${styles.tabPill}`, phoneTab);
+  // ...and, once quiet, the calls list Home and Calls open with.
+  usePlacePrefetch(authenticated && !loading, () => {
+    void warmCallsList(recentContextKey);
+  });
+  useHoverPrefetch(authenticated);
 
   const toggleCollapsed = () => {
     const next = !collapsed;
@@ -648,6 +693,7 @@ function LightboxShellFrame({
     setJoining(null);
   }
   const [createOpen, setCreateOpen] = useState(false);
+  const [workspaceSheetOpen, setWorkspaceSheetOpen] = useState(false);
 
   // Phones: the avatar in the top bar and More in the tab bar open one sheet.
   function toggleAccountSheet(event: MouseEvent<HTMLElement>) {
@@ -738,6 +784,16 @@ function LightboxShellFrame({
       ? "Personal"
       : currentWorkspace.name
     : null;
+  // Phones: the bar's workspace name opens the Workspace sheet when there
+  // is another workspace, an invitation or Create to offer.
+  const switchable = workspaces.filter(
+    (workspace) => workspace.sales_xray_enabled,
+  );
+  const canSwitchHere =
+    authenticated &&
+    !chromePending &&
+    Boolean(workspaceLabel) &&
+    (switchable.length > 1 || invites.invites.length > 0 || invites.live);
   const personalWorkspace = workspaces.find(
     (workspace) =>
       workspace.kind === "personal" && workspace.sales_xray_enabled,
@@ -851,7 +907,7 @@ function LightboxShellFrame({
             </div>
           </div>
           <div className={styles.stripNav}>
-            <Link
+            <ScreenLink
               className={`${styles.stripBtn}${place === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/dashboard"
               aria-label="Dashboard"
@@ -859,12 +915,12 @@ function LightboxShellFrame({
               aria-current={place === "dashboard" ? "page" : undefined}
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Dashboard</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "leads" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/leads"
-              prefetch={false}
               aria-label="Leads"
               data-rail-tip="Leads"
               aria-current={place === "leads" ? "page" : undefined}
@@ -874,9 +930,25 @@ function LightboxShellFrame({
                 strokeWidth={1.75}
                 live={leadsBadgeLive}
               />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Leads</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
+              className={`${styles.stripBtn}${place === "chats" ? ` ${styles.stripBtnActive}` : ""}`}
+              href="/chats"
+              aria-label="Chats"
+              data-rail-tip="Chats"
+              aria-current={place === "chats" ? "page" : undefined}
+            >
+              <ChatsTabIcon
+                size={20}
+                strokeWidth={1.75}
+                live={leadsBadgeLive}
+              />
+              <span className={styles.railPill} aria-hidden="true" />
+              <span style={RAIL_NAME_STYLE}>Chats</span>
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
               href={newAnalysisHref}
               aria-label="New analysis"
@@ -884,9 +956,10 @@ function LightboxShellFrame({
               aria-current={place === "analyse" ? "page" : undefined}
             >
               <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>New analysis</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/analysis/calls"
               aria-label="Calls"
@@ -894,9 +967,10 @@ function LightboxShellFrame({
               aria-current={place === "calls" ? "page" : undefined}
             >
               <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Calls</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/prospects"
               aria-label="Prospects"
@@ -904,44 +978,45 @@ function LightboxShellFrame({
               aria-current={place === "prospects" ? "page" : undefined}
             >
               <Users size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Prospects</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/coaching"
-              prefetch={false}
               aria-label="Coaching"
               data-rail-tip="Coaching"
               aria-current={place === "coaching" ? "page" : undefined}
             >
               <GraduationCap size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Coaching</span>
-            </Link>
+            </ScreenLink>
             {inOrganisation || place === "organisation" ? (
-              <Link
+              <ScreenLink
                 className={`${styles.stripBtn}${place === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
                 href="/organisation"
-                prefetch={false}
                 aria-label="Organisation"
                 data-rail-tip="Organisation"
                 aria-current={place === "organisation" ? "page" : undefined}
               >
                 <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.railPill} aria-hidden="true" />
                 <span style={RAIL_NAME_STYLE}>Organisation</span>
-              </Link>
+              </ScreenLink>
             ) : null}
             {orgAdmin || place === "insights" ? (
-              <Link
+              <ScreenLink
                 className={`${styles.stripBtn}${place === "insights" ? ` ${styles.stripBtnActive}` : ""}`}
                 href="/organisation/insights"
-                prefetch={false}
                 aria-label="Insights"
                 data-rail-tip="Insights"
                 aria-current={place === "insights" ? "page" : undefined}
               >
                 <BarChart3 size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.railPill} aria-hidden="true" />
                 <span style={RAIL_NAME_STYLE}>Insights</span>
-              </Link>
+              </ScreenLink>
             ) : null}
             {/* Gold reviewers (owner, 19 Oct); nothing for anyone else. */}
             <ReviewRailLink
@@ -1184,18 +1259,43 @@ function LightboxShellFrame({
                   </span>
                 </button>
               )}
-              <span
-                title={
-                  workspaceLabel ? `Workspace: ${workspaceLabel}` : undefined
-                }
-              >
-                {/* Two lines from the first paint: the workspace line is a
-                    placeholder while it loads, so the title never drops. */}
-                <small className={styles.mobileContext}>
-                  {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
-                </small>
-                <b>{pageTitle ?? workspaceLabel}</b>
-              </span>
+              {/* Where you are. Tapping it switches workspace in one
+                  step when there is anywhere else to go (owner, 20 Oct:
+                  "workspaces shifter needs to be made in a far better way"). */}
+              {canSwitchHere ? (
+                <button
+                  type="button"
+                  className={styles.mobilePlace}
+                  onClick={() => setWorkspaceSheetOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={workspaceSheetOpen}
+                  aria-label={`Workspace: ${workspaceLabel}. Switch workspace`}
+                  title={`Workspace: ${workspaceLabel}`}
+                >
+                  <small className={styles.mobileContext}>
+                    {workspaceLabel}
+                    <ChevronDown
+                      size={12}
+                      strokeWidth={2.5}
+                      aria-hidden="true"
+                    />
+                  </small>
+                  <b>{barTitle ?? workspaceLabel}</b>
+                </button>
+              ) : (
+                <span
+                  title={
+                    workspaceLabel ? `Workspace: ${workspaceLabel}` : undefined
+                  }
+                >
+                  {/* Two lines from the first paint: the workspace line is a
+                      placeholder while it loads, so the title never drops. */}
+                  <small className={styles.mobileContext}>
+                    {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
+                  </small>
+                  <b>{barTitle ?? workspaceLabel}</b>
+                </span>
+              )}
             </div>
           ) : (
             <BrandLockup href={homeHref} />
@@ -1260,44 +1360,63 @@ function LightboxShellFrame({
             <p>{heading.description}</p>
           </div>
         ) : null}
-        <main id="main-content" className={styles.main}>
+        <main id="main-content" ref={pageRef} className={styles.main}>
           {/* A page that fails leaves the shell working: navigation, Recents. */}
           <SectionBoundary
             name="This screen"
             note="Your calls and reports are safe."
             resetKey={pathname}
           >
-            {children}
+            {/* A tapped place shows its outline at once, while the router
+                fetches it; the page underneath stays mounted until then. */}
+            {standIn ? (
+              <StandInContext.Provider value>
+                <RouteLoading pathname={standIn} />
+              </StandInContext.Provider>
+            ) : null}
+            <div
+              className={styles.pageSlot}
+              data-page-slot=""
+              data-standing-in={standIn ? "" : undefined}
+            >
+              {children}
+            </div>
           </SectionBoundary>
         </main>
       </div>
-      {/* Owner, 17 Oct: five clear tabs on phones, nothing else. Prospects,
-          Coaching and the organisation pages live in the More sheet. */}
+      {/* Owner, 17 and 20 Oct: five clear tabs on phones (Home, Leads, New,
+          Calls, More), nothing else. Chats opens from the Leads | Chats
+          switch; Prospects, Coaching and the organisation pages live in the
+          More sheet. */}
       <nav
+        ref={tabBarRef}
         className={styles.bottomNav}
         aria-label="Mobile Sales Xray navigation"
       >
-        <Link
+        <ScreenLink
           className={styles.bottomLink}
           href="/dashboard"
           aria-current={phoneTab === "dashboard" ? "page" : undefined}
         >
           <LayoutGrid size={20} aria-hidden="true" />
+          <span className={styles.tabPill} aria-hidden="true" />
           <span>Home</span>
-        </Link>
+        </ScreenLink>
         {/* Signed out, Leads and Calls only lead to a sign-in prompt (B22). */}
         {guest ? null : (
-          <Link
+          <ScreenLink
             className={styles.bottomLink}
             href="/leads"
-            prefetch={false}
             aria-current={phoneTab === "leads" ? "page" : undefined}
           >
-            <LeadsTabIcon size={20} live={leadsBadgeLive} />
+            {/* Chats live inside Leads on phones (owner, 20 Oct: "5 tabs,
+                Chats inside Leads"), so unread chats count here too. */}
+            <LeadsTabIcon size={20} live={leadsBadgeLive} withChats />
+            <span className={styles.tabPill} aria-hidden="true" />
             <span>Leads</span>
-          </Link>
+          </ScreenLink>
         )}
-        <Link
+        <ScreenLink
           className={`${styles.bottomLink} ${styles.bottomNew}`}
           href={newAnalysisHref}
           aria-label="New analysis"
@@ -1306,29 +1425,32 @@ function LightboxShellFrame({
           <span className={styles.newMark} aria-hidden="true">
             <Plus size={18} strokeWidth={2.25} />
           </span>
+          <span className={styles.tabPill} aria-hidden="true" />
           <span>New</span>
-        </Link>
+        </ScreenLink>
         {guest ? null : (
-          <Link
+          <ScreenLink
             className={styles.bottomLink}
             href="/analysis/calls"
             aria-current={phoneTab === "calls" ? "page" : undefined}
           >
             <FolderOpen size={20} aria-hidden="true" />
+            <span className={styles.tabPill} aria-hidden="true" />
             <span>Calls</span>
-          </Link>
+          </ScreenLink>
         )}
         {/* Signed out shows Sign in (the phone app has its own sign-in
             screen, so it hides this); an unconfirmed session keeps More. */}
         {guest ? (
-          <Link
+          <ScreenLink
             className={`${styles.bottomLink} sx-web-only`}
             href={accountHref}
             onClick={openAccount}
           >
             <LogIn size={20} aria-hidden="true" />
+            <span className={styles.tabPill} aria-hidden="true" />
             <span>Sign in</span>
-          </Link>
+          </ScreenLink>
         ) : (
           <button
             type="button"
@@ -1339,6 +1461,7 @@ function LightboxShellFrame({
             aria-current={phoneTab === "more" ? "page" : undefined}
           >
             <Ellipsis size={20} aria-hidden="true" />
+            <span className={styles.tabPill} aria-hidden="true" />
             <span>More</span>
           </button>
         )}
@@ -1368,11 +1491,42 @@ function LightboxShellFrame({
         openNews={openNews}
         openEvent={navigateEvent}
       />
-      {accountCardOpen && authenticated ? (
+      {authenticated ? (
+        <Sheet
+          open={workspaceSheetOpen}
+          onClose={() => setWorkspaceSheetOpen(false)}
+          title="Workspace"
+          description="Where your calls, leads and reports live."
+        >
+          <WorkspacePicker
+            workspaces={switchable}
+            currentId={effectiveTenantId}
+            branding={branding}
+            personName={profileName}
+            onSelect={(tenantId) => {
+              setWorkspaceSheetOpen(false);
+              void handleSelectWorkspace(tenantId);
+            }}
+            onKeep={() => setWorkspaceSheetOpen(false)}
+            invites={invites.invites}
+            joining={joining}
+            onJoin={(invite) => void joinInvite(invite)}
+            onCreate={
+              invites.live
+                ? () => {
+                    setWorkspaceSheetOpen(false);
+                    setCreateOpen(true);
+                  }
+                : undefined
+            }
+          />
+        </Sheet>
+      ) : null}
+      {/* Mounted while signed in, so the phone sheet can slide away. */}
+      {authenticated ? (
         <SettingsMenu
-          key={accountView}
           initialView={accountView}
-          open
+          open={accountCardOpen}
           anchorRef={accountAnchorRef}
           onClose={closeAccountCard}
           name={profileName}
@@ -1398,9 +1552,15 @@ function LightboxShellFrame({
 
 type ShellPage = Omit<LightboxShellProps, "children">;
 
-const PersistentShellContext = createContext<
-  ((page: ShellPage) => void) | null
->(null);
+type ShellRegistry = {
+  claim: (id: string, claim: ShellClaim<ShellPage>) => void;
+  release: (id: string) => void;
+};
+
+const PersistentShellContext = createContext<ShellRegistry | null>(null);
+
+/** True inside the outline standing in for a tapped place. */
+const StandInContext = createContext(false);
 
 /**
  * One app frame (sidebar, top bar, page area) that stays mounted while the
@@ -1413,34 +1573,58 @@ export function PersistentShell({ children }: { children: ReactNode }) {
   // from what the session already knows, so a page drawn on the server with
   // its session (dev) arrives with its full bar, not loading placeholders.
   const access = useWorkspaceAccess();
-  const [page, setPage] = useState<ShellPage>(() => ({
+  const [first] = useState<ShellPage>(() => ({
     authenticated: access?.authenticated === true,
     loading: !access || access.status === "loading",
   }));
+  // Every mounted page and stand-in outline claims the frame; see
+  // shell-claims.ts for which one it shows.
+  const [claims, setClaims] = useState<ShellClaims<ShellPage>>([]);
+  const registry = useMemo<ShellRegistry>(
+    () => ({
+      claim: (id, claim) => setClaims((list) => claimShell(list, id, claim)),
+      release: (id) => setClaims((list) => releaseShell(list, id)),
+    }),
+    [],
+  );
+  const page = shownClaim(claims)?.page ?? first;
+  // A loading screen can't know the session, but the frame does: once the
+  // session is confirmed, a screen that is still loading never turns the
+  // bar back into placeholders (no flicker between pages, owner 20 Oct).
+  const signedIn =
+    access?.authenticated === true && access.status !== "loading";
+  const shown =
+    page.loading && signedIn
+      ? { ...page, loading: false, authenticated: true }
+      : page;
   return (
-    <PersistentShellContext.Provider value={setPage}>
-      <LightboxShellFrame {...page}>{children}</LightboxShellFrame>
+    <PersistentShellContext.Provider value={registry}>
+      <LightboxShellFrame {...shown}>{children}</LightboxShellFrame>
     </PersistentShellContext.Provider>
   );
 }
 
 function ShellPageSettings({
-  setPage,
+  registry,
   children,
   ...page
-}: LightboxShellProps & { setPage: (page: ShellPage) => void }) {
+}: LightboxShellProps & { registry: ShellRegistry }) {
+  const id = useId();
+  const standIn = useContext(StandInContext);
   // The chrome settings are plain data, so their serialised form is both the
   // change signal and the value handed to the frame.
   const settings = JSON.stringify(page);
   // Before paint, so the frame never shows the previous page's chrome.
   useLayoutEffect(() => {
-    setPage(JSON.parse(settings) as ShellPage);
-  }, [setPage, settings]);
+    registry.claim(id, { page: JSON.parse(settings) as ShellPage, standIn });
+  }, [registry, id, settings, standIn]);
+  // Only on leaving: a settings change updates the claim in its place.
+  useLayoutEffect(() => () => registry.release(id), [registry, id]);
   return children;
 }
 
 export function LightboxShell(props: LightboxShellProps) {
-  const setPage = useContext(PersistentShellContext);
-  if (!setPage) return <LightboxShellFrame {...props} />;
-  return <ShellPageSettings setPage={setPage} {...props} />;
+  const registry = useContext(PersistentShellContext);
+  if (!registry) return <LightboxShellFrame {...props} />;
+  return <ShellPageSettings registry={registry} {...props} />;
 }
