@@ -104,9 +104,8 @@ it("turns a summary into the row's insight, an unknown outcome into none", () =>
 it("reads an identity's list once however many ask at the same moment", async () => {
   vi.stubEnv("NODE_ENV", "production");
   let answer: (response: Response) => void = () => {};
-  const fetcher = vi.fn(
-    (_url: RequestInfo | URL, _init?: RequestInit) =>
-      new Promise<Response>((resolve) => (answer = resolve)),
+  const fetcher = vi.fn<typeof fetch>(
+    () => new Promise<Response>((resolve) => (answer = resolve)),
   );
   vi.stubGlobal("fetch", fetcher);
   const identity = identityOf({ personId: "p", sessionId: "s", tenantId: "t" });
