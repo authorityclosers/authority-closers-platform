@@ -95,6 +95,76 @@ const NEED_LABELS: Record<string, string> = {
 
 // What connecting gives, for an app that isn't connected yet (this is Settings,
 // so never "connect it in Settings").
+// Back from Meta or Google (Lead Desk c8c34cfc): /settings/apps?connected=<card>
+// or ?connect_error=<code>. The card a connect started from is remembered for the
+// errors, which name no app.
+const PENDING_KEY = "sx.appConnect";
+const CARD_NAMES: Record<string, string> = {
+  meta_leads: "Facebook and Instagram lead ads",
+  google_ads: "Google Ads",
+  whatsapp: "WhatsApp",
+  messenger: "Messenger",
+  instagram: "Instagram",
+};
+const RETURN_WORDS: Record<string, string> = {
+  cancelled: "You stopped before it finished. Connect again when you’re ready.",
+  in_use: "That Page or account is already connected to another organisation.",
+  no_pages: "No Pages were shared. Connect again and tick the Pages to use.",
+  no_accounts:
+    "No accounts were shared. Connect again and choose the accounts to use.",
+  no_numbers:
+    "No WhatsApp number was shared. Connect again and choose the number to use.",
+  failed: "Try again in a moment.",
+};
+
+/** The one corner card for the way back from a connect, or null. */
+export function appReturnNotice(
+  search: string,
+  pending: string | null,
+): Parameters<typeof notify>[0] | null {
+  const params = new URLSearchParams(search);
+  const connected = params.get("connected");
+  const error = params.get("connect_error");
+  if (!connected && !error) return null;
+  const key =
+    connected && connected in CARD_NAMES
+      ? connected
+      : pending && pending in CARD_NAMES
+        ? pending
+        : null;
+  const name = key ? CARD_NAMES[key] : null;
+  if (connected)
+    return {
+      id: "connected-app-return",
+      tone: "success",
+      title: `${name ?? "The app"} is connected`,
+      message: "Its card below shows what it brings in.",
+      timeout: 6000,
+    };
+  const code = error && error in RETURN_WORDS ? error : "failed";
+  return {
+    id: "connected-app-return",
+    tone: code === "cancelled" ? "info" : "error",
+    title:
+      code === "cancelled"
+        ? `${name ?? "The app"} wasn’t connected`
+        : `Couldn’t connect ${name ?? "the app"}`,
+    message: RETURN_WORDS[code],
+    timeout: code === "cancelled" ? 6000 : undefined,
+  };
+}
+
+/** A full-page connect, remembering which card it started from. */
+function connectApp(app: AppHealth) {
+  try {
+    window.sessionStorage.setItem(PENDING_KEY, app.app);
+  } catch {
+    // Without storage the card on the way back names no app.
+  }
+  const target = app.connect;
+  if (target) goToProvider(target.path);
+}
+
 const GIVES: Record<AppKey, string> = {
   meta_leads:
     "New leads from your Facebook and Instagram forms arrive in Leads by themselves.",
@@ -256,10 +326,7 @@ function AppCard({
       <div className={styles.actions}>
         {app.state === "problem" && app.connect ? (
           // Its own words ask to connect again: that is the one filled button.
-          <Button
-            variant="primary"
-            onClick={() => goToProvider(app.connect!.path)}
-          >
+          <Button variant="primary" onClick={() => connectApp(app)}>
             <PlugZap size={15} aria-hidden="true" />
             Reconnect
           </Button>
@@ -270,7 +337,7 @@ function AppCard({
           <Button
             variant="secondary"
             className={styles.tinted}
-            onClick={() => goToProvider(app.connect!.path)}
+            onClick={() => connectApp(app)}
           >
             <PlugZap size={15} aria-hidden="true" />
             Connect
@@ -664,7 +731,7 @@ function ManageSheet({
           ) : null}
           {app.connect ? (
             <div>
-              <Button onClick={() => goToProvider(app.connect!.path)}>
+              <Button onClick={() => connectApp(app)}>
                 <PlugZap size={15} aria-hidden="true" />
                 {app.connections.length ? "Connect another" : "Connect"}
               </Button>
@@ -798,6 +865,30 @@ export function ConnectedApps() {
     );
     return () => controller.abort();
   }, [attempt]);
+
+  // Back from a connect: say how it went once, then drop the query so a reload
+  // doesn't say it again. The health read on mount shows the new state.
+  useEffect(() => {
+    let pending: string | null = null;
+    try {
+      pending = window.sessionStorage.getItem(PENDING_KEY);
+      window.sessionStorage.removeItem(PENDING_KEY);
+    } catch {
+      pending = null;
+    }
+    const notice = appReturnNotice(window.location.search, pending);
+    if (!notice) return;
+    notify(notice);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("connected");
+    params.delete("connect_error");
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+    );
+  }, []);
 
   // Back from Meta or Google, or another tab: read again (at most every 30 s).
   useEffect(() => {

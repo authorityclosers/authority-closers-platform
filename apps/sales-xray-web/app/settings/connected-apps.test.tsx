@@ -29,7 +29,7 @@ vi.mock("../organisation/integrations/integrations-panel", () => ({
   ),
 }));
 
-import { ConnectedApps } from "./connected-apps";
+import { ConnectedApps, appReturnNotice } from "./connected-apps";
 import { parseHealth } from "./connected-apps-client";
 
 (
@@ -578,4 +578,49 @@ it("keeps one result at a time, shown once", async () => {
   expect(
     card("whatsapp").querySelector('[data-status="failed"]'),
   ).not.toBeNull();
+});
+
+it("says once how a connect went on the way back, then drops the query", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/settings/apps?connected=whatsapp&x=1",
+  );
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  expect(seen.notices).toEqual([
+    expect.objectContaining({
+      tone: "success",
+      title: "WhatsApp is connected",
+    }),
+  ]);
+  expect(window.location.search).toBe("?x=1");
+  window.history.replaceState(null, "", "/");
+});
+
+it("remembers which card a connect started from, for an error that names no app", async () => {
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  await act(async () => button(card("google_ads"), "Connect")!.click());
+  expect(window.sessionStorage.getItem("sx.appConnect")).toBe("google_ads");
+  expect(
+    appReturnNotice("?connect_error=no_accounts", "google_ads"),
+  ).toMatchObject({
+    tone: "error",
+    title: "Couldn’t connect Google Ads",
+    message:
+      "No accounts were shared. Connect again and choose the accounts to use.",
+  });
+  expect(
+    appReturnNotice("?connect_error=cancelled", "messenger"),
+  ).toMatchObject({
+    tone: "info",
+    title: "Messenger wasn’t connected",
+  });
+  expect(appReturnNotice("?connect_error=weird", null)).toMatchObject({
+    title: "Couldn’t connect the app",
+    message: "Try again in a moment.",
+  });
+  expect(appReturnNotice("", null)).toBeNull();
+  window.sessionStorage.clear();
 });
