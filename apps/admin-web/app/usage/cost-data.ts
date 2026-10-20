@@ -77,6 +77,10 @@ export type Day = {
 export type StageRow = {
   stage: string;
   label: string;
+  /** Model steps: input and output tokens. Transcription: audio minutes. */
+  inputTokens: number;
+  outputTokens: number;
+  audioMinutes: number;
   rupees: number;
   share: number;
   perMinute: number | null;
@@ -241,9 +245,22 @@ export type TopCall = {
   rupees: number;
 };
 
+/** What the organisation and feature filters offer, and what is chosen. */
+export type Choices = {
+  companies: {
+    id: string;
+    name: string;
+    environment: string;
+    rupees: number;
+  }[];
+  stages: { stage: string; label: string }[];
+};
+
 export type Metrics = {
   days: number;
   fx: Fx;
+  filters: { company: string | null; stage: string | null };
+  choices: Choices;
   environment: string;
   tests: boolean;
   here: string | null;
@@ -373,8 +390,27 @@ export function normalizeMetrics(raw: unknown): Metrics {
   const money = read.object(body.money);
   const ideas = read.object(body.ideas);
   const fx = read.object(body.fx);
+  const filters = read.object(body.filters);
+  const choices = read.object(body.choices);
   return {
     days: n(window.days, 30),
+    filters: { company: os(filters.company), stage: os(filters.stage) },
+    choices: {
+      companies: read.array(choices.companies).map((item) => {
+        const row = read.object(item);
+        return {
+          id: s(row.id),
+          name: s(row.name, "Unknown"),
+          environment: s(row.environment),
+          rupees: n(row.rupees),
+        };
+      }),
+      stages: read.array(choices.stages).map((item) => {
+        const row = read.object(item);
+        const stage = s(row.stage);
+        return { stage, label: s(row.label, STAGE_LABEL[stage] ?? stage) };
+      }),
+    },
     fx: {
       currency: s(fx.currency, "USD"),
       usdToInr: n(fx.usd_to_inr, 100) || 100,
@@ -452,6 +488,9 @@ export function normalizeMetrics(raw: unknown): Metrics {
           rupees: n(row.rupees),
           share: n(row.share),
           perMinute: on(row.per_minute),
+          inputTokens: n(row.input_tokens),
+          outputTokens: n(row.output_tokens),
+          audioMinutes: n(row.audio_minutes),
         };
       }),
     },
@@ -770,6 +809,8 @@ export function costQuery(
     params.set("cb", next.cb);
   }
   if (next.sort && next.sort !== "newest") params.set("sort", next.sort);
+  if (next.org) params.set("org", next.org);
+  if (next.feature) params.set("feature", next.feature);
   for (const [key, value] of Object.entries(extra)) params.set(key, value);
   const text = params.toString();
   return text ? `/usage?${text}` : "/usage";
@@ -964,7 +1005,24 @@ export type ChartView = {
   cb?: string;
   /** Per call order: newest unless chosen. */
   sort?: string;
+  /** One organisation (its id) and one feature (a stage key), else everything. */
+  org?: string;
+  feature?: string;
 };
+
+const ORG = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** The organisation and feature filters from a link; anything else is ignored. */
+export function scopeView(query: { org?: string; feature?: string }): {
+  org?: string;
+  feature?: string;
+} {
+  return {
+    org: query.org && ORG.test(query.org) ? query.org : undefined,
+    feature:
+      query.feature && query.feature in STAGE_LABEL ? query.feature : undefined,
+  };
+}
 
 /** The orders the Per call tab offers (the API accepts the same keys). */
 export const CALL_SORTS = [
@@ -1011,4 +1069,34 @@ export function chartView(query: {
       ? query.sort
       : undefined,
   };
+}
+
+/**
+ * Revenue against cost in plain sentences, one per environment (owner, 20 Oct
+ * 2026: "explained in plain words on the page"). Customers pay in rupees; the AI
+ * cost is shown as billed (dollars) with rupees beside it.
+ */
+export function revenueWords(metrics: Metrics): string[] {
+  const lines: string[] = [];
+  for (const name of ENVIRONMENTS) {
+    const value = metrics.revenue.totals[name];
+    if (!value) continue;
+    const label = ENVIRONMENT_LABEL[name] ?? name;
+    const cost = money(value.cost, metrics.fx);
+    if (name !== "production") {
+      lines.push(
+        `${label}: payments here are test money, but the AI it used cost ${cost}, real spend on the shared provider account.`,
+      );
+    } else if (value.revenue > 0) {
+      const share = Math.round((value.margin / value.revenue) * 100);
+      lines.push(
+        `${label}: customers paid ${inr(value.revenue)} in the last ${metrics.days} days and the AI behind their calls cost ${cost}, so ${inr(value.margin)} is left after AI (${share}% of what came in).`,
+      );
+    } else {
+      lines.push(
+        `${label}: no money came in during the last ${metrics.days} days while the AI cost ${cost}, so for now the AI runs at a cost.`,
+      );
+    }
+  }
+  return lines;
 }

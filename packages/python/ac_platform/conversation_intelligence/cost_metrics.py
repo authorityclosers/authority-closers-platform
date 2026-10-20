@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -54,6 +55,9 @@ MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_CALLS = 300
 # Calls that cost nothing are listed apart, newest first (owner's review, 19 Oct 2026).
 MAX_ZERO_CALLS = 100
+# Organisations offered by the filter, and the shape of their ids (tenant uuids).
+MAX_COMPANIES = 60
+COMPANY_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 # How the Per call tab can order the calls with a cost.
 CALL_SORTS = ("newest", "cost", "per_minute", "audio", "tokens")
 STALE_AFTER = timedelta(minutes=45)
@@ -516,6 +520,9 @@ class Scope:
     # The Per call tab: its order, and whether each call carries its steps.
     call_sort: str = "newest"
     call_steps: bool = False
+    # Usage filters (owner, 20 Oct 2026): one organisation, one feature (stage).
+    company: str | None = None
+    stage: str | None = None
 
     @property
     def since(self) -> datetime:
@@ -553,6 +560,71 @@ def _company(
     }
 
 
+def _narrow(export: Export, company: str | None, stage: str | None) -> Export:
+    """One organisation's and/or one feature's rows only (the Usage filters)."""
+
+    steps = [
+        step
+        for step in export.steps
+        if (company is None or step.company == company) and (stage is None or step.stage == stage)
+    ]
+    kept = {step.call for step in steps}
+    return replace(
+        export,
+        steps=steps,
+        calls=[
+            call
+            for call in export.calls
+            if (company is None or call.company == company) and (stage is None or call.id in kept)
+        ],
+        payments=[
+            row
+            for row in export.payments
+            if company is None or _text(row.get("company")) == company
+        ],
+        subscriptions=[
+            row
+            for row in export.subscriptions
+            if company is None or _text(row.get("company")) == company
+        ],
+    )
+
+
+def _choices(
+    exports: Sequence[Export], by_env: Mapping[str, Export], scope: Scope
+) -> dict[str, Any]:
+    """What the filters offer: organisations with spend in the window (most first) and the
+    features that ran, so a choice never shows an empty page."""
+
+    spend: Counter[tuple[str, str]] = Counter()
+    stages: set[str] = set()
+    for export in exports:
+        for step in export.steps:
+            if step.at < scope.since:
+                continue
+            stages.add(step.stage)
+            if step.company:
+                spend[(export.environment, step.company)] += step.paise or 0
+    companies: dict[str, dict[str, Any]] = {}
+    for (environment, company), paise in spend.most_common():
+        row = companies.setdefault(
+            company, {**_company(by_env, environment, company), "rupees": 0.0}
+        )
+        row["rupees"] = round(row["rupees"] + paise / 100, 2)
+        row.setdefault("environment", environment)
+    return {
+        "companies": list(companies.values())[:MAX_COMPANIES],
+        "stages": [
+            {"stage": stage, "label": STAGE_LABELS.get(stage, stage)}
+            for stage in sorted(
+                stages,
+                key=lambda item: list(STAGE_LABELS).index(item) if item in STAGE_LABELS else 99,
+            )
+            if stage != "C1"
+        ],
+    }
+
+
 def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
     by_env = {export.environment: export for export in exports}
     chosen = [
@@ -560,6 +632,9 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         for export in exports
         if scope.environment == "all" or export.environment == scope.environment
     ]
+    choices = _choices(chosen, by_env, scope)
+    if scope.company is not None or scope.stage is not None:
+        chosen = [_narrow(export, scope.company, scope.stage) for export in chosen]
     calls = {(call.environment, call.id): call for export in chosen for call in export.calls}
 
     def kind_of(step: Step) -> str:
@@ -687,8 +762,13 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         for day in days
     ]
     stage_spend: Counter[str] = Counter()
+    stage_tokens: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
     for step in steps:
         stage_spend[step.stage] += step.paise or 0
+        tally = stage_tokens[step.stage]
+        tally[0] += step.input_tokens
+        tally[1] += step.output_tokens
+        tally[2] += step.audio_ms if step.status == "succeeded" else 0
     total = spend(steps)
     for env_row in environments:
         env_row["per_minute"] = cohort([env_row["environment"]], days)
@@ -717,6 +797,10 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
                 "rupees": _rupees(paise),
                 "share": round(paise / total, 3) if total else 0,
                 "per_minute": _per_minute(paise, audio(steps)),
+                # Transcription is audio minutes; model steps are input and output tokens.
+                "input_tokens": stage_tokens[stage][0],
+                "output_tokens": stage_tokens[stage][1],
+                "audio_minutes": _minutes(stage_tokens[stage][2]),
             }
             for stage, paise in sorted(stage_spend.items(), key=lambda item: -item[1])
             if stage != "C1"
@@ -894,6 +978,8 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         "environment": scope.environment,
         "tests": scope.tests,
         "fx": FX,
+        "filters": {"company": scope.company, "stage": scope.stage},
+        "choices": choices,
         "sources": [
             {
                 "environment": export.environment,
@@ -1330,6 +1416,8 @@ class AdminCostMetrics:
         tests: bool = False,
         call_sort: str = "newest",
         call_steps: bool = False,
+        company: str | None = None,
+        stage: str | None = None,
     ) -> dict[str, Any]:
         if actor.tenant_id != self.operations_tenant_id:
             raise ConversationDenied("Cost and usage requires the AC operations workspace.")
@@ -1340,6 +1428,10 @@ class AdminCostMetrics:
             raise ConversationError("Choose all, production, staging or development.")
         if call_sort not in CALL_SORTS:
             raise ConversationError("Sort calls by newest, cost, per_minute, audio or tokens.")
+        if company is not None and not COMPANY_ID.fullmatch(company):
+            raise ConversationError("Choose an organisation from the list.")
+        if stage is not None and stage not in STAGE_LABELS:
+            raise ConversationError("Choose a feature from the list.")
         exports, problems = read_store(self.store_root)
         now = utc(self.application.clock())
         result = build_metrics(
@@ -1351,6 +1443,8 @@ class AdminCostMetrics:
                 tests=tests,
                 call_sort=call_sort,
                 call_steps=call_steps,
+                company=company,
+                stage=stage,
             ),
         )
         result["problems"] = problems

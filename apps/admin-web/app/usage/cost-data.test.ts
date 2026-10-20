@@ -296,3 +296,86 @@ describe("money in dollars and rupees", () => {
     expect(STAGE_LABEL.AR).toBe("AI replies");
   });
 });
+
+describe("organisation and feature filters", () => {
+  it("reads the choices and keeps a valid choice in every link", async () => {
+    const { costQuery, normalizeMetrics, scopeView } = await import(
+      "./cost-data"
+    );
+    const metrics = normalizeMetrics({
+      filters: { company: null, stage: "CDF" },
+      choices: {
+        companies: [
+          {
+            id: "4a1b2c3d-0000-4000-8000-00000000c0de",
+            name: "Fictional Co",
+            environment: "production",
+            rupees: 12.5,
+          },
+        ],
+        stages: [{ stage: "C2", label: "Transcription" }, { stage: "CDF" }],
+      },
+      overview: {
+        by_stage: [
+          { stage: "C4", rupees: 1, input_tokens: 9000, output_tokens: 1200 },
+          { stage: "C2", rupees: 3, audio_minutes: 12.5 },
+        ],
+      },
+    });
+    expect(metrics.filters).toEqual({ company: null, stage: "CDF" });
+    expect(metrics.choices.stages[1]).toEqual({
+      stage: "CDF",
+      label: "Call data · fast",
+    });
+    expect(metrics.overview.byStage[0]).toMatchObject({
+      inputTokens: 9000,
+      outputTokens: 1200,
+    });
+    expect(metrics.overview.byStage[1].audioMinutes).toBe(12.5);
+    const org = "4a1b2c3d-0000-4000-8000-00000000c0de";
+    expect(scopeView({ org, feature: "AR" })).toEqual({ org, feature: "AR" });
+    expect(scopeView({ org: "../x", feature: "nope" })).toEqual({
+      org: undefined,
+      feature: undefined,
+    });
+    const link = costQuery(
+      {
+        tab: "overview",
+        days: "30",
+        env: "all",
+        tests: false,
+        org,
+        feature: "AR",
+      },
+      { days: "7" },
+    );
+    expect(link).toBe(`/usage?days=7&org=${org}&feature=AR`);
+  });
+});
+
+describe("revenue against cost in plain words", () => {
+  it("says what came in, what the AI cost and what is left", async () => {
+    const { normalizeMetrics, revenueWords } = await import("./cost-data");
+    const metrics = normalizeMetrics({
+      window: { days: 30 },
+      fx: { usd_to_inr: 100, set_on: "2026-09-19" },
+      revenue: {
+        totals: {
+          production: { revenue: 5000, cost: 700, margin: 4300 },
+          staging: { revenue: 100, cost: 250, margin: -150 },
+        },
+      },
+    });
+    const [production, staging] = revenueWords(metrics);
+    expect(production).toContain("customers paid ₹5,000 in the last 30 days");
+    expect(production).toContain("cost $7.00 · ₹700.00");
+    expect(production).toContain("86% of what came in");
+    expect(staging).toContain("test money");
+    const idle = normalizeMetrics({
+      revenue: {
+        totals: { production: { revenue: 0, cost: 12, margin: -12 } },
+      },
+    });
+    expect(revenueWords(idle)[0]).toContain("no money came in");
+  });
+});

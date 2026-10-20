@@ -545,3 +545,37 @@ def test_every_paid_ai_feature_counts_at_the_one_rate() -> None:
     assert metrics["fx"]["currency"] == "USD"
     stages = {row["stage"] for row in metrics["overview"]["by_stage"]}
     assert {"CDF", "CDD", "AR"} <= stages
+
+
+def test_filters_narrow_to_one_organisation_or_feature_and_offer_choices() -> None:
+    document = _document()
+    document["companies"].append(
+        {"id": "co-2", "name": "Other Fictional Co", "kind": "organisation"}
+    )
+    document["pointer_reviews"].append(
+        {
+            "call": None,
+            "company": "co-2",
+            "model": "gemini-3.8-flash",
+            "input_tokens": 1000,
+            "output_tokens": 200,
+            "by": "timer",
+            "at": _at(5),
+        }
+    )
+    export = parse_export("staging", document)
+    whole = build_metrics([export], _scope())
+    names = [row["name"] for row in whole["choices"]["companies"]]
+    assert set(names) == {"Sunrise Rooftops", "Other Fictional Co"}
+    assert {row["stage"] for row in whole["choices"]["stages"]} >= {"C2", "C4", "C5", "PR"}
+    one = build_metrics([parse_export("staging", document)], _scope(company="co-2"))
+    assert one["filters"] == {"company": "co-2", "stage": None}
+    assert [row["stage"] for row in one["overview"]["by_stage"]] == ["PR"]
+    assert one["overview"]["spend_window"] == 0.15
+    # The choices still list every organisation, so the filter can be changed back.
+    assert len(one["choices"]["companies"]) == 2
+    transcription = build_metrics([parse_export("staging", document)], _scope(stage="C2"))
+    (row,) = transcription["overview"]["by_stage"]
+    assert row["stage"] == "C2" and row["audio_minutes"] > 0 and row["input_tokens"] == 0
+    facts = build_metrics([parse_export("staging", document)], _scope(stage="C4"))
+    assert facts["overview"]["by_stage"][0]["input_tokens"] > 0

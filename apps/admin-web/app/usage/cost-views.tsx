@@ -26,6 +26,7 @@ import {
   pct,
   perMin,
   rateWords,
+  revenueWords,
   usd,
   seconds,
   seriesValue,
@@ -98,6 +99,83 @@ function Chips({
         </Link>
       ))}
     </nav>
+  );
+}
+
+/**
+ * One organisation and one feature (owner, 20 Oct 2026: "filters per organisation,
+ * per user, per call and per feature"). A plain form, so it works without script;
+ * the Per call tab lists each call of the choice.
+ */
+export function ScopeFilters({
+  metrics,
+  current,
+}: {
+  metrics: Metrics;
+  current: CostFilter;
+}) {
+  const { companies, stages } = metrics.choices;
+  const chosenOrg = companies.find((item) => item.id === current.org);
+  const chosenStage = stages.find((item) => item.stage === current.feature);
+  const keep: Record<string, string | undefined> = {
+    tab: current.tab !== "overview" ? current.tab : undefined,
+    days: current.days !== "30" ? current.days : undefined,
+    env: current.env !== "all" ? current.env : undefined,
+    tests: current.tests ? "1" : undefined,
+    charts: current.charts,
+    ca: current.ca,
+    cb: current.cb,
+    sort: current.sort,
+  };
+  return (
+    <form className={styles.scope} method="get" action="/usage">
+      {Object.entries(keep).map(([name, value]) =>
+        value ? (
+          <input key={name} type="hidden" name={name} value={value} />
+        ) : null,
+      )}
+      <label>
+        Organisation
+        <select name="org" defaultValue={current.org ?? ""}>
+          <option value="">All organisations</option>
+          {companies.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name} ·{" "}
+              {ENVIRONMENT_LABEL[item.environment] ?? item.environment} ·{" "}
+              {money(item.rupees, metrics.fx)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Feature
+        <select name="feature" defaultValue={current.feature ?? ""}>
+          <option value="">All features</option>
+          {stages.map((item) => (
+            <option key={item.stage} value={item.stage}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" className={styles.scopeButton}>
+        Show
+      </button>
+      {current.org || current.feature ? (
+        <span className={styles.scopeNow}>
+          Showing {chosenOrg?.name ?? "one organisation"}
+          {current.org && current.feature ? " · " : ""}
+          {current.feature ? (chosenStage?.label ?? current.feature) : ""}
+          {" · "}
+          <Link
+            href={costQuery(current, { org: undefined, feature: undefined })}
+            scroll={false}
+          >
+            Show everything
+          </Link>
+        </span>
+      ) : null}
+    </form>
   );
 }
 
@@ -408,7 +486,7 @@ export function OverviewView({
           title="Where the money goes"
           sub={`${inr(o.spendWindow)} · ${scope}`}
           tools={
-            <Why detail="Spend per pipeline step. Audio check runs on our own server and costs nothing." />
+            <Why detail="Spend per feature: transcription is priced by audio minutes; the model steps (facts, report, pointer review, call data, AI replies, quote facts) by input and output tokens. Audio check runs on our own server and costs nothing." />
           }
         >
           {o.byStage.length ? (
@@ -420,8 +498,12 @@ export function OverviewView({
                   max={1}
                   label={`${pct(row.share)} of spend`}
                 />
-                <strong>{inr(row.rupees)}</strong>
-                <small>{perMin(row.perMinute)}</small>
+                <strong>{money(row.rupees, metrics.fx)}</strong>
+                <small>
+                  {row.audioMinutes
+                    ? `${minutes(row.audioMinutes)} of audio · ${perMin(row.perMinute)}`
+                    : `${tokens(row.inputTokens)} in · ${tokens(row.outputTokens)} out tokens`}
+                </small>
               </div>
             ))
           ) : (
@@ -1048,8 +1130,23 @@ export function CallsView({
 export function RevenueView({ metrics }: { metrics: Metrics }) {
   const revenue = metrics.revenue;
   const totals = ENVIRONMENTS.filter((name) => revenue.totals[name]);
+  const words = revenueWords(metrics);
   return (
     <>
+      {words.length ? (
+        <Panel title="In plain words" sub={`last ${metrics.days} days`}>
+          <ul className={styles.plain}>
+            {words.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className={styles.note}>
+            Revenue is live payments and subscription charges minus refunds.
+            Cost is what the AI providers charge at list price, nothing else:
+            hosting, staff and payment fees are not in it.
+          </p>
+        </Panel>
+      ) : null}
       <Tiles label="Revenue against cost">
         {totals.map((name) => {
           const value = revenue.totals[name] ?? {

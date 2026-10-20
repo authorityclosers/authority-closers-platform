@@ -19,7 +19,7 @@ from ac_platform.conversation_intelligence.application import (
 from ac_platform.conversation_intelligence.cost_metrics import AdminCostMetrics
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_admin_surface
 
-_FILTERS = {"days", "env", "tests", "sort", "steps"}
+_FILTERS = {"days", "env", "tests", "sort", "steps", "company", "stage"}
 
 
 def install_cost_metrics_routes(
@@ -36,6 +36,8 @@ def install_cost_metrics_routes(
         tests: Annotated[int, Query(ge=0, le=1)] = 0,
         sort: Literal["newest", "cost", "per_minute", "audio", "tokens"] = "newest",
         steps: Annotated[int, Query(ge=0, le=1)] = 0,
+        company: Annotated[str | None, Query(min_length=36, max_length=36)] = None,
+        stage: Annotated[str | None, Query(min_length=1, max_length=8)] = None,
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
         """Spend, usage, revenue against cost and hold health; numbers only, never content."""
@@ -45,7 +47,8 @@ def install_cost_metrics_routes(
         names = set(request.query_params)
         if names - _FILTERS or any(len(request.query_params.getlist(n)) != 1 for n in names):
             raise HTTPException(
-                422, "Cost and usage takes days, env, tests, sort and steps once each."
+                422,
+                "Cost and usage takes days, env, tests, sort, steps, company and stage once each.",
             )
         if settings.operations_tenant_id is None:
             raise HTTPException(503, "Cost and usage is not configured.")
@@ -62,6 +65,8 @@ def install_cost_metrics_routes(
                 tests=bool(tests),
                 call_sort=sort,
                 call_steps=bool(steps),
+                company=company,
+                stage=stage,
             )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
