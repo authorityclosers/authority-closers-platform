@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 
 import { notify } from "../notice-center";
+import { readSalesXrayWorkspaces } from "../sales-xray-workspaces";
 import { IntegrationsPanel } from "../organisation/integrations/integrations-panel";
 import { goToProvider } from "../sign-in-connect";
 import { parseSignInMethods, type ConnectOption } from "../sign-in-methods";
@@ -91,6 +92,42 @@ const NEED_LABELS: Record<string, string> = {
   to: "Send the test to",
   message: "A message a lead might send",
 };
+
+// What connecting gives, for an app that isn't connected yet (this is Settings,
+// so never "connect it in Settings").
+const GIVES: Record<AppKey, string> = {
+  meta_leads:
+    "New leads from your Facebook and Instagram forms arrive in Leads by themselves.",
+  whatsapp: "Message leads on WhatsApp and answer their replies in Chats.",
+  messenger: "Answer Messenger chats from Sales Xray.",
+  instagram: "Answer Instagram DMs and comments from Sales Xray.",
+  google_ads:
+    "Leads from your Google Ads lead forms arrive in Leads every few minutes.",
+  phone_calls:
+    "Your team's calls from the Sales Xray phone app are logged on their leads.",
+  webhook_sources: "Bring leads in from your website, sheets and other apps.",
+  ai_replies: "Draft or send first replies to new lead messages.",
+};
+
+/** The card's one line: the app's own words, or what connecting gives. */
+export function cardWords(app: AppHealth): string {
+  if (app.state === "problem" && app.lastError) return app.lastError.words;
+  if (app.state === "ready" || app.state === "problem") return app.words;
+  if (app.state === "not_set_up") return app.words || "Not available here yet.";
+  return GIVES[app.app];
+}
+
+// One grid, grouped so it scans (design review, 20 Oct); sign-in last.
+const GROUPS: { title: string; apps: AppKey[] }[] = [
+  {
+    title: "Leads and ads",
+    apps: ["meta_leads", "google_ads", "webhook_sources"],
+  },
+  { title: "Messages", apps: ["whatsapp", "messenger", "instagram"] },
+  { title: "Calls and AI", apps: ["phone_calls", "ai_replies"] },
+];
+// The outline while loading: the same groups, so nothing moves.
+const SKELETON_GROUPS = [3, 3, 2];
 
 const POLL_MS = 2000;
 const POLL_LIMIT = 45;
@@ -215,27 +252,31 @@ function AppCard({
           <Badge tone={status.tone}>{status.label}</Badge>
         </div>
       </div>
-      <p className={styles.words}>
-        {app.state === "problem" && app.lastError
-          ? app.lastError.words
-          : app.words}
-      </p>
+      <p className={styles.words}>{cardWords(app)}</p>
       <div className={styles.actions}>
+        {app.state === "problem" && app.connect ? (
+          // Its own words ask to connect again: that is the one filled button.
+          <Button
+            variant="primary"
+            onClick={() => goToProvider(app.connect!.path)}
+          >
+            <PlugZap size={15} aria-hidden="true" />
+            Reconnect
+          </Button>
+        ) : null}
         {app.state === "not_set_up" ? null : !connected &&
           app.connect &&
           app.state !== "off" ? (
           <Button
-            variant="primary"
+            variant="secondary"
+            className={styles.tinted}
             onClick={() => goToProvider(app.connect!.path)}
           >
             <PlugZap size={15} aria-hidden="true" />
             Connect
           </Button>
         ) : (
-          <Button
-            variant={connected ? "secondary" : "primary"}
-            onClick={onManage}
-          >
+          <Button variant="secondary" onClick={onManage}>
             Manage
           </Button>
         )}
@@ -280,7 +321,7 @@ function SignInCard({ option }: { option: ConnectOption }) {
         <Link
           href="/settings/security"
           className={styles.linkButton}
-          data-variant={option.connected ? "secondary" : "primary"}
+          data-variant={option.connected ? "secondary" : "tinted"}
         >
           {option.connected ? "Manage" : "Connect"}
         </Link>
@@ -526,6 +567,7 @@ function ManageSheet({
   mode,
   offer,
   result,
+  workspace,
   onClose,
   onRun,
   onDismiss,
@@ -535,6 +577,7 @@ function ManageSheet({
   mode: "manage" | "test";
   offer?: TestOffer;
   result: Running | undefined;
+  workspace: string | null;
   onClose: () => void;
   onRun: (offer: TestOffer, body: Record<string, unknown>) => void;
   onDismiss: () => void;
@@ -629,6 +672,12 @@ function ManageSheet({
           ) : null}
         </>
       ) : null}
+      {offers.length && workspace ? (
+        <p className={styles.runsIn}>
+          Runs in <strong>{workspace}</strong>, with its own Pages, numbers and
+          leads.
+        </p>
+      ) : null}
       {offers.map((item) => (
         <section
           key={item.kind}
@@ -678,6 +727,8 @@ export function ConnectedApps() {
   const [tests, setTests] = useState<Partial<Record<AppKey, Running>>>({});
   const [sheet, setSheet] = useState<SheetState>(null);
   const lastRead = useRef(0);
+  // Which workspace these apps belong to: tests run there, so it is named.
+  const [workspace, setWorkspace] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -733,6 +784,20 @@ export function ConnectedApps() {
       );
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    readSalesXrayWorkspaces(controller.signal).then(
+      (choices) =>
+        setWorkspace(
+          choices.workspaces.find(
+            (item) => item.tenant_id === choices.selected_tenant_id,
+          )?.name ?? null,
+        ),
+      () => undefined,
+    );
+    return () => controller.abort();
+  }, [attempt]);
 
   // Back from Meta or Google, or another tab: read again (at most every 30 s).
   useEffect(() => {
@@ -799,10 +864,10 @@ export function ConnectedApps() {
 
   const run = useCallback(
     async (app: AppKey, body: Record<string, unknown>) => {
-      setTests((current) => ({
-        ...current,
+      // One result at a time: a new test replaces any other card's result.
+      setTests({
         [app]: { testId: null, status: "waiting", words: "", steps: [] },
-      }));
+      });
       try {
         const result = await startTest(app, body);
         setTests((current) => ({ ...current, [app]: { ...result, polls: 0 } }));
@@ -852,9 +917,15 @@ export function ConnectedApps() {
       <div className={styles.summary}>
         {loaded.state === "ready" ? (
           <p>
+            {workspace ? (
+              <span className={styles.workspace}>{workspace} · </span>
+            ) : null}
             <strong>{connected} connected</strong>
             {attention ? (
-              <span data-tone="warn"> · {attention} need attention</span>
+              <span data-tone="warn">
+                {" "}
+                · {attention} {attention === 1 ? "needs" : "need"} attention
+              </span>
             ) : null}
             {ago(loaded.checkedAt) ? (
               <span> · checked {ago(loaded.checkedAt)}</span>
@@ -878,33 +949,67 @@ export function ConnectedApps() {
             aria-hidden="true"
             className={refreshing ? styles.spin : undefined}
           />
-          {loaded.state === "failed" ? "Try again" : "Check again"}
+          <span className={styles.refreshLabel}>
+            {loaded.state === "failed" ? "Try again" : "Check again"}
+          </span>
         </Button>
       </div>
-      <div className={styles.grid} aria-busy={loaded.state === "loading"}>
+      <div className={styles.groups} aria-busy={loaded.state === "loading"}>
         {loaded.state === "loading"
-          ? Array.from({ length: 8 }, (_, index) => (
-              <CardSkeleton key={index} />
+          ? SKELETON_GROUPS.map((size, group) => (
+              <section key={group} className={styles.group} aria-hidden="true">
+                <Skeleton width={110} height={12} />
+                <div className={styles.grid}>
+                  {Array.from({ length: size }, (_, index) => (
+                    <CardSkeleton key={index} />
+                  ))}
+                </div>
+              </section>
             ))
-          : apps.map((app) => (
-              <AppCard
-                key={app.app}
-                app={app}
-                result={tests[app.app]}
-                onManage={() => setSheet({ app: app.app, mode: "manage" })}
-                onTest={(offer) =>
-                  offer.needs.length || offer.confirm
-                    ? setSheet({ app: app.app, mode: "test", offer })
-                    : void run(app.app, {})
-                }
-                onDismiss={() => dismiss(app.app)}
-              />
-            ))}
-        {loaded.state !== "loading"
-          ? signIn.map((option) => (
-              <SignInCard key={option.kind} option={option} />
-            ))
-          : null}
+          : GROUPS.map((group) => {
+              const members = group.apps
+                .map((key) => apps.find((app) => app.app === key))
+                .filter((app): app is AppHealth => app !== undefined);
+              return members.length ? (
+                <section
+                  key={group.title}
+                  className={styles.group}
+                  aria-label={group.title}
+                >
+                  <h3 className={styles.groupTitle}>{group.title}</h3>
+                  <div className={styles.grid}>
+                    {members.map((app) => (
+                      <AppCard
+                        key={app.app}
+                        app={app}
+                        result={
+                          sheet?.app === app.app ? undefined : tests[app.app]
+                        }
+                        onManage={() =>
+                          setSheet({ app: app.app, mode: "manage" })
+                        }
+                        onTest={(offer) =>
+                          offer.needs.length || offer.confirm
+                            ? setSheet({ app: app.app, mode: "test", offer })
+                            : void run(app.app, {})
+                        }
+                        onDismiss={() => dismiss(app.app)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null;
+            })}
+        {loaded.state !== "loading" && signIn.length ? (
+          <section className={styles.group} aria-label="Sign-in">
+            <h3 className={styles.groupTitle}>Sign-in</h3>
+            <div className={styles.grid}>
+              {signIn.map((option) => (
+                <SignInCard key={option.kind} option={option} />
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
       {open && sheet ? (
         <ManageSheet
@@ -912,6 +1017,7 @@ export function ConnectedApps() {
           mode={sheet.mode}
           offer={sheet.offer}
           result={tests[open.app]}
+          workspace={workspace}
           onClose={() => setSheet(null)}
           onRun={(_, body) => void run(open.app, body)}
           onDismiss={() => dismiss(open.app)}

@@ -144,6 +144,19 @@ beforeEach(() => {
   routes = {
     "GET /v1/lead-desk/integrations/health": () => Response.json(HEALTH),
     "GET /v1/me/sign-in-methods": () => Response.json(SIGN_IN),
+    "GET /v1/me/sales-xray-workspaces": () =>
+      Response.json({
+        selected_tenant_id: "t-sandbox",
+        workspaces: [
+          {
+            tenant_id: "t-sandbox",
+            kind: "organisation",
+            name: "Brightline Sandbox",
+            role: "owner",
+            sales_xray_enabled: true,
+          },
+        ],
+      }),
   };
   vi.stubGlobal(
     "fetch",
@@ -189,22 +202,34 @@ it("draws card outlines first, then one card per app with its status and one mai
       release = resolve;
     });
   await act(async () => root.render(<ConnectedApps />));
-  expect(host.querySelector('[aria-busy="true"]')?.children).toHaveLength(8);
+  // The same groups as the cards, so nothing moves when they arrive.
+  expect(
+    host.querySelectorAll('[aria-busy="true"] section > div > div'),
+  ).toHaveLength(8);
   await act(async () => release(Response.json(HEALTH)));
   await flush();
   expect(
     [...host.querySelectorAll("article")].map((item) => item.dataset.app),
   ).toEqual([
     "meta_leads",
-    "whatsapp",
     "google_ads",
+    "whatsapp",
     "phone_calls",
     "ai_replies",
     "sign-in-google",
     "sign-in-facebook",
   ]);
+  expect(
+    [...host.querySelectorAll("h3")]
+      .map((item) => item.textContent)
+      .filter((text) =>
+        ["Leads and ads", "Messages", "Calls and AI", "Sign-in"].includes(
+          text ?? "",
+        ),
+      ),
+  ).toEqual(["Leads and ads", "Messages", "Calls and AI", "Sign-in"]);
   expect(host.textContent).toContain("4 connected");
-  expect(host.textContent).toContain("1 need attention");
+  expect(host.textContent).toContain("1 needs attention");
   expect(card("meta_leads").textContent).toContain("Connected");
   // A problem shows the app's own words about it.
   expect(card("whatsapp").textContent).toContain("Needs attention");
@@ -466,4 +491,91 @@ it("reads only known apps and follows only the back end's own routes", () => {
   expect(parsed?.apps[0]).toMatchObject({ state: "problem", connect: null });
   expect(parsed?.apps[0].connections[0].disconnect).toBeNull();
   expect(parseHealth({ apps: "x" })).toBeNull();
+});
+
+it("leads an app that needs attention with Reconnect, the one filled button", async () => {
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  const filled = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      'article button[data-variant="primary"]',
+    ),
+  ];
+  expect(filled.map((item) => item.textContent)).toEqual(["Reconnect"]);
+  expect(filled[0].closest("article")?.getAttribute("data-app")).toBe(
+    "whatsapp",
+  );
+  await act(async () => filled[0].click());
+  expect(seen.trips).toEqual(["/v1/lead-desk/whatsapp/start"]);
+  // Connect elsewhere is tinted, not filled.
+  expect(
+    button(card("google_ads"), "Connect")?.getAttribute("data-variant"),
+  ).toBe("secondary");
+});
+
+it("says what connecting gives instead of sending people to Settings, and names the workspace", async () => {
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  expect(card("google_ads").textContent).toContain(
+    "Leads from your Google Ads lead forms arrive in Leads every few minutes.",
+  );
+  expect(card("google_ads").textContent).not.toContain("Not connected.");
+  expect(host.textContent).not.toMatch(/in Settings\./);
+  expect(host.textContent).toContain("Brightline Sandbox · 4 connected");
+  await act(async () =>
+    button(card("whatsapp"), "Send a test message")!.click(),
+  );
+  expect(host.querySelector("dialog")?.textContent).toContain(
+    "Runs in Brightline Sandbox",
+  );
+});
+
+it("keeps one result at a time, shown once", async () => {
+  routes["POST /v1/lead-desk/integrations/phone_calls/test"] = () =>
+    Response.json({
+      testId: null,
+      app: "phone_calls",
+      status: "passed",
+      words: "Phones fine.",
+    });
+  routes["POST /v1/lead-desk/integrations/whatsapp/test"] = () =>
+    Response.json({
+      testId: null,
+      app: "whatsapp",
+      status: "failed",
+      words: "Meta refused.",
+    });
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  await act(async () =>
+    button(card("phone_calls"), "Check the phones")!.click(),
+  );
+  await flush();
+  expect(card("phone_calls").querySelector('[role="status"]')).not.toBeNull();
+  // A test in a sheet shows there only, and the older card result goes.
+  await act(async () =>
+    button(card("whatsapp"), "Send a test message")!.click(),
+  );
+  const sheet = host.querySelector("dialog")!;
+  const input = sheet.querySelector<HTMLInputElement>('input[type="tel"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "+91 90000 11111");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => button(sheet, "Send a test message")!.click());
+  await flush();
+  expect(host.querySelectorAll('[data-status="failed"]')).toHaveLength(1);
+  expect(card("phone_calls").querySelector('[role="status"]')).toBeNull();
+  expect(card("whatsapp").querySelector('[role="status"]')).toBeNull();
+  // Closed: the result is in its card, once.
+  await act(async () =>
+    sheet.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click(),
+  );
+  expect(host.querySelectorAll('[data-status="failed"]')).toHaveLength(1);
+  expect(
+    card("whatsapp").querySelector('[data-status="failed"]'),
+  ).not.toBeNull();
 });

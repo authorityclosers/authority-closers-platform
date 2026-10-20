@@ -24,9 +24,43 @@
   font-weight: 650;
 }
 
+.workspace {
+  color: var(--sx-ink-2);
+  font-weight: 650;
+}
+
+.runsIn {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.runsIn strong {
+  color: var(--sx-ink);
+}
+
 .summary [data-tone="warn"] {
   color: var(--sx-warn);
   font-weight: 600;
+}
+
+.groups {
+  display: grid;
+  gap: 18px;
+}
+
+.group {
+  display: grid;
+  gap: 8px;
+}
+
+.groupTitle {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .grid {
@@ -128,10 +162,12 @@
   white-space: nowrap;
 }
 
-.linkButton[data-variant="primary"] {
+/* Connect: tinted, so one filled button per view stays the fix for a problem. */
+.actions .tinted,
+.linkButton[data-variant="tinted"] {
   border-color: transparent;
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
 }
 
 .linkButton:focus-visible {
@@ -448,5 +484,19 @@
 @media (max-width: 599px) {
   .card {
     min-height: 0;
+  }
+
+  /* Thumb-sized on a phone. */
+  .actions > * {
+    min-height: 44px;
+  }
+
+  .refreshLabel {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }

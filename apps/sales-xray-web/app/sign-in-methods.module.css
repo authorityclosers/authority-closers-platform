@@ -33,3 +33,11 @@
   width: 88px;
   height: 12px;
 }
+
+/* Connect: the same tinted accent as in Connected apps (design review, 20 Oct). */
+button.connect,
+button.connect:hover {
+  border-color: transparent;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}

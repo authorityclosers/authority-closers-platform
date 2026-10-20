@@ -473,7 +473,7 @@ export function SignInMethods({ active }: { active: boolean }) {
             <div className={styles.rowControl}>
               <button
                 type="button"
-                className={styles.primary}
+                className={`${styles.secondary} ${local.connect}`}
                 disabled={busy !== null}
                 onClick={() => void connect(option.kind)}
               >

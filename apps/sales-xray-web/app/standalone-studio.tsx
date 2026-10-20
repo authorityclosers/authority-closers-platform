@@ -742,7 +742,15 @@ function StandaloneStudioView({
       <WorkspaceAccessProvider value={accessValue}>
         <AppFrame embedded={embedded}>
           {view.kind === "ready" && !salesXrayEnabled ? (
-            <AcquisitionShell authenticated active={activeFor(pathname)}>
+            <AcquisitionShell
+              authenticated
+              active={activeFor(pathname)}
+              pageName={
+                pathname === "/settings" || pathname?.startsWith("/settings/")
+                  ? "Settings"
+                  : undefined
+              }
+            >
               <WorkspaceNoAccess workspace={null} />
             </AcquisitionShell>
           ) : (
