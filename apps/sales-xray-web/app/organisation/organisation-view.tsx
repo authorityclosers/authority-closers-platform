@@ -82,6 +82,7 @@ import { TeamPatternsSection } from "./team-patterns-section";
 import {
   IntegrationsPanel,
   type IntegrationPart,
+  type IntegrationsPanelOptions,
 } from "./integrations/integrations-panel";
 
 type Base =
@@ -214,6 +215,7 @@ export function OrganisationView({
   embedded = false,
   sections,
   integrationParts,
+  integrationOptions,
 }: {
   /** The page's first reads made on the server (dev), or null. */
   initial?: ServerOrganisation | null;
@@ -225,6 +227,8 @@ export function OrganisationView({
   sections?: readonly Tab[];
   /** Which parts of Integrations to show (Settings splits them into sections). */
   integrationParts?: readonly IntegrationPart[];
+  /** Settings → Developers: what goes between the parts, and a new key. */
+  integrationOptions?: IntegrationsPanelOptions;
 }) {
   const router = useOptionalRouter();
   const access = useWorkspaceAccess();
@@ -542,7 +546,10 @@ export function OrganisationView({
 
             {shows("integrations") && canManage && (
               <SectionBoundary name="Integrations">
-                <IntegrationsPanel parts={integrationParts} />
+                <IntegrationsPanel
+                  parts={integrationParts}
+                  {...integrationOptions}
+                />
               </SectionBoundary>
             )}
             {sections?.includes("integrations") && live && !canManage ? (

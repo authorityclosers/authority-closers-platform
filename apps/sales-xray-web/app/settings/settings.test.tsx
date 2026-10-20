@@ -37,6 +37,9 @@ vi.mock("../organisation/organisation-view", () => ({
   },
 }));
 vi.mock("../leads/alerts-card", () => ({ AlertsCard: () => null }));
+vi.mock("./developers", () => ({
+  DevelopersSection: () => <p data-testid="developers">developers</p>,
+}));
 vi.mock("./connected-apps", () => ({
   ConnectedApps: () => <p data-testid="connected-apps">apps grid</p>,
 }));
@@ -154,7 +157,6 @@ it("builds each section from the existing screens, with only its own parts", asy
   await render("organisation");
   await render("team");
   await render("apps");
-  await render("developers");
   await render("ai-replies");
   const organisation = seen.organisation as {
     embedded: boolean;
@@ -168,9 +170,11 @@ it("builds each section from the existing screens, with only its own parts", asy
     // The company's details; the overview stays at /organisation.
     [["company"], undefined],
     [["members"], undefined],
-    [["integrations"], ["keys", "webhook", "handover", "apps"]],
     [["integrations"], ["ai"]],
   ]);
+  // Developers: the docs first, keys, Try it, your AI assistant, the webhook.
+  await render("developers");
+  expect(host.querySelector('[data-testid="developers"]')).not.toBeNull();
   // Connected apps is one grid of app cards of its own.
   await render("apps");
   expect(host.querySelector('[data-testid="connected-apps"]')).not.toBeNull();

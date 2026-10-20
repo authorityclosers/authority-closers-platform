@@ -21,6 +21,7 @@ import { AlertsCard } from "../leads/alerts-card";
 import { OrganisationView } from "../organisation/organisation-view";
 import { Panel } from "../ui/kit";
 import { ConnectedApps } from "./connected-apps";
+import { DevelopersSection } from "./developers";
 import type { SettingsSectionId } from "./settings-sections";
 import styles from "./sections.module.css";
 
@@ -134,13 +135,7 @@ export function SettingsSectionView({ id }: { id: SettingsSectionId }) {
         />
       );
     case "developers":
-      return (
-        <OrganisationView
-          embedded
-          sections={["integrations"]}
-          integrationParts={["keys", "webhook", "handover", "apps"]}
-        />
-      );
+      return <DevelopersSection />;
     case "notifications":
       return <Notifications />;
     case "devices":

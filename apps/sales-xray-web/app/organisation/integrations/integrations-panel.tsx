@@ -15,7 +15,7 @@ import {
   Send,
   Webhook as WebhookIcon,
 } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { notify } from "../../notice-center";
 import {
@@ -283,9 +283,11 @@ function NewKeyDialog({
 function KeysSection({
   data,
   onChange,
+  onKeyMade,
 }: {
   data: Integrations;
   onChange: (keys: ApiKey[]) => void;
+  onKeyMade?: (key: string) => void;
 }) {
   const [creating, setCreating] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
@@ -373,6 +375,7 @@ function KeysSection({
           setCreating(false);
           onChange([key, ...data.keys]);
           setSecret(made);
+          onKeyMade?.(made);
         }}
       />
       <SecretOnce
@@ -1232,37 +1235,86 @@ const DEVELOPER_PARTS: ReadonlySet<IntegrationPart> = new Set([
   "apps",
 ]);
 
+export type IntegrationsPanelOptions = {
+  /** Shown right after a part (Settings → Developers: Try it after the keys). */
+  extras?: Partial<Record<IntegrationPart, ReactNode>>;
+  /** A new key, the moment it is made; the caller keeps it in memory only. */
+  onKeyMade?: (key: string) => void;
+  /** Changed by the caller to read again (a key was just used). */
+  refresh?: number;
+};
+
 export function IntegrationsPanel({
   parts = ALL_PARTS,
+  extras,
+  onKeyMade,
+  refresh = 0,
 }: {
   parts?: readonly IntegrationPart[];
-}) {
+} & IntegrationsPanelOptions) {
   const [data, setData] = useState<Integrations | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   // Keys, the webhook, hand-over and apps share one read; the rest read their own.
   const needsData = parts.some((part) => DEVELOPER_PARTS.has(part));
+  // Read again when asked (a key was just used) and when the page is back in
+  // view (at most every 15 s), so "Last used" is current. A later read that
+  // fails keeps what is shown and says nothing.
+  const shown = useRef(false);
   useEffect(() => {
     if (!needsData) return;
     const controller = new AbortController();
     readIntegrations(controller.signal).then(
       (value) => {
+        shown.current = true;
         setData(value);
         setFailed(false);
       },
       (error: unknown) => {
+        if (shown.current || controller.signal.aborted) return;
         problem(error, "Integrations did not load");
         setFailed(true);
       },
     );
     return () => controller.abort();
-  }, [attempt, needsData]);
+  }, [attempt, needsData, refresh]);
+  useEffect(() => {
+    if (!needsData) return;
+    let last = Date.now();
+    const again = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - last < 15_000) return;
+      last = Date.now();
+      setAttempt((n) => n + 1);
+    };
+    window.addEventListener("focus", again);
+    document.addEventListener("visibilitychange", again);
+    return () => {
+      window.removeEventListener("focus", again);
+      document.removeEventListener("visibilitychange", again);
+    };
+  }, [needsData]);
   const shows = (part: IntegrationPart) => parts.includes(part);
   const own = (
     <>
-      {shows("whatsapp") ? <WhatsAppSettings /> : null}
-      {shows("social") ? <SocialSettings /> : null}
-      {shows("ai") ? <AiRepliesSettings /> : null}
+      {shows("whatsapp") ? (
+        <>
+          <WhatsAppSettings />
+          {extras?.whatsapp}
+        </>
+      ) : null}
+      {shows("social") ? (
+        <>
+          <SocialSettings />
+          {extras?.social}
+        </>
+      ) : null}
+      {shows("ai") ? (
+        <>
+          <AiRepliesSettings />
+          {extras?.ai}
+        </>
+      ) : null}
     </>
   );
   if (needsData && failed && !data)
@@ -1295,21 +1347,25 @@ export function IntegrationsPanel({
       {data && shows("keys") ? (
         <KeysSection
           data={data}
+          onKeyMade={onKeyMade}
           onChange={(keys) => setData({ ...data, keys })}
         />
       ) : null}
+      {data && shows("keys") ? extras?.keys : null}
       {data && shows("webhook") ? (
         <WebhookSection
           data={data}
           onChange={(webhook) => setData({ ...data, webhook })}
         />
       ) : null}
+      {data && shows("webhook") ? extras?.webhook : null}
       {data && shows("handover") ? (
         <HandoverSection
           data={data}
           onChange={(handover) => setData({ ...data, handover })}
         />
       ) : null}
+      {data && shows("handover") ? extras?.handover : null}
       {data && shows("apps") ? (
         <AppsSection
           data={data}
@@ -1317,6 +1373,7 @@ export function IntegrationsPanel({
           onConnections={(connections) => setData({ ...data, connections })}
         />
       ) : null}
+      {data && shows("apps") ? extras?.apps : null}
     </div>
   );
 }
