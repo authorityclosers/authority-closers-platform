@@ -177,7 +177,7 @@ def expired(tokens: Mapping[str, Any], *, margin: int = 300) -> bool:
 
 def stamped(answer: Mapping[str, Any]) -> dict[str, Any]:
     """Tokens from an OAuth answer, with when the access token ends."""
-    out = {
+    out: dict[str, Any] = {
         "access_token": str(answer.get("access_token") or ""),
         "refresh_token": str(answer.get("refresh_token") or "") or None,
     }
