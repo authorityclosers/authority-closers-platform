@@ -1,0 +1,108 @@
+{
+  "call_id": "fx-12",
+  "call_type": "inbound_followup",
+  "language_mix": "hi-en",
+  "target_minutes": 10,
+  "seller": {
+    "company": "सफ़रनामा हॉलिडेज",
+    "product": "वियतनाम पाँच रात छह दिन फैमिली पैकेज",
+    "price_list": [
+      "प्रति वयस्क: अड़सठ हजार रुपये",
+      "प्रति बच्चा: बावन हजार रुपये",
+      "वीजा और इंश्योरेंस कॉम्बो: साढ़े सात हजार रुपये प्रति व्यक्ति"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "अंकिता माथुर",
+      "gender": "f",
+      "age_band": "20s",
+      "style": "enthusiastic, knowledgeable travel planner, patient with family needs"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "विवेक सचदेवा",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "thorough family planner, budget-conscious, protective of elderly mother and kids"
+    }
+  ],
+  "sections": [
+    {
+      "name": "Lead verification, destination & travelers profile",
+      "minutes": 3.0,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10",
+        "f11",
+        "f12",
+        "f13",
+        "f14",
+        "f15",
+        "f16",
+        "f17",
+        "f18",
+        "f19",
+        "f20",
+        "f21"
+      ]
+    },
+    {
+      "name": "Accommodation, diet, activities & transparent pricing",
+      "minutes": 4.0,
+      "facts": [
+        "f22",
+        "f23",
+        "f24",
+        "f25",
+        "f26",
+        "f27",
+        "f28",
+        "f29",
+        "f30",
+        "f31"
+      ]
+    },
+    {
+      "name": "Documentation, baggage, advance payment & schedule",
+      "minutes": 3.0,
+      "facts": [
+        "f32",
+        "f33",
+        "f34",
+        "f35",
+        "f36",
+        "f37"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t017"
+      ],
+      "statement": "Salesperson provided reassurance and proactive arrangements for the elderly mother's pure vegetarian dietary needs and airport wheelchair assistance."
+    },
+    {
+      "id": "k02",
+      "kind": "price_too_early",
+      "turn_ids": [
+        "t023"
+      ],
+      "statement": "Salesperson quoted the total package cost before clarifying international flight ticket inventory costs and room setup preferences."
+    }
+  ]
+}

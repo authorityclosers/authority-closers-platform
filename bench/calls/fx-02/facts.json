@@ -1,0 +1,466 @@
+[
+  {
+    "id": "f01",
+    "type": "person_name",
+    "slot": "seller.name",
+    "value": "रोहिणी चितळेकर",
+    "normalized": "Rohini Chitale-kar",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "रोहिणी चितळेकर बोलतेय",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f02",
+    "type": "company",
+    "slot": "seller.company",
+    "value": "चित्रांगण किचन स्टुडिओ",
+    "normalized": "Chitrangon Kitchen Studio",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "चित्रांगण किचन स्टुडिओ मधून",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f03",
+    "type": "person_name",
+    "slot": "prospect.name",
+    "value": "दिगंबर मांडके",
+    "normalized": "Digambar Mandke",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "दिगंबर मांडके",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.037,
+    "trap": null
+  },
+  {
+    "id": "f04",
+    "type": "location",
+    "slot": "prospect.area",
+    "value": "नाशिक रोड",
+    "normalized": "Nashik Road",
+    "turn_ids": [
+      "t003"
+    ],
+    "evidence": "नाशिक रोडच्या गोदावरी हाइट्सचा",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.074,
+    "trap": null
+  },
+  {
+    "id": "f05",
+    "type": "location",
+    "slot": "prospect.project",
+    "value": "गोदावरी हाइट्स",
+    "normalized": "Godavari Heights",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "गोदावरी हाइट्समध्ये फ्लॅट क्रमांक तीनशे दोन",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.111,
+    "trap": null
+  },
+  {
+    "id": "f06",
+    "type": "location",
+    "slot": "prospect.flat_no",
+    "value": "तीनशे दोन",
+    "normalized": "Flat 302",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "फ्लॅट क्रमांक तीनशे दोन",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.111,
+    "trap": null
+  },
+  {
+    "id": "f07",
+    "type": "quantity",
+    "slot": "kitchen.dimensions",
+    "value": "आठ बाय दहा फूट",
+    "normalized": "8x10 ft",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "आठ बाय दहा फूट",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.185,
+    "trap": null
+  },
+  {
+    "id": "f08",
+    "type": "requirement",
+    "slot": "kitchen.layout",
+    "value": "एल-आकार",
+    "normalized": "L-shape",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "L-shape layout आहे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.185,
+    "trap": null
+  },
+  {
+    "id": "f09",
+    "type": "requirement",
+    "slot": "countertop.material",
+    "value": "काळा ग्रॅनाइट",
+    "normalized": "Black granite",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "काळा ग्रॅनाइट slab आधीच बसवला आहे",
+    "said_by": "S2",
+    "critical": false,
+    "needle": false,
+    "depth": 0.185,
+    "trap": null
+  },
+  {
+    "id": "f10",
+    "type": "product",
+    "slot": "seller.product",
+    "value": "अमृता",
+    "normalized": "Amrita",
+    "turn_ids": [
+      "t007"
+    ],
+    "evidence": "अमृता मॉडेलमध्ये BWR मरीन प्लाय",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.222,
+    "trap": null
+  },
+  {
+    "id": "f11",
+    "type": "requirement",
+    "slot": "material.wood",
+    "value": "BWR मरीन प्लाय",
+    "normalized": "BWR marine ply",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "BWR मरीन प्लायच पाहिजे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.259,
+    "trap": null
+  },
+  {
+    "id": "f12",
+    "type": "requirement",
+    "slot": "finish.type",
+    "value": "अक्रिलिक फिनिश",
+    "normalized": "Acrylic finish",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "शटर्सवर अक्रिलिक फिनिश चालेल",
+    "said_by": "S2",
+    "critical": false,
+    "needle": false,
+    "depth": 0.259,
+    "trap": null
+  },
+  {
+    "id": "f13",
+    "type": "price",
+    "slot": "seller.quote_base",
+    "value": "दोन लाख पस्तीस हजार",
+    "normalized": "235000 INR",
+    "turn_ids": [
+      "t009"
+    ],
+    "evidence": "दोन लाख पस्तीस हजार रुपये येतं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.296,
+    "trap": "alt_number_form"
+  },
+  {
+    "id": "f14",
+    "type": "budget",
+    "slot": "prospect.budget",
+    "value": "दोन लाख रुपये",
+    "normalized": "200000 INR",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "माझं budget दोन लाख रुपये आहे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.333,
+    "trap": null
+  },
+  {
+    "id": "f15",
+    "type": "objection",
+    "slot": "prospect.cost_limit",
+    "value": "दोन लाखाच्या आत बसवायचं आहे",
+    "normalized": "must be within 200000 INR",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "दोन लाखाच्या आत बसवायचं आहे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.333,
+    "trap": null
+  },
+  {
+    "id": "f16",
+    "type": "price",
+    "slot": "package.appliances",
+    "value": "तीस हजार",
+    "normalized": "30000 INR",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "तीस हजार रुपयांचं वेगळं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.444,
+    "trap": null
+  },
+  {
+    "id": "f17",
+    "type": "price",
+    "slot": "seller.combo_total",
+    "value": "दोन लाख पासष्ट हजार",
+    "normalized": "265000 INR",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "दोन्ही मिळून दोन लाख पासष्ट हजार होतात",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.444,
+    "trap": null
+  },
+  {
+    "id": "f18",
+    "type": "duration",
+    "slot": "delivery.timeline",
+    "value": "तीन आठवडे",
+    "normalized": "3 weeks",
+    "turn_ids": [
+      "t015"
+    ],
+    "evidence": "बरोबर तीन आठवडे लागतात",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.519,
+    "trap": null
+  },
+  {
+    "id": "f19",
+    "type": "date",
+    "slot": "possession.date",
+    "value": "वीस नोव्हेंबर",
+    "normalized": "2026-11-20",
+    "turn_ids": [
+      "t016"
+    ],
+    "evidence": "बिल्डरने आता वीस नोव्हेंबर सांगितला आहे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.556,
+    "trap": "self_correction"
+  },
+  {
+    "id": "f20",
+    "type": "date",
+    "slot": "site_visit.date",
+    "value": "चोवीस ऑक्टोबर",
+    "normalized": "2026-10-24",
+    "turn_ids": [
+      "t018"
+    ],
+    "evidence": "चोवीस ऑक्टोबर शनिवारी",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.63,
+    "trap": null
+  },
+  {
+    "id": "f21",
+    "type": "time",
+    "slot": "site_visit.time",
+    "value": "सकाळी साडेअकरा",
+    "normalized": "11:30 AM",
+    "turn_ids": [
+      "t018"
+    ],
+    "evidence": "सकाळी साडेअकरा वाजता",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.63,
+    "trap": null
+  },
+  {
+    "id": "f22",
+    "type": "person_name",
+    "slot": "designer.name",
+    "value": "प्रसाद कुलकर्णी",
+    "normalized": "Prasad Kulkarni",
+    "turn_ids": [
+      "t019"
+    ],
+    "evidence": "प्रसाद कुलकर्णी स्वतः तुमच्या flat वर येतील",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.667,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f23",
+    "type": "person_name",
+    "slot": "decision_maker.wife",
+    "value": "सुनीता मांडके",
+    "normalized": "Sunita Mandke",
+    "turn_ids": [
+      "t020"
+    ],
+    "evidence": "माझी पत्नी सुनीता मांडके पण सोबत असेल",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.704,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f24",
+    "type": "duration",
+    "slot": "warranty.plywood",
+    "value": "पाच वर्षे",
+    "normalized": "5 years",
+    "turn_ids": [
+      "t023"
+    ],
+    "evidence": "BWR plywood वर पाच वर्षे",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.815,
+    "trap": null
+  },
+  {
+    "id": "f25",
+    "type": "duration",
+    "slot": "warranty.hardware",
+    "value": "दहा वर्षे",
+    "normalized": "10 years",
+    "turn_ids": [
+      "t023"
+    ],
+    "evidence": "Tandem hardware वर दहा वर्षे",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.815,
+    "trap": null
+  },
+  {
+    "id": "f26",
+    "type": "price",
+    "slot": "visit.cost",
+    "value": "मोफत",
+    "normalized": "0 INR",
+    "turn_ids": [
+      "t025"
+    ],
+    "evidence": "Site visit आणि 3D design पूर्णपणे मोफत आहे",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.889,
+    "trap": null
+  },
+  {
+    "id": "f27",
+    "type": "price",
+    "slot": "booking.token",
+    "value": "पंधरा हजार रुपये",
+    "normalized": "15000 INR",
+    "turn_ids": [
+      "t025"
+    ],
+    "evidence": "पंधरा हजार रुपये token amount लागते",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.889,
+    "trap": null
+  },
+  {
+    "id": "f28",
+    "type": "time",
+    "slot": "catalog.deadline",
+    "value": "दुपारी चार वाजेपर्यंत",
+    "normalized": "16:00",
+    "turn_ids": [
+      "t027"
+    ],
+    "evidence": "आज दुपारी चार वाजेपर्यंत तुमच्या याच WhatsApp number वर",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.963,
+    "trap": null
+  },
+  {
+    "id": "f29",
+    "type": "contact_preference",
+    "slot": "prospect.channel",
+    "value": "WhatsApp वर PDF",
+    "normalized": "WhatsApp PDF",
+    "turn_ids": [
+      "t026"
+    ],
+    "evidence": "WhatsApp वर अमृता मॉडेलचे काही photos आणि PDF catalog पाठवून द्या",
+    "said_by": "S2",
+    "critical": false,
+    "needle": false,
+    "depth": 0.926,
+    "trap": null
+  }
+]
