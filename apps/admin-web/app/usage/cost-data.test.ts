@@ -279,10 +279,16 @@ describe("money in dollars and rupees", () => {
     const metrics = normalizeMetrics({
       fx: { currency: "USD", usd_to_inr: 100, set_on: "2026-09-19" },
     });
+    // An older answer names no mode: the planning rate.
     expect(metrics.fx).toEqual({
       currency: "USD",
       usdToInr: 100,
       setOn: "2026-09-19",
+      mode: "planning",
+      planningUsdToInr: 100,
+      latest: null,
+      unratedSteps: 0,
+      problem: null,
     });
     expect(usd(533, metrics.fx)).toBe("$5.33");
     expect(money(533, metrics.fx)).toBe("$5.33 · ₹533.00");
@@ -322,7 +328,11 @@ describe("organisation and feature filters", () => {
         ],
       },
     });
-    expect(metrics.filters).toEqual({ company: null, stage: "CDF" });
+    expect(metrics.filters).toEqual({
+      company: null,
+      stage: "CDF",
+      person: null,
+    });
     expect(metrics.choices.stages[1]).toEqual({
       stage: "CDF",
       label: "Call data · fast",

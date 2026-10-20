@@ -53,6 +53,7 @@ from ac_platform.conversation_intelligence import (
 from ac_platform.conversation_intelligence import models as conversation_models
 from ac_platform.db.base import Base
 from ac_platform.enrollment import models as enrollment_models
+from ac_platform.fx import models as fx_models
 from ac_platform.identity import google_profile_models, sales_xray_profile_models
 from ac_platform.identity import models as identity_models
 from ac_platform.integrations import models as integration_models
@@ -70,6 +71,7 @@ from ac_platform.practice import models as practice_models
 from ac_platform.product_updates import models as product_update_models
 from ac_platform.providers import models as provider_models
 from ac_platform.tenancy import models as tenancy_models
+from ac_platform.usage_people import models as usage_people_models
 
 MODEL_MODULES = (
     identity_models,
@@ -107,6 +109,8 @@ MODEL_MODULES = (
     partner_event_models,
     call_data_models,
     ai_spend_models,
+    fx_models,
+    usage_people_models,
     integration_models,
     admin_settings_models,
     authorization_models,

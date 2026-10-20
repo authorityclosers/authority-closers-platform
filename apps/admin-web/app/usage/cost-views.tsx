@@ -26,6 +26,7 @@ import {
   money,
   pct,
   perMin,
+  personWords,
   rateWords,
   revenueWords,
   unitWords,
@@ -116,8 +117,9 @@ export function ScopeFilters({
   metrics: Metrics;
   current: CostFilter;
 }) {
-  const { companies, stages } = metrics.choices;
+  const { companies, people, peopleAvailable, stages } = metrics.choices;
   const chosenOrg = companies.find((item) => item.id === current.org);
+  const chosenPerson = people.find((item) => item.id === current.person);
   const chosenStage = stages.find((item) => item.stage === current.feature);
   const keep: Record<string, string | undefined> = {
     tab: current.tab !== "overview" ? current.tab : undefined,
@@ -128,6 +130,7 @@ export function ScopeFilters({
     ca: current.ca,
     cb: current.cb,
     sort: current.sort,
+    fx: current.fx,
   };
   return (
     <form className={styles.scope} method="get" action="/usage">
@@ -150,6 +153,25 @@ export function ScopeFilters({
         </select>
       </label>
       <label>
+        Person
+        <select
+          name="person"
+          defaultValue={current.person ?? ""}
+          disabled={!people.length}
+        >
+          <option value="">
+            {people.length ? "Everyone" : "People appear after the next export"}
+          </option>
+          {people.map((item) => (
+            <option key={`${item.environment}-${item.id}`} value={item.id}>
+              {personWords(item)} ·{" "}
+              {ENVIRONMENT_LABEL[item.environment] ?? item.environment} ·{" "}
+              {money(item.rupees, metrics.fx)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
         Feature
         <select name="feature" defaultValue={current.feature ?? ""}>
           <option value="">All features</option>
@@ -163,20 +185,50 @@ export function ScopeFilters({
       <button type="submit" className={styles.scopeButton}>
         Show
       </button>
-      {current.org || current.feature ? (
+      {current.org || current.feature || current.person ? (
         <span className={styles.scopeNow}>
-          Showing {chosenOrg?.name ?? "one organisation"}
-          {current.org && current.feature ? " · " : ""}
-          {current.feature ? (chosenStage?.label ?? current.feature) : ""}
+          Showing{" "}
+          {[
+            current.org ? (chosenOrg?.name ?? "one organisation") : null,
+            current.person
+              ? chosenPerson
+                ? personWords(chosenPerson)
+                : "one person"
+              : null,
+            current.feature ? (chosenStage?.label ?? current.feature) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
           {" · "}
           <Link
-            href={costQuery(current, { org: undefined, feature: undefined })}
+            href={costQuery(current, {
+              org: undefined,
+              feature: undefined,
+              person: undefined,
+            })}
             scroll={false}
           >
             Show everything
           </Link>
         </span>
       ) : null}
+      <span className={styles.scopeNow}>
+        Rupees at {rateWords(metrics.fx)}
+        {metrics.fx.problem ? ` (${metrics.fx.problem})` : ""} ·{" "}
+        <Link
+          href={costQuery(current, {
+            fx: metrics.fx.mode === "daily" ? "planning" : undefined,
+          })}
+          scroll={false}
+        >
+          {metrics.fx.mode === "daily"
+            ? `Use the planning rate (₹${metrics.fx.planningUsdToInr})`
+            : "Use each day's ECB rate"}
+        </Link>
+        {peopleAvailable.length && people.some((item) => !item.name)
+          ? " · Names show for this Admin's own environment; others by pseudonym."
+          : ""}
+      </span>
     </form>
   );
 }

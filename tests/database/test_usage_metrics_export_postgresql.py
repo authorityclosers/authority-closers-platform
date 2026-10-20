@@ -9,12 +9,16 @@ Disposable loopback PostgreSQL; no provider credentials or network calls.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 
 from ac_platform.conversation_intelligence.cost_metrics import SCHEMA, parse_export, price
+from ac_platform.conversation_intelligence.models import ConversationRecording
+from ac_platform.usage_people.pseudonyms import ensure_key, names_for, pseudonym
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_worker_postgresql import (  # type: ignore[attr-defined]
     _postgres_harness,
@@ -36,16 +40,43 @@ def test_export_reads_a_real_step_and_its_open_hold_read_only(
         engine, _sessions, prepared, reservation_id = await _uncertain_hold(
             postgres_harness, tmp_path, max_cost_paise=2_000
         )
-        try:
+
+        async def export_now() -> dict[str, Any]:
             async with engine.connect() as connection, connection.begin():
                 await connection.exec_driver_sql("SET TRANSACTION READ ONLY")
                 await connection.exec_driver_sql("SET LOCAL ac.metrics_environment = 'staging'")
                 await connection.exec_driver_sql("SET LOCAL ac.metrics_days = '30'")
                 result = await connection.exec_driver_sql(EXPORT_SQL.read_text(encoding="utf-8"))
                 raw = result.scalar_one()
+            return raw if isinstance(raw, dict) else json.loads(raw)
+
+        try:
+            # Before this environment has a pseudonym key: no person, and never a name.
+            before = await export_now()
+            assert [call["person"] for call in before["calls"]] == [None]
+            assert all(set(row) == {"id", "kind"} for row in before["companies"])
+            now = datetime.now(UTC)
+            async with engine.begin() as connection:
+                inner, outer = await connection.run_sync(lambda sync: ensure_key(sync, now))
+                person_id = (
+                    await connection.execute(
+                        select(ConversationRecording.person_id).where(
+                            ConversationRecording.id == prepared.recording_id
+                        )
+                    )
+                ).scalar_one()
+            document = await export_now()
+            async with engine.begin() as connection:
+                named = await connection.run_sync(
+                    lambda sync: names_for(sync, [document["calls"][0]["person"]], now)
+                )
         finally:
             await engine.dispose()
-        document = raw if isinstance(raw, dict) else json.loads(raw)
+        # The export's SQL HMAC is the app's: Admin can name this environment's people.
+        expected = pseudonym(inner, outer, person_id)
+        assert document["calls"][0]["person"] == expected
+        assert list(named) == [expected] and all(named.values())
+        assert str(person_id) not in json.dumps(document)
         assert document["schema"] == SCHEMA and document["environment"] == "staging"
         assert document["window_days"] == 30
         assert document["ai_work"] == []  # every paid AI feature is read; none ran here

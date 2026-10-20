@@ -5,7 +5,10 @@ and boom it's there, and all its models listed".
   models are listed;
 - ``models``: the models each one offers, from OpenRouter's public catalogue, the provider
   registry's adapters and the price sheet;
-- ``http``: the Admin read.
+- ``health``: each provider's spend and failures in this environment;
+- ``keys``: a provider's key, sealed for this environment and never answered, and its free
+  connection test;
+- ``http``: the Admin reads and the key routes.
 
-Nothing here holds or prints a key.
+A key is sealed the moment it arrives; nothing here prints or returns one.
 """
