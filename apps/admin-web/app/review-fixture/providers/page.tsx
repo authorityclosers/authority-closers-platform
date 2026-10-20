@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ProviderHub } from "../../sales-xray/provider-hub";
 import {
   normalizeHealth,
+  normalizeKeys,
   normalizeHub,
 } from "../../sales-xray/provider-hub-data";
 import { StageAssignments } from "../../sales-xray/stage-assignments";
@@ -11,6 +12,7 @@ import { hubFixture } from "./hub-fixture";
 import {
   jobsAnswers,
   jobsHealth,
+  jobsKeys,
   jobsMetrics,
   jobsPrices,
   jobsSettings,
@@ -42,6 +44,7 @@ export default async function ProvidersFixturePage({
       <ProviderHub
         hub={normalizeHub(hubFixture(provider ?? null))}
         health={normalizeHealth(jobsHealth(new Date()))}
+        keys={normalizeKeys(jobsKeys(new Date()))}
       />
     </Page>
   );

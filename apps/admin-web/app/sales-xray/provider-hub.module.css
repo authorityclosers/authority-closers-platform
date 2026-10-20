@@ -460,3 +460,69 @@
   font-size: var(--sx-text-sm);
   line-height: 1.45;
 }
+
+/* A provider's key here (slice 2): last four characters, the test, and the sealed form. */
+.keyPanel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 12px;
+}
+
+.keyPanel h3 {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.keyLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.keyLine code {
+  color: var(--sx-ink);
+}
+
+.keyResult {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.keyForm {
+  display: grid;
+  gap: 8px;
+}
+
+.keyForm label {
+  display: grid;
+  gap: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.keyForm input {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 10px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.keyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

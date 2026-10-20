@@ -8,13 +8,15 @@ Three sources, merged per provider:
   stage (transcription, facts, report and coaching).
 - the price sheet: the unit prices our own cost figures use (speech is priced per hour or
   minute of audio there).
+- the provider's own list, once its key is added here and tested (``keys.LISTED``): models
+  OpenRouter does not list (Groq, Together, the speech providers) appear with their ids.
 
 Prices are list prices in US dollars; nothing here is a charge or a quote.
 """
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -143,9 +145,14 @@ def _sheet_rows(registry_id: str) -> list[dict[str, Any]]:
     return rows
 
 
-def models_for(provider: Provider, openrouter: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One provider's models: OpenRouter's by prefix, then the price sheet's and the registry's
-    own models, each marked with the stages the pipeline can run on it today."""
+def models_for(
+    provider: Provider,
+    openrouter: Iterable[dict[str, Any]],
+    listed: Mapping[str, Sequence[str]] | None = None,
+) -> list[dict[str, Any]]:
+    """One provider's models: OpenRouter's by prefix, then the price sheet's, the registry's
+    and the provider's own list (from its key's test), each marked with the stages the
+    pipeline can run on it today."""
 
     if "*" in provider.prefixes:
         rows = [dict(row) for row in openrouter]
@@ -191,6 +198,25 @@ def models_for(provider: Provider, openrouter: Iterable[dict[str, Any]]) -> list
             rows.append(row)
             by_short[model.model_id] = row
         row["stages"] = sorted(set(row["stages"]) | set(stages))
+    for model_id in (listed or {}).get(provider.id, ()):
+        if model_id in by_short or any(item["id"] == model_id for item in rows):
+            continue
+        by_short[model_id] = {
+            "id": model_id,
+            "name": model_id,
+            "context": None,
+            "inputs": [],
+            "outputs": [],
+            "audio_in": False,
+            "json": False,
+            "usd_in_per_million": None,
+            "usd_out_per_million": None,
+            "usd_per_audio_hour": None,
+            "free": False,
+            "stages": [],
+            "source": "provider",
+        }
+        rows.append(by_short[model_id])
     return rows
 
 
@@ -210,10 +236,11 @@ def hub_view(
     fetched_at: datetime | None,
     problem: str | None,
     selected: str | None,
+    listed: Mapping[str, Sequence[str]] | None = None,
 ) -> dict[str, Any]:
     providers = []
     for provider in PROVIDERS:
-        models = models_for(provider, openrouter)
+        models = models_for(provider, openrouter, listed)
         prices = [
             row["usd_in_per_million"]
             for row in models
@@ -240,7 +267,7 @@ def hub_view(
         "schema": SCHEMA,
         "providers": providers,
         "selected": chosen.id if chosen else None,
-        "models": models_for(chosen, openrouter) if chosen else [],
+        "models": models_for(chosen, openrouter, listed) if chosen else [],
         "catalogue": {
             "source": "OpenRouter",
             "fetched_at": None if fetched_at is None else fetched_at.isoformat(),

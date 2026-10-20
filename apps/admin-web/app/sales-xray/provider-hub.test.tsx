@@ -214,7 +214,7 @@ it("filters providers as you type and models by chip, with prices and stages", a
   await act(async () => button("Hears audio").click());
   expect(host.textContent).toContain("Showing 1 of 3");
   expect(button("Hears audio").getAttribute("aria-pressed")).toBe("true");
-  expect(host.textContent).toContain("never shown again");
+  expect(host.textContent).toContain("can call this provider today");
   expect(
     host.querySelector('a[href="https://aistudio.google.com"]'),
   ).not.toBeNull();

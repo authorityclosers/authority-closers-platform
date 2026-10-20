@@ -436,3 +436,79 @@ export function failureCountWords(
     ? `${total}, ${failures.last24Hours} in the last 24 hours.`
     : `${total}, none in the last 24 hours.`;
 }
+
+/* ---------- keys here (slice 2) ---------- */
+
+/** A connection test: the server's plain words and what fixes a failure. */
+export type KeyTest = {
+  at: string;
+  ok: boolean | null;
+  status: number | null;
+  models: number | null;
+  words: string;
+  fix: string | null;
+};
+
+export type ProviderKeyRow = {
+  provider: string;
+  hint: string;
+  addedAt: string;
+  freeCheck: boolean;
+  tested: KeyTest | null;
+};
+
+export type ProviderKeys = {
+  environment: string;
+  /** False until this environment's API holds its platform key (Root). */
+  sealing: boolean;
+  freshMinutes: number;
+  keys: Record<string, ProviderKeyRow>;
+};
+
+/** GET /v1/admin/providers/keys: the last four characters and the last test, never a key. */
+export function normalizeKeys(raw: unknown): ProviderKeys {
+  const body = read.object(raw);
+  const keys: Record<string, ProviderKeyRow> = {};
+  for (const item of read.array(body.keys)) {
+    const row = read.object(item);
+    const provider = read.string(row.provider);
+    if (!provider) continue;
+    const tested = row.tested ? read.object(row.tested) : null;
+    keys[provider] = {
+      provider,
+      hint: read.string(row.hint),
+      addedAt: read.string(row.added_at),
+      freeCheck: read.boolean(row.free_check),
+      tested: tested
+        ? {
+            at: read.string(tested.at),
+            ok: typeof tested.ok === "boolean" ? tested.ok : null,
+            status: read.optionalNumber(tested.status),
+            models: read.optionalNumber(tested.models),
+            words: read.string(tested.words),
+            fix: read.optionalString(tested.fix),
+          }
+        : null,
+    };
+  }
+  return {
+    environment: read.string(body.environment),
+    sealing: read.boolean(body.sealing),
+    freshMinutes: read.number(body.fresh_minutes, 10),
+    keys,
+  };
+}
+
+/** A test in plain words: the server's own, or a fallback for an older answer. */
+export function keyTestWords(test: KeyTest): string {
+  if (test.words) return test.words;
+  if (test.ok === null)
+    return "This provider has no free check: its first real use is the test.";
+  if (test.ok)
+    return test.models === null
+      ? "The key works."
+      : `The key works: ${test.models} ${test.models === 1 ? "model" : "models"} listed.`;
+  return test.status
+    ? `The last test failed (HTTP ${test.status}). Test again to see what fixes it.`
+    : "The last test could not reach the provider.";
+}

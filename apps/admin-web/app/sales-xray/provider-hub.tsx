@@ -6,7 +6,8 @@
  * see every model it offers with context, inputs, JSON support, list prices and the
  * pipeline stages it can run here. Searching filters as you type; the chosen provider is
  * in the link, so a page can be shared. Each provider shows its spend here and its failures,
- * the latest in plain words with what fixes it. Keys arrive next (sealed, write-only).
+ * the latest in plain words with what fixes it, and its key here: sealed, write-only, with a
+ * free connection test.
  */
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -29,7 +30,9 @@ import {
   type ModelFilter,
   type ProviderHealth,
   type ProviderHealthRow,
+  type ProviderKeys,
 } from "./provider-hub-data";
+import { ProviderKey } from "./provider-key";
 import styles from "./provider-hub.module.css";
 
 const KIND_CHIPS: { key: KindFilter; label: string }[] = [
@@ -178,9 +181,11 @@ function HealthHere({
 export function ProviderHub({
   hub,
   health = null,
+  keys = null,
 }: {
   hub: Hub;
   health?: ProviderHealth | null;
+  keys?: ProviderKeys | null;
 }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
@@ -299,9 +304,11 @@ export function ProviderHub({
                 : chosen.pipeline === "planned"
                   ? "An adapter is designed but not built yet, so models can be compared, not used. "
                   : "Not wired to the pipeline yet: browse and compare its models. "}
-              Adding a key here is the next step: it will be sealed for this
-              environment and never shown again.
+              {keys
+                ? "Its key is sealed per environment and never shown again."
+                : "Keys are added here once this server offers it."}
             </p>
+            {keys ? <ProviderKey provider={chosen} keys={keys} /> : null}
             {health ? <HealthHere provider={chosen} health={health} /> : null}
             <div className={styles.modelTools}>
               <input

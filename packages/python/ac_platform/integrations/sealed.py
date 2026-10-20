@@ -5,6 +5,9 @@
   sign a delivery.
 - ``partner_key``: a key the organisation pastes for an app Sales X-Ray calls (for
   example a hand-over service key). Never shown again.
+- ``provider_key``: an AI provider's API key a control account adds in Admin's Providers
+  hub, held under the operations workspace, one active per provider (``provider_hub.keys``).
+  Never shown again.
 
 The platform key is ``AC_INTEGRATIONS_SEAL_KEY``: 32 random bytes, base64url, one per
 environment, held in Infisical and given to the API and the partner-events runner.
@@ -42,7 +45,7 @@ from ac_platform.integrations.models import IntegrationSecret
 ENV = "AC_INTEGRATIONS_SEAL_KEY"
 REF_PREFIX = "AC_PARTNER_WEBHOOK_SECRET__SEALED_"  # noqa: S105 - a name, never a value
 REF_PATTERN = re.compile(r"^AC_PARTNER_WEBHOOK_SECRET__SEALED_([0-9A-F]{32})$")
-PURPOSES = frozenset({"webhook_signing", "partner_key"})
+PURPOSES = frozenset({"webhook_signing", "partner_key", "provider_key"})
 WEBHOOK_PREFIX = "whsec_"
 _ALPHABET = string.ascii_letters + string.digits
 _TABLE = cast(Table, IntegrationSecret.__table__)

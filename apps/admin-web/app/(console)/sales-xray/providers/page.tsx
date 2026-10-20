@@ -9,6 +9,7 @@ import { ProviderHub } from "@/app/sales-xray/provider-hub";
 import {
   modelPrices,
   normalizeHealth,
+  normalizeKeys,
   normalizeHub,
 } from "@/app/sales-xray/provider-hub-data";
 import { StageAssignments } from "@/app/sales-xray/stage-assignments";
@@ -27,22 +28,25 @@ const TABS = [
 
 const PROVIDER_ID = /^[a-z_]{1,32}$/;
 
-/** The hub, its health here, and who does each job: read together so the page arrives whole. */
+/** The hub, its keys and health here, and who does each job: read together, so the page
+ * arrives whole. */
 async function readHub(chosen: string | null) {
-  const [hub, health, registry, callData, leadAi, metrics] = await Promise.all([
-    adminRead(
-      `/v1/admin/providers/hub${chosen ? `?provider=${chosen}` : ""}`,
-      normalizeHub,
-    ),
-    adminRead("/v1/admin/providers/health", normalizeHealth),
-    adminRead("/v1/admin/settings", normalizeRegistry),
-    adminRead("/v1/admin/call-data", read.object),
-    adminRead("/v1/admin/lead-desk-ai", read.object),
-    adminRead(
-      "/v1/admin/conversation/metrics?days=30&env=all&tests=0",
-      normalizeMetrics,
-    ),
-  ]);
+  const [hub, health, keys, registry, callData, leadAi, metrics] =
+    await Promise.all([
+      adminRead(
+        `/v1/admin/providers/hub${chosen ? `?provider=${chosen}` : ""}`,
+        normalizeHub,
+      ),
+      adminRead("/v1/admin/providers/health", normalizeHealth),
+      adminRead("/v1/admin/providers/keys", normalizeKeys),
+      adminRead("/v1/admin/settings", normalizeRegistry),
+      adminRead("/v1/admin/call-data", read.object),
+      adminRead("/v1/admin/lead-desk-ai", read.object),
+      adminRead(
+        "/v1/admin/conversation/metrics?days=30&env=all&tests=0",
+        normalizeMetrics,
+      ),
+    ]);
   // Each area's answer by its route: the setting controls change from these.
   const answers: Record<string, unknown> = {};
   if (callData.ok) answers["/v1/admin/call-data"] = callData.data;
@@ -51,6 +55,7 @@ async function readHub(chosen: string | null) {
     hub,
     // An older server without the health read still shows the hub.
     health: health.ok ? health.data : null,
+    keys: keys.ok ? keys.data : null,
     settings: registry.ok ? registry.data.settings : [],
     answers,
     prices: callData.ok
@@ -85,7 +90,11 @@ export default async function ProvidersPage({
             prices={data.prices}
           />
           {data.hub.ok ? (
-            <ProviderHub hub={data.hub.data} health={data.health} />
+            <ProviderHub
+              hub={data.hub.data}
+              health={data.health}
+              keys={data.keys}
+            />
           ) : (
             <Unavailable title="The Providers hub" reason={data.hub.error} />
           )}

@@ -202,3 +202,38 @@ export function jobsHealth(now: Date) {
     ],
   };
 }
+
+/** Fictional GET /v1/admin/providers/keys: a Gemini key ending a1b2 that the last test refused. */
+export function jobsKeys(now: Date) {
+  const ago = (hours: number) =>
+    new Date(now.getTime() - hours * 3_600_000).toISOString();
+  return {
+    environment: "dev",
+    sealing: true,
+    fresh_minutes: 10,
+    keys: [
+      {
+        provider: "gemini",
+        hint: "a1b2",
+        added_at: ago(26),
+        free_check: true,
+        tested: {
+          at: ago(1),
+          ok: false,
+          status: 402,
+          models: null,
+          words:
+            "Out of credit, or billing is not set up. Top up in the provider's console.",
+          fix: "console",
+        },
+      },
+      {
+        provider: "sarvam",
+        hint: "9f3c",
+        added_at: ago(200),
+        free_check: false,
+        tested: null,
+      },
+    ],
+  };
+}
