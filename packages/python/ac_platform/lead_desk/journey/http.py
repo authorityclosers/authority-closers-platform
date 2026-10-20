@@ -36,7 +36,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.journey import engine, mapping
+from ac_platform.lead_desk.journey import catalogue, engine, mapping
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey.model import Journey, JourneyError
 from ac_platform.lead_desk.journey.templates import (
@@ -233,6 +233,17 @@ class DestinationView(_View):
 class MatchesCommand(_Command):
     expected_version: int = Field(alias="expectedVersion", ge=0)
     events: dict[str, str | None]
+
+
+class SuggestionView(_View):
+    ref: str
+    label: str
+    source: str
+    workflow: str
+    milestone: str
+    meaning: str
+    kind: str
+    kind_words: str = Field(alias="kindWords")
 
 
 class SummaryView(_View):
@@ -493,6 +504,21 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 kind=kind,
                 kind_words=KIND_WORDS[kind],
             )
+
+    @router.get(
+        "/journey/suggestions",
+        response_model=list[SuggestionView],
+        response_model_by_alias=True,
+    )
+    async def suggestions(request: Request, response: Response) -> list[SuggestionView]:
+        """Stages the business already uses in an app it connected (Pulse's workflow steps)
+        that aren't stages here yet. Offered only: a manager adds one with a tap."""
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            row = await desk.db.get(LeadDeskSettings, desk.tenant_id)
+            journey = await journeys.read(desk.db, desk.tenant_id)
+            found = catalogue.suggestions((row.config if row else None) or {}, journey)
+            return [SuggestionView(**item) for item in found]
 
     @router.get("/journey/history", response_model=list[HistoryItem], response_model_by_alias=True)
     async def history(request: Request, response: Response) -> list[HistoryItem]:

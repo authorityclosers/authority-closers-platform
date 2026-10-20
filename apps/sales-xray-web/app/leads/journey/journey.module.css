@@ -21,7 +21,8 @@
 .kindChip[data-kind="new"],
 .kindPicker button[data-kind="new"],
 .preview li[data-kind="new"],
-.matchStage[data-kind="new"] {
+.matchStage[data-kind="new"],
+.fromApp[data-kind="new"] {
   --tone: var(--lx-info);
 }
 
@@ -29,7 +30,8 @@
 .kindChip[data-kind="follow_up"],
 .kindPicker button[data-kind="follow_up"],
 .preview li[data-kind="follow_up"],
-.matchStage[data-kind="follow_up"] {
+.matchStage[data-kind="follow_up"],
+.fromApp[data-kind="follow_up"] {
   --tone: var(--lx-teal);
 }
 
@@ -37,7 +39,8 @@
 .kindChip[data-kind="interested"],
 .kindPicker button[data-kind="interested"],
 .preview li[data-kind="interested"],
-.matchStage[data-kind="interested"] {
+.matchStage[data-kind="interested"],
+.fromApp[data-kind="interested"] {
   --tone: var(--lx-warning);
 }
 
@@ -45,7 +48,8 @@
 .kindChip[data-kind="won"],
 .kindPicker button[data-kind="won"],
 .preview li[data-kind="won"],
-.matchStage[data-kind="won"] {
+.matchStage[data-kind="won"],
+.fromApp[data-kind="won"] {
   --tone: var(--lx-success);
 }
 
@@ -53,7 +57,8 @@
 .kindChip[data-kind="lost"],
 .kindPicker button[data-kind="lost"],
 .preview li[data-kind="lost"],
-.matchStage[data-kind="lost"] {
+.matchStage[data-kind="lost"],
+.fromApp[data-kind="lost"] {
   --tone: var(--lx-danger);
 }
 
@@ -84,6 +89,18 @@
   grid-template-columns: minmax(0, 1.12fr) minmax(330px, 0.88fr);
   align-items: start;
   gap: 16px;
+}
+
+/* Computers: the platforms stay beside the stages and scroll on their own. */
+@media (min-width: 900px) {
+  .adsPane {
+    position: sticky;
+    top: 12px;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
 }
 
 .stagesPane,
@@ -430,6 +447,51 @@ button.stageMain:focus-visible {
   font-size: var(--sx-text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- from a connected app ---------- */
+
+.fromApps {
+  display: grid;
+  gap: 6px;
+  padding: 2px 0 0 24px;
+}
+
+.fromApps small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.fromAppsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fromApp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px dashed color-mix(in oklab, var(--tone) 55%, var(--sx-line));
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--tone) 8%, transparent);
+  color: color-mix(in oklab, var(--tone) 72%, var(--sx-ink));
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fromApp:hover {
+  background: color-mix(in oklab, var(--tone) 16%, transparent);
+}
+
+.fromApp:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
 }
 
 /* ---------- archived ---------- */

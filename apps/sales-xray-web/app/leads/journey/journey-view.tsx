@@ -62,12 +62,14 @@ import {
   newId,
   problem,
   readJourney,
+  readSuggestions,
   readTemplates,
   reorder,
   saveJourney,
   split,
   type Draft,
   type Guess,
+  type Suggestion,
   type JourneyView,
   type Kind,
   type TemplateView,
@@ -547,6 +549,19 @@ function StageBuilder({
     },
   });
 
+  const add = (draft: Draft) =>
+    setList((items) => {
+      if (draft.kind === "won" || draft.kind === "lost")
+        return [...items, draft];
+      // An open stage goes before the first Won stage: the sale comes last.
+      const at = items.findIndex(
+        (item) => !item.archived && item.kind === "won",
+      );
+      const next = [...items];
+      next.splice(at < 0 ? next.length : at, 0, draft);
+      return next;
+    });
+
   const open = list.find((item) => item.id === editing) ?? null;
   return (
     <div className={styles.builder}>
@@ -582,21 +597,8 @@ function StageBuilder({
           />
         ))}
       </ol>
-      <AddStage
-        onAdd={(draft) =>
-          setList((items) => {
-            if (draft.kind === "won" || draft.kind === "lost")
-              return [...items, draft];
-            // An open stage goes before the first Won stage: the sale comes last.
-            const at = items.findIndex(
-              (item) => !item.archived && item.kind === "won",
-            );
-            const next = [...items];
-            next.splice(at < 0 ? next.length : at, 0, draft);
-            return next;
-          })
-        }
-      />
+      <AddStage onAdd={add} />
+      <FromApps list={list} onAdd={add} />
 
       <h3 className={styles.besideTitle}>Beside the way</h3>
       <ul className={styles.path} data-beside="" aria-label="Beside the way">
@@ -680,6 +682,72 @@ function StageBuilder({
 }
 
 /* ---------- adding a stage ---------- */
+
+/* ---------- stages the business already uses in a connected app ---------- */
+
+function FromApps({
+  list,
+  onAdd,
+}: {
+  list: Draft[];
+  onAdd: (draft: Draft) => void;
+}) {
+  const [found, setFound] = useState<Suggestion[]>([]);
+  useEffect(() => {
+    let live = true;
+    readSuggestions()
+      .then((next) => {
+        if (live && Array.isArray(next)) setFound(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  const taken = new Set(
+    list.flatMap((item) => [
+      item.ref ?? "",
+      item.label.trim().toLocaleLowerCase(),
+    ]),
+  );
+  const shown = found.filter(
+    (item) =>
+      !taken.has(item.ref) && !taken.has(item.label.toLocaleLowerCase()),
+  );
+  if (!shown.length) return null;
+  return (
+    <div className={styles.fromApps}>
+      <small>From your {shown[0].source} workflows</small>
+      <span className={styles.fromAppsList}>
+        {shown.map((item) => (
+          <button
+            key={item.ref}
+            type="button"
+            className={styles.fromApp}
+            data-kind={item.kind}
+            title={`${item.workflow}: ${item.meaning}`}
+            onClick={() =>
+              onAdd({
+                id: newId(),
+                label: item.label,
+                kind: ADDABLE.includes(item.kind) ? item.kind : "follow_up",
+                milestone: item.milestone,
+                meaning: item.meaning,
+                archived: false,
+                leads: 0,
+                origin: "pulse",
+                ref: item.ref,
+              })
+            }
+          >
+            <Plus size={12} aria-hidden="true" />
+            {item.label}
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
 
 function AddStage({ onAdd }: { onAdd: (draft: Draft) => void }) {
   const [label, setLabel] = useState("");

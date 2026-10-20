@@ -123,6 +123,20 @@ export type Draft = {
   leads: number;
   kindWords?: string;
   meaning?: string;
+  /** Where a stage came from when it was added from a connected app. */
+  origin?: string;
+  ref?: string;
+};
+
+export type Suggestion = {
+  ref: string;
+  label: string;
+  source: string;
+  workflow: string;
+  milestone: string;
+  meaning: string;
+  kind: Kind;
+  kindWords: string;
 };
 
 const API = "/v1/lead-desk";
@@ -160,6 +174,7 @@ export async function call<T>(
 export const readJourney = () => call<JourneyView>("/journey");
 export const readTemplates = () => call<TemplateView[]>("/journey/templates");
 export const readAds = () => call<AdsView>("/journey/ads");
+export const readSuggestions = () => call<Suggestion[]>("/journey/suggestions");
 
 export const saveJourney = (expectedVersion: number, drafts: Draft[]) =>
   call<JourneyView>("/journey", {
@@ -172,6 +187,8 @@ export const saveJourney = (expectedVersion: number, drafts: Draft[]) =>
         ...(draft.kind ? { kind: draft.kind } : {}),
         ...(draft.milestone ? { milestone: draft.milestone } : {}),
         archived: draft.archived,
+        ...(!draft.key && draft.origin ? { origin: draft.origin } : {}),
+        ...(!draft.key && draft.ref ? { ref: draft.ref } : {}),
       })),
     }),
   });

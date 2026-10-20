@@ -307,6 +307,7 @@ function Matches({
   onConfirm: (events: Record<string, string | null>) => Promise<void>;
 }) {
   const [names, setNames] = useState<Record<string, string | null>>({});
+  const [all, setAll] = useState(false);
   const edit = () => {
     setNames(
       Object.fromEntries(
@@ -320,6 +321,16 @@ function Matches({
     (item) => item.state === "new" && item.suggested,
   );
   const sentAll = provider.matches.every((item) => item.state !== "new");
+  const going = provider.matches.filter((item) => shown(item));
+  // Compact by default (the screen fits without scrolling): the new matches, or
+  // the first few that go; everything on "Show all" and while editing.
+  const visible =
+    editing || all
+      ? provider.matches
+      : fresh.length
+        ? fresh
+        : going.slice(0, 3);
+  const hidden = provider.matches.length - visible.length;
   return (
     <div className={styles.matches}>
       <div className={styles.matchesHead}>
@@ -356,7 +367,7 @@ function Matches({
         </div>
       ) : null}
       <ol className={styles.matchList}>
-        {provider.matches.map((item) => {
+        {visible.map((item) => {
           const name = editing ? (names[item.stageKey] ?? null) : shown(item);
           return (
             <li
@@ -421,6 +432,18 @@ function Matches({
           );
         })}
       </ol>
+      {!editing && (hidden > 0 || all) ? (
+        <button
+          type="button"
+          className={styles.linkButton}
+          aria-expanded={all}
+          onClick={() => setAll((open) => !open)}
+        >
+          {all
+            ? "Show fewer"
+            : `Show all ${provider.matches.length} stages (${going.length} go to ${provider.name})`}
+        </button>
+      ) : null}
       {editing ? (
         <div className={styles.matchActions}>
           <small>Leave a name empty to send nothing for that stage.</small>
