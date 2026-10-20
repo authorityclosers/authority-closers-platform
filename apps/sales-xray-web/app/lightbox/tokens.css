@@ -221,27 +221,37 @@
   letter-spacing: 0 !important;
 }
 
-/* ---------- Dark theme (System / Light / Dark control; release requires the P6 theme matrix) ---------- */
+/* ---------- Dark theme (System / Light / Dark control; release requires the P6 theme matrix) ----------
+ * Design system v2 (owner, 20 Oct 2026: "this colour blue for dark mode is
+ * kinda ugly"): a graphite ladder replaces the navy one. Neutral greys with
+ * no blue cast, from the app ground up to the surfaces that float (sheets,
+ * menus: --sx-elevated mixes a little ink into the surface). Teal stays the
+ * one accent. Text pairs keep at least 5.7:1, mostly far more (tokens.test). */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --lx-ink: #e8edf5;
-  --lx-ink-2: #d6deea;
-  --lx-ink-3: #b7c2d3;
-  --lx-muted: #93a0b5;
-  --lx-muted-2: #8390a6;
-  --lx-line: #1e2a42;
-  --lx-line-soft: #18223a;
-  --lx-line-strong: #2b3a59;
-  --lx-paper: #060a14;
-  --lx-paper-2: #0b1222;
-  --lx-surface: #0f1829;
-  --lx-sunken: #0a1120;
+  --lx-ink: #f4f5f7;
+  --lx-ink-2: #e3e5e9;
+  --lx-ink-3: #c3c7ce;
+  --lx-muted: #9ea3ac;
+  --lx-muted-2: #8e939c;
+  --lx-line: #26272c;
+  --lx-line-soft: #1d1e22;
+  --lx-line-strong: #36383e;
+  --lx-paper: #0b0c0e;
+  --lx-paper-2: #111215;
+  --lx-surface: #17181b;
+  --lx-sunken: #0f1012;
+  --lx-film: #0c0d10;
+  --lx-film-2: #1a1c21;
+  --lx-film-text-2: #c9cdd4;
+  --lx-film-text-3: #9fa4ad;
+  --lx-film-wave: #3a3d45;
   --lx-teal: #2dd4bf;
   --lx-teal-hover: #5eead4;
   --lx-teal-soft: rgba(45, 212, 191, 0.12);
   --lx-teal-tint: rgba(45, 212, 191, 0.08);
   --lx-teal-edge: rgba(45, 212, 191, 0.28);
-  --lx-on-teal: #0a1220;
+  --lx-on-teal: #0b0c0e;
   --lx-strength: #2dd4bf;
   --lx-strength-soft: rgba(45, 212, 191, 0.12);
   --lx-strength-ink: #2dd4bf;
@@ -257,9 +267,9 @@
   --lx-closing: #7aa7ff;
   --lx-closing-soft: rgba(122, 167, 255, 0.15);
   --lx-closing-ink: #bfd0ff;
-  --lx-hypothesis: #93a0b5;
-  --lx-info: #b7c2d3;
-  --lx-info-soft: rgba(183, 194, 211, 0.12);
+  --lx-hypothesis: #9ea3ac;
+  --lx-info: #c3c7ce;
+  --lx-info-soft: rgba(195, 199, 206, 0.12);
   --lx-warning: #f59e0b;
   --lx-warning-soft: rgba(245, 158, 11, 0.12);
   --lx-danger: #f97066;
@@ -294,6 +304,11 @@
   --lx-paper-2: #f9fafd;
   --lx-surface: #ffffff;
   --lx-sunken: #edf1f7;
+  --lx-film: #0a1220;
+  --lx-film-2: #16233a;
+  --lx-film-text-2: #c9d4e3;
+  --lx-film-text-3: #9fb0c8;
+  --lx-film-wave: #3a4c66;
   --lx-teal: #097870;
   --lx-teal-hover: #06615b;
   --lx-teal-soft: #dcf6ef;
@@ -402,14 +417,15 @@
 }
 
 :root[data-theme="dark"] {
-  --xr-text: #eef2f7;
-  --xr-text-2: #c7d1dd;
-  --xr-muted: #95a4b6;
-  --xr-card: #0a1119;
-  --xr-card-2: #0d1520;
-  --xr-card-3: #111b27;
-  --xr-line: #18222e;
-  --xr-line-2: #223041;
+  /* Design system v2: the report's cards sit on the same graphite ladder. */
+  --xr-text: #f2f3f5;
+  --xr-text-2: #c9ccd2;
+  --xr-muted: #9da1a9;
+  --xr-card: #141518;
+  --xr-card-2: #18191c;
+  --xr-card-3: #1d1e22;
+  --xr-line: #24252a;
+  --xr-line-2: #2e3036;
   --xr-shadow: none;
   --xr-green: #2bd283;
   --xr-green-mark: #20c878;
@@ -431,7 +447,7 @@
   --xr-purple-mark: #b25cf6;
   --xr-purple-soft: rgba(178, 92, 246, 0.11);
   --xr-purple-line: rgba(178, 92, 246, 0.34);
-  --xr-solid-text: #0a1119;
+  --xr-solid-text: #0b0c0e;
   --xr-on-mark: #ffffff;
 }
 

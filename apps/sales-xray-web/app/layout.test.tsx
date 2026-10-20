@@ -47,6 +47,6 @@ it("draws under phone notches and keeps zoom allowed (native-wrapper ready)", as
   expect(viewport).not.toHaveProperty("userScalable");
   expect(viewport.themeColor).toEqual([
     { media: "(prefers-color-scheme: light)", color: "#f4f6fb" },
-    { media: "(prefers-color-scheme: dark)", color: "#060a14" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0c0e" },
   ]);
 });

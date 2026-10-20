@@ -196,7 +196,27 @@ describe("Lightbox token derivative", () => {
       "density-panel-head",
       "density-tile-min",
     ]);
+    // Design system v2 (owner, 20 Oct 2026): a graphite dark ladder, no navy.
+    const changedDark = new Map([
+      ["ink", "#f4f5f7"],
+      ["ink-2", "#e3e5e9"],
+      ["ink-3", "#c3c7ce"],
+      ["muted", "#9ea3ac"],
+      ["muted-2", "#8e939c"],
+      ["line", "#26272c"],
+      ["line-soft", "#1d1e22"],
+      ["line-strong", "#36383e"],
+      ["paper", "#0b0c0e"],
+      ["paper-2", "#111215"],
+      ["surface", "#17181b"],
+      ["sunken", "#0f1012"],
+    ]);
     const addedDark = new Set([
+      "film",
+      "film-2",
+      "film-text-2",
+      "film-text-3",
+      "film-wave",
       "on-teal",
       "strength-ink",
       "objection-ink",
@@ -218,7 +238,10 @@ describe("Lightbox token derivative", () => {
     ).toEqual(addedLight);
 
     for (const [name, value] of sourceDark)
-      expect([name, appDarkOverrides.get(name)]).toEqual([name, value]);
+      expect([name, appDarkOverrides.get(name)]).toEqual([
+        name,
+        changedDark.get(name) ?? value,
+      ]);
     expect(
       new Set(
         [...appDarkOverrides.keys()].filter((name) => !sourceDark.has(name)),
