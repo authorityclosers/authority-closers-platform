@@ -1361,6 +1361,7 @@ function LightboxShellFrame({
             {standIn ? <RouteLoading pathname={standIn} /> : null}
             <div
               className={styles.pageSlot}
+              data-page-slot=""
               data-standing-in={standIn ? "" : undefined}
             >
               {children}
