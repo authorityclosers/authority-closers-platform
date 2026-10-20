@@ -190,6 +190,8 @@ def cmd_plan() -> int:
     if req["py_tests"]:
         py_matrix = [{"fam": "targeted", "shard": 0, "count": 1}]
         count_a = count_b = 0
+    elif "py" not in fams:
+        py_matrix, count_a, count_b = [], 0, 0
     else:
         _, fam_a, fam_b, measured = py_families()
         cost = lambda files: sum(measured.get(p, 1.0) for p in files)  # noqa: E731

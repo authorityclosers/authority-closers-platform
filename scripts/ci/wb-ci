@@ -81,11 +81,13 @@ fi
 flock -u 8
 export GIT_DIR="$BARE"
 
-sha=$($G --git-dir="$WB/.git" rev-parse --verify "${sha:-HEAD}^{commit}") || die "cannot resolve the commit '${sha:-HEAD}'"
+wanted=${sha:-HEAD}
+sha=$($G --git-dir="$WB/.git" rev-parse --verify "$wanted^{commit}") || die "cannot resolve the commit '$wanted'"
 short=${sha:0:8}
 changed_files=()
 if [ "$full" = 0 ]; then
-  base=$($G --git-dir="$WB/.git" rev-parse --verify "${base:-$sha^}^{commit}") || die "cannot resolve the base '${base:-$sha^}'"
+  wanted=${base:-$sha^}
+  base=$($G --git-dir="$WB/.git" rev-parse --verify "$wanted^{commit}") || die "cannot resolve the base '$wanted'"
   # Never let a failed diff look like "nothing changed" (a run must not go green having tested nothing).
   diff_out=$($G --git-dir="$WB/.git" diff --name-only "$base" "$sha") || die "cannot diff ${base:0:8}..$short"
   [ -z "$diff_out" ] || mapfile -t changed_files <<< "$diff_out"
