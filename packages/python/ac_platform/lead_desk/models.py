@@ -29,6 +29,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import conv
 
 from ac_platform.db.base import Base
 
@@ -873,7 +874,9 @@ class LeadConversion(Base):
 
 
 class LeadConversionAttempt(Base):
-    """One send of one lead stage to an ad platform (append-only delivery log)."""
+    """One send of one lead stage to an ad platform (append-only delivery log). Its
+    checks' names were too long for PostgreSQL and were shortened when 0111 made
+    them; they are named here as the database has them."""
 
     __tablename__ = "lead_desk_conversion_attempts"
     __table_args__ = (
@@ -882,18 +885,21 @@ class LeadConversionAttempt(Base):
             ["lead_desk_conversions.id"],
             name="fk_lead_desk_conversion_attempt_conversion",
         ),
-        CheckConstraint("attempt >= 1", name="lead_desk_conversion_attempt_number"),
+        CheckConstraint(
+            "attempt >= 1",
+            name=conv("ck_lead_desk_conversion_attempts_lead_desk_conversion_a_e7b7"),
+        ),
         CheckConstraint(
             "duration_ms >= 0 AND finished_at >= started_at",
-            name="lead_desk_conversion_attempt_timing",
+            name=conv("ck_lead_desk_conversion_attempts_lead_desk_conversion_a_96be"),
         ),
         CheckConstraint(
             "http_status IS NULL OR http_status BETWEEN 100 AND 599",
-            name="lead_desk_conversion_attempt_http_status",
+            name=conv("ck_lead_desk_conversion_attempts_lead_desk_conversion_a_0612"),
         ),
         CheckConstraint(
             "http_status IS NOT NULL OR error_code IS NOT NULL",
-            name="lead_desk_conversion_attempt_outcome",
+            name=conv("ck_lead_desk_conversion_attempts_lead_desk_conversion_a_84b4"),
         ),
     )
 

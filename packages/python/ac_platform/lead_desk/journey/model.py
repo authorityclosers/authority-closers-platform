@@ -245,7 +245,7 @@ def build(
             key = _unique_key(base, taken | set(before.by_key))
             milestone = milestone or guess_milestone(label)
             kind = kind or MILESTONE_KIND[milestone]
-            origin = item.get("origin") if item.get("origin") in ORIGINS else "custom"
+            origin = str(item["origin"]) if item.get("origin") in ORIGINS else "custom"
             ref = item.get("ref") if isinstance(item.get("ref"), str) else None
             stage = Stage(key, label, kind, milestone, item.get("archived") is True, origin, ref)
         else:
@@ -305,19 +305,16 @@ def from_template(
     profile = template(template_id)
     if profile is None:
         raise JourneyError("Pick one of the listed kinds of business.")
-    wanted = [
-        {"key": item.key, "label": item.label, "milestone": item.milestone, "kind": item.kind}
-        for item in profile.stages
-    ]
     out: list[Stage] = []
     taken: set[str] = set()
-    for item in wanted:
-        prior = before.by_key.get(item["key"])
-        if prior is not None and prior.kind != item["kind"] and counts.get(prior.key, 0) > 0:
+    for item in profile.stages:
+        key = item.key
+        prior = before.by_key.get(key)
+        if prior is not None and prior.kind != item.kind and counts.get(prior.key, 0) > 0:
             # Same key, another meaning, and leads in it: keep the old one, give this one
             # a fresh key.
-            item = {**item, "key": _unique_key(item["key"], set(before.by_key) | taken)}
-        stage = Stage(item["key"], item["label"], item["kind"], item["milestone"])
+            key = _unique_key(key, set(before.by_key) | taken)
+        stage = Stage(key, item.label, item.kind, item.milestone)
         taken.add(stage.key)
         out.append(stage)
     for prior in before.stages:

@@ -95,7 +95,8 @@ def read(config: Mapping[str, Any], provider: str) -> ProviderSettings:
     if not isinstance(value, Mapping):
         legacy = _legacy_meta(config) if provider == "meta" else None
         return legacy or ProviderSettings(provider, None, None, False, {}, None, None, None, 0)
-    destination = value.get("destination") if isinstance(value.get("destination"), Mapping) else {}
+    raw = value.get("destination")
+    destination: Mapping[str, Any] = raw if isinstance(raw, Mapping) else {}
     events = value.get("events") if isinstance(value.get("events"), Mapping) else {}
     return ProviderSettings(
         provider=provider,
