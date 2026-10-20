@@ -21,6 +21,12 @@ SENT = {
                 {"id": "st_3", "name": "Site visit", "block": "site_visit", "position": 3},
                 {"id": "st_2", "name": "Call the lead", "block": "follow_up", "position": 2},
                 {"id": "st_5", "name": "Prepare the van", "block": "checklist", "position": 5},
+                {
+                    "id": "st_6",
+                    "name": "Approve the discount quote",
+                    "block": "approval",
+                    "position": 6,
+                },
             ],
         }
     ],
@@ -30,7 +36,7 @@ SENT = {
 def test_a_catalogue_is_kept_bounded_and_in_order() -> None:
     kept = catalogue.clean("pulse", SENT, now=100)
     steps = kept["workflows"][0]["steps"]
-    assert [step["id"] for step in steps] == ["st_1", "st_2", "st_3", "st_4", "st_5"]
+    assert [step["id"] for step in steps] == ["st_1", "st_2", "st_3", "st_4", "st_5", "st_6"]
     assert kept["revision"] == "r1" and kept["received_at"] == 100
     with pytest.raises(catalogue.CatalogueError):
         catalogue.clean("crm_x", SENT, now=1)

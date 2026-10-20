@@ -47,6 +47,10 @@ SALES_BLOCKS: Final[dict[str, str]] = {
 }
 
 
+# Pulse block kinds that are never a step of a sale.
+INSIDE_BLOCKS: Final[frozenset[str]] = frozenset({"approval", "decision", "wait", "end"})
+
+
 class CatalogueError(ValueError):
     """The sent catalogue can't be kept; the message names what to fix."""
 
@@ -127,6 +131,8 @@ def suggestions(config: Mapping[str, Any], journey: Journey) -> list[dict[str, A
             name = str(step.get("name") or "")
             ref = f"{source}:{step.get('id')}"
             block = step.get("block")
+            if block in INSIDE_BLOCKS:
+                continue  # approvals, decisions and waits are inside steps, not a sale
             milestone = SALES_BLOCKS.get(str(block)) if block else None
             if milestone is None:
                 milestone = guess_milestone(name)
