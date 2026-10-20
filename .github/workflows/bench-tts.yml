@@ -1,0 +1,96 @@
+# Analysis-cost research (20 Oct 2026): render fictional benchmark calls to audio with open TTS on free runners.
+# Runs only for pushes to bench/** refs, whose tree holds nothing but this workflow and bench/ (fictional data).
+# No secrets are needed; HF_TOKEN (optional) switches Marathi/Gujarati to Indic Parler-TTS.
+name: bench-tts
+
+on:
+  push:
+    branches:
+      - "bench/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-tts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      shards: ${{ steps.p.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json, pathlib
+          calls = sorted(p.name for p in pathlib.Path("bench/calls").iterdir() if (p / "script.json").exists())
+          # balance shards by script length (words of tts)
+          size = {c: sum(len(t.get("tts", "").split()) for t in json.load(open(f"bench/calls/{c}/script.json", encoding="utf-8"))["turns"]) for c in calls}
+          n = min(16, max(1, len(calls)))
+          shards = [[] for _ in range(n)]; load = [0] * n
+          for c in sorted(calls, key=lambda c: -size[c]):
+              i = load.index(min(load)); shards[i].append(c); load[i] += size[c]
+          print("shards=" + json.dumps([" ".join(s) for s in shards if s]))
+          EOF
+          cat "$GITHUB_OUTPUT"
+
+  render:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 6   # leave the org's 20 concurrent jobs for wb-ci
+      matrix:
+        calls: ${{ fromJson(needs.plan.outputs.shards) }}
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: bench/requirements.txt
+      - name: System packages
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng ffmpeg >/dev/null && ffmpeg -hide_banner -encoders 2>/dev/null | grep -i amr || true
+      - name: Python packages
+        run: |
+          pip install -q --extra-index-url https://download.pytorch.org/whl/cpu -r bench/requirements.txt
+          if [ -n "$HF_TOKEN" ]; then pip install -q git+https://github.com/huggingface/parler-tts.git; fi
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ hashFiles('bench/requirements.txt') }}-v1
+      - name: Render
+        working-directory: bench
+        run: |
+          set -e
+          dirs=""; for c in ${{ matrix.calls }}; do dirs="$dirs calls/$c"; done
+          python render_call.py $dirs --out audio
+      - name: Round-trip check (faster-whisper small, first 120 s)
+        working-directory: bench
+        run: |
+          python qa_roundtrip.py --calls calls --audio audio --model small --seconds 120 --variant clean_16k || true
+          python qa_roundtrip.py --calls calls --audio audio --model small --seconds 120 --variant phone_8k || true
+      - name: Smoke variants (Marathi engines, scored by whisper large-v3-turbo)
+        if: hashFiles('bench/SMOKE') != '' && contains(matrix.calls, 'sm-mr')
+        working-directory: bench
+        run: |
+          python render_call.py calls/sm-mr --out audio/variant-mms --mr-engine mms
+          python qa_roundtrip.py --calls calls --audio audio --model large-v3-turbo --seconds 120 --only sm-mr sm-hi || true
+          python qa_roundtrip.py --calls calls --audio audio/variant-mms --model large-v3-turbo --seconds 120 || true
+      - name: Name the artifact
+        id: n
+        run: echo "name=audio-$(echo '${{ matrix.calls }}' | tr ' ' '_' | cut -c1-60)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.n.outputs.name }}
+          path: bench/audio
+          retention-days: 30
+          compression-level: 0
