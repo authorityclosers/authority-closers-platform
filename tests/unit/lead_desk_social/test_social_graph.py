@@ -247,6 +247,21 @@ def test_refusals_in_plain_words() -> None:
     assert "can't get messages" in str(graph.refusal({"code": 551}))
     assert "permission" in str(graph.refusal({"code": 200}))
     assert str(graph.refusal({})) == "Meta refused the message. Try again."
+    # Meta's own table: the subcode says more than the code.
+    for code, subcode, words in (
+        (2022, None, graph.PAUSED_WORDS),
+        (10, 1893063, graph.PAUSED_WORDS),
+        (200, 2018028, graph.REVIEW_WORDS),
+        (10, 2018108, graph.AWAY_WORDS),
+        (10, 2018300, graph.OTHER_APP_WORDS),
+        (100, 2018001, graph.GONE_WORDS),
+        (613, 2534040, graph.LIMIT_WORDS),
+    ):
+        found = graph.refusal({"code": code, "error_subcode": subcode})
+        assert (str(found), found.code, found.subcode) == (words, code, subcode)
+    assert "private reply" in str(graph.refusal({"code": 100, "error_subcode": 2534025}))
+    assert "Meta allows one" in str(graph.refusal({"code": 10900}))
+    assert "Allow access to messages" in str(graph.refusal({"code": 200, "error_subcode": 2534041}))
 
 
 def _graph(handler: Any) -> graph.Graph:
@@ -450,3 +465,23 @@ def test_meta_s_own_trouble_and_timeouts_say_so_and_keep_the_trace() -> None:
 
     late = calling(slow)
     assert (str(late), late.kind) == (graph.TIMEOUT_WORDS, "timeout")
+
+
+def test_an_instagram_read_receipt_names_the_message() -> None:
+    delivery = graph.parse(
+        _messaging(
+            "instagram",
+            IG,
+            [
+                {
+                    "sender": {"id": IGSID},
+                    "recipient": {"id": IG},
+                    "timestamp": 1792440000000,
+                    "read": {"mid": "ig.out1"},
+                }
+            ],
+        )
+    )
+    assert [(s.channel, s.user_id, s.status, s.mids, s.until) for s in delivery.seen] == [
+        ("instagram", IGSID, "read", ("ig.out1",), None)
+    ]

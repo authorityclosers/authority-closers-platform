@@ -521,12 +521,17 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                 account_id=command.account_id,
                 body=command.text,
                 human_agent=command.human_agent,
+                queue=True,
             )
             await desk.db.flush()
+            status = message.status
             view = await conversation_view(desk, lead_id)
-            if message.status == "failed":
-                response.headers["X-Messaging-Error"] = "1"
-            return view
+        # Queued: the runner sends it (Chats reads the thread again every 2 s meanwhile).
+        if status == "queued":
+            runner.wake()
+        elif status == "failed":
+            response.headers["X-Messaging-Error"] = "1"
+        return view
 
     @router.get("/social/inbox", response_model=list[InboxView], response_model_by_alias=True)
     async def social_inbox(request: Request, response: Response) -> list[InboxView]:

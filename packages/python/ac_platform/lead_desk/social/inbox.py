@@ -44,6 +44,11 @@ from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, owner_names
 
 STATUS_ORDER: Final[dict[str, int]] = {"queued": 0, "sent": 1, "delivered": 2, "read": 3}
 FIRST_REPLY_WITHIN: Final[timedelta] = timedelta(minutes=10)
+# A person's message waits for the runner (every 10 s, or at once when woken); one that
+# couldn't go out within this long is not sent late.
+QUEUE_LATE: Final[timedelta] = timedelta(minutes=5)
+LATE_WORDS: Final[str] = "Not sent: it waited too long to go out. Send it again."
+GONE_WORDS: Final[str] = "Not sent: this conversation isn't here any more."
 events_log = structlog.get_logger(__name__)
 OUT_OF_HOURS_EVERY: Final[timedelta] = timedelta(hours=12)
 CONVERSATION_LIMIT: Final[int] = 200
@@ -376,6 +381,8 @@ async def receive(
             LeadSocialMessage.user_id == seen.user_id,
             LeadSocialMessage.direction == "out",
             LeadSocialMessage.status.in_(earlier),
+            # Only what Meta took: a message still queued hasn't gone yet.
+            LeadSocialMessage.mid.is_not(None),
         ]
         which: list[Any] = []
         if seen.mids:
@@ -605,8 +612,19 @@ async def send(
     human_agent: bool = False,
     auto: str | None = None,
     reply_to: LeadSocialMessage | None = None,
+    queue: bool = False,
 ) -> LeadSocialMessage:
-    """Send one message to a lead on Messenger or Instagram, inside Meta's rules."""
+    """Send one message to a lead on Messenger or Instagram, inside Meta's rules.
+
+    With ``queue`` (a person's message from Chats or Leads) it is kept as queued under
+    the request's own id and the answer comes back at once; the runner sends it and
+    records it on the lead (``queued_sends``). Automations and tests send at once."""
+    if queue:
+        earlier = await desk.db.get(LeadSocialMessage, command_id)
+        if earlier is not None:
+            if earlier.tenant_id != desk.tenant_id or earlier.lead_id != lead_id:
+                raise DeskError(409, "That request was already used.")
+            return earlier
     seen = await desk.db.scalar(
         select(LeadEvent).where(
             LeadEvent.tenant_id == desk.tenant_id, LeadEvent.command_id == command_id
@@ -646,7 +664,7 @@ async def send(
             raise DeskError(409, "It's more than 7 days since their last message.")
         tag = "HUMAN_AGENT"
     message = LeadSocialMessage(
-        id=uuid4(),
+        id=command_id if queue else uuid4(),
         tenant_id=desk.tenant_id,
         account_id=chat.account.id,
         lead_id=lead.id,
@@ -662,25 +680,72 @@ async def send(
         created_at=desk.now,
     )
     desk.db.add(message)
+    if queue:
+        await desk.db.flush()
+        return message
+    await _deliver(cfg, api, chat.account, message, now=desk.now)
+    _record(desk, lead, message, command_id=command_id)
+    await desk.db.flush()
+    return message
+
+
+async def _deliver(
+    cfg: graph.SocialConfig,
+    api: graph.Graph,
+    row: LeadSocialAccount,
+    message: LeadSocialMessage,
+    *,
+    now: datetime,
+) -> None:
     try:
         message.mid = await api.send(
-            chat.account.page_id,
-            page_token(cfg, chat.account),
-            user_id=chat.user_id,
+            row.page_id,
+            page_token(cfg, row),
+            user_id=message.user_id,
             text=message.body or "",
-            channel=channel,
-            human_agent=tag is not None,
+            channel=message.channel,
+            human_agent=message.tag is not None,
         )
         message.status = "sent"
-        message.status_at = desk.now
+        message.status_at = now
     except graph.SocialError as error:
         message.status = "failed"
         message.error_code = error_code(error)
         message.error_title = error_text(error)
-        refused(error, channel=channel, what="send")
-    _record(desk, lead, message, command_id=command_id)
-    await desk.db.flush()
-    return message
+        refused(error, channel=message.channel, what="send")
+
+
+async def queued_sends(
+    db: AsyncSession, cfg: graph.SocialConfig, api: graph.Graph, *, now: datetime
+) -> int:
+    """Send the oldest message a person queued, and record it on the lead as sent or
+    not (so a refused one doesn't count as an answer). 0 when none waits."""
+    message = await db.scalar(
+        select(LeadSocialMessage)
+        .where(
+            LeadSocialMessage.status == "queued",
+            LeadSocialMessage.direction == "out",
+            LeadSocialMessage.auto.is_(None),
+        )
+        .order_by(LeadSocialMessage.created_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+    if message is None:
+        return 0
+    row = await db.get(LeadSocialAccount, message.account_id)
+    lead = await db.get(Lead, message.lead_id) if message.lead_id is not None else None
+    if row is None or row.status != "active" or lead is None or not message.body:
+        message.status, message.error_code, message.error_title = "failed", "gone", GONE_WORDS
+    elif now - message.created_at > QUEUE_LATE:
+        message.status, message.error_code, message.error_title = "failed", "late", LATE_WORDS
+    else:
+        await _deliver(cfg, api, row, message, now=now)
+    if row is not None and lead is not None:
+        # When the person wrote it, under their request's id (a repeat finds it).
+        _record(_system(row, db, now), lead, message, command_id=message.id, at=message.created_at)
+    await db.flush()
+    return 1
 
 
 # Meta's own words ride after this mark in error_title: shown to owners and admins only.
@@ -730,7 +795,12 @@ def refused(error: graph.SocialError, *, channel: str, what: str) -> None:
 
 
 def _record(
-    desk: LeadDesk, lead: Lead, message: LeadSocialMessage, *, command_id: UUID | None
+    desk: LeadDesk,
+    lead: Lead,
+    message: LeadSocialMessage,
+    *,
+    command_id: UUID | None,
+    at: datetime | None = None,
 ) -> None:
     desk._event(
         lead,
@@ -746,6 +816,7 @@ def _record(
         },
         actor=message.sent_by_person_id,
         command_id=command_id,
+        at=at,
     )
     lead.updated_at = desk.now
 

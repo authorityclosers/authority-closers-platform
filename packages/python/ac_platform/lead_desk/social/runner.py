@@ -1,5 +1,7 @@
 """The Messenger and Instagram loop, every 10 seconds inside the API.
 
+- Sends: the messages people queued from Chats and Leads, first (a send wakes the loop,
+  so it goes within a second or so).
 - Comment to message: one private reply (and the rule's public answer) to each comment
   a Page's rule matched.
 - Auto replies: an instant first reply to someone writing for the first time, and a
@@ -30,6 +32,23 @@ log = logging.getLogger(__name__)
 
 _TICK = 10
 _LOCK = (1802, 1268)  # one pass across API processes and slots
+_SENDS_PER_PASS = 20
+_nudges: list[asyncio.Event] = []  # this process's loop, woken by a person's send
+
+
+def wake() -> None:
+    """A person queued a message: start this process's next pass now."""
+    for nudge in _nudges:
+        nudge.set()
+
+
+async def _pause(stop: asyncio.Event, nudge: asyncio.Event, seconds: float) -> None:
+    waits = {asyncio.ensure_future(stop.wait()), asyncio.ensure_future(nudge.wait())}
+    try:
+        await asyncio.wait(waits, timeout=seconds, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for waiting in waits:
+            waiting.cancel()
 
 
 async def _locked(db: AsyncSession) -> bool:
@@ -47,7 +66,15 @@ async def social_pass(
     *,
     now: datetime,
 ) -> dict[str, int]:
-    out = {"comments": 0, "first": 0, "late": 0, "erased": 0}
+    out = {"sent": 0, "comments": 0, "first": 0, "late": 0, "erased": 0}
+    for _ in range(_SENDS_PER_PASS):
+        async with sessions() as db, db.begin():
+            if not await _locked(db):
+                return out
+            done = await inbox.queued_sends(db, cfg, api, now=now)
+        if not done:
+            break
+        out["sent"] += done
     for name, work in (
         ("comments", inbox.comment_replies),
         ("first", inbox.first_replies),
@@ -65,10 +92,21 @@ async def social_pass(
 async def run(
     sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event, *, first_delay: int = _TICK
 ) -> None:
-    with suppress(TimeoutError):
-        await asyncio.wait_for(stop.wait(), timeout=first_delay)
+    nudge = asyncio.Event()
+    _nudges.append(nudge)
+    try:
+        await _pause(stop, nudge, first_delay)
+        await _loop(sessions, stop, nudge)
+    finally:
+        _nudges.remove(nudge)
+
+
+async def _loop(
+    sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event, nudge: asyncio.Event
+) -> None:
     async with httpx.AsyncClient(timeout=10) as client:
         while not stop.is_set():
+            nudge.clear()  # a send during this pass starts the next one at once
             cfg = graph.config()
             if cfg is not None:
                 try:
@@ -77,8 +115,7 @@ async def run(
                     )
                 except Exception:  # noqa: BLE001 - the loop must survive a bad tick
                     log.warning("messenger and instagram tick failed", exc_info=True)
-            with suppress(TimeoutError):
-                await asyncio.wait_for(stop.wait(), timeout=_TICK)
+            await _pause(stop, nudge, _TICK)
 
 
 def attach(

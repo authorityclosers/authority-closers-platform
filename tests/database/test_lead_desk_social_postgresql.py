@@ -49,6 +49,7 @@ class FakeGraph:
     sent: list[dict[str, Any]] = []
     public: list[dict[str, Any]] = []
     subscribed: list[str] = []
+    fail: graph.SocialError | None = None  # Meta's next answer to a send, when refusing
 
     def __init__(self, cfg: graph.SocialConfig, client: Any = None, *, timeout: float = 15) -> None:
         self.cfg = cfg
@@ -77,6 +78,8 @@ class FakeGraph:
         channel: str,
         human_agent: bool = False,
     ) -> str:
+        if FakeGraph.fail is not None:
+            raise FakeGraph.fail
         FakeGraph.sent.append(
             {"to": user_id, "text": text, "channel": channel, "human_agent": human_agent}
         )
@@ -156,6 +159,7 @@ def test_messenger_and_instagram_conversations_and_comment_replies(
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(graph, "Graph", FakeGraph)
     FakeGraph.sent, FakeGraph.public, FakeGraph.subscribed = [], [], []
+    FakeGraph.fail = None
     cfg = graph.config()
     assert cfg is not None
 
@@ -258,13 +262,35 @@ def test_messenger_and_instagram_conversations_and_comment_replies(
                 )
                 assert [m["text"] for m in thread["messages"]] == ["Is the 3 BHK available?"]
 
+                reply = {"commandId": str(uuid4()), "channel": "messenger", "text": "Yes, it is!"}
                 sent = await client.post(
-                    f"{BASE}/leads/{lead_id}/social",
-                    json={"commandId": str(uuid4()), "channel": "messenger", "text": "Yes, it is!"},
-                    headers=WRITE,
+                    f"{BASE}/leads/{lead_id}/social", json=reply, headers=WRITE
                 )
                 assert sent.status_code == 200, sent.text
-                assert sent.json()["threads"][0]["messages"][-1]["status"] == "sent"
+                # The answer comes back at once, queued; the runner sends it.
+                assert sent.json()["threads"][0]["messages"][-1]["status"] == "queued"
+                assert FakeGraph.sent == []
+                again = await client.post(
+                    f"{BASE}/leads/{lead_id}/social", json=reply, headers=WRITE
+                )
+                assert len(again.json()["threads"][0]["messages"]) == 2  # the same request
+                # A read receipt now doesn't touch it: Meta hasn't got it yet.
+                early = {
+                    "object": "page",
+                    "entry": [
+                        {
+                            "id": PAGE,
+                            "messaging": [
+                                {"sender": {"id": PSID}, "read": {"watermark": 4102444800000}}
+                            ],
+                        }
+                    ],
+                }
+                assert (await deliver(early))["statuses"] == 0
+                assert await tick(inbox.queued_sends) == 1
+                assert await tick(inbox.queued_sends) == 0
+                chat = (await client.get(f"{BASE}/leads/{lead_id}/social")).json()
+                assert chat["threads"][0]["messages"][-1]["status"] == "sent"
                 assert FakeGraph.sent[-1] == {
                     "to": PSID,
                     "text": "Yes, it is!",
@@ -297,6 +323,57 @@ def test_messenger_and_instagram_conversations_and_comment_replies(
                 }
                 assert (await deliver(receipt))["statuses"] == 1
 
+                # ----- Meta refuses one: its words, and it doesn't count as an answer -----
+                FakeGraph.fail = graph.refusal(
+                    {"code": 2022, "message": "(#2022) Paused for now", "fbtrace_id": "AbC12"}
+                )
+                refused_id = str(uuid4())
+                queued = await client.post(
+                    f"{BASE}/leads/{lead_id}/social",
+                    json={"commandId": refused_id, "channel": "messenger", "text": "Hello?"},
+                    headers=WRITE,
+                )
+                assert queued.json()["threads"][0]["messages"][-1]["status"] == "queued"
+                assert await tick(inbox.queued_sends) == 1
+                FakeGraph.fail = None
+                chat = (await client.get(f"{BASE}/leads/{lead_id}/social")).json()
+                last = chat["threads"][0]["messages"][-1]
+                assert last["status"] == "failed"
+                assert last["error"] == (
+                    f"{graph.PAUSED_WORDS} Meta says: \u201c(#2022) Paused for now\u201d"
+                    " (code 2022)"
+                )
+                # One that waited too long isn't sent late.
+                stale_id = uuid4()
+                await client.post(
+                    f"{BASE}/leads/{lead_id}/social",
+                    json={"commandId": str(stale_id), "channel": "messenger", "text": "Hi again"},
+                    headers=WRITE,
+                )
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(LeadSocialMessage)
+                        .where(LeadSocialMessage.id == stale_id)
+                        .values(created_at=datetime.now(UTC) - timedelta(minutes=6))
+                    )
+                count = len(FakeGraph.sent)
+                assert await tick(inbox.queued_sends) == 1
+                assert len(FakeGraph.sent) == count
+                async with setup.sessions() as db:
+                    stale = await db.get(LeadSocialMessage, stale_id)
+                    assert stale is not None
+                    assert (stale.status, stale.error_code) == ("failed", "late")
+                    events = {
+                        str(e.command_id): e.data["failed"]
+                        for e in await db.scalars(
+                            select(LeadEvent).where(
+                                LeadEvent.lead_id == lead_id, LeadEvent.kind == "message"
+                            )
+                        )
+                    }
+                    assert events[reply["commandId"]] is False
+                    assert events[refused_id] is True and events[str(stale_id)] is True
+
                 # ----- after 24 hours: only a person, with the Human Agent tag -----
                 async with setup.sessions() as db, db.begin():
                     await db.execute(
@@ -322,6 +399,7 @@ def test_messenger_and_instagram_conversations_and_comment_replies(
                     headers=WRITE,
                 )
                 assert tagged.status_code == 200, tagged.text
+                assert await tick(inbox.queued_sends) == 1
                 assert FakeGraph.sent[-1]["human_agent"] is True
                 async with setup.sessions() as db, db.begin():
                     await db.execute(

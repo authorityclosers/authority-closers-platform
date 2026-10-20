@@ -700,21 +700,67 @@ def refusal(error: Mapping[str, Any]) -> SocialError:
     return found
 
 
+WINDOW_WORDS: Final[str] = (
+    "It's more than 24 hours since their last message, so Meta won't deliver this."
+)
+AWAY_WORDS: Final[str] = "This person can't get messages from you right now."
+LIMIT_WORDS: Final[str] = "Meta is limiting messages right now. Try again later."
+PAUSED_WORDS: Final[str] = (
+    "Meta has paused messages from this Page for now. Check the Page in Meta Business Suite."
+)
+REVIEW_WORDS: Final[str] = (
+    "Until Meta approves Sales Xray's app, it can only message people with a role on the app."
+)
+OTHER_APP_WORDS: Final[str] = (
+    "Another app has this conversation right now. Hand it back to Sales Xray in Meta"
+    " Business Suite."
+)
+GONE_WORDS: Final[str] = "Meta can't find this person any more."
+PERMISSION_WORDS: Final[str] = "Meta didn't give permission for this. Connect the Page again."
+# Meta's Messenger and Instagram codes (developers.facebook.com/docs/messenger-platform/
+# error-codes), in words a seller or manager can act on: a subcode first, then the code.
+_BY_SUBCODE: Final[dict[int, str]] = {
+    2018278: WINDOW_WORDS,
+    2018065: WINDOW_WORDS,
+    2534022: WINDOW_WORDS,
+    1545041: AWAY_WORDS,
+    2018108: AWAY_WORDS,
+    2018028: REVIEW_WORDS,
+    2018001: GONE_WORDS,
+    2534014: GONE_WORDS,
+    2018300: OTHER_APP_WORDS,
+    2534037: OTHER_APP_WORDS,
+    1893063: PAUSED_WORDS,
+    2534040: LIMIT_WORDS,
+    2534025: "Meta doesn't allow a private reply to this comment.",
+    2534013: "This Page has no Instagram account linked. Link one in Meta Business Suite.",
+    2534077: "Meta says the Instagram account isn't linked to this Page, or its two-step"
+    " sign-in is off. Fix it in Meta Business Suite.",
+    2534041: "This Instagram account doesn't let apps answer its messages. Turn on"
+    " \u201cAllow access to messages\u201d in Instagram's settings.",
+    2534029: "Meta has blocked this business from Instagram messaging.",
+}
+_BY_CODE: Final[dict[int, str]] = {
+    190: "Meta ended this connection. Connect the Page again.",
+    102: "Meta ended this connection. Connect the Page again.",
+    551: AWAY_WORDS,
+    1545041: AWAY_WORDS,
+    2022: PAUSED_WORDS,
+    10900: "This comment already had its private reply. Meta allows one.",
+    4: LIMIT_WORDS,
+    17: LIMIT_WORDS,
+    32: LIMIT_WORDS,
+    613: LIMIT_WORDS,
+}
+
+
 def _refusal(code: int | None, subcode: int | None) -> SocialError:
-    if code in (190, 102):
-        return SocialError("Meta ended this connection. Connect the Page again.", code, subcode)
-    if subcode == 2018278 or (code == 10 and subcode in (2018065, 2534022)):
-        return SocialError(
-            "It's more than 24 hours since their last message, so Meta won't deliver this.",
-            code,
-            subcode,
-        )
-    if code in (551, 1545041) or subcode == 1545041:
-        return SocialError("This person can't get messages from you right now.", code, subcode)
-    if code in (4, 17, 32, 613) or (code is not None and 80000 <= code < 80100):
-        return SocialError("Meta is limiting messages right now. Try again later.", code, subcode)
-    if code in (10, 200, 3, 230) or (code is not None and 200 <= code < 300):
-        return SocialError(
-            "Meta didn't give permission for this. Connect the Page again.", code, subcode
-        )
-    return SocialError("Meta refused the message. Try again.", code, subcode)
+    words = _BY_SUBCODE.get(subcode) if subcode is not None else None
+    if words is None and code is not None:
+        words = _BY_CODE.get(code)
+    if words is None and code is not None:
+        if 80000 <= code < 80100:
+            words = LIMIT_WORDS
+        elif code in (10, 3, 230) or 200 <= code < 300:
+            words = PERMISSION_WORDS
+    return SocialError(words or "Meta refused the message. Try again.", code, subcode)
