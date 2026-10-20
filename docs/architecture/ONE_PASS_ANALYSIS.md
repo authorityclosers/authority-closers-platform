@@ -112,3 +112,31 @@ imports the research's own run of today's pipeline on each call's script as the
 classic side (Scribe priced at list price). While the bench project's Gemini key is
 refused, requests go to Google AI Studio through OpenRouter on the research's
 account, data collection denied, each written to the research ledger.
+
+## First measurement: the fictional set (21 Oct 2026)
+
+All 16 fictional calls (264 audio minutes), `both` on dev-live. One pass read each call's phone-quality MP3
+through Google AI Studio by OpenRouter. Classic is the research's run of today's pipeline on each call's script
+(a perfect transcript), plus Scribe at list price. Rupees at ₹100 a dollar, list prices.
+
+| | today's pipeline | one pass |
+|---|---|---|
+| ₹ per audio minute, all 16 calls (standard) | 1.00 | 0.50 |
+| the same on Flex | (not measured) | 0.25 |
+| cost per call (fit) | ₹6.35 + ₹0.61 a minute | ₹5.55 + ₹0.16 a minute |
+| a 13.8-minute call, per minute | ₹1.07 | ₹0.57 standard, ₹0.28 Flex |
+| fact recall (Haiku judge) | 71.3% | 77.3% |
+| unsupported facts | 0.3% | 2.4% (from the transcriber, per the research) |
+| coaching truths covered, the 9 calls whose report validated | 68.1% | 71.9% |
+| median time per call | 129 s (stages one after another) | 100 s |
+| contracts passed | | 89 of 96 |
+
+- The fixed part of one pass is its output (about 12,700 tokens a call: the 27 pointers with their text, the
+  detailed C5 overview, the call data) and about 12,000 tokens of instructions. Flex halves it; trimming the
+  pointer text is the next lever; the instructions are a shared prefix the implicit cache can reuse at volume.
+- The 7 failed contracts were all the C5 detailed overview: that route can't take the strict schema, so JSON mode
+  was used. Those reports now stand without the overview (`ok_without_overview`). The direct Gemini route sends
+  the strict schema the C5 stage already uses.
+- Gemini 3.1 Flash-Lite cut four long calls (22–46 min) short or broke their JSON once; each passed on a retry.
+- Spend: about $1.84 of the research's OpenRouter credit, logged in its ledger (`devlive:onepass:*`, judges
+  `judge:*`).
