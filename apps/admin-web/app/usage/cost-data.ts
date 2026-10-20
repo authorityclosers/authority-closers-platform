@@ -21,7 +21,14 @@ export const STAGE_LABEL: Record<string, string> = {
   C4: "Facts",
   C5: "Report",
   PR: "Pointer review",
+  CDF: "Call data · fast",
+  CDD: "Call data · deep",
+  AR: "AI replies",
+  QF: "Quote facts",
 };
+
+/** How rupees were made from the dollars providers bill (one rate, and since when). */
+export type Fx = { currency: string; usdToInr: number; setOn: string | null };
 
 export const KIND_LABEL: Record<string, string> = {
   real: "Real",
@@ -236,6 +243,7 @@ export type TopCall = {
 
 export type Metrics = {
   days: number;
+  fx: Fx;
   environment: string;
   tests: boolean;
   here: string | null;
@@ -364,8 +372,14 @@ export function normalizeMetrics(raw: unknown): Metrics {
   const revenue = read.object(body.revenue);
   const money = read.object(body.money);
   const ideas = read.object(body.ideas);
+  const fx = read.object(body.fx);
   return {
     days: n(window.days, 30),
+    fx: {
+      currency: s(fx.currency, "USD"),
+      usdToInr: n(fx.usd_to_inr, 100) || 100,
+      setOn: os(fx.set_on),
+    },
     environment: s(body.environment, "all"),
     tests: read.boolean(body.tests),
     here: os(body.here),
@@ -659,6 +673,29 @@ export const inr = (value: number | null) =>
     : Math.abs(value) >= 1000
       ? INR_ROUND.format(value)
       : INR.format(value);
+
+const USD = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+});
+
+/** Dollars, as providers bill them, from rupees made at the one rate. */
+export const usd = (rupees: number | null, fx: Fx) =>
+  rupees === null ? "–" : USD.format(rupees / fx.usdToInr);
+
+/** "$5.33 · ₹533": dollars first, rupees beside them. */
+export const money = (rupees: number | null, fx: Fx) =>
+  rupees === null ? "–" : `${usd(rupees, fx)} · ${inr(rupees)}`;
+
+/** The rate in words: "₹100 per $1, set 19 Sep 2026". */
+export function rateWords(fx: Fx): string {
+  const day = fx.setOn ? Date.parse(`${fx.setOn}T00:00:00Z`) : Number.NaN;
+  const when = Number.isNaN(day)
+    ? ""
+    : `, set ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(day)}`;
+  return `₹${fx.usdToInr} per $1${when}`;
+}
 
 /** Rupees per audio minute, always with paise. */
 export const perMin = (value: number | null) =>

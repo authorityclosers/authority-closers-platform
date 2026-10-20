@@ -20,6 +20,7 @@ import pytest
 from ac_platform.conversation_intelligence import cost_metrics
 from ac_platform.conversation_intelligence.application import ConversationDenied, ConversationError
 from ac_platform.conversation_intelligence.cost_metrics import (
+    AI_WORK_STAGES,
     AdminCostMetrics,
     Scope,
     build_metrics,
@@ -487,3 +488,60 @@ def test_per_call_sorts_keeps_free_calls_apart_and_opens_each_step() -> None:
     )
     assert first["rupees"] == 3.67 and first["audio_minutes"] == 10.0
     assert [step["stage"] for step in real["steps"]][:3] == ["C2", "C4", "C5"]
+
+
+def test_every_paid_ai_feature_counts_at_the_one_rate() -> None:
+    document = _document(
+        ai_work=[
+            {
+                "stage": "CDF",
+                "call": "call-real",
+                "company": "co-1",
+                "provider": "gemini",
+                "model": "gemini-3.8-flash",
+                "status": "succeeded",
+                "trigger": "auto",
+                "input_tokens": 1000,
+                "output_tokens": 200,
+                "cost_inr": 0.1425,  # the engine's old Rs 95 estimate: the sheet wins
+                "at": _at(2),
+            },
+            {
+                "stage": "CDD",
+                "call": "call-real",
+                "company": "co-1",
+                "provider": "gemini",
+                "model": "gemini-3.8-flash",
+                "status": "running",
+                "trigger": "auto",
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_inr": 2,
+                "at": _at(2.5),
+            },
+            {
+                "stage": "AR",
+                "call": None,
+                "company": "co-1",
+                "provider": "gemini",
+                "model": "a-model-the-sheet-lacks",
+                "status": "sent",
+                "trigger": "auto",
+                "input_tokens": 1000,
+                "output_tokens": 200,
+                "cost_inr": 0.5,
+                "at": _at(3),
+            },
+            {"stage": "XX", "at": _at(3)},  # unknown stages are skipped
+        ]
+    )
+    export = parse_export("staging", document)
+    work = {step.stage: step for step in export.steps if step.stage in AI_WORK_STAGES}
+    assert work["CDF"].paise == 15 and work["CDF"].status == "succeeded"
+    assert work["CDD"].paise == 200 and work["CDD"].status == "running"
+    assert work["AR"].paise == 15  # priced as Flash, never free
+    metrics = build_metrics([export], _scope())
+    assert metrics["fx"]["usd_to_inr"] == 100 and metrics["fx"]["set_on"] == "2026-09-19"
+    assert metrics["fx"]["currency"] == "USD"
+    stages = {row["stage"] for row in metrics["overview"]["by_stage"]}
+    assert {"CDF", "CDD", "AR"} <= stages

@@ -271,3 +271,28 @@ describe("charts the owner picks and compares", () => {
     expect(seriesValue("inr", 4.73)).toBe("₹4.73");
   });
 });
+
+describe("money in dollars and rupees", () => {
+  it("shows dollars first, rupees beside them, and names the one rate", async () => {
+    const { money, normalizeMetrics, rateWords, usd, STAGE_LABEL } =
+      await import("./cost-data");
+    const metrics = normalizeMetrics({
+      fx: { currency: "USD", usd_to_inr: 100, set_on: "2026-09-19" },
+    });
+    expect(metrics.fx).toEqual({
+      currency: "USD",
+      usdToInr: 100,
+      setOn: "2026-09-19",
+    });
+    expect(usd(533, metrics.fx)).toBe("$5.33");
+    expect(money(533, metrics.fx)).toBe("$5.33 · ₹533.00");
+    expect(money(null, metrics.fx)).toBe("–");
+    expect(rateWords(metrics.fx)).toMatch(/^₹100 per \$1, set 19 Sept? 2026$/);
+    // An older server sends no rate: the sheet's ₹100 is assumed, no date claimed.
+    const older = normalizeMetrics({});
+    expect(older.fx.usdToInr).toBe(100);
+    expect(rateWords(older.fx)).toBe("₹100 per $1");
+    expect(STAGE_LABEL.CDF).toBe("Call data · fast");
+    expect(STAGE_LABEL.AR).toBe("AI replies");
+  });
+});

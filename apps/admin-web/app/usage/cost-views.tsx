@@ -22,8 +22,11 @@ import {
   dayLabel,
   inr,
   minutes,
+  money,
   pct,
   perMin,
+  rateWords,
+  usd,
   seconds,
   seriesValue,
   stamp,
@@ -190,7 +193,9 @@ export function Sources({ metrics }: { metrics: Metrics }) {
           </span>
         );
       })}
-      <Why detail="Every 15 minutes each environment exports usage numbers only (no call content) into a separate metrics store, read-only. Rupees are list prices from the price sheet (₹100 per US dollar), not invoices. Calls copied from one database to another count once, in the environment they ran in. Days are India time." />
+      <Why
+        detail={`Every 15 minutes each environment exports usage numbers only (no call content) into a separate metrics store, read-only. Money is list prices from the price sheet, in the dollars providers bill; rupees use one rate, ${rateWords(metrics.fx)} (a card's rate differs). Calls copied from one database to another count once, in the environment they ran in. Days are India time. "Late" means that environment's export is old: its numbers are as of the time shown.`}
+      />
     </div>
   );
 }
@@ -290,8 +295,8 @@ export function OverviewView({
       <Tiles label="Spend">
         <Kpi
           label="Spent this month"
-          value={inr(o.spendMonth)}
-          note={`Today ${inr(o.spendToday)} · ${scope}`}
+          value={usd(o.spendMonth, metrics.fx)}
+          note={`${inr(o.spendMonth)} at ${rateWords(metrics.fx)} · today ${money(o.spendToday, metrics.fx)} · ${scope} · every environment and feature`}
           spark={
             <Spark
               values={o.daily.map((day) => day.spend)}
@@ -319,21 +324,21 @@ export function OverviewView({
           label="Test runs"
           value={count(o.testRuns)}
           tone={o.testsWindow > o.spendWindow ? "warn" : undefined}
-          note={`${inr(o.testsWindow)} on canaries and QA · ${windowLabel}`}
+          note={`${money(o.testsWindow, metrics.fx)} on canaries and QA · ${windowLabel}`}
         />
       </Tiles>
       <Panel
         title="By environment"
         sub={windowLabel}
         tools={
-          <Why detail="Each environment's own spend. Today and this month are India time. Upload to report is the median from the upload to the report being ready." />
+          <Why detail="Each environment's own spend: production, staging and development share one provider account, so all three count against its credit. Dollars are what providers bill; rupees are those dollars at the price sheet's one rate. Today and this month are India time. Upload to report is the median from the upload to the report being ready." />
         }
       >
         <Table
           label="Spend by environment"
           cards={o.environments.map((row) => (
             <div key={row.environment} role="listitem">
-              <Env name={row.environment} /> · {inr(row.window)} ·{" "}
+              <Env name={row.environment} /> · {money(row.window, metrics.fx)} ·{" "}
               {perMin(row.perMinute)} · {count(row.calls)} calls
             </div>
           ))}
@@ -376,9 +381,9 @@ export function OverviewView({
                 <th scope="row">
                   <Env name={row.environment} />
                 </th>
-                <td data-num="">{inr(row.today)}</td>
-                <td data-num="">{inr(row.month)}</td>
-                <td data-num="">{inr(row.window)}</td>
+                <td data-num="">{money(row.today, metrics.fx)}</td>
+                <td data-num="">{money(row.month, metrics.fx)}</td>
+                <td data-num="">{money(row.window, metrics.fx)}</td>
                 <td data-num="">{perMin(row.perMinute)}</td>
                 <td data-num="">{count(row.calls)}</td>
                 <td data-num="">{count(row.reports)}</td>

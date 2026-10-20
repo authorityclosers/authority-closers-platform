@@ -31,7 +31,11 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from ac_platform.conversation_intelligence.admin_pricing import estimate_provider_usage
+from ac_platform.conversation_intelligence.admin_pricing import (
+    FX_SET_ON,
+    FX_USD_TO_INR,
+    estimate_provider_usage,
+)
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationDenied,
@@ -62,6 +66,20 @@ STAGE_LABELS = {
     "C4": "Facts",
     "C5": "Report",
     "PR": "Pointer review",
+    "CDF": "Call data · fast",
+    "CDD": "Call data · deep",
+    "AR": "AI replies",
+    "QF": "Quote facts",
+}
+# Paid AI beyond call analysis (the export's ai_work rows).
+AI_WORK_STAGES = ("CDF", "CDD", "AR", "QF")
+# An unknown Gemini model is priced as Flash, never read as free (as the AI spend ledger).
+FALLBACK_MODEL = "gemini-3.8-flash"
+FX = {
+    "currency": "USD",
+    "usd_to_inr": float(FX_USD_TO_INR),
+    "set_on": FX_SET_ON.isoformat(),
+    "source": "The price sheet's planning rate; providers bill in US dollars.",
 }
 HOLD_REFS = {
     "provider-cost-reconciliation": "Waiting for settlement or an invoice check",
@@ -319,6 +337,46 @@ def parse_export(environment: str, document: Mapping[str, Any]) -> Export:
                 audio_ms=0,
                 elapsed_ms=None,
                 paise=price("gemini", model, usage, 0),
+                at=at,
+            )
+        )
+    for row in _rows(document, "ai_work"):
+        at = _when(row.get("at"))
+        stage = _text(row.get("stage"))
+        if at is None or stage not in AI_WORK_STAGES:
+            continue
+        provider, model = _text(row.get("provider")) or "gemini", _text(row.get("model"))
+        raw = _text(row.get("status")) or "unknown"
+        status = raw if raw in ("failed", "skipped", "running") else "succeeded"
+        usage = {
+            "promptTokenCount": _int(row.get("input_tokens")),
+            "candidatesTokenCount": _int(row.get("output_tokens")),
+        }
+        if status == "running":
+            paise: int | None = 200  # the engine counts a start with no outcome as Rs 2
+        else:
+            # The price sheet first, so every figure uses one rate; then the feature's own.
+            paise = price(provider, model, usage, 0)
+            if paise is None and provider == "gemini":
+                paise = price("gemini", FALLBACK_MODEL, usage, 0)
+            cost = row.get("cost_inr")
+            if paise is None and isinstance(cost, (int, float)) and not isinstance(cost, bool):
+                paise = round(cost * 100)
+        export.steps.append(
+            Step(
+                environment=environment,
+                call=_text(row.get("call")),
+                company=_text(row.get("company")),
+                stage=stage,
+                provider=provider,
+                model=model,
+                status=status,
+                attempts=1,
+                input_tokens=usage["promptTokenCount"],
+                output_tokens=usage["candidatesTokenCount"],
+                audio_ms=0,
+                elapsed_ms=None,
+                paise=paise,
                 at=at,
             )
         )
@@ -835,6 +893,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         },
         "environment": scope.environment,
         "tests": scope.tests,
+        "fx": FX,
         "sources": [
             {
                 "environment": export.environment,
