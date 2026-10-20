@@ -51,6 +51,12 @@ from ac_platform.kernel.authz import ActorContext
 SCOPES = ("settings:read", "settings:write", "admin:read")
 READ_SCOPE = "admin:read"
 _ID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+# The one-click raises Admin offers beside the settings: each saves through its own
+# area, audited there as a cap raise; a key needs settings:write, as for any change.
+ONE_CLICK: tuple[tuple[str, str], ...] = (
+    ("POST", "/v1/admin/call-data/raise"),
+    ("POST", "/v1/admin/lead-desk-ai/raise"),
+)
 # GET only, and content-free by design (see the module note).
 READS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(pattern)
@@ -105,6 +111,8 @@ def key_routes() -> dict[tuple[str, str], str]:
         routes[("GET", item.read.path)] = "settings:read"
         if item.write is not None and not BLOCKED.search(item.write.path):
             routes[(item.write.method, item.write.path)] = "settings:write"
+    for route in ONE_CLICK:
+        routes[route] = "settings:write"
     return {route: scope for route, scope in routes.items() if not BLOCKED.search(route[1])}
 
 

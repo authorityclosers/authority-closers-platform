@@ -39,6 +39,13 @@ export AC_ADMIN_KEY=ac_live_...
 | `ac-admin review-queue [--pipeline KEY] [--limit N]`          | The calls a review pipeline samples, with progress                                                                                                                        |
 | `ac-admin health [--days N]`                                  | Jobs finished, failed and stuck, timings, and cost per minute                                                                                                             |
 
+`ac-admin raise AREA [--to RUPEES]` works like the one-click raise in Admin. It raises an AI cap so that waiting work resumes, and is audited as a cap raise. It needs `settings:write`.
+
+| Area                               | What `--to` does                                         |
+| ---------------------------------- | -------------------------------------------------------- |
+| `call-data-fast`, `call-data-deep` | Required: the new daily cap in rupees                    |
+| `lead-ai`                          | Optional: when left out, the cap goes to the next preset |
+
 Output is JSON. Exit codes:
 
 - `0`: done.
@@ -49,7 +56,7 @@ Output is JSON. Exit codes:
 
 Run `ac-admin mcp` to serve tools on stdio. Every command above is offered as a tool:
 
-- `list_settings`, `get_setting`, `set_setting`
+- `list_settings`, `get_setting`, `set_setting`, `raise_cap`
 - `list_organisations`, `list_calls`, `get_call_map`, `get_review_queue`, `get_health`
 
 Example entry in an assistant's MCP configuration:

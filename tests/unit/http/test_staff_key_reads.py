@@ -37,3 +37,10 @@ def test_call_content_and_browser_only_areas_stay_out_of_reach() -> None:
         assert route_scope(routes, "GET", path) is None, path
     # Settings keep their own scopes.
     assert route_scope(routes, "GET", "/v1/admin/settings") == "settings:read"
+
+
+def test_the_one_click_raises_need_settings_write() -> None:
+    routes = key_routes()
+    for path in ("/v1/admin/call-data/raise", "/v1/admin/lead-desk-ai/raise"):
+        assert route_scope(routes, "POST", path) == "settings:write"
+        assert route_scope(routes, "GET", path) is None

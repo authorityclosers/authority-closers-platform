@@ -192,6 +192,7 @@ def test_mcp_lists_tools_and_changes_a_setting() -> None:
         "list_settings",
         "get_setting",
         "set_setting",
+        "raise_cap",
         "list_organisations",
         "list_calls",
         "get_call_map",
@@ -304,3 +305,31 @@ def test_mcp_offers_the_reads_as_tools() -> None:
         },
     )
     assert refused["result"]["isError"] is True
+
+
+LEAD_AI = {"revision": 4, "config": {"cap_inr": 300}}
+
+
+def test_raise_is_the_one_click_route_with_the_revision_it_read() -> None:
+    fake = _fake(
+        **{
+            "GET /v1/admin/lead-desk-ai": (200, LEAD_AI),
+            "POST /v1/admin/lead-desk-ai/raise": (200, {"revision": 5}),
+            "POST /v1/admin/call-data/raise": (200, {"revision": 8}),
+        }
+    )
+    assert _run(["raise", "lead-ai"], fake)[0] == 0
+    method, path, headers, body = fake.seen[-1]
+    assert (method, path, body) == (
+        "POST",
+        "/v1/admin/lead-desk-ai/raise",
+        {"expected_revision": 4},
+    )
+    assert "Idempotency-key" in headers
+    assert _run(["raise", "call-data-deep", "--to", "600"], fake)[0] == 0
+    assert fake.seen[-1][3] == {"expected_revision": 7, "daily_cap_inr": 600, "pipeline": "deep"}
+    before = len(fake.seen)
+    # Call data needs a target, and a target must be above the cap now.
+    assert _run(["raise", "call-data-fast"], fake)[0] == 2
+    assert _run(["raise", "lead-ai", "--to", "300"], fake)[0] == 2
+    assert all(method == "GET" for method, *_ in fake.seen[before:])
