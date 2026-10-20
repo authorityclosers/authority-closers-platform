@@ -112,6 +112,12 @@
   background: var(--sx-surface);
 }
 
+/* A panel is one grid column that grows to its widest child: every part may
+   shrink to the panel, so a long subtitle truncates instead of widening it. */
+.panel > * {
+  min-width: 0;
+}
+
 .panelHead {
   display: flex;
   align-items: center;
