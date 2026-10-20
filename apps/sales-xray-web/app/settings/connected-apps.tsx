@@ -52,7 +52,7 @@ import {
   type TestOffer,
   type TestResult,
 } from "./connected-apps-client";
-import { Sheet } from "./sheet";
+import { Sheet } from "../ui/sheet";
 import styles from "./connected-apps.module.css";
 
 const LOGOS: Record<AppKey, { brands?: string[]; icon?: LucideIcon }> = {
@@ -630,6 +630,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function ManageSheet({
+  open,
   app,
   mode,
   offer,
@@ -640,6 +641,7 @@ function ManageSheet({
   onDismiss,
   onChanged,
 }: {
+  open: boolean;
   app: AppHealth;
   mode: "manage" | "test";
   offer?: TestOffer;
@@ -681,7 +683,7 @@ function ManageSheet({
   }
   return (
     <Sheet
-      open
+      open={open}
       title={
         mode === "test" && offer ? `${offer.label} · ${app.name}` : app.name
       }
@@ -793,6 +795,9 @@ export function ConnectedApps() {
   const [signIn, setSignIn] = useState<ConnectOption[]>([]);
   const [tests, setTests] = useState<Partial<Record<AppKey, Running>>>({});
   const [sheet, setSheet] = useState<SheetState>(null);
+  // The last sheet's app stays drawn while the sheet slides away (ui/sheet).
+  const [drawn, setDrawn] = useState<SheetState>(null);
+  if (sheet && sheet !== drawn) setDrawn(sheet);
   const lastRead = useRef(0);
   // Which workspace these apps belong to: tests run there, so it is named.
   const [workspace, setWorkspace] = useState<string | null>(null);
@@ -1001,7 +1006,7 @@ export function ConnectedApps() {
     (app) => app.state === "ready" || app.state === "problem",
   ).length;
   const attention = apps.filter((app) => app.state === "problem").length;
-  const open = sheet ? apps.find((app) => app.app === sheet.app) : undefined;
+  const open = drawn ? apps.find((app) => app.app === drawn.app) : undefined;
 
   return (
     <div className={styles.page}>
@@ -1102,11 +1107,12 @@ export function ConnectedApps() {
           </section>
         ) : null}
       </div>
-      {open && sheet ? (
+      {open && drawn ? (
         <ManageSheet
+          open={sheet !== null}
           app={open}
-          mode={sheet.mode}
-          offer={sheet.offer}
+          mode={drawn.mode}
+          offer={drawn.offer}
           result={tests[open.app]}
           workspace={workspace}
           onClose={() => setSheet(null)}

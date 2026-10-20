@@ -416,7 +416,9 @@ it("manages an app in a sheet: its connections, disconnect on a second press, an
   await act(async () =>
     sheet.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click(),
   );
-  expect(host.querySelector("dialog")).toBeNull();
+  // The kit sheet slides away, then closes.
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 700)));
+  expect(host.querySelector("dialog")?.open ?? false).toBe(false);
   await act(async () => button(card("meta_leads"), "Manage")!.click());
   sheet = host.querySelector("dialog")!;
   expect(sheet.textContent).toContain("Brightline Coaching");
@@ -574,6 +576,7 @@ it("keeps one result at a time, shown once", async () => {
   await act(async () =>
     sheet.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click(),
   );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 700)));
   expect(host.querySelectorAll('[data-status="failed"]')).toHaveLength(1);
   expect(
     card("whatsapp").querySelector('[data-status="failed"]'),

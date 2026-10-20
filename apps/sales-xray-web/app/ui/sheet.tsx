@@ -36,8 +36,7 @@ const DISMISS_MIN_PX = 96;
 export const SHEET_FLICK = 0.55;
 
 const matches = (query: string) =>
-  typeof window !== "undefined" &&
-  window.matchMedia?.(query).matches === true;
+  typeof window !== "undefined" && window.matchMedia?.(query).matches === true;
 const reducedMotion = () => matches("(prefers-reduced-motion: reduce)");
 
 type Wide = "right" | "center";
@@ -54,19 +53,25 @@ function play(
   options: KeyframeAnimationOptions,
 ): Animation | null {
   if (typeof element.animate !== "function") return null;
+  let animation: Animation;
   try {
-    return element.animate(frames, options);
+    animation = element.animate(frames, options);
   } catch {
-    return element.animate(frames, {
+    animation = element.animate(frames, {
       ...options,
       easing: "cubic-bezier(0.32, 0.72, 0, 1)",
     });
   }
+  // Settling or closing early cancels the motion on purpose; its finished
+  // promise then rejects (AbortError), which is not an error here.
+  animation.finished?.catch(() => undefined);
+  return animation;
 }
 
 function restingFrom(wide: Wide): Keyframe {
   if (reducedMotion()) return { opacity: 0 };
-  if (matches(SHEET_PHONE_QUERY)) return { transform: "translate3d(0, 100%, 0)" };
+  if (matches(SHEET_PHONE_QUERY))
+    return { transform: "translate3d(0, 100%, 0)" };
   return wide === "right"
     ? { transform: "translate3d(calc(100% + 24px), 0, 0)" }
     : { transform: "scale(0.96)", opacity: 0 };
@@ -374,7 +379,9 @@ export function Sheet({
               </h2>
             )}
             <div className={styles.body}>{children}</div>
-            {footer ? <footer className={styles.footer}>{footer}</footer> : null}
+            {footer ? (
+              <footer className={styles.footer}>{footer}</footer>
+            ) : null}
           </>
         ) : null}
       </div>
