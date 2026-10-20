@@ -371,6 +371,29 @@ function install(first: boolean) {
     if (!url.includes("/v1/lead-desk/")) return real(input, init);
     const method = init?.method ?? "GET";
     if (url.endsWith("/journey/templates")) return answer(TEMPLATES);
+    if (url.endsWith("/journey/suggestions"))
+      return answer([
+        {
+          ref: "pulse:st_quote",
+          label: "Quotation sent",
+          source: "Pulse",
+          workflow: "Sales",
+          milestone: "proposal",
+          meaning: MEANINGS.proposal,
+          kind: "interested",
+          kindWords: "Hot",
+        },
+        {
+          ref: "pulse:st_token",
+          label: "Token amount received",
+          source: "Pulse",
+          workflow: "Sales",
+          milestone: "negotiation",
+          meaning: MEANINGS.negotiation,
+          kind: "interested",
+          kindWords: "Hot",
+        },
+      ]);
     if (url.endsWith("/journey/ads")) return answer(ADS);
     if (url.endsWith("/journey/summary"))
       return answer({
