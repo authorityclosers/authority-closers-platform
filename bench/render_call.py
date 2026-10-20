@@ -48,18 +48,26 @@ def base_lang(lang: str) -> str:
 
 
 class Engines:
-    def __init__(self, en_engine: str):
+    def __init__(self, en_engine: str, mr_engine: str = "kokoro-mr"):
         self._kokoro: dict[str, object] = {}
         self._mms: dict[str, tuple] = {}
         self._parler = None
         self.en_engine = en_engine  # "kokoro-h" (Hindi voice reads English: Indian accent) or "kokoro-b"
+        self.mr_engine = mr_engine  # "kokoro-mr" (Hindi voice, espeak Marathi phonemes) or "mms"
         self.hf = bool(os.environ.get("HF_TOKEN"))
 
     def kokoro(self, code: str):
         if code not in self._kokoro:
             from kokoro import KPipeline
 
-            self._kokoro[code] = KPipeline(lang_code=code, repo_id="hexgrad/Kokoro-82M")
+            if code == "mr":  # Hindi voices, Marathi phonemes (espeak-ng "mr")
+                from misaki import espeak
+
+                pipe = KPipeline(lang_code="h", repo_id="hexgrad/Kokoro-82M")
+                pipe.g2p = espeak.EspeakG2P(language="mr")
+                self._kokoro[code] = pipe
+            else:
+                self._kokoro[code] = KPipeline(lang_code=code, repo_id="hexgrad/Kokoro-82M")
         return self._kokoro[code]
 
     def say_kokoro(self, text: str, code: str, voice: str, speed: float) -> np.ndarray:
@@ -143,6 +151,8 @@ def synth_turn(eng: Engines, turn: dict, v: dict, call_lang: str) -> tuple[np.nd
     if eng.hf:
         spk = v["parler"][lang]
         return eng.say_parler(text, spk, v["style"]), f"indic-parler:{spk}"
+    if lang == "mr" and eng.mr_engine == "kokoro-mr":
+        return eng.say_kokoro(text, "mr", v["kokoro_h"], v["speed"]), f"kokoro-mr:{v['kokoro_h']}"
     return eng.say_mms(text, lang, v["semitones"]), f"mms-{lang}:{v['semitones']:+.1f}st"
 
 
@@ -184,7 +194,7 @@ def phone_version(mix: np.ndarray, snr_db: float, rng: np.random.Generator, tmp:
     return y, codec
 
 
-def render(call_dir: Path, out_root: Path, en_engine: str) -> dict:
+def render(call_dir: Path, out_root: Path, en_engine: str, mr_engine: str = "kokoro-mr") -> dict:
     plan = json.loads((call_dir / "plan.json").read_text(encoding="utf-8"))
     script = json.loads((call_dir / "script.json").read_text(encoding="utf-8"))
     cid = plan["call_id"]
@@ -193,7 +203,7 @@ def render(call_dir: Path, out_root: Path, en_engine: str) -> dict:
     nrng = np.random.default_rng(seed)
     voices = assign_voices(plan, rng)
     roles = {s["id"]: s.get("role") for s in plan["speakers"]}
-    eng = Engines(en_engine)
+    eng = Engines(en_engine, mr_engine)
     clips, segs, engines_used = [], [], set()
     cursor = 0
     for t in script["turns"]:
@@ -228,7 +238,7 @@ def render(call_dir: Path, out_root: Path, en_engine: str) -> dict:
     sf.write(out / "phone_8k.flac", phone, 8000)
     (out / "segments.json").write_text(json.dumps(segs, ensure_ascii=False, indent=0), encoding="utf-8")
     meta = {"call_id": cid, "seed": seed, "seconds": round(total / SR, 1), "snr_db": snr, "phone_codec": codec,
-            "engines": sorted(engines_used), "en_engine": en_engine, "voices": voices}
+            "engines": sorted(engines_used), "en_engine": en_engine, "mr_engine": mr_engine, "voices": voices}
     (out / "render.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     return meta
 
@@ -238,9 +248,10 @@ def main() -> int:
     ap.add_argument("calls", nargs="+", type=Path)
     ap.add_argument("--out", type=Path, default=Path("audio"))
     ap.add_argument("--en-engine", default="kokoro-h", choices=["kokoro-h", "kokoro-b"])
+    ap.add_argument("--mr-engine", default="kokoro-mr", choices=["kokoro-mr", "mms"])
     a = ap.parse_args()
     for c in a.calls:
-        meta = render(c, a.out, a.en_engine)
+        meta = render(c, a.out, a.en_engine, a.mr_engine)
         print(json.dumps({k: meta[k] for k in ("call_id", "seconds", "snr_db", "phone_codec", "engines")}))
         sys.stdout.flush()
     return 0

@@ -22,6 +22,47 @@ def norm(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+_V = {"अ": "a", "आ": "aa", "इ": "i", "ई": "ii", "उ": "u", "ऊ": "uu", "ऋ": "ri", "ए": "e", "ऐ": "ai", "ओ": "o", "औ": "au",
+      "ऑ": "o", "ॲ": "e"}
+_M = {"ा": "aa", "ि": "i", "ी": "ii", "ु": "u", "ू": "uu", "ृ": "ri", "े": "e", "ै": "ai", "ो": "o", "ौ": "au",
+      "ॉ": "o", "ॅ": "e", "ं": "n", "ँ": "n", "ः": "h", "़": ""}
+_C = dict(zip("कखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसहळ",
+              "k kh g gh n ch chh j jh n t th d dh n t th d dh n p ph b bh m y r l v sh sh s h l".split()))
+_D = dict(zip("०१२३४५६७८९", "0123456789"))
+
+
+def translit(s: str) -> str:
+    """Rough Devanagari -> Latin (inherent a, matras, virama, final-schwa deletion) so that English words written
+    in either script and Hindi/Marathi words compare on one alphabet. Approximate; used only for tCER."""
+    out, i = [], 0
+    s = unicodedata.normalize("NFC", s)
+    while i < len(s):
+        ch = s[i]
+        if ch in _C:
+            out.append(_C[ch])
+            nxt = s[i + 1] if i + 1 < len(s) else ""
+            if nxt == "्":
+                i += 2
+                continue
+            if nxt in _M and nxt not in "ंँः़":
+                i += 1
+                continue
+            out.append("a")
+        elif ch in _M:
+            out.append(_M[ch])
+        elif ch in _V:
+            out.append(_V[ch])
+        elif ch in _D:
+            out.append(_D[ch])
+        elif ch == "्":
+            pass
+        else:
+            out.append(ch)
+        i += 1
+    words = "".join(out).lower().split()
+    return " ".join(w[:-1] if len(w) > 2 and w.endswith("a") and not w.endswith("aa") else w for w in words)
+
+
 def cer(ref: str, hyp: str) -> float:
     r, h = norm(ref).replace(" ", ""), norm(hyp).replace(" ", "")
     if not r:
@@ -67,7 +108,7 @@ def main() -> int:
         hyp = " ".join(hyp_parts)
         res = {"call": d.name, "variant": a.variant, "model": a.model, "language": info.language,
                "lang_prob": round(info.language_probability, 2), "seconds": a.seconds,
-               "cer": round(cer(ref, hyp), 3), "wall_s": round(time.time() - t0, 1),
+               "cer": round(cer(ref, hyp), 3), "tcer": round(cer(translit(ref), translit(hyp)), 3), "wall_s": round(time.time() - t0, 1),
                "ref_head": ref[:160], "hyp_head": hyp[:160]}
         (d / f"qa_{a.variant}_{a.model}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1),
                                                           encoding="utf-8")

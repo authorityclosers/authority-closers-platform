@@ -77,12 +77,13 @@ jobs:
         run: |
           python qa_roundtrip.py --calls calls --audio audio --model small --seconds 120 --variant clean_16k || true
           python qa_roundtrip.py --calls calls --audio audio --model small --seconds 120 --variant phone_8k || true
-      - name: Smoke variants (English with a British Kokoro voice)
-        if: hashFiles('bench/SMOKE') != ''
+      - name: Smoke variants (Marathi engines, scored by whisper large-v3-turbo)
+        if: hashFiles('bench/SMOKE') != '' && contains(matrix.calls, 'sm-mr')
         working-directory: bench
         run: |
-          python render_call.py calls/sm-en --out audio/variant-kokoro-b --en-engine kokoro-b
-          python qa_roundtrip.py --calls calls --audio audio/variant-kokoro-b --model small --seconds 120 || true
+          python render_call.py calls/sm-mr --out audio/variant-mms --mr-engine mms
+          python qa_roundtrip.py --calls calls --audio audio --model large-v3-turbo --seconds 120 --only sm-mr sm-hi || true
+          python qa_roundtrip.py --calls calls --audio audio/variant-mms --model large-v3-turbo --seconds 120 || true
       - name: Name the artifact
         id: n
         run: echo "name=audio-$(echo '${{ matrix.calls }}' | tr ' ' '_' | cut -c1-60)" >> "$GITHUB_OUTPUT"
