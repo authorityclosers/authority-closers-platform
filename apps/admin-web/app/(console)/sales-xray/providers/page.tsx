@@ -1,32 +1,55 @@
 import { AdminShell } from "@/app/components/admin-shell";
+import { adminRead } from "@/app/lib/server-api";
 import { BenchmarkCenterPanel } from "@/app/sales-xray/benchmark-center";
 import { ControlCenterPanel } from "@/app/sales-xray/control-center";
 import { ProviderControlsPanel } from "@/app/sales-xray/provider-controls";
-import { QueryTabs } from "@/app/ui/kit";
+import { ProviderHub } from "@/app/sales-xray/provider-hub";
+import { normalizeHub } from "@/app/sales-xray/provider-hub-data";
+import { QueryTabs, Unavailable } from "@/app/ui/kit";
 
 export const dynamic = "force-dynamic";
 
 const TABS = [
+  { key: "hub", label: "Providers" },
   { key: "overview", label: "Overview" },
-  { key: "providers", label: "Providers and routes" },
+  { key: "providers", label: "Routes (advanced)" },
   { key: "benchmark", label: "Benchmark" },
 ];
+
+const PROVIDER_ID = /^[a-z_]{1,32}$/;
 
 export default async function ProvidersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; provider?: string }>;
 }) {
-  const { tab } = await searchParams;
-  const current = TABS.some((item) => item.key === tab) ? tab! : "overview";
+  const { tab, provider } = await searchParams;
+  const current = TABS.some((item) => item.key === tab) ? tab! : "hub";
+  const chosen = provider && PROVIDER_ID.test(provider) ? provider : null;
+  const hub =
+    current === "hub"
+      ? await adminRead(
+          `/v1/admin/providers/hub${chosen ? `?provider=${chosen}` : ""}`,
+          normalizeHub,
+        )
+      : null;
   return (
     <AdminShell
       active="sales-xray"
       title="Providers & costs"
-      description="Which models analyse calls, what each step may cost, and how they compare."
+      description="Find a provider, see every model it offers and what each costs, and which models analyse calls."
     >
       <QueryTabs base="/sales-xray/providers" items={TABS} current={current} />
-      {current === "providers" ? (
+      {current === "hub" ? (
+        hub?.ok ? (
+          <ProviderHub hub={hub.data} />
+        ) : (
+          <Unavailable
+            title="The Providers hub"
+            reason={hub?.error ?? "Not read"}
+          />
+        )
+      ) : current === "providers" ? (
         <ProviderControlsPanel />
       ) : current === "benchmark" ? (
         <BenchmarkCenterPanel />
