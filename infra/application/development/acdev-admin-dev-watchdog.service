@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart Admin's dev server when its pages fail for two minutes (acdev user unit)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/acdev-admin-dev-watchdog
+Nice=10
