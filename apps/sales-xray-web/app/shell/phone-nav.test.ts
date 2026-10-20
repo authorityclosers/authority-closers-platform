@@ -60,3 +60,9 @@ it("keeps Chats inside the Leads tab on phones, with its own rail icon (owner, 2
   expect(shellActiveFor("/chats", "analyse")).toBe("chats");
   expect(phoneTabFor("/chatsroom", undefined)).toBeNull();
 });
+
+it("lights the account entry on every Settings page, loading or not", () => {
+  expect(shellActiveFor("/settings", "analyse")).toBe("account");
+  expect(shellActiveFor("/settings/apps", "analyse")).toBe("account");
+  expect(phoneTabFor("/settings/team", undefined)).toBe("more");
+});

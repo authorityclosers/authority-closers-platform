@@ -100,6 +100,8 @@ export function shellActiveFor(
     if (under(pathname, "/organisation/insights")) return "insights";
     if (under(pathname, "/organisation")) return "organisation";
     if (under(pathname, "/account")) return "account";
+    // Settings and its sections light the account entry, loading or not.
+    if (under(pathname, "/settings")) return "account";
   }
   return active;
 }

@@ -896,7 +896,18 @@
   scrollbar-gutter: auto;
 }
 
-.shell[data-mobile-fit="true"] .main > :global(.xray-app) {
+/* The page's slot draws no box of its own, so the page lays out as the
+   main area's child; it hides while a tapped place's outline stands in. */
+.pageSlot {
+  display: contents;
+}
+
+.pageSlot[data-standing-in] {
+  display: none;
+}
+
+.shell[data-mobile-fit="true"] .main > :global(.xray-app),
+.shell[data-mobile-fit="true"] .pageSlot > :global(.xray-app) {
   height: 100%;
   min-height: 0;
 }
@@ -1071,7 +1082,10 @@
   /* The report scroller already owns its reading margin. Nested shell
      padding was taking another 48px away from the phone viewport. */
   .shell[data-mobile-fit="true"]
-    .main:has(> :global(.xray-app[data-stage="report"])) {
+    .main:has(
+      > :global(.xray-app[data-stage="report"]),
+      > .pageSlot > :global(.xray-app[data-stage="report"])
+    ) {
     padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   }
 }
@@ -1090,6 +1104,7 @@
 
   .shell[data-mobile-fit="true"] .main,
   .shell[data-mobile-fit="true"] .main > :global(.xray-app),
+  .shell[data-mobile-fit="true"] .pageSlot > :global(.xray-app),
   .shell[data-mobile-fit="true"] .main :global(.studio-main) {
     height: auto;
     overflow: visible;

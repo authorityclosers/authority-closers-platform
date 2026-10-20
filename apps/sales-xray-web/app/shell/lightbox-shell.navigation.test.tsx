@@ -124,8 +124,8 @@ it("makes the sidebar search open Calls with the typed text", () => {
   expect(form?.querySelector("kbd")?.textContent).toBe("Ctrl K");
 });
 
-// Owner, 17 Oct: five tabs; 20 Oct: Chats gets its own tab beside Leads.
-it("keeps the phone tab bar to its six tabs, plus a dev settings control", () => {
+// Owner, 17 Oct: five tabs; 20 Oct: "5 tabs, Chats inside Leads".
+it("keeps the phone tab bar to its five tabs, plus a dev settings control", () => {
   for (const liveData of [false, true]) {
     const shell = (
       <AcquisitionShell authenticated active="dashboard">
@@ -143,12 +143,14 @@ it("keeps the phone tab bar to its six tabs, plus a dev settings control", () =>
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Home", "Leads", "Chats", "New", "Calls", "More", "Settings"]
-        : ["Home", "Leads", "Chats", "New", "Calls", "More"],
+        ? ["Home", "Leads", "New", "Calls", "More", "Settings"]
+        : ["Home", "Leads", "New", "Calls", "More"],
     );
     // Owner, 17 Oct: Prospects and Coaching open from the More sheet.
     expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
     expect(nav.querySelector('a[href="/coaching"]')).toBeNull();
+    // Chats opens from the Leads | Chats switch, not its own tab.
+    expect(nav.querySelector('a[href="/chats"]')).toBeNull();
     const more = Array.from(nav.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "More",
     );
@@ -160,7 +162,7 @@ it("keeps the phone tab bar to its six tabs, plus a dev settings control", () =>
   }
 });
 
-it("keeps the six tabs for an unconfirmed session; signed out offers Home, New and Sign in", () => {
+it("keeps the five tabs for an unconfirmed session; signed out offers Home, New and Sign in", () => {
   const tabs = (shell: React.ReactElement) => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(shell);
@@ -176,7 +178,7 @@ it("keeps the six tabs for an unconfirmed session; signed out offers Home, New a
         <p>Dashboard</p>
       </AcquisitionShell>,
     ),
-  ).toEqual(["Home", "Leads", "Chats", "New", "Calls", "More"]);
+  ).toEqual(["Home", "Leads", "New", "Calls", "More"]);
   // B22: Leads and Calls only lead to a sign-in prompt for a visitor.
   expect(
     tabs(

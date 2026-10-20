@@ -41,7 +41,7 @@ const SHELL_ROUTES = new Set([
   "/settings",
 ]);
 
-function isShellRoute(pathname: string | null) {
+export function isShellRoute(pathname: string | null) {
   if (!pathname) return false;
   // Static exports use trailing slashes for the same application pages.
   const route = pathname.replace(/\/$/, "") || "/";

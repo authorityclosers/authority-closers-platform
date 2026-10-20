@@ -57,6 +57,10 @@ import { AllowanceRing } from "./allowance-ring";
 import { MinutesMeter } from "./minutes-meter";
 import { phoneTabFor, shellActiveFor } from "./phone-nav";
 import { RailTip } from "./rail-tip";
+import { usePlacePrefetch, useHoverPrefetch } from "./route-prefetch";
+import { ScreenLink } from "./screen-link";
+import { useScreenMotion } from "./screen-transition";
+import { RouteLoading } from "./route-loading";
 import { SectionBoundary } from "../ui/section-boundary";
 import {
   readAllowance,
@@ -183,6 +187,9 @@ function resolvePageTitle(
   if (active === "analyse") return "New analysis";
   return null;
 }
+
+const inSettings = (pathname: string | null) =>
+  pathname === "/settings" || (pathname?.startsWith("/settings/") ?? false);
 
 const subscribeNothing = () => () => {};
 
@@ -342,8 +349,19 @@ function LightboxShellFrame({
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
   const pathname = usePathname();
   const place = shellActiveFor(pathname, active);
-  const pageTitle = resolvePageTitle(place, heading, pageName);
+  // Every Settings page says Settings, even while its section loads.
+  const pageTitle = resolvePageTitle(
+    place,
+    heading,
+    pageName ?? (inSettings(pathname) ? "Settings" : undefined),
+  );
   const phoneTab = phoneTabFor(pathname, active);
+  // Moving between places animates the page area; the places one tap away
+  // are made ready while the app is quiet (owner, 20 Oct).
+  const pageRef = useRef<HTMLElement | null>(null);
+  const standIn = useScreenMotion(pageRef, pathname);
+  usePlacePrefetch(authenticated && !loading);
+  useHoverPrefetch(authenticated);
 
   const toggleCollapsed = () => {
     const next = !collapsed;
@@ -854,7 +872,7 @@ function LightboxShellFrame({
             </div>
           </div>
           <div className={styles.stripNav}>
-            <Link
+            <ScreenLink
               className={`${styles.stripBtn}${place === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/dashboard"
               aria-label="Dashboard"
@@ -863,11 +881,10 @@ function LightboxShellFrame({
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Dashboard</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "leads" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/leads"
-              prefetch={false}
               aria-label="Leads"
               data-rail-tip="Leads"
               aria-current={place === "leads" ? "page" : undefined}
@@ -878,11 +895,10 @@ function LightboxShellFrame({
                 live={leadsBadgeLive}
               />
               <span style={RAIL_NAME_STYLE}>Leads</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "chats" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/chats"
-              prefetch={false}
               aria-label="Chats"
               data-rail-tip="Chats"
               aria-current={place === "chats" ? "page" : undefined}
@@ -893,8 +909,8 @@ function LightboxShellFrame({
                 live={leadsBadgeLive}
               />
               <span style={RAIL_NAME_STYLE}>Chats</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
               href={newAnalysisHref}
               aria-label="New analysis"
@@ -903,8 +919,8 @@ function LightboxShellFrame({
             >
               <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>New analysis</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/analysis/calls"
               aria-label="Calls"
@@ -913,8 +929,8 @@ function LightboxShellFrame({
             >
               <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Calls</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/prospects"
               aria-label="Prospects"
@@ -923,43 +939,40 @@ function LightboxShellFrame({
             >
               <Users size={20} strokeWidth={1.75} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Prospects</span>
-            </Link>
-            <Link
+            </ScreenLink>
+            <ScreenLink
               className={`${styles.stripBtn}${place === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/coaching"
-              prefetch={false}
               aria-label="Coaching"
               data-rail-tip="Coaching"
               aria-current={place === "coaching" ? "page" : undefined}
             >
               <GraduationCap size={20} strokeWidth={1.75} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Coaching</span>
-            </Link>
+            </ScreenLink>
             {inOrganisation || place === "organisation" ? (
-              <Link
+              <ScreenLink
                 className={`${styles.stripBtn}${place === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
                 href="/organisation"
-                prefetch={false}
                 aria-label="Organisation"
                 data-rail-tip="Organisation"
                 aria-current={place === "organisation" ? "page" : undefined}
               >
                 <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
                 <span style={RAIL_NAME_STYLE}>Organisation</span>
-              </Link>
+              </ScreenLink>
             ) : null}
             {orgAdmin || place === "insights" ? (
-              <Link
+              <ScreenLink
                 className={`${styles.stripBtn}${place === "insights" ? ` ${styles.stripBtnActive}` : ""}`}
                 href="/organisation/insights"
-                prefetch={false}
                 aria-label="Insights"
                 data-rail-tip="Insights"
                 aria-current={place === "insights" ? "page" : undefined}
               >
                 <BarChart3 size={20} strokeWidth={1.75} aria-hidden="true" />
                 <span style={RAIL_NAME_STYLE}>Insights</span>
-              </Link>
+              </ScreenLink>
             ) : null}
             {/* Gold reviewers (owner, 19 Oct); nothing for anyone else. */}
             <ReviewRailLink
@@ -1278,56 +1291,55 @@ function LightboxShellFrame({
             <p>{heading.description}</p>
           </div>
         ) : null}
-        <main id="main-content" className={styles.main}>
+        <main id="main-content" ref={pageRef} className={styles.main}>
           {/* A page that fails leaves the shell working: navigation, Recents. */}
           <SectionBoundary
             name="This screen"
             note="Your calls and reports are safe."
             resetKey={pathname}
           >
-            {children}
+            {/* A tapped place shows its outline at once, while the router
+                fetches it; the page underneath stays mounted until then. */}
+            {standIn ? <RouteLoading pathname={standIn} /> : null}
+            <div
+              className={styles.pageSlot}
+              data-standing-in={standIn ? "" : undefined}
+            >
+              {children}
+            </div>
           </SectionBoundary>
         </main>
       </div>
-      {/* Owner, 17 Oct: five clear tabs on phones, nothing else. Prospects,
-          Coaching and the organisation pages live in the More sheet. */}
+      {/* Owner, 17 and 20 Oct: five clear tabs on phones (Home, Leads, New,
+          Calls, More), nothing else. Chats opens from the Leads | Chats
+          switch; Prospects, Coaching and the organisation pages live in the
+          More sheet. */}
       <nav
         className={styles.bottomNav}
         aria-label="Mobile Sales Xray navigation"
       >
-        <Link
+        <ScreenLink
           className={styles.bottomLink}
           href="/dashboard"
           aria-current={phoneTab === "dashboard" ? "page" : undefined}
         >
           <LayoutGrid size={20} aria-hidden="true" />
           <span>Home</span>
-        </Link>
+        </ScreenLink>
         {/* Signed out, Leads and Calls only lead to a sign-in prompt (B22). */}
         {guest ? null : (
-          <Link
+          <ScreenLink
             className={styles.bottomLink}
             href="/leads"
-            prefetch={false}
             aria-current={phoneTab === "leads" ? "page" : undefined}
           >
-            <LeadsTabIcon size={20} live={leadsBadgeLive} />
+            {/* Chats live inside Leads on phones (owner, 20 Oct: "5 tabs,
+                Chats inside Leads"), so unread chats count here too. */}
+            <LeadsTabIcon size={20} live={leadsBadgeLive} withChats />
             <span>Leads</span>
-          </Link>
+          </ScreenLink>
         )}
-        {/* Owner, 20 Oct: chats get their own place, beside Leads. */}
-        {guest ? null : (
-          <Link
-            className={styles.bottomLink}
-            href="/chats"
-            prefetch={false}
-            aria-current={phoneTab === "chats" ? "page" : undefined}
-          >
-            <ChatsTabIcon size={20} live={leadsBadgeLive} />
-            <span>Chats</span>
-          </Link>
-        )}
-        <Link
+        <ScreenLink
           className={`${styles.bottomLink} ${styles.bottomNew}`}
           href={newAnalysisHref}
           aria-label="New analysis"
@@ -1337,28 +1349,28 @@ function LightboxShellFrame({
             <Plus size={18} strokeWidth={2.25} />
           </span>
           <span>New</span>
-        </Link>
+        </ScreenLink>
         {guest ? null : (
-          <Link
+          <ScreenLink
             className={styles.bottomLink}
             href="/analysis/calls"
             aria-current={phoneTab === "calls" ? "page" : undefined}
           >
             <FolderOpen size={20} aria-hidden="true" />
             <span>Calls</span>
-          </Link>
+          </ScreenLink>
         )}
         {/* Signed out shows Sign in (the phone app has its own sign-in
             screen, so it hides this); an unconfirmed session keeps More. */}
         {guest ? (
-          <Link
+          <ScreenLink
             className={`${styles.bottomLink} sx-web-only`}
             href={accountHref}
             onClick={openAccount}
           >
             <LogIn size={20} aria-hidden="true" />
             <span>Sign in</span>
-          </Link>
+          </ScreenLink>
         ) : (
           <button
             type="button"
@@ -1447,9 +1459,18 @@ export function PersistentShell({ children }: { children: ReactNode }) {
     authenticated: access?.authenticated === true,
     loading: !access || access.status === "loading",
   }));
+  // A loading screen can't know the session, but the frame does: once the
+  // session is confirmed, a screen that is still loading never turns the
+  // bar back into placeholders (no flicker between pages, owner 20 Oct).
+  const signedIn =
+    access?.authenticated === true && access.status !== "loading";
+  const shown =
+    page.loading && signedIn
+      ? { ...page, loading: false, authenticated: true }
+      : page;
   return (
     <PersistentShellContext.Provider value={setPage}>
-      <LightboxShellFrame {...page}>{children}</LightboxShellFrame>
+      <LightboxShellFrame {...shown}>{children}</LightboxShellFrame>
     </PersistentShellContext.Provider>
   );
 }
