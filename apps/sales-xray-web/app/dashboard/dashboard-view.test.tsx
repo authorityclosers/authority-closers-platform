@@ -668,3 +668,56 @@ it("asks nothing about a sandbox for a plain member or a personal workspace", as
   );
   expect(host.textContent).not.toContain("Nobody here is real");
 });
+
+it("shows the sandbox card from the server's read, from the first paint", async () => {
+  fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+  await act(async () => {
+    root.render(
+      <InitialSessionProvider value={SERVED}>
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: {
+              personId: "person-1",
+              sessionId: "session-1",
+              tenantId: "tenant-1",
+            },
+            retry: () => {},
+            requestAccountSignIn: signIn,
+          }}
+        >
+          <DashboardPage
+            initial={{
+              sandbox: {
+                status: 200,
+                body: {
+                  sandbox: true,
+                  businesses: 10,
+                  representatives: 60,
+                  calls: 3360,
+                  reports: 3360,
+                  outcomes: 3360,
+                  history_summaries: 0,
+                  approved_at: "2026-10-11T20:48:00+00:00",
+                },
+              },
+            }}
+          />
+        </WorkspaceAccessContext.Provider>
+      </InitialSessionProvider>,
+    );
+  });
+  // Above the figures from the start: it never arrives late and pushes them.
+  expect(host.textContent).toContain("Nobody here is real");
+  const card = host.querySelector('[aria-labelledby="sandbox-title"]');
+  const figures = host.querySelector('dl[aria-label="Dashboard figures"]');
+  expect(card).not.toBeNull();
+  expect(
+    figures === null ||
+      Boolean(
+        card!.compareDocumentPosition(figures) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+  ).toBe(true);
+});

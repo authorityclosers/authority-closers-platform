@@ -107,6 +107,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
       recent:
         cachedPanel<ReadState<LibrarySubmission[]>>(identity, "recent") ??
         listed,
+      sandbox: cachedPanel<SandboxFacts>(identity, "sandbox"),
     };
   });
 
@@ -125,8 +126,14 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
     ReadState<LibrarySubmission[]>
   >(seed.recent ?? cached?.recent ?? { status: "loading" });
   // The fictional AC Sandbox explains itself to its owner or admins; a failed
-  // read simply shows no card (it is never part of the page's figures).
-  const [sandbox, setSandbox] = useState<SandboxFacts | null>(null);
+  // read simply shows no card (it is never part of the page's figures). It
+  // starts from the server's read or this identity's last one, so the card
+  // is there from the first paint instead of pushing the figures down.
+  const [sandbox, setSandbox] = useState<SandboxFacts | null>(() =>
+    seed.sandbox?.status === "ready"
+      ? seed.sandbox.value
+      : (cached?.sandbox ?? null),
+  );
 
   // A cancelled read (unmount, or a re-run of the effect) must not paint
   // "Not loaded": only the live request may change a panel.
@@ -230,11 +237,12 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
     if (team !== true) return;
     const controller = new AbortController();
     void settle(readSandboxFacts(controller.signal)).then((result) => {
-      if (!controller.signal.aborted)
-        setSandbox(result.ok ? result.value : null);
+      if (controller.signal.aborted) return;
+      setSandbox(result.ok ? result.value : null);
+      if (result.ok) rememberPanel(identity, "sandbox", result.value);
     });
     return () => controller.abort();
-  }, [team]);
+  }, [team, identity]);
   const states = [summaryState, activityState, allowanceState, recentState];
   // 403: this workspace has no Sales Xray access. Say so once, clearly.
   const forbidden = states.some(
@@ -309,7 +317,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
           onHiddenChange={setHiddenRecent}
         />
       ) : (
-        <DashboardBody team={team} skeleton />
+        <DashboardBody team={team} sandbox={sandbox} skeleton />
       )}
       {failing && revealed ? (
         <ConnectionNotice
