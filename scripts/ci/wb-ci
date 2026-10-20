@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# wb-ci: run workbench checks on GitHub-hosted runners instead of on ac (owner, 20 Oct 2026).
+#
+#   wb-ci [--sha <sha>] [--web] [--py] [--visual [route ...]] [--py-tests <path> ...]
+#         [--changed [<base>]] [--include <path> ...] [--no-wait] [--keep]
+#
+#   --sha        workbench commit to test (default: the workbench HEAD on dev/live)
+#   --web        prettier, eslint, tsc, vitest       --py      ruff, mypy, pytest + PostgreSQL suites (4 shards)
+#   --visual     screenshots at 390 and 1440, light and dark; routes default to every fictional review fixture
+#   --py-tests   run only these pytest paths (one job) instead of the 4 shards
+#   --changed    scope web/ruff checks to files changed in <base>..<sha> (default base: <sha>^)
+#   --include    also test these uncommitted workbench files (read only; nothing in the checkout changes)
+#   --no-wait    print the run URL and return     --keep    keep the wb-ci/* branch after the run
+# No option among --web/--py/--visual means all three. Exit 0 only when the run succeeded.
+#
+# How: a bare repo (~/src/wb-ci.git) borrows the workbench's objects, builds a request commit (the tested tree plus
+# .wb-ci/request.json and the current CI files), pushes it to refs/heads/wb-ci/<sha7>-<rand>, waits for
+# .github/workflows/workbench-checks.yml, prints a summary and deletes the branch. The shared checkout's files, index
+# and branch are never touched. See docs/ops/WORKBENCH-CI.md.
+set -euo pipefail
+
+if [ "$(id -un)" != acdev ]; then exec sudo -n -u acdev "$0" "$@"; fi
+export PATH="/home/acdev/.local/bin:/usr/local/bin:/usr/bin:/bin"
+REPO=authorityclosers/authority-closers-platform
+URL="https://github.com/$REPO.git"
+WB=/home/acdev/src/dev-live/authority-closers-platform
+BARE=/home/acdev/src/wb-ci.git
+G=/usr/bin/git
+CI_FILES=(.github/workflows/workbench-checks.yml scripts/ci/wb_checks.py scripts/ci/wb_screens.mjs)
+
+sha="" base="" changed=0 wait=1 keep=0
+checks=() routes=() py_tests=() include=()
+mode=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --sha) sha="$2"; shift 2; mode="" ;;
+    --web) checks+=(web); shift; mode="" ;;
+    --py) checks+=(py); shift; mode="" ;;
+    --visual) checks+=(visual); shift; mode=routes ;;
+    --py-tests) checks+=(py); shift; mode=py_tests ;;
+    --changed) changed=1; shift; mode=base ;;
+    --include) shift; mode=include ;;
+    --no-wait) wait=0; shift; mode="" ;;
+    --keep) keep=1; shift; mode="" ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    --*) echo "wb-ci: unknown option $1" >&2; exit 2 ;;
+    *)
+      case "$mode" in
+        routes) routes+=("$1") ;;
+        py_tests) py_tests+=("$1") ;;
+        include) include+=("$1") ;;
+        base) base="$1"; mode="" ;;
+        *) echo "wb-ci: unexpected argument $1" >&2; exit 2 ;;
+      esac
+      shift ;;
+  esac
+done
+[ ${#checks[@]} -gt 0 ] || checks=(web py visual)
+
+# One bare repo, objects borrowed from the workbench (no copy); request commits are written here only.
+exec 8>/home/acdev/src/.wb-ci.init.lock
+flock 8
+if [ ! -d "$BARE" ]; then
+  $G init -q --bare "$BARE"
+  echo "$WB/.git/objects" > "$BARE/objects/info/alternates"
+fi
+flock -u 8
+export GIT_DIR="$BARE"
+
+sha=$($G --git-dir="$WB/.git" rev-parse --verify "${sha:-HEAD}^{commit}")
+short=${sha:0:8}
+if [ "$changed" = 1 ]; then
+  base=$($G --git-dir="$WB/.git" rev-parse --verify "${base:-$sha^}^{commit}")
+  mapfile -t changed_files < <($G --git-dir="$WB/.git" diff --name-only "$base" "$sha"; [ ${#include[@]} -gt 0 ] && printf '%s\n' "${include[@]}")
+fi
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+export GIT_INDEX_FILE="$tmp/index"
+$G read-tree "$sha"
+if [ ${#include[@]} -gt 0 ]; then
+  for path in "${include[@]}"; do
+    if [ -e "$WB/$path" ]; then $G --work-tree="$WB" add -f -- "$path"; else $G rm -q --cached --ignore-unmatch -- "$path"; fi
+  done
+fi
+wb_head=$($G --git-dir="$WB/.git" rev-parse HEAD)
+for path in "${CI_FILES[@]}"; do
+  if blob=$($G --git-dir="$WB/.git" rev-parse -q --verify "$wb_head:$path" 2>/dev/null); then
+    $G update-index --add --cacheinfo "100644,$blob,$path"
+  fi
+done
+python3 - "$tmp/request.json" "$sha" "${checks[*]}" "$changed" <<'PY' "${changed_files[@]:-}" ---ROUTES "${routes[@]:-}" ---PYTESTS "${py_tests[@]:-}" ---INCLUDE "${include[@]:-}"
+import json, os, socket, sys
+out, sha, checks, changed = sys.argv[1:5]
+rest = sys.argv[5:]
+def take(marker):
+    if marker not in rest: return []
+    i = rest.index(marker) + 1
+    j = next((k for k in range(i, len(rest)) if rest[k].startswith("---")), len(rest))
+    return [x for x in rest[i:j] if x]
+first = next((k for k, x in enumerate(rest) if x.startswith("---")), len(rest))
+files = [x for x in rest[:first] if x]
+json.dump({"schema": "wb-ci/1", "source_sha": sha, "checks": sorted(set(checks.split())),
+           "changed_files": sorted(set(files)) if changed == "1" else None,
+           "routes": take("---ROUTES"), "py_tests": take("---PYTESTS"), "include_paths": take("---INCLUDE"),
+           "requested_by": f"{os.environ.get('SUDO_USER') or os.environ.get('USER', '?')}@{socket.gethostname()}"},
+          open(out, "w"), indent=2)
+PY
+blob=$($G hash-object -w "$tmp/request.json")
+$G update-index --add --cacheinfo "100644,$blob,.wb-ci/request.json"
+tree=$($G write-tree)
+request=$(GIT_AUTHOR_NAME="wb-ci" GIT_AUTHOR_EMAIL="workbench@authorityclosers.com" \
+  GIT_COMMITTER_NAME="wb-ci" GIT_COMMITTER_EMAIL="workbench@authorityclosers.com" \
+  $G commit-tree "$tree" -p "$sha" -m "wb-ci: ${checks[*]} for $short")
+unset GIT_INDEX_FILE
+branch="wb-ci/$short-$(head -c4 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+
+push() { $G -c credential.helper= -c 'credential.helper=!gh auth git-credential' push -q "$URL" "$@"; }
+started=$(date +%s)
+# wb-ci-base keeps later pushes small (the remote then already has the workbench history). It triggers no workflow.
+push "$request:refs/heads/$branch" "+$sha:refs/heads/wb-ci-base"
+echo "wb-ci: pushed $branch (request ${request:0:8} on $short; checks: ${checks[*]}$( [ "$changed" = 1 ] && echo "; changed files: ${#changed_files[@]}"))"
+cleanup() { [ "$keep" = 1 ] || push ":refs/heads/$branch" 2>/dev/null || true; }
+
+run=""
+for _ in $(seq 1 60); do
+  # The branch is unique; no --workflow filter (a workflow outside main is only listed after its first run).
+  run=$(gh run list -R "$REPO" --branch "$branch" --limit 3 --json databaseId,headSha,workflowName \
+        --jq ".[] | select(.headSha==\"$request\" and .workflowName==\"Workbench checks\") | .databaseId" 2>/dev/null | head -1)
+  [ -n "$run" ] && break
+  sleep 5
+done
+if [ -z "$run" ]; then echo "wb-ci: no run started for $branch after 5 min" >&2; cleanup; exit 1; fi
+url="https://github.com/$REPO/actions/runs/$run"
+echo "wb-ci: run $url"
+[ "$wait" = 1 ] || { echo "wb-ci: not waiting (--no-wait); the branch stays until you delete it: git push origin :$branch"; exit 0; }
+
+gh run watch "$run" -R "$REPO" --interval 30 --exit-status >"$tmp/watch.log" 2>&1 || true
+elapsed=$(( $(date +%s) - started ))
+gh run view "$run" -R "$REPO" --json conclusion,jobs --jq '
+  "result: \(.conclusion)",
+  (.jobs[] | "  \(.name | .[0:34]) \(.conclusion // .status) \(
+     if .startedAt and .completedAt then (((.completedAt|fromdate) - (.startedAt|fromdate)) | tostring) + "s" else "" end)"
+     + (if .conclusion == "failure" then " — failed: " + ([.steps[] | select(.conclusion=="failure") | .name] | join(", ")) else "" end))' \
+  > "$tmp/summary.txt" 2>/dev/null || echo "result: unknown (gh run view failed)" > "$tmp/summary.txt"
+cat "$tmp/summary.txt"
+gh api "repos/$REPO/actions/runs/$run/artifacts" --jq \
+  ".artifacts[] | \"  artifact \(.name) (\(.size_in_bytes/1024|floor) KB): $url/artifacts/\(.id)\"" 2>/dev/null || true
+echo "wb-ci: $(( elapsed / 60 ))m$(( elapsed % 60 ))s from push to result; details and check tables: $url"
+cleanup
+grep -q '^result: success$' "$tmp/summary.txt"
