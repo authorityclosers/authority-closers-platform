@@ -104,7 +104,7 @@ function Owner({
     }
   };
   return (
-    <div className={styles.owner}>
+    <div className={styles.ownerField}>
       <button
         type="button"
         className={styles.ownerButton}
