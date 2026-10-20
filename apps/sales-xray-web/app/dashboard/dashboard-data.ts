@@ -14,6 +14,7 @@ import {
   record,
   type Allowance,
   type LibrarySubmission,
+  type SubmissionLibraryPage,
 } from "../acquisition-client";
 import { ReportContractError } from "../report-contract";
 
@@ -181,6 +182,8 @@ export async function readRecentCalls(
   limit = 5,
   /** Ask for each call's owner (sent only to organisation owners/admins). */
   owners = false,
+  /** The whole first page, for the Calls list's cache (calls-cache.ts). */
+  onPage?: (page: SubmissionLibraryPage) => void,
 ): Promise<LibrarySubmission[]> {
   const page = parseSubmissionLibraryPage(
     await acquisition(
@@ -190,6 +193,7 @@ export async function readRecentCalls(
       { signal },
     ),
   );
+  if (owners) onPage?.(page);
   return page.submissions.slice(0, limit);
 }
 

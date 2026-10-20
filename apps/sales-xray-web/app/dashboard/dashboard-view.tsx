@@ -30,6 +30,13 @@ import { seededDashboard, type ServerDashboard } from "./dashboard-seed";
 import { useServerSeedAllowed } from "../initial-session";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import { PolicyFooter } from "../policy-footer";
+import {
+  cachedCallsPage,
+  cachedPanel,
+  identityOf,
+  rememberCallsPage,
+  rememberPanel,
+} from "../calls-cache";
 
 /**
  * The page waits for its reads (they run together) and then appears whole,
@@ -76,21 +83,43 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
       : null,
   );
   const [seed] = useState(() => seededDashboard(seedAllowed ? initial : null));
+  // What this identity's Home showed last time (calls-cache.ts): the panels
+  // paint from it at once and read again quietly (design system v2). Not
+  // under test, where every case starts from nothing.
+  const identity = identityOf(context);
+  const [cached] = useState(() => {
+    if (!identity || process.env.NODE_ENV === "test") return null;
+    const page = cachedCallsPage(identity);
+    const listed: ReadState<LibrarySubmission[]> | undefined = page
+      ? { status: "ready", value: page.submissions.slice(0, 5) }
+      : undefined;
+    return {
+      summary: cachedPanel<ReadState<CallSummary | null>>(identity, "summary"),
+      activity: cachedPanel<ReadState<CallActivity | null>>(
+        identity,
+        "activity",
+      ),
+      allowance: cachedPanel<ReadState<Allowance>>(identity, "allowance"),
+      recent:
+        cachedPanel<ReadState<LibrarySubmission[]>>(identity, "recent") ??
+        listed,
+    };
+  });
 
   const [hiddenRecent, setHiddenRecent] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [summaryState, setSummaryState] = useState<
     ReadState<CallSummary | null>
-  >(seed.summary ?? { status: "loading" });
+  >(seed.summary ?? cached?.summary ?? { status: "loading" });
   const [activityState, setActivityState] = useState<
     ReadState<CallActivity | null>
-  >(seed.activity ?? { status: "loading" });
+  >(seed.activity ?? cached?.activity ?? { status: "loading" });
   const [allowanceState, setAllowanceState] = useState<ReadState<Allowance>>(
-    seed.allowance ?? { status: "loading" },
+    seed.allowance ?? cached?.allowance ?? { status: "loading" },
   );
   const [recentState, setRecentState] = useState<
     ReadState<LibrarySubmission[]>
-  >(seed.recent ?? { status: "loading" });
+  >(seed.recent ?? cached?.recent ?? { status: "loading" });
   // The fictional AC Sandbox explains itself to its owner or admins; a failed
   // read simply shows no card (it is never part of the page's figures).
   const [sandbox, setSandbox] = useState<SandboxFacts | null>(null);
@@ -121,13 +150,32 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
     [],
   );
 
+  // Home's read of the list is the Calls list's first page too: Calls then
+  // opens with its rows (calls-cache.ts).
   const loadRecent = useCallback(
     (signal?: AbortSignal) =>
-      void settle(readRecentCalls(signal, 5, true)).then((result) => {
+      void settle(
+        readRecentCalls(signal, 5, true, (page) =>
+          rememberCallsPage(identity, page),
+        ),
+      ).then((result) => {
         if (!signal?.aborted) setRecentState(toState(result));
       }),
-    [],
+    [identity],
   );
+
+  // Ready panels are kept for this identity's next visit.
+  useEffect(() => {
+    if (!identity) return;
+    const panels = {
+      summary: summaryState,
+      activity: activityState,
+      allowance: allowanceState,
+      recent: recentState,
+    };
+    for (const [name, state] of Object.entries(panels))
+      if (state.status === "ready") rememberPanel(identity, name, state);
+  }, [identity, summaryState, activityState, allowanceState, recentState]);
 
   useEffect(() => {
     const controller = new AbortController();

@@ -45,6 +45,7 @@ import {
   type SubmissionLibraryPage,
 } from "./acquisition-client";
 import { seededLibraryPage } from "./calls-seed";
+import { cachedCallsPage, rememberCallsPage } from "./calls-cache";
 import { useServerSeedAllowed } from "./initial-session";
 import type { ServerRead } from "./server-reads";
 import { SectionBoundary } from "./ui/section-boundary";
@@ -72,6 +73,7 @@ import { CallsBodySkeleton } from "./calls-skeleton";
 export { CallsBodySkeleton, CallsSkeleton } from "./calls-skeleton";
 import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
+import { useRowsInView } from "./rows-in-view";
 import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
 import { RecentCallsList, RecentCallsSkeleton } from "./dashboard/recent-calls";
@@ -360,16 +362,25 @@ function CallsLibraryContent({
     router.prefetch("/dashboard");
   }, [router]);
 
-  const [submissions, setSubmissions] = useState<LibrarySubmission[]>(
-    seed?.submissions ?? [],
+  // The last list this identity read (calls-cache.ts): the page paints
+  // from it at once and reads again quietly (design system v2). Not under
+  // test, where every case starts from nothing.
+  const [cached] = useState(() =>
+    seed || preview || process.env.NODE_ENV === "test"
+      ? null
+      : cachedCallsPage(identityKey),
   );
-  const submissionsRef = useRef<LibrarySubmission[]>(seed?.submissions ?? []);
+  const first = seed ?? cached;
+  const [submissions, setSubmissions] = useState<LibrarySubmission[]>(
+    first?.submissions ?? [],
+  );
+  const submissionsRef = useRef<LibrarySubmission[]>(first?.submissions ?? []);
 
   const [nextCursor, setNextCursor] = useState<string | null>(
-    seed?.nextCursor ?? null,
+    first?.nextCursor ?? null,
   );
   const [loading, setLoading] = useState(
-    !seed && access?.authenticated === true,
+    !first && access?.authenticated === true,
   );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -443,7 +454,7 @@ function CallsLibraryContent({
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [attempt, setAttempt] = useState(0);
   const seededIds = () =>
-    new Set(seed?.submissions.map((submission) => submission.id));
+    new Set(first?.submissions.map((submission) => submission.id));
   const seenSubmissionIds = useRef(seededIds());
   const firstPageSubmissionIds = useRef(seededIds());
   const loadedCursors = useRef(new Set<string>());
@@ -611,6 +622,7 @@ function CallsLibraryContent({
     // The server already read the first page (a retry reads again).
     if (seed && attempt === 0) {
       mounted.current = true;
+      if (!preview) rememberCallsPage(identityKey, seed);
       return;
     }
     const controller = new AbortController();
@@ -635,6 +647,7 @@ function CallsLibraryContent({
         )
           return;
         const resolved = page.submissions.length > 0 ? page.submissions : [];
+        if (!preview) rememberCallsPage(identityKey, page);
         submissionsRef.current = resolved;
         firstPageSubmissionIds.current = new Set(
           resolved.map((submission) => submission.id),
@@ -986,16 +999,30 @@ function CallsLibraryContent({
     sort,
   );
   const workspace = insights && !preview;
-  // Summaries for the first screens of ready rows only, not one per call.
+  // Reports are read only for ready rows that have come on screen, and the
+  // one opened, never for the whole page; each once for this identity
+  // (calls-cache.ts). Without a way to tell what is on screen, the first
+  // screens' rows count as seen, as before.
+  const { seen: rowsSeen, observeRow } = useRowsInView(workspace);
   const insightIds = visibleSubmissions
-    .filter((submission) => submission.hasReport)
+    .filter(
+      (submission) =>
+        submission.hasReport &&
+        (rowsSeen === null ||
+          rowsSeen.has(submission.id) ||
+          submission.id === previewId),
+    )
     .slice(0, 24)
     .map((submission) => submission.id);
   const {
     insightOf,
     statusOf,
     retry: retryInsights,
-  } = useCallInsights(insightIds, workspace && access?.authenticated === true);
+  } = useCallInsights(
+    insightIds,
+    workspace && access?.authenticated === true,
+    identityKey,
+  );
   useEffect(() => {
     if (!workspace) return;
     const onKey = (event: KeyboardEvent) => {
@@ -1194,6 +1221,8 @@ function CallsLibraryContent({
       <div
         className={`${styles.row} calls-library-row`}
         key={submission.id}
+        ref={workspace ? observeRow : undefined}
+        data-call-row={submission.id}
         data-tone={tone}
         data-selected={isSelected ? "true" : undefined}
         data-picked={picked.has(submission.id) ? "true" : undefined}

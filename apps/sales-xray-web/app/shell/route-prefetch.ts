@@ -15,7 +15,7 @@
  *
  * A device asking to save data (or on 2G) gets none of the idle prefetching.
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { startEarlyReads } from "../early-reads";
 import { useAppRouter } from "./app-router";
@@ -76,9 +76,16 @@ type IdleWindow = Window & {
   cancelIdleCallback?: (handle: number) => void;
 };
 
-/** The frame's idle prefetch of the places one tap away. */
-export function usePlacePrefetch(enabled: boolean) {
+/**
+ * The frame's idle prefetch of the places one tap away; then `warm`, for
+ * the first data those places read (calls-cache.ts warmCallsList).
+ */
+export function usePlacePrefetch(enabled: boolean, warm?: () => void) {
   const router = useAppRouter();
+  const warmRef = useRef(warm);
+  useEffect(() => {
+    warmRef.current = warm;
+  });
   useEffect(() => {
     if (!router || !enabled || process.env.NODE_ENV === "test" || savingData())
       return;
@@ -96,7 +103,10 @@ export function usePlacePrefetch(enabled: boolean) {
     const next = () => {
       if (cancelled) return;
       const href = queue.shift();
-      if (!href) return;
+      if (!href) {
+        warmRef.current?.();
+        return;
+      }
       prefetchPlace(router, href);
       whenIdle(next);
     };
