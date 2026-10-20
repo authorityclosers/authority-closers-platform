@@ -52,6 +52,8 @@ import { Ticks } from "./ticks";
 // The open chat reads again every 10 s while in view (a shared server).
 const POLL_MS = 10 * 1000;
 const MIN_GAP_MS = 5 * 1000;
+const SENDING_EVERY_MS = 2 * 1000;
+const SENDING_FOR_MS = 60 * 1000;
 const STICK_PX = 96;
 
 const AUTO: Record<string, string> = {
@@ -349,6 +351,26 @@ export function ThreadView({
       window.removeEventListener("focus", back);
     };
   }, []);
+
+  // A message still sending (queued on the server): read again every 2 s
+  // until it is sent or refused, for up to a minute.
+  const sending =
+    detail?.messages.some(
+      (message) => message.direction === "out" && message.status === "queued",
+    ) ?? false;
+  useEffect(() => {
+    if (!sending) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      if (Date.now() - started > SENDING_FOR_MS) {
+        window.clearInterval(timer);
+        return;
+      }
+      if (document.visibilityState === "visible")
+        setRound((value) => value + 1);
+    }, SENDING_EVERY_MS);
+    return () => window.clearInterval(timer);
+  }, [sending]);
 
   const count = (detail?.messages.length ?? 0) + (pending ? 1 : 0);
   useLayoutEffect(() => {

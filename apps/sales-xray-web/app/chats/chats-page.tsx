@@ -47,6 +47,7 @@ import {
   FiltersSkeleton,
   PickHint,
   ThreadListSkeleton,
+  useManagesChats,
 } from "./chats-skeleton";
 import { ThreadFilters, ThreadList } from "./thread-list";
 import { LeadPanel, LeadSheetDialog } from "./lead-panel";
@@ -130,6 +131,7 @@ export function ChatsRoute() {
   const [sla, setSla] = useState<Sla | null>(null);
   const [filter, setFilter] = useState<ChatFilter>(NO_FILTER);
   const marks = useSeenMarks(personId);
+  const manages = useManagesChats();
   // One shared reader: every 15 s while this screen is open and in view,
   // paused while hidden, again on coming back and right after a send.
   const { list, error } = useChats({ live: authenticated, screen: true });
@@ -244,8 +246,10 @@ export function ChatsRoute() {
   }
 
   const ready = !!list;
-  const canManage = me?.can_manage === true;
-  const showScopes = canManage && !!list?.owners;
+  // The role is in the session from the first paint; the desk's own answer
+  // only fills in when the session doesn't say.
+  const canManage = manages ?? me?.can_manage === true;
+  const showScopes = canManage && (list ? list.owners : true);
   const channels = [...new Set(threads.map((thread) => thread.channel))];
   const waiting = threads.filter((thread) => thread.waiting).length;
   const unread = threads.filter((thread) => isUnread(thread, marks)).length;
@@ -330,7 +334,7 @@ export function ChatsRoute() {
               <div className={styles.switchSlot}>
                 <LeadsChatsSwitch current="chats" />
               </div>
-              <FiltersSkeleton />
+              <FiltersSkeleton scopes={canManage} />
               <ThreadListSkeleton />
             </>
           )
