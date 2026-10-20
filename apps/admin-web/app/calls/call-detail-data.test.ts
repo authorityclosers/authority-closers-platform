@@ -1,9 +1,13 @@
 import { expect, it } from "vitest";
 
 import {
+  COLUMNS,
+  LAYOUT,
+  after,
   normalizeCallDetail,
   objectFacets,
   placeStages,
+  stageTimeline,
 } from "./call-detail-data";
 
 const RAW = {
@@ -145,4 +149,89 @@ it("reads totals per branch, zero where the server sends none", () => {
   expect(detail.totals.deep).toEqual({ costInr: 0, tokensIn: 0, tokensOut: 0 });
   expect(detail.edges[0]).toMatchObject({ branch: "fast", durationMs: 12_300 });
   expect(detail.runs[0].state).toBe("uncertain");
+});
+
+const TIMED = normalizeCallDetail({
+  stages: [
+    {
+      key: "received",
+      label: "Received",
+      status: "done",
+      started_at: "2026-10-20T09:00:00Z",
+      finished_at: "2026-10-20T09:00:00Z",
+    },
+    {
+      key: "audio_check",
+      label: "Audio check",
+      code: "C1",
+      status: "done",
+      started_at: "2026-10-20T09:00:00Z",
+      finished_at: "2026-10-20T09:00:04Z",
+      duration_ms: 4000,
+    },
+    {
+      key: "facts",
+      label: "Facts",
+      code: "C4",
+      status: "done",
+      started_at: "2026-10-20T09:00:42Z",
+      finished_at: "2026-10-20T09:01:10Z",
+      duration_ms: 28_000,
+      cost_inr: 0.42,
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      attempts: 3,
+      tokens_in: 3000,
+      tokens_out: 600,
+      detail: "3 tasks · 1 failed or unsure",
+    },
+    {
+      key: "coaching",
+      label: "Report, coaching",
+      code: "C5",
+      status: "running",
+      started_at: "2026-10-20T09:01:11Z",
+    },
+    {
+      key: "review",
+      label: "Human review",
+      status: "done",
+      started_at: "2026-10-22T09:00:00Z",
+      finished_at: "2026-10-22T09:30:00Z",
+      detail: "4 answers from 1 reviewer",
+    },
+  ],
+});
+
+it("reads each main analysis stage's code and places C1 to C6 and review on the graph", () => {
+  expect(TIMED.stages.map((stage) => stage.code)).toEqual([
+    null,
+    "C1",
+    "C4",
+    "C5",
+    null,
+  ]);
+  expect(placeStages(TIMED.stages).extra).toEqual([]);
+  for (const key of ["alignment", "published", "pointer_review", "report"])
+    expect(LAYOUT[key]).toBeDefined();
+  expect(COLUMNS).toBe(7);
+  // No two current stages share a place.
+  const places = Object.entries(LAYOUT)
+    .filter(([key]) => key !== "report")
+    .map(([, place]) => `${place.col}:${place.lane}`);
+  expect(new Set(places).size).toBe(places.length);
+});
+
+it("times every stage from the call's arrival and scales bars to the machine run", () => {
+  const { spanMs, times } = stageTimeline(TIMED.stages);
+  expect(times.get("facts")).toEqual({ startMs: 42_000, endMs: 70_000 });
+  expect(times.get("coaching")).toEqual({ startMs: 71_000, endMs: null });
+  // Human review two days later never stretches the bars.
+  expect(spanMs).toBe(71_000);
+  expect(after(times.get("review")!.startMs)).toBe("+2 days");
+  expect(after(42_000)).toBe("+42 s");
+  expect(after(185_000)).toBe("+3:05");
+  expect(after(2 * 3_600_000 + 5 * 60_000)).toBe("+2 h 05 min");
+  expect(after(null)).toBe("");
+  expect(stageTimeline([]).spanMs).toBe(0);
 });

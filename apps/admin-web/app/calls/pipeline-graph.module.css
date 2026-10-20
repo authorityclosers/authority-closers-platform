@@ -9,7 +9,7 @@
 .graph {
   display: block;
   width: 100%;
-  min-width: 720px;
+  min-width: 980px;
   height: auto;
   font-family: inherit;
 }
@@ -92,6 +92,18 @@
   fill: var(--sx-ink);
   font-size: 12px;
   font-weight: 650;
+}
+
+.code {
+  fill: var(--sx-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.node[data-status="done"] .code {
+  fill: var(--sx-good);
 }
 
 .nodeMeta {

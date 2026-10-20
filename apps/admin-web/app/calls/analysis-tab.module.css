@@ -34,6 +34,67 @@
   text-decoration: underline;
 }
 
+/* The call's stages in one line: code, name, time and cost; hover for the model. */
+.stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--sx-text-xs);
+}
+
+.stages li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  color: var(--sx-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stages li::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sx-line-strong);
+  content: "";
+}
+
+.stages li[data-status="done"]::before {
+  background: var(--sx-good);
+}
+
+.stages li[data-status="running"] {
+  border-color: var(--sx-accent);
+}
+
+.stages li[data-status="running"]::before {
+  background: var(--sx-accent);
+}
+
+.stages li[data-status="failed"] {
+  border-color: var(--sx-bad);
+  background: var(--sx-bad-soft);
+}
+
+.stages li[data-status="failed"]::before {
+  background: var(--sx-bad);
+}
+
+.stages b {
+  color: var(--sx-muted);
+  font-weight: 700;
+}
+
+.stages span {
+  color: var(--sx-muted);
+}
+
 .group h3 {
   display: flex;
   align-items: center;

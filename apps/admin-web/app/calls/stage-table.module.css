@@ -1,0 +1,63 @@
+/* The call's stages, one dense row each. Tokens only; bar colours match the graph. */
+
+.code {
+  display: inline-block;
+  min-width: 2.2em;
+  margin-right: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+}
+
+.model {
+  max-width: 220px;
+  overflow-wrap: anywhere;
+}
+
+.barHead,
+.barCell {
+  width: 22%;
+  min-width: 120px;
+}
+
+.track {
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--sx-sunken) 70%, transparent);
+}
+
+.bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 3px;
+  border-radius: 4px;
+  background: var(--sx-line-strong);
+}
+
+.bar[data-status="done"] {
+  background: color-mix(in oklab, var(--sx-good) 75%, var(--sx-line));
+}
+
+.bar[data-status="running"] {
+  background: var(--sx-accent);
+}
+
+.bar[data-status="failed"] {
+  background: var(--sx-bad);
+}
+
+.later {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
