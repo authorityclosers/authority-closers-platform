@@ -93,6 +93,9 @@ class Lead(Base):
     language: Mapped[str | None] = mapped_column(String(40), nullable=True)
     interest: Mapped[str | None] = mapped_column(String(200), nullable=True)
     stage: Mapped[str] = mapped_column(String(16))
+    # The business's own stage a seller picked (0111); None: the business's
+    # stage for this desk stage (lead_desk/journey/model.py).
+    step: Mapped[str | None] = mapped_column(String(40), nullable=True)
     owner_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     owner_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -129,7 +132,7 @@ class LeadEvent(Base):
         ),
         CheckConstraint(
             "kind IN ('captured', 'repeat', 'assigned', 'reassigned', 'call', 'result', 'note',"
-            " 'edited', 'message', 'scheduled')",
+            " 'edited', 'message', 'scheduled', 'stage')",
             name="lead_desk_event_kind",
         ),
         Index("ix_lead_desk_event_lead", "tenant_id", "lead_id", "created_at"),
@@ -774,3 +777,131 @@ class LeadAiSettings(Base):
     config: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadJourneyVersion(Base):
+    """One saved list of a business's own lead stages (migration 0111). Never changed
+    after it is written; the newest version is the list in use."""
+
+    __tablename__ = "lead_desk_journey_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_journey_version_tenant"
+        ),
+        CheckConstraint("version >= 1", name="lead_desk_journey_version_number"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    industry: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    stages: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    note: Mapped[str] = mapped_column(String(200))
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadConversion(Base):
+    """One lead stage told to one ad platform (migration 0111). Built once from Lead
+    Desk's history and frozen, so a retry sends the same event. The payload holds only
+    what the platform matches on (its own lead or click id, hashed contact details); it
+    is emptied after 90 days. Lead Desk's history stays the record of the stage."""
+
+    __tablename__ = "lead_desk_conversions"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_conversion_tenant"),
+        CheckConstraint(
+            "status IN ('pending', 'delivered', 'rejected', 'dead_letter', 'dropped')",
+            name="lead_desk_conversion_status",
+        ),
+        CheckConstraint(
+            "provider IN ('meta', 'google_ads', 'linkedin', 'tiktok', 'microsoft_ads')",
+            name="lead_desk_conversion_provider",
+        ),
+        CheckConstraint("length(trim(destination)) > 0", name="lead_desk_conversion_destination"),
+        CheckConstraint("length(trim(event_name)) > 0", name="lead_desk_conversion_event_name"),
+        CheckConstraint(
+            "(payload IS NULL) = (erased_at IS NOT NULL)", name="lead_desk_conversion_erasure"
+        ),
+        CheckConstraint(
+            "(status = 'delivered') = (delivered_at IS NOT NULL)",
+            name="lead_desk_conversion_delivered",
+        ),
+        CheckConstraint("attempts >= 0", name="lead_desk_conversion_attempts"),
+        CheckConstraint("length(payload_sha256) = 64", name="lead_desk_conversion_digest"),
+        CheckConstraint(
+            "last_http_status IS NULL OR last_http_status BETWEEN 100 AND 599",
+            name="lead_desk_conversion_http_status",
+        ),
+        Index(
+            "uq_lead_desk_conversion_event",
+            "tenant_id",
+            "provider",
+            "destination",
+            "lead_id",
+            "event_name",
+            unique=True,
+        ),
+        Index(
+            "ix_lead_desk_conversion_due",
+            "next_attempt_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_lead_desk_conversion_recent", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    source_event_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    provider: Mapped[str] = mapped_column(String(24))
+    destination: Mapped[str] = mapped_column(String(64))
+    stage_key: Mapped[str] = mapped_column(String(40))
+    event_name: Mapped[str] = mapped_column(String(100))
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    payload_sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))
+    attempts: Mapped[int] = mapped_column(Integer)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    test: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadConversionAttempt(Base):
+    """One send of one lead stage to an ad platform (append-only delivery log)."""
+
+    __tablename__ = "lead_desk_conversion_attempts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["conversion_id"],
+            ["lead_desk_conversions.id"],
+            name="fk_lead_desk_conversion_attempt_conversion",
+        ),
+        CheckConstraint("attempt >= 1", name="lead_desk_conversion_attempt_number"),
+        CheckConstraint(
+            "duration_ms >= 0 AND finished_at >= started_at",
+            name="lead_desk_conversion_attempt_timing",
+        ),
+        CheckConstraint(
+            "http_status IS NULL OR http_status BETWEEN 100 AND 599",
+            name="lead_desk_conversion_attempt_http_status",
+        ),
+        CheckConstraint(
+            "http_status IS NOT NULL OR error_code IS NOT NULL",
+            name="lead_desk_conversion_attempt_outcome",
+        ),
+    )
+
+    conversion_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    attempt: Mapped[int] = mapped_column(Integer, primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer)

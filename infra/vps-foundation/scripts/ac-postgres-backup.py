@@ -652,7 +652,19 @@ AI_REPLIES_PARITY_TABLES = SPEND_PARITY_TABLES + ("lead_desk_ai_replies",)
 AI_SETTINGS_PARITY_MIGRATION_HEAD = "20261019_0110"
 AI_SETTINGS_PARITY_CONTRACT = "ac-postgres-parity-v77"
 AI_SETTINGS_PARITY_TABLES = AI_REPLIES_PARITY_TABLES + ("lead_desk_ai_settings",)
+# 0111 adds lead stages per business and the ad-platform outbox.
+JOURNEY_PARITY_MIGRATION_HEAD = "20261020_0111"
+JOURNEY_PARITY_CONTRACT = "ac-postgres-parity-v78"
+JOURNEY_PARITY_TABLES = AI_SETTINGS_PARITY_TABLES + (
+    "lead_desk_journey_versions",
+    "lead_desk_conversions",
+    "lead_desk_conversion_attempts",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    JOURNEY_PARITY_MIGRATION_HEAD: (
+        JOURNEY_PARITY_CONTRACT,
+        JOURNEY_PARITY_TABLES,
+    ),
     AI_SETTINGS_PARITY_MIGRATION_HEAD: (
         AI_SETTINGS_PARITY_CONTRACT,
         AI_SETTINGS_PARITY_TABLES,

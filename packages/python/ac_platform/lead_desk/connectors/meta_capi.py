@@ -29,14 +29,12 @@ back as state. Bodies are emptied after 90 days.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
 import re
 import time
-from collections.abc import AsyncIterator, Mapping
-from contextlib import asynccontextmanager, suppress
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final
@@ -683,52 +681,14 @@ async def tick(
     return {"made": made, "sent": len(lines), "delivered": delivered, "swept": swept}
 
 
-async def run_sender(
-    sessions: async_sessionmaker[AsyncSession],
-    stop: asyncio.Event,
-    *,
-    environment: str,
-    first_delay: int = _TICK,
-) -> None:
-    """Every minute, while Meta is set up, send lead stages. Survives a bad tick."""
-    with suppress(TimeoutError):
-        await asyncio.wait_for(stop.wait(), timeout=first_delay)
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        while not stop.is_set():
-            cfg = meta.config()
-            if cfg is not None:
-                try:
-                    await tick(sessions, cfg, client, environment=environment)
-                except Exception:  # noqa: BLE001 - the loop must survive a bad tick
-                    log.warning("meta conversions tick failed", exc_info=True)
-            with suppress(TimeoutError):
-                await asyncio.wait_for(stop.wait(), timeout=_TICK)
-
-
 def attach(
     application: FastAPI, sessions: async_sessionmaker[AsyncSession], environment: str
 ) -> None:
-    """Run the sender for the API's lifetime by wrapping the app's own lifespan."""
-    if environment in {"local", "test"}:
-        return
-    inner = application.router.lifespan_context
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
-        async with inner(app) as state:
-            stop = asyncio.Event()
-            task = asyncio.create_task(
-                run_sender(sessions, stop, environment=environment), name="meta-conversions"
-            )
-            try:
-                yield state
-            finally:
-                stop.set()
-                task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await task
-
-    application.router.lifespan_context = lifespan
+    """Nothing to start: the lead-stage engine (``lead_desk/journey/engine.py``, 20 Oct
+    2026) sends Meta's events now, with the other ad platforms', and moves each
+    organisation's waiting events and settings over from here. Kept so the connectors'
+    installer needs no change."""
+    del application, sessions, environment
 
 
 # ----- what the page shows ------------------------------------------------------------
