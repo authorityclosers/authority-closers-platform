@@ -6,9 +6,9 @@
 #   wb-ci --refresh-durations <run-id>      rebalance the Python shards from a run's JUnit reports
 #
 #   default      --changed: only the jobs the commit's paths touch; lint, tsc, vitest and ruff on the changed files
-#   --changed B  changed files in B..<sha> (default B = <sha>^)        --full   every job (20 jobs, < 5 min)
+#   --changed B  changed files in B..<sha> (default B = <sha>^)        --full   every job (20 jobs: lint+tsc, vitest, visual, 17 Python shards; < 5 min)
 #   --web/--py/--visual   force these families (with the scope above); --visual takes optional routes
-#   --py-tests   one pytest job for these paths instead of the 16 shards
+#   --py-tests   one pytest job for these paths instead of the 17 shards
 #   --include    also test these uncommitted workbench files (read only; nothing in the checkout changes)
 #   --no-wait    print the run URL and return     --keep    keep the wb-ci branch after the run
 # Exit 0 only when the run succeeded. See docs/ops/WORKBENCH-CI.md.
@@ -110,7 +110,7 @@ tmp, sha, full, checks = sys.argv[1:5]
 read = lambda name: [x for x in open(f"{tmp}/{name}").read().splitlines() if x.strip()]
 json.dump({"schema": "wb-ci/2", "source_sha": sha, "full": full == "1", "checks": sorted(set(checks.split())),
            "changed_files": None if full == "1" else sorted(set(read("changed"))),
-           "routes": read("routes"), "py_tests": read("py_tests"), "include_paths": read("include"), "py_shards": 16,
+           "routes": read("routes"), "py_tests": read("py_tests"), "include_paths": read("include"), "py_shards": 17,
            "requested_by": f"{os.environ.get('SUDO_USER') or os.environ.get('USER', '?')}@{socket.gethostname()}"},
           open(f"{tmp}/request.json", "w"), indent=2)
 PY
@@ -160,7 +160,7 @@ url="https://github.com/$REPO/actions/runs/$run"
 echo "wb-ci: run $url"
 [ "$wait" = 1 ] || { echo "wb-ci: not waiting (--no-wait); delete the branch later: git push origin :$branch"; exit 0; }
 
-gh run watch "$run" -R "$REPO" --interval 10 --exit-status >"$tmp/watch.log" 2>&1 || true
+gh run watch "$run" -R "$REPO" --interval 3 --exit-status >"$tmp/watch.log" 2>&1 || true
 elapsed=$(( $(date +%s) - started ))
 gh run view "$run" -R "$REPO" --json conclusion,jobs --jq '
   def secs(a; b): if a and b and (b|startswith("0001")|not) then ((b|fromdate) - (a|fromdate)) else null end;
@@ -170,10 +170,11 @@ gh run view "$run" -R "$REPO" --json conclusion,jobs --jq '
   > "$tmp/summary.txt" 2>/dev/null || echo "result: unknown (gh run view failed)" > "$tmp/summary.txt"
 cat "$tmp/summary.txt"
 gh api "repos/$REPO/actions/runs/$run/artifacts?per_page=100" --jq "
-  (.artifacts[] | select(.name | startswith(\"python-test-shard\") | not)
+  (.artifacts[] | select(.name | startswith(\"wb-py-\") | not)
      | \"  artifact \(.name) (\(.size_in_bytes/1024|floor) KB): $url/artifacts/\(.id)\"),
-  ([.artifacts[] | select(.name | startswith(\"python-test-shard\"))] | select(length > 0)
+  ([.artifacts[] | select(.name | startswith(\"wb-py-\"))] | select(length > 0)
      | \"  python shard reports (manifest + JUnit): \(length) artifacts in the run\")" 2>/dev/null || true
 echo "wb-ci: $(( elapsed / 60 ))m$(( elapsed % 60 ))s from push to result; check tables per job: $url"
 cleanup
 grep -q '^result: success$' "$tmp/summary.txt"
+

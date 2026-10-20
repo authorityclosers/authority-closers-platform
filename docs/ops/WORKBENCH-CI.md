@@ -12,9 +12,9 @@ On ac as any user (it re-runs itself as `acdev`), or from the laptop with `ssh a
 ```bash
 wb-ci                                   # default: only the jobs the HEAD commit's paths touch, scoped to its files
 wb-ci --changed <base>                  # the same for everything in <base>..HEAD
-wb-ci --full                            # every job: lint, tsc, vitest, screenshots and 16 Python shards (< 5 min)
+wb-ci --full                            # every job: lint + tsc, vitest, screenshots, 17 Python shards (< 5 min)
 wb-ci --web                             # force the web jobs (scoped to the changed files unless --full)
-wb-ci --py-tests tests/core/test_x.py   # one pytest target with PostgreSQL instead of the 16 shards
+wb-ci --py-tests tests/core/test_x.py   # one pytest target with PostgreSQL instead of the 17 shards
 wb-ci --visual /review-fixture/shell "/?new=1&sx-fixture=auth.email"
 wb-ci --include apps/sales-xray-web/app/x.tsx   # also test this uncommitted file
 wb-ci --sha 1a2b3c4d --full             # a specific workbench commit
@@ -26,7 +26,7 @@ wb-ci --sha 1a2b3c4d --full             # a specific workbench commit
 |---|---|
 | `apps/`, `packages/typescript/` | lint (prettier + eslint on the changed files), tsc (affected packages), vitest (`vitest related`) |
 | `apps/sales-xray-web/`, `packages/typescript/ui/`, `packages/typescript/sales-xray-review-ui/` | the above, plus screenshots of the frames those paths affect |
-| `packages/python/`, `tests/`, `alembic`, `migrations/`, `scripts/*.py` | lint (ruff on the changed files, plus mypy) and all 16 Python shards |
+| `packages/python/`, `tests/`, `alembic`, `migrations/`, `scripts/*.py` | lint (ruff on the changed files, plus mypy) and all 17 Python shards |
 | workflow, `scripts/ci/wb*`, lockfiles, `package.json`, `pyproject.toml`, `tsconfig*` | everything, as `--full` |
 | docs only | nothing: the summary says so |
 
@@ -66,18 +66,22 @@ summary.
 
 - **plan** reads the request.
 - **Full layout: 20 jobs**, the GitHub Free concurrency limit:
-  - lint: prettier, eslint, ruff and mypy;
-  - tsc;
+  - lint: prettier, eslint, ruff, mypy, and tsc in a full run;
   - vitest;
   - visual: 390 and 1440 px, light and dark, two pages at a time;
-  - 16 Python shards.
-- **Each Python shard:**
-  - starts two PostgreSQL containers as its first step, so they boot while uv and pnpm install;
-  - installs the ffmpeg/browser prerequisites (about 60 s) only when its assigned test files mention them. If one is
-    missed, `python_test_shard.py` fails the shard instead of skipping silently;
-  - balances its files with `scripts/ci/wb-python-durations.json`, measured on GitHub runners.
-- **summary** downloads every shard's manifest. It runs `python_test_shard.py verify` (every file in exactly one shard,
-  every shard reported) and fails on any failed job.
+  - 17 Python shards.
+- **A `--changed` run** gives tsc its own job.
+- **The Python shards come in two families that partition the tests:**
+  - **a:** about 90 files that mention Playwright, ffmpeg, a codec or the native build. Their shards install those
+    prerequisites in the background, about 60 s.
+  - **b:** everything else, with no prerequisites.
+  - Each family is sharded and verified by `python_test_shard.py` with its own exclusion list: the base exclusions
+    plus the other family's files.
+  - Shards balance by `scripts/ci/wb-python-durations.json`, measured on GitHub runners.
+  - PostgreSQL containers and `pnpm install` start in the background while uv installs.
+- **summary** downloads every shard's manifest. It runs `python_test_shard.py verify` per family (every file in
+  exactly one shard, every shard reported) and fails on any failed job.
+- **No `PG*` variables in the jobs.** The local sandbox guard in `development/seed.py` refuses to run when one is set.
 
 **Refreshing the shard durations.** Do this after test files are added or grow:
 1. Run `wb-ci --refresh-durations <run-id of a full run>`.
@@ -88,3 +92,4 @@ summary.
   opens a pull request. Release, image, single-track, migration-schema-publish and the lane gate are unaffected.
 - No secrets are used.
 - GitHub push protection (secret scanning) checks every push. Never commit secrets to the workbench.
+

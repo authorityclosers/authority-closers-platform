@@ -33,8 +33,10 @@ jobs:
       py: ${{ steps.plan.outputs.py }}
       lint: ${{ steps.plan.outputs.lint }}
       visual: ${{ steps.plan.outputs.visual }}
+      web_matrix: ${{ steps.plan.outputs.web_matrix }}
       py_matrix: ${{ steps.plan.outputs.py_matrix }}
-      py_shards: ${{ steps.plan.outputs.py_shards }}
+      py_count_a: ${{ steps.plan.outputs.py_count_a }}
+      py_count_b: ${{ steps.plan.outputs.py_count_b }}
       scope: ${{ steps.plan.outputs.scope }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -75,7 +77,7 @@ jobs:
       - if: needs.plan.outputs.py == 'true'
         name: Install locked Python dependencies
         run: python -m pip install --disable-pip-version-check uv==0.12.7 && uv sync --frozen
-      - name: Prettier, ESLint, ruff and mypy (${{ needs.plan.outputs.scope }})
+      - name: Prettier, ESLint, ruff, mypy (and tsc in a full run) (${{ needs.plan.outputs.scope }})
         run: python3 scripts/ci/wb_checks.py web --task lint
 
   web:
@@ -86,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [tsc, vitest]
+        task: ${{ fromJSON(needs.plan.outputs.web_matrix) }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -101,14 +103,15 @@ jobs:
 
   py-tests:
     needs: plan
-    if: needs.plan.outputs.py_matrix != '[]' && needs.plan.outputs.py_matrix != ''
+    if: needs.plan.outputs.py == 'true'
+    name: py-tests (${{ matrix.fam }} ${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 16
-      matrix:
-        shard: ${{ fromJSON(needs.plan.outputs.py_matrix) }}
+      max-parallel: 17
+      # Family a: test files that may need the codec/browser/native prerequisites; family b: the rest (no 60 s install).
+      matrix: ${{ fromJSON(needs.plan.outputs.py_matrix) }}
     # Same databases, roles and environment as Application validation's Python test shards. PostgreSQL starts as
     # plain containers in the first step so it boots while the toolchains install.
     env:
@@ -139,17 +142,17 @@ jobs:
           python-version: "3.12"
       - name: Install locked Python dependencies
         run: python -m pip install --disable-pip-version-check uv==0.12.7 && uv sync --frozen
-      - name: Does this shard need codec and browser prerequisites?
-        id: needs
-        run: python3 scripts/ci/wb_checks.py py-needs --shard ${{ matrix.shard }}
+      - name: This family's exclusion list (base exclusions plus the other family)
+        if: matrix.fam != 'targeted'
+        run: python3 scripts/ci/wb_checks.py py-family --fam ${{ matrix.fam }} --out "$RUNNER_TEMP/exclusions.txt"
       - name: Restore Playwright browsers
-        if: steps.needs.outputs.needed == 'true'
+        if: matrix.fam != 'b'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.cache/ms-playwright
           key: wb-playwright-${{ runner.os }}-${{ hashFiles('uv.lock', 'pnpm-lock.yaml') }}
       - name: Start codec, filesystem and browser prerequisites in the background
-        if: steps.needs.outputs.needed == 'true'
+        if: matrix.fam != 'b'
         run: |
           ( uv run --frozen python scripts/ci/ci_prerequisites.py codec filesystem browser; echo $? > "$RUNNER_TEMP/prereq.rc" ) \
             > "$RUNNER_TEMP/prereq.log" 2>&1 &
@@ -180,17 +183,17 @@ jobs:
           tail -5 "$RUNNER_TEMP/pnpm.log"
           test "$(cat "$RUNNER_TEMP/pnpm.rc" 2>/dev/null)" = 0
       - name: Wait for the prerequisites
-        if: steps.needs.outputs.needed == 'true'
+        if: matrix.fam != 'b'
         run: |
           for _ in $(seq 1 600); do [ -f "$RUNNER_TEMP/prereq.rc" ] && break; sleep 1; done
           cat "$RUNNER_TEMP/prereq.log"
           test "$(cat "$RUNNER_TEMP/prereq.rc" 2>/dev/null)" = 0
-      - name: Run Python tests (shard ${{ matrix.shard }} of ${{ needs.plan.outputs.py_shards }})
+      - name: Run Python tests (family ${{ matrix.fam }}, shard ${{ matrix.shard }} of ${{ matrix.count }})
         run: |
           set -euo pipefail
           out="${RUNNER_TEMP}/python-test-shard-${{ matrix.shard }}"
           mkdir -p "$out"
-          if [ "${{ matrix.shard }}" = targeted ]; then
+          if [ "${{ matrix.fam }}" = targeted ]; then
             mapfile -t tests < <(python3 -c 'import json; print("\n".join(json.load(open(".wb-ci/request.json"))["py_tests"]))')
             uv run pytest -q --junitxml "$out/junit.xml" --basetemp "${RUNNER_TEMP}/wb-python-basetemp" "${tests[@]}"
           else
@@ -198,8 +201,8 @@ jobs:
               --root "${GITHUB_WORKSPACE}" \
               --duration-file scripts/ci/wb-python-durations.json \
               --shard-index "${{ matrix.shard }}" \
-              --shard-count "${{ needs.plan.outputs.py_shards }}" \
-              --exclude-file scripts/ci/python-test-exclusions.txt \
+              --shard-count "${{ matrix.count }}" \
+              --exclude-file "$RUNNER_TEMP/exclusions.txt" \
               --manifest "$out/manifest.json" \
               --junitxml "$out/junit.xml" \
               --basetemp "${RUNNER_TEMP}/wb-python-basetemp-${{ matrix.shard }}"
@@ -208,7 +211,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          name: wb-py-${{ matrix.fam }}-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/python-test-shard-${{ matrix.shard }}
           if-no-files-found: warn
           retention-days: 3
@@ -262,21 +265,34 @@ jobs:
         if: needs.py-tests.result != 'skipped' && !contains(needs.plan.outputs.py_matrix, 'targeted')
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: python-test-shard-${{ github.sha }}-*
-          path: ${{ runner.temp }}/python-test-shards
+          pattern: wb-py-*-${{ github.sha }}-*
+          path: ${{ runner.temp }}/wb-py
           merge-multiple: false
-      - name: Verify every Python shard reported (complete coverage)
+      - name: Verify every Python shard reported, family by family (the families partition the tests)
         id: verify
         if: needs.py-tests.result != 'skipped' && !contains(needs.plan.outputs.py_matrix, 'targeted')
-        run: >-
-          python3 scripts/ci/python_test_shard.py verify
-          --root "${GITHUB_WORKSPACE}"
-          --duration-file scripts/ci/wb-python-durations.json
-          --shard-count "${{ needs.plan.outputs.py_shards }}"
-          --exclude-file scripts/ci/python-test-exclusions.txt
-          --manifest-dir "${{ runner.temp }}/python-test-shards"
-          --sha "${{ github.sha }}"
-          --run-attempt "${{ github.run_attempt }}"
+        env:
+          COUNT_A: ${{ needs.plan.outputs.py_count_a }}
+          COUNT_B: ${{ needs.plan.outputs.py_count_b }}
+        run: |
+          set -euo pipefail
+          for fam in a b; do
+            count=COUNT_${fam^^}
+            dir="$RUNNER_TEMP/verify-$fam"
+            mkdir -p "$dir"
+            for src in "$RUNNER_TEMP"/wb-py/wb-py-"$fam"-*; do
+              [ -d "$src" ] && mv "$src" "$dir/python-test-shard-${src##*/wb-py-$fam-}"
+            done
+            python3 scripts/ci/wb_checks.py py-family --fam "$fam" --out "$RUNNER_TEMP/exclusions-$fam.txt"
+            python3 scripts/ci/python_test_shard.py verify \
+              --root "${GITHUB_WORKSPACE}" \
+              --duration-file scripts/ci/wb-python-durations.json \
+              --shard-count "${!count}" \
+              --exclude-file "$RUNNER_TEMP/exclusions-$fam.txt" \
+              --manifest-dir "$dir" \
+              --sha "${{ github.sha }}" \
+              --run-attempt "${{ github.run_attempt }}"
+          done
       - name: Results and artifact links
         if: always()
         env:
