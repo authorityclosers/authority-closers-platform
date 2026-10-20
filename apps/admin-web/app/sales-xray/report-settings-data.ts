@@ -58,6 +58,9 @@ export type HistoryRow = {
   createdAt: string;
 };
 
+/** An industry a default can be set for: a lead-stage profile (e.g. real_estate). */
+export type IndustryProfile = { id: string; name: string };
+
 export type ReportSettingsOverview = {
   parameters: Parameter[];
   versions: Version[];
@@ -65,6 +68,7 @@ export type ReportSettingsOverview = {
   industries: { industryCode: string; versionNumber: number }[];
   organisations: OrganisationRow[];
   history: HistoryRow[];
+  industryProfiles: IndustryProfile[];
 };
 
 const n = read.number;
@@ -153,7 +157,20 @@ export function normalizeReportSettings(raw: unknown): ReportSettingsOverview {
         createdAt: s(row.created_at),
       };
     }),
+    industryProfiles: read.array(body.industry_profiles).map((item) => {
+      const row = read.object(item);
+      return { id: s(row.id), name: s(row.name, s(row.id)) };
+    }),
   };
+}
+
+/** An industry id in words, from the lead-stage profiles ("real_estate" → "Real estate"). */
+export function industryName(
+  id: string | null,
+  profiles: readonly IndustryProfile[],
+): string | null {
+  if (id === null) return null;
+  return profiles.find((item) => item.id === id)?.name ?? id;
 }
 
 /** A dotted key's value in a nested settings object ("report.parts.outcome"). */

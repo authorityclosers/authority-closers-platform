@@ -10,9 +10,11 @@ on or off. Settings live in numbered, immutable versions:
   the default for an industry, or as the general default. Every choice is a new
   event (append-only), so rolling back is choosing an earlier version again and
   the history says who changed what and why.
-- An organisation's version: its own choice, else its industry's default
-  (industry from AUT-2115's organisation profile), else the general default,
-  else version 1.
+- An organisation's version: its own choice, else its industry's default, else
+  the general default, else version 1. An industry is one of the lead-stage
+  profiles (lead_desk/journey/templates.py): the organisation's industry is the
+  profile its newest lead stages were built from, so the Report and the lead
+  stages are tailored by the same generic industry ids (orchestrator, 20 Oct).
 
 Auto-tuning (AUT-2116, not built): every parameter below declares its bounds,
 whether it is tunable, and which telemetry or outcome signals would tune it. A
@@ -23,7 +25,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -32,10 +33,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ac_platform.lead_desk.journey.templates import DEFAULT_TEMPLATE, TEMPLATES
+
 SCHEMA = "ac.sales-xray.report-settings/1"
 VERSION_1_ID = UUID("6f1e0f3a-0b7c-5e3d-9a52-7d1c0e7a0001")
 VERSION_1_CREATED_AT = datetime(2026, 10, 19, tzinfo=UTC)
-INDUSTRY_CODE = re.compile(r"^[A-Z0-9][A-Z0-9.]{0,15}$")
+# Every lead-stage profile but "Any business", which is the general default itself.
+INDUSTRY_PROFILES: dict[str, str] = {
+    profile.id: profile.name for profile in TEMPLATES if profile.id != DEFAULT_TEMPLATE
+}
 
 Complexity = Literal["simple", "standard", "expert"]
 ReportStyle = Literal["guided", "compact", "scorecard"]
@@ -462,22 +468,25 @@ def effective_version(
 
 
 def valid_industry(code: str | None) -> str | None:
+    """A lead-stage profile id, e.g. real_estate; None for no industry."""
+
     if code is None:
         return None
-    value = code.strip().upper()
-    if not INDUSTRY_CODE.fullmatch(value):
-        raise ValueError("Use an industry code such as 62011 or J62.")
+    value = code.strip().lower()
+    if value not in INDUSTRY_PROFILES:
+        raise ValueError(
+            "Choose an industry from the lead-stage profiles: " + ", ".join(INDUSTRY_PROFILES)
+        )
     return value
 
 
-def industry_of(details: Any) -> str | None:
-    """The organisation's industry code (AUT-2115 hook), if its profile has one."""
+def industry_of(profile: Any) -> str | None:
+    """An organisation's industry: the lead-stage profile its newest stages came from."""
 
-    if not isinstance(details, dict):
+    if not isinstance(profile, str) or not profile:
         return None
-    code = details.get("industry_code")
     try:
-        return valid_industry(code) if isinstance(code, str) and code else None
+        return valid_industry(profile)
     except ValueError:
         return None
 
@@ -493,6 +502,7 @@ __all__ = [
     "VERSION_1",
     "VERSION_1_CREATED_AT",
     "VERSION_1_ID",
+    "INDUSTRY_PROFILES",
     "Choice",
     "Parameter",
     "ReportSettings",

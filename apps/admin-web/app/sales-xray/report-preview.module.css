@@ -1,0 +1,158 @@
+/* A version on a fictional call. Tokens only; amber marks low pointer scores. */
+
+.preview {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 10px;
+  background: var(--sx-sunken);
+  font-size: var(--sx-text-sm);
+}
+
+.call {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.call span,
+.part small,
+.off,
+.tab > small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.tab {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--sx-surface);
+}
+
+.tab h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--sx-text-sm);
+}
+
+.part {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.score {
+  font-size: var(--sx-text-lg, 18px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.pointers,
+.compact,
+.scorecard,
+.moments {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.compact {
+  gap: 2px;
+}
+
+.pointers li {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.pointerHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pointerHead b,
+.scorecard b {
+  font-variant-numeric: tabular-nums;
+}
+
+.pointers q {
+  color: var(--sx-ink-2);
+  font-style: italic;
+}
+
+.pointers small,
+.why {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.scorecard {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+}
+
+.scorecard li {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--sx-sunken);
+}
+
+.scorecard li[data-low] {
+  background: color-mix(in oklab, var(--sx-warn) 20%, transparent);
+}
+
+.facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.facts div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(0, 2fr);
+  gap: 8px;
+}
+
+.facts dt {
+  color: var(--sx-muted);
+}
+
+.facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.tone {
+  margin: 0;
+}
+
+.moments li {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
+.pending {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  font-size: var(--sx-text-xs);
+}

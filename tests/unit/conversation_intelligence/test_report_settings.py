@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from ac_platform.conversation_intelligence.report_settings import (
+    INDUSTRY_PROFILES,
     PARAMETERS,
     POINTER_IDS,
     SCHEMA,
@@ -126,11 +127,14 @@ def test_an_organisation_gets_its_own_then_its_industry_then_the_general_version
     assert effective_version(organisation=None, industry=None, general=None) == (1, "built_in")
 
 
-def test_industry_codes_come_from_the_organisation_profile() -> None:
-    assert valid_industry(" j62 ") == "J62" and valid_industry(None) is None
-    with pytest.raises(ValueError):
-        valid_industry("retail & more")
-    assert industry_of({"industry_code": "62011", "industry": "Software"}) == "62011"
-    assert industry_of({"industry": "Real estate"}) is None  # free text is not a code
-    assert industry_of({"industry_code": "bad code"}) is None
+def test_industries_are_the_lead_stage_profiles() -> None:
+    assert INDUSTRY_PROFILES["real_estate"] == "Real estate"
+    assert "simple" not in INDUSTRY_PROFILES  # "Any business" is the general default
+    assert valid_industry(" Real_Estate ") == "real_estate" and valid_industry(None) is None
+    for wrong in ("62011", "J62", "simple", "retail & more"):
+        with pytest.raises(ValueError, match="lead-stage profiles"):
+            valid_industry(wrong)
+    assert industry_of("home_services") == "home_services"
+    assert industry_of("simple") is None  # an organisation on "Any business" has none
+    assert industry_of("not a profile") is None
     assert industry_of(None) is None

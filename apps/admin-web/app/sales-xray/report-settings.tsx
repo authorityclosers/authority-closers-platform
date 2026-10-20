@@ -1,20 +1,23 @@
 "use client";
 
 /**
- * Report settings: create a version, choose one for an organisation, an
- * industry or everyone, roll back. Every click is one idempotent command; the
- * server keeps every version and every choice (append-only history).
+ * Report settings: create a version (previewed on a fictional call), publish
+ * it to everyone or choose it for an organisation or an industry, roll back.
+ * Every click is one idempotent command; the server keeps every version and
+ * every choice (append-only history). Nothing re-analyses a call.
  */
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { command, keyFor, type Intent } from "../lib/client-api";
 import { Badge, Button } from "../ui/kit";
+import { ReportPreview } from "./report-preview";
 import {
   SURFACE_LABEL,
   valueAt,
   withValue,
   type HistoryRow,
+  type IndustryProfile,
   type Parameter,
   type Version,
 } from "./report-settings-data";
@@ -131,20 +134,31 @@ export function ChooseVersion({
   );
 }
 
-/** Add or change an industry's default version (industry codes come from AUT-2115). */
-export function IndustryDefault({ versions }: { versions: Version[] }) {
+/** Add or change an industry's default version (industries are the lead-stage profiles). */
+export function IndustryDefault({
+  versions,
+  profiles,
+}: {
+  versions: Version[];
+  profiles: IndustryProfile[];
+}) {
   const [code, setCode] = useState("");
   const [version, setVersion] = useState(String(versions.at(-1)?.number ?? 1));
   const { busy, error, send } = useCommand(CHOICES);
   return (
     <div className={styles.choose}>
-      <input
-        aria-label="Industry code"
-        placeholder="Industry code, e.g. 62011"
+      <select
+        aria-label="Industry"
         value={code}
-        maxLength={16}
         onChange={(event) => setCode(event.target.value)}
-      />
+      >
+        <option value="">Choose an industry</option>
+        {profiles.map((profile) => (
+          <option key={profile.id} value={profile.id}>
+            {profile.name}
+          </option>
+        ))}
+      </select>
       <select
         aria-label="Version for this industry"
         value={version}
@@ -157,7 +171,7 @@ export function IndustryDefault({ versions }: { versions: Version[] }) {
         ))}
       </select>
       <Button
-        disabled={busy || !code.trim()}
+        disabled={busy || !code}
         onClick={() =>
           void send({
             scope: "industry",
@@ -316,14 +330,29 @@ function Pointers({
   );
 }
 
-/** A new version, started from an existing one; only what you change differs. */
+/**
+ * A new version, started from an existing one; only what you change differs.
+ * The preview shows it on a fictional call as you change it. Save keeps it for
+ * later; Save and publish also makes it everyone's default in one go (an
+ * organisation's or industry's own choice still wins). Rolling back is in the
+ * history.
+ */
 export function VersionEditor({
   parameters,
   versions,
+  profiles = [],
+  generalVersionNumber = null,
 }: {
   parameters: Parameter[];
   versions: Version[];
+  profiles?: IndustryProfile[];
+  /** Everyone's default now, as this screen saw it (null: version 1). */
+  generalVersionNumber?: number | null;
 }) {
+  const router = useRouter();
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishIntent, setPublishIntent] = useState<Intent | null>(null);
   const newest = versions.at(-1);
   const [base, setBase] = useState(newest?.number ?? 1);
   const start = versions.find((item) => item.number === base)?.settings ?? {};
@@ -333,6 +362,54 @@ export function VersionEditor({
   const [industry, setIndustry] = useState("");
   const [open, setOpen] = useState(false);
   const { busy, error, send } = useCommand(VERSIONS);
+  const body = () => ({
+    label: label.trim(),
+    note: note.trim() || null,
+    base_number: base,
+    industry_code: industry || null,
+    settings,
+  });
+  async function publish() {
+    const request = body();
+    const intent = keyFor(publishIntent, request);
+    setPublishIntent(intent);
+    setPublishing(true);
+    setPublishError(null);
+    const made = await command<Record<string, unknown>>(
+      VERSIONS,
+      request,
+      intent.key,
+    );
+    if (!made.ok) {
+      setPublishing(false);
+      setPublishError(made.message);
+      return;
+    }
+    const number =
+      typeof made.data.number === "number" ? made.data.number : null;
+    const choice = {
+      scope: "general",
+      version_number: number,
+      expected_version_number: generalVersionNumber,
+      reason: `Published version ${number ?? "?"}`,
+    };
+    const chosen =
+      number === null
+        ? null
+        : await command(CHOICES, choice, keyFor(null, choice).key);
+    setPublishing(false);
+    router.refresh();
+    if (!chosen || !chosen.ok) {
+      setPublishError(
+        `Version ${number ?? "?"} is saved but not published: ${
+          chosen && !chosen.ok ? chosen.message : "its number was not returned"
+        }. Choose it under Defaults.`,
+      );
+      return;
+    }
+    setPublishIntent(null);
+    setOpen(false);
+  }
   const allPointers = Array.isArray(
     valueAt(versions[0]?.settings ?? {}, "report.pointers"),
   )
@@ -349,13 +426,7 @@ export function VersionEditor({
       className={styles.editor}
       onSubmit={(event) => {
         event.preventDefault();
-        void send({
-          label: label.trim(),
-          note: note.trim() || null,
-          base_number: base,
-          industry_code: industry.trim() || null,
-          settings,
-        }).then((saved) => {
+        void send(body()).then((saved) => {
           if (saved) setOpen(false);
         });
       }}
@@ -389,13 +460,18 @@ export function VersionEditor({
           value={label}
           onChange={(event) => setLabel(event.target.value)}
         />
-        <input
+        <select
           aria-label="Built for industry (optional)"
-          placeholder="Built for industry code (optional)"
-          maxLength={16}
           value={industry}
           onChange={(event) => setIndustry(event.target.value)}
-        />
+        >
+          <option value="">Any industry</option>
+          {profiles.map((profile) => (
+            <option key={profile.id} value={profile.id}>
+              {profile.name}
+            </option>
+          ))}
+        </select>
         <input
           aria-label="Why this version"
           placeholder="Why (optional)"
@@ -404,49 +480,70 @@ export function VersionEditor({
           onChange={(event) => setNote(event.target.value)}
         />
       </div>
-      {["report", "prospect", "coaching"].map((surface) => (
-        <fieldset key={surface} className={styles.surface}>
-          <legend>{SURFACE_LABEL[surface]}</legend>
-          {parameters
-            .filter((parameter) => parameter.surface === surface)
-            .map((parameter) =>
-              parameter.kind === "pointers" ? (
-                <Pointers
-                  key={parameter.key}
-                  all={allPointers}
-                  value={valueAt(settings, parameter.key)}
-                  onChange={(value) =>
-                    setSettings(withValue(settings, parameter.key, value))
-                  }
-                />
-              ) : (
-                <Field
-                  key={parameter.key}
-                  parameter={parameter}
-                  value={valueAt(settings, parameter.key)}
-                  onChange={(value) =>
-                    setSettings(withValue(settings, parameter.key, value))
-                  }
-                />
-              ),
-            )}
-        </fieldset>
-      ))}
+      <div className={styles.editorBody}>
+        <div className={styles.editorFields}>
+          {["report", "prospect", "coaching"].map((surface) => (
+            <fieldset key={surface} className={styles.surface}>
+              <legend>{SURFACE_LABEL[surface]}</legend>
+              {parameters
+                .filter((parameter) => parameter.surface === surface)
+                .map((parameter) =>
+                  parameter.kind === "pointers" ? (
+                    <Pointers
+                      key={parameter.key}
+                      all={allPointers}
+                      value={valueAt(settings, parameter.key)}
+                      onChange={(value) =>
+                        setSettings(withValue(settings, parameter.key, value))
+                      }
+                    />
+                  ) : (
+                    <Field
+                      key={parameter.key}
+                      parameter={parameter}
+                      value={valueAt(settings, parameter.key)}
+                      onChange={(value) =>
+                        setSettings(withValue(settings, parameter.key, value))
+                      }
+                    />
+                  ),
+                )}
+            </fieldset>
+          ))}
+        </div>
+        <ReportPreview
+          settings={settings}
+          baseline={versions[0]?.settings ?? {}}
+          parameters={parameters}
+        />
+      </div>
       <div className={styles.editorFoot}>
-        {error ? (
+        {error || publishError ? (
           <small className={styles.error} role="alert">
-            {error}
+            {error ?? publishError}
           </small>
         ) : (
           <small>
-            Version 1 stays as it is. Saving makes a new numbered version.
+            Version 1 stays as it is. Saving makes a new numbered version;
+            people see it only once it is published or chosen for them.
           </small>
         )}
-        <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>
+        <Button
+          variant="ghost"
+          onClick={() => setOpen(false)}
+          disabled={busy || publishing}
+        >
           Cancel
         </Button>
-        <Button type="submit" variant="primary" disabled={busy}>
+        <Button type="submit" disabled={busy || publishing}>
           {busy ? "Saving…" : "Save version"}
+        </Button>
+        <Button
+          variant="primary"
+          disabled={busy || publishing || label.trim().length < 2}
+          onClick={() => void publish()}
+        >
+          {publishing ? "Publishing…" : "Save and publish to everyone"}
         </Button>
       </div>
     </form>

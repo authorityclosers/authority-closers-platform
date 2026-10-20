@@ -206,3 +206,34 @@
   align-items: center;
   text-transform: capitalize;
 }
+
+/* The editor's fields beside the preview on wide screens; stacked on phones. */
+.editorBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .editorBody {
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  }
+}
+
+.editorFields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.previewToggle summary {
+  color: var(--sx-accent);
+  cursor: pointer;
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.previewToggle[open] summary {
+  margin-bottom: 8px;
+}

@@ -36,6 +36,7 @@ from ac_platform.conversation_intelligence.report_settings_models import (
     ReportSettingsVersion,
 )
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.lead_desk.models import LeadJourneyVersion
 from ac_platform.tenancy.models import Organisation, Tenant
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
@@ -80,9 +81,23 @@ async def _organisation(
                 created_at=NOW,
                 creation_command_id=uuid4(),
                 domain_verification_token="fictional-" + "x" * 44,
-                details={} if industry is None else {"industry_code": industry},
+                details={},
             )
         )
+        if industry is not None:
+            # The industry comes from the organisation's lead stages; the newest counts.
+            for version, profile in ((1, "simple"), (2, industry)):
+                database.add(
+                    LeadJourneyVersion(
+                        tenant_id=tenant_id,
+                        version=version,
+                        industry=profile,
+                        stages=[{"key": "new", "label": "New", "kind": "new", "milestone": "lead"}],
+                        note="Fictional stages",
+                        created_by_person_id=None,
+                        created_at=NOW,
+                    )
+                )
     return tenant_id
 
 
@@ -103,7 +118,7 @@ def test_versions_choices_rollback_and_the_apps_version(
             fixture = await seed(engine)
             operations = fixture.tenant_id
             actor = ActorContext(fixture.person_id, fixture.session_id, operations)
-            wise = await _organisation(sessions, "Sunrise Rooftops", "68100")
+            wise = await _organisation(sessions, "Sunrise Rooftops", "home_services")
             other = await _organisation(sessions, "Other Co", None)
 
             async def admin(database: AsyncSession) -> ReportSettingsAdmin:
@@ -162,7 +177,11 @@ def test_versions_choices_rollback_and_the_apps_version(
 
             await choose("general", scope="general", version_number=2)
             assert (await effective(other))["version"]["number"] == 2
-            await choose("industry", scope="industry", industry_code="68100", version_number=3)
+            with pytest.raises(ConversationError, match="lead-stage profiles"):
+                await choose("code", scope="industry", industry_code="68100", version_number=3)
+            await choose(
+                "industry", scope="industry", industry_code="home_services", version_number=3
+            )
             assert (await effective(wise))["source"] == "industry"
             assert (await effective(wise))["version"]["number"] == 3
             assert (await effective(other))["version"]["number"] == 2
@@ -202,9 +221,15 @@ def test_versions_choices_rollback_and_the_apps_version(
             assert [item["number"] for item in overview["versions"]] == [1, 2, 3]
             assert overview["versions"][0]["frozen"] is True
             assert overview["general_version_number"] == 2
-            assert overview["industries"] == [{"industry_code": "68100", "version_number": 3}]
+            assert overview["industries"] == [
+                {"industry_code": "home_services", "version_number": 3}
+            ]
+            assert {"id": "home_services", "name": "Home services & solar"} in overview[
+                "industry_profiles"
+            ]
             names = {row["name"]: row for row in overview["organisations"]}
             assert names["Sunrise Rooftops"]["version_number"] == 3
+            assert names["Sunrise Rooftops"]["industry_code"] == "home_services"
             assert names["Sunrise Rooftops"]["own_version_number"] is None
             kinds = [(row["kind"], row["scope"]) for row in overview["history"]]
             assert kinds[0] == ("assigned", "organisation") and len(kinds) == 6
