@@ -46,18 +46,29 @@ const MODEL_LIMIT = 200;
 const href = (id: string) => `/sales-xray/providers?tab=hub&provider=${id}`;
 
 /** A provider's mark: its initials on its own colour (no brand artwork). */
-export function ProviderMark({ id, name }: { id: string; name: string }) {
-  const letters = name
+/**
+ * Two letters for a provider's mark: the first letters of its first two words, or of a
+ * one-word name's capitals ("OpenRouter" OR, "OpenAI" OA, "DeepSeek" DS), else its first two.
+ */
+export function initials(name: string): string {
+  const words = name
     .replace(/\(.*\)/, "")
     .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join("")
-    .toUpperCase();
+    .filter(Boolean);
+  if (words.length > 1)
+    return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase();
+  const word = words[0] ?? "";
+  const capitals = word.replace(/[^A-Z]/g, "");
+  return (
+    capitals.length > 1 ? capitals.slice(0, 2) : word.slice(0, 2)
+  ).toUpperCase();
+}
+
+/** A provider's mark: its initials on its own colour (no brand artwork). */
+export function ProviderMark({ id, name }: { id: string; name: string }) {
   return (
     <span className={styles.mark} data-provider={id} aria-hidden="true">
-      {letters || id.slice(0, 2).toUpperCase()}
+      {initials(name) || id.slice(0, 2).toUpperCase()}
     </span>
   );
 }

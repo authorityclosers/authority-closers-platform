@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
-import { ProviderHub } from "./provider-hub";
+import { ProviderHub, initials } from "./provider-hub";
 import {
   NO_MODEL_FILTER,
   contextWords,
@@ -234,4 +234,13 @@ it("asks for a provider when none is chosen and says when the catalogue is down"
   expect(host.textContent).toContain("Choose a provider to see its models");
   expect(host.textContent).toContain("could not be read just now");
   expect(host.querySelector('a[aria-current="true"]')).toBeNull();
+});
+
+it("gives every provider two distinct letters", () => {
+  expect(initials("OpenRouter")).toBe("OR");
+  expect(initials("OpenAI")).toBe("OA");
+  expect(initials("Google Gemini")).toBe("GG");
+  expect(initials("Groq")).toBe("GR");
+  expect(initials("DeepSeek")).toBe("DS");
+  expect(initials("Custom (OpenAI-compatible)")).toBe("CU");
 });
