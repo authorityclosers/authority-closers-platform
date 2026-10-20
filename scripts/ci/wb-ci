@@ -3,7 +3,7 @@
 #
 #   wb-ci [--sha <sha>] [--changed [<base>] | --full] [--web] [--py] [--visual [route ...]]
 #         [--py-tests <path> ...] [--include <path> ...] [--no-wait] [--keep]
-#   wb-ci --refresh-durations <run-id>      rebalance the Python shards from a run's JUnit reports
+#   wb-ci --refresh-durations <run-id>[,<run-id>...]   rebalance the Python shards (per-file mean over the runs)
 #
 #   default      --changed: only the jobs the commit's paths touch; lint, tsc, vitest and ruff on the changed files
 #   --changed B  changed files in B..<sha> (default B = <sha>^)        --full   every job (20 jobs: lint+tsc, vitest, visual, 17 Python shards; < 5 min)
@@ -33,7 +33,7 @@ CI_FILES=(.github/workflows/workbench-checks.yml scripts/ci/wb_checks.py scripts
 
 if [ "${1:-}" = --refresh-durations ]; then
   [ -n "${2:-}" ] || { echo "usage: wb-ci --refresh-durations <run-id>" >&2; exit 2; }
-  source_sha=$(gh api "repos/$REPO/actions/runs/$2" --jq .head_sha)
+  source_sha=$(gh api "repos/$REPO/actions/runs/${2%%,*}" --jq .head_sha)  # several runs: comma-separated, averaged
   python3 "$WB/scripts/ci/wb_durations.py" "$2" "$source_sha" "$WB/scripts/ci/wb-python-durations.json"
   echo "Now commit it: wb-commit -m 'wb-ci: shard durations from run $2' -- scripts/ci/wb-python-durations.json"
   exit 0

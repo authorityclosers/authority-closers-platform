@@ -84,7 +84,8 @@ summary.
 - **No `PG*` variables in the jobs.** The local sandbox guard in `development/seed.py` refuses to run when one is set.
 
 **Refreshing the shard durations.** Do this after test files are added or grow:
-1. Run `wb-ci --refresh-durations <run-id of a full run>`.
+1. Run `wb-ci --refresh-durations <run-id>,<run-id>,...` with two or three recent full runs. Each file's cost is its
+   mean over those runs, which damps the runner-to-runner noise; one run alone balances to noise.
 2. Commit with `wb-commit -- scripts/ci/wb-python-durations.json`.
 
 **Safety:**
