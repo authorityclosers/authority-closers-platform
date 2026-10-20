@@ -286,3 +286,12 @@
   max-width: 100%;
   overflow-x: auto;
 }
+
+/* A panel is a grid whose one column grows to its widest child: let each part shrink. */
+.steps,
+.stdio,
+.tryForm,
+.answer,
+.snippet {
+  min-width: 0;
+}
