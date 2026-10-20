@@ -65,10 +65,21 @@ class MetaError(ValueError):
     Leads Access Manager (``lead_access``), or try again later (``other``).
     """
 
-    def __init__(self, message: str, kind: ErrorKind = "other", code: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        kind: ErrorKind = "other",
+        code: int | None = None,
+        *,
+        detail: str | None = None,
+        subcode: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.kind: ErrorKind = kind
         self.code = code
+        # Meta's own words and subcode, for owners and admins (Settings → Connected apps).
+        self.detail = detail
+        self.subcode = subcode
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,9 +178,11 @@ def make_state(
     person_id: UUID,
     now: float | None = None,
     app_challenge: str | None = None,
+    card: str | None = None,
 ) -> str:
     """Signed state for a provider sign-in. ``app_challenge`` marks a Connect started
-    in the Sales Xray app, which finishes there (see ``app_return``)."""
+    in the Sales Xray app, which finishes there (see ``app_return``); ``card`` one
+    started from Settings → Connected apps, which comes back there."""
     body = {
         "t": str(tenant_id),
         "p": str(person_id),
@@ -178,6 +191,8 @@ def make_state(
     }
     if app_challenge is not None:
         body["a"] = app_challenge
+    if card is not None:
+        body["r"] = card
     raw = _b64(json.dumps(body, separators=(",", ":")).encode())
     mac = hmac.new(secret.encode(), raw.encode(), hashlib.sha256).digest()
     return f"{raw}.{_b64(mac)}"
@@ -315,21 +330,29 @@ LEAD_ACCESS_TEXT: Final[str] = (
 
 def graph_error(error: Mapping[str, Any], status: int) -> MetaError:
     """A Graph error as a plain message, with what the manager can do about it."""
-    raw = error.get("code")
+    raw, sub = error.get("code"), error.get("error_subcode")
     code = raw if isinstance(raw, int) and not isinstance(raw, bool) else None
-    message = str(error.get("message") or "").casefold()
+    subcode = sub if isinstance(sub, int) and not isinstance(sub, bool) else None
+    said = " ".join(str(error.get("error_user_msg") or error.get("message") or "").split())
+    facts: dict[str, Any] = {"detail": said[:300] or None, "subcode": subcode}
+    message = said.casefold()
     if code in (190, 102):
-        return MetaError("Meta ended this connection. Connect the Page again.", "token", code)
+        return MetaError(
+            "Meta ended this connection. Connect the Page again.", "token", code, **facts
+        )
     if any(words in message for words in LEAD_ACCESS_WORDS):
-        return MetaError(LEAD_ACCESS_TEXT, "lead_access", code)
+        return MetaError(LEAD_ACCESS_TEXT, "lead_access", code, **facts)
     if code in (10, 200, 3, 294) or status == 403:
         return MetaError(
             "Meta didn't give permission for this. Continue with Meta again and allow "
             "the Page and its leads.",
             "permission",
             code,
+            **facts,
         )
-    return MetaError("Meta refused the request. Try again, or connect the Page again.", code=code)
+    return MetaError(
+        "Meta refused the request. Try again, or connect the Page again.", code=code, **facts
+    )
 
 
 class Graph:
@@ -570,6 +593,27 @@ class Graph:
 
     async def unsubscribe(self, page_id: str, page_token: str) -> None:
         await self._call("DELETE", f"{page_id}/subscribed_apps", access_token=page_token)
+
+    async def test_leads(self, form_id: str, page_token: str) -> list[str]:
+        """The form's test leads (Meta keeps one at a time)."""
+        old = await self._call("GET", f"{form_id}/test_leads", access_token=page_token)
+        return [
+            str(row["id"])
+            for row in old.get("data") or []
+            if isinstance(row, Mapping) and row.get("id")
+        ]
+
+    async def delete_lead(self, lead_id: str, page_token: str) -> None:
+        await self._call("DELETE", lead_id, access_token=page_token)
+
+    async def create_test_lead(self, form_id: str, page_token: str) -> str:
+        """Meta's test lead on this form (Settings → Connected apps); its leadgen webhook
+        brings it in. The form's earlier test lead must be deleted first."""
+        made = await self._call("POST", f"{form_id}/test_leads", access_token=page_token)
+        lead_id = str(made.get("id") or "")
+        if not lead_id:
+            raise MetaError("Meta didn't make the test lead. Try again.")
+        return lead_id
 
     async def lead(self, leadgen_id: str, page_token: str) -> dict[str, Any]:
         return await self._call("GET", leadgen_id, fields=LEAD_FIELDS, access_token=page_token)

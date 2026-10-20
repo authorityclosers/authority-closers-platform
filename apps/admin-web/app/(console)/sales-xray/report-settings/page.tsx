@@ -8,10 +8,12 @@ import {
   RollBack,
   VersionEditor,
 } from "@/app/sales-xray/report-settings";
+import { ReportPreview } from "@/app/sales-xray/report-preview";
 import {
   SOURCE_LABEL,
   describeChange,
   describeEvent,
+  industryName,
   normalizeReportSettings,
 } from "@/app/sales-xray/report-settings-data";
 import styles from "@/app/sales-xray/report-settings.module.css";
@@ -61,7 +63,7 @@ export default async function ReportSettingsPage() {
             title="Who uses which version"
             sub={`${data.organisations.length} organisations`}
             tools={
-              <Why detail="An organisation uses the version chosen for it, else its industry's default (the industry comes from its profile), else the general default, else version 1. Choosing an earlier version is a rollback; every choice stays in the history." />
+              <Why detail="An organisation uses the version chosen for it, else its industry's default (its industry is the profile its lead stages were built from), else the general default, else version 1. Choosing an earlier version is a rollback; every choice stays in the history." />
             }
           >
             {data.organisations.length ? (
@@ -78,7 +80,12 @@ export default async function ReportSettingsPage() {
                   {data.organisations.map((row) => (
                     <tr key={row.tenantId}>
                       <th scope="row">{row.name}</th>
-                      <td>{row.industryCode ?? "not set"}</td>
+                      <td>
+                        {industryName(
+                          row.industryCode,
+                          data.industryProfiles,
+                        ) ?? "not set"}
+                      </td>
                       <td>
                         Version {row.versionNumber}
                         <span className={styles.sub}>
@@ -112,7 +119,7 @@ export default async function ReportSettingsPage() {
           <Panel
             title="Defaults"
             tools={
-              <Why detail="The general default applies to every organisation without its own choice or an industry default. Industry defaults use the industry code on the organisation's profile (AUT-2115)." />
+              <Why detail="The general default applies to every organisation without its own choice or an industry default. Industries are the lead-stage profiles (Real estate, Insurance and so on): an organisation's industry is the one its lead stages were built from." />
             }
           >
             <div className={styles.defaults}>
@@ -127,33 +134,38 @@ export default async function ReportSettingsPage() {
               </div>
               {data.industries.map((row) => (
                 <div key={row.industryCode}>
-                  <strong>Industry {row.industryCode}</strong>
+                  <strong>
+                    {industryName(row.industryCode, data.industryProfiles)}
+                  </strong>
                   <ChooseVersion
                     scope="industry"
                     industryCode={row.industryCode}
                     current={row.versionNumber}
                     inherited={data.generalVersionNumber ?? 1}
                     versions={data.versions}
-                    label={`Version for industry ${row.industryCode}`}
+                    label={`Version for ${industryName(row.industryCode, data.industryProfiles)}`}
                   />
                 </div>
               ))}
               <div>
                 <strong>Add an industry default</strong>
-                <IndustryDefault versions={data.versions} />
+                <IndustryDefault
+                  versions={data.versions}
+                  profiles={data.industryProfiles}
+                />
               </div>
             </div>
           </Panel>
           <Panel
             title="Versions"
-            sub={`${data.versions.length} saved, none ever edited`}
-            tools={
-              <VersionEditor
-                parameters={data.parameters}
-                versions={data.versions}
-              />
-            }
+            sub={`${data.versions.length} saved, none ever edited · publish makes one everyone's default`}
           >
+            <VersionEditor
+              parameters={data.parameters}
+              versions={data.versions}
+              profiles={data.industryProfiles}
+              generalVersionNumber={data.generalVersionNumber}
+            />
             <ol className={styles.versions}>
               {[...data.versions].reverse().map((version) => (
                 <li key={version.number}>
@@ -165,7 +177,16 @@ export default async function ReportSettingsPage() {
                       <Badge tone="accent">frozen</Badge>
                     ) : null}
                     {version.industryCode ? (
-                      <Badge>built for {version.industryCode}</Badge>
+                      <Badge>
+                        built for{" "}
+                        {industryName(
+                          version.industryCode,
+                          data.industryProfiles,
+                        )}
+                      </Badge>
+                    ) : null}
+                    {version.number === (data.generalVersionNumber ?? 1) ? (
+                      <Badge tone="good">everyone&rsquo;s default</Badge>
                     ) : null}
                     <span className={styles.sub}>
                       {version.baseNumber
@@ -187,6 +208,14 @@ export default async function ReportSettingsPage() {
                       ))}
                     </ul>
                   ) : null}
+                  <details className={styles.previewToggle}>
+                    <summary>Preview on a fictional call</summary>
+                    <ReportPreview
+                      settings={version.settings}
+                      baseline={data.versions[0]?.settings ?? {}}
+                      parameters={data.parameters}
+                    />
+                  </details>
                 </li>
               ))}
             </ol>

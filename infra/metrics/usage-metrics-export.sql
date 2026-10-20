@@ -83,6 +83,32 @@ pointer AS (
   FROM conversation_pointer_reviews
   WHERE created_at >= (SELECT since FROM win)
 ),
+-- Paid AI beyond call analysis, from each feature's own rows (owner, 20 Oct 2026: Admin
+-- must show all AI spend): the call data engine (a start with no outcome counts Rs 2, as
+-- the engine counts it), AI replies and partner quote facts. Counters and labels only.
+ai_work AS (
+  SELECT CASE WHEN d.pipeline = 'deep' THEN 'CDD' ELSE 'CDF' END AS stage,
+         d.recording_id AS call_id, d.tenant_id AS company_id,
+         coalesce(d.provider, 'gemini') AS provider, d.model_id AS model,
+         d.state AS status, d.trigger AS work_trigger,
+         coalesce(d.input_tokens, 0) AS input_tokens, coalesce(d.output_tokens, 0) AS output_tokens,
+         CASE WHEN d.state = 'running' THEN 2 ELSE d.cost_inr END AS cost_inr,
+         d.created_at AS at
+  FROM call_data_runs d
+  WHERE d.created_at >= (SELECT since FROM win)
+    AND (d.state <> 'running'
+         OR NOT EXISTS (SELECT 1 FROM call_data_runs o WHERE o.supersedes_id = d.id))
+  UNION ALL
+  SELECT 'AR', NULL, a.tenant_id, coalesce(a.provider, 'gemini'), a.model, a.outcome, a.mode,
+         coalesce(a.input_tokens, 0), coalesce(a.output_tokens, 0), a.cost_inr, a.created_at
+  FROM lead_desk_ai_replies a
+  WHERE a.created_at >= (SELECT since FROM win) AND a.input_tokens IS NOT NULL
+  UNION ALL
+  SELECT 'QF', f.recording_id, f.tenant_id, 'gemini', f.model_id, f.status, 'auto',
+         coalesce(f.input_tokens, 0), coalesce(f.output_tokens, 0), NULL, f.created_at
+  FROM partner_quote_facts f
+  WHERE f.created_at >= (SELECT since FROM win) AND f.input_tokens IS NOT NULL
+),
 plan_latest AS (
   SELECT DISTINCT ON (recording_id) recording_id, id, state, manifest, created_at
   FROM conversation_processing_plans
@@ -294,6 +320,11 @@ SELECT json_build_object(
       'call', call_id, 'company', company_id, 'model', model, 'version', version,
       'input_tokens', input_tokens, 'output_tokens', output_tokens, 'by', created_by, 'at', at
     ) ORDER BY at) FROM pointer), '[]'::json),
+  'ai_work', coalesce((SELECT json_agg(json_build_object(
+      'stage', stage, 'call', call_id, 'company', company_id, 'provider', provider,
+      'model', model, 'status', status, 'trigger', work_trigger,
+      'input_tokens', input_tokens, 'output_tokens', output_tokens, 'cost_inr', cost_inr, 'at', at
+    ) ORDER BY at) FROM ai_work), '[]'::json),
   'synthetic_calls', coalesce((SELECT json_agg(json_build_object('day', day, 'n', n) ORDER BY day) FROM synthetic), '[]'::json),
   'holds', coalesce((SELECT json_agg(json_build_object(
       'day', day, 'scope', scope_id, 'state', state, 'ref', ref, 'provider', provider, 'kind', kind,

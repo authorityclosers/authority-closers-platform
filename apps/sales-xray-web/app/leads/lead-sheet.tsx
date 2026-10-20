@@ -62,6 +62,7 @@ import {
   type Stage,
 } from "./leads-client";
 import { LastCallBrief } from "./call-brief-card";
+import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
 import { WhatsAppThread } from "./whatsapp-thread";
 import { sourceText, whyLine } from "./desk-view";
@@ -96,6 +97,8 @@ import {
   type SimulationPick,
   type SimulationStep,
 } from "./simulated-call";
+import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
+import { Sheet as KitSheet } from "../ui/sheet";
 import styles from "./leads.module.css";
 
 // Sources whose leads arrive with a form's own answers worth showing.
@@ -109,6 +112,11 @@ const NO_RETRY = new Set([
 
 /* ---------- Sheet ---------- */
 
+/**
+ * Every Leads sheet is the kit Sheet (design system v2): phones swipe it away
+ * from the top, computers get the floating panel on the right. The label
+ * names the dialog; the content brings its own heading.
+ */
 export function Sheet({
   open,
   label,
@@ -120,40 +128,27 @@ export function Sheet({
   onClose: () => void;
   children: ReactNode;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
   return (
-    <dialog
-      ref={ref}
+    <KitSheet
+      open={open}
+      onClose={onClose}
+      title={label}
+      hideTitle
+      closeButton={false}
       className={styles.sheet}
-      aria-label={label}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
     >
-      {open ? (
-        <div className={styles.sheetBody}>
-          <button
-            type="button"
-            className={styles.sheetClose}
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-          {children}
-        </div>
-      ) : null}
-    </dialog>
+      <div className={styles.sheetBody}>
+        <button
+          type="button"
+          className={styles.sheetClose}
+          onClick={onClose}
+          aria-label="Close"
+        >
+          <X size={18} aria-hidden="true" />
+        </button>
+        {children}
+      </div>
+    </KitSheet>
   );
 }
 
@@ -191,6 +186,39 @@ const NEXT: { key: Stage; label: string; sub: string; tone: string }[] = [
   { key: "won", label: "Won", sub: "They bought", tone: "good" },
   { key: "lost", label: "Not interested", sub: "Close this lead", tone: "bad" },
 ];
+
+const TONES: Record<string, string> = {
+  interested: "warm",
+  follow_up: "later",
+  won: "good",
+  lost: "bad",
+};
+
+type Choice = {
+  id: string;
+  key: Stage;
+  step?: string;
+  label: string;
+  sub: string;
+  tone: string;
+};
+
+/** What a seller picks after a call that connected: the business's own stages
+ *  (Lead stages), else the desk's four. */
+export function stageChoices(detail: {
+  stage_choices?: LeadDetail["stage_choices"];
+}): Choice[] {
+  const own = (detail.stage_choices ?? []).filter((item) => TONES[item.kind]);
+  if (!own.length) return NEXT.map((item) => ({ ...item, id: item.key }));
+  return own.map((item) => ({
+    id: item.key,
+    key: item.kind,
+    step: item.key,
+    label: item.label,
+    sub: item.meaning,
+    tone: TONES[item.kind],
+  }));
+}
 
 /** The stage a lead already has, chosen again after "We talked" (UX study item 6). */
 export function stageAfterTalk(stage: Stage): Stage | null {
@@ -290,7 +318,21 @@ export function CallOutcome({
     heard?.connected === false ? missedReason(heard.result) : null,
   );
   const lastStage = stageAfterTalk(detail.lead.stage);
+  const choices = stageChoices(detail);
+  const lastStep =
+    lastStage &&
+    detail.lead.step &&
+    choices.some((item) => item.step === detail.lead.step)
+      ? detail.lead.step
+      : null;
   const [stage, setStage] = useState<Stage | null>(lastStage);
+  const [step, setStep] = useState<string | null>(lastStep);
+  // What the last call suggests, when it is one of the choices (Lead stages).
+  const suggested =
+    detail.stage_suggestion &&
+    choices.some((item) => item.step === detail.stage_suggestion?.step)
+      ? detail.stage_suggestion
+      : null;
   const [next, setNext] = useState<Pick>("morning");
   const [retry, setRetry] = useState<Pick | null>(null);
   const [custom, setCustom] = useState(() =>
@@ -335,6 +377,7 @@ export function CallOutcome({
         connected: talk === "talked",
         reason: talk === "missed" ? (reason ?? undefined) : undefined,
         stage: talk === "talked" ? (stage ?? undefined) : undefined,
+        step: talk === "talked" ? (step ?? undefined) : undefined,
         follow_up_at: at ? at.toISOString() : undefined,
         remark: note.trim() || undefined,
         deal_value: deal.trim() || undefined,
@@ -398,6 +441,7 @@ export function CallOutcome({
           onClick={() => {
             setTalk("missed");
             setStage(null);
+            setStep(null);
           }}
         >
           <PhoneMissed size={22} aria-hidden="true" />
@@ -454,19 +498,36 @@ export function CallOutcome({
       {talk === "talked" ? (
         <div className={styles.outcomeStep}>
           <span className={styles.stepLabel}>What happens next?</span>
+          {suggested ? (
+            <SuggestionHint
+              suggestion={suggested}
+              active={step === suggested.step}
+              onUse={() => {
+                setStage(suggested.kind);
+                setStep(suggested.step);
+              }}
+            />
+          ) : null}
           <div
             className={styles.stageGrid}
             role="group"
             aria-label="What happens next"
           >
-            {NEXT.map((item) => (
+            {choices.map((item) => (
               <button
-                key={item.key}
+                key={item.id}
                 type="button"
                 className={styles.stageTile}
                 data-tone={item.tone}
-                aria-pressed={stage === item.key}
-                onClick={() => setStage(item.key)}
+                aria-pressed={
+                  item.step
+                    ? step === item.step
+                    : stage === item.key && step === null
+                }
+                onClick={() => {
+                  setStage(item.key);
+                  setStep(item.step ?? null);
+                }}
               >
                 <strong>{item.label}</strong>
                 <small>{item.sub}</small>
@@ -715,6 +776,11 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
         title: `${who} sent ${event.channel === "SMS" ? "an SMS" : "a WhatsApp"}${
           event.template_label ? ` · ${event.template_label}` : ""
         }`,
+      };
+    case "stage":
+      return {
+        title: `${who} moved them to ${event.stage_label ?? "a new stage"}`,
+        detail: event.note ?? undefined,
       };
     case "scheduled":
       return {
@@ -1570,7 +1636,13 @@ export function LeadCard({
       .map((field) => ({ label: field.label, value: field.value })),
   ];
   // A lead typed in by hand has no form: its answers are the details above.
-  const answers = FORM_SOURCES.has(lead.source) ? detail.source_fields : [];
+  // A lead that began as a chat has no form either: never Meta's raw ids.
+  const origin = chatOrigin(lead);
+  const answers = !FORM_SOURCES.has(lead.source)
+    ? []
+    : origin
+      ? chatFacts(detail.source_fields)
+      : detail.source_fields;
 
   const move = async (personId: string | null) => {
     setMoving(true);
@@ -1611,6 +1683,7 @@ export function LeadCard({
         </div>
       </header>
       <p className={styles.why}>{whyLine(lead)}</p>
+      <SuggestedStage detail={detail} onChanged={onChanged} />
       {detail.next_action_note ? (
         <p className={styles.nextNote}>Last note: {detail.next_action_note}</p>
       ) : null}
@@ -1806,7 +1879,9 @@ export function LeadCard({
         )}
         {answers.length ? (
           <div className={styles.formAnswers}>
-            <span className={styles.stepLabel}>Answers from the form</span>
+            <span className={styles.stepLabel}>
+              {origin ? "From the chat" : "Answers from the form"}
+            </span>
             <dl className={styles.detailRows}>
               {answers.map((field, index) => (
                 <div key={`${field.label}-${index}`}>

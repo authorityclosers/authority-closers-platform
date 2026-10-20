@@ -6,6 +6,7 @@ import {
   analysisArea,
   callDataArea,
   executionArea,
+  leadDeskAiArea,
   providerArea,
   reportArea,
 } from "./settings-data";
@@ -226,4 +227,82 @@ it("says which period the budget counts and shows the ceiling", () => {
     value: "₹1",
     note: undefined,
   });
+});
+
+it("shows AI replies to leads with this period's spend, and offers a raise only when it waits", () => {
+  const answer = {
+    revision: 3,
+    config: {
+      enabled: true,
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      cap_inr: 100,
+      period: "daily",
+    },
+    provider_label: "Google Gemini",
+    models: [
+      {
+        provider: "gemini",
+        model: "gemini-3.8-flash",
+        label: "Gemini 3.8 Flash",
+      },
+    ],
+    status: {
+      spent_inr: 12.5,
+      cap_inr: 100,
+      period: "daily",
+      at_cap: false,
+      waiting: 0,
+      raise_to_inr: 300,
+    },
+    history: [{ revision: 3, at: "2026-10-20T05:00:00Z" }],
+  };
+  const area = leadDeskAiArea(ok(answer));
+  expect(area.revision).toBe("3");
+  expect(area.changedAt).toBe("2026-10-20T05:00:00Z");
+  expect(area.href).toBe("");
+  expect(area.rows).toEqual([
+    {
+      id: "lead_desk_ai.enabled",
+      label: "AI replies to lead messages",
+      value: "On",
+      note: "Google Gemini · ₹12.50 spent today",
+    },
+    {
+      id: "lead_desk_ai.model",
+      label: "AI replies: model",
+      value: "Gemini 3.8 Flash",
+    },
+    {
+      id: "lead_desk_ai.cap_inr",
+      label: "AI replies: cap",
+      value: "₹100 a day",
+    },
+    {
+      id: "lead_desk_ai.period",
+      label: "AI replies: cap counted",
+      value: "Each day",
+    },
+  ]);
+  expect(area.raise).toBeUndefined();
+
+  const capped = leadDeskAiArea(
+    ok({
+      ...answer,
+      status: { ...answer.status, spent_inr: 100, at_cap: true, waiting: 4 },
+    }),
+  );
+  expect(capped.rows[0].note).toBe(
+    "Google Gemini · ₹100.00 spent today · cap reached · 4 waiting",
+  );
+  expect(capped.raise).toEqual({
+    revision: 3,
+    to: 300,
+    atCap: true,
+    waiting: 4,
+  });
+
+  const unread = leadDeskAiArea({ ok: false, error: "Not deployed here" });
+  expect(unread.unavailable).toBe("Not deployed here");
+  expect(unread.rows).toEqual([]);
 });

@@ -159,6 +159,26 @@ function GuideSession({
   );
 }
 
+/**
+ * The first-call guide walks through analysing a call. The CRM's pages (Leads,
+ * Chats) and the account, organisation and Settings pages are not part of that
+ * walk, so it never covers them (orchestrator's dev pass, 20 Oct: it opened on every
+ * Leads visit and moved the list when skipped).
+ */
+export function firstCallGuideFits(pathname: string | null): boolean {
+  if (!pathname) return true;
+  if (
+    [
+      "/account",
+      "/organisation",
+      "/organisation/invites",
+      "/organisation/insights",
+    ].includes(pathname)
+  )
+    return false;
+  return !/^\/(leads|chats|settings)(\/|$)/.test(pathname);
+}
+
 export function FirstCallGuide() {
   const access = useWorkspaceAccess();
   const pathname = usePathname();
@@ -170,10 +190,7 @@ export function FirstCallGuide() {
     access.authenticated !== true ||
     !access.context ||
     workspace?.sales_xray_enabled === false ||
-    pathname === "/account" ||
-    pathname === "/organisation" ||
-    pathname === "/organisation/invites" ||
-    pathname === "/organisation/insights"
+    !firstCallGuideFits(pathname)
   )
     return null;
   return (

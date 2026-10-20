@@ -1,0 +1,22 @@
+[Unit]
+Description=AC root disk alert at 85 percent (AUT-2165)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-disk-alert --apply
+StateDirectory=ac-disk-alert
+StateDirectoryMode=0700
+UMask=0077
+Nice=15
+TimeoutStartSec=45s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

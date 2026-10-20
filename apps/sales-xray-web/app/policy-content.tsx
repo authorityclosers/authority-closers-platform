@@ -29,7 +29,7 @@ const TITLES: Record<PolicySlug, string> = {
 const UPDATED: Record<PolicySlug, [string, string]> = {
   pricing: ["2026-10-03", "3 October 2026"],
   terms: ["2026-10-03", "3 October 2026"],
-  privacy: ["2026-10-16", "16 October 2026"],
+  privacy: ["2026-10-20", "20 October 2026"],
   refunds: ["2026-10-16", "16 October 2026"],
   delivery: ["2026-10-03", "3 October 2026"],
   contact: ["2026-10-16", "16 October 2026"],
@@ -254,6 +254,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "Usage and billing records, including plan, minutes, and orders.",
         "If you use Google sign-in, the Google account identifier and basic profile information needed to authenticate or link your identity. We do not receive your Google password. We keep your first and last name, language setting, Google Workspace email domain when supplied, and a small copy of your Google profile photo.",
         "Razorpay processes payment credentials entered in its hosted checkout. Sales Xray receives payment status and transaction references, not complete card credentials.",
+        "If a business connects its WhatsApp number, Facebook Page or Instagram account to Sales Xray: the messages people send that business there, and the business's replies.",
       ],
     },
     {
@@ -270,7 +271,16 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
       bullets: [
         "Hosting and analysis service providers needed to operate Sales Xray. Before an analysis starts, the processing plan shows the analysis provider and purpose and asks you to accept that processing.",
         "Razorpay for payments made through its hosted checkout.",
+        "Google (the Gemini API, provided by Google LLC), to draft replies to messages, only for a business that switches on AI replies. See AI replies to messages, below.",
         "Sales Xray does not use your recordings or reports to target advertising.",
+      ],
+    },
+    {
+      title: "AI replies to messages",
+      paragraphs: [
+        "A business that uses Sales Xray can switch on AI replies for the messages people send it on WhatsApp, Messenger or Instagram. To draft a reply, Sales Xray then sends Google (the Gemini API, provided by Google LLC) the business's own description of itself and the words of up to the last 10 messages in that one conversation. If the person did not come from a Facebook or Instagram lead form, their first name is sent too.",
+        "Sales Xray does not send Google the answers given in Facebook or Instagram lead forms, or the phone number or email address saved with a lead.",
+        "The business chooses whether a person at the business reads each draft before it is sent, or whether replies are sent automatically. AI replies answer only about the business, hand the conversation to a person on complaints, on anything they cannot answer from the business's own description, or when you ask for a person, and stop when you reply STOP.",
       ],
     },
     {

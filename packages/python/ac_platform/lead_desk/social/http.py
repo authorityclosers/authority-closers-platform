@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,6 +41,7 @@ from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership, Organisation
 
 log = logging.getLogger(__name__)
+events = structlog.get_logger(__name__)
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 NO_STORE = {"Cache-Control": "no-store"}
 _MAX_WEBHOOK = 3 * 1024 * 1024
@@ -137,6 +139,20 @@ class InboxView(BaseModel):
     last_at: datetime = Field(alias="lastAt")
     waiting: bool
     window_open: bool = Field(alias="windowOpen")
+    # For the Chats screen; read as optional by older pages.
+    account_id: UUID | None = Field(default=None, alias="accountId")
+    place: str | None = None
+    last_kind: str = Field(default="text", alias="lastKind")
+    last_direction: str = Field(default="in", alias="lastDirection")
+    last_status: str = Field(default="received", alias="lastStatus")
+    waiting_since: datetime | None = Field(default=None, alias="waitingSince")
+    window_closes_at: datetime | None = Field(default=None, alias="windowClosesAt")
+    owner_id: UUID | None = Field(default=None, alias="ownerId")
+    owner_name: str | None = Field(default=None, alias="ownerName")
+
+
+# The Settings → Connected apps cards a Messenger/Instagram connect can come back to.
+MESSAGING_CARDS: tuple[str, ...] = ("messenger", "instagram")
 
 
 def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -277,12 +293,19 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
         response: Response,
         app_challenge: str | None = Query(default=None),
         reply: str | None = Query(default=None, alias="format"),
+        return_to: str | None = Query(default=None),
+        card: str | None = Query(default=None),
     ) -> Response:
         """Connect Messenger and Instagram: off to Facebook Login for Business and back.
-        From the Sales Xray app, with ``app_challenge``, it finishes in the app."""
+        From the Sales Xray app, with ``app_challenge``, it finishes in the app; from
+        Settings → Connected apps, with ``return_to``, it comes back to that card."""
         cfg = social_config()
         if app_challenge is not None and not app_return.CHALLENGE.fullmatch(app_challenge):
             raise HTTPException(422, "Start again from the Sales Xray app.", headers=PRIVATE)
+        try:
+            settings_card = app_return.settings_card(return_to, card, allowed=MESSAGING_CARDS)
+        except ValueError:
+            raise HTTPException(422, "Start again from Settings.", headers=PRIVATE) from None
         async with desk_for(request, response) as desk:
             desk._require_manager()
             state = meta.make_state(
@@ -290,6 +313,7 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                 tenant_id=desk.tenant_id,
                 person_id=desk.viewer.person_id,
                 app_challenge=app_challenge,
+                card=settings_card,
             )
         url = graph.dialog_url(cfg, redirect_uri=callback_url(), state=state)
         if reply == "json":
@@ -311,9 +335,11 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
         params = request.query_params
         state = params.get("state", "")
         try:
-            from_app = bool(meta.peek_state(cfg.app_secret, state).get("a"))
+            peeked = meta.peek_state(cfg.app_secret, state)
         except meta.MetaError:
-            from_app = False
+            peeked = {}
+        from_app = bool(peeked.get("a"))
+        card = app_return.card_of(peeked, MESSAGING_CARDS)
         if from_app:
             # In the phone's browser, with no Sales Xray session: hand back to the app.
             if params.get("error"):
@@ -327,11 +353,20 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                 ),
             )
         back = f"{app_url()}/organisation?tab=integrations"
+
+        def done(outcome: str) -> Response:
+            url = (
+                app_return.settings_url(app_url(), card, outcome)
+                if card
+                else f"{back}&messaging={outcome}"
+            )
+            return RedirectResponse(url, status_code=303, headers=PRIVATE)
+
         if params.get("error"):
-            return RedirectResponse(f"{back}&messaging=cancelled", status_code=303, headers=PRIVATE)
+            return done("cancelled")
         code = params.get("code", "")
         if not code or not state:
-            return RedirectResponse(f"{back}&messaging=failed", status_code=303, headers=PRIVATE)
+            return done("failed")
         try:
             async with desk_for(request, response, write=True, origin=False) as desk:
                 desk._require_manager()
@@ -343,16 +378,14 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                         person_id=desk.viewer.person_id,
                     )
                 except meta.MetaError:
-                    return RedirectResponse(
-                        f"{back}&messaging=failed", status_code=303, headers=PRIVATE
-                    )
+                    return done("failed")
                 outcome, _ = await finish(desk, cfg, code)
         except HTTPException as error:
             if error.status_code in (401, 403):
                 raise
             log.warning("messaging connect failed: %s", error.detail)
-            return RedirectResponse(f"{back}&messaging=failed", status_code=303, headers=PRIVATE)
-        return RedirectResponse(f"{back}&messaging={outcome}", status_code=303, headers=PRIVATE)
+            return done("failed")
+        return done(outcome)
 
     @router.post("/messaging/app-complete", response_model=AppCompleted)
     async def messaging_app_complete(
@@ -436,7 +469,9 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                             kind=m.kind,
                             text=m.body,
                             status=m.status,
-                            error=m.error_title,
+                            error=inbox.error_words(
+                                m.error_title, m.error_code, manager=desk.viewer.can_manage
+                            ),
                             auto=m.auto,
                             human_agent=m.tag == "HUMAN_AGENT",
                             at=m.meta_time or m.created_at,
@@ -486,12 +521,17 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                 account_id=command.account_id,
                 body=command.text,
                 human_agent=command.human_agent,
+                queue=True,
             )
             await desk.db.flush()
+            status = message.status
             view = await conversation_view(desk, lead_id)
-            if message.status == "failed":
-                response.headers["X-Messaging-Error"] = "1"
-            return view
+        # Queued: the runner sends it (Chats reads the thread again every 2 s meanwhile).
+        if status == "queued":
+            runner.wake()
+        elif status == "failed":
+            response.headers["X-Messaging-Error"] = "1"
+        return view
 
     @router.get("/social/inbox", response_model=list[InboxView], response_model_by_alias=True)
     async def social_inbox(request: Request, response: Response) -> list[InboxView]:
@@ -505,6 +545,15 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                     last_at=thread.last_at,
                     waiting=thread.waiting,
                     window_open=thread.window_open,
+                    account_id=thread.account_id,
+                    place=thread.place,
+                    last_kind=thread.last_kind,
+                    last_direction=thread.last_direction,
+                    last_status=thread.last_status,
+                    waiting_since=thread.waiting_since,
+                    window_closes_at=thread.window_closes_at,
+                    owner_id=thread.owner_id,
+                    owner_name=thread.owner_name,
                 )
                 for thread in await inbox.inbox(desk)
             ]
@@ -580,6 +629,16 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
             done = await inbox.receive(
                 database, delivery, now=datetime.now(UTC), names=names, app_id=cfg.app_id
             )
+        # Counts and reasons only, never a message, a name or an id (structlog: the
+        # stdlib logger's info lines don't reach the journal).
+        events.info(
+            "lead_desk_messaging_webhook",
+            messages=done.messages,
+            statuses=done.statuses,
+            comments=done.comments,
+            skipped=[f"{skip.reason}:{','.join(skip.fields)}" for skip in delivery.skipped]
+            + [reason for reason in done.skipped if reason == "no_rule"],
+        )
         return {
             "messages": done.messages,
             "leads": done.leads_created,

@@ -1,9 +1,10 @@
 """Admin call map: every stage of one call, with status, timing, cost, provider and version.
 
-received → audio check → transcription → fast pipeline → objects → better
-transcript → deep pipeline → objects updated → Report → AI pointer review →
-Prospect. Read-only and content-free: ids, times, states, model names, token
-counts and list-price estimates only; never transcript text, quotes or values.
+received → C1 audio check → C2 transcription → fast pipeline → objects → better
+transcript → deep pipeline → objects updated; C3 alignment → C4 facts → C5 report and
+coaching → C6 published → AI pointer review, prospect; and the gold reviewers' answers.
+Read-only and content-free: ids, times, states, model names, token counts and list-price
+estimates only; never transcript text, quotes or values.
 """
 
 from __future__ import annotations
@@ -44,10 +45,12 @@ def stage(
     version: str | None = None,
     detail: str | None = None,
     counts: dict[str, Any] | None = None,
+    code: str | None = None,
 ) -> dict[str, Any]:
     return {
         "key": key,
         "label": label,
+        "code": code,  # the main analysis stage, C1 to C6
         "status": status,  # done | running | failed | skipped | waiting | not_built
         "started_at": _iso(started),
         "finished_at": _iso(finished),
@@ -137,13 +140,17 @@ def call_map(connection: Any, recording_id: UUID) -> dict[str, Any] | None:
             finished=call["created_at"],
             detail=f"From {call['capture_source'] or 'upload'} · {call['workspace']}",
         ),
-        _checkpoint_stage("audio_check", "Audio check", checkpoints, ("C0", "C1"), call),
-        _task_stage("transcription", "Transcription (batch)", tasks.get("C2"), media_ms),
+        {
+            **_checkpoint_stage("audio_check", "Audio check", checkpoints, ("C0", "C1"), call),
+            "code": "C1",
+        },
+        {**_task_stage("transcription", "Transcript", tasks.get("C2"), media_ms), "code": "C2"},
     ]
     stages.extend(_engine_stages(connection, recording_id))
-    stages.append(_report_stage(tasks, checkpoints, media_ms))
+    stages.extend(_analysis_stages(tasks, checkpoints, media_ms))
     stages.append(_pointer_stage(connection, recording_id))
     stages.append(_prospect_stage(connection, call["submission_id"]))
+    stages.append(_review_stage(connection, recording_id))
     total = sum(Decimal(str(s["cost_inr"])) for s in stages if s["cost_inr"] is not None)
     return {
         "schema": SCHEMA,
@@ -332,34 +339,135 @@ def _engine_stages(connection: Any, recording_id: UUID) -> list[dict[str, Any]]:
     ]
 
 
-def _report_stage(
-    tasks: dict[str, list[Any]], checkpoints: dict[str, Any], media_ms: int | None
+_OPEN = ("queued", "running")
+_ENDED_BADLY = ("failed", "uncertain", "cancelled")
+
+
+def _tokens(usage: dict[str, Any], *keys: str) -> int | None:
+    for key in keys:
+        value = usage.get(key)
+        if type(value) is int and value >= 0:
+            return value
+    return None
+
+
+def _attempts_stage(
+    key: str,
+    label: str,
+    code: str,
+    rows: list[Any],
+    media_ms: int | None,
+    *,
+    moved_on: bool,
 ) -> dict[str, Any]:
-    c4, c5 = tasks.get("C4") or [], tasks.get("C5") or []
-    c6 = checkpoints.get("C6")
-    if not c4 and not c5:
-        return stage("report", "Report · Coaching", "waiting")
+    """One analysis stage run as model tasks (C4 fact chunks, C5 coaching): every attempt
+    counted, cost summed over the completed ones, tokens from the provider receipts.
+    `moved_on` is true once a later stage has started or saved, so this one is finished."""
+    if not rows:
+        return stage(key, label, "waiting", code=code)
     cost = Decimal(0)
-    model = provider = None
-    for row in [*c4, *c5]:
+    priced = False
+    provider = model = None
+    tokens_in = tokens_out = 0
+    counted = False
+    ends: list[datetime] = []
+    for row in rows:
         receipt = _receipt(row["provider_receipt"])
-        estimate = _task_cost(receipt, media_ms) if row["state"] == "completed" else None
-        cost += estimate or 0
-        provider, model = receipt.get("provider") or provider, receipt.get("model") or model
-    started = (c4 or c5)[0]["created_at"]
-    failed = any(row["state"] in ("failed", "uncertain") for row in [*c4[-1:], *c5[-1:]])
-    status = "done" if c6 is not None else "failed" if failed else "running"
+        provider = receipt.get("provider") or provider
+        model = receipt.get("model") or model
+        usage = _receipt(receipt.get("usage"))
+        took_in = _tokens(usage, "promptTokenCount", "prompt_tokens", "input_tokens")
+        took_out = _tokens(usage, "candidatesTokenCount", "completion_tokens", "output_tokens")
+        if took_in is not None or took_out is not None:
+            counted = True
+            tokens_in += took_in or 0
+            tokens_out += took_out or 0
+        if row["state"] == "completed":
+            estimate = _task_cost(receipt, media_ms)
+            if estimate is not None:
+                cost += estimate
+                priced = True
+            end = row["saved_at"] or row["receipt_recorded_at"]
+            if end is not None:
+                ends.append(end)
+    completed = sum(1 for row in rows if row["state"] == "completed")
+    failed = sum(1 for row in rows if row["state"] in _ENDED_BADLY)
+    if any(row["state"] in _OPEN for row in rows):
+        status = "running"
+    elif moved_on or rows[-1]["state"] == "completed":
+        status = "done"
+    else:
+        status = "failed"
+    words = [f"{len(rows)} task{'s' if len(rows) != 1 else ''}"]
+    if failed:
+        words.append(f"{failed} failed or unsure")
     return stage(
-        "report",
-        "Report · Coaching",
+        key,
+        label,
         status,
-        started=started,
-        finished=c6["created_at"] if c6 is not None else None,
-        cost_inr=cost if cost else None,
+        started=rows[0]["created_at"],
+        finished=max(ends) if ends and status != "running" else None,
+        cost_inr=cost if priced else None,
         provider=provider,
         model=model,
-        counts={"fact_chunks": len(c4), "coaching_attempts": len(c5)},
+        detail=" · ".join(words),
+        code=code,
+        counts={
+            "attempts": len(rows),
+            "completed": completed,
+            "failed": failed,
+            "tokens_in": tokens_in if counted else None,
+            "tokens_out": tokens_out if counted else None,
+        },
     )
+
+
+def _analysis_stages(
+    tasks: dict[str, list[Any]], checkpoints: dict[str, Any], media_ms: int | None
+) -> list[dict[str, Any]]:
+    """The main analysis after the transcript, one node per stage (owner 19 Oct, C1 to C6):
+    C3 alignment (local), C4 facts and C5 report and coaching (model tasks), C6 published."""
+    c4, c5 = tasks.get("C4") or [], tasks.get("C5") or []
+    parents = [checkpoints[name]["created_at"] for name in ("C1", "C2") if name in checkpoints]
+    c3, c5_saved, c6 = checkpoints.get("C3"), checkpoints.get("C5"), checkpoints.get("C6")
+    later = ("C4", "C5", "C6")
+    return [
+        stage(
+            "alignment",
+            "Alignment",
+            "done" if c3 is not None else "skipped" if c4 or c5 else "waiting",
+            started=max(parents) if c3 is not None and len(parents) == 2 else None,
+            finished=c3["created_at"] if c3 is not None else None,
+            provider="local" if c3 is not None else None,
+            detail="Speakers and words placed on the call's own clock",
+            code="C3",
+        ),
+        _attempts_stage(
+            "facts",
+            "Facts",
+            "C4",
+            c4,
+            media_ms,
+            moved_on=bool(c5) or any(name in checkpoints for name in later),
+        ),
+        _attempts_stage(
+            "coaching",
+            "Report, coaching",
+            "C5",
+            c5,
+            media_ms,
+            moved_on=c5_saved is not None or c6 is not None,
+        ),
+        stage(
+            "published",
+            "Published",
+            "done" if c6 is not None else "waiting",
+            started=c5_saved["created_at"] if c6 is not None and c5_saved is not None else None,
+            finished=c6["created_at"] if c6 is not None else None,
+            detail="The report the person sees",
+            code="C6",
+        ),
+    ]
 
 
 def _pointer_stage(connection: Any, recording_id: UUID) -> dict[str, Any]:
@@ -420,4 +528,37 @@ def _prospect_stage(connection: Any, submission_id: UUID | None) -> dict[str, An
         "done",
         finished=row["created_at"],
         detail="Linked by a person" if row["link_kind"] == "person" else "Detected from the call",
+    )
+
+
+def _review_stage(connection: Any, recording_id: UUID) -> dict[str, Any]:
+    """Gold reviewers' answers on this call (Review 2.0): counts and times, never answers."""
+    row = (
+        connection.execute(
+            text(
+                """
+            SELECT count(*) AS answers, count(DISTINCT v.reviewer_id) AS reviewers,
+                   min(v.created_at) AS first_at, max(v.created_at) AS last_at
+            FROM review_verdicts v
+            WHERE v.recording_id = :recording AND v.erased_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM review_verdicts n WHERE n.supersedes_id = v.id)
+            """
+            ),
+            {"recording": recording_id},
+        )
+        .mappings()
+        .first()
+    )
+    if row is None or not row["answers"]:
+        return stage("review", "Human review", "waiting", detail="No gold answers yet")
+    answers, reviewers = int(row["answers"]), int(row["reviewers"])
+    return stage(
+        "review",
+        "Human review",
+        "done",
+        started=row["first_at"],
+        finished=row["last_at"],
+        detail=f"{answers} answer{'s' if answers != 1 else ''} from "
+        f"{reviewers} reviewer{'s' if reviewers != 1 else ''}",
+        counts={"answers": answers, "reviewers": reviewers},
     )

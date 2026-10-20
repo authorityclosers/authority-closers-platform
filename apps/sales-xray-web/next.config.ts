@@ -30,9 +30,17 @@ const devAllowedOrigins = (process.env.AC_SALES_XRAY_DEV_ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+/** Route and page file extensions; "discovery.ts" only outside the static preview. */
+export function pageExtensions(preview: boolean): string[] {
+  const base = ["tsx", "ts", "jsx", "js"];
+  return preview ? base : [...base, "discovery.ts"];
+}
 const config: NextConfig = {
   ...(devAllowedOrigins.length ? { allowedDevOrigins: devAllowedOrigins } : {}),
   output: staticPreview ? "export" : "standalone",
+  // The OAuth/MCP discovery handlers (app/.well-known/**/route.discovery.ts) read the request
+  // host, so they cannot be static: the static preview leaves them out, every real build keeps them.
+  pageExtensions: pageExtensions(staticPreview),
   ...(staticPreview ? { trailingSlash: true } : {}),
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,
@@ -117,6 +125,20 @@ const config: NextConfig = {
               destination: "/analysis/calls",
               permanent: false,
             },
+            // The organisation's settings live in Settings (owner, 20 Oct);
+            // its overview stays at /organisation.
+            ...(
+              [
+                ["members", "/settings/team"],
+                ["company", "/settings/organisation"],
+                ["integrations", "/settings/developers"],
+              ] as const
+            ).map(([tab, destination]) => ({
+              source: "/organisation",
+              has: [{ type: "query" as const, key: "tab", value: tab }],
+              destination,
+              permanent: false,
+            })),
             {
               source: "/",
               has: [

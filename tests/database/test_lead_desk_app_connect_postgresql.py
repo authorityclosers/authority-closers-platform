@@ -212,6 +212,34 @@ def test_meta_connect_in_the_app_finishes_through_the_phones_browser(
                 assert plain.status_code == 303, plain.text
                 assert plain.headers["location"].endswith("/leads?tab=sources&meta=connected")
                 assert len(await _sources(setup, "meta")) == 1
+
+                # Started from Settings → Connected apps: back to that card.
+                odd = await app.get(f"{META}/connect", params={"return_to": "https://elsewhere"})
+                assert odd.status_code == 422  # only /settings/apps is offered
+                wrong_card = await app.get(
+                    f"{META}/connect", params={"return_to": "/settings/apps", "card": "whatsapp"}
+                )
+                assert wrong_card.status_code == 422
+                card = await app.get(
+                    f"{META}/connect",
+                    params={"return_to": "/settings/apps", "card": "meta_leads"},
+                )
+                card_state = parse_qs(urlparse(card.headers["location"]).query)["state"][0]
+                assert meta.peek_state(cfg.app_secret, card_state)["r"] == "meta_leads"
+                back_to_card = await app.get(
+                    f"{META}/callback", params={"code": "meta-code", "state": card_state}
+                )
+                assert back_to_card.headers["location"].endswith(
+                    "/settings/apps?connected=meta_leads"
+                )
+                stopped = await app.get(
+                    f"{META}/callback", params={"error": "access_denied", "state": card_state}
+                )
+                assert stopped.headers["location"].endswith(
+                    "/settings/apps?connect_error=cancelled"
+                )
+                no_code = await app.get(f"{META}/callback", params={"state": card_state})
+                assert no_code.headers["location"].endswith("/settings/apps?connect_error=failed")
         finally:
             await setup.engine.dispose()
 
@@ -295,6 +323,17 @@ def test_google_connect_in_the_app_finishes_through_the_phones_browser(
                 web = await app.get(f"{BASE}/google/connect")
                 assert web.status_code == 303
                 assert web.headers["location"].startswith(gads.AUTH)
+                card = await app.get(
+                    f"{BASE}/google/connect", params={"return_to": "/settings/apps"}
+                )
+                card_state = parse_qs(urlparse(card.headers["location"]).query)["state"][0]
+                stopped = await app.get(
+                    f"{BASE}/google/callback",
+                    params={"error": "access_denied", "state": card_state},
+                )
+                assert stopped.headers["location"].endswith(
+                    "/settings/apps?connect_error=cancelled"
+                )
         finally:
             await setup.engine.dispose()
 
@@ -363,6 +402,23 @@ def test_whatsapp_connect_in_the_app_finishes_through_the_phones_browser(
                 assert done.json() == {"result": "connected"}
                 status = (await app.get(f"{BASE}/whatsapp/status")).json()
                 assert [n["displayNumber"] for n in status["numbers"]] == ["+91 80000 00000"]
+
+                # Started from Settings → Connected apps: back to that card.
+                card = await app.get(
+                    f"{BASE}/whatsapp/start",
+                    params={"return_to": "/settings/apps", "card": "whatsapp"},
+                )
+                card_state = parse_qs(urlparse(card.headers["location"]).query)["state"][0]
+                stopped = await app.get(
+                    f"{BASE}/whatsapp/callback", params={"error": "denied", "state": card_state}
+                )
+                assert stopped.headers["location"].endswith(
+                    "/settings/apps?connect_error=cancelled"
+                )
+                plain = await app.get(f"{BASE}/whatsapp/callback", params={"error": "denied"})
+                assert plain.headers["location"].endswith(
+                    "/organisation?tab=integrations&whatsapp=cancelled"
+                )  # from anywhere else, as before
         finally:
             await setup.engine.dispose()
 

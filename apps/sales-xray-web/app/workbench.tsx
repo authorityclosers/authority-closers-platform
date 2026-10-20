@@ -197,7 +197,7 @@ export function Workbench({ hasRunLink = false }: { hasRunLink?: boolean }) {
           className="brand"
           href="/"
           prefetch={false}
-          aria-label="Dipak’s Sales Xray home"
+          aria-label="Sales Xray home"
         >
           <span className="brand-symbol">
             <BrandMark />
@@ -248,7 +248,7 @@ export function Workbench({ hasRunLink = false }: { hasRunLink?: boolean }) {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
-            Dipak’s Sales Xray <ChevronRight size={14} />
+            Sales Xray <ChevronRight size={14} />
             <span>{nav.find((v) => v.id === tab)?.label}</span>
           </div>
           <div className="header-actions">

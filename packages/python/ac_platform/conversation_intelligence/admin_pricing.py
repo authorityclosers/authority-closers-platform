@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import date
 from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
@@ -20,6 +21,11 @@ _SNAPSHOT_SCHEMA = "ac.sales-xray.pricing-snapshot/1"
 _EVIDENCE_RELEASE_SHA = "0847db5d3ca1ed825b68c226713d0f52d11683b1"
 _SOURCE_DATE = "2026-09-14"
 _FX_USD_TO_INR = Decimal("100")
+# Providers bill in US dollars; every rupee figure here is dollars at this one planning
+# rate (set with the price sheet on 19 Sep 2026). A card's or bank's rate differs, so
+# Admin shows dollars first and names this rate beside every rupee amount.
+FX_USD_TO_INR = _FX_USD_TO_INR
+FX_SET_ON = date(2026, 9, 19)
 
 
 @dataclass(frozen=True, slots=True)
@@ -408,4 +414,10 @@ def estimate_provider_usage(
     }
 
 
-__all__ = ["PRICING_SNAPSHOTS", "PricingSnapshot", "estimate_provider_usage"]
+__all__ = [
+    "FX_SET_ON",
+    "FX_USD_TO_INR",
+    "PRICING_SNAPSHOTS",
+    "PricingSnapshot",
+    "estimate_provider_usage",
+]

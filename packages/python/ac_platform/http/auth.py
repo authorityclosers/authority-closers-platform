@@ -73,7 +73,12 @@ from ac_platform.identity.google_profile import (
 )
 from ac_platform.identity.google_profile_photo import fetch_google_profile_photo
 from ac_platform.identity.learner_consent import learner_consent_acknowledgement
-from ac_platform.identity.models import IdentityCommandIdempotency, Person, PersonStatus
+from ac_platform.identity.models import (
+    IdentityCommandIdempotency,
+    Person,
+    PersonStatus,
+    ProviderIdentity,
+)
 from ac_platform.identity.onboarding import (
     LearnerOnboardingService,
     OnboardingConcurrencyError,
@@ -96,8 +101,11 @@ from ac_platform.identity.password_auth import (
     PasswordPolicyError,
 )
 from ac_platform.identity.provider_link_email import (
+    PROVIDER_CONNECTED_ACTION,
     PROVIDER_LINKED_ACTION,
+    SIGN_IN_REFUSED_ACTION,
     enqueue_provider_linked_email,
+    enqueue_provider_notice,
 )
 from ac_platform.identity.sales_xray_profile import (
     get_sales_xray_profile,
@@ -106,6 +114,7 @@ from ac_platform.identity.sales_xray_profile import (
 )
 from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
 from ac_platform.identity.services import (
+    ConflictingProviderIdentityError,
     IdentityConcurrencyError,
     IdentityResolutionError,
     IdentityServiceError,
@@ -118,6 +127,7 @@ from ac_platform.identity.services import (
     VerifiedProviderAssertion,
     validate_verified_provider_assertion,
 )
+from ac_platform.identity.sign_in_methods import PROVIDER_ISSUERS, session_is_fresh
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
 from ac_platform.kernel.events import EventCategory, EventEnvelope
@@ -512,6 +522,12 @@ class EmailLoginCodeVerifyResponse(BaseModel):
     account_created: bool
     profile_complete: bool
     return_path: str
+
+
+class SignInMethodConnectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    return_to: str = Field(min_length=1, max_length=200)
 
 
 class GoogleCompletionRequest(BaseModel):
@@ -1524,6 +1540,9 @@ def _sales_xray_auth_result_response(
         "unavailable",
         "account_exists",
         "no_email",
+        "linked",
+        "already_linked",
+        "fresh_sign_in",
     ],
     transaction_cookie_names: tuple[str, ...],
     flow_id: UUID | None = None,
@@ -1603,6 +1622,58 @@ _OAUTH_STATE_PATTERN = re.compile(r"[A-Za-z0-9_-]{32,160}")
 _APPLE_RETURN_COOKIE_PATH = "/"
 _APPLE_RETURN_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{40,6000}\Z")
 _APPLE_FORM_POST_MAX_BYTES = 16 * 1024
+
+
+# Where Settings -> Connect may come back to: a plain same-site page path (never the
+# API or the sign-in pages) and, for the Settings dialog, a #settings[/<section>] hash.
+_SETTINGS_RETURN_PAGE = (
+    r"(?P<path>/(?:(?!(?:v1|auth)(?:[/#?]|$))"
+    r"[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+){0,5})?)"
+)
+SETTINGS_RETURN_PATTERN = re.compile(
+    _SETTINGS_RETURN_PAGE + r"(?P<hash>#settings(?:/(?P<section>[a-z-]{1,40}))?)?"
+)
+# The same place as the transaction keeps it: return paths carry no fragment, so the
+# hash rides as ?settings=<section>.
+_SETTINGS_RETURN_STORED = re.compile(
+    _SETTINGS_RETURN_PAGE + r"(?P<hash>\?settings=(?P<section>[a-z-]{0,40}))?"
+)
+
+
+def _settings_return_stored(return_to: str) -> str | None:
+    match = SETTINGS_RETURN_PATTERN.fullmatch(return_to)
+    if match is None:
+        return None
+    if match["hash"] is None:
+        return match["path"]
+    return f"{match['path']}?settings={match['section'] or ''}"
+
+
+def _settings_connect_response(
+    settings: Settings,
+    stored_return: str,
+    *,
+    transaction_cookie_names: tuple[str, ...],
+    connected: str | None = None,
+    error: Literal["in_use", "cancelled", "failed"] | None = None,
+) -> Response:
+    """Back to the Settings page with one bounded outcome in the query."""
+
+    match = _SETTINGS_RETURN_STORED.fullmatch(stored_return)
+    if match is None:  # pragma: no cover - only matching paths reach here
+        raise InvalidAuthTransaction("The settings return path is invalid.")
+    fragment = ""
+    if match["hash"] is not None:
+        fragment = "#settings" + (f"/{match['section']}" if match["section"] else "")
+    query = urlencode({"connected": connected} if connected else {"connect_error": error})
+    response = RedirectResponse(
+        f"{_surface_origin(settings, 'sales_xray')}{match['path']}?{query}{fragment}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+    _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
+    response.headers["cache-control"] = "no-store"
+    response.headers["pragma"] = "no-cache"
+    return response
 
 
 def _link_existing_email(surface: str, provider: str) -> bool | None:
@@ -1748,6 +1819,12 @@ def install_identity_http(
         **(extra_providers or {}),
     }
     apple_return_codec = AppleFormPostCodec(settings.oauth_transaction_secret.get_secret_value())
+    # What Settings may offer to connect: providers that are really configured here.
+    application.state.sign_in_provider_names = frozenset(
+        name
+        for name, configured in sign_in_providers.items()
+        if not isinstance(configured, DisabledIdentityProvider)
+    )
     codec = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value())
     completion_receipt_codec = SalesXrayCompletionReceiptCodec(
         settings.oauth_transaction_secret.get_secret_value()
@@ -2426,6 +2503,69 @@ def install_identity_http(
             now=consented_at,
         )
 
+    def _client_address(request: Request) -> str:
+        return client_identity(
+            request.scope,
+            trusted_proxy_addresses=settings.rate_limit_trusted_proxy_addresses,
+        )
+
+    async def _record_connected_provider(
+        database: AsyncSession,
+        request: Request,
+        *,
+        person_id: UUID,
+        provider: str,
+    ) -> None:
+        """Audit a Settings -> Connect link and email the account, in its transaction."""
+
+        tenant_id = settings.public_learner_tenant_id
+        if tenant_id is None:
+            raise PasswordRegistrationUnavailable("The public learner context is not configured.")
+        event = await AuditRepository(database).append(
+            tenant_id=tenant_id,
+            actor_person_id=person_id,
+            action=PROVIDER_CONNECTED_ACTION,
+            resource_type="person",
+            resource_id=person_id,
+            payload={"provider": provider, "ip_address": _client_address(request)},
+            reason=f"The person connected {_provider_label(provider)} sign-in in Settings.",
+        )
+        await enqueue_provider_notice(database, event)
+
+    async def _record_sign_in_refusal(
+        request: Request,
+        *,
+        provider: str,
+        error: ProviderEmailInUseError,
+    ) -> None:
+        """Record, apart from the rolled-back sign-in, that a provider was refused for an
+        account's email. Best effort: the person still gets the refusal if this fails."""
+
+        tenant_id = settings.public_learner_tenant_id
+        if tenant_id is None or error.person_id is None:
+            return
+        try:
+            async with sessions() as database, database.begin():
+                await AuditRepository(database).append(
+                    tenant_id=tenant_id,
+                    actor_person_id=None,
+                    actor_type="system",
+                    action=SIGN_IN_REFUSED_ACTION,
+                    resource_type="person",
+                    resource_id=error.person_id,
+                    payload={
+                        "provider": provider,
+                        "reason": error.reason,
+                        "ip_address": _client_address(request),
+                    },
+                    reason=(
+                        f"{_provider_label(provider)} sign-in was refused: its email "
+                        "belongs to this account, which it may not join."
+                    ),
+                )
+        except Exception:
+            _LOGGER.warning("sign_in_refusal_not_recorded")
+
     async def _record_google_profile_claims_best_effort(
         database: AsyncSession,
         *,
@@ -2755,10 +2895,23 @@ def install_identity_http(
             raise LearnerConsentRequired(
                 "The current learner acknowledgement must be accepted before continuing."
             )
+        connect_flow: UUID | None = None
         if surface == "sales_xray" and authorization_type is ProviderAuthorizationType.LINK:
-            raise InvalidAuthTransaction(
-                "Manage linked identities through your Academy account settings."
-            )
+            # Settings -> Connect (owner, 20 Oct 2026): a signed-in person adds a
+            # provider by page redirect, right after a sign-in. Not from the phone
+            # app's browser tab, which holds no Sales Xray session.
+            connect_flow = sales_xray_completion_flow_id(safe_return_path)
+            if connect_flow is None:
+                raise InvalidAuthTransaction(
+                    "Use the current Sales Xray completion flow to continue."
+                )
+            if app_challenge is not None:
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=(),
+                    flow_id=connect_flow,
+                )
         if (
             surface == "sales_xray"
             and authorization_type is ProviderAuthorizationType.AUTHENTICATE
@@ -2815,11 +2968,32 @@ def install_identity_http(
         async with sessions() as database, database.begin():
             identity = _identity(database)
             if authorization_type is ProviderAuthorizationType.LINK:
-                token = _session_cookie(request, settings)
-                if token is None:  # pragma: no cover - required session cookie narrows this value
-                    raise AuthenticationRequired("A valid Authority Closers session is required.")
-                resolved = await identity.resolve_actor(token)
+                try:
+                    token = _session_cookie(request, settings)
+                    if token is None:  # pragma: no cover - required cookie narrows this value
+                        raise AuthenticationRequired(
+                            "A valid Authority Closers session is required."
+                        )
+                    resolved = await identity.resolve_actor(token)
+                except (AuthenticationRequired, IdentityServiceError):
+                    if connect_flow is None:
+                        raise
+                    return _sales_xray_auth_result_response(
+                        settings,
+                        result="failed",
+                        transaction_cookie_names=(),
+                        flow_id=connect_flow,
+                    )
                 person_id = resolved.actor.person_id
+                if connect_flow is not None and not await session_is_fresh(
+                    database, resolved.actor.session_id, datetime.now(UTC)
+                ):
+                    return _sales_xray_auth_result_response(
+                        settings,
+                        result="fresh_sign_in",
+                        transaction_cookie_names=(),
+                        flow_id=connect_flow,
+                    )
             issued = await identity.begin_provider_authorization(
                 authorization_type,
                 audience,
@@ -2938,6 +3112,187 @@ def install_identity_http(
         response.headers["referrer-policy"] = "no-referrer"
         return response
 
+    @router.post("/me/sign-in-methods/{provider_name}/connect", name="sign_in_method_connect")
+    async def connect_sign_in_method(
+        request: Request,
+        provider_name: Literal["google", "apple", "facebook"],
+        body: SignInMethodConnectRequest,
+    ) -> Response:
+        """Settings -> Connect: the provider address for a signed-in, fresh session.
+
+        The answer sets the sign-in transaction cookie; the page then goes to
+        ``redirect_url`` (a full-page redirect, never a pop-up).
+        """
+
+        def refuse(status_code: int, code: str, detail: str) -> JSONResponse:
+            return JSONResponse(
+                {"detail": detail, "code": code},
+                status_code=status_code,
+                headers={"cache-control": "no-store", "pragma": "no-cache"},
+            )
+
+        _require_surface_host(request, settings, "sales_xray")
+        try:
+            require_safe_origin(request, settings)
+        except DomainError:
+            return refuse(403, "origin", "Use this Sales Xray page to continue.")
+        try:
+            presented_staff_key = staff_key(request, settings)
+        except AuthenticationRequired:
+            presented_staff_key = "refused"
+        if presented_staff_key is not None:
+            return refuse(403, "staff_key", "Sign in to connect a sign-in method.")
+        if SALES_XRAY_APP_USER_AGENT.search(request.headers.get("user-agent") or ""):
+            # The app opens provider pages in the phone's browser, which has no
+            # Sales Xray session to connect to.
+            return refuse(
+                409,
+                "app_not_supported",
+                "Connect sign-in methods from a computer or your phone's browser.",
+            )
+        stored_return = _settings_return_stored(body.return_to)
+        if stored_return is None:
+            return refuse(422, "return_to", "Come back to a Sales Xray page.")
+        selected_provider = sign_in_providers.get(provider_name)
+        if selected_provider is None or isinstance(selected_provider, DisabledIdentityProvider):
+            return refuse(404, "not_configured", "This sign-in method isn't offered here.")
+        try:
+            token = _session_cookie(request, settings)
+        except AuthenticationRequired:
+            return refuse(401, "sign_in", "Sign in to connect a sign-in method.")
+        if token is None:  # pragma: no cover - required session cookie narrows this value
+            return refuse(401, "sign_in", "Sign in to connect a sign-in method.")
+        async with sessions() as database, database.begin():
+            identity = _identity(database)
+            try:
+                resolved = await identity.resolve_actor(token)
+            except IdentityServiceError:
+                return refuse(401, "sign_in", "Sign in to connect a sign-in method.")
+            person_id = resolved.actor.person_id
+            if not await session_is_fresh(database, resolved.actor.session_id, datetime.now(UTC)):
+                return refuse(
+                    403,
+                    "fresh_sign_in",
+                    "For your safety, sign in again, then connect within 10 minutes.",
+                )
+            already = await database.scalar(
+                select(ProviderIdentity.id)
+                .where(
+                    ProviderIdentity.person_id == person_id,
+                    ProviderIdentity.issuer.in_(PROVIDER_ISSUERS[provider_name]),
+                )
+                .limit(1)
+            )
+            if already is not None:
+                return refuse(
+                    409,
+                    "already_connected",
+                    f"{_provider_label(provider_name)} is already connected.",
+                )
+            issued = await identity.begin_provider_authorization(
+                ProviderAuthorizationType.LINK,
+                selected_provider.audience,
+                person_id=person_id,
+            )
+        transaction = AuthTransaction.from_issued(
+            issued,
+            surface="sales_xray",
+            return_path=stored_return,
+            provider=provider_name,
+        )
+        response = JSONResponse(
+            {
+                "redirect_url": selected_provider.authorization_url(
+                    transaction,
+                    redirect_uri=_surface_callback_uri(settings, "sales_xray", provider_name),
+                )
+            },
+            headers={"cache-control": "no-store", "pragma": "no-cache"},
+        )
+        _prune_oauth_transaction_cookies(request, response, settings, codec)
+        _set_oauth_transaction_cookie(
+            response,
+            codec.encode(transaction),
+            settings,
+            state=transaction.state,
+        )
+        return response
+
+    async def _finish_settings_connect(
+        provider_name: str,
+        request: Request,
+        transaction: AuthTransaction,
+        *,
+        settings_return: str,
+        state_value: str,
+        code: str | None,
+        provider_error: str | None,
+        transaction_cookie_names: tuple[str, ...],
+    ) -> Response:
+        """Link the provider to the signed-in person; never a new or another account."""
+
+        def back(
+            *,
+            connected: str | None = None,
+            error: Literal["in_use", "cancelled", "failed"] | None = None,
+        ) -> Response:
+            return _settings_connect_response(
+                settings,
+                settings_return,
+                transaction_cookie_names=transaction_cookie_names,
+                connected=connected,
+                error=error,
+            )
+
+        if provider_error is not None:
+            return back(error="cancelled")
+        if code is None:
+            return back(error="failed")
+        try:
+            session_token = _session_cookie(request, settings, required=False)
+        except AuthenticationRequired:
+            session_token = None
+        if session_token is None:
+            return back(error="failed")
+        try:
+            assertion = await sign_in_providers.get(
+                provider_name, DisabledIdentityProvider()
+            ).exchange_code(
+                code,
+                transaction,
+                callback_state=state_value,
+                redirect_uri=_surface_callback_uri(settings, "sales_xray", provider_name),
+            )
+        except (IdentityProviderRejected, IdentityProviderUnavailable):
+            return back(error="failed")
+        try:
+            async with sessions() as database, database.begin():
+                identity = _identity(database)
+                linked, newly_linked = await identity.connect_provider_for_session(
+                    session_token,
+                    transaction.transaction_id,
+                    assertion,
+                    pkce_verifier=transaction.pkce_verifier,
+                )
+                if newly_linked:
+                    await _record_connected_provider(
+                        database,
+                        request,
+                        person_id=linked.person_id,
+                        provider=provider_name,
+                    )
+        except ConflictingProviderIdentityError:
+            return back(error="in_use")
+        except (
+            IdentityServiceError,
+            PasswordRegistrationUnavailable,
+            SQLAlchemyError,
+            OSError,
+            TimeoutError,
+        ):
+            return back(error="failed")
+        return back(connected=provider_name)
+
     @router.get("/auth/{provider_name}/callback", name="sales_xray_provider_auth_callback")
     async def sales_xray_provider_auth_callback(
         request: Request,
@@ -3035,6 +3390,7 @@ def install_identity_http(
         provider_error = error_values[0] if error_values else None
         transaction_cookie_names: tuple[str, ...] = ()
         completion_flow_id: UUID | None = None
+        settings_return: str | None = None
         try:
             transaction_cookie_name, encoded_transaction = _callback_oauth_transaction_cookie(
                 request,
@@ -3051,7 +3407,14 @@ def install_identity_http(
             _require_surface_host(request, settings, transaction.surface)
             if transaction.surface == "sales_xray":
                 completion_flow_id = sales_xray_completion_flow_id(transaction.return_path)
-                if completion_flow_id is None:
+                if (
+                    completion_flow_id is None
+                    and transaction.authorization_type is ProviderAuthorizationType.LINK
+                    and _SETTINGS_RETURN_STORED.fullmatch(transaction.return_path) is not None
+                ):
+                    # Settings -> Connect started by POST .../connect.
+                    settings_return = transaction.return_path
+                elif completion_flow_id is None:
                     raise InvalidAuthTransaction("The Sales Xray completion flow is invalid.")
             if (
                 transaction.surface == "sales_xray"
@@ -3065,11 +3428,6 @@ def install_identity_http(
                 raise InvalidAuthTransaction(
                     "The learner acknowledgement is not valid for this application surface."
                 )
-            if (
-                transaction.surface == "sales_xray"
-                and transaction.authorization_type is ProviderAuthorizationType.LINK
-            ):
-                raise InvalidAuthTransaction("Link identities through Academy account settings.")
             if not hmac.compare_digest(transaction.state, state_value):
                 raise InvalidAuthTransaction("The callback state does not match the transaction.")
             if transaction.provider != provider_name:
@@ -3080,6 +3438,13 @@ def install_identity_http(
                     request,
                     settings,
                     state=state_value,
+                )
+            if settings_return is not None:
+                return _settings_connect_response(
+                    settings,
+                    settings_return,
+                    transaction_cookie_names=transaction_cookie_names,
+                    error="failed",
                 )
             if (
                 settings.sales_xray_app_url is not None
@@ -3095,6 +3460,17 @@ def install_identity_http(
                 request,
                 settings,
                 error,
+                transaction_cookie_names=transaction_cookie_names,
+            )
+        if settings_return is not None:
+            return await _finish_settings_connect(
+                provider_name,
+                request,
+                transaction,
+                settings_return=settings_return,
+                state_value=state_value,
+                code=code,
+                provider_error=provider_error,
                 transaction_cookie_names=transaction_cookie_names,
             )
         app_handoff = transaction.app_challenge is not None
@@ -3432,12 +3808,28 @@ def install_identity_http(
                         raise AuthenticationRequired(
                             "A valid Authority Closers session is required."
                         )
-                    linked = await identity.link_provider_for_session(
-                        link_session_token,
-                        transaction.transaction_id,
-                        assertion,
-                        pkce_verifier=transaction.pkce_verifier,
-                    )
+                    if transaction.surface == "sales_xray":
+                        # Settings -> Connect: the provider's email may differ.
+                        linked, newly_linked = await identity.connect_provider_for_session(
+                            link_session_token,
+                            transaction.transaction_id,
+                            assertion,
+                            pkce_verifier=transaction.pkce_verifier,
+                        )
+                        if newly_linked:
+                            await _record_connected_provider(
+                                database,
+                                request,
+                                person_id=linked.person_id,
+                                provider=provider_name,
+                            )
+                    else:
+                        linked = await identity.link_provider_for_session(
+                            link_session_token,
+                            transaction.transaction_id,
+                            assertion,
+                            pkce_verifier=transaction.pkce_verifier,
+                        )
                     if provider_name == "google":
                         profile_claims = await _record_google_profile_claims_best_effort(
                             database,
@@ -3520,7 +3912,28 @@ def install_identity_http(
                 error,
                 transaction_cookie_names=transaction_cookie_names,
             )
+        except ConflictingProviderIdentityError as error:
+            # Connect: that provider account already signs in to another account.
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result=(
+                        "already_linked"
+                        if transaction.authorization_type is ProviderAuthorizationType.LINK
+                        else "failed"
+                    ),
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                    app_handoff=app_handoff,
+                )
+            return await _oauth_identity_problem_response(
+                request,
+                settings,
+                error,
+                transaction_cookie_names=transaction_cookie_names,
+            )
         except ProviderEmailInUseError as error:
+            await _record_sign_in_refusal(request, provider=provider_name, error=error)
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
@@ -3616,6 +4029,17 @@ def install_identity_http(
                     _refresh_google_profile_photo, *photo_refresh
                 )
             return handoff_page
+        if (
+            transaction.surface == "sales_xray"
+            and transaction.authorization_type is ProviderAuthorizationType.LINK
+        ):
+            # Connected; the session stays the one that started it.
+            return _sales_xray_auth_result_response(
+                settings,
+                result="linked",
+                transaction_cookie_names=transaction_cookie_names,
+                flow_id=completion_flow_id,
+            )
         if transaction.surface == "sales_xray" and not sales_xray_success:
             # A successful identity operation without a session/flow binding
             # must never be accepted by the browser as completed sign-in.

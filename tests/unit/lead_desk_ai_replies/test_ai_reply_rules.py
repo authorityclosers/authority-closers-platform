@@ -1,6 +1,7 @@
 """AI replies: what the rules decide before and after the model, and what the model sees."""
 
 import json
+from typing import Any
 
 import pytest
 
@@ -82,13 +83,6 @@ def test_the_model_sees_only_the_business_the_lead_and_this_conversation() -> No
         HOMES,
         channel="whatsapp",
         lead_name="Asha Fictional",
-        payload={
-            "field_data": [
-                {"name": "full_name", "values": ["Asha Fictional"]},
-                {"name": "phone_number", "values": ["+919999000001"]},
-                {"name": "budget", "values": ["Under 1 crore"]},
-            ]
-        },
         turns=[
             prompt.Turn("in", "Hi"),
             prompt.Turn("out", "Hello! How can we help?"),
@@ -98,11 +92,94 @@ def test_the_model_sees_only_the_business_the_lead_and_this_conversation() -> No
     assert "Fictional Homes" in system and "Site office open 10am-7pm" in system
     assert "Devanagari" in system and "Never give prices" in system
     assert "WhatsApp" in system and "not a general assistant" in system
-    assert "Lead's first name: Asha" in user and "- budget: Under 1 crore" in user
-    assert "+919999000001" not in user  # contact details aren't sent
+    assert "Lead's first name: Asha" in user and "form" not in user.casefold()
     assert json.dumps("क्या साइट विजिट रविवार को हो सकती है?", ensure_ascii=False) in user
-    coaching, _ = prompt.build(COACHING, channel="instagram", lead_name="", payload=None, turns=[])
+    assert "unknown" in prompt.build(HOMES, channel="whatsapp", lead_name="", turns=[])[1]
+    coaching, _ = prompt.build(COACHING, channel="instagram", lead_name="", turns=[])
     assert "exactly as the business facts state them" in coaching and "Instagram" in coaching
+
+
+def test_no_lead_ads_data_reaches_the_model() -> None:
+    """The Leads app's App Review declared that no AI provider receives lead data from
+    Meta: the prompt has no form answers at all, and no name for a lead-ads lead."""
+    import asyncio
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from ac_platform.lead_desk.ai_replies import service
+
+    class Rows:
+        def __init__(self, rows: list[Any]) -> None:
+            self.rows = rows
+
+        def all(self) -> list[Any]:
+            return self.rows
+
+    now = datetime.now(UTC)
+    rows = [
+        SimpleNamespace(
+            id=uuid4(),
+            direction="out",
+            kind="template",
+            body="Hi Asha, thanks!",
+            meta_time=now,
+            created_at=now,
+        ),
+        SimpleNamespace(
+            id=uuid4(),
+            direction="in",
+            kind="text",
+            body="Site visit on Sunday?",
+            meta_time=now,
+            created_at=now,
+        ),
+    ]
+
+    class Db:
+        async def get(self, model: Any, key: Any) -> None:
+            return None  # no Lead Desk settings: the default (suggest, no profile)
+
+        async def scalars(self, query: Any) -> Rows:
+            return Rows(list(reversed(rows)))  # newest first, as the query orders them
+
+    lead = SimpleNamespace(
+        id=uuid4(),
+        tenant_id=uuid4(),
+        name="Asha Fictional",
+        source="meta",
+        phone="+919999000001",
+        owner_person_id=None,
+        payload={"field_data": [{"name": "budget", "values": ["Under 1 crore"]}]},
+    )
+    ready = asyncio.run(service.prepare(Db(), lead, "whatsapp", now=now))  # type: ignore[arg-type]
+    assert ready.lead_name == ""
+    assert [turn.text for turn in ready.turns] == ["Site visit on Sunday?"]
+    _, user = prompt.build(HOMES, channel="whatsapp", lead_name=ready.lead_name, turns=ready.turns)
+    assert "Asha" not in user and "crore" not in user and "+91" not in user
+
+
+def test_try_it_sends_the_sample_and_the_profile_only() -> None:
+    import asyncio
+    from uuid import uuid4
+
+    from ac_platform.lead_desk.ai_replies import service
+
+    class Db:
+        async def get(self, model: Any, key: Any) -> Any:
+            from types import SimpleNamespace
+
+            return SimpleNamespace(config={rules.KEY: rules.as_config(HOMES)})
+
+    ready = asyncio.run(
+        service.prepare_try(Db(), uuid4(), "instagram", "Sunday site visit?")  # type: ignore[arg-type]
+    )
+    assert (ready.lead_id, ready.lead_name, ready.window_open) == (None, "", True)
+    assert ready.settings == HOMES and service.decide(ready) is None
+    system, user = prompt.build(
+        ready.settings, channel=ready.channel, lead_name=ready.lead_name, turns=ready.turns
+    )
+    assert "Fictional Homes" in system and "Sunday site visit?" in user and "unknown" in user
 
 
 def test_the_answer_is_read_strictly() -> None:

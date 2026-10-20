@@ -130,6 +130,27 @@ def test_an_admin_makes_a_key_and_an_app_uses_it(postgres_harness: Any, tmp_path
                     leads = await app.get("/v1/api/leads", headers=bearer)
                     assert leads.status_code == 200
                     assert added.json()["id"] in leads.text
+                    second = await app.post(
+                        "/v1/api/leads",
+                        headers=bearer,
+                        json={"name": "Ravi Rao", "phone": "+919800000002"},
+                    )
+                    assert second.status_code == 201, second.text
+                    # limit (1-50) pages the list; offset goes on from next_offset.
+                    page = (await app.get("/v1/api/leads?limit=1", headers=bearer)).json()
+                    assert (len(page["leads"]), page["next_offset"]) == (1, 1)
+                    assert page["total"] >= 2
+                    rest = (await app.get("/v1/api/leads?limit=1&offset=1", headers=bearer)).json()
+                    assert len(rest["leads"]) == 1
+                    assert rest["leads"][0]["lead_id"] != page["leads"][0]["lead_id"]
+                    assert (
+                        len(
+                            (await app.get("/v1/api/leads?limit=500", headers=bearer)).json()[
+                                "leads"
+                            ]
+                        )
+                        == page["total"]
+                    )  # at most 50 a page
                     one = await app.get(f"/v1/api/leads/{added.json()['id']}", headers=bearer)
                     assert one.status_code == 200 and "Asha Rao" in one.text
 

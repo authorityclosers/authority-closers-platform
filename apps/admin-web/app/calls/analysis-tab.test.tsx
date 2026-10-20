@@ -246,3 +246,75 @@ it("lists moments with their reading and judges them in psychology terms", async
   ]);
   vi.unstubAllGlobals();
 });
+
+it("shows the call's stages in one line with code, time and cost", async () => {
+  const staged = normalizeCallDetail({
+    call: { recording_id: "r-3" },
+    stages: [
+      {
+        key: "received",
+        label: "Received",
+        status: "done",
+        started_at: "2026-10-20T09:00:00Z",
+        finished_at: "2026-10-20T09:00:00Z",
+      },
+      {
+        key: "audio_check",
+        label: "Audio check",
+        code: "C1",
+        status: "done",
+        started_at: "2026-10-20T09:00:00Z",
+        finished_at: "2026-10-20T09:00:04Z",
+        duration_ms: 4000,
+      },
+      {
+        key: "facts",
+        label: "Facts",
+        code: "C4",
+        status: "done",
+        started_at: "2026-10-20T09:00:42Z",
+        finished_at: "2026-10-20T09:01:10Z",
+        duration_ms: 28_000,
+        cost_inr: 0.42,
+        provider: "gemini",
+        model: "gemini-3.8-flash",
+        attempts: 3,
+        tokens_in: 3000,
+        tokens_out: 600,
+        detail: "3 tasks · 1 failed or unsure",
+      },
+      {
+        key: "coaching",
+        label: "Report, coaching",
+        code: "C5",
+        status: "running",
+        started_at: "2026-10-20T09:01:11Z",
+      },
+      {
+        key: "review",
+        label: "Human review",
+        status: "done",
+        started_at: "2026-10-22T09:00:00Z",
+        finished_at: "2026-10-22T09:30:00Z",
+        detail: "4 answers from 1 reviewer",
+      },
+    ],
+  });
+  await act(async () =>
+    root.render(
+      <AnalysisTab detail={staged} recordingId="r-3" onSeek={() => {}} />,
+    ),
+  );
+  const strip = host.querySelector('[aria-label="Stages"]')!;
+  const items = [...strip.querySelectorAll("li")];
+  // Received is left to the full map; the rest are here.
+  expect(items.map((item) => item.getAttribute("data-status"))).toEqual([
+    "done",
+    "done",
+    "running",
+    "done",
+  ]);
+  expect(items[1].textContent).toBe("C4Facts28.0 s · ₹0.42");
+  expect(items[1].getAttribute("title")).toContain("gemini · gemini-3.8-flash");
+  expect(host.querySelectorAll("button")).toHaveLength(0);
+});

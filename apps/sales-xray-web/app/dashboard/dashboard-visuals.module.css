@@ -83,25 +83,27 @@
   cursor: default;
 }
 
+/* Solid bars (3:1 and more against the card in both themes); while a day
+   is read, the other days step back (v2). */
 .day i {
   width: 100%;
-  border-radius: 2px 2px 0 0;
+  border-radius: 3px 3px 1px 1px;
   background: var(--lx-teal);
-  opacity: 0.42;
-  transition: opacity var(--lx-dur-quick, 120ms) ease;
+  transition: opacity var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.bars:has(> .day[data-focus]) .day:not([data-focus]) i {
+  opacity: 0.38;
+}
+
+@media (hover: hover) {
+  .bars:has(> .day:hover) .day:not(:hover) i {
+    opacity: 0.38;
+  }
 }
 
 .day i[data-zero] {
   height: 0;
-}
-
-.day[data-today] i {
-  opacity: 1;
-}
-
-.day[data-focus] i,
-.day:hover i {
-  opacity: 1;
 }
 
 .day:focus-visible {

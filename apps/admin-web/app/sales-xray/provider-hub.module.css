@@ -1,0 +1,528 @@
+/* The Providers hub: a searchable list beside the chosen provider's models. Tokens only. */
+
+.hub {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 960px) {
+  .hub {
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  }
+
+  .back {
+    display: none;
+  }
+}
+
+/* Phones: a chosen provider gets the whole width, with a way back. */
+@media (max-width: 959px) {
+  .hub[data-chosen] .list {
+    display: none;
+  }
+}
+
+.list,
+.detail {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.search {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md, 15px);
+}
+
+.search:focus-visible {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--sx-accent) 25%, transparent);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+.providers,
+.models {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.provider {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 14px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  text-decoration: none;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.provider:hover {
+  border-color: var(--sx-line-strong);
+}
+
+.provider:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+.provider[aria-current="true"] {
+  border-color: var(--sx-accent);
+  background: color-mix(in oklab, var(--sx-accent) 7%, var(--sx-surface));
+}
+
+.providerText {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.providerText small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.4;
+}
+
+.providerMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 2px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* A provider's mark: initials on a colour of its own (no brand artwork). */
+.mark {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 11px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.mark[data-provider="openrouter"] {
+  background: color-mix(in oklab, var(--sx-ink) 88%, transparent);
+  color: var(--sx-surface);
+}
+
+.mark[data-provider="gemini"] {
+  background: color-mix(in oklab, var(--sx-accent) 20%, transparent);
+  color: var(--sx-accent);
+}
+
+.mark[data-provider="openai"],
+.mark[data-provider="elevenlabs"] {
+  background: var(--sx-ink);
+  color: var(--sx-surface);
+}
+
+.mark[data-provider="anthropic"] {
+  background: color-mix(in oklab, var(--sx-warn) 26%, transparent);
+  color: var(--sx-ink);
+}
+
+.mark[data-provider="groq"],
+.mark[data-provider="sarvam"] {
+  background: color-mix(in oklab, var(--sx-bad) 18%, transparent);
+  color: var(--sx-bad);
+}
+
+.mark[data-provider="deepseek"],
+.mark[data-provider="deepgram"] {
+  background: color-mix(
+    in oklab,
+    var(--sx-info, var(--sx-accent)) 20%,
+    transparent
+  );
+  color: var(--sx-info, var(--sx-accent));
+}
+
+.mark[data-provider="mistral"],
+.mark[data-provider="assemblyai"] {
+  background: color-mix(in oklab, var(--sx-warn) 30%, transparent);
+  color: var(--sx-ink);
+}
+
+.mark[data-provider="together"],
+.mark[data-provider="fireworks"],
+.mark[data-provider="cerebras"],
+.mark[data-provider="gladia"],
+.mark[data-provider="speechmatics"] {
+  background: color-mix(in oklab, var(--sx-good) 18%, transparent);
+  color: var(--sx-good);
+}
+
+.back {
+  justify-self: start;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.detailHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.detailHead > div {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.detailHead h2 {
+  margin: 0;
+  font-size: var(--sx-text-lg, 18px);
+}
+
+.detailHead p {
+  margin: 2px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.console {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.keyNote,
+.pick,
+.none,
+.source {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.keyNote {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+}
+
+.source {
+  font-size: var(--sx-text-xs);
+}
+
+.modelTools {
+  display: grid;
+  gap: 8px;
+}
+
+.count {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.model {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(
+      0,
+      0.9fr
+    );
+  gap: 6px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--sx-line);
+  font-size: var(--sx-text-sm);
+}
+
+@media (max-width: 720px) {
+  .model {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.modelName {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.modelName code {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
+.price {
+  display: grid;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.price small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .provider {
+    transition: none;
+  }
+}
+
+/* Who does each job. */
+.runsOn {
+  display: grid;
+  gap: 2px;
+}
+
+.runsOn code {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.muted {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.change {
+  display: grid;
+  gap: 6px;
+}
+
+.estimates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  list-style: none;
+}
+
+.estimates b {
+  color: var(--sx-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.estimates li[data-current] b {
+  color: var(--sx-accent);
+}
+
+/* Phones: one card per job; what it runs on beside its cost, the change below. */
+.cardLine {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardLine > span:last-child {
+  color: var(--sx-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Health and spend here (slice 4): plain numbers, the latest failure and what fixes it. */
+.health {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 12px;
+}
+
+.health[data-state="attention"] {
+  border-color: var(--sx-warn);
+}
+
+.health h3 {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.spend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.spend dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.spend dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.spend small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.failures {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.latest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.latest p {
+  flex: 1 1 260px;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+/* A provider's key here (slice 2): last four characters, the test, and the sealed form. */
+.keyPanel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 12px;
+}
+
+.keyPanel h3 {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.keyLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.keyLine code {
+  color: var(--sx-ink);
+}
+
+.keyResult {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.keyForm {
+  display: grid;
+  gap: 8px;
+}
+
+.keyForm label {
+  display: grid;
+  gap: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.keyForm input {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 10px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.keyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

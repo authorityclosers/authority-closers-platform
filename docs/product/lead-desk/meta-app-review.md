@@ -103,6 +103,14 @@ hands the conversation to a person (and alerts the seller) on complaints, price 
 discount talk, anything it can't answer from the business's information, or when the
 lead asks for a person, and it stops automatic messages when the lead says STOP.
 
+**Data handling (AI replies).** The processor is Google LLC (the Gemini API), which is
+named on the privacy page (/privacy, "AI replies to messages"). For each draft it gets
+only the business's own profile, the words of up to the last 10 messages of that one
+conversation, and the lead's first name, but only when the lead did not come from lead
+ads. Nothing from Meta lead ads (`leads_retrieval`) is ever sent: no form answers, and
+no phone number or email saved with a lead. AI replies run only while Sales Xray's Admin
+has them switched on for that environment, and within its spending cap.
+
 **Record (screencast 1, "send a message").** A test phone writes "Is a site visit
 possible on Sunday?" to the test number → the lead appears in Leads with the message →
 the AI draft appears in the conversation → the seller taps Send → the reply arrives on

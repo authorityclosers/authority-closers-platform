@@ -174,3 +174,39 @@ it("turns Make off at two active keys", async () => {
   await act(async () => root.render(<StaffKeys data={full} />));
   expect(button("Make a staff key").disabled).toBe(true);
 });
+
+it("asks for admin:read only when its box is ticked", async () => {
+  const fetcher = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          id: "k-3",
+          name: "Agent",
+          prefix: "ac_dev_aaaaaaaa",
+          scopes: ["settings:read", "admin:read"],
+          state: "active",
+          key: KEY,
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const one = normalizeStaffKeys({ keys: [], limits: { active: 2 } });
+  await act(async () => root.render(<StaffKeys data={one} />));
+  await act(async () => button("Make a staff key").click());
+  await type(
+    host.querySelector<HTMLInputElement>('input[aria-label="Key name"]')!,
+    "Agent",
+  );
+  const reads = [...host.querySelectorAll("label")].find((label) =>
+    label.textContent?.includes("May read calls and health"),
+  )!;
+  await act(async () => reads.querySelector("input")!.click());
+  await act(async () => button("Make key").click());
+  const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+  expect(JSON.parse(String(init.body))).toEqual({
+    name: "Agent",
+    scopes: ["settings:read", "admin:read"],
+  });
+  expect(host.textContent).toContain("content-free reads");
+});

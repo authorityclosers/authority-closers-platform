@@ -12,13 +12,15 @@
   align-items: center;
   gap: var(--lx-space-3);
   padding: var(--lx-space-3) var(--lx-space-4);
-  border: 1px solid var(--lx-line);
+  border: 1px solid var(--sx-glass-edge);
   border-radius: var(--lx-radius-lg);
-  background: var(--lx-surface);
-  box-shadow: var(--lx-shadow-2);
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
   color: var(--lx-ink);
   pointer-events: auto;
-  animation: lxToastIn var(--lx-dur-move) var(--lx-ease-move);
+  animation: lxToastIn var(--sx-dur-sheet) var(--sx-spring);
 }
 
 .copy {

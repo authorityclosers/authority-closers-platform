@@ -14,7 +14,7 @@ import { useMemo, useState } from "react";
 import { Badge, type Tone } from "../ui/kit";
 import type { CallDetail, Evidence } from "./call-detail-data";
 import { clock } from "./call-data";
-import { rupees } from "./call-map-data";
+import { STAGE_STATUS_LABEL, duration, rupees } from "./call-map-data";
 import {
   myAnswers,
   othersOn,
@@ -38,6 +38,9 @@ const SENTIMENT_TONE: Record<string, Tone> = {
   neutral: "neutral",
   negative: "bad",
 };
+
+/** The stages the strip shows: the main analysis (C1 to C6), both reads and review. */
+const STRIP = new Set(["fast", "deep", "pointer_review", "review"]);
 
 /** Moments shown before "Show all". */
 const FIRST_MOMENTS = 12;
@@ -96,6 +99,9 @@ export function AnalysisTab({
   const newest = (pipeline: string) =>
     detail.runs.find((run) => run.pipeline === pipeline)?.state ?? null;
   const current = detail.objects.filter((item) => item.state === "current");
+  const strip = detail.stages.filter(
+    (stage) => stage.code !== null || STRIP.has(stage.key),
+  );
 
   return (
     <div className={styles.tab}>
@@ -120,6 +126,34 @@ export function AnalysisTab({
           Full map, objects and runs
         </Link>
       </p>
+      {strip.length ? (
+        <ol className={styles.stages} aria-label="Stages">
+          {strip.map((stage) => (
+            <li
+              key={stage.key}
+              data-status={stage.status}
+              title={[
+                stage.label,
+                STAGE_STATUS_LABEL[stage.status],
+                [stage.provider, stage.model].filter(Boolean).join(" · "),
+                stage.detail,
+              ]
+                .filter(Boolean)
+                .join("\n")}
+            >
+              {stage.code ? <b>{stage.code}</b> : null}
+              {stage.label}
+              {stage.durationMs !== null || stage.costInr !== null ? (
+                <span>
+                  {[duration(stage.durationMs), rupees(stage.costInr)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
       {groups.length ? (
         groups.map((group) => (
           <section

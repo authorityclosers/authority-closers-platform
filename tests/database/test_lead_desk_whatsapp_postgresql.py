@@ -377,6 +377,24 @@ def test_whatsapp_conversations_from_connect_to_sla(
 
                 inbox_rows = (await client.get(f"{BASE}/whatsapp/inbox")).json()
                 assert {row["leadName"] for row in inbox_rows} == {"Asha Patil", "Ravi Kumar"}
+                # The Chats screen's fields: number, kind, direction, status, clock, owner.
+                ravi = next(row for row in inbox_rows if row["leadName"] == "Ravi Kumar")
+                assert (ravi["lastDirection"], ravi["lastKind"], ravi["lastStatus"]) == (
+                    "out",
+                    "template",
+                    "sent",
+                )
+                assert ravi["waitingSince"] is None and ravi["accountId"] == number_id
+                assert ravi["place"].startswith("WhatsApp · +")
+                assert ravi["ownerId"] is None or ravi["ownerName"]
+                chats = (await client.get(f"{BASE}/chats")).json()
+                assert set(chats["sla"]) == {"on", "minutes"} and chats["generatedAt"]
+                assert {t["leadName"] for t in chats["threads"]} == {"Asha Patil", "Ravi Kumar"}
+                assert {t["channel"] for t in chats["threads"]} == {"whatsapp"}
+                # Read marks (0113): nobody here has opened these chats yet.
+                assert all(t["unread"] >= 0 for t in chats["threads"])
+                assert all(t["key"].startswith(f"whatsapp:{number_id}:") for t in chats["threads"])
+                assert "919811100011" not in str([t["key"] for t in chats["threads"]])
 
                 # ----- templates: create one for review, delete it -----
                 made = await client.post(

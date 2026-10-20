@@ -53,3 +53,16 @@ it("lights the desktop rail icon from the address too", () => {
   expect(shellActiveFor("/", "dashboard")).toBe("dashboard");
   expect(shellActiveFor(null, "prospects")).toBe("prospects");
 });
+
+it("keeps Chats inside the Leads tab on phones, with its own rail icon (owner, 20 Oct)", () => {
+  expect(phoneTabFor("/chats", "analyse")).toBe("leads");
+  expect(phoneTabFor(null, "chats")).toBe("leads");
+  expect(shellActiveFor("/chats", "analyse")).toBe("chats");
+  expect(phoneTabFor("/chatsroom", undefined)).toBeNull();
+});
+
+it("lights the account entry on every Settings page, loading or not", () => {
+  expect(shellActiveFor("/settings", "analyse")).toBe("account");
+  expect(shellActiveFor("/settings/apps", "analyse")).toBe("account");
+  expect(phoneTabFor("/settings/team", undefined)).toBe("more");
+});

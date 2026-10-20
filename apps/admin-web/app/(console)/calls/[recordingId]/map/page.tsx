@@ -8,6 +8,7 @@ import { EngineObjectsView } from "@/app/calls/engine-objects";
 import { LiveRefresh } from "@/app/calls/live-refresh";
 import { ObjectsTable } from "@/app/calls/objects-table";
 import { PipelineGraph } from "@/app/calls/pipeline-graph";
+import { StageTable } from "@/app/calls/stage-table";
 import { adminRead } from "@/app/lib/server-api";
 import { KIND_BADGE, KIND_TONE } from "@/app/lib/workspaces";
 import {
@@ -31,7 +32,7 @@ const BRANCH_LABEL: Record<Branch | "call", string> = {
   main: "Main",
   fast: "Fast read",
   deep: "Deep read",
-  report: "Report",
+  report: "Analysis and review",
 };
 
 const RUN_TONE: Record<string, Tone> = {
@@ -122,6 +123,12 @@ export default async function CallMapPage({
         sub={`${detail.stages.filter((stage) => stage.status === "done").length} of ${detail.stages.length} stages done · hover a stage for model, tokens and attempts`}
       >
         <PipelineGraph stages={detail.stages} edges={detail.edges} />
+      </Panel>
+      <Panel
+        title="Stages"
+        sub="When each started after the call arrived, how long it took, tokens, model and cost"
+      >
+        <StageTable stages={detail.stages} />
       </Panel>
       <Panel
         title="Objects"

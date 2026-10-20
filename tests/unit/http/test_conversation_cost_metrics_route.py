@@ -15,9 +15,11 @@ async def test_metrics_route_bounds_its_filters(admin_client, monkeypatch) -> No
     client, _database = admin_client
     seen: dict[str, Any] = {}
 
-    async def summary(service, actor, *, days, environment, tests, call_sort, call_steps):
+    async def summary(
+        service, actor, *, days, environment, tests, call_sort, call_steps, company, stage
+    ):
         seen.update(days=days, environment=environment, tests=tests, root=service.store_root)
-        seen.update(call_sort=call_sort, call_steps=call_steps)
+        seen.update(call_sort=call_sort, call_steps=call_steps, company=company, stage=stage)
         return {"overview": {}}
 
     monkeypatch.setattr(AdminCostMetrics, "summary", summary)
@@ -33,7 +35,16 @@ async def test_metrics_route_bounds_its_filters(admin_client, monkeypatch) -> No
         "root": None,
         "call_sort": "newest",
         "call_steps": False,
+        "company": None,
+        "stage": None,
     }
+    company = "4a1b2c3d-0000-4000-8000-00000000c0de"
+    assert (
+        await client.get(
+            "/v1/admin/conversation/metrics", params={"company": company, "stage": "CDF"}
+        )
+    ).status_code == 200
+    assert seen["company"] == company and seen["stage"] == "CDF"
     assert (await client.get("/v1/admin/conversation/metrics")).status_code == 200
     assert seen["days"] == 30 and seen["environment"] == "all" and seen["tests"] is False
     for params in (
@@ -42,6 +53,8 @@ async def test_metrics_route_bounds_its_filters(admin_client, monkeypatch) -> No
         {"env": "laptop"},
         {"tests": "2"},
         {"q": "x"},
+        {"company": "short"},
+        {"stage": "much-too-long"},
     ):
         assert (
             await client.get("/v1/admin/conversation/metrics", params=params)

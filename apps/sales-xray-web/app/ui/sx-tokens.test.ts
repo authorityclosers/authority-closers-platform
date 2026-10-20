@@ -27,7 +27,31 @@ it("allows three text sizes plus title and figure styles", () => {
   const sizes = [...tokens.matchAll(/--sx-text-[\w-]+:\s*([^;]+);/g)].map(
     ([, value]) => value.match(/(\d+)px/)?.[1],
   );
-  expect(sizes).toEqual(["12", "13", "14", "15", "20", "24"]);
+  // v2 (owner, 20 Oct): a 17 px headline for sheets and phone titles, and
+  // one large title.
+  expect(sizes).toEqual(["12", "13", "14", "15", "17", "20", "24", "28"]);
+});
+
+it("keeps glass on one material with solid fallbacks (design system v2)", () => {
+  const code = tokens.replace(/\/\*[\s\S]*?\*\//g, "");
+  expect(code).toMatch(
+    /\.sx-glass\s*\{[^}]*backdrop-filter:\s*var\(--sx-glass-blur\)/,
+  );
+  expect(code).toMatch(/@supports not \(\s*\(backdrop-filter/);
+  expect(code).toMatch(
+    /prefers-reduced-transparency: reduce[^@]*--sx-glass: var\(--sx-elevated\)/,
+  );
+  expect(code).toMatch(
+    /prefers-contrast: more[^@]*--sx-glass: var\(--sx-elevated\)/,
+  );
+});
+
+it("gives motion springs and a reduced-motion answer", () => {
+  const code = tokens.replace(/\/\*[\s\S]*?\*\//g, "");
+  expect(code).toMatch(/--sx-spring:\s*linear\(/);
+  expect(code).toMatch(
+    /prefers-reduced-motion: reduce\)\s*\{\s*:root\s*\{[^}]*--sx-spring: var\(--sx-ease-out\)/,
+  );
 });
 
 it("is loaded for every screen", () => {

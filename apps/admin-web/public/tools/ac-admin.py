@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ac-admin: Authority Closers Admin settings from the command line, and as an MCP server.
+"""ac-admin: Authority Closers Admin from the command line, and as an MCP server.
 
 Download from Admin (Accounts -> Integrations -> Staff keys). One file, Python 3.10+,
 standard library only. Signs in with a staff key made in Admin by a verified control
@@ -13,12 +13,19 @@ so it stays out of shell history and process lists, and this tool never prints i
     ac-admin settings list                 # every setting, its value now, whether it changes here
     ac-admin settings get ID               # one setting: value, revision, options or bounds
     ac-admin settings set ID VALUE [--reason TEXT]
+    ac-admin orgs                          # organisations and workspaces, with their kind
+    ac-admin calls [--organisation ID] [--status S] [--limit N]   # newest calls first
+    ac-admin call-map CALL_ID              # one call's stages: C1 to C6, reads, review
+    ac-admin review-queue [--pipeline KEY] [--limit N]
+    ac-admin health [--days N]             # analysis health: finished, failed, stuck, cost
+    ac-admin raise AREA [--to RUPEES]      # one click: raise an AI cap and resume the waiting
     ac-admin mcp                           # an MCP server on stdio (for AI assistants)
 
-A key reaches only the settings Admin lists (GET /v1/admin/settings); each change goes
-through that area's own route, with its checks and audit. Output is JSON. Exit status 0
-on success, 1 when Admin refused (its answer is printed), 2 on a usage or connection
-problem.
+A key reaches the settings Admin lists (GET /v1/admin/settings); each change goes through
+that area's own route, with its checks and audit. With admin:read it also makes
+content-free reads (ids, states, times, counts, costs, model names; never transcripts,
+quotes or report text). Output is JSON. Exit status 0 on success, 1 when Admin refused
+(its answer is printed), 2 on a usage or connection problem.
 """
 
 from __future__ import annotations
@@ -34,13 +41,29 @@ import urllib.request
 import uuid
 from collections.abc import Callable, Mapping
 from typing import Any
+from urllib.parse import urlencode
 
 DEFAULT_BASE = "https://admin.authorityclosers.com"
-VERSION = "1.0.0"
+VERSION = "1.2.0"
 TIMEOUT = 30
 TRUE = {"true", "on", "yes", "1"}
 FALSE = {"false", "off", "no", "0"}
 KEY_SHAPE = re.compile(r"ac_[a-z]{2,8}_[A-Za-z0-9_-]{20,}")
+# The one-click raises: area -> (where it reads, where it raises, the cap's pointer).
+RAISES: dict[str, tuple[str, str, str]] = {
+    "call-data-fast": (
+        "/v1/admin/call-data",
+        "/v1/admin/call-data/raise",
+        "/config/fast/daily_cap_inr",
+    ),
+    "call-data-deep": (
+        "/v1/admin/call-data",
+        "/v1/admin/call-data/raise",
+        "/config/deep/daily_cap_inr",
+    ),
+    "lead-ai": ("/v1/admin/lead-desk-ai", "/v1/admin/lead-desk-ai/raise", "/config/cap_inr"),
+}
+CALL_ID = re.compile(r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
 
 
 class ApiError(Exception):
@@ -169,6 +192,59 @@ class Client:
             "help": item.get("help"),
         }
 
+    # Content-free reads (the key needs admin:read).
+
+    def read(self, path: str, query: Mapping[str, Any] | None = None) -> Any:
+        chosen = {key: value for key, value in (query or {}).items() if value not in (None, "")}
+        return self.call("GET", path + (f"?{urlencode(chosen)}" if chosen else ""))
+
+    def organisations(self) -> Any:
+        return self.read("/v1/platform/workspaces")
+
+    def calls(
+        self, organisation: str | None = None, status: str | None = None, limit: Any = 50
+    ) -> Any:
+        if organisation is not None and not CALL_ID.match(organisation):
+            raise UsageError("--organisation takes an organisation id (see: ac-admin orgs).")
+        return self.read(
+            "/v1/admin/conversation/calls",
+            {"organisation": organisation, "status": status, "limit": _bounded(limit, 100)},
+        )
+
+    def call_map(self, call_id: str) -> Any:
+        if not CALL_ID.match(call_id):
+            raise UsageError("Give a call id (see: ac-admin calls).")
+        return self.read(f"/v1/admin/call-data/calls/{call_id.lower()}/map")
+
+    def review_queue(self, pipeline: str = "analysis-sales", limit: Any = 50) -> Any:
+        return self.read(
+            "/v1/admin/conversation/review/queue",
+            {"pipeline": pipeline, "limit": _bounded(limit, 100)},
+        )
+
+    def health(self, days: Any = 7) -> Any:
+        return self.read("/v1/admin/conversation/health", {"days": _bounded(days, 30)})
+
+    def raise_cap(self, area: str, to: Any = None) -> Any:
+        """One click, as in Admin: a higher cap, and the waiting work resumes. Call data
+        needs --to (rupees a day); AI replies take the next preset when it is left out."""
+        if area not in RAISES:
+            raise UsageError(f"Choose one of: {', '.join(RAISES)}")
+        read, change, cap = RAISES[area]
+        answer = self.call("GET", read)
+        now = pointer(answer, cap)
+        body: dict[str, Any] = {"expected_revision": pointer(answer, "/revision")}
+        if to is not None:
+            target = _bounded(to, 50_000)
+            if isinstance(now, int) and target <= now:
+                raise UsageError(f"Raise it above the cap now, ₹{now}.")
+            body["cap_inr" if area == "lead-ai" else "daily_cap_inr"] = target
+        elif area != "lead-ai":
+            raise UsageError("Give --to: the new daily cap in rupees.")
+        if area != "lead-ai":
+            body["pipeline"] = area.rsplit("-", 1)[1]
+        return self.call("POST", change, body, idempotent=True)
+
     def set(self, setting_id: str, text: str, reason: str | None = None) -> Any:
         item = self.setting(setting_id)
         write = item.get("write")
@@ -180,6 +256,18 @@ class Client:
         return self.call(
             write["method"], write["path"], body, idempotent=bool(write.get("idempotency_key"))
         )
+
+
+def _bounded(value: Any, high: int) -> int:
+    if isinstance(value, bool):
+        raise UsageError("Give a whole number.")
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise UsageError("Give a whole number.") from None
+    if not 1 <= number <= high:
+        raise UsageError(f"Between 1 and {high}.")
+    return number
 
 
 def options(item: Mapping[str, Any], answer: Any) -> list[str]:
@@ -292,6 +380,72 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["id", "value"],
         },
     },
+    {
+        "name": "raise_cap",
+        "description": "One click, as in Admin: raise an AI cap so the waiting work resumes "
+        "(audited as a cap raise). Areas: call-data-fast, call-data-deep (give to: rupees a "
+        "day) and lead-ai (to left out: the next preset). Needs settings:write.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "area": {"type": "string", "enum": ["call-data-fast", "call-data-deep", "lead-ai"]},
+                "to": {"type": "integer", "minimum": 1},
+            },
+            "required": ["area"],
+        },
+    },
+    {
+        "name": "list_organisations",
+        "description": "Every organisation and workspace Admin knows, with its kind "
+        "(company, customer, personal, sandbox, operations). Needs admin:read.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_calls",
+        "description": "The newest analysed calls, optionally for one organisation or "
+        "status: ids, organisation, salesperson, status, language, length, provider and "
+        "model. No call content. Needs admin:read.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "organisation": {"type": "string", "description": "Organisation id"},
+                "status": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+            },
+        },
+    },
+    {
+        "name": "get_call_map",
+        "description": "One call's stages, C1 audio check to C6 published, the fast and "
+        "deep reads and review: status, start and finish, time, cost, provider and model. "
+        "No call content. Needs admin:read.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"call_id": {"type": "string"}},
+            "required": ["call_id"],
+        },
+    },
+    {
+        "name": "get_review_queue",
+        "description": "Calls a review pipeline samples for gold reviewers, newest first, "
+        "with progress. Needs admin:read.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "pipeline": {"type": "string", "description": "Default analysis-sales"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+            },
+        },
+    },
+    {
+        "name": "get_health",
+        "description": "Analysis health over 1 to 30 days: jobs finished, failed and "
+        "stuck, timings and cost per minute. Needs admin:read.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 30}},
+        },
+    },
 ]
 
 
@@ -302,6 +456,20 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
         return client.get(str(args["id"]))
     if name == "set_setting":
         return client.set(str(args["id"]), str(args["value"]), args.get("reason"))
+    if name == "raise_cap":
+        return client.raise_cap(str(args["area"]), args.get("to"))
+    if name == "list_organisations":
+        return client.organisations()
+    if name == "list_calls":
+        return client.calls(args.get("organisation"), args.get("status"), args.get("limit", 50))
+    if name == "get_call_map":
+        return client.call_map(str(args["call_id"]))
+    if name == "get_review_queue":
+        return client.review_queue(
+            str(args.get("pipeline") or "analysis-sales"), args.get("limit", 50)
+        )
+    if name == "get_health":
+        return client.health(args.get("days", 7))
     raise KeyError(name)
 
 
@@ -373,7 +541,7 @@ def serve(client: Client, stdin: Any = sys.stdin, stdout: Any = sys.stdout) -> N
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ac-admin", description="Admin settings, by key.")
+    parser = argparse.ArgumentParser(prog="ac-admin", description="Admin, by staff key.")
     parser.add_argument("--version", action="version", version=f"ac-admin {VERSION}")
     commands = parser.add_subparsers(dest="command", required=True)
     settings = commands.add_parser("settings").add_subparsers(dest="action", required=True)
@@ -384,6 +552,21 @@ def _parser() -> argparse.ArgumentParser:
     change.add_argument("id")
     change.add_argument("value")
     change.add_argument("--reason")
+    commands.add_parser("orgs")
+    calls = commands.add_parser("calls")
+    calls.add_argument("--organisation")
+    calls.add_argument("--status")
+    calls.add_argument("--limit", type=int, default=50)
+    call_map = commands.add_parser("call-map")
+    call_map.add_argument("call_id")
+    queue = commands.add_parser("review-queue")
+    queue.add_argument("--pipeline", default="analysis-sales")
+    queue.add_argument("--limit", type=int, default=50)
+    health = commands.add_parser("health")
+    health.add_argument("--days", type=int, default=7)
+    lift = commands.add_parser("raise")
+    lift.add_argument("area", choices=sorted(RAISES))
+    lift.add_argument("--to", type=int)
     commands.add_parser("mcp")
     return parser
 
@@ -424,8 +607,20 @@ def main(
         serve(client)
         return 0
     try:
-        if args.action == "list":
-            result: Any = client.list()
+        if args.command == "orgs":
+            result: Any = client.organisations()
+        elif args.command == "calls":
+            result = client.calls(args.organisation, args.status, args.limit)
+        elif args.command == "call-map":
+            result = client.call_map(args.call_id)
+        elif args.command == "review-queue":
+            result = client.review_queue(args.pipeline, args.limit)
+        elif args.command == "health":
+            result = client.health(args.days)
+        elif args.command == "raise":
+            result = client.raise_cap(args.area, args.to)
+        elif args.action == "list":
+            result = client.list()
         elif args.action == "get":
             result = client.get(args.id)
         else:

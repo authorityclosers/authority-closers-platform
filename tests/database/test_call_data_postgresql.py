@@ -30,7 +30,7 @@ from ac_platform.call_data.models import (
     CallObjectDecision,
 )
 from ac_platform.call_data.provider import Answer, ProviderFailure
-from ac_platform.call_data.runner import process_call
+from ac_platform.call_data.runner import automatic_hours, process_call
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationRecording,
@@ -574,6 +574,20 @@ def test_calls_wait_for_budget_and_settings_keep_their_history(postgres_harness:
     with postgres_harness.connect() as connection:
         assert call_engine.waiting_for_budget(connection, "fast", now) == 1
         assert call_engine.waiting_for_budget(connection, "deep", now) == 0  # waits for fast
+        # Fresh: the automatic runner still reads it. Three hours on: held, never by itself.
+        fresh = call_engine.queue(connection, "fast", now)
+        assert (fresh["new"], fresh["held"], fresh["fresh_hours"]) == (1, 0, 2)
+        later = call_engine.queue(connection, "fast", now + timedelta(hours=3))
+        assert (later["new"], later["held"]) == (0, 1) and later["oldest_held_at"]
+        old = call_engine.candidates(
+            connection,
+            not_before=now - timedelta(days=1),
+            hours=automatic_hours("auto", 720),
+            limit=5,
+            recording_id=seeded["recording_id"],
+        )
+        assert len(old) == 1  # saved just now, inside the two hours
+    assert automatic_hours("auto", 720) == 2 and automatic_hours("backfill", 720) == 720
     assert _process(postgres_harness, seeded, FakeModel())["outcome"] == "succeeded"
     with postgres_harness.begin() as connection:
         assert call_engine.waiting_for_budget(connection, "fast", now) == 0

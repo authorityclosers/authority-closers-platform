@@ -549,7 +549,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             workspace_menu = page.get_by_role("menu", name="Switch account")
             expect(workspace_menu.get_by_role("menuitemradio")).to_have_count(2)
             expect(
-                workspace_menu.get_by_role("menuitemradio", name="Personal Just you")
+                workspace_menu.get_by_role("menuitemradio", name=re.compile(r"Personal.*Just you"))
             ).to_have_attribute("aria-checked", "true")
             expect(
                 workspace_menu.get_by_text("Synthetic second Sales Xray workspace", exact=True)
@@ -565,7 +565,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             with _navigation_window(page, navigation_windows):
                 workspace_menu.get_by_role(
                     "menuitemradio",
-                    name="Synthetic second Sales Xray workspace Your organisation",
+                    name=re.compile(r"Synthetic second Sales Xray workspace.*Organisation"),
                 ).click()
                 expect(
                     page.get_by_role(
@@ -615,7 +615,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "button", name="Current workspace: Synthetic second Sales Xray workspace"
             ).click()
             with _navigation_window(page, navigation_windows):
-                workspace_menu.get_by_role("menuitemradio", name="Personal Just you").click()
+                workspace_menu.get_by_role(
+                    "menuitemradio", name=re.compile(r"Personal.*Just you")
+                ).click()
                 expect(switcher).to_be_visible()
                 page.wait_for_load_state("networkidle")
             checks.append(
@@ -938,6 +940,13 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                     for item in network
                 ):
                     accepted_aborts.add(f"{method} {path}: net::ERR_ABORTED")
+            # Next probes each nav tab's page with HEAD; a navigation cancels the probes
+            # still in flight. Accept that for any exported page path (new tabs such as
+            # /leads/, /chats/ and /coaching/ add probes); every other failure stays fatal.
+            page_probe = re.compile(r"HEAD /(?:[a-z0-9_-]+/)*: net::ERR_ABORTED")
+            accepted_aborts.update(
+                failure for failure in request_failures if page_probe.fullmatch(failure)
+            )
             proof["navigation_cancellations"] = [
                 failure for failure in request_failures if failure in accepted_aborts
             ]

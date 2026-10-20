@@ -21,19 +21,25 @@ from ac_platform.call_data.models import CallDataRun, CallObject, CallObjectDeci
 SCHEMA = "call-data-detail/1"
 
 # (from, to, branch): the shape of the journey; each edge takes its 'to' stage's status/cost.
+# The main analysis follows the checkpoint lineage: C3 needs C1 and C2, then C4 → C5 → C6.
 EDGES = (
     ("received", "audio_check", "main"),
     ("received", "transcription", "main"),
+    ("audio_check", "alignment", "main"),
+    ("transcription", "alignment", "main"),
     ("transcription", "fast", "fast"),
     ("fast", "objects", "fast"),
     ("transcription", "better_transcript", "deep"),
     ("better_transcript", "deep", "deep"),
     ("objects", "deep", "deep"),
     ("deep", "objects_updated", "deep"),
-    ("transcription", "report", "report"),
-    ("audio_check", "report", "report"),
-    ("report", "pointer_review", "report"),
-    ("report", "prospect", "report"),
+    ("alignment", "facts", "report"),
+    ("facts", "coaching", "report"),
+    ("coaching", "published", "report"),
+    ("published", "pointer_review", "report"),
+    ("published", "prospect", "report"),
+    ("coaching", "review", "report"),
+    ("objects_updated", "review", "deep"),
 )
 
 
@@ -174,10 +180,10 @@ def detail(connection: Any, recording_id: UUID) -> dict[str, Any] | None:
         {"recording": recording_id},
     ).first()
     branches = {
-        "main": ("received", "audio_check", "transcription"),
+        "main": ("received", "audio_check", "transcription", "alignment"),
         "fast": ("fast", "objects"),
         "deep": ("better_transcript", "deep", "objects_updated"),
-        "report": ("report", "pointer_review", "prospect"),
+        "report": ("facts", "coaching", "published", "pointer_review", "prospect", "review"),
     }
 
     def total(keys: tuple[str, ...]) -> dict[str, Any]:

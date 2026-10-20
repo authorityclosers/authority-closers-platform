@@ -141,9 +141,13 @@ def test_lead_stages_go_back_to_the_organisations_meta_dataset(
                     )
                     assert done.status_code == 200, done.text
 
-                # Lead Desk events are read once they have settled (5 minutes).
+                # Lead Desk events are read once they have settled (5 minutes); the card
+                # says what is waiting and when it goes.
                 now = datetime.now(UTC)
                 assert await meta_capi.collect(setup.sessions, environment="dev", now=now) == 0
+                view = (await client.get(f"{META}/conversions")).json()
+                assert view["settling"] == 6 and view["sendsAt"]
+                assert datetime.fromisoformat(view["sendsAt"]) > now
                 later = now + timedelta(minutes=10)
                 assert await meta_capi.collect(setup.sessions, environment="dev", now=later) == 6
                 assert await meta_capi.collect(setup.sessions, environment="dev", now=later) == 0
@@ -153,6 +157,7 @@ def test_lead_stages_go_back_to_the_organisations_meta_dataset(
                     assert len(lines) == 6 and len(posts) == 5
                     view = (await client.get(f"{META}/conversions")).json()
                     assert view["counts"] == {"delivered": 5, "pending": 1}
+                    assert view["settling"] == 0 and view["sendsAt"] is None  # collected
                     assert view["waitingOn"].startswith("Meta ended the connection")
                     async with setup.sessions() as db, db.begin():
                         await meta_capi.deliver(db, http, cfg, now=later + timedelta(minutes=30))

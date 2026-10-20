@@ -32,9 +32,13 @@ def postgres_harness() -> Iterator[Engine]:
     yield from conversation_harness(ROOT)
 
 
-def migration() -> Any:
-    path = ROOT / "db/migrations/versions/20261019_0109_lead_desk_ai_replies.py"
-    spec = importlib.util.spec_from_file_location("lead_desk_ai_replies_migration", path)
+# The next migration changes this table too (Admin settings): undone first, redone after.
+LATER = "20261019_0110_lead_desk_ai_settings.py"
+
+
+def migration(name: str = "20261019_0109_lead_desk_ai_replies.py") -> Any:
+    path = ROOT / "db/migrations/versions" / name
+    spec = importlib.util.spec_from_file_location(path.stem, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -59,9 +63,12 @@ def test_empty_migration_downgrades_reupgrades_and_matches_the_models(
         assert TABLE in inspect(connection).get_table_names()
         context = MigrationContext.configure(connection, opts={"target_metadata": model_metadata()})
         with Operations.context(context):
+            later = migration(LATER)
+            later.downgrade()
             module.downgrade()
             assert TABLE not in inspect(connection).get_table_names()
             module.upgrade()
+            later.upgrade()
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
 
 

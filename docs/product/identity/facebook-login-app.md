@@ -33,23 +33,25 @@ Meta dashboard needs for **Continue with Facebook**. The code is in
 | | App | App ID | Mode |
 | --- | --- | --- | --- |
 | production | **Sales Xray Sign-in** (consumer, Facebook Login use case) | 1448624290545887 | development until App Review passes |
-| staging | test app "Sales Xray Sign-in - staging" | 1455343733195283 | always development |
-| dev | test app "Sales Xray Sign-in - dev" | 2170927907172743 | always development |
+| staging | test app "Sales Xray Sign-in - staging" | 1102739412562298 | always development |
+| dev | test app "Sales Xray Sign-in - dev" | 1514054053884522 | always development |
 
 Test apps copy the parent's settings and have their own ID and secret; only
 people with a role on the app can sign in with them. App IDs are public; the
 secrets live only in Infisical.
 
-State on 19 Oct 2026 (orchestrator):
+State on 20 Oct 2026 (orchestrator):
 
 - The use case has `public_profile` and `email` (`email` was missing at first).
-- Parent: Facebook Login settings as below, production redirect URI saved.
-- Each test app has its own App domain. The test apps copied the production
-  redirect URI and Meta's dashboard doesn't open Facebook Login settings for
-  consumer test apps, so each environment's own callback is set through the
-  Graph API once the secrets are stored.
-- `AC_FACEBOOK_LOGIN_APP_ID` is set for dev (Infisical and dev-live), staging and
-  production; the secrets follow through the owner's paste file.
+- Parent: Facebook Login settings as below; its redirect URI list is the
+  production callback only.
+- The first two test apps (2170927907172743, 1455343733195283) were deleted with
+  the owner's approval and recreated with the IDs above, because a consumer test
+  app can't change its redirect URIs after it is made.
+- Each test app has its own App domain.
+- `AC_FACEBOOK_LOGIN_APP_ID` and `AC_FACEBOOK_LOGIN_APP_SECRET` are in Infisical
+  for dev, staging and production (each secret checked against its own app) and
+  in dev-live.
 
 ## Facebook Login settings, per app
 
@@ -65,7 +67,12 @@ Facebook Login → Settings:
 | Login with the JavaScript SDK | No |
 | Login from devices | No |
 
-Valid OAuth Redirect URIs (exactly one per app):
+Valid OAuth Redirect URIs: the parent holds only the production callback. Each
+test app holds all three callbacks (production, staging, dev), including its own:
+Meta copies the parent's list when a test app is made and doesn't let anyone edit a
+consumer test app's list afterwards. That deviates from "one per app" but is safe:
+all three are our own hosts, and a code issued to one app fails the exchange with
+another app's secret.
 
 | App | Valid OAuth Redirect URI |
 | --- | --- |

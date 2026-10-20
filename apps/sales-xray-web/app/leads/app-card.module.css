@@ -1,0 +1,898 @@
+/*
+ * The CRM's connection and setup cards (owner, 20 Oct). Tokens only: the
+ * --sx-* set and the Lightbox palette; no raw colours.
+ */
+
+.card {
+  display: grid;
+  min-width: 0;
+  box-sizing: border-box;
+  gap: 16px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+}
+
+.headText {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.titleRow h3 {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-panel);
+}
+
+.summary {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.action {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.body {
+  display: grid;
+  gap: 12px;
+}
+
+/* ---------- Logo tile ---------- */
+
+.logo {
+  position: relative;
+  display: grid;
+  flex: none;
+  box-sizing: border-box;
+  place-items: center;
+  border: 1px solid var(--sx-line);
+  border-radius: 12px;
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+}
+
+.logo[data-kind="icon"] {
+  border-color: transparent;
+  background: var(--sx-accent-soft);
+}
+
+.logoBadge {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  padding: 2px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sx-surface);
+  box-shadow: 0 0 0 1px var(--sx-line);
+}
+
+/* ---------- Status ---------- */
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px 0 8px;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.status > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sx-muted);
+}
+
+.status[data-tone="good"] {
+  background: color-mix(in oklab, var(--sx-good) 12%, transparent);
+  color: var(--lx-strength-ink);
+}
+
+.status[data-tone="good"] > span {
+  background: var(--sx-good);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--sx-good) 22%, transparent);
+}
+
+.status[data-tone="warn"] {
+  background: color-mix(in oklab, var(--sx-warn) 13%, transparent);
+  color: var(--lx-focus-ink);
+}
+
+.status[data-tone="warn"] > span {
+  background: var(--sx-warn);
+}
+
+.status[data-tone="bad"] {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+.status[data-tone="bad"] > span {
+  background: var(--sx-bad);
+}
+
+.status[data-tone="accent"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.status[data-tone="accent"] > span {
+  background: var(--sx-accent);
+}
+
+/* ---------- Pages, numbers, accounts ---------- */
+
+.sub {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-sunken) 55%, var(--sx-surface));
+}
+
+.sub[data-tone="bad"] {
+  border-color: color-mix(in oklab, var(--sx-bad) 35%, var(--sx-line));
+}
+
+.sub[data-tone="warn"] {
+  border-color: color-mix(in oklab, var(--sx-warn) 35%, var(--sx-line));
+}
+
+.sub[data-off] .subTitle {
+  opacity: 0.7;
+}
+
+.subHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.subTitle {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.subTitle strong {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.subTitle small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
+}
+
+.subActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subBody {
+  display: grid;
+  gap: 14px;
+}
+
+/* ---------- Groups and switches ---------- */
+
+.group {
+  display: grid;
+  gap: 8px;
+}
+
+.groupHead h4 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.groupHead p {
+  margin: 2px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
+}
+
+.switchRow {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+}
+
+.switchRow[data-on] {
+  border-color: color-mix(in oklab, var(--sx-accent) 30%, var(--sx-line));
+}
+
+.switchLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+}
+
+.switchText {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.switchText strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.switchText small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--sx-line-strong);
+  cursor: pointer;
+  transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
+  appearance: none;
+}
+
+.switch::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-1);
+  content: "";
+  transition: transform var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.switch:checked {
+  background: var(--sx-accent);
+}
+
+.switch:checked::after {
+  transform: translateX(16px);
+}
+
+.switch:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.switch:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.switchMore {
+  display: grid;
+  gap: 10px;
+}
+
+/* ---------- Fields (inputs inside these cards) ---------- */
+
+.card input:not([type]),
+.card input[type="text"],
+.card input[type="url"],
+.card select,
+.card textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--sx-control-h);
+  padding: 7px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.card textarea {
+  min-height: 64px;
+  line-height: 1.45;
+  field-sizing: content;
+  resize: vertical;
+}
+
+.card input:not([type]):focus,
+.card input[type="text"]:focus,
+.card input[type="url"]:focus,
+.card select:focus,
+.card textarea:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+/* ---------- Buttons ---------- */
+
+.primary,
+.secondary,
+.quiet {
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--lx-dur-quick) var(--lx-ease-quick),
+    transform var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.primary {
+  background: var(--lx-gradient-primary, var(--sx-accent));
+  box-shadow: var(--lx-shadow-cta);
+  color: var(--sx-accent-ink);
+}
+
+.primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.secondary {
+  border-color: var(--sx-line);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--sx-sunken);
+}
+
+.quiet {
+  background: transparent;
+  color: var(--sx-ink-2);
+}
+
+.quiet:hover:not(:disabled) {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.quiet[data-danger]:hover:not(:disabled) {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+.primary:disabled,
+.secondary:disabled,
+.quiet:disabled {
+  box-shadow: none;
+  cursor: default;
+  opacity: 0.55;
+}
+
+.primary:focus-visible,
+.secondary:focus-visible,
+.quiet:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* ---------- Save bar ---------- */
+
+.saveBar {
+  position: sticky;
+  z-index: 2;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 2px -4px -4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--sx-accent) 30%, var(--sx-line));
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-accent) 6%, var(--sx-surface));
+  box-shadow: var(--sx-shadow-float);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  animation: card-rise var(--lx-dur-move) var(--lx-ease-move) both;
+}
+
+.saveBar[data-saved] {
+  border-color: color-mix(in oklab, var(--sx-good) 30%, var(--sx-line));
+  background: color-mix(in oklab, var(--sx-good) 7%, var(--sx-surface));
+  box-shadow: none;
+  color: var(--lx-strength-ink);
+  font-weight: 650;
+}
+
+.saveActions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- Small helpers ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip:has(input:checked),
+.chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.chip input {
+  margin: 0;
+  accent-color: var(--sx-accent);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--sx-surface);
+  box-shadow: inset 0 0 0 1px var(--sx-line);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.fact[data-tone="good"] {
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--sx-good) 35%, transparent);
+  color: var(--lx-strength-ink);
+}
+
+.fact[data-tone="warn"] {
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--sx-warn) 40%, transparent);
+  color: var(--lx-focus-ink);
+}
+
+.problem {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--sx-radius-sm);
+  background: color-mix(in oklab, var(--sx-warn) 11%, transparent);
+  color: var(--lx-focus-ink);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.quietText {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--sx-line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table thead th {
+  background: var(--sx-sunken);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody th {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.table caption {
+  padding: 0 0 8px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-align: left;
+}
+
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saveBar {
+    animation: none;
+  }
+
+  .switch,
+  .switch::after,
+  .primary,
+  .secondary,
+  .quiet {
+    transition: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .primary,
+  .secondary,
+  .quiet,
+  .chip {
+    min-height: 44px;
+  }
+
+  .switch {
+    width: 48px;
+    height: 28px;
+  }
+
+  .switch::after {
+    width: 22px;
+    height: 22px;
+  }
+
+  .switch:checked::after {
+    transform: translateX(20px);
+  }
+}
+
+/* Phones: the main action goes under the title, full width. */
+@media (max-width: 599.98px) {
+  .card {
+    padding: 16px;
+  }
+
+  .head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .action {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .action > * {
+    flex: 1;
+  }
+}
+
+/* ---------- A labelled field ---------- */
+
+.field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.fieldLabel {
+  display: grid;
+  gap: 2px;
+}
+
+.fieldLabel strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.fieldLabel small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
+}
+
+fieldset.sub {
+  min-inline-size: 0;
+  margin: 0;
+}
+
+/* ---------- Lists and folded extras ---------- */
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  list-style: none;
+}
+
+.list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--sx-line);
+}
+
+.list > li > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.list strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.list small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.listText {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.details {
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+
+.details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.details > summary svg {
+  transition: transform var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.details[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.details > div {
+  padding: 4px 12px 12px;
+}
+
+/* ---------- Choice cards (one of a few) ---------- */
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  cursor: pointer;
+  transition:
+    border-color var(--lx-dur-quick) var(--lx-ease-quick),
+    background-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.option input {
+  margin: 2px 0 0;
+  accent-color: var(--sx-accent);
+}
+
+.option > span {
+  display: grid;
+  gap: 2px;
+}
+
+.option strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.option small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
+}
+
+.option:has(input:checked) {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--sx-accent);
+}
+
+.option:has(input:focus-visible) {
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* ---------- Rows that open a lead ---------- */
+
+.rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rows button {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rows button:hover {
+  background: var(--sx-surface);
+}
+
+.rows button > span:first-child {
+  display: grid;
+  gap: 1px;
+}
+
+.rows strong {
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.rows small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

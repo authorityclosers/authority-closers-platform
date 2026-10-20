@@ -1,9 +1,10 @@
 /**
  * One call's stage map (GET /v1/admin/conversation/calls/{id}/data-map,
- * call data engine, owner 19 Oct): received → transcription → fast pipeline →
- * call objects → better transcript → deep pipeline → objects updated → Report
- * → AI pointer review → Prospect. Normalizers give every missing field a
- * default. Pure.
+ * call data engine, owner 19 Oct): received → C1 audio check → C2 transcript
+ * → fast pipeline → call objects → better transcript → deep pipeline →
+ * objects updated; C3 alignment → C4 facts → C5 report and coaching → C6
+ * published → AI pointer review, Prospect; human review. Normalizers give
+ * every missing field a default. Pure.
  */
 import { read } from "../lib/read";
 
@@ -41,6 +42,8 @@ export const STAGE_STATUS_TONE: Record<
 export type MapStage = {
   key: string;
   label: string;
+  /** The main analysis stage, C1 to C6; null for the others. */
+  code: string | null;
   status: StageStatus;
   startedAt: string | null;
   finishedAt: string | null;
@@ -82,6 +85,7 @@ export function normalizeMap(raw: unknown): CallMapData {
       return {
         key: read.string(stage.key),
         label: read.string(stage.label, "Stage"),
+        code: read.optionalString(stage.code),
         status: asStatus(stage.status),
         startedAt: read.optionalString(stage.started_at),
         finishedAt: read.optionalString(stage.finished_at),
@@ -163,7 +167,7 @@ export function stageCounts(stage: MapStage): string[] {
         audio === "frames" ? "voice from audio frames" : "voice from timings",
       );
   }
-  if (stage.key === "fast" || stage.key === "deep") {
+  if (["fast", "deep", "facts", "coaching"].includes(stage.key)) {
     const inTokens = number("tokens_in");
     const outTokens = number("tokens_out");
     if (inTokens !== null && outTokens !== null)

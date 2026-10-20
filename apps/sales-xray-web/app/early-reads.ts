@@ -58,11 +58,11 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
     `${ACQUISITION}/submissions/summary`,
     `${ACQUISITION}/activity`,
     `${ACQUISITION}/session`,
-    `${ACQUISITION}/submissions?include_owners=true&order=reports_first`,
+    `${ACQUISITION}/submissions?include_owners=true&order=reports_first&include_summary=true`,
   ],
   "/analysis/calls": [
     ...SESSION,
-    `${ACQUISITION}/submissions?include_owners=true&order=reports_first`,
+    `${ACQUISITION}/submissions?include_owners=true&order=reports_first&include_summary=true`,
   ],
   "/analysis/new": [...SESSION, ...STUDIO],
   "/organisation": [
@@ -82,6 +82,8 @@ const CALL_READS = [
   ...SESSION,
   `${ACQUISITION}/entry`,
   `${ACQUISITION}/session`,
+  // How this workspace's Report shows a call (report settings version).
+  `${ACQUISITION}/report-settings`,
 ];
 
 /**
@@ -158,6 +160,56 @@ export function earlyReadsScript(): string {
 function store(): EarlyStore | null {
   if (typeof window === "undefined") return null;
   return (window as EarlyWindow).__sxEarly ?? null;
+}
+
+/**
+ * Starts an app address's own reads now, the way the inline script does on
+ * a full page load, for a tab being pressed (owner, 20 Oct: "loaded
+ * intelligently beforehand"). The page then finds its first answers on the
+ * way. The session reads are left out (the app already holds the session),
+ * and the same rules apply: GETs only, only once conversation reads are
+ * allowed here, and an answer still fresh is not asked for again.
+ */
+export function startEarlyReads(pathname: string) {
+  if (typeof window === "undefined" || typeof fetch !== "function") return;
+  let allowed = false;
+  try {
+    allowed = window.sessionStorage.getItem(EARLY_CONVERSATION_KEY) === "1";
+  } catch {
+    // Storage refused: the page reads for itself.
+  }
+  if (!allowed) return;
+  const urls = earlyReadsFor(pathname).filter(
+    (url) => !EARLY_SESSION_ONLY(url),
+  );
+  if (!urls.length) return;
+  const early = ((window as EarlyWindow).__sxEarly ??= {});
+  const at = Date.now();
+  for (const url of urls) {
+    const known = early[url];
+    if (known && at - known.at <= EARLY_READ_TTL_MS) continue;
+    early[url] = {
+      at,
+      p: fetch(url, {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
+        headers: { accept: "application/json" },
+      })
+        .then(async (response): Promise<Answer> => {
+          const headers: [string, string][] = [];
+          response.headers.forEach((value, key) => headers.push([key, value]));
+          return {
+            status: response.status,
+            statusText: response.statusText,
+            headers,
+            body: await response.text(),
+          };
+        })
+        .catch(() => null),
+    };
+  }
 }
 
 /**

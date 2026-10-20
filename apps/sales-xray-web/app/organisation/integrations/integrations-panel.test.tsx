@@ -313,3 +313,101 @@ it("sets up the hand-over with a pasted key and the form questions", async () =>
   expect(host.textContent).toContain("…abcd");
   expect(host.textContent).not.toContain("psvc_secret_key");
 });
+
+it("shows only the parts Settings asks for, and reads integrations only when it needs them", async () => {
+  await act(async () =>
+    root.render(<IntegrationsPanel parts={["keys", "webhook"]} />),
+  );
+  await flush();
+  const urls = () => calls.map((call) => String(call.url));
+  expect(
+    urls().some((url) => url.includes("/v1/sales-xray/integrations")),
+  ).toBe(true);
+  expect(urls().some((url) => url.includes("/v1/lead-desk/"))).toBe(false);
+
+  act(() => root.unmount());
+  root = createRoot(host);
+  calls.length = 0;
+  await act(async () => root.render(<IntegrationsPanel parts={["ai"]} />));
+  await flush();
+  expect(
+    urls().some((url) => url.includes("/v1/sales-xray/integrations")),
+  ).toBe(false);
+  expect(urls().some((url) => url.includes("/ai-replies"))).toBe(true);
+});
+
+it("hands a new key to the page, places extras after a part, and reads again when asked or back in view", async () => {
+  const made: string[] = [];
+  const overviewReads = () =>
+    calls.filter(
+      (call) => call.url.endsWith("/integrations") && !call.init?.method,
+    ).length;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+  const draw = (refresh: number) =>
+    root.render(
+      <IntegrationsPanel
+        parts={["keys", "webhook"]}
+        refresh={refresh}
+        onKeyMade={(key) => made.push(key)}
+        extras={{ keys: <p data-testid="after-keys">try it</p> }}
+      />,
+    );
+  await act(async () => draw(0));
+  await flush();
+  expect(overviewReads()).toBe(1);
+  // Right after the keys, before the webhook.
+  const after = host.querySelector('[data-testid="after-keys"]')!;
+  expect(after.previousElementSibling?.textContent).toContain("API keys");
+
+  await act(async () => button("New key").click());
+  const name = document.querySelector<HTMLInputElement>(
+    "dialog input:not([type])",
+  );
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set?.call(name, "Partner app");
+    name?.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    document
+      .querySelector<HTMLInputElement>('dialog input[type="checkbox"]')
+      ?.click();
+  });
+  await act(async () => button("Create key").click());
+  await flush();
+  expect(made).toEqual(["sxk_test_Zz99" + "x".repeat(36)]);
+
+  // A key was used: the page asks for a fresh read.
+  await act(async () => draw(1));
+  await flush();
+  expect(overviewReads()).toBe(2);
+  // Back in view soon after: no read; 15 s later: one.
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await flush();
+  expect(overviewReads()).toBe(2);
+  clock.mockReturnValue(1_020_000);
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await flush();
+  expect(overviewReads()).toBe(3);
+  clock.mockRestore();
+});
+
+it("labels each key's values, so a phone can show every key as a small card", async () => {
+  await act(async () => root.render(<IntegrationsPanel parts={["keys"]} />));
+  await flush();
+  const row = host.querySelector("tbody tr")!;
+  expect(
+    [...row.querySelectorAll("td[data-label]")].map((cell) => [
+      cell.getAttribute("data-label"),
+      cell.textContent,
+    ]),
+  ).toEqual([
+    ["Key", "sxk_test_Ab12…"],
+    ["Permissions", "Read calls and their status"],
+    ["Last used", "Never"],
+    ["Expires", "Never"],
+    ["State", "Active"],
+  ]);
+});

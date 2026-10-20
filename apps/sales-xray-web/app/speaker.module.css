@@ -374,13 +374,17 @@
   box-sizing: border-box;
   margin: 0;
   padding: 14px 14px 14px 16px;
-  border: 1px solid var(--lx-line);
-  border-radius: 14px;
-  background: var(--lx-surface);
-  box-shadow: var(--sx-shadow-float, var(--lx-shadow-2));
+  /* Design system v2: a floating card is glass, like the tab bar it sits
+     above (solid where transparency is reduced; sx-tokens.css). */
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
   color: var(--lx-ink);
   font-family: var(--lx-font-ui);
-  animation: detected-in 220ms var(--lx-ease-move, ease) both;
+  animation: detected-in var(--sx-dur-page) var(--sx-spring) both;
 }
 
 .detected::before {

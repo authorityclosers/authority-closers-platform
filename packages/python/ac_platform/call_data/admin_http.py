@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
 from ac_platform.audit.service import AuditRepository
-from ac_platform.call_data import detail, engine
+from ac_platform.call_data import call_map, detail, engine
 from ac_platform.call_data.settings import PIPELINES, SettingsError, public, raise_to
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -83,6 +83,25 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
         return actor
+
+    @router.get("/v1/admin/call-data/calls/{recording_id}/map")
+    async def call_stage_map(
+        recording_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """One call's stages (call-data-map/1): status, times, cost, provider and model per
+        stage, C1 to C6, the fast and deep reads and review. Content-free, so a staff key
+        with admin:read may read it."""
+        await admit(request, response, auth)
+        result = await auth.database.run_sync(
+            lambda session: call_map.call_map(session.connection(), recording_id)
+        )
+        if result is None:
+            raise HTTPException(404, "This call is not here.")
+        result["environment"] = settings.environment
+        return result
 
     @router.get("/v1/admin/call-data/calls/{recording_id}/detail")
     async def call_detail(
@@ -156,13 +175,14 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
                 spent = engine.spent_today(connection, pipeline, now)
                 cap = config[pipeline]["daily_cap_inr"]
                 at_cap = config[pipeline]["enabled"] and spent >= cap
+                queue = engine.queue(connection, pipeline, now)
                 status[pipeline] = {
                     "spent_today_inr": float(spent),
                     "daily_cap_inr": cap,
                     "at_cap": bool(at_cap),
-                    "waiting": engine.waiting_for_budget(connection, pipeline, now)
-                    if config[pipeline]["enabled"]
-                    else 0,
+                    # Only calls that still run by themselves; held ones never do.
+                    "waiting": queue["new"] if config[pipeline]["enabled"] else 0,
+                    **queue,
                     "raise_to_inr": raise_to(cap),
                 }
             return {
@@ -254,7 +274,8 @@ def install_call_data_admin_http(application: FastAPI, ctx: RouteContext) -> Non
         response: Response,
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
-        """One click: raise a pipeline's daily cap; the waiting calls resume on the next pass."""
+        """One click: raise a pipeline's daily cap; calls from the last two hours resume on the
+        next pass, older ones stay held."""
         try:
             require_safe_origin(request, settings)
         except DomainError:

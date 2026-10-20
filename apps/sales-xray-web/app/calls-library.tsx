@@ -45,6 +45,11 @@ import {
   type SubmissionLibraryPage,
 } from "./acquisition-client";
 import { seededLibraryPage } from "./calls-seed";
+import {
+  cachedCallsPage,
+  readCallsList,
+  rememberCallsPage,
+} from "./calls-cache";
 import { useServerSeedAllowed } from "./initial-session";
 import type { ServerRead } from "./server-reads";
 import { SectionBoundary } from "./ui/section-boundary";
@@ -72,6 +77,8 @@ import { CallsBodySkeleton } from "./calls-skeleton";
 export { CallsBodySkeleton, CallsSkeleton } from "./calls-skeleton";
 import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
+import { insightFromSummary, needsOwnRead } from "./call-summary";
+import { useRowsInView } from "./rows-in-view";
 import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
 import { RecentCallsList, RecentCallsSkeleton } from "./dashboard/recent-calls";
@@ -241,7 +248,8 @@ const FILTERS: { id: "all" | CallTone; label: string }[] = [
 ];
 
 /** The Calls page reads calls with Reports before never-analysed ones. */
-const LIST_PATH = "/submissions?include_owners=true&order=reports_first";
+const LIST_PATH =
+  "/submissions?include_owners=true&order=reports_first&include_summary=true";
 
 /** A saved call whose analysis never started (the server orders these last). */
 function notAnalysed(submission: LibrarySubmission) {
@@ -360,16 +368,25 @@ function CallsLibraryContent({
     router.prefetch("/dashboard");
   }, [router]);
 
-  const [submissions, setSubmissions] = useState<LibrarySubmission[]>(
-    seed?.submissions ?? [],
+  // The last list this identity read (calls-cache.ts): the page paints
+  // from it at once and reads again quietly (design system v2). Not under
+  // test, where every case starts from nothing.
+  const [cached] = useState(() =>
+    seed || preview || process.env.NODE_ENV === "test"
+      ? null
+      : cachedCallsPage(identityKey),
   );
-  const submissionsRef = useRef<LibrarySubmission[]>(seed?.submissions ?? []);
+  const first = seed ?? cached;
+  const [submissions, setSubmissions] = useState<LibrarySubmission[]>(
+    first?.submissions ?? [],
+  );
+  const submissionsRef = useRef<LibrarySubmission[]>(first?.submissions ?? []);
 
   const [nextCursor, setNextCursor] = useState<string | null>(
-    seed?.nextCursor ?? null,
+    first?.nextCursor ?? null,
   );
   const [loading, setLoading] = useState(
-    !seed && access?.authenticated === true,
+    !first && access?.authenticated === true,
   );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -434,6 +451,9 @@ function CallsLibraryContent({
   };
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [previewId, setPreviewId] = useState<string | null>(null);
+  // The preview keeps its call on screen while it slides away.
+  const [shownPreviewId, setShownPreviewId] = useState<string | null>(null);
+  if (previewId && previewId !== shownPreviewId) setShownPreviewId(previewId);
   // Phones show row checkboxes only in Select mode; desktops always do.
   const [selecting, setSelecting] = useState(false);
   // Dates in the browser's language and zone; a page drawn on the server
@@ -443,7 +463,7 @@ function CallsLibraryContent({
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [attempt, setAttempt] = useState(0);
   const seededIds = () =>
-    new Set(seed?.submissions.map((submission) => submission.id));
+    new Set(first?.submissions.map((submission) => submission.id));
   const seenSubmissionIds = useRef(seededIds());
   const firstPageSubmissionIds = useRef(seededIds());
   const loadedCursors = useRef(new Set<string>());
@@ -611,6 +631,7 @@ function CallsLibraryContent({
     // The server already read the first page (a retry reads again).
     if (seed && attempt === 0) {
       mounted.current = true;
+      if (!preview) rememberCallsPage(identityKey, seed);
       return;
     }
     const controller = new AbortController();
@@ -623,11 +644,15 @@ function CallsLibraryContent({
     activeRequestKind.current = "initial";
     const generation = ++requestGeneration.current;
     mounted.current = true;
-    void acquisition(preview ? "/submissions" : LIST_PATH, {
-      signal: controller.signal,
-    })
-      .then((value) => {
-        const page = parseSubmissionLibraryPage(value);
+    // The full list is read once for this identity, however many ask now.
+    void (
+      preview
+        ? acquisition("/submissions", { signal: controller.signal }).then(
+            parseSubmissionLibraryPage,
+          )
+        : readCallsList(identityKey, controller.signal)
+    )
+      .then((page) => {
         if (
           controller.signal.aborted ||
           !mounted.current ||
@@ -635,6 +660,7 @@ function CallsLibraryContent({
         )
           return;
         const resolved = page.submissions.length > 0 ? page.submissions : [];
+        if (!preview) rememberCallsPage(identityKey, page);
         submissionsRef.current = resolved;
         firstPageSubmissionIds.current = new Set(
           resolved.map((submission) => submission.id),
@@ -986,16 +1012,43 @@ function CallsLibraryContent({
     sort,
   );
   const workspace = insights && !preview;
-  // Summaries for the first screens of ready rows only, not one per call.
+  // Rows show the Report's facts the list sends (include_summary=true):
+  // no per-row reads. The full Report and call record are read for the call
+  // opened in the drawer (its moments), and for rows from a server without
+  // summaries, only once they come on screen; each once for this identity
+  // (calls-cache.ts).
+  const { seen: rowsSeen, observeRow } = useRowsInView(workspace);
   const insightIds = visibleSubmissions
-    .filter((submission) => submission.hasReport)
+    .filter(
+      (submission) =>
+        submission.id === previewId ||
+        (needsOwnRead(submission) &&
+          (rowsSeen === null || rowsSeen.has(submission.id))),
+    )
     .slice(0, 24)
     .map((submission) => submission.id);
   const {
     insightOf,
     statusOf,
     retry: retryInsights,
-  } = useCallInsights(insightIds, workspace && access?.authenticated === true);
+  } = useCallInsights(
+    insightIds,
+    workspace && access?.authenticated === true,
+    identityKey,
+  );
+  // A row's insight: its own read when there is one, else the list's
+  // summary; and how far its facts are.
+  const rowInsight = (submission: LibrarySubmission) =>
+    insightOf(submission.id) ??
+    (workspace && submission.summary
+      ? insightFromSummary(submission.summary)
+      : null);
+  const rowStatus = (submission: LibrarySubmission) =>
+    submission.summary !== undefined && !insightOf(submission.id)
+      ? submission.summary
+        ? ("ready" as const)
+        : ("unavailable" as const)
+      : statusOf(submission.id);
   useEffect(() => {
     if (!workspace) return;
     const onKey = (event: KeyboardEvent) => {
@@ -1049,7 +1102,7 @@ function CallsLibraryContent({
           "Link",
         ],
         ...rows.map((submission) => {
-          const insight = insightOf(submission.id);
+          const insight = rowInsight(submission);
           return [
             titleOf(submission),
             formatCreatedDate(submission.createdAt, dates),
@@ -1153,9 +1206,9 @@ function CallsLibraryContent({
     const isOpening = openingId === submission.id;
     const isSelected =
       submission.id === selectedId || selectedSubmission?.id === submission.id;
-    const insight = workspace ? insightOf(submission.id) : null;
+    const insight = workspace ? rowInsight(submission) : null;
     const read =
-      workspace && submission.hasReport ? statusOf(submission.id) : null;
+      workspace && submission.hasReport ? rowStatus(submission) : null;
     const title = titleOf(submission);
     const label = submission.label;
     const length = lengthCell(submission, insight);
@@ -1194,6 +1247,8 @@ function CallsLibraryContent({
       <div
         className={`${styles.row} calls-library-row`}
         key={submission.id}
+        ref={workspace ? observeRow : undefined}
+        data-call-row={submission.id}
         data-tone={tone}
         data-selected={isSelected ? "true" : undefined}
         data-picked={picked.has(submission.id) ? "true" : undefined}
@@ -1339,15 +1394,19 @@ function CallsLibraryContent({
   const previewSubmission = previewId
     ? (submissions.find((submission) => submission.id === previewId) ?? null)
     : null;
+  const shownPreview = shownPreviewId
+    ? (submissions.find((submission) => submission.id === shownPreviewId) ??
+      null)
+    : null;
   const loadedInsights = workspace
     ? submissions
-        .map((submission) => insightOf(submission.id))
+        .map((submission) => rowInsight(submission))
         .filter((insight): insight is CallInsight => insight !== null)
     : [];
   // Call time: the length measured at upload, as Organisation counts it.
   const time = { calls: 0, ms: 0 };
   for (const submission of submissions) {
-    const measuredMs = workspace ? insightOf(submission.id)?.durationMs : null;
+    const measuredMs = workspace ? rowInsight(submission)?.durationMs : null;
     if (measuredMs || hasRecordedLength(submission)) {
       time.calls += 1;
       time.ms += measuredMs || submission.durationSeconds * 1000;
@@ -1440,9 +1499,7 @@ function CallsLibraryContent({
   };
   const insightErrors =
     workspace &&
-    visibleSubmissions.some(
-      (submission) => statusOf(submission.id) === "error",
-    );
+    visibleSubmissions.some((submission) => rowStatus(submission) === "error");
 
   const content = (
     <div
@@ -1927,30 +1984,27 @@ function CallsLibraryContent({
           </section>
         </>
       )}
-      {workspace && previewSubmission ? (
-        <SectionBoundary
-          name="The call preview"
-          resetKey={previewSubmission.id}
-        >
+      {workspace && shownPreview ? (
+        <SectionBoundary name="The call preview" resetKey={shownPreview.id}>
           <CallsDrawer
-            key={previewSubmission.id}
-            id={previewSubmission.id}
-            title={titleOf(previewSubmission)}
-            meta={`${formatCreatedDate(previewSubmission.createdAt, dates)} · ${formatCreatedTime(previewSubmission.createdAt, dates)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
-            status={submissionState(previewSubmission)}
-            tone={callTone(previewSubmission)}
-            insight={insightOf(previewSubmission.id)}
-            readState={statusOf(previewSubmission.id)}
+            key={shownPreview.id}
+            open={previewSubmission !== null}
+            id={shownPreview.id}
+            title={titleOf(shownPreview)}
+            meta={`${formatCreatedDate(shownPreview.createdAt, dates)} · ${formatCreatedTime(shownPreview.createdAt, dates)} · ${lengthOf(shownPreview, rowInsight(shownPreview))}`}
+            status={submissionState(shownPreview)}
+            tone={callTone(shownPreview)}
+            insight={rowInsight(shownPreview)}
+            readState={statusOf(shownPreview.id)}
             onRetry={retryInsights}
-            hasReport={previewSubmission.hasReport}
+            hasReport={shownPreview.hasReport}
             canRename={Boolean(
-              previewSubmission.label &&
-                ownsCall(previewSubmission.owner, viewerId),
+              shownPreview.label && ownsCall(shownPreview.owner, viewerId),
             )}
-            onOpen={() => openSubmission(previewSubmission)}
+            onOpen={() => openSubmission(shownPreview)}
             onRename={() => {
               setPreviewId(null);
-              setRenamingId(previewSubmission.id);
+              setRenamingId(shownPreview.id);
             }}
             onClose={() => setPreviewId(null)}
           />

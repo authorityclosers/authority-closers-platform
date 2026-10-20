@@ -1,6 +1,6 @@
-import { AccountView } from "../account-view";
+import { AccountRedirect } from "../settings/account-redirect";
 
-/** The signed-in account: identity, contact details and analysis allowance. */
+/** The account now lives in Settings: /account#<section> opens that section there. */
 export default function AccountPage() {
-  return <AccountView />;
+  return <AccountRedirect />;
 }

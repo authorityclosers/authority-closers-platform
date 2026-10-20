@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from typing import Any, Final
 from uuid import UUID, uuid4
 
+import structlog
 from sqlalchemy import and_, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,10 +40,16 @@ from ac_platform.lead_desk.models import (
     LeadSocialMessage,
 )
 from ac_platform.lead_desk.social import graph
-from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
+from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, owner_names
 
 STATUS_ORDER: Final[dict[str, int]] = {"queued": 0, "sent": 1, "delivered": 2, "read": 3}
 FIRST_REPLY_WITHIN: Final[timedelta] = timedelta(minutes=10)
+# A person's message waits for the runner (every 10 s, or at once when woken); one that
+# couldn't go out within this long is not sent late.
+QUEUE_LATE: Final[timedelta] = timedelta(minutes=5)
+LATE_WORDS: Final[str] = "Not sent: it waited too long to go out. Send it again."
+GONE_WORDS: Final[str] = "Not sent: this conversation isn't here any more."
+events_log = structlog.get_logger(__name__)
 OUT_OF_HOURS_EVERY: Final[timedelta] = timedelta(hours=12)
 CONVERSATION_LIMIT: Final[int] = 200
 INBOX_LIMIT: Final[int] = 100
@@ -207,6 +214,8 @@ def save_settings(row: LeadSocialAccount, settings: Mapping[str, Any]) -> None:
                 "public_reply": public,
             }
         )
+    # The last comment not answered, and why, outlives a settings save (Connected apps).
+    skip = (row.config or {}).get(SKIP_KEY)
     row.config = {
         "messenger": settings.get("messenger") is not False,
         "instagram": settings.get("instagram") is not False,
@@ -214,6 +223,7 @@ def save_settings(row: LeadSocialAccount, settings: Mapping[str, Any]) -> None:
         "first_reply": {"on": bool(first.get("on")), "text": first["text"]},
         "out_of_hours": {"on": bool(late.get("on")), "text": late["text"]},
         "comments": rules,
+        **({SKIP_KEY: skip} if isinstance(skip, dict) else {}),
     }
 
 
@@ -227,6 +237,17 @@ class Received:
     statuses: int = 0
     comments: int = 0
     unsent: int = 0
+    skipped: list[str] = field(default_factory=list)  # why comments weren't taken
+
+
+SKIP_KEY = "last_comment_skip"
+
+
+def note_skip(row: LeadSocialAccount, channel: str, reason: str, now: datetime) -> None:
+    """The Page's last comment not taken, and why, for Settings → Connected apps."""
+    config = dict(row.config or {})
+    config[SKIP_KEY] = {"at": now.isoformat(), "channel": channel, "why": reason}
+    row.config = config
 
 
 def chat_key(channel: str, account_id: str, user_id: str) -> tuple[str, str, str]:
@@ -363,6 +384,8 @@ async def receive(
             LeadSocialMessage.user_id == seen.user_id,
             LeadSocialMessage.direction == "out",
             LeadSocialMessage.status.in_(earlier),
+            # Only what Meta took: a message still queued hasn't gone yet.
+            LeadSocialMessage.mid.is_not(None),
         ]
         which: list[Any] = []
         if seen.mids:
@@ -395,7 +418,10 @@ async def receive(
             None,
         )
         if index is None:
-            continue  # only comments a rule asks for are kept
+            # Only comments a rule asks for are kept.
+            note_skip(row, comment.channel, "no_rule", now)
+            out.skipped.append("no_rule")
+            continue
         lead, created = await lead_for(
             db, row, comment.channel, comment.user_id, comment.user_name, now=now, comment=True
         )
@@ -428,6 +454,11 @@ async def receive(
         if inserted.first() is not None:
             out.comments += 1
             out.leads_created += created
+    for skip in delivery.skipped:
+        row = await find(skip.channel, skip.account_id)
+        if row is not None:
+            note_skip(row, skip.channel, skip.reason, now)
+        out.skipped.append(skip.reason)
     if delivery.unsent:
         result = await db.execute(
             update(LeadSocialMessage)
@@ -584,8 +615,19 @@ async def send(
     human_agent: bool = False,
     auto: str | None = None,
     reply_to: LeadSocialMessage | None = None,
+    queue: bool = False,
 ) -> LeadSocialMessage:
-    """Send one message to a lead on Messenger or Instagram, inside Meta's rules."""
+    """Send one message to a lead on Messenger or Instagram, inside Meta's rules.
+
+    With ``queue`` (a person's message from Chats or Leads) it is kept as queued under
+    the request's own id and the answer comes back at once; the runner sends it and
+    records it on the lead (``queued_sends``). Automations and tests send at once."""
+    if queue:
+        earlier = await desk.db.get(LeadSocialMessage, command_id)
+        if earlier is not None:
+            if earlier.tenant_id != desk.tenant_id or earlier.lead_id != lead_id:
+                raise DeskError(409, "That request was already used.")
+            return earlier
     seen = await desk.db.scalar(
         select(LeadEvent).where(
             LeadEvent.tenant_id == desk.tenant_id, LeadEvent.command_id == command_id
@@ -625,7 +667,7 @@ async def send(
             raise DeskError(409, "It's more than 7 days since their last message.")
         tag = "HUMAN_AGENT"
     message = LeadSocialMessage(
-        id=uuid4(),
+        id=command_id if queue else uuid4(),
         tenant_id=desk.tenant_id,
         account_id=chat.account.id,
         lead_id=lead.id,
@@ -641,28 +683,127 @@ async def send(
         created_at=desk.now,
     )
     desk.db.add(message)
-    try:
-        message.mid = await api.send(
-            chat.account.page_id,
-            page_token(cfg, chat.account),
-            user_id=chat.user_id,
-            text=message.body or "",
-            channel=channel,
-            human_agent=tag is not None,
-        )
-        message.status = "sent"
-        message.status_at = desk.now
-    except graph.SocialError as error:
-        message.status = "failed"
-        message.error_code = str(error.code) if error.code is not None else "refused"
-        message.error_title = str(error)[:200]
+    if queue:
+        await desk.db.flush()
+        return message
+    await _deliver(cfg, api, chat.account, message, now=desk.now)
     _record(desk, lead, message, command_id=command_id)
     await desk.db.flush()
     return message
 
 
+async def _deliver(
+    cfg: graph.SocialConfig,
+    api: graph.Graph,
+    row: LeadSocialAccount,
+    message: LeadSocialMessage,
+    *,
+    now: datetime,
+) -> None:
+    try:
+        message.mid = await api.send(
+            row.page_id,
+            page_token(cfg, row),
+            user_id=message.user_id,
+            text=message.body or "",
+            channel=message.channel,
+            human_agent=message.tag is not None,
+        )
+        message.status = "sent"
+        message.status_at = now
+    except graph.SocialError as error:
+        message.status = "failed"
+        message.error_code = error_code(error)
+        message.error_title = error_text(error)
+        refused(error, channel=message.channel, what="send")
+
+
+async def queued_sends(
+    db: AsyncSession, cfg: graph.SocialConfig, api: graph.Graph, *, now: datetime
+) -> int:
+    """Send the oldest message a person queued, and record it on the lead as sent or
+    not (so a refused one doesn't count as an answer). 0 when none waits."""
+    message = await db.scalar(
+        select(LeadSocialMessage)
+        .where(
+            LeadSocialMessage.status == "queued",
+            LeadSocialMessage.direction == "out",
+            LeadSocialMessage.auto.is_(None),
+        )
+        .order_by(LeadSocialMessage.created_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+    if message is None:
+        return 0
+    row = await db.get(LeadSocialAccount, message.account_id)
+    lead = await db.get(Lead, message.lead_id) if message.lead_id is not None else None
+    if row is None or row.status != "active" or lead is None or not message.body:
+        message.status, message.error_code, message.error_title = "failed", "gone", GONE_WORDS
+    elif now - message.created_at > QUEUE_LATE:
+        message.status, message.error_code, message.error_title = "failed", "late", LATE_WORDS
+    else:
+        await _deliver(cfg, api, row, message, now=now)
+    if row is not None and lead is not None:
+        # When the person wrote it, under their request's id (a repeat finds it).
+        _record(_system(row, db, now), lead, message, command_id=message.id, at=message.created_at)
+    await db.flush()
+    return 1
+
+
+# Meta's own words ride after this mark in error_title: shown to owners and admins only.
+META_MARK: Final[str] = " \u2016 Meta: "
+
+
+def error_code(error: graph.SocialError) -> str:
+    """The stored code: Meta's code and subcode, or why there is none."""
+    if error.code is not None:
+        return (f"{error.code}/{error.subcode}" if error.subcode is not None else str(error.code))[
+            :32
+        ]
+    return error.kind or "refused"
+
+
+def error_text(error: graph.SocialError) -> str:
+    """Our words for everyone, then Meta's own words for owners and admins."""
+    ours = str(error)
+    if error.detail:
+        return (ours + META_MARK + error.detail)[:200]
+    return ours[:200]
+
+
+def error_words(stored: str | None, code: str | None, *, manager: bool) -> str | None:
+    """What a person sees for a message that didn't go."""
+    if not stored:
+        return None
+    ours, _, theirs = stored.partition(META_MARK)
+    if not manager:
+        return ours
+    said = f" Meta says: \u201c{theirs}\u201d" if theirs else ""
+    shown_code = f" (code {code})" if code and code[:1].isdigit() else ""
+    return f"{ours}{said}{shown_code}"
+
+
+def refused(error: graph.SocialError, *, channel: str, what: str) -> None:
+    """Every refused send in the journal: codes and Meta's trace id, never the words sent."""
+    events_log.info(
+        "lead_desk_social_send_refused",
+        what=what,
+        channel=channel,
+        code=error.code,
+        subcode=error.subcode,
+        kind=error.kind,
+        trace=error.trace,
+    )
+
+
 def _record(
-    desk: LeadDesk, lead: Lead, message: LeadSocialMessage, *, command_id: UUID | None
+    desk: LeadDesk,
+    lead: Lead,
+    message: LeadSocialMessage,
+    *,
+    command_id: UUID | None,
+    at: datetime | None = None,
 ) -> None:
     desk._event(
         lead,
@@ -678,6 +819,7 @@ def _record(
         },
         actor=message.sent_by_person_id,
         command_id=command_id,
+        at=at,
     )
     lead.updated_at = desk.now
 
@@ -694,12 +836,24 @@ class InboxThread:
     last_at: datetime
     waiting: bool
     window_open: bool
+    # For the Chats screen (chats-inbox-api-ask, 20 Oct): which Page, the newest
+    # message's kind, direction and status, the reply clock, and the lead's owner.
+    account_id: UUID | None = None
+    user_id: str = ""
+    place: str | None = None
+    last_kind: str = "text"
+    last_direction: str = "in"
+    last_status: str = "received"
+    waiting_since: datetime | None = None
+    window_closes_at: datetime | None = None
+    owner_id: UUID | None = None
+    owner_name: str | None = None
 
 
 _THREADS = """
     SELECT DISTINCT ON (m.account_id, m.channel, m.user_id)
-           m.lead_id, m.channel, m.user_id, m.user_name, m.body, m.kind, m.direction,
-           COALESCE(m.meta_time, m.created_at) AS at
+           m.lead_id, m.account_id, m.channel, m.user_id, m.user_name, m.body, m.kind,
+           m.direction, m.status, COALESCE(m.meta_time, m.created_at) AS at
     FROM lead_desk_social_messages m
     WHERE m.tenant_id = :tenant AND m.erased_at IS NULL AND m.created_at >= :since
     ORDER BY m.account_id, m.channel, m.user_id, COALESCE(m.meta_time, m.created_at) DESC,
@@ -714,6 +868,20 @@ _LAST_IN = """
     GROUP BY m.account_id, m.channel, m.user_id
 """
 
+# The reply clock: their first message after our last one, per conversation.
+_WAITING_SINCE = """
+    SELECT i.account_id, i.channel, i.user_id, MIN(COALESCE(i.meta_time, i.created_at)) AS at
+    FROM lead_desk_social_messages i
+    WHERE i.tenant_id = :tenant AND i.direction = 'in' AND i.erased_at IS NULL
+      AND i.created_at >= :since
+      AND COALESCE(i.meta_time, i.created_at) > COALESCE(
+        (SELECT MAX(COALESCE(o.meta_time, o.created_at)) FROM lead_desk_social_messages o
+         WHERE o.tenant_id = i.tenant_id AND o.account_id = i.account_id
+           AND o.channel = i.channel AND o.user_id = i.user_id AND o.direction = 'out'),
+        '-infinity'::timestamptz)
+    GROUP BY i.account_id, i.channel, i.user_id
+"""
+
 
 async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
     """Conversations of the last month, waiting ones first; a seller sees their own."""
@@ -721,9 +889,14 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
     params = {"tenant": desk.tenant_id, "since": since}
     rows = (await desk.db.execute(text(_THREADS), params)).all()
     last_in = {
-        (row.channel, row.user_id): row.at
+        (row.account_id, row.channel, row.user_id): row.at
         for row in (await desk.db.execute(text(_LAST_IN), params)).all()
     }
+    since_in = {
+        (row.account_id, row.channel, row.user_id): row.at
+        for row in (await desk.db.execute(text(_WAITING_SINCE), params)).all()
+    }
+    pages = {row.id: row for row in await accounts(desk.db, desk.tenant_id, active=False)}
     leads = {
         lead.id: lead
         for lead in (
@@ -735,6 +908,7 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
             )
         ).all()
     }
+    owners = await owner_names(desk.db, (lead.owner_person_id for lead in leads.values()))
     out: list[InboxThread] = []
     for row in rows:
         lead = leads.get(row.lead_id) if row.lead_id else None
@@ -742,6 +916,11 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
             lead is None or lead.owner_person_id != desk.viewer.person_id
         ):
             continue
+        key = (row.account_id, row.channel, row.user_id)
+        heard = last_in.get(key)
+        open_ = graph.window_open(heard, desk.now)
+        page = pages.get(row.account_id)
+        owner = lead.owner_person_id if lead else None
         out.append(
             InboxThread(
                 lead_id=lead.id if lead else None,
@@ -750,7 +929,17 @@ async def inbox(desk: LeadDesk, *, days: int = 30) -> list[InboxThread]:
                 last_text=row.body or None,
                 last_at=row.at,
                 waiting=row.direction == "in",
-                window_open=graph.window_open(last_in.get((row.channel, row.user_id)), desk.now),
+                window_open=open_,
+                account_id=row.account_id,
+                user_id=row.user_id,
+                place=label(page, row.channel) if page else None,
+                last_kind=row.kind,
+                last_direction=row.direction,
+                last_status=row.status,
+                waiting_since=since_in.get(key) if row.direction == "in" else None,
+                window_closes_at=heard + graph.WINDOW if open_ and heard else None,
+                owner_id=owner,
+                owner_name=owners.get(owner) if owner else None,
             )
         )
     out.sort(key=lambda thread: (not thread.waiting, -thread.last_at.timestamp()))
@@ -781,14 +970,23 @@ async def comment_replies(
             rules[comment.rule] if comment.rule is not None and comment.rule < len(rules) else None
         )
         written = comment.meta_time or comment.created_at
-        if (
-            row is None
-            or row.status != "active"
-            or rule is None
-            or now - written > graph.COMMENT_REPLY_WINDOW
-            or comment.comment_id is None
-        ):
-            comment.reply_state = "skipped"
+        why = (
+            "page_off"
+            if row is None or row.status != "active"
+            else "rule_gone"
+            if rule is None
+            else "too_old"
+            if now - written > graph.COMMENT_REPLY_WINDOW
+            else "bad_id"
+            if comment.comment_id is None
+            else None
+        )
+        if why is not None or row is None or rule is None or comment.comment_id is None:
+            reason = why or "bad_id"
+            comment.reply_state, comment.error_code = "skipped", reason
+            if row is not None:
+                note_skip(row, comment.channel, reason, now)
+            events_log.info("lead_desk_comment_skipped", channel=comment.channel, why=reason)
             continue
         words = graph.fill(str(rule["reply"]), comment.user_name)
         reply = LeadSocialMessage(
@@ -826,10 +1024,11 @@ async def comment_replies(
             sent += 1
         except graph.SocialError as error:
             reply.status = "failed"
-            reply.error_code = str(error.code) if error.code is not None else "refused"
-            reply.error_title = str(error)[:200]
+            reply.error_code = error_code(error)
+            reply.error_title = error_text(error)
             comment.reply_state = "failed"
-            comment.error_title = str(error)[:200]
+            comment.error_title = error_text(error)
+            refused(error, channel=comment.channel, what="private_reply")
         public = rule.get("public_reply")
         if public and reply.status == "sent":
             try:

@@ -7,10 +7,11 @@
  * the Team tab with each campaign.
  */
 
-import { RefreshCw, Megaphone } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Button } from "../ui/kit";
+import { notify } from "../notice-center";
+import { AppCard, AppLogo, cardStyles, StatusPill } from "./app-card";
 import { ago, LeadsError } from "./leads-client";
 import styles from "./leads.module.css";
 import { waCall } from "./whatsapp-client";
@@ -109,7 +110,6 @@ export function SpendSummary() {
 
 export function AdSpendPanel() {
   const [report, setReport] = useSpend();
-  const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (
     !report?.configured ||
@@ -119,7 +119,6 @@ export function AdSpendPanel() {
 
   const refresh = async () => {
     setBusy(true);
-    setNote(null);
     try {
       setReport(
         await waCall<SpendReport>("/meta/spend/refresh?days=30", {
@@ -127,37 +126,52 @@ export function AdSpendPanel() {
         }),
       );
     } catch (reason) {
-      setNote(
-        reason instanceof LeadsError ? reason.message : "That didn't work.",
-      );
+      notify({
+        id: "ad-spend",
+        tone: "error",
+        title: "Not updated",
+        message:
+          reason instanceof LeadsError
+            ? reason.message
+            : "That didn't work. Try again.",
+      });
     } finally {
       setBusy(false);
     }
   };
 
+  const line = spendLine(report);
   return (
-    <section className={styles.waSettings} aria-label="Ad spend">
-      <div className={styles.waHead}>
-        <Megaphone size={18} aria-hidden="true" />
-        <h3>Ads: what each lead cost</h3>
-        <Button variant="ghost" disabled={busy} onClick={refresh}>
+    <AppCard
+      logo={<AppLogo brands={["meta"]} />}
+      title="Ads: what each lead cost"
+      label="Ad spend"
+      status={
+        report.syncedAt ? (
+          <StatusPill tone="accent">Updated {ago(report.syncedAt)}</StatusPill>
+        ) : null
+      }
+      summary={`Your Meta campaigns over the last 30 days, and the leads that reached Sales Xray from each. Only owners and admins see this.${line ? ` ${line}.` : ""}`}
+      action={
+        <button
+          type="button"
+          className={cardStyles.secondary}
+          disabled={busy}
+          onClick={() => void refresh()}
+        >
           <RefreshCw size={14} aria-hidden="true" />
-          Check now
-        </Button>
-      </div>
-      <p className={styles.hint}>
-        Your Meta campaigns over the last 30 days, and the leads that reached
-        Sales Xray from each.
-        {report.syncedAt ? ` Updated ${ago(report.syncedAt)}.` : ""}
-      </p>
+          {busy ? "Checking…" : "Check now"}
+        </button>
+      }
+    >
       {report.error ? (
-        <p className={styles.error} role="alert">
+        <p className={cardStyles.problem} role="status">
           {report.error}
         </p>
       ) : null}
       {report.campaigns.length ? (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
+        <div className={cardStyles.tableWrap}>
+          <table className={cardStyles.table}>
             <thead>
               <tr>
                 <th scope="col">Campaign</th>
@@ -173,7 +187,7 @@ export function AdSpendPanel() {
                 <tr
                   key={`${item.adAccountId}|${item.campaignId}|${item.currency}`}
                 >
-                  <td>{item.campaignName}</td>
+                  <th scope="row">{item.campaignName}</th>
                   <td>{money(item.spend, item.currency)}</td>
                   <td>
                     {item.leads}
@@ -190,13 +204,10 @@ export function AdSpendPanel() {
           </table>
         </div>
       ) : (
-        <p className={styles.hint}>No campaign spent anything in these days.</p>
-      )}
-      {note ? (
-        <p className={styles.hint} role="status">
-          {note}
+        <p className={cardStyles.quietText}>
+          No campaign spent anything in these days.
         </p>
-      ) : null}
-    </section>
+      )}
+    </AppCard>
   );
 }

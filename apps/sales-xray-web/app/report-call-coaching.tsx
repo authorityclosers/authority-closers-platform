@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DocumentReportData } from "./report-document-data";
 import type { ReportEvidence, SalesReport } from "./report-contract";
 import { REPORT_SKILLS } from "./report-pillars";
+import { useReportLook } from "./report-settings";
 import { basisChip } from "./coaching/call-coaching";
 import {
   CALL,
@@ -306,7 +307,15 @@ function CanonicalCallCoaching({
   onSelectContextualPlayback,
 }: Props & { coaching: CallCoaching }) {
   const { focus, lesson, mission, practice } = coaching;
+  // The report settings version: moments (how many), patterns across calls,
+  // and how much the focus explains. Version 1 shows all of it.
+  const { coaching: look } = useReportLook();
   if (!focus || !lesson || !mission || !practice || !data.report) return null;
+  const moments = look.moments
+    ? look.maxMoments !== null
+      ? coaching.evidence.slice(0, look.maxMoments)
+      : coaching.evidence
+    : [];
   const skill = REPORT_SKILLS.some(([id]) => id === focus.skill_id)
     ? focus.skill_id
     : null;
@@ -320,49 +329,52 @@ function CanonicalCallCoaching({
             explanation={focus.explanation}
             why={focus.why_it_matters}
             reason={focus.selected_reason}
-            evidenceAnchor={
-              coaching.evidence.length ? "report-coaching-why" : undefined
-            }
+            brief={look.detail === "simple"}
+            evidenceAnchor={moments.length ? "report-coaching-why" : undefined}
             lessonAnchor="report-coaching-better"
             mission={mission.behavior}
             missionAnchor="report-coaching-mission"
             take={dipakTake(coaching.media_clips)}
           />
         </Pillar>
-        <Pillar id="report-coaching-why" copy={CALL_PILLARS.why} level={3}>
-          {coaching.evidence.length ? (
-            <div className={coachingStyles.card} data-flush="">
-              <MomentList
-                evidence={coaching.evidence}
-                showCall={false}
-                heading={WHY.callEvidence}
-                label={CALL.moments}
-                onPlay={onSelectEvidence}
-                contextFor={(source) => {
-                  const playback =
-                    data.report && data.transcript && onSelectContextualPlayback
-                      ? buildContextualSourcePlayback(
-                          data.report,
-                          data.transcript,
-                          source,
-                        )
+        {look.moments ? (
+          <Pillar id="report-coaching-why" copy={CALL_PILLARS.why} level={3}>
+            {moments.length ? (
+              <div className={coachingStyles.card} data-flush="">
+                <MomentList
+                  evidence={moments}
+                  showCall={false}
+                  heading={WHY.callEvidence}
+                  label={CALL.moments}
+                  onPlay={onSelectEvidence}
+                  contextFor={(source) => {
+                    const playback =
+                      data.report &&
+                      data.transcript &&
+                      onSelectContextualPlayback
+                        ? buildContextualSourcePlayback(
+                            data.report,
+                            data.transcript,
+                            source,
+                          )
+                        : null;
+                    return playback
+                      ? {
+                          range: playback.playback_range,
+                          play: () =>
+                            onSelectContextualPlayback!(playback, CALL.title),
+                        }
                       : null;
-                  return playback
-                    ? {
-                        range: playback.playback_range,
-                        play: () =>
-                          onSelectContextualPlayback!(playback, CALL.title),
-                      }
-                    : null;
-                }}
-              />
-            </div>
-          ) : (
-            <StoryCard>
-              <p>{WHY.noTimestamp}</p>
-            </StoryCard>
-          )}
-        </Pillar>
+                  }}
+                />
+              </div>
+            ) : (
+              <StoryCard>
+                <p>{WHY.noTimestamp}</p>
+              </StoryCard>
+            )}
+          </Pillar>
+        ) : null}
         <LessonPanel
           id="report-coaching-better"
           level={3}
@@ -388,13 +400,15 @@ function CanonicalCallCoaching({
           >
             {REPORT_COACHING.openFull}
           </Link>
-          <Link
-            prefetch={false}
-            className={kitStyles.button}
-            href={skill ? `/coaching?focus=${skill}` : "/coaching"}
-          >
-            {CALL.mineAcross}
-          </Link>
+          {look.acrossCalls ? (
+            <Link
+              prefetch={false}
+              className={kitStyles.button}
+              href={skill ? `/coaching?focus=${skill}` : "/coaching"}
+            >
+              {CALL.mineAcross}
+            </Link>
+          ) : null}
         </div>
       </div>
     </div>
@@ -415,6 +429,7 @@ function RetainedCallCoaching({
   foreign?: boolean;
 }) {
   const report = data.report;
+  const { coaching: look } = useReportLook();
   if (!report || report.preview) return null;
   const focus = callCoachingFocus(report);
   const fullCall =
@@ -434,17 +449,19 @@ function RetainedCallCoaching({
           {REPORT_COACHING.openFull}
         </Link>
       ) : null}
-      <Link
-        prefetch={false}
-        className={kitStyles.button}
-        href={
-          focus?.skillId && !foreign
-            ? `/coaching?focus=${focus.skillId}`
-            : "/coaching"
-        }
-      >
-        {CALL.mineAcross}
-      </Link>
+      {look.acrossCalls ? (
+        <Link
+          prefetch={false}
+          className={kitStyles.button}
+          href={
+            focus?.skillId && !foreign
+              ? `/coaching?focus=${focus.skillId}`
+              : "/coaching"
+          }
+        >
+          {CALL.mineAcross}
+        </Link>
+      ) : null}
     </div>
   );
   if (!focus)
@@ -475,6 +492,11 @@ function RetainedCallCoaching({
       </div>
     );
   const title = focus.finding.title;
+  const quotes = look.moments
+    ? look.maxMoments !== null
+      ? focus.finding.evidence.slice(0, look.maxMoments)
+      : focus.finding.evidence
+    : [];
   return (
     <div
       className={styles.coaching}
@@ -489,24 +511,27 @@ function RetainedCallCoaching({
             explanation={focus.finding.explanation}
             why={focus.why ?? focus.finding.explanation}
             reason={RETAINED.reason}
-            evidenceAnchor="report-coaching-why"
+            brief={look.detail === "simple"}
+            evidenceAnchor={quotes.length ? "report-coaching-why" : undefined}
             mission={focus.behavior}
             missionAnchor="report-coaching-mission"
           />
         </Pillar>
-        <Pillar id="report-coaching-why" copy={CALL_PILLARS.why} level={3}>
-          <StoryCard label={WHY.callEvidence}>
-            {focus.finding.evidence.map((source, index) => (
-              <Quote
-                key={index}
-                text={source.quote}
-                source={source}
-                title={CALL.title}
-                onSelect={onSelectEvidence}
-              />
-            ))}
-          </StoryCard>
-        </Pillar>
+        {quotes.length ? (
+          <Pillar id="report-coaching-why" copy={CALL_PILLARS.why} level={3}>
+            <StoryCard label={WHY.callEvidence}>
+              {quotes.map((source, index) => (
+                <Quote
+                  key={index}
+                  text={source.quote}
+                  source={source}
+                  title={CALL.title}
+                  onSelect={onSelectEvidence}
+                />
+              ))}
+            </StoryCard>
+          </Pillar>
+        ) : null}
         <Pillar
           id="report-coaching-better"
           copy={CALL_PILLARS.better}

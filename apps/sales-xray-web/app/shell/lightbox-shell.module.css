@@ -896,7 +896,18 @@
   scrollbar-gutter: auto;
 }
 
-.shell[data-mobile-fit="true"] .main > :global(.xray-app) {
+/* The page's slot draws no box of its own, so the page lays out as the
+   main area's child; it hides while a tapped place's outline stands in. */
+.pageSlot {
+  display: contents;
+}
+
+.pageSlot[data-standing-in] {
+  display: none;
+}
+
+.shell[data-mobile-fit="true"] .main > :global(.xray-app),
+.shell[data-mobile-fit="true"] .pageSlot > :global(.xray-app) {
   height: 100%;
   min-height: 0;
 }
@@ -911,64 +922,117 @@
   scrollbar-gutter: stable;
 }
 
-/* ---------- Bottom navigation ---------- */
+/* ---------- Bottom navigation (design system v2) ----------
+   Phones: a floating glass tab bar, Apple's Liquid Glass tab bar on the
+   web. The selected tab sits in a soft capsule that glides to the next tab
+   when you move (a view transition, screen-transition.ts); a press dips
+   the tab with a spring. Labels and icons stay monochrome; teal marks the
+   selected icon and the one New action. The capsule glides by measuring
+   (screen-transition.ts useGlide). */
 
 .bottomNav {
   display: none;
 }
 
 .bottomLink {
+  position: relative;
+  isolation: isolate;
   display: flex;
   min-width: 0;
   min-height: 44px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   padding: 0;
   border: 0;
-  border-top: 2px solid transparent;
+  border-radius: calc(var(--sx-radius-xl) - 5px);
   background: transparent;
-  color: var(--lx-muted);
+  color: var(--sx-muted);
   font: var(--lx-text-meta);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 14px;
+  line-height: 13px;
+  letter-spacing: 0.01em;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
 }
 
-/* Icons take the New mark's 26 px slot, so every label shares one line. */
+.bottomLink:active {
+  transform: scale(0.92);
+  transition-duration: var(--sx-dur-instant);
+}
+
+/* Icons take the New mark's 28 px slot, so every label shares one line. */
 .bottomLink > svg {
   flex: none;
-  margin-block: 3px;
+  margin-block: 2px;
+}
+
+/* The selected tab's capsule: one element, named only on the selected tab,
+   so a move between tabs slides it from one to the other. */
+.tabPill {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--sx-fill-strong);
+  opacity: 0;
+  transform: scale(0.85);
+  transition:
+    opacity var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.bottomLink[aria-current="page"] .tabPill {
+  opacity: 1;
+  transform: none;
 }
 
 .bottomLink[aria-current="page"] {
-  border-top-color: var(--lx-teal);
-  color: var(--lx-ink);
+  color: var(--sx-ink);
   font-weight: 700;
 }
 
 .bottomLink[aria-current="page"] > svg {
-  color: var(--lx-teal);
+  color: var(--sx-accent);
 }
 
 /* New is the one filled control in the bar: the app's single teal action. */
 .newMark {
   display: grid;
-  width: 40px;
-  height: 26px;
+  width: 44px;
+  height: 28px;
   place-items: center;
-  border-radius: var(--lx-radius-sm, 8px);
-  background: var(--lx-teal);
-  color: var(--lx-on-teal);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  box-shadow: 0 4px 12px -4px
+    color-mix(in oklab, var(--sx-accent) 70%, transparent);
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.bottomNew[aria-current="page"] .tabPill {
+  background: transparent;
+}
+
+.bottomNew[aria-current="page"] .newMark {
+  box-shadow:
+    0 0 0 3px var(--sx-accent-soft),
+    0 4px 12px -4px color-mix(in oklab, var(--sx-accent) 70%, transparent);
 }
 
 @media (hover: hover) {
   .bottomNew:hover .newMark {
     background: var(--lx-teal-hover);
+  }
+  .bottomLink:hover {
+    color: var(--sx-ink);
   }
 }
 
@@ -1010,18 +1074,21 @@
     display: none;
   }
 
+  /* A glass top bar: the page scrolls beneath it, softly blurred. */
   .mobileBar {
     position: sticky;
     z-index: 20;
     top: 0;
     display: flex;
     box-sizing: border-box;
-    min-height: calc(48px + env(safe-area-inset-top, 0px));
+    min-height: calc(52px + env(safe-area-inset-top, 0px));
     padding: env(safe-area-inset-top, 0px)
       max(var(--lx-space-4), env(safe-area-inset-right, 0px)) 0
       max(var(--lx-space-4), env(safe-area-inset-left, 0px));
-    background: var(--lx-surface);
-    border-bottom: 1px solid var(--lx-line);
+    background: var(--sx-glass-thick);
+    -webkit-backdrop-filter: var(--sx-glass-blur);
+    backdrop-filter: var(--sx-glass-blur);
+    border-bottom: 1px solid var(--sx-hairline);
   }
 
   .mobileBar > a > span:last-child span:last-child {
@@ -1042,20 +1109,27 @@
     );
   }
 
+  /* --lx-bottom-nav-h is the room the bar takes: 60 px of glass and the
+     8 px it floats above the edge. */
   .bottomNav {
     position: fixed;
     z-index: 30;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    right: max(12px, env(safe-area-inset-right, 0px));
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
     display: grid;
-    height: calc(var(--lx-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+    height: calc(var(--lx-bottom-nav-h) - 8px);
     box-sizing: border-box;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
-    padding: 0 var(--lx-space-2) env(safe-area-inset-bottom, 0px);
-    border-top: 1px solid var(--lx-line);
-    background: var(--lx-surface);
+    gap: 2px;
+    padding: 5px;
+    border: 1px solid var(--sx-glass-edge);
+    border-radius: var(--sx-radius-xl);
+    background: var(--sx-glass);
+    -webkit-backdrop-filter: var(--sx-glass-blur);
+    backdrop-filter: var(--sx-glass-blur);
+    box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
   }
 
   .shell[data-mobile-fit="true"] .content {
@@ -1071,7 +1145,10 @@
   /* The report scroller already owns its reading margin. Nested shell
      padding was taking another 48px away from the phone viewport. */
   .shell[data-mobile-fit="true"]
-    .main:has(> :global(.xray-app[data-stage="report"])) {
+    .main:has(
+      > :global(.xray-app[data-stage="report"]),
+      > .pageSlot > :global(.xray-app[data-stage="report"])
+    ) {
     padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   }
 }
@@ -1090,6 +1167,7 @@
 
   .shell[data-mobile-fit="true"] .main,
   .shell[data-mobile-fit="true"] .main > :global(.xray-app),
+  .shell[data-mobile-fit="true"] .pageSlot > :global(.xray-app),
   .shell[data-mobile-fit="true"] .main :global(.studio-main) {
     height: auto;
     overflow: visible;
@@ -1115,6 +1193,7 @@
     position: static;
     height: auto;
     min-height: 56px;
+    margin: 8px 12px;
   }
 }
 
@@ -1347,8 +1426,34 @@
   transform: scale(0.94);
 }
 .stripBtnActive {
-  background: var(--lx-teal-soft);
+  background: transparent;
   color: var(--lx-teal);
+}
+
+/* Design system v2: the active icon sits in a soft capsule, one element
+   named only on the active icon, so a move between places glides it from
+   one icon to the next (a view transition, screen-transition.ts). */
+.stripBtn {
+  isolation: isolate;
+}
+
+.railPill {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--lx-teal-soft);
+  opacity: 0;
+  transform: scale(0.8);
+  transition:
+    opacity var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+  pointer-events: none;
+}
+
+.stripBtnActive .railPill {
+  opacity: 1;
+  transform: none;
 }
 .stripBtnActive::before {
   position: absolute;
@@ -1620,10 +1725,44 @@
   margin-left: -2px;
 }
 
-.mobileWorkspace > span {
+.mobileWorkspace > span,
+.mobilePlace {
   display: grid;
   min-width: 0;
   line-height: 1.15;
+}
+
+/* The same two lines as a button: the workspace switch, one tap away. */
+.mobilePlace {
+  justify-items: start;
+  min-height: 44px;
+  align-content: center;
+  margin: 0;
+  padding: 0 8px 0 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.mobilePlace:active {
+  transform: scale(0.97);
+}
+
+.mobilePlace:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.mobilePlace small {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .mobileWorkspace small {

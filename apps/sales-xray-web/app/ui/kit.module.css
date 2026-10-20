@@ -110,6 +110,13 @@
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 5%, transparent);
+}
+
+/* A panel is one grid column that grows to its widest child: every part may
+   shrink to the panel, so a long subtitle truncates instead of widening it. */
+.panel > * {
+  min-width: 0;
 }
 
 .panelHead {
@@ -157,6 +164,15 @@
   font-size: var(--sx-text-xs);
   font-weight: 600;
   text-decoration: none;
+}
+
+/* Touch screens: a 44 px target around the small link, with no room taken
+   (the negative margins give back what the height adds). */
+@media (pointer: coarse) {
+  .panelAction {
+    min-height: 44px;
+    margin-block: -12.5px;
+  }
 }
 
 .panelFoot {
@@ -289,6 +305,7 @@
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 5%, transparent);
 }
 
 .tile {
@@ -307,8 +324,16 @@
     0 -1px 0 var(--sx-line);
 }
 
+a.tile {
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
 a.tile:hover {
-  background: var(--sx-sunken);
+  background: var(--sx-fill-soft);
+}
+
+a.tile:active {
+  background: var(--sx-fill);
 }
 
 .tileLabel {
@@ -434,16 +459,30 @@ a.tile:hover {
   margin-top: 6px;
 }
 
+/* One soft sheen sweeps across every placeholder together (the gradient is
+   fixed to the window), instead of each one blinking on its own. */
 .skeleton {
   display: block;
   border-radius: 6px;
-  background: var(--sx-sunken);
-  animation: kit-pulse 1.4s ease-in-out infinite;
+  background-color: var(--sx-sunken);
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklab, var(--sx-surface) 55%, transparent) 50%,
+    transparent 70%
+  );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: 200vw 100%;
+  animation: kit-sheen 1.8s var(--sx-ease-sheet) infinite;
 }
 
-@keyframes kit-pulse {
-  50% {
-    opacity: 0.55;
+@keyframes kit-sheen {
+  from {
+    background-position: 100vw 0;
+  }
+  to {
+    background-position: -100vw 0;
   }
 }
 
@@ -465,10 +504,18 @@ a.tile:hover {
   gap: 6px;
   height: 36px;
   padding: 0 10px;
+  border-radius: var(--sx-radius-sm) var(--sx-radius-sm) 0 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
   font-weight: 600;
   text-decoration: none;
+  transition:
+    color var(--sx-dur-fast) var(--sx-ease-out),
+    background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.tab:hover {
+  background: var(--sx-fill-soft);
 }
 
 .tab:hover,
@@ -485,6 +532,14 @@ a.tile:hover {
   border-radius: 2px;
   background: var(--sx-accent);
   content: "";
+  animation: kit-underline var(--sx-dur-base) var(--sx-spring) both;
+}
+
+@keyframes kit-underline {
+  from {
+    transform: scaleX(0.3);
+    opacity: 0;
+  }
 }
 
 .tabCount {
@@ -498,7 +553,7 @@ a.tile:hover {
   gap: 2px;
   padding: 2px;
   border-radius: var(--sx-radius-sm);
-  background: var(--sx-sunken);
+  background: var(--sx-fill);
 }
 
 .segment {
@@ -512,12 +567,28 @@ a.tile:hover {
   font-size: var(--sx-text-sm);
   font-weight: 600;
   cursor: pointer;
+  transition:
+    color var(--sx-dur-fast) var(--sx-ease-out),
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
 }
 
+.segment:hover:not([aria-pressed="true"]) {
+  color: var(--sx-ink-2);
+}
+
+.segment:active {
+  transform: scale(0.96);
+}
+
+/* Apple's segmented control: the chosen segment lifts off the well. */
 .segment[aria-pressed="true"] {
-  background: var(--sx-surface);
+  background: var(--sx-elevated);
   color: var(--sx-ink);
-  box-shadow: var(--lx-shadow-1);
+  box-shadow:
+    0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
 }
 
 /* ---------- Avatar ---------- */
@@ -566,6 +637,19 @@ a.tile:hover {
 
 .row + .row {
   border-top: 1px solid var(--lx-line-soft);
+}
+
+/* A row that opens something answers the pointer and the press. */
+.row:has(> .rowMain > a.rowTitle) {
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.row:has(> .rowMain > a.rowTitle):hover {
+  background: var(--sx-fill-soft);
+}
+
+.row:has(> .rowMain > a.rowTitle):active {
+  background: var(--sx-fill);
 }
 
 .rowIcon {
@@ -757,16 +841,30 @@ a.rowTitle:focus-visible::after {
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    border-color var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
 }
 
 .button:hover:not(:disabled) {
-  background: var(--sx-sunken);
+  background: color-mix(in oklab, var(--lx-ink) 4%, var(--sx-surface));
+}
+
+/* A press dips the button and lets it spring back. */
+.button:active:not(:disabled) {
+  transform: scale(var(--sx-press-scale));
+  transition-duration: var(--sx-dur-instant);
 }
 
 .button[data-variant="primary"] {
   border-color: transparent;
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
+  box-shadow: 0 6px 14px -8px
+    color-mix(in oklab, var(--sx-accent) 80%, transparent);
 }
 
 .button[data-variant="primary"]:hover:not(:disabled) {
@@ -777,6 +875,12 @@ a.rowTitle:focus-visible::after {
   border-color: transparent;
   background: transparent;
   color: var(--sx-ink-2);
+}
+
+.button[data-variant="ghost"]:hover:not(:disabled),
+.button[data-variant="icon"]:hover:not(:disabled) {
+  background: var(--sx-fill);
+  color: var(--sx-ink);
 }
 
 .button[data-variant="icon"] {
@@ -799,6 +903,13 @@ a.rowTitle:focus-visible::after {
 .inline:focus-visible {
   outline: 2px solid var(--sx-accent);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button:active:not(:disabled),
+  .segment:active {
+    transform: none;
+  }
 }
 
 /* ---------- Fields and inline edit ---------- */
@@ -829,6 +940,14 @@ a.rowTitle:focus-visible::after {
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
+  transition:
+    border-color var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.field :is(input, select, textarea):hover:not(:focus),
+.inlineInput:hover:not(:focus) {
+  border-color: var(--sx-line-strong);
 }
 
 .field textarea {
@@ -840,8 +959,8 @@ a.rowTitle:focus-visible::after {
 .field :is(input, select, textarea):focus,
 .inlineInput:focus {
   border-color: var(--sx-accent);
-  outline: 2px solid var(--sx-accent-soft);
-  outline-offset: 0;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--sx-accent-soft);
 }
 
 .fieldHint {
@@ -927,20 +1046,48 @@ a.rowTitle:focus-visible::after {
   width: min(420px, calc(100vw - 2 * var(--sx-gutter)));
   box-sizing: border-box;
   padding: 20px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
   color: var(--sx-ink);
-  box-shadow: var(--lx-shadow-2, var(--lx-shadow-1));
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
 }
 
 .dialog::backdrop {
-  background: color-mix(in oklab, var(--sx-ink) 32%, transparent);
+  background: var(--sx-scrim);
 }
 
+/* It rises in with a calm spring over a dimmed page. */
 .dialog[open] {
   display: grid;
   gap: 14px;
+  animation: kit-dialog-in var(--sx-dur-sheet) var(--sx-spring-calm) both;
+}
+
+.dialog[open]::backdrop {
+  animation: kit-fade-in var(--sx-dur-base) linear both;
+}
+
+@keyframes kit-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+
+@keyframes kit-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation-name: kit-fade-in;
+    animation-duration: 160ms;
+  }
 }
 
 /* showModal() focuses the dialog itself; its controls show focus instead. */
@@ -976,15 +1123,22 @@ a.rowTitle:focus-visible::after {
   height: var(--sx-control-h);
   padding: 0;
   border: 0;
-  border-radius: var(--sx-radius-sm);
-  background: transparent;
-  color: var(--sx-muted);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
   cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
 }
 
 .dialogClose:hover {
-  background: var(--sx-sunken);
+  background: var(--sx-fill-strong);
   color: var(--sx-ink);
+}
+
+.dialogClose:active {
+  transform: scale(var(--sx-press-scale));
 }
 
 .dialogClose:focus-visible {

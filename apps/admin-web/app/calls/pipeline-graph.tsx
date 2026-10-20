@@ -1,22 +1,26 @@
 /**
  * The call's pipeline as a graph (owner 19 Oct: "nicer nodes and a better
- * structure"): stages as nodes in lanes (checks, main and fast read, deep read,
- * report), links coloured by status with their time and cost. Drawn on the
- * server as SVG; wide graphs scroll inside their panel on phones.
+ * structure", C1 to C6): stages as nodes in lanes (checks, main and fast read,
+ * deep read, the main analysis, review), each with its stage code, status,
+ * time, cost and model; links coloured by status. Drawn on the server as SVG;
+ * the graph scrolls inside its panel on narrow screens.
  */
 import {
+  COLUMNS,
   LANES,
   LAYOUT,
+  after,
   placeStages,
+  stageTimeline,
   type DetailEdge,
   type DetailStage,
 } from "./call-detail-data";
 import { STAGE_STATUS_LABEL, duration, rupees } from "./call-map-data";
 import styles from "./pipeline-graph.module.css";
 
-const GUTTER = 92;
-const COL = 196;
-const LANE = 86;
+const GUTTER = 84;
+const COL = 184;
+const LANE = 80;
 const NODE_W = 164;
 const NODE_H = 62;
 const TOP = 10;
@@ -25,11 +29,19 @@ const TOP = 10;
 const DEFAULT_EDGES: readonly [string, string][] = [
   ["received", "audio_check"],
   ["received", "transcription"],
+  ["audio_check", "alignment"],
+  ["transcription", "alignment"],
   ["transcription", "fast"],
   ["fast", "objects"],
   ["transcription", "better_transcript"],
   ["better_transcript", "deep"],
   ["deep", "objects_updated"],
+  ["alignment", "facts"],
+  ["facts", "coaching"],
+  ["coaching", "published"],
+  ["published", "pointer_review"],
+  ["published", "prospect"],
+  ["coaching", "review"],
   ["transcription", "report"],
   ["report", "pointer_review"],
   ["report", "prospect"],
@@ -69,7 +81,8 @@ export function PipelineGraph({
           durationMs: byKey.get(to)?.durationMs ?? null,
         }))
   ).filter((edge) => known.has(edge.from) && known.has(edge.to));
-  const width = GUTTER + 5 * COL;
+  const { times } = stageTimeline(stages);
+  const width = GUTTER + (COLUMNS - 1) * COL + NODE_W + 8;
   const height = TOP * 2 + LANES.length * LANE - (LANE - NODE_H);
 
   return (
@@ -141,6 +154,7 @@ export function PipelineGraph({
           const third = [stage.model ?? stage.provider, stage.version]
             .filter(Boolean)
             .join(" · ");
+          const started = times.get(stage.key)?.startMs ?? null;
           return (
             <g
               key={stage.key}
@@ -149,9 +163,12 @@ export function PipelineGraph({
             >
               <title>
                 {[
-                  stage.label,
+                  [stage.code, stage.label].filter(Boolean).join(" · "),
                   second,
                   third,
+                  started !== null
+                    ? `Started ${after(started)} after the call arrived`
+                    : null,
                   stage.attempts && stage.attempts > 1
                     ? `${stage.attempts} attempts`
                     : null,
@@ -166,8 +183,18 @@ export function PipelineGraph({
               <rect x={x} y={y} width={NODE_W} height={NODE_H} rx={8} />
               <circle className={styles.dot} cx={x + 12} cy={y + 15} r={4} />
               <text className={styles.nodeTitle} x={x + 22} y={y + 19}>
-                {clip(stage.label, 22)}
+                {clip(stage.label, stage.code ? 18 : 22)}
               </text>
+              {stage.code ? (
+                <text
+                  className={styles.code}
+                  x={x + NODE_W - 10}
+                  y={y + 19}
+                  textAnchor="end"
+                >
+                  {stage.code}
+                </text>
+              ) : null}
               <text className={styles.nodeMeta} x={x + 10} y={y + 37}>
                 {clip(second, 27)}
               </text>

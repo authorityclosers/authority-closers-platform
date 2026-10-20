@@ -13,9 +13,14 @@ from fastapi.testclient import TestClient
 import ac_platform.http.auth as auth_module
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import install_identity_http
-from ac_platform.http.auth_transactions import AuthTransaction, AuthTransactionCodec
+from ac_platform.http.auth_transactions import (
+    AuthTransaction,
+    AuthTransactionCodec,
+    normalize_return_path,
+)
 from ac_platform.http.identity_provider import IdentityProviderEmailMissing
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.http.rate_limits import DEFAULT_RATE_LIMIT_RULES
 from ac_platform.identity.application import ProviderEmailInUseError
 from ac_platform.identity.services import VerifiedProviderAssertion
 from tests.unit.http.test_auth_routes import (
@@ -407,3 +412,33 @@ def test_apple_cancel_and_malformed_posts_fail_closed() -> None:
         response = _apple_post(client, fields)
         assert _result(response) == "failed"
         assert not any("_apple." in name for name in response.cookies)
+
+
+def test_settings_connect_is_rate_limited_like_a_sign_in_start() -> None:
+    [rule] = [rule for rule in DEFAULT_RATE_LIMIT_RULES if rule.name == "sign-in-method-connect"]
+    assert (rule.method, rule.capacity, rule.refill_seconds) == ("POST", 20, 600)
+    for provider in ("google", "apple", "facebook"):
+        assert rule.path.fullmatch(f"/v1/me/sign-in-methods/{provider}/connect")
+    assert not rule.path.fullmatch("/v1/me/sign-in-methods/google/remove")
+    assert not rule.path.fullmatch("/v1/me/sign-in-methods/github/connect")
+
+
+@pytest.mark.parametrize(
+    ("return_to", "stored", "back"),
+    [
+        ("/#settings/security", "/?settings=security", "/?connected=apple#settings/security"),
+        ("/#settings", "/?settings=", "/?connected=apple#settings"),
+        ("/settings/security", "/settings/security", "/settings/security?connected=apple"),
+        ("/", "/", "/?connected=apple"),
+    ],
+)
+def test_the_settings_return_survives_the_round_trip(
+    return_to: str, stored: str, back: str
+) -> None:
+    kept = auth_module._settings_return_stored(return_to)
+    assert kept == stored
+    assert normalize_return_path(stored) == stored  # the transaction can carry it
+    response = auth_module._settings_connect_response(
+        _sales_staging_settings(), stored, transaction_cookie_names=(), connected="apple"
+    )
+    assert response.headers["location"] == f"{SALES_STAGING_ORIGIN}{back}"

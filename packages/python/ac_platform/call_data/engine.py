@@ -246,6 +246,56 @@ def spent_today(connection: Any, pipeline: str, now: datetime) -> Decimal:
     return Decimal(finished or 0) + Decimal(2) * int(open_attempts or 0)
 
 
+# Owner, 20 Oct 2026: nothing old runs or charges by itself. The automatic runner
+# reads only transcripts saved in the last AUTO_FRESH_HOURS; a call not read by then
+# (the pipeline was off, at its cap, stopped by the spend guard or the runner was
+# down) is held, and only an explicit backfill (after raising the backfill cap in
+# AI spend, which is the approval) ever reads it.
+AUTO_FRESH_HOURS = 2
+
+
+def queue(connection: Any, pipeline: str, now: datetime, hours: int = 720) -> dict[str, Any]:
+    """Calls this pipeline has not read (last 30 days): `new` ones the automatic runner
+    still reads by itself, and `held` ones it never will, with the oldest held moment."""
+    after_fast = _AFTER_FAST if pipeline == "deep" else ""
+    row = connection.execute(
+        text(
+            f"""
+            SELECT count(*) FILTER (WHERE cp.created_at > :fresh) AS new,
+                   count(*) FILTER (WHERE cp.created_at <= :fresh) AS held,
+                   min(cp.created_at) FILTER (WHERE cp.created_at <= :fresh) AS oldest_held
+            FROM conversation_checkpoints cp
+            JOIN conversation_recordings c ON c.id = cp.recording_id
+            WHERE cp.stage = 'C2' AND cp.erased_at IS NULL
+              AND json_typeof(cp.payload) = 'object' AND cp.created_at > :horizon
+              AND c.state = 'ready' AND c.deleted_at IS NULL
+              AND cp.created_at = (
+                SELECT max(n.created_at) FROM conversation_checkpoints n
+                WHERE n.recording_id = cp.recording_id AND n.stage = 'C2'
+                  AND n.erased_at IS NULL
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM call_data_runs r
+                WHERE r.recording_id = cp.recording_id AND r.pipeline = :pipeline
+                  AND r.transcript_revision = cp.payload ->> 'revision'
+              )
+              {after_fast}
+            """  # noqa: S608 - fixed fragments, values bound
+        ),
+        {
+            "pipeline": pipeline,
+            "horizon": now - timedelta(hours=hours),
+            "fresh": now - timedelta(hours=AUTO_FRESH_HOURS),
+        },
+    ).one()
+    return {
+        "new": int(row.new or 0),
+        "held": int(row.held or 0),
+        "oldest_held_at": row.oldest_held.isoformat() if row.oldest_held else None,
+        "fresh_hours": AUTO_FRESH_HOURS,
+    }
+
+
 def waiting_for_budget(connection: Any, pipeline: str, now: datetime, hours: int = 720) -> int:
     """Calls whose newest transcript has no run of this pipeline yet (last 30 days)."""
     after_fast = _AFTER_FAST if pipeline == "deep" else ""

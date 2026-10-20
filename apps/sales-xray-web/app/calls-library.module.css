@@ -4,6 +4,11 @@
  * the selected filter. A figure strip, one toolbar row and a Linear-style
  * table; phones get inbox rows (title on up to two lines, one meta line).
  * Tokens only, no raw colours. The drawer has its own module.
+ *
+ * Design system v2 (20 Oct): the figures are tiles like Home's on computers
+ * (one compact card on phones, so the list starts sooner), controls and
+ * search are filled, the chosen chip is solid, rows answer hover and press.
+ * No size changes.
  */
 
 .page {
@@ -92,17 +97,18 @@
   gap: 6px;
   min-height: var(--lx-control-compact-h, 32px);
   padding: 0 10px;
-  border: 1px solid var(--lx-line);
+  border: 1px solid transparent;
   border-radius: var(--lx-radius-sm);
-  background: var(--lx-surface);
-  color: var(--lx-ink-3);
+  background: var(--sx-fill);
+  color: var(--lx-ink-2);
   cursor: pointer;
   font: inherit;
   font-weight: 600;
   white-space: nowrap;
   transition:
-    border-color var(--lx-dur-quick) var(--lx-ease-quick),
-    color var(--lx-dur-quick) var(--lx-ease-quick);
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    color var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-fast) var(--sx-ease-out);
 }
 
 .refresh {
@@ -114,8 +120,14 @@
 .refresh:hover:not(:disabled),
 .tool:hover:not(:disabled),
 .secondary:hover:not(:disabled) {
-  border-color: var(--lx-line-strong);
+  background: var(--sx-fill-strong);
   color: var(--lx-ink);
+}
+
+.refresh:active:not(:disabled),
+.tool:active:not(:disabled),
+.secondary:active:not(:disabled) {
+  transform: scale(var(--sx-press-scale));
 }
 
 .refresh:disabled,
@@ -174,12 +186,8 @@
 .strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
   min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--lx-line);
-  border-radius: var(--lx-radius-md);
-  background: var(--lx-surface);
-  box-shadow: var(--lx-shadow-1);
 }
 
 .kpi {
@@ -188,10 +196,10 @@
   gap: 4px;
   min-width: 0;
   padding: 14px 16px;
-}
-
-.kpi + .kpi {
-  border-left: 1px solid var(--lx-line);
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-1);
 }
 
 .kpi dt {
@@ -209,10 +217,11 @@
 }
 
 .kpi dd b {
+  font-family: var(--lx-font-display);
   font-size: 24px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   line-height: 1.2;
 }
 
@@ -345,14 +354,18 @@
   max-width: 280px;
   min-height: var(--lx-control-compact-h, 32px);
   padding: 0 8px 0 10px;
-  border: 1px solid var(--lx-line);
+  border: 1px solid transparent;
   border-radius: var(--lx-radius-sm);
-  background: var(--lx-surface);
+  background: var(--sx-fill);
   color: var(--lx-muted);
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out);
 }
 
 .search:focus-within {
   border-color: var(--lx-teal);
+  background: var(--sx-surface);
   box-shadow: 0 0 0 3px var(--lx-teal-soft);
 }
 
@@ -446,23 +459,30 @@
   padding: 0 10px;
   border: 1px solid transparent;
   border-radius: var(--lx-radius-pill);
-  background: none;
-  color: var(--lx-ink-3);
+  background: var(--sx-fill-soft);
+  color: var(--lx-ink-2);
   cursor: pointer;
   font: inherit;
   font-weight: 600;
   white-space: nowrap;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    color var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-fast) var(--sx-ease-out);
 }
 
 .filters button:hover {
-  background: var(--lx-sunken);
+  background: var(--sx-fill);
   color: var(--lx-ink);
 }
 
+.filters button:active {
+  transform: scale(var(--sx-press-scale));
+}
+
 .filters button[aria-pressed="true"] {
-  border-color: var(--lx-teal-edge);
-  background: var(--lx-teal-soft);
-  color: var(--lx-teal);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
 }
 
 .filters button:focus-visible {
@@ -483,8 +503,8 @@
 }
 
 .filters button[aria-pressed="true"] .chipCount {
-  background: var(--lx-surface);
-  color: var(--lx-teal);
+  background: color-mix(in oklab, var(--lx-on-teal) 16%, transparent);
+  color: var(--lx-on-teal);
 }
 
 .repFilter,
@@ -496,9 +516,9 @@
   gap: 6px;
   min-height: var(--lx-control-compact-h, 32px);
   padding: 0 8px 0 10px;
-  border: 1px solid var(--lx-line);
+  border: 1px solid transparent;
   border-radius: var(--lx-radius-sm);
-  background: var(--lx-surface);
+  background: var(--sx-fill);
   color: var(--lx-muted);
 }
 
@@ -514,7 +534,7 @@
   padding: 0 2px 0 0;
   border: 0;
   background: none;
-  color: var(--lx-ink-3);
+  color: var(--lx-ink-2);
   cursor: pointer;
   font: inherit;
   font-weight: 600;
@@ -532,7 +552,7 @@
 }
 
 .selectToggle[aria-pressed="true"] {
-  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-soft);
   color: var(--lx-teal);
 }
 
@@ -604,9 +624,17 @@
   border-top: 1px solid var(--lx-line-soft);
 }
 
+.row {
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
 .row:hover,
 .row[data-picked] {
-  background: var(--lx-paper-2);
+  background: var(--sx-fill-soft);
+}
+
+.row:has(> .item:active) {
+  background: var(--sx-fill);
 }
 
 .row[data-selected]::before {
@@ -890,7 +918,7 @@
 }
 
 .iconButton:hover {
-  border-color: var(--lx-line);
+  background: var(--sx-fill);
   color: var(--lx-ink);
 }
 
@@ -963,7 +991,7 @@
 }
 
 .more:hover:not(:disabled) {
-  background: var(--lx-paper-2);
+  background: var(--sx-fill-soft);
   color: var(--lx-ink);
 }
 
@@ -1218,6 +1246,12 @@
 
   .strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-radius-md);
+    background: var(--sx-surface);
+    box-shadow: var(--lx-shadow-1);
   }
 
   /* r17 S5: compact figures on phones, each name and number on one line
@@ -1231,6 +1265,10 @@
     column-gap: 8px;
     row-gap: 2px;
     padding: 10px 12px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
   }
 
   .kpi dt {
@@ -1544,5 +1582,23 @@
   .metaStatus[data-tone] i,
   .status[data-tone] i {
     animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh,
+  .tool,
+  .secondary,
+  .search,
+  .filters button,
+  .row {
+    transition: none;
+  }
+
+  .refresh:active:not(:disabled),
+  .tool:active:not(:disabled),
+  .secondary:active:not(:disabled),
+  .filters button:active {
+    transform: none;
   }
 }

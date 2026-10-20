@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { Allowance, LibrarySubmission } from "../acquisition-client";
+import {
+  parseSubmissionLibraryPage,
+  type Allowance,
+  type LibrarySubmission,
+} from "../acquisition-client";
 import { ConnectionNotice } from "../connection-notice";
 import { LightboxShell } from "../shell/lightbox-shell";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
@@ -13,7 +17,6 @@ import {
   readAllowance,
   readCallActivity,
   readCallSummary,
-  readRecentCalls,
   readSandboxFacts,
   settle,
   type CallActivity,
@@ -30,6 +33,14 @@ import { seededDashboard, type ServerDashboard } from "./dashboard-seed";
 import { useServerSeedAllowed } from "../initial-session";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import { PolicyFooter } from "../policy-footer";
+import {
+  cachedCallsPage,
+  cachedPanel,
+  identityOf,
+  readCallsList,
+  rememberCallsPage,
+  rememberPanel,
+} from "../calls-cache";
 
 /**
  * The page waits for its reads (they run together) and then appears whole,
@@ -76,24 +87,53 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
       : null,
   );
   const [seed] = useState(() => seededDashboard(seedAllowed ? initial : null));
+  // What this identity's Home showed last time (calls-cache.ts): the panels
+  // paint from it at once and read again quietly (design system v2). Not
+  // under test, where every case starts from nothing.
+  const identity = identityOf(context);
+  const [cached] = useState(() => {
+    if (!identity || process.env.NODE_ENV === "test") return null;
+    const page = cachedCallsPage(identity);
+    const listed: ReadState<LibrarySubmission[]> | undefined = page
+      ? { status: "ready", value: page.submissions.slice(0, 5) }
+      : undefined;
+    return {
+      summary: cachedPanel<ReadState<CallSummary | null>>(identity, "summary"),
+      activity: cachedPanel<ReadState<CallActivity | null>>(
+        identity,
+        "activity",
+      ),
+      allowance: cachedPanel<ReadState<Allowance>>(identity, "allowance"),
+      recent:
+        cachedPanel<ReadState<LibrarySubmission[]>>(identity, "recent") ??
+        listed,
+      sandbox: cachedPanel<SandboxFacts>(identity, "sandbox"),
+    };
+  });
 
   const [hiddenRecent, setHiddenRecent] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [summaryState, setSummaryState] = useState<
     ReadState<CallSummary | null>
-  >(seed.summary ?? { status: "loading" });
+  >(seed.summary ?? cached?.summary ?? { status: "loading" });
   const [activityState, setActivityState] = useState<
     ReadState<CallActivity | null>
-  >(seed.activity ?? { status: "loading" });
+  >(seed.activity ?? cached?.activity ?? { status: "loading" });
   const [allowanceState, setAllowanceState] = useState<ReadState<Allowance>>(
-    seed.allowance ?? { status: "loading" },
+    seed.allowance ?? cached?.allowance ?? { status: "loading" },
   );
   const [recentState, setRecentState] = useState<
     ReadState<LibrarySubmission[]>
-  >(seed.recent ?? { status: "loading" });
+  >(seed.recent ?? cached?.recent ?? { status: "loading" });
   // The fictional AC Sandbox explains itself to its owner or admins; a failed
-  // read simply shows no card (it is never part of the page's figures).
-  const [sandbox, setSandbox] = useState<SandboxFacts | null>(null);
+  // read simply shows no card (it is never part of the page's figures). It
+  // starts from the server's read or this identity's last one, so the card
+  // is there from the first paint instead of pushing the figures down.
+  const [sandbox, setSandbox] = useState<SandboxFacts | null>(() =>
+    seed.sandbox?.status === "ready"
+      ? seed.sandbox.value
+      : (cached?.sandbox ?? null),
+  );
 
   // A cancelled read (unmount, or a re-run of the effect) must not paint
   // "Not loaded": only the live request may change a panel.
@@ -121,13 +161,44 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
     [],
   );
 
+  // Home's read of the list is the Calls list's first page too: Calls then
+  // opens with its rows (calls-cache.ts).
   const loadRecent = useCallback(
     (signal?: AbortSignal) =>
-      void settle(readRecentCalls(signal, 5, true)).then((result) => {
+      void settle(
+        readCallsList(identity, signal).then((page) =>
+          page.submissions.slice(0, 5),
+        ),
+      ).then((result) => {
         if (!signal?.aborted) setRecentState(toState(result));
       }),
-    [],
+    [identity],
   );
+
+  // The list the server read for this page is the Calls list's first page
+  // too: Calls then opens with its rows.
+  useEffect(() => {
+    const served = seedAllowed ? initial?.recent : null;
+    if (!identity || served?.status !== 200) return;
+    try {
+      rememberCallsPage(identity, parseSubmissionLibraryPage(served.body));
+    } catch {
+      // A bad shape stays the server's problem; Calls reads for itself.
+    }
+  }, [identity, seedAllowed, initial]);
+
+  // Ready panels are kept for this identity's next visit.
+  useEffect(() => {
+    if (!identity) return;
+    const panels = {
+      summary: summaryState,
+      activity: activityState,
+      allowance: allowanceState,
+      recent: recentState,
+    };
+    for (const [name, state] of Object.entries(panels))
+      if (state.status === "ready") rememberPanel(identity, name, state);
+  }, [identity, summaryState, activityState, allowanceState, recentState]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -166,11 +237,12 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
     if (team !== true) return;
     const controller = new AbortController();
     void settle(readSandboxFacts(controller.signal)).then((result) => {
-      if (!controller.signal.aborted)
-        setSandbox(result.ok ? result.value : null);
+      if (controller.signal.aborted) return;
+      setSandbox(result.ok ? result.value : null);
+      if (result.ok) rememberPanel(identity, "sandbox", result.value);
     });
     return () => controller.abort();
-  }, [team]);
+  }, [team, identity]);
   const states = [summaryState, activityState, allowanceState, recentState];
   // 403: this workspace has no Sales Xray access. Say so once, clearly.
   const forbidden = states.some(
@@ -245,7 +317,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
           onHiddenChange={setHiddenRecent}
         />
       ) : (
-        <DashboardBody team={team} skeleton />
+        <DashboardBody team={team} sandbox={sandbox} skeleton />
       )}
       {failing && revealed ? (
         <ConnectionNotice

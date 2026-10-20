@@ -22,13 +22,15 @@
   gap: 10px;
   align-items: start;
   padding: 12px 10px 12px 14px;
-  border: 1px solid var(--lx-line);
-  border-radius: 14px;
-  background: var(--lx-surface);
-  box-shadow: var(--sx-shadow-float);
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
   color: var(--lx-ink);
   pointer-events: auto;
-  animation: enter 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: enter var(--sx-dur-sheet) var(--sx-spring) both;
 }
 
 .card::before {
@@ -93,26 +95,35 @@
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  border: 1px solid var(--lx-line-strong);
+  border: 1px solid var(--sx-hairline);
   border-radius: 999px;
-  background: var(--lx-surface);
+  background: var(--sx-fill-soft);
   color: var(--lx-ink);
   font: inherit;
   font-size: 12.5px;
   font-weight: 650;
   cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.action:active,
+.reference:active,
+.close:active {
+  transform: scale(var(--sx-press-scale));
 }
 
 .reference {
   border-color: transparent;
-  background: var(--lx-sunken);
+  background: var(--sx-fill);
   color: var(--lx-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .action:hover,
 .reference:hover {
-  background: var(--lx-sunken);
+  background: var(--sx-fill-strong);
   color: var(--lx-ink);
 }
 
@@ -124,14 +135,17 @@
   margin: -4px -2px 0 0;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
   color: var(--lx-muted);
   cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
 }
 
 .close:hover {
-  background: var(--lx-sunken);
+  background: var(--sx-fill);
   color: var(--lx-ink);
 }
 
@@ -142,10 +156,11 @@
   box-shadow: var(--lx-ring-focus);
 }
 
+/* A corner card springs up from the corner it lives in. */
 @keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(14px) scale(0.96);
   }
 }
 

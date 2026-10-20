@@ -22,6 +22,7 @@ from ac_platform.admin_settings.registry import (
     pointer,
     request_body,
 )
+from ac_platform.call_data import settings as model_menu
 from ac_platform.call_data.settings import DEFAULTS, SettingsError, public, validate
 from ac_platform.conversation_intelligence.analysis_settings import (
     DEFAULT_ANALYSIS_SETTINGS,
@@ -32,6 +33,7 @@ from ac_platform.http.conversation_execution_control import (
     BudgetCapIntent,
     ExecutionControlIntent,
 )
+from ac_platform.lead_desk.ai_replies import admin_settings as lead_ai
 from tests.unit.http.test_conversation_learner_acquisition import _settings
 
 ANALYSIS_ANSWER = {
@@ -40,6 +42,16 @@ ANALYSIS_ANSWER = {
     "settings": DEFAULT_ANALYSIS_SETTINGS.effective_values(),
 }
 CALL_DATA_ANSWER = public(validate({}), revision=7)
+# The Lead Desk's AI replies answer, as GET /v1/admin/lead-desk-ai sends it (the parts read).
+LEAD_AI_ANSWER = {
+    "revision": 3,
+    "config": lead_ai.validate({}),
+    "models": [
+        {"provider": item.provider, "model": item.model, "label": item.label}
+        for item in model_menu.MODELS.values()
+        if item.provider in lead_ai.PROVIDERS
+    ],
+}
 
 
 def test_ids_are_unique_and_every_setting_belongs_to_an_area() -> None:
@@ -160,3 +172,41 @@ def test_pointer_reads_rfc_6901_paths_and_misses_softly() -> None:
     assert pointer(document, "/a/missing") is None
     assert pointer(document, "/a/b~1c/9") is None
     assert pointer(document, "") == document
+
+
+@pytest.mark.parametrize("item", [item for item in SETTINGS if item.area == "lead-desk-ai"])
+def test_ai_replies_changes_pass_the_lead_desks_validation_at_their_bounds(item) -> None:
+    assert item.write is not None
+    key = item.id.split(".")[1]
+    assert key in lead_ai.DEFAULTS
+    if item.kind == "int":
+        assert item.minimum is not None and item.maximum is not None
+        for good in (item.minimum, item.maximum):
+            body = request_body(item, LEAD_AI_ANSWER, good)
+            assert body["expected_revision"] == 3
+            assert lead_ai.validate(body["config"])[key] == good
+        for bad in (item.minimum - 1, item.maximum + 1):
+            with pytest.raises(lead_ai.SettingsError):
+                lead_ai.validate(request_body(item, LEAD_AI_ANSWER, bad)["config"])
+    elif item.kind == "bool":
+        body = request_body(item, LEAD_AI_ANSWER, True)
+        assert lead_ai.validate(body["config"])["enabled"] is True
+    else:
+        if item.options_from is not None:
+            menu = pointer(LEAD_AI_ANSWER, item.options_from[0])
+            values = [entry[item.options_from[1]] for entry in menu]
+        else:
+            values = [value for value, _ in item.options]
+        assert values
+        for value in values:
+            assert (
+                lead_ai.validate(request_body(item, LEAD_AI_ANSWER, value)["config"])[key] == value
+            )
+
+
+def test_ai_replies_bounds_and_periods_match_the_lead_desk() -> None:
+    assert find("lead_desk_ai.cap_inr").maximum == lead_ai.MAX_CAP
+    assert [value for value, _ in find("lead_desk_ai.period").options] == list(lead_ai.PERIODS)
+    # Changing one field sends the rest of the saved settings back unchanged.
+    body = request_body(find("lead_desk_ai.cap_inr"), LEAD_AI_ANSWER, 300)
+    assert body["config"] == {**LEAD_AI_ANSWER["config"], "cap_inr": 300}

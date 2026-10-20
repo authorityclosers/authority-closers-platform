@@ -33,7 +33,12 @@ export type PipelineStatus = {
   spentTodayInr: number;
   dailyCapInr: number;
   atCap: boolean;
+  /** Calls the automatic runner still reads by itself (saved in the last freshHours). */
   waiting: number;
+  /** Not read and older than freshHours: never run or charge by themselves. */
+  held: number;
+  oldestHeldAt: string | null;
+  freshHours: number;
   raiseToInr: number;
 };
 
@@ -109,6 +114,9 @@ export function normalizeCallData(raw: unknown): CallDataSettings {
       dailyCapInr: read.number(value.daily_cap_inr),
       atCap: read.boolean(value.at_cap),
       waiting: read.number(value.waiting),
+      held: read.number(value.held),
+      oldestHeldAt: read.optionalString(value.oldest_held_at),
+      freshHours: read.number(value.fresh_hours, 2),
       raiseToInr: read.number(value.raise_to_inr, 300),
     };
   };

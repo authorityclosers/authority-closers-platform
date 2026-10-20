@@ -1,0 +1,248 @@
+/* Settings: sections down the side on a computer; list, then a section on a phone. Tokens only. */
+
+.shell {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 24px;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px var(--sx-gutter) 40px;
+  box-sizing: border-box;
+}
+
+.nav {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  display: grid;
+  gap: 14px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.navTitle {
+  margin: 0 0 2px 10px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-title);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.group h2 {
+  margin: 0 0 4px 10px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.group ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 6px 10px;
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink-2);
+  text-decoration: none;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  outline: none;
+}
+
+.item[aria-current="page"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent-ink);
+}
+
+.item[aria-current="page"] .icon {
+  color: var(--sx-accent);
+}
+
+.icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+}
+
+.item[data-variant="list"] {
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+}
+
+.item[data-variant="list"] .icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.label {
+  color: var(--sx-ink);
+}
+
+.hint {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.content {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-title);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.header p {
+  margin: 2px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.back {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  justify-self: start;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+/* The overview: every section as a card. */
+.overview {
+  display: grid;
+  gap: 18px;
+}
+
+.overview .group ul {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 8px;
+}
+
+.overviewHead h1 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-title);
+  font-weight: 750;
+}
+
+.overviewHead p {
+  margin: 2px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* While the session is checked: panels shaped like a section's own. */
+.loading {
+  display: grid;
+  gap: 16px;
+}
+
+.skeletonPanel {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.skeletonHead {
+  display: flex;
+  align-items: center;
+  min-height: var(--sx-panel-head-h);
+  box-sizing: border-box;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.skeletonRow > :first-child {
+  flex: none;
+}
+
+.skeletonRow + .skeletonRow {
+  border-top: 1px solid var(--sx-line);
+}
+
+.skeletonLines {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+
+@media (max-width: 899px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding-top: 12px;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .back {
+    display: inline-flex;
+  }
+
+  .overview .group ul {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -12,6 +12,7 @@ workspace; managers (owners and admins) set things up, sellers see their own lea
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -20,6 +21,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -31,14 +33,38 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import sla
+from ac_platform.lead_desk.chats import reads as chat_reads
 from ac_platform.lead_desk.connectors import app_return, meta
 from ac_platform.lead_desk.connectors.app_return import AppComplete, AppCompleted
 from ac_platform.lead_desk.models import LeadDeskSettings, LeadWhatsAppNumber, LeadWhatsAppTemplate
+from ac_platform.lead_desk.social import inbox as social_inbox
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.lead_desk.whatsapp import cloud, inbox, runner
 from ac_platform.tenancy.models import Membership, Organisation
 
 log = logging.getLogger(__name__)
+events = structlog.get_logger(__name__)
+
+
+def signup_log(outcome: str, params: Any = None, *, detail: str | None = None) -> None:
+    """Each Embedded Signup outcome in the journal (structlog: the stdlib logger's lines
+    don't reach it): Meta's own error words when it sent any, never a code or a token."""
+    found = params if params is not None else {}
+
+    def part(name: str, limit: int) -> str | None:
+        return " ".join(str(found.get(name) or "").split())[:limit] or None
+
+    events.info(
+        "lead_desk_whatsapp_signup",
+        outcome=outcome,
+        error=part("error", 60),
+        reason=part("error_reason", 60),
+        meta_code=part("error_code", 12),
+        meta_said=part("error_description", 200) or part("error_message", 200),
+        detail=" ".join((detail or "").split())[:200] or None,
+    )
+
+
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 NO_STORE = {"Cache-Control": "no-store"}
 _MAX_WEBHOOK = 3 * 1024 * 1024  # Meta sends up to 3 MB
@@ -159,6 +185,44 @@ class ThreadView(BaseModel):
     last_at: datetime = Field(alias="lastAt")
     waiting: bool
     window_open: bool = Field(alias="windowOpen")
+    # For the Chats screen; read as optional by older pages.
+    account_id: UUID | None = Field(default=None, alias="accountId")
+    place: str | None = None
+    last_kind: str = Field(default="text", alias="lastKind")
+    last_direction: str = Field(default="in", alias="lastDirection")
+    last_status: str = Field(default="received", alias="lastStatus")
+    waiting_since: datetime | None = Field(default=None, alias="waitingSince")
+    window_closes_at: datetime | None = Field(default=None, alias="windowClosesAt")
+    owner_id: UUID | None = Field(default=None, alias="ownerId")
+    owner_name: str | None = Field(default=None, alias="ownerName")
+
+
+class ChatThreadView(ThreadView):
+    """One conversation on the Chats screen, whichever channel it is on."""
+
+    key: str  # the channel, the account and a hash of the person's id: stable, opaque
+    channel: Literal["whatsapp", "messenger", "instagram"]
+    # Their messages this person hasn't read yet, on any device (read marks, 0113).
+    unread: int = 0
+
+
+class ChatsSla(BaseModel):
+    on: bool
+    minutes: int
+
+
+class ChatsView(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    generated_at: datetime = Field(alias="generatedAt")
+    sla: ChatsSla
+    threads: list[ChatThreadView]
+
+
+CHATS_LIMIT = 200
+
+
+def _person_key(*parts: object) -> str:
+    return hashlib.sha256(":".join(str(part) for part in parts).encode()).hexdigest()[:16]
 
 
 class SlaView(BaseModel):
@@ -203,6 +267,10 @@ class SlaReport(BaseModel):
     end: date
     sellers: list[SellerSlaView]
     late: list[LateView] = Field(default_factory=list)
+
+
+# The Settings → Connected apps card a WhatsApp connect can come back to.
+WHATSAPP_CARDS: tuple[str, ...] = ("whatsapp",)
 
 
 def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -369,12 +437,19 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         response: Response,
         app_challenge: str | None = Query(default=None),
         reply: str | None = Query(default=None, alias="format"),
+        return_to: str | None = Query(default=None),
+        card: str | None = Query(default=None),
     ) -> Response:
         """Connect WhatsApp: off to Meta's Embedded Signup, back to the callback. From
-        the Sales Xray app, with ``app_challenge``, it finishes in the app (app_return)."""
+        the Sales Xray app, with ``app_challenge``, it finishes in the app (app_return);
+        from Settings → Connected apps, with ``return_to``, it comes back there."""
         cfg = whatsapp_config()
         if app_challenge is not None and not app_return.CHALLENGE.fullmatch(app_challenge):
             raise HTTPException(422, "Start again from the Sales Xray app.", headers=PRIVATE)
+        try:
+            settings_card = app_return.settings_card(return_to, card, allowed=WHATSAPP_CARDS)
+        except ValueError:
+            raise HTTPException(422, "Start again from Settings.", headers=PRIVATE) from None
         async with desk_for(request, response) as desk:
             desk._require_manager()
             state = meta.make_state(
@@ -382,6 +457,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 tenant_id=desk.tenant_id,
                 person_id=desk.viewer.person_id,
                 app_challenge=app_challenge,
+                card=settings_card,
             )
         url = cloud.dialog_url(cfg, redirect_uri=callback_url(), state=state)
         if reply == "json":
@@ -391,8 +467,13 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
     async def finish_whatsapp(desk: LeadDesk, cfg: cloud.WhatsAppConfig, code: str) -> str:
         """Swap Embedded Signup's code and connect every number the customer shared."""
         api = cloud.Cloud(cfg)
-        token = await api.exchange(code, redirect_uri=callback_url())
-        rows = await inbox.connect_shared(desk, cfg, api, token)
+        try:
+            token = await api.exchange(code, redirect_uri=callback_url())
+            rows = await inbox.connect_shared(desk, cfg, api, token)
+        except (HTTPException, cloud.WhatsAppError) as error:
+            signup_log("failed", detail=str(getattr(error, "detail", None) or error))
+            raise
+        signup_log("connected" if rows else "nonumbers")
         for row in rows:
             try:
                 await inbox.sync_templates(desk.db, cfg, api, row, now=desk.now)
@@ -428,15 +509,19 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         cfg = whatsapp_config()
         state_value = request.query_params.get("state", "")
         try:
-            app_started = bool(meta.peek_state(cfg.app_secret, state_value).get("a"))
+            peeked = meta.peek_state(cfg.app_secret, state_value)
         except meta.MetaError:
-            app_started = False
+            peeked = {}
+        app_started = bool(peeked.get("a"))
+        card = app_return.card_of(peeked, WHATSAPP_CARDS)
         if app_started:
             # In the phone's browser, with no Sales Xray session: hand back to the app.
             params = request.query_params
             if params.get("error"):
+                signup_log("cancelled", params)
                 return app_return.return_page("whatsapp", result="cancelled")
             if not params.get("code"):
+                signup_log("failed", params, detail="no code from Meta")
                 return app_return.return_page("whatsapp", result="failed")
             return app_return.return_page(
                 "whatsapp",
@@ -448,12 +533,23 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 ),
             )
         back = f"{app_url()}/organisation?tab=integrations"
+
+        def done(outcome: str) -> Response:
+            url = (
+                app_return.settings_url(app_url(), card, outcome)
+                if card
+                else f"{back}&whatsapp={outcome}"
+            )
+            return RedirectResponse(url, status_code=303, headers=PRIVATE)
+
         if request.query_params.get("error"):
-            return RedirectResponse(f"{back}&whatsapp=cancelled", status_code=303, headers=PRIVATE)
+            signup_log("cancelled", request.query_params)
+            return done("cancelled")
         code = request.query_params.get("code", "")
         state = request.query_params.get("state", "")
         if not code or not state:
-            return RedirectResponse(f"{back}&whatsapp=failed", status_code=303, headers=PRIVATE)
+            signup_log("failed", request.query_params, detail="no code from Meta")
+            return done("failed")
         try:
             async with desk_for(request, response, write=True, origin=False) as desk:
                 desk._require_manager()
@@ -465,16 +561,15 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                         person_id=desk.viewer.person_id,
                     )
                 except meta.MetaError:
-                    return RedirectResponse(
-                        f"{back}&whatsapp=failed", status_code=303, headers=PRIVATE
-                    )
+                    signup_log("failed", detail="the start doesn't match this person")
+                    return done("failed")
                 outcome = await finish_whatsapp(desk, cfg, code)
         except HTTPException as error:
             if error.status_code in (401, 403):
                 raise
             log.warning("whatsapp connect failed: %s", error.detail)
-            return RedirectResponse(f"{back}&whatsapp=failed", status_code=303, headers=PRIVATE)
-        return RedirectResponse(f"{back}&whatsapp={outcome}", status_code=303, headers=PRIVATE)
+            return done("failed")
+        return done(outcome)
 
     @router.post("/whatsapp/connect", response_model=WhatsAppStatus, response_model_by_alias=True)
     async def whatsapp_connect(
@@ -684,9 +779,84 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     last_at=thread.last_at,
                     waiting=thread.waiting,
                     window_open=thread.window_open,
+                    account_id=thread.number_id,
+                    place=thread.place,
+                    last_kind=thread.last_kind,
+                    last_direction=thread.last_direction,
+                    last_status=thread.last_status,
+                    waiting_since=thread.waiting_since,
+                    window_closes_at=thread.window_closes_at,
+                    owner_id=thread.owner_id,
+                    owner_name=thread.owner_name,
                 )
                 for thread in await inbox.inbox(desk)
             ]
+
+    @router.get("/chats", response_model=ChatsView, response_model_by_alias=True)
+    async def chats(request: Request, response: Response) -> ChatsView:
+        """WhatsApp, Messenger and Instagram conversations together (the Chats screen):
+        waiting ones first, then newest. A seller sees only the leads they own."""
+        async with desk_for(request, response) as desk:
+            _, config = await desk.settings()
+            target = sla.read(config)
+            unread = await chat_reads.unread(desk)
+
+            def unread_for(channel: str, account: UUID | None, lead: UUID | None) -> int:
+                return unread.get((channel, account, lead), 0) if account and lead else 0
+
+            rows: list[ChatThreadView] = [
+                ChatThreadView(
+                    key=f"whatsapp:{thread.number_id}:{_person_key(desk.tenant_id, thread.wa_id)}",
+                    channel="whatsapp",
+                    lead_id=thread.lead_id,
+                    lead_name=thread.lead_name,
+                    last_text=thread.last_text,
+                    last_at=thread.last_at,
+                    waiting=thread.waiting,
+                    window_open=thread.window_open,
+                    account_id=thread.number_id,
+                    place=thread.place,
+                    last_kind=thread.last_kind,
+                    last_direction=thread.last_direction,
+                    last_status=thread.last_status,
+                    waiting_since=thread.waiting_since,
+                    window_closes_at=thread.window_closes_at,
+                    owner_id=thread.owner_id,
+                    owner_name=thread.owner_name,
+                    unread=unread_for("whatsapp", thread.number_id, thread.lead_id),
+                )
+                for thread in await inbox.inbox(desk)
+            ]
+            rows += [
+                ChatThreadView(
+                    key=f"{thread.channel}:{thread.account_id}:"
+                    f"{_person_key(desk.tenant_id, thread.user_id)}",
+                    channel="instagram" if thread.channel == "instagram" else "messenger",
+                    lead_id=thread.lead_id,
+                    lead_name=thread.lead_name,
+                    last_text=thread.last_text,
+                    last_at=thread.last_at,
+                    waiting=thread.waiting,
+                    window_open=thread.window_open,
+                    account_id=thread.account_id,
+                    place=thread.place,
+                    last_kind=thread.last_kind,
+                    last_direction=thread.last_direction,
+                    last_status=thread.last_status,
+                    waiting_since=thread.waiting_since,
+                    window_closes_at=thread.window_closes_at,
+                    owner_id=thread.owner_id,
+                    owner_name=thread.owner_name,
+                    unread=unread_for(thread.channel, thread.account_id, thread.lead_id),
+                )
+                for thread in await social_inbox.inbox(desk)
+            ]
+            rows.sort(key=lambda row: (not row.waiting, -row.last_at.timestamp()))
+            return ChatsView(
+                generated_at=desk.now,
+                sla=ChatsSla(on=bool(target.on), minutes=int(target.minutes)),
+                threads=rows[:CHATS_LIMIT],
+            )
 
     # Dev reaches these through the Leads webhook's Cloudflare Access bypass
     # (/v1/lead-desk/meta/webhook/*); staging and production use the canonical path.

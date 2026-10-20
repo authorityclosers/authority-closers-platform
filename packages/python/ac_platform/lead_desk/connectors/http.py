@@ -240,6 +240,9 @@ class ConversionsView(BaseModel):
     counts: dict[str, int]
     last_delivered_at: str | None = Field(default=None, alias="lastDeliveredAt")
     waiting_on: str | None = Field(default=None, alias="waitingOn")
+    # Stage changes that go once they settle (5 minutes), and when the first goes.
+    settling: int = 0
+    sends_at: str | None = Field(default=None, alias="sendsAt")
     recent: list[ConversionEventView]
 
 
@@ -288,6 +291,11 @@ class PullResult(BaseModel):
     repeat: int
     known: int
     skipped: int
+
+
+# The Settings → Connected apps cards each connect can come back to (see app_return).
+META_CARDS: tuple[str, ...] = ("meta_leads",)
+GOOGLE_CARDS: tuple[str, ...] = ("google_ads",)
 
 
 def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -481,6 +489,19 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             return JSONResponse({"url": url}, headers=PRIVATE)
         return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
+    def back_card(return_to: str | None, card: str | None, allowed: tuple[str, ...]) -> str | None:
+        """A connect started from Settings → Connected apps comes back to its card."""
+        try:
+            return app_return.settings_card(return_to, card, allowed=allowed)
+        except ValueError:
+            raise HTTPException(422, "Start again from Settings.", headers=PRIVATE) from None
+
+    def returning(body: Callable[[], dict[str, Any]], allowed: tuple[str, ...]) -> str | None:
+        try:
+            return app_return.card_of(body(), allowed)
+        except (meta.MetaError, gads.GoogleAdsApiError):
+            return None
+
     def from_app(body: Callable[[], dict[str, Any]]) -> bool:
         try:
             return bool(body().get("a"))
@@ -517,9 +538,12 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         response: Response,
         app_challenge_value: str | None = Query(default=None, alias="app_challenge"),
         reply: str | None = Query(default=None, alias="format"),
+        return_to: str | None = Query(default=None),
+        card: str | None = Query(default=None),
     ) -> Response:
         cfg = meta_config()
         challenge = app_challenge(app_challenge_value)
+        settings_card = back_card(return_to, card, META_CARDS)
         async with desk_for(request, response) as desk:
             desk._require_manager()
             state = meta.make_state(
@@ -527,6 +551,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 tenant_id=desk.viewer.tenant_id,
                 person_id=desk.viewer.person_id,
                 app_challenge=challenge,
+                card=settings_card,
             )
         return started(meta.dialog_url(cfg, redirect_uri=callback_url(), state=state), reply)
 
@@ -536,12 +561,22 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         state = request.query_params.get("state", "")
         if from_app(lambda: meta.peek_state(cfg.app_secret, state)):
             return hand_off("meta", cfg.token_key, request)
+        card = returning(lambda: meta.peek_state(cfg.app_secret, state), META_CARDS)
         back = f"{app_url()}/leads?tab=sources"
+
+        def done(outcome: str) -> Response:
+            url = (
+                app_return.settings_url(app_url(), card, outcome)
+                if card
+                else f"{back}&meta={outcome}"
+            )
+            return RedirectResponse(url, status_code=303, headers=PRIVATE)
+
         if request.query_params.get("error"):
-            return RedirectResponse(f"{back}&meta=cancelled", status_code=303, headers=PRIVATE)
+            return done("cancelled")
         code = request.query_params.get("code", "")
         if not code or not state:
-            return RedirectResponse(f"{back}&meta=failed", status_code=303, headers=PRIVATE)
+            return done("failed")
         async with desk_for(request, response, write=True, origin=False) as desk:
             desk._require_manager()
             meta.read_state(
@@ -551,7 +586,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 person_id=desk.viewer.person_id,
             )
             found = await finish_meta(desk, cfg, code)
-        return RedirectResponse(f"{back}&meta={found}", status_code=303, headers=PRIVATE)
+        return done(found)
 
     @router.post("/meta/app-complete", response_model=AppCompleted)
     async def meta_app_complete(
@@ -673,7 +708,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         cfg = meta.config()
         chosen = meta_capi.read_settings(config)
         box = config.get(meta_capi.CONNECTION)
-        facts = await meta_capi.summary(desk.db, desk.viewer.tenant_id, desk.now)
+        facts = await meta_capi.summary(desk.db, desk.viewer.tenant_id, desk.now, settings=chosen)
         return ConversionsView(
             configured=cfg is not None,
             connected=cfg is not None
@@ -691,6 +726,8 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             if facts["last_delivered_at"]
             else None,
             waiting_on=_waiting_words(facts["waiting_on"]),
+            settling=facts["settling"],
+            sends_at=facts["sends_at"].isoformat() if facts["sends_at"] else None,
             recent=[ConversionEventView(**item) for item in facts["recent"]],
         )
 
@@ -1126,9 +1163,12 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         response: Response,
         app_challenge_value: str | None = Query(default=None, alias="app_challenge"),
         reply: str | None = Query(default=None, alias="format"),
+        return_to: str | None = Query(default=None),
+        card: str | None = Query(default=None),
     ) -> Response:
         cfg = google_config()
         challenge = app_challenge(app_challenge_value)
+        settings_card = back_card(return_to, card, GOOGLE_CARDS)
         async with desk_for(request, response) as desk:
             desk._require_manager()
             state = gads.make_state(
@@ -1136,6 +1176,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 tenant_id=desk.viewer.tenant_id,
                 person_id=desk.viewer.person_id,
                 app_challenge=challenge,
+                card=settings_card,
             )
         return started(
             gads.consent_url(cfg, redirect_uri=google_callback_url(), state=state), reply
@@ -1147,19 +1188,29 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         state = request.query_params.get("state", "")
         if from_app(lambda: gads.peek_state(cfg, state)):
             return hand_off("google", cfg.token_key, request)
+        card = returning(lambda: gads.peek_state(cfg, state), GOOGLE_CARDS)
         back = f"{app_url()}/leads?tab=sources"
+
+        def done(outcome: str) -> Response:
+            url = (
+                app_return.settings_url(app_url(), card, outcome)
+                if card
+                else f"{back}&google={outcome}"
+            )
+            return RedirectResponse(url, status_code=303, headers=PRIVATE)
+
         if request.query_params.get("error"):
-            return RedirectResponse(f"{back}&google=cancelled", status_code=303, headers=PRIVATE)
+            return done("cancelled")
         code = request.query_params.get("code", "")
         if not code or not state:
-            return RedirectResponse(f"{back}&google=failed", status_code=303, headers=PRIVATE)
+            return done("failed")
         async with desk_for(request, response, write=True, origin=False) as desk:
             desk._require_manager()
             gads.read_state(
                 cfg, state, tenant_id=desk.viewer.tenant_id, person_id=desk.viewer.person_id
             )
             found = await finish_google(desk, cfg, code)
-        return RedirectResponse(f"{back}&google={found}", status_code=303, headers=PRIVATE)
+        return done(found)
 
     @router.post("/google/app-complete", response_model=AppCompleted)
     async def google_app_complete(

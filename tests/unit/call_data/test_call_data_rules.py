@@ -292,9 +292,9 @@ def test_settings_are_checked_and_cost_is_a_list_price_estimate() -> None:
     ):
         with pytest.raises(SettingsError):
             validate(bad)
-    # Gemini 3.8 Flash: $0.75 in, $3.75 out per million tokens at Rs 95.
-    assert cost_inr("gemini-3.8-flash", 1_000_000, 0) == Decimal("71.2500")
-    assert cost_inr("gemini-3.8-flash", 7000, 1500) == Decimal("1.0331")
+    # Gemini 3.8 Flash: $0.75 in, $3.75 out per million tokens at the sheet's Rs 100.
+    assert cost_inr("gemini-3.8-flash", 1_000_000, 0) == Decimal("75.0000")
+    assert cost_inr("gemini-3.8-flash", 7000, 1500) == Decimal("1.0875")
     assert cost_inr("unknown", 10, 10) == Decimal("0")
 
 

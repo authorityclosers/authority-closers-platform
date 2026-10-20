@@ -2,12 +2,16 @@
  * Dashboard (AUT-1663 strike A): the same calm surface as Calls and
  * Organisation. One steady heading, one figure strip, the daily chart beside
  * call status, then recent calls. One surface level, tokens only.
+ *
+ * Design system v2 (20 Oct): a large title, the figures as four summary
+ * tiles with large numbers, headline section titles. Sizes are set for the
+ * loading outline too, so nothing moves when the numbers arrive.
  */
 
 .page {
   display: grid;
   align-content: start;
-  gap: 20px;
+  gap: 24px;
   width: 100%;
   min-width: 0;
   color: var(--lx-ink);
@@ -39,29 +43,26 @@
 .strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
   min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--lx-line);
-  border-radius: var(--lx-radius-md);
-  background: var(--lx-surface);
-  box-shadow: var(--lx-shadow-1);
+  margin: 0;
 }
 
 .kpi {
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
-  padding: 14px 16px;
-}
-
-.kpi + .kpi {
-  border-left: 1px solid var(--lx-line);
+  padding: 16px 18px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-1);
 }
 
 .kpi dt {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -70,7 +71,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  min-height: 32px;
+  min-height: 36px;
 }
 
 /* The value with its change beside it (kit Delta); the accessory sits at the end. */
@@ -106,11 +107,12 @@
 }
 
 .kpi dd b {
-  font-size: 24px;
+  font-family: var(--lx-font-display);
+  font-size: 30px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 
 .unknown {
@@ -138,8 +140,8 @@
 }
 
 .skeletonValue {
-  width: 56px;
-  height: 28px;
+  width: 64px;
+  height: 32px;
 }
 
 /* A word-shaped placeholder inside a line of text: the line keeps its box. */
@@ -187,23 +189,24 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  min-height: 24px;
+  min-height: 26px;
+  padding-inline: 2px;
   color: var(--lx-muted);
 }
 
 .sectionHead h2 {
   color: var(--lx-ink);
-  font-size: 13px;
-  font-weight: 650;
+  font: var(--sx-text-headline);
+  letter-spacing: -0.01em;
 }
 
 .surface {
   min-width: 0;
-  padding: 14px 16px;
+  padding: 16px 18px;
   overflow: hidden;
-  border: 1px solid var(--lx-line);
-  border-radius: var(--lx-radius-md);
-  background: var(--lx-surface);
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
   box-shadow: var(--lx-shadow-1);
 }
 
@@ -407,31 +410,29 @@
   }
 
   .page {
-    gap: 16px;
+    gap: 20px;
   }
 
   .strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .kpi {
-    padding: 12px 14px;
+    padding: 14px;
   }
 
-  .kpi + .kpi {
-    border-left: 0;
-  }
-
-  .kpi:nth-child(even) {
-    border-left: 1px solid var(--lx-line);
-  }
-
-  .kpi:nth-child(n + 3) {
-    border-top: 1px solid var(--lx-line);
+  .kpi dd:first-of-type {
+    min-height: 30px;
   }
 
   .kpi dd b {
-    font-size: 20px;
+    font-size: 24px;
+  }
+
+  .skeletonValue {
+    width: 56px;
+    height: 26px;
   }
 
   /* Two tiles across: a shorter sparkline beside the value and its change. */
@@ -450,6 +451,11 @@
 
   .columns .surface {
     min-height: 0;
+  }
+
+  /* The large title above already gives the period. */
+  .wideMeta {
+    display: none;
   }
 
   .steps {
@@ -502,12 +508,15 @@
 /* The fictional AC Sandbox's own card: copy, figures, then its views. */
 .sandbox {
   display: grid;
-  gap: 12px;
-  padding: 16px 18px;
-  border: 1px solid var(--lx-line);
-  border-left: 3px solid var(--lx-teal);
-  border-radius: var(--lx-radius-md);
-  background: var(--lx-surface);
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklab, var(--lx-teal) 26%, var(--sx-line));
+  border-radius: var(--sx-radius-md);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--lx-teal) 8%, var(--sx-surface)),
+    var(--sx-surface) 72%
+  );
   box-shadow: var(--lx-shadow-1);
 }
 
@@ -518,12 +527,14 @@
 
 .sandboxCopy h2 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 650;
+  text-wrap: balance;
+  font: var(--sx-text-headline);
+  letter-spacing: -0.01em;
 }
 
 .sandboxCopy p {
   margin: 0;
+  text-wrap: pretty;
 }
 
 .sandboxCopy p:last-child {
@@ -531,6 +542,7 @@
 }
 
 .sandboxEyebrow {
+  text-wrap: balance;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.02em;
@@ -556,29 +568,61 @@
 
 .sandboxFacts dd {
   margin: 0;
-  font-size: 17px;
-  font-weight: 650;
+  font-family: var(--lx-font-display);
+  font-size: 20px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
 }
 
+/* Its views as chips: one tap each, answering hover and press. */
 .sandboxLinks {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 18px;
+  gap: 8px;
 }
 
 .sandboxLinks a {
-  color: var(--lx-teal);
+  display: inline-flex;
+  min-height: 34px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--lx-ink);
   font-weight: 600;
   text-decoration: none;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-fast) var(--sx-ease-out);
 }
 
 .sandboxLinks a:hover {
-  text-decoration: underline;
+  background: var(--sx-fill-strong);
+}
+
+.sandboxLinks a:active {
+  transform: scale(var(--sx-press-scale));
 }
 
 .sandboxLinks a:focus-visible {
-  border-radius: var(--lx-radius-xs);
   box-shadow: var(--lx-ring-focus);
   outline: none;
+}
+
+@media (pointer: coarse) {
+  .sandboxLinks a {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sandboxLinks a {
+    transition: none;
+  }
+
+  .sandboxLinks a:active {
+    transform: none;
+  }
 }

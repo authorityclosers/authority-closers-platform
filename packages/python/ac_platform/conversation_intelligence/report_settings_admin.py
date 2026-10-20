@@ -25,6 +25,7 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.report_settings import (
+    INDUSTRY_PROFILES,
     PARAMETERS,
     SCHEMA,
     VERSION_1,
@@ -42,8 +43,9 @@ from ac_platform.conversation_intelligence.report_settings_models import (
     ReportSettingsVersion,
 )
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.lead_desk.models import LeadJourneyVersion
 from ac_platform.organisations.workspace_kinds import classify_workspaces
-from ac_platform.tenancy.models import Organisation, Tenant
+from ac_platform.tenancy.models import Tenant
 
 MAX_VERSIONS = 200
 
@@ -165,8 +167,15 @@ class ReportSettingsStore:
         return row
 
     async def industry(self, tenant_id: UUID) -> str | None:
-        organisation = await self.database.get(Organisation, tenant_id)
-        return None if organisation is None else industry_of(organisation.details)
+        """The lead-stage profile the organisation's newest lead stages came from."""
+
+        profile = await self.database.scalar(
+            select(LeadJourneyVersion.industry)
+            .where(LeadJourneyVersion.tenant_id == tenant_id)
+            .order_by(LeadJourneyVersion.version.desc())
+            .limit(1)
+        )
+        return industry_of(profile)
 
     async def effective(self, tenant_id: UUID) -> dict[str, Any]:
         """The version that applies to one workspace, and where it came from."""
@@ -222,11 +231,30 @@ class ReportSettingsAdmin:
     async def _names(self) -> dict[UUID, tuple[str, str | None]]:
         rows = (
             await self.database.execute(
-                select(Tenant.id, Tenant.name, Organisation.details)
-                .outerjoin(Organisation, Organisation.tenant_id == Tenant.id)
-                .where(Tenant.id.in_(self.organisation_ids))
+                select(Tenant.id, Tenant.name).where(Tenant.id.in_(self.organisation_ids))
             )
         ).all()
+        newest = (
+            select(
+                LeadJourneyVersion.tenant_id,
+                func.max(LeadJourneyVersion.version).label("version"),
+            )
+            .where(LeadJourneyVersion.tenant_id.in_(self.organisation_ids))
+            .group_by(LeadJourneyVersion.tenant_id)
+            .subquery()
+        )
+        profiles: dict[UUID, str | None] = {
+            tenant_id: industry
+            for tenant_id, industry in (
+                await self.database.execute(
+                    select(LeadJourneyVersion.tenant_id, LeadJourneyVersion.industry).join(
+                        newest,
+                        (newest.c.tenant_id == LeadJourneyVersion.tenant_id)
+                        & (newest.c.version == LeadJourneyVersion.version),
+                    )
+                )
+            ).tuples()
+        }
         # Clear names (Admin 2.0, 19 Oct 2026): "Personal accounts", not the registered name.
         clear = await classify_workspaces(
             self.database,
@@ -235,8 +263,11 @@ class ReportSettingsAdmin:
             tenant_ids=self.organisation_ids,
         )
         return {
-            tenant_id: (clear[tenant_id].name if tenant_id in clear else name, industry_of(details))
-            for tenant_id, name, details in rows
+            tenant_id: (
+                clear[tenant_id].name if tenant_id in clear else name,
+                industry_of(profiles.get(tenant_id)),
+            )
+            for tenant_id, name in rows
         }
 
     async def overview(self, actor: ActorContext) -> dict[str, Any]:
@@ -305,6 +336,10 @@ class ReportSettingsAdmin:
             ],
             "organisations": organisations,
             "history": [_event_view(row, tenant_names) for row in events],
+            # The industries a default can be set for: the lead-stage profiles.
+            "industry_profiles": [
+                {"id": profile, "name": name} for profile, name in INDUSTRY_PROFILES.items()
+            ],
         }
 
     async def _lock(self) -> None:

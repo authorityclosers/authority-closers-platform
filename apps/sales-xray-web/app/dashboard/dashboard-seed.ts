@@ -8,8 +8,10 @@ import type { ReadState } from "./dashboard-body";
 import {
   parseCallActivity,
   parseCallSummary,
+  parseSandboxFacts,
   type CallActivity,
   type CallSummary,
+  type SandboxFacts,
 } from "./dashboard-data";
 
 /** The dashboard's reads, exactly as the browser makes them. */
@@ -18,7 +20,10 @@ export const DASHBOARD_PATHS = {
   activity: "/v1/conversation/acquisition/activity",
   allowance: "/v1/conversation/acquisition/session",
   recent:
-    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true",
+  // The sandbox card sits above the figures: read with them, so it never
+  // arrives late and pushes them down.
+  sandbox: "/v1/organisation/sandbox",
 } as const;
 
 export type ServerAnswer = { status: number; body: unknown } | null;
@@ -31,6 +36,7 @@ type Seed = {
   activity?: ReadState<CallActivity | null>;
   allowance?: ReadState<Allowance>;
   recent?: ReadState<LibrarySubmission[]>;
+  sandbox?: ReadState<SandboxFacts>;
 };
 
 /**
@@ -83,5 +89,6 @@ export function seededDashboard(initial: ServerDashboard | null): Seed {
     recent: seedOf(initial.recent, (body) =>
       parseSubmissionLibraryPage(body).submissions.slice(0, 5),
     ),
+    sandbox: seedOf(initial.sandbox, parseSandboxFacts),
   };
 }
