@@ -8,7 +8,7 @@
      "py_shards": 17, "requested_by": "..."}
 
 Python shards come in two families that partition the tests: (a) files that may need the codec/browser/native
-prerequisites, (b) the rest, which install only the codec (database tests upload audio; ffprobe measures it). Each family is sharded and verified on its own by
+prerequisites, (b) the rest, which skip that 60 s install. Each family is sharded and verified on its own by
 scripts/ci/python_test_shard.py (an exclusion file adds the other family's files).
 
 Full runs every job. Otherwise only the families the changed paths touch run (explicit `checks` force families), and
@@ -169,9 +169,23 @@ def cmd_py_family(fam: str, output: str) -> int:
     return 0
 
 
+CODE = re.compile(r"\.(py|ts|tsx|js|jsx|mjs|cjs|css|sql|sh)$")
+
+
 def cmd_plan() -> int:
     req = request()
     fams, full = families(req)
+    # Guard (20 Oct, a "green" run that tested 0 files): a scoped request must name files, and changed code must map to
+    # at least one job. Either failure turns the run red instead of passing having tested nothing.
+    if not full and not (req["changed_files"] or req["py_tests"] or req["routes"]):
+        print("::error title=empty request::A scoped wb-ci request named no changed files; nothing would be tested.")
+        summary("### Workbench request\n\n**Refused:** no changed files in a scoped request. Use `--full` or `--changed <base>`.")
+        return 1
+    code = [p for p in (req["changed_files"] or []) if CODE.search(p) and not p.startswith("docs/")]
+    if not full and code and not fams:
+        print(f"::error title=unchecked code::{len(code)} changed code files map to no job, e.g. {code[0]}; run --full.")
+        summary(f"### Workbench request\n\n**Refused:** changed code maps to no job ({', '.join(code[:5])}). Use `--full`.")
+        return 1
     shards = int(req["py_shards"])
     if req["py_tests"]:
         py_matrix = [{"fam": "targeted", "shard": 0, "count": 1}]
