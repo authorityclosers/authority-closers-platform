@@ -49,7 +49,9 @@ import styles from "./chats.module.css";
 import { OptInBox, TemplateComposer } from "./template-composer";
 import { Ticks } from "./ticks";
 
-const POLL_MS = 8000;
+// The open chat reads again every 10 s while in view (a shared server).
+const POLL_MS = 10 * 1000;
+const MIN_GAP_MS = 5 * 1000;
 const STICK_PX = 96;
 
 const AUTO: Record<string, string> = {
@@ -126,7 +128,11 @@ function Bubble({
         <span className={styles.bubbleMeta}>
           {who ? <span className={styles.bubbleWho}>{who}</span> : null}
           {message.humanAgent ? <span>Answered personally</span> : null}
-          <time dateTime={message.at}>{clockTime(message.at)}</time>
+          {message.status === "queued" ? (
+            <span className={styles.sending}>Sending…</span>
+          ) : (
+            <time dateTime={message.at}>{clockTime(message.at)}</time>
+          )}
           {out ? <Ticks status={message.status} size={14} /> : null}
         </span>
       </div>
@@ -294,11 +300,19 @@ export function ThreadView({
 
   const [round, setRound] = useState(0);
   const again = () => setRound((value) => value + 1);
+  // A read that started before a send must not undo the sent message: each
+  // send moves the epoch on, and older answers are dropped (orchestrator's
+  // dev pass, 20 Oct: the new bubble vanished until a later poll).
+  const epoch = useRef(0);
+  const readAt = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
+    const started = epoch.current;
+    readAt.current = Date.now();
     readThread({ channel, leadId, accountId }, controller.signal)
       .then((next) => {
+        if (started !== epoch.current) return;
         setDetail(next);
         setFailed(next ? null : "This chat isn't here any more.");
       })
@@ -313,13 +327,27 @@ export function ThreadView({
     return () => controller.abort();
   }, [channel, leadId, accountId, round]);
 
-  // New messages while it is open: read again every few seconds, in view only.
+  // New messages while it is open: every 10 s in view, none while hidden, and
+  // once on coming back (at most every 5 s).
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible")
         setRound((value) => value + 1);
     }, POLL_MS);
-    return () => window.clearInterval(timer);
+    const back = () => {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - readAt.current > MIN_GAP_MS
+      )
+        setRound((value) => value + 1);
+    };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("focus", back);
+    };
   }, []);
 
   const count = (detail?.messages.length ?? 0) + (pending ? 1 : 0);
@@ -417,10 +445,12 @@ export function ThreadView({
           detail={detail}
           leadId={leadId}
           onPending={(message) => {
+            epoch.current += 1;
             stick.current = true;
             setPending(message);
           }}
           onSent={(next) => {
+            epoch.current += 1;
             setPending(null);
             if (next) setDetail(next);
             onChanged();

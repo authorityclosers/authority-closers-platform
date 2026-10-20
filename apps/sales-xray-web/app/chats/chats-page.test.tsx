@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { WorkspaceAccessValue } from "../workspace-access";
 import { ChatsRoute } from "./chats-page";
+import { resetChatsStore } from "./chats-store";
 
 const mocks = vi.hoisted(() => ({
   access: null as WorkspaceAccessValue | null,
@@ -56,6 +57,7 @@ const conversation = () => ({
 });
 
 beforeEach(() => {
+  resetChatsStore();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   window.history.replaceState(null, "", "/chats");
   mocks.access = {

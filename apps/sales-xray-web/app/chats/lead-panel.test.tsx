@@ -161,11 +161,25 @@ it("adds a note and moves the lead to another seller", async () => {
   );
   expect(host.textContent).toContain("Visit on Saturday.");
 
-  const select = host.querySelector<HTMLSelectElement>("select")!;
+  const change = [...host.querySelectorAll("button")].find((button) =>
+    button.textContent?.includes("Change"),
+  )!;
+  await act(async () => change.click());
+  const find = host.querySelector<HTMLInputElement>(
+    "input[aria-label='Find a seller']",
+  )!;
   await act(async () => {
-    select.value = "p2";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(find, "kar");
+    find.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  const picks = [...host.querySelectorAll("ul[aria-label='Sellers'] button")];
+  expect(picks.map((pick) => pick.querySelector("span")?.textContent)).toEqual([
+    "Karan Mehta",
+  ]);
+  await act(async () => (picks[0] as HTMLButtonElement).click());
   await settle();
   expect(
     calls.find((call) => call.url.endsWith("/assign"))?.body,
@@ -173,5 +187,6 @@ it("adds a note and moves the lead to another seller", async () => {
     person_id: "p2",
     expected_revision: 3,
   });
-  expect(select.value).toBe("p2");
+  expect(host.textContent).toContain("Karan Mehta");
+  expect(host.querySelector("input[aria-label='Find a seller']")).toBeNull();
 });

@@ -698,11 +698,13 @@ export function attachmentLabel(kind: string): string | null {
   return ATTACHMENTS[kind] ?? "Something this app can't show";
 }
 
-/** The list's last line: their words, or what they sent. */
+/** The list's last line: their words or what they sent; ours start "You:". */
 export function previewLine(thread: ChatThread): string {
-  if (thread.lastText) return thread.lastText;
-  const label = thread.lastKind ? attachmentLabel(thread.lastKind) : null;
-  return label ?? "A photo, file or sticker";
+  const words =
+    thread.lastText ||
+    (thread.lastKind ? attachmentLabel(thread.lastKind) : null) ||
+    "A photo, file or sticker";
+  return thread.lastDirection === "out" ? `You: ${words}` : words;
 }
 
 /** The place under the name, e.g. "Messenger · Fictional Homes". */

@@ -156,23 +156,6 @@
   color: var(--sx-surface);
 }
 
-.chip[data-channel="whatsapp"][aria-pressed="true"] {
-  background: var(--lx-strength);
-}
-
-.chip[data-channel="messenger"][aria-pressed="true"] {
-  background: var(--lx-closing);
-}
-
-.chip[data-channel="instagram"][aria-pressed="true"] {
-  background: linear-gradient(
-    120deg,
-    var(--lx-missed),
-    var(--lx-objection) 60%,
-    var(--lx-focus)
-  );
-}
-
 /* ---------- The list ---------- */
 
 .listBody {
@@ -711,7 +694,7 @@
 }
 
 .ticks[data-status="read"] {
-  color: var(--lx-closing);
+  color: var(--sx-accent);
 }
 
 .ticks[data-status="failed"] {
@@ -1334,120 +1317,6 @@
   }
 }
 
-/* ---------- Chats card on the lead desk ---------- */
-
-.deskChats {
-  display: grid;
-  gap: 4px;
-  padding: 12px 12px 8px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--lx-radius-lg);
-  background: var(--sx-surface);
-}
-
-.deskChats header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 0 4px;
-  color: var(--sx-ink);
-  font-size: var(--sx-text-md);
-}
-
-.deskChats header > svg {
-  color: var(--sx-accent);
-}
-
-.deskWaiting {
-  display: inline-flex;
-  align-items: center;
-  height: var(--sx-badge-h);
-  padding: 0 8px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
-  color: var(--lx-focus-ink);
-  font-size: var(--sx-text-xs);
-  font-weight: 650;
-}
-
-.deskOpen {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  min-height: var(--sx-control-h);
-  margin-left: auto;
-  padding: 0 4px 0 10px;
-  border-radius: var(--sx-radius-sm);
-  color: var(--sx-accent);
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.deskOpen:hover {
-  background: var(--sx-accent-soft);
-}
-
-.deskChats ul {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.deskRow {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 52px;
-  padding: 6px 4px;
-  border-radius: var(--sx-radius-sm);
-  color: var(--sx-ink);
-  text-decoration: none;
-}
-
-.deskRow:hover {
-  background: var(--sx-sunken);
-}
-
-.deskRow > span:nth-child(2) {
-  display: grid;
-  min-width: 0;
-}
-
-.deskRow strong {
-  overflow: hidden;
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.deskRow small {
-  overflow: hidden;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.deskRow time {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-}
-
-.deskRow .wait {
-  margin-left: 0;
-}
-
-.deskOpen:focus-visible,
-.deskRow:focus-visible {
-  outline: 2px solid transparent;
-  box-shadow: var(--sx-focus-ring);
-}
-
 /* ---------- WhatsApp templates and opt-in ---------- */
 
 .composeNote {
@@ -1648,4 +1517,134 @@
   box-shadow:
     0 0 0 2px var(--sx-surface),
     inset 0 0 0 1px var(--sx-line);
+}
+
+.sending {
+  color: var(--sx-muted);
+  font-style: italic;
+  animation: chats-breathe 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sending {
+    animation: none;
+  }
+}
+
+/* ---------- Who has the lead: a picker that finds by name ---------- */
+
+.owner {
+  display: grid;
+  gap: 6px;
+}
+
+.ownerButton {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ownerButton small {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.ownerPicker {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-float);
+}
+
+.ownerPicker input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.ownerPicker input:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.ownerPicker ul {
+  display: grid;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.ownerPicker li button {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ownerPicker li button:hover:not(:disabled) {
+  background: var(--sx-sunken);
+}
+
+.ownerPicker li small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  white-space: nowrap;
+}
+
+.ownerButton:focus-visible,
+.ownerPicker li button:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The Leads | Chats switch on phones, above the filters. */
+.switchSlot {
+  display: contents;
+}
+
+@media (max-width: 899.98px) {
+  .switchSlot {
+    display: block;
+    padding: 10px 16px 0;
+  }
 }

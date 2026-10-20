@@ -15,7 +15,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -23,33 +22,32 @@ import {
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { requestWorkspace } from "../call-ownership";
-import { LeadsError, readMe, type Desk } from "../leads/leads-client";
+import { readMe, type Desk } from "../leads/leads-client";
 import { notify, dismissNotice } from "../notice-center";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { Empty, Skeleton } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
-import { publishChats, rememberSeen, useSeenMarks } from "./chats-badge";
+import { rememberSeen, useSeenMarks } from "./chats-badge";
 import {
   CHANNELS,
   CHATS_PATH,
   isUnread,
   NO_FILTER,
   sameThread,
-  readChats,
   readSla,
   type ChatChannel,
   type ChatFilter,
-  type ChatList,
   type ChatThread,
   type Sla,
 } from "./chats-client";
 import styles from "./chats.module.css";
+import { refreshChats, useChats } from "./chats-store";
 import { ThreadFilters, ThreadList, ThreadListSkeleton } from "./thread-list";
 import { LeadPanel, LeadSheetDialog } from "./lead-panel";
 import { readPanelChoice, savePanelChoice, useMedia } from "./media";
+import { LeadsChatsSwitch } from "./leads-chats-switch";
 import { ThreadView } from "./thread-view";
 
-const LIST_EVERY_MS = 20 * 1000;
 const CLOCK_EVERY_MS = 30 * 1000;
 
 /* ---------- The open chat, after "#" ---------- */
@@ -174,6 +172,9 @@ export function ChatsSkeleton() {
         open={false}
         list={
           <>
+            <div className={styles.switchSlot}>
+              <LeadsChatsSwitch current="chats" />
+            </div>
             <FiltersSkeleton />
             <ThreadListSkeleton />
           </>
@@ -198,15 +199,13 @@ export function ChatsRoute() {
   const contextKey = `${personId}:${access?.context?.tenantId}`;
 
   const [me, setMe] = useState<Desk["me"] | null>(null);
-  const [list, setList] = useState<ChatList | null>(null);
-  const [listKey, setListKey] = useState<string | null>(null);
-  const [error, setError] = useState<LeadsError | null>(null);
   const [sla, setSla] = useState<Sla | null>(null);
   const [filter, setFilter] = useState<ChatFilter>(NO_FILTER);
   const marks = useSeenMarks(personId);
-  const [version, setVersion] = useState(0);
+  // One shared reader: every 15 s while this screen is open and in view,
+  // paused while hidden, again on coming back and right after a send.
+  const { list, error } = useChats({ live: authenticated, screen: true });
   const [now, setNow] = useState(() => new Date());
-  const hadList = useRef(false);
   // The lead beside the chat: open by default on wide screens, then as the
   // person last left it; on phones a sheet, opened on demand per chat.
   const narrow = useMedia("(max-width: 899.98px)");
@@ -216,7 +215,7 @@ export function ChatsRoute() {
   );
   const [sheetFor, setSheetFor] = useState<string | null>(null);
 
-  const refresh = useCallback(() => setVersion((value) => value + 1), []);
+  const refresh = useCallback(() => void refreshChats({ force: true }), []);
 
   // Who I am here (managers see the team's chats) and the reply target.
   useEffect(() => {
@@ -229,66 +228,29 @@ export function ChatsRoute() {
     return () => controller.abort();
   }, [authenticated, contextKey]);
 
+  // With a list on screen, a failed refresh is a corner card only.
   useEffect(() => {
-    if (!authenticated) return;
-    let live = true;
-    readChats()
-      .then((next) => {
-        if (!live) return;
-        hadList.current = true;
-        setList(next);
-        setListKey(contextKey);
-        setError(null);
-        setNow(new Date());
-        publishChats(next.threads);
-        dismissNotice("chats-load");
-      })
-      .catch((reason: unknown) => {
-        if (!live) return;
-        const problem =
-          reason instanceof LeadsError
-            ? reason
-            : new LeadsError("Your chats didn't load. Try again.", 0);
-        setListKey(contextKey);
-        setError(problem);
-        // With a list on screen, a failed refresh is a corner card only.
-        if (hadList.current && problem.status !== 403)
-          notify({
-            id: "chats-load",
-            tone: "error",
-            title: "Chats didn't refresh",
-            message: problem.message,
-            action: { label: "Try again", run: refresh },
-          });
+    if (!error) {
+      dismissNotice("chats-load");
+      return;
+    }
+    if (list && error.status !== 403)
+      notify({
+        id: "chats-load",
+        tone: "error",
+        title: "Chats didn't refresh",
+        message: error.message,
+        action: { label: "Try again", run: refresh },
       });
-    return () => {
-      live = false;
-    };
-  }, [authenticated, contextKey, version, refresh]);
+  }, [error, list, refresh]);
 
-  // Fresh while open: every 20 s, and when the tab or app comes back.
+  // The waiting clocks move on by themselves.
   useEffect(() => {
-    if (!authenticated) return;
-    const again = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-    const listTimer = window.setInterval(again, LIST_EVERY_MS);
     const clock = window.setInterval(() => setNow(new Date()), CLOCK_EVERY_MS);
-    document.addEventListener("visibilitychange", again);
-    window.addEventListener("focus", again);
-    return () => {
-      window.clearInterval(listTimer);
-      window.clearInterval(clock);
-      document.removeEventListener("visibilitychange", again);
-      window.removeEventListener("focus", again);
-    };
-  }, [authenticated, refresh]);
+    return () => window.clearInterval(clock);
+  }, []);
 
-  const current = listKey === contextKey;
-  const threads = useMemo(
-    () => (current && list ? list.threads : []),
-    [current, list],
-  );
+  const threads = useMemo(() => list?.threads ?? [], [list]);
   const openThread =
     (opened && threads.find((thread) => sameThread(thread, opened))) ?? null;
 
@@ -315,7 +277,7 @@ export function ChatsRoute() {
     );
   }
 
-  if (current && error && !list) {
+  if (error && !list) {
     const organisation = access?.workspaces?.find(
       (workspace) =>
         workspace.kind === "organisation" && workspace.sales_xray_enabled,
@@ -353,7 +315,7 @@ export function ChatsRoute() {
     );
   }
 
-  const ready = current && !!list;
+  const ready = !!list;
   const canManage = me?.can_manage === true;
   const showScopes = canManage && !!list?.owners;
   const channels = [...new Set(threads.map((thread) => thread.channel))];
@@ -402,6 +364,9 @@ export function ChatsRoute() {
         list={
           ready ? (
             <>
+              <div className={styles.switchSlot}>
+                <LeadsChatsSwitch current="chats" />
+              </div>
               <ThreadFilters
                 filter={filter}
                 onChange={setFilter}
@@ -434,6 +399,9 @@ export function ChatsRoute() {
             </>
           ) : (
             <>
+              <div className={styles.switchSlot}>
+                <LeadsChatsSwitch current="chats" />
+              </div>
               <FiltersSkeleton />
               <ThreadListSkeleton />
             </>

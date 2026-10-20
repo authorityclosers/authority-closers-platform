@@ -55,6 +55,12 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+const PICK_SHOWN = 40;
+
+/**
+ * Who has the lead, and for managers a seller picker that finds by name
+ * (orchestrator's dev pass, 20 Oct: 60+ names in a plain list).
+ */
 function Owner({
   detail,
   onChanged,
@@ -62,48 +68,91 @@ function Owner({
   detail: LeadDetail;
   onChanged: (next: LeadDetail) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [find, setFind] = useState("");
   const [busy, setBusy] = useState(false);
+  const search = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (open) search.current?.focus();
+  }, [open]);
   const lead = detail.lead;
   if (!detail.can_assign) return <>{lead.owner_name ?? "Not assigned yet"}</>;
+  const needle = find.trim().toLocaleLowerCase();
+  const others = detail.reps.filter(
+    (rep) =>
+      rep.person_id !== lead.owner_person_id &&
+      (!needle || rep.name.toLocaleLowerCase().includes(needle)),
+  );
+  const move = async (personId: string) => {
+    setBusy(true);
+    try {
+      onChanged(await reassign(lead, personId));
+      setOpen(false);
+      setFind("");
+    } catch (reason) {
+      notify({
+        id: "chats-reassign",
+        tone: "error",
+        title: "Not moved",
+        message:
+          reason instanceof LeadsError
+            ? reason.message
+            : "That didn't work. Try again.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <select
-      className={styles.ownerSelect}
-      aria-label="Who has this lead"
-      value={lead.owner_person_id ?? ""}
-      disabled={busy}
-      onChange={async (event) => {
-        setBusy(true);
-        try {
-          onChanged(await reassign(lead, event.target.value || null));
-        } catch (reason) {
-          notify({
-            id: "chats-reassign",
-            tone: "error",
-            title: "Not moved",
-            message:
-              reason instanceof LeadsError
-                ? reason.message
-                : "That didn't work. Try again.",
-          });
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      {!lead.owner_person_id ? (
-        <option value="">Not assigned yet</option>
+    <div className={styles.owner}>
+      <button
+        type="button"
+        className={styles.ownerButton}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>{lead.owner_name ?? "Not assigned yet"}</span>
+        <small>{open ? "Close" : "Change"}</small>
+      </button>
+      {open ? (
+        <div className={styles.ownerPicker}>
+          <input
+            ref={search}
+            type="search"
+            aria-label="Find a seller"
+            placeholder="Find a seller"
+            value={find}
+            onChange={(event) => setFind(event.target.value)}
+          />
+          {others.length ? (
+            <ul aria-label="Sellers">
+              {others.slice(0, PICK_SHOWN).map((rep) => (
+                <li key={rep.person_id}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void move(rep.person_id)}
+                  >
+                    <span>{rep.name}</span>
+                    <small>
+                      {rep.open_leads} open
+                      {rep.available ? "" : " · away"}
+                    </small>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.panelQuiet}>No seller by that name.</p>
+          )}
+          {others.length > PICK_SHOWN ? (
+            <p className={styles.panelQuiet}>
+              {others.length - PICK_SHOWN} more: type part of a name.
+            </p>
+          ) : null}
+        </div>
       ) : null}
-      {lead.owner_person_id &&
-      !detail.reps.some((rep) => rep.person_id === lead.owner_person_id) ? (
-        <option value={lead.owner_person_id}>{lead.owner_name}</option>
-      ) : null}
-      {detail.reps.map((rep) => (
-        <option key={rep.person_id} value={rep.person_id}>
-          {rep.name}
-          {rep.available ? "" : " (away)"}
-        </option>
-      ))}
-    </select>
+    </div>
   );
 }
 

@@ -1,8 +1,10 @@
 import { CALLS_PATH, NEW_ANALYSIS_PATH } from "../analysis-routes";
 
 /**
- * The phone tabs (owner, 17 Oct: five, everything else under More; 20 Oct:
- * Chats gets its own place beside Leads).
+ * The five phone tabs (owner, 17 Oct): everything else lives under More.
+ * Chats lives inside Leads on phones (owner, 20 Oct: "5 tabs, Chats inside
+ * Leads"); computers keep a Chats item in the rail. ("chats" stays in the type
+ * only until the shell drops its phone Chats link.)
  */
 export type PhoneTab =
   | "dashboard"
@@ -28,7 +30,7 @@ export type ShellActive =
 const FROM_ACTIVE: Record<ShellActive, PhoneTab> = {
   dashboard: "dashboard",
   leads: "leads",
-  chats: "chats",
+  chats: "leads",
   analyse: "new",
   calls: "calls",
   prospects: "more",
@@ -54,7 +56,7 @@ export function phoneTabFor(
   if (pathname) {
     if (under(pathname, "/dashboard")) return "dashboard";
     if (under(pathname, "/leads")) return "leads";
-    if (under(pathname, "/chats")) return "chats";
+    if (under(pathname, "/chats")) return "leads";
     if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
       return "calls";
     // A call analysed here keeps /analysis/new in the router while the

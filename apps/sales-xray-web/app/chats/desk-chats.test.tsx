@@ -3,6 +3,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { DeskChats } from "./desk-chats";
+import { resetChatsStore } from "./chats-store";
+
+vi.mock("../workspace-access", () => ({
+  useWorkspaceAccess: () => ({
+    status: "ready",
+    authenticated: true,
+    context: { personId: "p-me", sessionId: "s1", tenantId: "t1" },
+  }),
+}));
 
 const LEAD = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
@@ -17,6 +26,7 @@ const json = (body: unknown, code = 200) =>
   });
 
 beforeEach(() => {
+  resetChatsStore();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   social = [
     {

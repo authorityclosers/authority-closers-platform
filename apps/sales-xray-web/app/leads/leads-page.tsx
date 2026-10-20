@@ -26,6 +26,7 @@ import {
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { DeskChats } from "../chats/desk-chats";
+import { LeadsChatsSwitch } from "../chats/leads-chats-switch";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import {
   Badge,
@@ -402,6 +403,8 @@ export function LeadsRoute() {
             className={styles.pullSpinner}
             aria-hidden="true"
           />
+          {/* Phones: Leads | Chats (owner, 20 Oct: Chats inside Leads). */}
+          <LeadsChatsSwitch current="leads" />
           <PhoneSetupBar />
           <div className={styles.wideOnly}>
             <PageHeader

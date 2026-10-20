@@ -11,46 +11,30 @@ import { ChevronRight, Hourglass, MessagesSquare } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { publishChats } from "./chats-badge";
+import { useWorkspaceAccess } from "../workspace-access";
 import { ChatAvatar } from "./channel-mark";
 import {
   chatHref,
   CHATS_PATH,
   listTime,
   previewLine,
-  readChats,
   waitedFor,
   waitTone,
-  type ChatThread,
 } from "./chats-client";
-import styles from "./chats.module.css";
+import styles from "./desk-chats.module.css";
+import { useChats } from "./chats-store";
 
 const SHOWN = 4;
-const EVERY_MS = 60 * 1000;
 
 export function DeskChats() {
-  const [threads, setThreads] = useState<ChatThread[] | null>(null);
+  const access = useWorkspaceAccess();
+  const live = access?.authenticated === true && access.status === "ready";
+  const { list } = useChats({ live });
+  const threads = list?.threads ?? null;
   const [now, setNow] = useState(() => new Date());
-
   useEffect(() => {
-    let live = true;
-    const load = () =>
-      readChats()
-        .then((list) => {
-          if (!live) return;
-          setThreads(list.threads);
-          setNow(new Date());
-          publishChats(list.threads);
-        })
-        .catch(() => live && setThreads([]));
-    void load();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load();
-    }, EVERY_MS);
-    return () => {
-      live = false;
-      window.clearInterval(timer);
-    };
+    const clock = window.setInterval(() => setNow(new Date()), 30 * 1000);
+    return () => window.clearInterval(clock);
   }, []);
 
   const open = (threads ?? []).filter((thread) => thread.leadId);

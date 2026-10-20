@@ -13,6 +13,7 @@
 import { PhoneCall } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
+import { useUnreadChats } from "../chats/chats-badge";
 import { readBadge, type Badge } from "./leads-client";
 import styles from "./leads.module.css";
 
@@ -80,11 +81,14 @@ export function LeadsTabIcon({
   size = 20,
   strokeWidth,
   live,
+  withChats = false,
 }: {
   size?: number;
   strokeWidth?: number;
   /** Signed in, loaded and not under test; otherwise no badge and no read. */
   live: boolean;
+  /** Phones: Chats lives inside Leads, so unread chats count here too. */
+  withChats?: boolean;
 }) {
   const latest = useSyncExternalStore(
     live ? subscribe : idle,
@@ -92,9 +96,11 @@ export function LeadsTabIcon({
     serverSnapshot,
   );
   const badge = live ? latest : null;
+  const unread = useUnreadChats(live && withChats);
   const late = badge?.overdue ?? 0;
   const due = badge?.to_call ?? 0;
-  const count = late || due;
+  // Late calls first (red); otherwise what waits: calls due and unread chats.
+  const count = late || due + unread;
   return (
     <span className={styles.tabIcon}>
       <PhoneCall size={size} strokeWidth={strokeWidth} aria-hidden="true" />
@@ -102,7 +108,12 @@ export function LeadsTabIcon({
         <span className={styles.tabBadge} data-tone={late ? "bad" : "accent"}>
           <span aria-hidden="true">{count > 99 ? "99+" : count}</span>
           <span className={styles.srOnly}>
-            {late ? `, ${late} late` : `, ${due} to call`}
+            {late
+              ? `, ${late} late`
+              : [
+                  due ? `, ${due} to call` : "",
+                  unread ? `, ${unread} unread chats` : "",
+                ].join("")}
           </span>
         </span>
       ) : null}
