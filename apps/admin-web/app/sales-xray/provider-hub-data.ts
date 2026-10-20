@@ -235,3 +235,62 @@ export const PIPELINE_WORDS: Record<PipelineState, string> = {
   planned: "Adapter planned",
   none: "Browse and compare",
 };
+
+/* ---------- who does each job ---------- */
+
+/** A model a stage's setting offers, with its list prices in dollars per million tokens. */
+export type ModelPrice = {
+  model: string;
+  label: string;
+  usdIn: number;
+  usdOut: number;
+};
+
+export function modelPrices(
+  models: readonly {
+    model: string;
+    label: string;
+    inputUsd: string;
+    outputUsd: string;
+  }[],
+): ModelPrice[] {
+  return models
+    .map((item) => ({
+      model: item.model,
+      label: item.label,
+      usdIn: Number.parseFloat(item.inputUsd),
+      usdOut: Number.parseFloat(item.outputUsd),
+    }))
+    .filter(
+      (item) => Number.isFinite(item.usdIn) && Number.isFinite(item.usdOut),
+    );
+}
+
+/**
+ * Rupees per audio minute if a stage ran on this model: the stage's tokens per transcribed
+ * minute in the window, priced at the model's list prices. Null without audio to divide by.
+ */
+export function estimatePerMinute(
+  stage: { inputTokens: number; outputTokens: number },
+  audioMinutes: number,
+  price: ModelPrice,
+  usdToInr: number,
+): number | null {
+  if (audioMinutes <= 0) return null;
+  const usd =
+    ((stage.inputTokens / audioMinutes) * price.usdIn +
+      (stage.outputTokens / audioMinutes) * price.usdOut) /
+    1_000_000;
+  return usd * usdToInr;
+}
+
+const PAISE = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 3,
+});
+
+/** "₹0.084 a min", or "–". */
+export const rupeesPerMinute = (value: number | null) =>
+  value === null ? "–" : `${PAISE.format(value)} a min`;

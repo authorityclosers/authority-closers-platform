@@ -341,3 +341,44 @@
     transition: none;
   }
 }
+
+/* Who does each job. */
+.runsOn {
+  display: grid;
+  gap: 2px;
+}
+
+.runsOn code {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.muted {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.change {
+  display: grid;
+  gap: 6px;
+}
+
+.estimates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  list-style: none;
+}
+
+.estimates b {
+  color: var(--sx-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.estimates li[data-current] b {
+  color: var(--sx-accent);
+}
