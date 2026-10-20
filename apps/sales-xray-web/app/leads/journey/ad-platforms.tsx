@@ -102,8 +102,11 @@ export function AdPlatforms({ version }: { version: number }) {
     return () => clearInterval(timer);
   }, [ads?.settling, load]);
 
-  const ready = ads?.providers.filter((item) => item.available) ?? [];
-  const later = ads?.providers.filter((item) => !item.available) ?? [];
+  // Platforms set up on this environment get a card; the rest share one line.
+  const ready =
+    ads?.providers.filter((item) => item.available && item.configured) ?? [];
+  const later =
+    ads?.providers.filter((item) => !item.available || !item.configured) ?? [];
   return (
     <div className={styles.ads}>
       <header className={styles.paneHead}>
@@ -141,8 +144,8 @@ export function AdPlatforms({ version }: { version: number }) {
             ))}
           </span>
           <small>
-            {later.map((item) => item.name).join(", ")}: being connected next.
-            Your stages will match them the same way.
+            {later.map((item) => item.name).join(", ")}: not set up here yet.
+            Your stages will match them the same way once they are.
           </small>
         </div>
       ) : null}
