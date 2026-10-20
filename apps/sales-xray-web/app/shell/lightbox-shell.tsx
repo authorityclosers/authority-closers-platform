@@ -1324,6 +1324,7 @@ function LightboxShellFrame({
           aria-current={phoneTab === "dashboard" ? "page" : undefined}
         >
           <LayoutGrid size={20} aria-hidden="true" />
+          <span className={styles.tabPill} aria-hidden="true" />
           <span>Home</span>
         </ScreenLink>
         {/* Signed out, Leads and Calls only lead to a sign-in prompt (B22). */}
@@ -1336,6 +1337,7 @@ function LightboxShellFrame({
             {/* Chats live inside Leads on phones (owner, 20 Oct: "5 tabs,
                 Chats inside Leads"), so unread chats count here too. */}
             <LeadsTabIcon size={20} live={leadsBadgeLive} withChats />
+            <span className={styles.tabPill} aria-hidden="true" />
             <span>Leads</span>
           </ScreenLink>
         )}
@@ -1348,6 +1350,7 @@ function LightboxShellFrame({
           <span className={styles.newMark} aria-hidden="true">
             <Plus size={18} strokeWidth={2.25} />
           </span>
+          <span className={styles.tabPill} aria-hidden="true" />
           <span>New</span>
         </ScreenLink>
         {guest ? null : (
@@ -1357,6 +1360,7 @@ function LightboxShellFrame({
             aria-current={phoneTab === "calls" ? "page" : undefined}
           >
             <FolderOpen size={20} aria-hidden="true" />
+            <span className={styles.tabPill} aria-hidden="true" />
             <span>Calls</span>
           </ScreenLink>
         )}
@@ -1369,6 +1373,7 @@ function LightboxShellFrame({
             onClick={openAccount}
           >
             <LogIn size={20} aria-hidden="true" />
+            <span className={styles.tabPill} aria-hidden="true" />
             <span>Sign in</span>
           </ScreenLink>
         ) : (
@@ -1381,6 +1386,7 @@ function LightboxShellFrame({
             aria-current={phoneTab === "more" ? "page" : undefined}
           >
             <Ellipsis size={20} aria-hidden="true" />
+            <span className={styles.tabPill} aria-hidden="true" />
             <span>More</span>
           </button>
         )}
@@ -1410,11 +1416,11 @@ function LightboxShellFrame({
         openNews={openNews}
         openEvent={navigateEvent}
       />
-      {accountCardOpen && authenticated ? (
+      {/* Mounted while signed in, so the phone sheet can slide away. */}
+      {authenticated ? (
         <SettingsMenu
-          key={accountView}
           initialView={accountView}
-          open
+          open={accountCardOpen}
           anchorRef={accountAnchorRef}
           onClose={closeAccountCard}
           name={profileName}

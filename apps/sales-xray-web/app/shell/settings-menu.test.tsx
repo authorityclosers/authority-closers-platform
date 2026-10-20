@@ -6,6 +6,7 @@ import { SettingsMenu } from "./settings-menu";
 import type { Allowance } from "../acquisition-client";
 import { guideOffKey } from "../guide-progress";
 import { FIRST_CALL_GUIDE } from "../guide-registry";
+import { SHEET_PHONE_QUERY } from "../ui/sheet";
 import {
   WorkspaceAccessContext,
   type WorkspaceAccessValue,
@@ -17,75 +18,93 @@ import {
 
 let root: Root;
 let host: HTMLDivElement;
-let originalWidth: number | null = null;
-let originalHeight: number | null = null;
+const realMatchMedia = window.matchMedia;
+
+function asPhone(phone: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: query === SHEET_PHONE_QUERY ? phone : false,
+      addEventListener() {},
+      removeEventListener() {},
+    }),
+  });
+}
 
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  if (originalWidth !== null)
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: originalWidth,
-    });
-  if (originalHeight !== null)
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: originalHeight,
-    });
-  originalWidth = null;
-  originalHeight = null;
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: realMatchMedia,
+  });
   vi.unstubAllGlobals();
 });
 
-it("keeps the account menu inside the mobile viewport by the active trigger", async () => {
-  originalWidth = window.innerWidth;
-  originalHeight = window.innerHeight;
-  Object.defineProperty(window, "innerWidth", {
-    configurable: true,
-    value: 390,
-  });
-  Object.defineProperty(window, "innerHeight", {
-    configurable: true,
-    value: 800,
-  });
+type Props = Partial<Parameters<typeof SettingsMenu>[0]>;
 
-  const anchor = document.createElement("a");
-  anchor.getBoundingClientRect = () =>
-    ({
-      left: 150,
-      right: 230,
-      top: 740,
-      bottom: 780,
-      width: 80,
-      height: 40,
-    }) as DOMRect;
-  const anchorRef = { current: anchor };
+async function open(props: Props = {}, access?: WorkspaceAccessValue) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  const menu = (
+    <SettingsMenu
+      open
+      anchorRef={{ current: document.createElement("button") }}
+      onClose={() => {}}
+      name="Fictional User"
+      email="fictional@example.test"
+      allowance={null}
+      {...props}
+    />
+  );
   await act(async () =>
     root.render(
-      <SettingsMenu
-        open
-        anchorRef={anchorRef}
-        onClose={() => {}}
-        name="Fictional User"
-        email="fictional@example.test"
-        allowance={null}
-      />,
+      access ? (
+        <WorkspaceAccessContext.Provider value={access}>
+          {menu}
+        </WorkspaceAccessContext.Provider>
+      ) : (
+        menu
+      ),
     ),
   );
-
-  const menu = document.querySelector<HTMLElement>(
-    '[role="dialog"][aria-label="Account menu"]',
-  )!;
-  expect(menu.style.getPropertyValue("--card-left")).toBe("45px");
-  const bottom = Number.parseFloat(
-    menu.style.getPropertyValue("--card-bottom"),
+  return (
+    document.querySelector<HTMLElement>(
+      '[role="dialog"][aria-label="Account menu"]',
+    ) ?? document.querySelector<HTMLElement>("dialog[open]")!
   );
-  expect(bottom).toBeGreaterThan(0);
-  expect(bottom).toBeLessThan(800);
+}
+
+it("opens beside the gear on a computer, inside the window", async () => {
+  asPhone(false);
+  const anchor = document.createElement("a");
+  anchor.getBoundingClientRect = () =>
+    ({
+      left: 12,
+      right: 52,
+      top: 700,
+      bottom: 740,
+      width: 40,
+      height: 40,
+    }) as DOMRect;
+  const menu = await open({ anchorRef: { current: anchor } });
+  expect(menu.style.getPropertyValue("--card-left")).toBe("62px");
+  expect(Number.parseFloat(menu.style.getPropertyValue("--card-bottom"))).toBe(
+    window.innerHeight - 740,
+  );
+});
+
+it("opens as a sheet on a phone, named Account, which swipes away", async () => {
+  asPhone(true);
+  const sheet = await open();
+  expect(sheet.tagName).toBe("DIALOG");
+  const title = document.getElementById(
+    sheet.getAttribute("aria-labelledby")!,
+  );
+  expect(title?.textContent).toBe("Account");
+  expect(sheet.textContent).toContain("Fictional User");
+  expect(sheet.textContent).toContain("Log out");
 });
 
 it.each<[Allowance, string | null]>([
@@ -95,7 +114,7 @@ it.each<[Allowance, string | null]>([
       available_seconds: 600000,
       committed_seconds: 0,
     },
-    "166 h 40 min of 166 h 40 min left",
+    "166 h 40 min left",
   ],
   [
     {
@@ -107,76 +126,63 @@ it.each<[Allowance, string | null]>([
     null,
   ],
 ])("does not invent a plan for %j", async (allowance, text) => {
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  await act(async () =>
-    root.render(
-      <SettingsMenu
-        open
-        anchorRef={{ current: document.createElement("button") }}
-        onClose={() => {}}
-        name="Fictional User"
-        email="fictional@example.test"
-        allowance={allowance}
-      />,
-    ),
-  );
-  const menu = document.querySelector(
-    '[role="dialog"][aria-label="Account menu"]',
+  asPhone(false);
+  const menu = await open({ allowance });
+  const plan = menu.querySelector<HTMLAnchorElement>(
+    'a[href="/settings/plan"]',
   )!;
-  if (text) expect(menu.textContent).toContain(text);
+  expect(plan.textContent).toContain("Plan & usage");
+  if (text) expect(plan.textContent).toContain(text);
+  else expect(plan.textContent).toBe("Plan & usage");
   expect(menu.textContent).not.toMatch(/Unlimited|unavailable|Trial/i);
-  expect(menu.querySelector('a[href="/plans"]')?.textContent).toBe("Plans");
-  if (allowance.unlimited) {
-    expect(menu.querySelector('[aria-hidden="true"] i')).toBeNull();
-    const buttons = [...menu.querySelectorAll("button")];
-    expect(
-      buttons.some((button) => button.textContent?.includes("Analysis time")),
-    ).toBe(false);
-    expect(
-      buttons.find((button) => button.textContent?.startsWith("Usage"))
-        ?.textContent,
-    ).toBe("Usage");
-  }
+});
+
+it("lists only what a person needs: Settings, Plan & usage, What's new, Help", async () => {
+  asPhone(false);
+  const menu = await open({ organisation: true });
+  const rows = [...menu.querySelectorAll<HTMLElement>("a, button")].map(
+    (row) => row.textContent?.trim(),
+  );
+  expect(rows).toEqual(
+    expect.arrayContaining([
+      "Log out",
+      "Settings",
+      "Plan & usage",
+      "What's new",
+      "Help & support",
+    ]),
+  );
+  expect(menu.querySelector('a[href="/settings"]')).not.toBeNull();
+  expect(menu.querySelector('a[href="/settings/help"]')).not.toBeNull();
+  // Owner, 20 Oct: "Taking new leads" lives on the Leads desk, not here;
+  // profile, language and billing live in Settings.
+  expect(menu.textContent).not.toMatch(
+    /Taking new leads|Language|Plans|Profile|billing/,
+  );
 });
 
 it("switches the first-call guide off and back on from the account menu", async () => {
+  asPhone(false);
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(new Response(null, { status: 503 })),
   );
   localStorage.clear();
-  const access: WorkspaceAccessValue = {
-    status: "ready",
-    authenticated: true,
-    context: { personId: "fictional-a", sessionId: "s", tenantId: "t" },
-    retry: () => {},
-  };
   const onClose = vi.fn();
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  await act(async () =>
-    root.render(
-      <WorkspaceAccessContext.Provider value={access}>
-        <SettingsMenu
-          open
-          anchorRef={{ current: document.createElement("button") }}
-          onClose={onClose}
-          name="Fictional User"
-          email="fictional@example.test"
-          allowance={null}
-        />
-      </WorkspaceAccessContext.Provider>,
-    ),
+  await open(
+    { onClose },
+    {
+      status: "ready",
+      authenticated: true,
+      context: { personId: "fictional-a", sessionId: "s", tenantId: "t" },
+      retry: () => {},
+    },
   );
   const toggle = document.querySelector<HTMLButtonElement>('[role="switch"]')!;
   expect(toggle.textContent).toContain("First call guide");
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   await act(async () => toggle.click());
   expect(toggle.getAttribute("aria-checked")).toBe("false");
-  expect(toggle.textContent).toContain("Off");
   expect(
     localStorage.getItem(guideOffKey("fictional-a", FIRST_CALL_GUIDE)),
   ).toBe("1");
@@ -192,16 +198,7 @@ it("switches the first-call guide off and back on from the account menu", async 
 it.each(["main", "news"] as const)(
   "shows Draft notes and acknowledges displayed keys from the %s view",
   async (initialView) => {
-    const access: WorkspaceAccessValue = {
-      status: "ready",
-      authenticated: true,
-      context: {
-        personId: `fictional-news-${initialView}`,
-        sessionId: "s",
-        tenantId: "t",
-      },
-      retry: () => {},
-    };
+    asPhone(false);
     let seen = false;
     const fetcher = vi.fn().mockImplementation((path: string) => {
       if (path === "/v1/updates/seen") seen = true;
@@ -232,27 +229,19 @@ it.each(["main", "news"] as const)(
       );
     });
     vi.stubGlobal("fetch", fetcher);
-    host = document.createElement("div");
-    document.body.append(host);
-    root = createRoot(host);
-    await act(async () =>
-      root.render(
-        <WorkspaceAccessContext.Provider value={access}>
-          <SettingsMenu
-            open
-            initialView={initialView}
-            anchorRef={{ current: document.createElement("button") }}
-            onClose={() => {}}
-            name="Fictional User"
-            email="fictional@example.test"
-            allowance={null}
-          />
-        </WorkspaceAccessContext.Provider>,
-      ),
+    const menu = await open(
+      { initialView },
+      {
+        status: "ready",
+        authenticated: true,
+        context: {
+          personId: `fictional-news-${initialView}`,
+          sessionId: "s",
+          tenantId: "t",
+        },
+        retry: () => {},
+      },
     );
-    const menu = document.querySelector(
-      '[role="dialog"][aria-label="Account menu"]',
-    )!;
     const news = [...menu.querySelectorAll("button")].find((button) =>
       button.textContent?.includes("What's new"),
     )!;
@@ -280,119 +269,61 @@ it.each(["main", "news"] as const)(
 );
 
 it("has no guide switch without a signed-in person", async () => {
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  await act(async () =>
-    root.render(
-      <SettingsMenu
-        open
-        anchorRef={{ current: document.createElement("button") }}
-        onClose={() => {}}
-        name={null}
-        email={null}
-        allowance={null}
-      />,
-    ),
-  );
+  asPhone(false);
+  await open({ name: null, email: null });
   expect(document.querySelector('[role="switch"]')).toBeNull();
 });
 
-it.each([true, false])(
-  "links Organisation from the account menu only inside one (%s)",
-  async (organisation) => {
-    host = document.createElement("div");
-    document.body.append(host);
-    root = createRoot(host);
-    await act(async () =>
-      root.render(
-        <SettingsMenu
-          open
-          anchorRef={{ current: document.createElement("button") }}
-          onClose={() => {}}
-          name="Fictional User"
-          email="fictional@example.test"
-          allowance={null}
-          organisation={organisation}
-        />,
-      ),
-    );
-    const link = document.querySelector('a[href="/organisation"]');
-    expect(link?.textContent ?? null).toBe(
-      organisation ? "Organisation" : null,
-    );
-  },
-);
-
-it("switches workspace from the account menu, where phones have no sidebar", async () => {
+it("puts the current workspace first on a phone, others one tap away", async () => {
+  asPhone(true);
   const onSelectWorkspace = vi.fn();
   const onClose = vi.fn();
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  await act(async () =>
-    root.render(
-      <SettingsMenu
-        open
-        anchorRef={{ current: document.createElement("button") }}
-        onClose={onClose}
-        name="Fictional User"
-        email="fictional@example.test"
-        allowance={null}
-        workspaces={[
-          { tenant_id: "org-one", kind: "organisation", name: "AC" },
-          { tenant_id: "personal-one", kind: "personal", name: "Fictional" },
-        ]}
-        currentWorkspaceId="org-one"
-        onSelectWorkspace={onSelectWorkspace}
-      />,
-    ),
-  );
-  const group = document.querySelector(
-    '[role="group"][aria-label="Workspace"]',
+  const sheet = await open({
+    onClose,
+    workspaces: [
+      { tenant_id: "org-one", kind: "organisation", name: "AC", role: "admin" },
+      { tenant_id: "personal-one", kind: "personal", name: "Fictional" },
+    ],
+    currentWorkspaceId: "org-one",
+    onSelectWorkspace,
+  });
+  const group = sheet.querySelector('[aria-label="Workspace"]')!;
+  const current = group.querySelector('[aria-current="true"]')!;
+  expect(current.textContent).toContain("AC");
+  expect(current.textContent).toContain("Organisation · Admin");
+  const personal = [...group.querySelectorAll("button")].find((row) =>
+    row.textContent?.includes("Personal · Just you"),
   )!;
-  const rows = [...group.querySelectorAll("button")];
-  expect(rows.map((row) => row.textContent)).toEqual(["AC", "Personal"]);
-  expect(rows[0].getAttribute("aria-current")).toBe("true");
-  await act(async () => rows[1].click());
+  expect(personal.querySelector("b")?.textContent).toBe("Personal");
+  await act(async () => (current as HTMLButtonElement).click());
+  expect(onSelectWorkspace).not.toHaveBeenCalled();
+  await act(async () => personal.click());
   expect(onClose).toHaveBeenCalled();
   expect(onSelectWorkspace).toHaveBeenCalledWith("personal-one");
 });
 
-it("offers phones the invitations and Create, even with one workspace", async () => {
+it("offers invitations and Create apart, even with one workspace", async () => {
+  asPhone(true);
   const onCreateOrganisation = vi.fn();
   const onClose = vi.fn();
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  await act(async () =>
-    root.render(
-      <SettingsMenu
-        open
-        anchorRef={{ current: document.createElement("button") }}
-        onClose={onClose}
-        name="Fictional User"
-        email="fictional@example.test"
-        allowance={null}
-        workspaces={[
-          { tenant_id: "personal-one", kind: "personal", name: "Fictional" },
-        ]}
-        currentWorkspaceId="personal-one"
-        onSelectWorkspace={() => {}}
-        invitesWaiting={2}
-        onCreateOrganisation={onCreateOrganisation}
-      />,
-    ),
-  );
-  const group = document.querySelector(
-    '[role="group"][aria-label="Workspace"]',
-  )!;
+  const sheet = await open({
+    onClose,
+    workspaces: [
+      { tenant_id: "personal-one", kind: "personal", name: "Fictional" },
+    ],
+    currentWorkspaceId: "personal-one",
+    onSelectWorkspace: () => {},
+    invitesWaiting: 2,
+    onCreateOrganisation,
+  });
+  const group = sheet.querySelector('[aria-label="Workspace"]')!;
   // One workspace is not a choice: no row for it.
   expect(group.textContent).not.toContain("Personal");
   const invitations = group.querySelector<HTMLAnchorElement>(
     'a[href="/organisation/invites"]',
   )!;
-  expect(invitations.textContent).toBe("Invitations2");
+  expect(invitations.textContent).toContain("Invitations");
+  expect(invitations.textContent).toContain("2");
   const create = [...group.querySelectorAll("button")].find(
     (row) => row.textContent === "Create an organisation",
   )!;
@@ -402,28 +333,12 @@ it("offers phones the invitations and Create, even with one workspace", async ()
 });
 
 it("offers Log out next to who is signed in, without focusing it", async () => {
+  asPhone(false);
   const fetchMock = vi
     .fn()
     .mockResolvedValue(new Response(null, { status: 503 }));
   vi.stubGlobal("fetch", fetchMock);
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  await act(async () =>
-    root.render(
-      <SettingsMenu
-        open
-        anchorRef={{ current: document.createElement("button") }}
-        onClose={() => {}}
-        name="Fictional User"
-        email="fictional@example.test"
-        allowance={null}
-      />,
-    ),
-  );
-  const menu = document.querySelector(
-    '[role="dialog"][aria-label="Account menu"]',
-  )!;
+  const menu = await open();
   const logOut = [...menu.querySelectorAll("button")].find(
     (button) => button.textContent === "Log out",
   )!;
@@ -440,34 +355,19 @@ it("offers Log out next to who is signed in, without focusing it", async () => {
 });
 
 it("lists the pages that are not phone tabs, organisation pages only in one", async () => {
-  const render = async (organisation: boolean) => {
-    host = document.createElement("div");
-    document.body.append(host);
-    root = createRoot(host);
-    await act(async () =>
-      root.render(
-        <SettingsMenu
-          open
-          anchorRef={{ current: document.createElement("button") }}
-          onClose={() => {}}
-          name="Fictional User"
-          email="fictional@example.test"
-          allowance={null}
-          organisation={organisation}
-          insights={organisation}
-        />,
-      ),
-    );
+  asPhone(true);
+  const pages = async (organisation: boolean) => {
+    const sheet = await open({ organisation, insights: organisation });
     return [
-      ...document.querySelectorAll<HTMLAnchorElement>(
+      ...sheet.querySelectorAll<HTMLAnchorElement>(
         'nav[aria-label="More pages"] a',
       ),
     ].map((link) => link.getAttribute("href"));
   };
-  expect(await render(false)).toEqual(["/prospects", "/coaching"]);
+  expect(await pages(false)).toEqual(["/prospects", "/coaching"]);
   await act(async () => root.unmount());
   host.remove();
-  expect(await render(true)).toEqual([
+  expect(await pages(true)).toEqual([
     "/prospects",
     "/coaching",
     "/organisation",
@@ -477,38 +377,38 @@ it("lists the pages that are not phone tabs, organisation pages only in one", as
   expect(document.body.textContent).not.toContain("Calls on this phone");
 });
 
+it("keeps the phone pages and workspace list off the computer's card", async () => {
+  asPhone(false);
+  const menu = await open({
+    organisation: true,
+    workspaces: [
+      { tenant_id: "org-one", kind: "organisation", name: "AC" },
+      { tenant_id: "personal-one", kind: "personal", name: "Fictional" },
+    ],
+    currentWorkspaceId: "org-one",
+    onSelectWorkspace: () => {},
+  });
+  expect(menu.querySelector('nav[aria-label="More pages"]')).toBeNull();
+  expect(menu.querySelector('[aria-label="Workspace"]')).toBeNull();
+});
+
 it("offers Phone setup in the More sheet inside the phone app only", async () => {
+  asPhone(true);
   const bridge = window as Window & { SXPhone?: unknown };
-  const render = async () => {
-    host = document.createElement("div");
-    document.body.append(host);
-    root = createRoot(host);
-    await act(async () =>
-      root.render(
-        <SettingsMenu
-          open
-          anchorRef={{ current: document.createElement("button") }}
-          onClose={() => {}}
-          name="Fictional User"
-          email="fictional@example.test"
-          allowance={null}
-          organisation={false}
-          insights={false}
-        />,
-      ),
-    );
+  const pages = async () => {
+    const sheet = await open({ organisation: false, insights: false });
     return [
-      ...document.querySelectorAll<HTMLAnchorElement>(
+      ...sheet.querySelectorAll<HTMLAnchorElement>(
         'nav[aria-label="More pages"] a',
       ),
     ].map((link) => link.getAttribute("href"));
   };
-  expect(await render()).not.toContain("/leads#phone-setup");
+  expect(await pages()).not.toContain("/leads#phone-setup");
   await act(async () => root.unmount());
   host.remove();
   bridge.SXPhone = { postMessage: () => {}, addEventListener: () => {} };
   try {
-    expect(await render()).toContain("/leads#phone-setup");
+    expect(await pages()).toContain("/leads#phone-setup");
     expect(document.body.textContent).toContain("Phone setup");
   } finally {
     delete bridge.SXPhone;

@@ -1,0 +1,193 @@
+/* Choosing where you work (design system v2): tokens only. */
+
+.picker {
+  display: grid;
+  gap: 2px;
+}
+
+/* The current workspace: first, larger, marked. */
+.current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px 8px 8px;
+  border: 0;
+  border-radius: var(--sx-radius-md);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  background: var(--sx-accent-soft);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--sx-accent) 22%, transparent);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 12px 6px 8px;
+  border: 0;
+  border-radius: var(--sx-radius-md);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.item:hover {
+  background: var(--sx-fill);
+}
+
+.item:active {
+  background: var(--sx-fill-strong);
+  transform: scale(0.985);
+}
+
+.current:focus-visible,
+.item:focus-visible,
+.create:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.item:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.tile {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--lx-on-teal);
+}
+
+.tile[data-size="lg"] {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  font-size: 14px;
+}
+
+.tile[data-size="sm"] {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 10.5px;
+}
+
+.tile[data-kind="personal"] {
+  background: var(--lx-gradient-primary, var(--sx-accent));
+}
+
+.tile[data-kind="organisation"] {
+  background: var(--sx-ink);
+  color: var(--sx-surface);
+}
+
+.tile[data-kind="invite"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.copy {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 1px;
+}
+
+.copy b {
+  overflow: hidden;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.current .copy b {
+  font-size: 15px;
+}
+
+.copy small {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 550;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.label {
+  margin: 10px 8px 2px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.join {
+  flex: none;
+  padding: 5px 12px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+/* An action, not a place: apart from the list, outlined, never filled. */
+.create {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 10px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    border-color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.create:hover {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+}
+
+@media (pointer: coarse) {
+  .item {
+    min-height: 52px;
+  }
+}

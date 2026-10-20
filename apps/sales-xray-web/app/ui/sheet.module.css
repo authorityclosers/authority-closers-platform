@@ -1,0 +1,209 @@
+/* The one sheet (design system v2): tokens only (ui/sx-tokens.css). */
+
+/* The dialog itself is a clear full-screen layer; the scrim and the panel
+   inside it are what you see, so both can move with the finger. */
+.sheet {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  overflow: hidden;
+}
+
+.sheet:not([open]) {
+  display: none;
+}
+
+.sheet::backdrop {
+  background: transparent;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--sx-scrim);
+  touch-action: none;
+}
+
+/* Phones: a glass sheet from the bottom edge. */
+.panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  max-height: calc(100dvh - max(env(safe-area-inset-top, 0px), 12px) - 28px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border: 1px solid var(--sx-glass-edge);
+  border-bottom: 0;
+  border-radius: var(--sx-radius-xl) var(--sx-radius-xl) 0 0;
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
+  overscroll-behavior: contain;
+  will-change: transform;
+}
+
+.grabber {
+  flex: none;
+  width: 36px;
+  height: 5px;
+  margin: 8px auto 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-strong);
+}
+
+/* The head drags the sheet, so it never scrolls the page. */
+.head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 20px;
+  touch-action: none;
+}
+
+.lead {
+  flex: none;
+  display: grid;
+}
+
+.titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font: var(--sx-text-headline);
+  letter-spacing: var(--sx-tracking-title);
+  color: var(--sx-ink);
+}
+
+.description {
+  margin: 2px 0 0;
+  font-size: var(--sx-text-sm);
+  line-height: 1.4;
+  color: var(--sx-muted);
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.close:hover {
+  background: var(--sx-fill-strong);
+}
+
+.close:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.close:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (pointer: coarse) {
+  .close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 16px 16px;
+}
+
+.footer {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--sx-hairline);
+}
+
+/* Computers: from the right, or in the middle. */
+@media (min-width: 900px) {
+  .grabber {
+    display: none;
+  }
+
+  .panel {
+    padding-bottom: 0;
+    border-bottom: 1px solid var(--sx-glass-edge);
+    border-radius: var(--sx-radius-lg);
+  }
+
+  .sheet[data-wide="right"] .panel {
+    left: auto;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: min(480px, calc(100vw - 24px));
+    max-height: none;
+  }
+
+  .sheet[data-wide="center"] .panel {
+    left: 50%;
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    translate: -50% -50%;
+    width: min(520px, calc(100vw - 32px));
+    max-height: min(720px, calc(100dvh - 48px));
+  }
+
+  .head {
+    padding: 18px 16px 12px 24px;
+    touch-action: auto;
+  }
+
+  .body {
+    padding: 2px 24px 24px;
+  }
+
+  .footer {
+    padding: 14px 24px;
+  }
+}

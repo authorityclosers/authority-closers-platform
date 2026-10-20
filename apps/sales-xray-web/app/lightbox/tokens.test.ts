@@ -170,8 +170,9 @@ describe("Lightbox token derivative", () => {
   it("keeps every source token except the documented corrections", () => {
     const changedLight = new Map([
       ["muted-2", "#646d7f"],
-      // r17 phone shell: a 56 px tab bar, as in Pulse (was 76 px).
-      ["bottom-nav-h", "56px"],
+      // Design system v2: a 60 px floating glass tab bar, 8 px above the
+      // edge (r17 had a 56 px bar on the edge; the source 76 px).
+      ["bottom-nav-h", "68px"],
       // One teal accent (owner, 11 Oct 2026): info is slate, not blue.
       ["info", "#56637a"],
       ["info-soft", "#eceff4"],
@@ -489,6 +490,11 @@ describe("Lightbox token derivative", () => {
       join(appDir, "shell/workspace-switcher.module.css"),
       "utf8",
     );
+    // The switcher's rows live in the shared picker (design system v2).
+    const pickerCss = readFileSync(
+      join(appDir, "shell/workspace-picker.module.css"),
+      "utf8",
+    );
     const profileCss = readFileSync(
       join(appDir, "profile-menu.module.css"),
       "utf8",
@@ -589,7 +595,12 @@ describe("Lightbox token derivative", () => {
 
       testCoarseStyles(switcherCss, {
         trigger: { minHeight: 44 },
+      });
+
+      testCoarseStyles(pickerCss, {
         item: { minHeight: 44 },
+        current: { minHeight: 44 },
+        create: { minHeight: 44 },
       });
 
       testCoarseStyles(themeToggleCss, {

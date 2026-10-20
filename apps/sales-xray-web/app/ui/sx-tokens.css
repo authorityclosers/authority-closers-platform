@@ -226,6 +226,12 @@ html[data-sx-move]::view-transition-new(root) {
   animation: none;
 }
 
+/* The selected tab's capsule glides to the next tab with a spring. */
+html[data-sx-move]::view-transition-group(sx-tab-pill) {
+  animation-duration: var(--sx-dur-page);
+  animation-timing-function: var(--sx-spring);
+}
+
 html[data-sx-move]::view-transition-group(sx-page) {
   animation-duration: var(--sx-dur-page);
   animation-timing-function: var(--sx-ease-out);

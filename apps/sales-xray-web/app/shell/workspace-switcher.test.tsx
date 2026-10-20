@@ -63,12 +63,17 @@ it("names where you are and offers only what works: no Soon items", async () => 
   expect(menu.textContent).not.toContain("Join with an invite");
   expect(menu.querySelectorAll("button:disabled")).toHaveLength(0);
 
+  // Design system v2: the current workspace first, with your role in it.
   const choices = [...menu.querySelectorAll("[role=menuitemradio]")];
   expect(choices.map((choice) => choice.getAttribute("aria-checked"))).toEqual([
-    "false",
     "true",
+    "false",
   ]);
+  expect(choices[0].textContent).toContain("Organisation · Owner");
+  expect(choices[1].textContent).toContain("Personal · Just you");
   await act(async () => (choices[0] as HTMLElement).click());
+  expect(onSelect).not.toHaveBeenCalled();
+  await act(async () => (choices[1] as HTMLElement).click());
   expect(onSelect).toHaveBeenCalledWith(personal.tenant_id);
 });
 
@@ -96,8 +101,8 @@ it("shows the organisation's logo in its tile, and the icon without one", async 
   const rows = [...host.querySelectorAll("[role=menuitemradio]")];
   // Only the selected organisation's row: other workspaces keep their tiles.
   expect(rows.map((row) => Boolean(row.querySelector("img")))).toEqual([
-    false,
     true,
+    false,
   ]);
   await render(null);
   expect(trigger.querySelector("img")).toBeNull();
@@ -139,6 +144,10 @@ it("offers each invitation as one Join, and Create only where the server can", a
   expect(
     host.querySelector("[aria-haspopup=menu]")?.getAttribute("aria-label"),
   ).toBe("Current workspace: Personal · 1 invitation waiting");
+  // Personal shows your own initials, never "PE" for the word Personal.
+  expect(host.querySelector("[aria-haspopup=menu]")?.textContent).toContain(
+    "AM",
+  );
   const menu = host.querySelector("[role=menu]") as HTMLElement;
   // With an invitation waiting, "not in an organisation" would be beside the point.
   expect(menu.textContent).not.toContain("You are not in an organisation yet");
