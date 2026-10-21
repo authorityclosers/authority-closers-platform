@@ -59,12 +59,26 @@ MODELS = MappingProxyType(
     }
 )
 
+# Which new calls the fast pipeline reads (owner, 21 Oct 2026, through the Orchestrator: the
+# fast engine is "for the lead details" of calls that no longer get a full report).
+# - all: every new call (development and staging);
+# - not_one_pass: every call except one whose report's one-pass read fills its call data
+#   and lead details (one_pass.plan_publish); calls stopped at their transcript (AI on
+#   calls level, short calls) and calls on today's C4 are still read;
+# - auto: the environment's default, not_one_pass in production and all elsewhere.
+FAST_CALLS = {
+    "auto": "This environment's default",
+    "all": "Every new call",
+    "not_one_pass": "Calls without a one-pass report",
+}
+
 DEFAULTS: dict[str, Any] = {
     "fast": {
         "enabled": True,
         "model": "gemini-3.8-flash",
         "daily_cap_inr": 150,
         "max_call_minutes": 60,
+        "calls": "auto",
     },
     # Owner, 19 Oct ("yes deep"): the deep pipeline on in every environment at ₹300/day.
     "deep": {
@@ -109,8 +123,18 @@ def validate(config: object) -> dict[str, Any]:
         minutes = merged["max_call_minutes"]
         if isinstance(minutes, bool) or not isinstance(minutes, int) or not 1 <= minutes <= 120:
             raise SettingsError("settings_max_minutes")
+        if pipeline == "fast" and merged["calls"] not in FAST_CALLS:
+            raise SettingsError("settings_calls")
         result[pipeline] = merged
     return result
+
+
+def fast_calls(config: dict[str, Any], environment: str | None) -> str:
+    """Which new calls the fast pipeline reads here: ``all`` or ``not_one_pass``."""
+    chosen = str(config["fast"].get("calls") or "auto")
+    if chosen != "auto":
+        return chosen
+    return "not_one_pass" if environment == "production" else "all"
 
 
 def raise_to(cap: int) -> int:
@@ -150,6 +174,7 @@ def public(config: dict[str, Any], *, revision: int | None) -> dict[str, Any]:
         ],
         "usd_to_inr": str(USD_TO_INR),
         "streaming": streaming_menu(),
+        "fast_calls": [{"value": key, "label": label} for key, label in FAST_CALLS.items()],
     }
 
 

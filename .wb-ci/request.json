@@ -1,0 +1,37 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "9f7d38125d500b931c05198ada2ee65ac61b7dbe",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/ds/ds.module.css",
+    "apps/sales-xray-web/app/ds/scale.css",
+    "packages/python/ac_platform/admin_settings/registry.py",
+    "packages/python/ac_platform/call_data/runner.py",
+    "packages/python/ac_platform/call_data/settings.py",
+    "tests/unit/call_data/test_call_data_fast_calls.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/unit/call_data/test_call_data_fast_calls.py",
+    "tests/unit/call_data/test_call_data_rules.py",
+    "tests/unit/http/test_admin_settings_registry.py",
+    "tests/unit/http/test_ac_admin_cli.py",
+    "tests/database/test_call_data_postgresql.py",
+    "tests/database/test_ai_spend_postgresql.py",
+    "tests/database/test_one_pass_postgresql.py",
+    "tests/database/test_one_pass_publish_postgresql.py",
+    "tests/database/test_call_data_fast_production_postgresql.py",
+    "tests/database/test_call_data_http_postgresql.py"
+  ],
+  "include_paths": [
+    "packages/python/ac_platform/call_data/runner.py",
+    "packages/python/ac_platform/call_data/settings.py",
+    "packages/python/ac_platform/admin_settings/registry.py",
+    "tests/unit/call_data/test_call_data_fast_calls.py"
+  ],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}

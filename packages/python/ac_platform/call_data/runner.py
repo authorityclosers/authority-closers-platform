@@ -23,7 +23,10 @@ How it runs:
 - before every call the environment's AI spend guard is asked too (``ai_spend``,
   owner 20 Oct 2026): development's background AI is off until switched on, the
   deep pipeline never runs by itself there and backfills never run there; a
-  backfill needs its own cap; sandbox and load-test organisations are skipped.
+  backfill needs its own cap; sandbox and load-test organisations are skipped;
+- in production (``settings.fast_calls``, owner 21 Oct 2026) a call whose one-pass report
+  fills its call data and lead details is left to that read, recorded once as a skipped
+  run (``one_pass_fills``); calls stopped at their transcript are still read.
 
     python -m ac_platform.call_data.runner \\
         --service-config /etc/authority-closers/development/service-live.json \\
@@ -53,6 +56,7 @@ BACKFILL = "operator:call-data-backfill"
 RUN_LOCK = "ac.call_data.fast"
 _PROVIDER = "gemini"
 LASTING_REFUSALS = frozenset({"permission_inactive", "account_inactive", "attempts_exhausted"})
+FILLED_BY_REPORT = "one_pass_fills"
 
 
 def _arguments(argv: list[str]) -> argparse.Namespace:
@@ -349,6 +353,60 @@ def process_call(
     return line
 
 
+# A C4 task exists once the plan is past the short-call decision (made after C2, before C4).
+_C4_STARTED = (
+    "SELECT EXISTS (SELECT 1 FROM conversation_inference_tasks"
+    " WHERE recording_id = :recording AND stage = 'C4')"
+)
+
+
+def one_pass_split(connection: Any, calls: list[Any]) -> tuple[list[Any], list[Any]]:
+    """The fast reads when one pass fills full calls (``settings.fast_calls``): (calls to
+    read now, calls one pass fills). A call stopped at its transcript (AI on calls level,
+    short call) or whose plan runs today's C4 is read. A one-pass plan that went on to C4
+    gets its call data and lead details from its report's read (one_pass.plan_publish),
+    including a "Get full report" call the fast pipeline has not read yet. A one-pass
+    plan not yet past the short-call decision waits for a later pass."""
+    from sqlalchemy import text
+
+    from ac_platform.call_ai import store as call_ai
+    from ac_platform.one_pass import plan_publish
+
+    planned = plan_publish.one_pass_plans(connection, [call.recording_id for call in calls])
+    read: list[Any] = []
+    left: list[Any] = []
+    for call in calls:
+        if call.recording_id not in planned or not call_ai.runs_beyond_transcript(
+            connection, call.tenant_id, call.recording_id
+        ):
+            read.append(call)
+        elif connection.scalar(text(_C4_STARTED), {"recording": call.recording_id}):
+            left.append(call)
+    return read, left
+
+
+def leave_to_one_pass(
+    sessions: Any, call: Any, *, apply: bool, trigger: str, created_by: str
+) -> dict[str, Any]:
+    """Record once that one pass fills this call, so later passes do not pick it again."""
+    from ac_platform.call_data import engine
+
+    if apply:
+        with sessions() as session, session.begin():
+            connection = session.connection()
+            engine.load(connection, call)
+            engine.skip_run(
+                connection,
+                call,
+                reason=FILLED_BY_REPORT,
+                pipeline="fast",
+                trigger=trigger,
+                created_by=created_by,
+                now=datetime.now(UTC),
+            )
+    return {"recording": str(call.recording_id), "skipped": FILLED_BY_REPORT}
+
+
 def automatic_hours(trigger: str, requested: int) -> int:
     """How far back a pass looks: automatic passes at most AUTO_FRESH_HOURS."""
     from ac_platform.call_data.engine import AUTO_FRESH_HOURS
@@ -370,6 +428,7 @@ def run_pass(
     from ac_platform.ai_spend import guard as spend_guard
     from ac_platform.call_data import engine
     from ac_platform.call_data.deep_runner import process_deep_call
+    from ac_platform.call_data.settings import fast_calls
 
     pipelines = ("fast", "deep") if arguments.pipeline == "both" else (arguments.pipeline,)
     trigger = "backfill" if arguments.backfill else "operator" if arguments.recording else "auto"
@@ -408,6 +467,25 @@ def run_pass(
             if calls and spend_environment is not None:
                 skipped = spend_guard.skipped_tenants(connection, spend_environment)
                 calls = [call for call in calls if call.tenant_id not in skipped]
+            if (
+                calls
+                and pipeline == "fast"
+                and not arguments.recording
+                and fast_calls(settings, spend_environment) == "not_one_pass"
+            ):
+                # Owner, 21 Oct 2026: in production the fast pipeline is for the lead details
+                # of calls that no longer get a full report; one pass fills the others.
+                calls, left = one_pass_split(connection, calls)
+                lines.extend(
+                    leave_to_one_pass(
+                        sessions,
+                        call,
+                        apply=arguments.apply,
+                        trigger=trigger,
+                        created_by=created_by,
+                    )
+                    for call in left
+                )
             if calls and pipeline == "deep" and not arguments.recording:
                 # AI on calls (owner, 21 Oct 2026): a call whose seller's level stops at its
                 # transcript (Off, Data only) gets the fast facts only, never a deep read.
