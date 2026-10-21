@@ -1,0 +1,415 @@
+/* Home in an organisation (owner, 22 Oct 2026): sales first. Tokens only. */
+
+.home {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.block {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.head h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-headline);
+  letter-spacing: -0.01em;
+}
+
+.meta {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* Four outcomes: two columns on a phone, four on a computer. */
+.outcomes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+@media (min-width: 900px) {
+  .outcomes {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.outcome {
+  --tone: var(--lx-teal);
+  --tone-soft: var(--lx-teal-soft);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 4px 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.outcome[data-tone="good"] {
+  --tone: var(--lx-strength-ink);
+  --tone-soft: var(--lx-strength-soft);
+}
+
+.outcome[data-tone="violet"] {
+  --tone: var(--lx-missed-ink);
+  --tone-soft: var(--lx-missed-soft);
+}
+
+.outcome[data-tone="slate"] {
+  --tone: var(--lx-closing-ink);
+  --tone-soft: var(--lx-closing-soft);
+}
+
+.outcomeIcon {
+  display: grid;
+  grid-row: span 2;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--sx-radius-sm);
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+
+.outcome dt {
+  align-self: end;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.outcome dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.outcomeValue {
+  color: var(--sx-ink);
+  font: var(--sx-text-kpi);
+  font-variant-numeric: tabular-nums;
+}
+
+.outcomeNote {
+  grid-column: 1 / -1;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.bar,
+.barBig {
+  display: inline-block;
+  width: 60%;
+  height: 10px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-fill-strong);
+}
+
+.barBig {
+  width: 40%;
+  height: 24px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips:empty {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.chip > svg {
+  color: var(--lx-teal);
+}
+
+.chip[data-tone="bad"] {
+  border-color: var(--lx-danger-edge);
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
+}
+
+.chip[data-tone="bad"] > svg {
+  color: inherit;
+}
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  list-style: none;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--sx-line);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 14px;
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.row > svg {
+  color: var(--sx-muted);
+}
+
+.rowMain {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowMain strong,
+.rowMain small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMain small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.rowEnd {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.rate {
+  display: grid;
+  justify-items: end;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+.late {
+  padding: 1px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.listSkeleton {
+  display: grid;
+  gap: 8px;
+}
+
+.listSkeleton > i {
+  display: block;
+  height: 56px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-fill-soft);
+}
+
+/* Open leads by stage: one bar per stage, on one scale. */
+.funnel {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  list-style: none;
+}
+
+.funnel a {
+  display: grid;
+  grid-template-columns: minmax(84px, 30%) minmax(0, 1fr) 3ch;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 6px;
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.funnelLabel {
+  overflow: hidden;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.funnelTrack {
+  height: 12px;
+  overflow: hidden;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+}
+
+.funnelBar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--lx-teal);
+}
+
+.funnel [data-kind="not_connected"] .funnelBar {
+  background: var(--lx-info);
+}
+
+.funnel [data-kind="follow_up"] .funnelBar {
+  background: var(--lx-focus);
+}
+
+.funnel [data-kind="interested"] .funnelBar {
+  background: var(--lx-missed);
+}
+
+.funnelCount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The salesperson's one primary action. */
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--sx-shadow-1);
+}
+
+.more {
+  justify-self: center;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.caughtUp {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.caughtUp span {
+  color: var(--sx-muted);
+}
+
+.caughtUp .more {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.dayStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.dayStrip > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.dayStrip dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.dayStrip dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.quiet {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  color: var(--sx-muted);
+}
+
+.chip:focus-visible,
+.row:focus-visible,
+.primary:focus-visible,
+.more:focus-visible,
+.funnel a:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .row:hover,
+  .funnel a:hover {
+    background: var(--sx-fill-soft);
+  }
+}

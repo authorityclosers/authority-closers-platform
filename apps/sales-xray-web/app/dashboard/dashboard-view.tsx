@@ -41,6 +41,7 @@ import {
   rememberCallsPage,
   rememberPanel,
 } from "../calls-cache";
+import { SalesHome } from "./sales-home";
 
 /**
  * The page waits for its reads (they run together) and then appears whole,
@@ -233,6 +234,16 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
   }, []);
 
   const team = useDashboardTeam();
+  // In an organisation, Home starts with sales (owner, 22 Oct 2026).
+  const inOrganisation =
+    access?.workspaces?.find(
+      (workspace) => workspace.tenant_id === access.context?.tenantId,
+    )?.kind === "organisation";
+  const salesRole =
+    inOrganisation && team !== null ? (team ? "manager" : "seller") : null;
+  const sales = salesRole ? (
+    <SalesHome manager={salesRole === "manager"} />
+  ) : null;
   useEffect(() => {
     if (team !== true) return;
     const controller = new AbortController();
@@ -315,9 +326,17 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
           viewerId={access?.context?.personId ?? null}
           hiddenRecent={hiddenRecent}
           onHiddenChange={setHiddenRecent}
+          sales={sales}
+          salesRole={salesRole}
         />
       ) : (
-        <DashboardBody team={team} sandbox={sandbox} skeleton />
+        <DashboardBody
+          team={team}
+          sandbox={sandbox}
+          skeleton
+          sales={sales}
+          salesRole={salesRole}
+        />
       )}
       {failing && revealed ? (
         <ConnectionNotice

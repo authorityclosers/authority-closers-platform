@@ -1834,3 +1834,17 @@
   outline: 2px solid transparent;
   box-shadow: var(--lx-ring-focus);
 }
+
+/* Phones: a page that takes the whole screen (an open chat, 22 Oct 2026)
+   hides the top bar and the tab bar; its own header leads back. */
+@media (max-width: 899.98px) {
+  .shell[data-immersive] .mobileBar,
+  .shell[data-immersive] .bottomNav {
+    display: none;
+  }
+
+  .shell[data-immersive] .content {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}

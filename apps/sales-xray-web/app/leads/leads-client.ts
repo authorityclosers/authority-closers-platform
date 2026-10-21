@@ -726,6 +726,47 @@ export function readTeam(signal?: AbortSignal) {
   return request<Team>("/team", { signal });
 }
 
+/** One period's sales outcomes (Home, owners and admins). */
+export type Outcomes = {
+  calls: number;
+  connected: number;
+  /** Different leads called at least once. */
+  leads_called: number;
+  /** Different leads moved to an interested or a won stage. */
+  interested: number;
+  won: number;
+  new_leads: number;
+  first_call_minutes: number | null;
+};
+
+export type SellerOutcome = {
+  person_id: string;
+  name: string;
+  calls: number;
+  connected: number;
+  interested: number;
+  won: number;
+  open_leads: number;
+  late: number;
+};
+
+export type Performance = {
+  days: number;
+  start: string;
+  end: string;
+  current: Outcomes;
+  previous: Outcomes;
+  sellers: SellerOutcome[];
+  pipeline: Record<string, number>;
+};
+
+export type Period = 1 | 7 | 30;
+
+/** How sales went today, or over 7 or 30 days, beside the period before. */
+export function readPerformance(days: Period, signal?: AbortSignal) {
+  return request<Performance>(`/reports/performance?days=${days}`, { signal });
+}
+
 export function saveRep(
   rep: Pick<RepView, "person_id" | "revision">,
   rules: {

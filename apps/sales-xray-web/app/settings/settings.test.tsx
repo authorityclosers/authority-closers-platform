@@ -79,6 +79,7 @@ afterEach(async () => {
 it("maps every section, and the old account sections, to an address of its own", () => {
   expect(SETTINGS_SECTIONS.map((item) => item.id)).toEqual([
     "profile",
+    "selling",
     "security",
     "plan",
     "organisation",

@@ -88,6 +88,13 @@ type DashboardBodyProps = {
   onHiddenChange?: (count: number) => void;
   /** The page's one loading state: the loaded layout with placeholders. */
   skeleton?: boolean;
+  /**
+   * In an organisation, Home starts with sales (owner, 22 Oct 2026): this
+   * block comes first. Managers still see call analysis after it; a seller
+   * sees only their recent calls after it.
+   */
+  sales?: ReactNode;
+  salesRole?: "manager" | "seller" | null;
 };
 
 /**
@@ -106,6 +113,8 @@ export function DashboardBody({
   hiddenRecent = 0,
   onHiddenChange,
   skeleton = false,
+  sales = null,
+  salesRole = null,
 }: DashboardBodyProps) {
   const summary = summaryState.status === "ready" ? summaryState.value : null;
   const activity =
@@ -141,187 +150,198 @@ export function DashboardBody({
     <>
       {/* One steady heading; New analysis lives in the shell, not here too.
           The workspace is named in the bar above, so the line stays put. */}
-      <header className={styles.header}>
-        <DashboardGreeting
-          placeholder={skeleton}
-          subtitle="Last 30 days, India time"
-        />
-      </header>
+      {sales ?? (
+        <header className={styles.header}>
+          <DashboardGreeting
+            placeholder={skeleton}
+            subtitle="Last 30 days, India time"
+          />
+        </header>
+      )}
 
       {sandbox?.sandbox ? <SandboxCard facts={sandbox} /> : null}
 
-      {showGetStarted ? (
+      {showGetStarted && !sales ? (
         <GetStarted allowance={allowance} />
       ) : (
         <>
-          <dl className={styles.strip} aria-label="Dashboard figures">
-            <Figure
-              id="metric-analysed"
-              label={label("Your calls analysed", "Calls analysed", "8em")}
-              status={activityState.status}
-              value={activity?.analysedLast30Days}
-              delta={
-                activity &&
-                (activity.analysedLast30Days ||
-                  activity.analysedPrevious30Days) ? (
-                  <Delta
-                    value={activity.analysedLast30Days}
-                    previous={activity.analysedPrevious30Days}
-                  />
-                ) : null
-              }
-              context={
-                activity === null
-                  ? null
-                  : activity.analysedPrevious30Days ||
-                      activity.analysedLast30Days
-                    ? `${activity.analysedPrevious30Days} in the 30 days before`
-                    : "in the last 30 days"
-              }
-              accessory={
-                lastTwoWeeks ? (
-                  <span className={styles.figureSpark}>
-                    <Spark
-                      values={lastTwoWeeks}
-                      label={`Calls analysed per day, last 14 days: ${lastTwoWeeks.join(", ")}`}
-                    />
-                  </span>
-                ) : null
-              }
-            />
-            <Figure
-              id="metric-reports-ready"
-              label="Reports ready"
-              status={summaryState.status}
-              value={summary?.completed}
-              context={
-                summary === null ? null : team === null ? (
-                  <Ph w="9em" />
-                ) : (
-                  `of ${summary.total} ${team ? "team" : "saved"} ${summary.total === 1 ? "call" : "calls"}`
-                )
-              }
-              accessory={
-                summary && summary.total > 0 ? (
-                  <span className={styles.figureShare}>
-                    <Meter
-                      value={summary.completed}
-                      max={summary.total}
-                      label={`${Math.round((summary.completed / summary.total) * 100)}% of saved calls have a ready report`}
-                    />
-                  </span>
-                ) : null
-              }
-            />
-            <Figure
-              id="metric-minutes-left"
-              label="Minutes left"
-              status={allowanceState.status}
-              value={allowance ? minutesLeft(allowance).value : null}
-              context={
-                allowance ? (
-                  <>
-                    {minutesLeft(allowance).subtext}
-                    {allowance.unlimited ? null : (
-                      <span className={styles.used}>
-                        {" · "}
-                        <MinutesUsed allowance={allowance} />
+          {/* Sales first, call analysis second (owner, 22 Oct 2026); a
+              seller's Home keeps only their recent calls below today. */}
+          {salesRole === "seller" ? null : (
+            <>
+              {sales ? (
+                <h2 className={styles.partTitle}>Call analysis</h2>
+              ) : null}
+              <dl className={styles.strip} aria-label="Dashboard figures">
+                <Figure
+                  id="metric-analysed"
+                  label={label("Your calls analysed", "Calls analysed", "8em")}
+                  status={activityState.status}
+                  value={activity?.analysedLast30Days}
+                  delta={
+                    activity &&
+                    (activity.analysedLast30Days ||
+                      activity.analysedPrevious30Days) ? (
+                      <Delta
+                        value={activity.analysedLast30Days}
+                        previous={activity.analysedPrevious30Days}
+                      />
+                    ) : null
+                  }
+                  context={
+                    activity === null
+                      ? null
+                      : activity.analysedPrevious30Days ||
+                          activity.analysedLast30Days
+                        ? `${activity.analysedPrevious30Days} in the 30 days before`
+                        : "in the last 30 days"
+                  }
+                  accessory={
+                    lastTwoWeeks ? (
+                      <span className={styles.figureSpark}>
+                        <Spark
+                          values={lastTwoWeeks}
+                          label={`Calls analysed per day, last 14 days: ${lastTwoWeeks.join(", ")}`}
+                        />
                       </span>
+                    ) : null
+                  }
+                />
+                <Figure
+                  id="metric-reports-ready"
+                  label="Reports ready"
+                  status={summaryState.status}
+                  value={summary?.completed}
+                  context={
+                    summary === null ? null : team === null ? (
+                      <Ph w="9em" />
+                    ) : (
+                      `of ${summary.total} ${team ? "team" : "saved"} ${summary.total === 1 ? "call" : "calls"}`
+                    )
+                  }
+                  accessory={
+                    summary && summary.total > 0 ? (
+                      <span className={styles.figureShare}>
+                        <Meter
+                          value={summary.completed}
+                          max={summary.total}
+                          label={`${Math.round((summary.completed / summary.total) * 100)}% of saved calls have a ready report`}
+                        />
+                      </span>
+                    ) : null
+                  }
+                />
+                <Figure
+                  id="metric-minutes-left"
+                  label="Minutes left"
+                  status={allowanceState.status}
+                  value={allowance ? minutesLeft(allowance).value : null}
+                  context={
+                    allowance ? (
+                      <>
+                        {minutesLeft(allowance).subtext}
+                        {allowance.unlimited ? null : (
+                          <span className={styles.used}>
+                            {" · "}
+                            <MinutesUsed allowance={allowance} />
+                          </span>
+                        )}
+                      </>
+                    ) : null
+                  }
+                  accessory={
+                    allowance ? <MinutesRing allowance={allowance} /> : null
+                  }
+                />
+                <Figure
+                  id="metric-needs-attention"
+                  label={
+                    summary && summary.needsAttention > 0 ? (
+                      <>
+                        <span className={styles.warnDot} aria-hidden="true" />
+                        Needs attention
+                      </>
+                    ) : (
+                      "Needs attention"
+                    )
+                  }
+                  status={summaryState.status}
+                  value={summary?.needsAttention}
+                  context={
+                    summary === null ? null : (
+                      <AttentionAction count={summary.needsAttention} />
+                    )
+                  }
+                />
+              </dl>
+
+              <div className={styles.columns}>
+                <section
+                  className={styles.section}
+                  aria-labelledby="panel-last-30-days"
+                >
+                  <div className={styles.sectionHead}>
+                    <h2 id="panel-last-30-days">
+                      {label(
+                        "Your calls analysed per day",
+                        "Calls analysed per day",
+                        "13em",
+                      )}
+                    </h2>
+                    <span className={styles.wideMeta}>
+                      Last 30 days, India time
+                    </span>
+                  </div>
+                  <div className={styles.surface}>
+                    {activityState.status === "loading" ? (
+                      <DayBarsSkeleton />
+                    ) : activityState.status === "error" ? (
+                      <NotLoaded />
+                    ) : activity === null ? (
+                      <Quiet text="Daily numbers are not available yet." />
+                    ) : activityAllZero ? (
+                      <Quiet text="No calls analysed in the last 30 days." />
+                    ) : (
+                      <SectionBoundary name="The daily chart">
+                        <DayBars days={activity.days} />
+                      </SectionBoundary>
                     )}
-                  </>
-                ) : null
-              }
-              accessory={
-                allowance ? <MinutesRing allowance={allowance} /> : null
-              }
-            />
-            <Figure
-              id="metric-needs-attention"
-              label={
-                summary && summary.needsAttention > 0 ? (
-                  <>
-                    <span className={styles.warnDot} aria-hidden="true" />
-                    Needs attention
-                  </>
-                ) : (
-                  "Needs attention"
-                )
-              }
-              status={summaryState.status}
-              value={summary?.needsAttention}
-              context={
-                summary === null ? null : (
-                  <AttentionAction count={summary.needsAttention} />
-                )
-              }
-            />
-          </dl>
+                  </div>
+                </section>
 
-          <div className={styles.columns}>
-            <section
-              className={styles.section}
-              aria-labelledby="panel-last-30-days"
-            >
-              <div className={styles.sectionHead}>
-                <h2 id="panel-last-30-days">
-                  {label(
-                    "Your calls analysed per day",
-                    "Calls analysed per day",
-                    "13em",
-                  )}
-                </h2>
-                <span className={styles.wideMeta}>
-                  Last 30 days, India time
-                </span>
+                <section
+                  className={styles.section}
+                  aria-labelledby="panel-call-status"
+                >
+                  <div className={styles.sectionHead}>
+                    <h2 id="panel-call-status">Call status</h2>
+                    <span>
+                      {label(
+                        "Everyone in the organisation",
+                        "All saved calls",
+                        "10em",
+                      )}
+                    </span>
+                  </div>
+                  <div className={styles.surface}>
+                    {summaryState.status === "loading" ? (
+                      <StatusSplitSkeleton />
+                    ) : summaryState.status === "error" ? (
+                      <NotLoaded />
+                    ) : summary === null ? (
+                      <Quiet text="Call status is not available yet." />
+                    ) : summary.total === 0 ? (
+                      <Quiet text="No saved calls yet." />
+                    ) : (
+                      <SectionBoundary name="Call status">
+                        <StatusSplit summary={summary} />
+                      </SectionBoundary>
+                    )}
+                  </div>
+                </section>
               </div>
-              <div className={styles.surface}>
-                {activityState.status === "loading" ? (
-                  <DayBarsSkeleton />
-                ) : activityState.status === "error" ? (
-                  <NotLoaded />
-                ) : activity === null ? (
-                  <Quiet text="Daily numbers are not available yet." />
-                ) : activityAllZero ? (
-                  <Quiet text="No calls analysed in the last 30 days." />
-                ) : (
-                  <SectionBoundary name="The daily chart">
-                    <DayBars days={activity.days} />
-                  </SectionBoundary>
-                )}
-              </div>
-            </section>
-
-            <section
-              className={styles.section}
-              aria-labelledby="panel-call-status"
-            >
-              <div className={styles.sectionHead}>
-                <h2 id="panel-call-status">Call status</h2>
-                <span>
-                  {label(
-                    "Everyone in the organisation",
-                    "All saved calls",
-                    "10em",
-                  )}
-                </span>
-              </div>
-              <div className={styles.surface}>
-                {summaryState.status === "loading" ? (
-                  <StatusSplitSkeleton />
-                ) : summaryState.status === "error" ? (
-                  <NotLoaded />
-                ) : summary === null ? (
-                  <Quiet text="Call status is not available yet." />
-                ) : summary.total === 0 ? (
-                  <Quiet text="No saved calls yet." />
-                ) : (
-                  <SectionBoundary name="Call status">
-                    <StatusSplit summary={summary} />
-                  </SectionBoundary>
-                )}
-              </div>
-            </section>
-          </div>
+            </>
+          )}
 
           <section
             className={styles.section}

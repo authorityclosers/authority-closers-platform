@@ -150,7 +150,11 @@ export function LeadLine({
             <span
               className={styles.leadWhy}
               data-tone={
-                row.overdue || row.missed_at ? "bad" : WHY_TONE[row.why_kind]
+                row.missed_at
+                  ? "bad"
+                  : row.overdue
+                    ? "warn"
+                    : WHY_TONE[row.why_kind]
               }
             >
               {row.overdue ? <b className={styles.lateTag}>Late</b> : null}

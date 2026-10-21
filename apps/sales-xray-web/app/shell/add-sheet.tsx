@@ -3,7 +3,9 @@
 /**
  * The phone tab bar's + (owner, 22 Oct 2026): "nobody wants call analysis in
  * that way". It opens one small sheet with the two things people add, a lead
- * or a call, instead of jumping straight to call analysis.
+ * or a call, instead of jumping straight to call analysis. Owner, confirmed:
+ * "the + pop-up has Add lead and Add a call (record or upload a call for
+ * analysis)".
  *
  * Add lead opens the quick form over the current screen; Add a call goes to
  * the record-or-upload page. Outside an organisation there is no lead desk,
@@ -96,7 +98,7 @@ export function AddSheet({
           icon={<AudioLines size={22} />}
           tone="call"
           title="Add a call"
-          text="Record or upload a call for its report"
+          text="Record or upload a call for analysis"
           href={callHref}
           onClick={onClose}
         />
