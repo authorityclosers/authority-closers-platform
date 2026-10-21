@@ -274,3 +274,103 @@ async def test_switching_to_one_pass_is_the_owners_action_and_back_is_one_click(
     )
     assert not await _admin(one_pass)._owner_gate(actor, _row(standard), confirm=None, reason=None)
     assert not await _admin(one_pass)._owner_gate(actor, _row(classic), confirm=None, reason=None)
+
+
+GOVERNANCE = {
+    "privacy_revision": "privacy-openai-20261021-v1",
+    "privacy_notice": "Synthetic test notice: OpenAI processes this call under a signed DPA.",
+    "retention_ref": "ref:retention/openai-zero",
+    "professional_gate_ref": "ref:professional/openai-1",
+}
+
+
+def _with_openai(config: object) -> object:
+    from dataclasses import replace
+
+    from tests.database.test_conversation_authority_postgresql import _provider, _refs
+
+    openai = replace(
+        _provider("openai", "gpt-6-luna", c2_route.LUNA_ENDPOINT, max_cost_paise=40),
+        **{key: value for key, value in _refs("openai", paid=True).items() if key != "pricing_ref"},
+    )
+    return replace(config, providers=(*config.providers, openai))
+
+
+def test_the_luna_configuration_and_profile() -> None:
+    from ac_platform.one_pass import markers
+
+    classic, bundle = _classic()
+    with pytest.raises(c2_route.SealError, match="no_openai_luna_provider"):
+        c2_route.derive_configuration(classic, one_pass=True, luna=True)
+    with pytest.raises(c2_route.SealError, match="luna_is_the_one_pass_route"):
+        c2_route.derive_configuration(_with_openai(classic), luna=True)
+    with_openai = _with_openai(classic)
+    for flex in (False, True):
+        luna = c2_route.derive_configuration(with_openai, flex=flex, one_pass=True, luna=True)
+        model = "gpt-6-luna" + (":flex" if flex else "")
+        routes = {route.task: route for route in luna.routes}
+        assert routes["asr"].model_id == gemini_audio.MODEL + (":flex" if flex else "")
+        assert (routes["facts"].provider_id, routes["facts"].model_id) == ("openai", model)
+        assert routes["facts"].recipe_revision == markers.RECIPE
+        assert (routes["coaching"].provider_id, routes["coaching"].model_id) == ("openai", model)
+        entry = next(item for item in luna.providers if item.model_id == model)
+        assert entry.max_cost_paise == c2_route.LUNA_MAX_COST_PAISE
+        assert entry.credential_ref == "ref:credential:openai"
+    # The classic bundle approves the Scribe configuration; the Luna profile needs Root's
+    # OpenAI governance.
+    with_bundle = bundle.model_copy(
+        update={
+            "acquisition_policy": bundle.acquisition_policy.model_copy(
+                update={
+                    "stages": tuple(
+                        stage.model_copy(update={"configuration_sha256": with_openai.digest})
+                        for stage in bundle.acquisition_policy.stages
+                    )
+                }
+            )
+        }
+    )
+    luna = c2_route.derive_configuration(with_openai, flex=True, one_pass=True, luna=True)
+    with pytest.raises(c2_route.SealError, match="openai_governance"):
+        c2_route.seal(with_bundle, with_openai, luna, flex=True, one_pass=True, luna={})
+    sealed = c2_route.seal(
+        with_bundle, with_openai, luna, flex=True, one_pass=True, luna=GOVERNANCE
+    )
+    (profile,) = sealed.acquisition_policy.profiles
+    assert profile.profile_id == c2_route.LUNA_FLEX_PROFILE_ID
+    _, c4, c5 = profile.stages
+    assert (c4.provider_id, c4.model_id, c4.recipe_revision) == (
+        "openai",
+        "gpt-6-luna:flex",
+        markers.RECIPE,
+    )
+    assert (c4.max_requests, c4.max_completion_tokens) == (1, c2_route.LUNA_COMPLETION_TOKENS)
+    assert c5.provider_id == "openai" and c5.max_completion_tokens <= 8_000
+    for stage in (c4, c5):
+        assert stage.privacy_notice == GOVERNANCE["privacy_notice"]
+        assert stage.retention_ref == GOVERNANCE["retention_ref"]
+        assert stage.max_cost_paise == c2_route.LUNA_MAX_COST_PAISE
+    assert ConversationProviderAdmin._approved_configuration(_row(luna), sealed)
+    assert ConversationProviderAdmin._approved_configuration(_row(with_openai), sealed)
+
+
+@pytest.mark.asyncio
+async def test_switching_onto_openai_needs_the_owners_dpa_word(monkeypatch) -> None:
+    classic, _ = _classic()
+    with_openai = _with_openai(classic)
+    standard = c2_route.derive_configuration(with_openai)
+    luna = c2_route.derive_configuration(with_openai, one_pass=True, luna=True)
+    actor = SimpleNamespace(tenant_id=uuid4(), person_id=uuid4(), session_id=uuid4())
+
+    async def is_fresh(_database: object, _session: object, _now: object) -> bool:
+        return True
+
+    monkeypatch.setattr(sign_in_methods, "session_is_fresh", is_fresh)
+    reason = "Owner, 21 Oct: I have signed the OpenAI DPA"
+    with pytest.raises(ConversationDenied, match="openai_dpa_signed"):
+        await _admin(standard)._owner_gate(actor, _row(luna), confirm="one_pass", reason=reason)
+    assert await _admin(standard)._owner_gate(
+        actor, _row(luna), confirm="openai_dpa_signed", reason=reason
+    )
+    # Off OpenAI again is one click.
+    assert not await _admin(luna)._owner_gate(actor, _row(standard), confirm=None, reason=None)

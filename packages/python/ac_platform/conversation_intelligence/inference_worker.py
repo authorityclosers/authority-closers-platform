@@ -98,7 +98,7 @@ if TYPE_CHECKING:
 
 _LEASE = timedelta(minutes=15)
 # The broker's own limit (a Flex call with its standard fallback) plus a margin.
-_EFFECT_SECONDS = 600
+_EFFECT_SECONDS = 860
 _VALIDATION_LABELS = {
     "C2": "transcript_schema_and_source_binding",
     "C4": "facts_schema_and_source_binding",
@@ -176,10 +176,13 @@ def _is_provisional_receipt(value: Any) -> bool:
 def _response_model_receipt(result: ProviderResult) -> dict[str, Any]:
     if result.provider != "openai":
         return {}
+    from ac_platform.conversation_intelligence.openai_tasks import api_model
+
     reported = _safe_receipt_identifier(result.data.get("model"))
     return {
         "reported_model": reported,
-        "model_verified": reported is not None and reported == result.model,
+        # A Flex route (gpt-6-luna:flex) is answered by its model (gpt-6-luna).
+        "model_verified": reported is not None and reported == api_model(result.model),
     }
 
 

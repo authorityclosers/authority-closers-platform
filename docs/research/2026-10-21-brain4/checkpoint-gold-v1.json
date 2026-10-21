@@ -1,0 +1,820 @@
+{
+  "checkpoint": "gold-v1/2026-10-21",
+  "source": "coaching lead's correction doc on 7 real calls (6 with notes); mapping inferred",
+  "calls": 6,
+  "notes_mapped": 70,
+  "labels": {
+    "positive": 27,
+    "negative": 9,
+    "mixed": 7,
+    "total": 43
+  },
+  "scorers": [
+    {
+      "scorer": "classic: pointer review (Gemini 3.8 Flash)",
+      "reads_per_call": 1,
+      "overall": {
+        "labels": 43,
+        "rated": 42,
+        "agree": 27,
+        "agreement": 0.643,
+        "wilson": [0.4917, 0.7701],
+        "by_call_ci": [0.5349, 0.75]
+      },
+      "by_label": {
+        "positive": {
+          "labels": 27,
+          "rated": 26,
+          "agree": 19,
+          "agreement": 0.731,
+          "wilson": [0.5392, 0.863],
+          "by_call_ci": [0.5714, 0.8966]
+        },
+        "negative": {
+          "labels": 9,
+          "rated": 9,
+          "agree": 2,
+          "agreement": 0.222,
+          "wilson": [0.0632, 0.5474],
+          "by_call_ci": [0.0, 0.5]
+        },
+        "mixed": {
+          "labels": 7,
+          "rated": 7,
+          "agree": 6,
+          "agreement": 0.857,
+          "wilson": [0.4869, 0.9743],
+          "by_call_ci": [0.8, 1.0]
+        }
+      },
+      "dimensions": {
+        "D01": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D02": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D03": {
+          "labels": 4,
+          "rated": 4,
+          "agree": 4,
+          "agreement": 1.0,
+          "wilson": [0.5101, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        },
+        "D04": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 1,
+          "agreement": 0.333,
+          "wilson": [0.0615, 0.7923],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D05": {
+          "labels": 6,
+          "rated": 6,
+          "agree": 3,
+          "agreement": 0.5,
+          "wilson": [0.1876, 0.8124],
+          "by_call_ci": [0.1667, 0.8333]
+        },
+        "D06": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 2,
+          "agreement": 1.0,
+          "wilson": [0.3424, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        },
+        "D07": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 3,
+          "agreement": 1.0,
+          "wilson": [0.4385, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        },
+        "D09": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D10": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D13": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.7935],
+          "by_call_ci": null
+        },
+        "D14": {
+          "labels": 5,
+          "rated": 5,
+          "agree": 3,
+          "agreement": 0.6,
+          "wilson": [0.2307, 0.8824],
+          "by_call_ci": [0.2, 1.0]
+        },
+        "D15": {
+          "labels": 5,
+          "rated": 4,
+          "agree": 3,
+          "agreement": 0.75,
+          "wilson": [0.3006, 0.9544],
+          "by_call_ci": [0.25, 1.0]
+        },
+        "D16": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.6576],
+          "by_call_ci": [0.0, 0.0]
+        },
+        "D17": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        },
+        "D18": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        }
+      }
+    },
+    {
+      "scorer": "one pass (research build, Gemini 3.8 Flash)",
+      "reads_per_call": 1,
+      "overall": {
+        "labels": 43,
+        "rated": 43,
+        "agree": 31,
+        "agreement": 0.721,
+        "wilson": [0.5731, 0.8325],
+        "by_call_ci": [0.64, 0.8095]
+      },
+      "by_label": {
+        "positive": {
+          "labels": 27,
+          "rated": 27,
+          "agree": 22,
+          "agreement": 0.815,
+          "wilson": [0.633, 0.9182],
+          "by_call_ci": [0.68, 0.963]
+        },
+        "negative": {
+          "labels": 9,
+          "rated": 9,
+          "agree": 2,
+          "agreement": 0.222,
+          "wilson": [0.0632, 0.5474],
+          "by_call_ci": [0.0, 0.5]
+        },
+        "mixed": {
+          "labels": 7,
+          "rated": 7,
+          "agree": 7,
+          "agreement": 1.0,
+          "wilson": [0.6457, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        }
+      },
+      "dimensions": {
+        "D01": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D02": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D03": {
+          "labels": 4,
+          "rated": 4,
+          "agree": 4,
+          "agreement": 1.0,
+          "wilson": [0.5101, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        },
+        "D04": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D05": {
+          "labels": 6,
+          "rated": 6,
+          "agree": 4,
+          "agreement": 0.667,
+          "wilson": [0.3, 0.9032],
+          "by_call_ci": [0.3333, 1.0]
+        },
+        "D06": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 2,
+          "agreement": 1.0,
+          "wilson": [0.3424, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        },
+        "D07": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 3,
+          "agreement": 1.0,
+          "wilson": [0.4385, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        },
+        "D09": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D10": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D13": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.7935],
+          "by_call_ci": null
+        },
+        "D14": {
+          "labels": 5,
+          "rated": 5,
+          "agree": 4,
+          "agreement": 0.8,
+          "wilson": [0.3755, 0.9638],
+          "by_call_ci": [0.4, 1.0]
+        },
+        "D15": {
+          "labels": 5,
+          "rated": 5,
+          "agree": 3,
+          "agreement": 0.6,
+          "wilson": [0.2307, 0.8824],
+          "by_call_ci": [0.2, 1.0]
+        },
+        "D16": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D17": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        },
+        "D18": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        }
+      }
+    },
+    {
+      "scorer": "Brain 4.0 research prompt (Gemini 3.8 Flash)",
+      "reads_per_call": 1,
+      "overall": {
+        "labels": 43,
+        "rated": 42,
+        "agree": 25,
+        "agreement": 0.595,
+        "wilson": [0.4449, 0.7296],
+        "by_call_ci": [0.4615, 0.7273]
+      },
+      "by_label": {
+        "positive": {
+          "labels": 27,
+          "rated": 26,
+          "agree": 16,
+          "agreement": 0.615,
+          "wilson": [0.4253, 0.7757],
+          "by_call_ci": [0.375, 0.8889]
+        },
+        "negative": {
+          "labels": 9,
+          "rated": 9,
+          "agree": 2,
+          "agreement": 0.222,
+          "wilson": [0.0632, 0.5474],
+          "by_call_ci": [0.0, 0.5]
+        },
+        "mixed": {
+          "labels": 7,
+          "rated": 7,
+          "agree": 7,
+          "agreement": 1.0,
+          "wilson": [0.6457, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        }
+      },
+      "dimensions": {
+        "D01": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D02": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D03": {
+          "labels": 4,
+          "rated": 4,
+          "agree": 3,
+          "agreement": 0.75,
+          "wilson": [0.3006, 0.9544],
+          "by_call_ci": [0.25, 1.0]
+        },
+        "D04": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 1,
+          "agreement": 0.333,
+          "wilson": [0.0615, 0.7923],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D05": {
+          "labels": 6,
+          "rated": 6,
+          "agree": 4,
+          "agreement": 0.667,
+          "wilson": [0.3, 0.9032],
+          "by_call_ci": [0.3333, 1.0]
+        },
+        "D06": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D07": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D09": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D10": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D13": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.7935],
+          "by_call_ci": null
+        },
+        "D14": {
+          "labels": 5,
+          "rated": 5,
+          "agree": 2,
+          "agreement": 0.4,
+          "wilson": [0.1176, 0.7693],
+          "by_call_ci": [0.0, 0.8]
+        },
+        "D15": {
+          "labels": 5,
+          "rated": 4,
+          "agree": 3,
+          "agreement": 0.75,
+          "wilson": [0.3006, 0.9544],
+          "by_call_ci": [0.25, 1.0]
+        },
+        "D16": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D17": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        },
+        "D18": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        }
+      }
+    },
+    {
+      "scorer": "Brain 4.0 research prompt (GPT-6 Luna)",
+      "reads_per_call": 1,
+      "overall": {
+        "labels": 43,
+        "rated": 35,
+        "agree": 14,
+        "agreement": 0.4,
+        "wilson": [0.2555, 0.5643],
+        "by_call_ci": [0.2333, 0.5476]
+      },
+      "by_label": {
+        "positive": {
+          "labels": 27,
+          "rated": 23,
+          "agree": 3,
+          "agreement": 0.13,
+          "wilson": [0.0454, 0.3213],
+          "by_call_ci": [0.0417, 0.2381]
+        },
+        "negative": {
+          "labels": 9,
+          "rated": 7,
+          "agree": 6,
+          "agreement": 0.857,
+          "wilson": [0.4869, 0.9743],
+          "by_call_ci": [0.5, 1.0]
+        },
+        "mixed": {
+          "labels": 7,
+          "rated": 5,
+          "agree": 5,
+          "agreement": 1.0,
+          "wilson": [0.5655, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        }
+      },
+      "dimensions": {
+        "D01": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 1,
+          "agreement": 0.333,
+          "wilson": [0.0615, 0.7923],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D02": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 1,
+          "agreement": 0.333,
+          "wilson": [0.0615, 0.7923],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D03": {
+          "labels": 4,
+          "rated": 0,
+          "agree": 0,
+          "agreement": null,
+          "wilson": null,
+          "by_call_ci": null
+        },
+        "D04": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D05": {
+          "labels": 6,
+          "rated": 6,
+          "agree": 3,
+          "agreement": 0.5,
+          "wilson": [0.1876, 0.8124],
+          "by_call_ci": [0.1667, 0.8333]
+        },
+        "D06": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.6576],
+          "by_call_ci": [0.0, 0.0]
+        },
+        "D07": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.5615],
+          "by_call_ci": [0.0, 0.0]
+        },
+        "D09": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D10": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D13": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        },
+        "D14": {
+          "labels": 5,
+          "rated": 5,
+          "agree": 1,
+          "agreement": 0.2,
+          "wilson": [0.0362, 0.6245],
+          "by_call_ci": [0.0, 0.6]
+        },
+        "D15": {
+          "labels": 5,
+          "rated": 4,
+          "agree": 2,
+          "agreement": 0.5,
+          "wilson": [0.15, 0.85],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D16": {
+          "labels": 2,
+          "rated": 0,
+          "agree": 0,
+          "agreement": null,
+          "wilson": null,
+          "by_call_ci": null
+        },
+        "D17": {
+          "labels": 1,
+          "rated": 0,
+          "agree": 0,
+          "agreement": null,
+          "wilson": null,
+          "by_call_ci": null
+        },
+        "D18": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        }
+      }
+    },
+    {
+      "scorer": "Brain 4.0 + coach-notes prompt (Gemini 3.8 Flash)",
+      "reads_per_call": 1,
+      "overall": {
+        "labels": 43,
+        "rated": 41,
+        "agree": 24,
+        "agreement": 0.585,
+        "wilson": [0.4337, 0.7224],
+        "by_call_ci": [0.3889, 0.7442]
+      },
+      "by_label": {
+        "positive": {
+          "labels": 27,
+          "rated": 26,
+          "agree": 16,
+          "agreement": 0.615,
+          "wilson": [0.4253, 0.7757],
+          "by_call_ci": [0.3462, 0.9091]
+        },
+        "negative": {
+          "labels": 9,
+          "rated": 8,
+          "agree": 1,
+          "agreement": 0.125,
+          "wilson": [0.0224, 0.4709],
+          "by_call_ci": [0.0, 0.3333]
+        },
+        "mixed": {
+          "labels": 7,
+          "rated": 7,
+          "agree": 7,
+          "agreement": 1.0,
+          "wilson": [0.6457, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        }
+      },
+      "dimensions": {
+        "D01": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D02": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D03": {
+          "labels": 4,
+          "rated": 4,
+          "agree": 3,
+          "agreement": 0.75,
+          "wilson": [0.3006, 0.9544],
+          "by_call_ci": [0.25, 1.0]
+        },
+        "D04": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 1,
+          "agreement": 0.333,
+          "wilson": [0.0615, 0.7923],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D05": {
+          "labels": 6,
+          "rated": 6,
+          "agree": 4,
+          "agreement": 0.667,
+          "wilson": [0.3, 0.9032],
+          "by_call_ci": [0.3333, 1.0]
+        },
+        "D06": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D07": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D09": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D10": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D13": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.7935],
+          "by_call_ci": null
+        },
+        "D14": {
+          "labels": 5,
+          "rated": 5,
+          "agree": 2,
+          "agreement": 0.4,
+          "wilson": [0.1176, 0.7693],
+          "by_call_ci": [0.0, 0.8]
+        },
+        "D15": {
+          "labels": 5,
+          "rated": 4,
+          "agree": 3,
+          "agreement": 0.75,
+          "wilson": [0.3006, 0.9544],
+          "by_call_ci": [0.25, 1.0]
+        },
+        "D16": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D17": {
+          "labels": 1,
+          "rated": 0,
+          "agree": 0,
+          "agreement": null,
+          "wilson": null,
+          "by_call_ci": null
+        },
+        "D18": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        }
+      }
+    }
+  ],
+  "limits": [
+    "One rater, 6 calls with notes: intervals are wide and every difference below is within noise.",
+    "Notes say what the coach chose to mention, not a rating of every dimension; a dimension he did not mention has no label.",
+    "The note-to-dimension mapping is an inference for the coaching lead's review.",
+    "Today's pointer review and the one pass score pointers (0-100), mapped to dimensions through the primary pointers; Brain 4.0 rates dimensions (1-5)."
+  ]
+}

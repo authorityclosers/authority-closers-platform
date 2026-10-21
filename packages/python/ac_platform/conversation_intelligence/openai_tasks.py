@@ -1,8 +1,14 @@
-"""Strict OpenAI Responses adapter for source-bound C5 coaching only.
+"""Strict OpenAI Responses adapter for source-bound C5 coaching and the one-pass C4.
 
 The Responses request is derived from the same versioned Sales Xray prompt as
 the Gemini/Groq paths. Local report validation remains authoritative; the JSON
 schema here only constrains the provider wire format.
+
+The one-pass C4 request (``one_pass.stage``) goes to GPT-6 Luna only, as the cost
+research measured it (21 Oct 2026, luna-route-spec): its own JSON schema, not strict
+(OpenAI took both one-pass schemas so on every request), the provider's default
+reasoning, up to 20,000 output tokens. ``gpt-6-luna:flex`` is the same model and
+request on OpenAI's Flex tier (the transport adds ``service_tier: flex``).
 """
 
 from __future__ import annotations
@@ -20,10 +26,19 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V7_MARKER,
     COACHING_PROMPT_V8_MARKER,
 )
+from ac_platform.one_pass.markers import MAX_COMPLETION_TOKENS as ONE_PASS_MAX_COMPLETION_TOKENS
+from ac_platform.one_pass.markers import is_one_pass
 
-OPENAI_TASK_MODELS = frozenset({"gpt-6-luna", "gpt-6-sol", "gpt-6-astra"})
+# GPT-6 Luna on Flex is its own approved route: the same model and request.
+OPENAI_FLEX_SUFFIX = ":flex"
+OPENAI_TASK_MODELS = frozenset(
+    {"gpt-6-luna", "gpt-6-sol", "gpt-6-astra", "gpt-6-luna" + OPENAI_FLEX_SUFFIX}
+)
+# The one-pass C4 request: Luna only, standard or Flex.
+OPENAI_ONE_PASS_MODELS = frozenset({"gpt-6-luna", "gpt-6-luna" + OPENAI_FLEX_SUFFIX})
 OPENAI_REASONING_EFFORTS = {
     "gpt-6-luna": frozenset({"none", "low", "medium", "high", "xhigh", "max"}),
+    "gpt-6-luna" + OPENAI_FLEX_SUFFIX: frozenset({"none", "low", "medium", "high", "xhigh", "max"}),
     "gpt-6-sol": frozenset({"none", "low", "medium", "high", "xhigh", "max"}),
     "gpt-6-astra": frozenset({"low", "medium", "high", "xhigh", "max"}),
 }
@@ -35,6 +50,70 @@ _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 
 class OpenAITaskError(ValueError):
     """Content-free OpenAI adapter failure."""
+
+
+def api_model(model: str) -> str:
+    """The provider's own model id: a Flex route sends the very same request."""
+    return model[: -len(OPENAI_FLEX_SUFFIX)] if model.endswith(OPENAI_FLEX_SUFFIX) else model
+
+
+def is_flex(model: str) -> bool:
+    return model.endswith(OPENAI_FLEX_SUFFIX)
+
+
+_ONE_PASS_FORMAT = "sales_xray_one_pass_facts_v1"  # noqa: S105 - a schema name
+_ONE_PASS_KEYS = frozenset(
+    {
+        "model",
+        "instructions",
+        "input",
+        "max_output_tokens",
+        "background",
+        "stream",
+        "service_tier",
+        "text",
+        "store",
+        "tools",
+        "tool_choice",
+        "truncation",
+    }
+)
+
+
+def _one_pass_format() -> dict[str, Any]:
+    from ac_platform.one_pass import stage
+
+    return {
+        "type": "json_schema",
+        "name": _ONE_PASS_FORMAT,
+        "strict": False,
+        "schema": stage.schema(),
+    }
+
+
+def _one_pass_body(model: str, maximum: Any, instructions: str, user_input: str) -> dict[str, Any]:
+    if model not in OPENAI_ONE_PASS_MODELS or not is_one_pass(instructions):
+        _fail("openai_task_model_not_supported")
+    if type(maximum) is not int or not 256 <= maximum <= ONE_PASS_MAX_COMPLETION_TOKENS:
+        _fail("openai_output_budget_invalid")
+    text_format = _one_pass_format()
+    if _input_bytes(instructions, user_input, text_format["schema"]) > OPENAI_MAX_INPUT_BYTES:
+        _fail("openai_input_budget_exceeded")
+    # No reasoning setting: the provider's default, as measured ("high" did not help).
+    return {
+        "model": api_model(model),
+        "instructions": instructions,
+        "input": user_input,
+        "max_output_tokens": maximum,
+        "background": False,
+        "stream": False,
+        "service_tier": "default",
+        "text": {"format": text_format},
+        "store": False,
+        "tools": [],
+        "tool_choice": "none",
+        "truncation": "disabled",
+    }
 
 
 def _fail(code: str) -> NoReturn:
@@ -111,9 +190,28 @@ def _input_bytes(instructions: str, user_input: str, schema: Mapping[str, Any]) 
 def prepare_openai_body(
     prompt: Mapping[str, Any], *, task: str, reasoning_effort: str = "low"
 ) -> dict[str, Any]:
-    """Convert a detailed C5 prompt to a stateless, no-tools Responses request."""
+    """Convert a detailed C5 prompt (or the one-pass C4 prompt, Luna only) to a
+    stateless, no-tools Responses request."""
 
     model = prompt.get("model")
+    if task == "facts" and isinstance(model, str):
+        messages = prompt.get("messages")
+        if (
+            not isinstance(messages, list)
+            or len(messages) != 2
+            or not all(isinstance(message, Mapping) for message in messages)
+            or messages[0].get("role") != "system"
+            or messages[1].get("role") != "user"
+            or not isinstance(messages[0].get("content"), str)
+            or not isinstance(messages[1].get("content"), str)
+        ):
+            _fail("openai_prompt_invalid")
+        return _one_pass_body(
+            model,
+            prompt.get("max_completion_tokens"),
+            messages[0]["content"],
+            messages[1]["content"],
+        )
     if task != "coaching" or not isinstance(model, str) or model not in OPENAI_TASK_MODELS:
         _fail("openai_task_model_not_supported")
     maximum = prompt.get("max_completion_tokens")
@@ -138,7 +236,7 @@ def prepare_openai_body(
     if _input_bytes(instructions, user_input, schema) > OPENAI_MAX_INPUT_BYTES:
         _fail("openai_input_budget_exceeded")
     body = {
-        "model": model,
+        "model": api_model(model),
         "instructions": instructions,
         "input": user_input,
         "max_output_tokens": maximum,
@@ -167,6 +265,8 @@ def openai_prompt_view(
 ) -> dict[str, Any]:
     """Validate persisted Responses bytes and return the common prompt view."""
 
+    if task == "facts":
+        return _one_pass_view(body, model=model, maximum=maximum)
     if task != "coaching" or model not in OPENAI_TASK_MODELS:
         _fail("openai_task_model_not_supported")
     expected_keys = {
@@ -188,7 +288,7 @@ def openai_prompt_view(
         _fail("openai_request_shape_invalid")
     instructions, user_input = body.get("instructions"), body.get("input")
     if (
-        body.get("model") != model
+        body.get("model") != api_model(model)
         or type(body.get("max_output_tokens")) is not int
         or body.get("max_output_tokens") != maximum
         or type(instructions) is not str
@@ -237,21 +337,90 @@ def openai_prompt_view(
     }
 
 
+def _one_pass_view(body: Mapping[str, Any], *, model: str, maximum: int) -> dict[str, Any]:
+    """The one-pass C4 request's persisted bytes, checked exactly as prepared."""
+    if model not in OPENAI_ONE_PASS_MODELS:
+        _fail("openai_task_model_not_supported")
+    if set(body) != _ONE_PASS_KEYS:
+        _fail("openai_request_shape_invalid")
+    instructions, user_input = body.get("instructions"), body.get("input")
+    if type(instructions) is not str or type(user_input) is not str:
+        _fail("openai_request_shape_invalid")
+    if dict(body) != _one_pass_body(model, maximum, instructions, user_input):
+        _fail("openai_request_shape_invalid")
+    return {
+        "model": model,
+        "max_completion_tokens": maximum,
+        "messages": [
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": user_input},
+        ],
+    }
+
+
+def require_openai_one_pass_cost_approval(
+    body: Mapping[str, Any],
+    *,
+    model: str,
+    maximum: int,
+    cost_basis: str,
+    cost_paise: int,
+    pricing_ref: str,
+    price_evidence_sha256: str,
+) -> None:
+    """Admit a one-pass C4 request on Luna only inside its exact paid cap: the whole input
+    at one UTF-8 byte a token (schema included) and the full output, at standard rates (a
+    Flex request that falls back is billed at standard)."""
+    from ac_platform.conversation_intelligence.admin_pricing import (
+        PRICING_SNAPSHOTS,
+        estimate_provider_usage,
+    )
+
+    _one_pass_view(body, model=model, maximum=maximum)
+    units = _input_bytes(body["instructions"], body["input"], body["text"]["format"]["schema"])
+    snapshot = PRICING_SNAPSHOTS.get(("openai", model))
+    estimate = estimate_provider_usage(
+        "openai",
+        api_model(model),
+        {
+            "input_tokens": units,
+            "output_tokens": maximum,
+            "total_tokens": units + maximum,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0,
+        },
+    )["paise"]
+    if (
+        snapshot is None
+        or cost_basis != "paid_pricing_evidence"
+        or pricing_ref != snapshot.pricing_ref
+        or price_evidence_sha256 != snapshot.evidence_sha256
+        or type(estimate) is not int
+        or estimate > cost_paise
+    ):
+        _fail("one_pass_cost_approval_required")
+
+
 def decode_openai_object(response: Mapping[str, Any], *, expected_model: str) -> dict[str, Any]:
     """Unwrap exactly one complete final JSON message, rejecting tools/refusals."""
 
     # The reviewed model pages and account inventory expose only these exact
     # IDs. Do not silently accept another model or invent a dated alias map.
     # Validation happens after the worker retains the raw returned response.
-    if expected_model not in OPENAI_TASK_MODELS or response.get("model") != expected_model:
+    if expected_model not in OPENAI_TASK_MODELS or response.get("model") != api_model(
+        expected_model
+    ):
         _fail("openai_response_model_mismatch")
+    # A Flex route is answered on Flex, or on the default tier after its one fallback.
+    tiers = {"default", "flex"} if is_flex(expected_model) else {"default"}
     if (
         response.get("object") != "response"
         or response.get("status") != "completed"
         or response.get("incomplete_details") is not None
         or response.get("error") is not None
         or response.get("store") is not False
-        or response.get("service_tier") != "default"
+        or response.get("service_tier") not in tiers
     ):
         _fail("openai_response_incomplete_or_stored")
     output = response.get("output")
@@ -303,11 +472,16 @@ def _nonfinite(_value: str) -> Any:
 
 
 __all__ = [
+    "OPENAI_FLEX_SUFFIX",
     "OPENAI_MAX_INPUT_BYTES",
+    "OPENAI_ONE_PASS_MODELS",
     "OPENAI_REASONING_EFFORTS",
     "OPENAI_TASK_MODELS",
     "OpenAITaskError",
+    "api_model",
     "decode_openai_object",
+    "is_flex",
     "openai_prompt_view",
     "prepare_openai_body",
+    "require_openai_one_pass_cost_approval",
 ]

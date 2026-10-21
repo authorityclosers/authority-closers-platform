@@ -401,7 +401,7 @@ def _model(
 
 
 DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
-    revision="provider-catalog-20261021-gemini-flex-v1",
+    revision="provider-catalog-20261021-luna-one-pass-v1",
     providers=(
         ProviderCatalogEntry(
             "local",
@@ -538,6 +538,16 @@ DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
                 _model(
                     "gpt-6-luna",
                     "https://api.openai.com/v1/responses",
+                    ("facts", "implemented"),
+                    ("coaching", "implemented"),
+                    readiness_override="request_only_account_access_unverified",
+                ),
+                # Flex (openai_tasks): the same model and request at half price, best
+                # effort, with a default-tier fallback after ten minutes.
+                _model(
+                    "gpt-6-luna:flex",
+                    "https://api.openai.com/v1/responses",
+                    ("facts", "implemented"),
                     ("coaching", "implemented"),
                     readiness_override="request_only_account_access_unverified",
                 ),
@@ -556,8 +566,9 @@ DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
             ),
             (
                 "Stateless Responses JSON-schema adapter is implemented for detailed C5 coaching "
-                "only. Model publication and /v1/models visibility do not attest account access, "
-                "quality, provider approval or hosted activation. ASR and C4 facts are unavailable."
+                "and, on GPT-6 Luna, the one-pass C4 request. Model publication and /v1/models "
+                "visibility do not attest account access, quality, provider approval or hosted "
+                "activation. ASR and chunked C4 facts are unavailable."
             ),
         ),
         ProviderCatalogEntry(

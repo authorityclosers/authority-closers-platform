@@ -805,7 +805,8 @@ def project_structure(structure: dict[str, Any], plan: Any) -> dict[str, Any]:
 
 
 async def latest_review(database: Any, envelope: dict[str, Any]) -> dict[str, Any] | None:
-    """Newest saved review for exactly this run, source and transcript revision."""
+    """Newest saved review for exactly this run, source and transcript revision, with
+    Brain 4.0's shadow read of the same report when the review carries none of its own."""
     from uuid import UUID
 
     from sqlalchemy import select
@@ -836,7 +837,15 @@ async def latest_review(database: Any, envelope: dict[str, Any]) -> dict[str, An
     )
     if row is None or row.payload is None or payload_sha256(row.payload) != row.payload_sha256:
         return None
-    return dict(row.payload)
+    review = dict(row.payload)
+    if "brain4" not in review:
+        # Brain 4.0 (beta): a shadow read of this exact report, when one was saved.
+        from ac_platform.conversation_intelligence.brain4_shadow import latest as brain4_latest
+
+        shadow = await brain4_latest(database, envelope)
+        if shadow is not None:
+            review["brain4"] = shadow
+    return review
 
 
 # Automatic scoring began on 16 Oct 2026 (rulebook 693645b0). The timer runner
@@ -926,6 +935,10 @@ async def erase_pointer_reviews_for_recording(
     )
 
     await erase_review_verdicts_for_recording(database, recording_id, now)
+    # Brain 4.0's shadow reads quote this call too: emptied in the same transaction.
+    from ac_platform.conversation_intelligence.brain4_shadow import erase_for_recording
+
+    await erase_for_recording(database, recording_id, now)
     return len(rows)
 
 

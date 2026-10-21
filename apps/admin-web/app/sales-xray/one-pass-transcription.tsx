@@ -28,7 +28,13 @@ function key(): string {
   return `one-pass-c2-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-type TierId = "standard" | "flex" | "one_pass" | "one_pass_flex";
+type TierId =
+  | "standard"
+  | "flex"
+  | "one_pass"
+  | "one_pass_flex"
+  | "luna"
+  | "luna_flex";
 type Tier = { id: TierId; label: string; state: GeminiTier };
 
 export function TranscriptionSwitch({ view }: { view: Transcription }) {
@@ -41,12 +47,17 @@ export function TranscriptionSwitch({ view }: { view: Transcription }) {
   const onGemini = view.active?.provider === "gemini";
   const onFlex = Boolean(view.active?.flex);
   const onOnePass = Boolean(view.active?.onePass);
+  const onOpenAI = Boolean(view.active?.openai);
+  const isLuna = (id: TierId | null) => id === "luna" || id === "luna_flex";
   // The owner's action is needed only to add what the active configuration lacks
-  // (Flash-Lite, Flex or one pass); dropping one is a click, as on the server.
+  // (Flash-Lite, Flex, one pass or OpenAI); dropping one is a click, as on the server.
   const needsOwner = (id: TierId) =>
     !onGemini ||
     (id.endsWith("flex") && !onFlex) ||
-    (id.startsWith("one_pass") && !onOnePass);
+    ((id.startsWith("one_pass") || isLuna(id)) && !onOnePass) ||
+    (isLuna(id) && !onOpenAI);
+  // Onto OpenAI, the owner confirms its DPA is signed; otherwise the one-pass word.
+  const word = isLuna(chosen) && !onOpenAI ? view.openaiConfirm : view.confirm;
   const tiers: Tier[] = [
     {
       id: "standard",
@@ -67,6 +78,16 @@ export function TranscriptionSwitch({ view }: { view: Transcription }) {
       id: "one_pass_flex",
       label: "One pass on Gemini Flex",
       state: view.onePassFlex,
+    },
+    {
+      id: "luna",
+      label: "One pass and report on OpenAI GPT-6 Luna (the cheapest)",
+      state: view.luna,
+    },
+    {
+      id: "luna_flex",
+      label: "Luna on OpenAI Flex",
+      state: view.lunaFlex,
     },
   ];
 
@@ -108,7 +129,7 @@ export function TranscriptionSwitch({ view }: { view: Transcription }) {
         onFlex ? " (Flex)" : ""
       }${view.active.onePass ? " · one pass" : ""} (revision ${view.active.revision})`
     : "No provider configuration is active here.";
-  const ready = confirm.trim() === view.confirm && reason.trim().length >= 10;
+  const ready = confirm.trim() === word && reason.trim().length >= 10;
 
   return (
     <div className={styles.switch}>
@@ -122,6 +143,13 @@ export function TranscriptionSwitch({ view }: { view: Transcription }) {
             <strong>{tier.label}</strong>
             {active ? (
               <small className={styles.note}>In use.</small>
+            ) : tier.state.savedRevision === null && tier.state.unavailable ? (
+              <small className={styles.note}>
+                {tier.state.unavailable ===
+                "configuration_has_no_openai_luna_provider"
+                  ? "Add OpenAI GPT-6 Luna in Providers first (its DPA references)."
+                  : "Not available from today's configuration."}
+              </small>
             ) : tier.state.savedRevision === null ? (
               <span className={styles.actions}>
                 <button
@@ -202,7 +230,8 @@ export function TranscriptionSwitch({ view }: { view: Transcription }) {
             />
           </label>
           <label className={styles.reason}>
-            Type {view.confirm} to confirm
+            Type {word} to confirm
+            {word === view.openaiConfirm ? " the OpenAI DPA is signed" : ""}
             <input
               value={confirm}
               maxLength={32}

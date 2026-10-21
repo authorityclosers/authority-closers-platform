@@ -18,7 +18,9 @@ import {
   lean,
   normalizeBrain4,
   percent,
+  ratio,
   withInterval,
+  type Checkpoint,
 } from "./brain4-data";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +30,106 @@ const HOW =
   "A dimension is compared through the pointers that ask its question. Exact: the same band " +
   "(needs improvement, average, good, excellent; Brain 4.0's 5 is excellent, 4 good, 3 average, " +
   "1-2 needs improvement). Intervals resample whole calls. Kappa is quadratic weighted kappa.";
+
+const DIMENSIONS: Record<string, string> = {
+  D01: "Starting the Call",
+  D02: "Setting the Plan",
+  D03: "Tone, Pace & Pauses",
+  D04: "Listening Well",
+  D05: "Asking the Right Questions",
+  D06: "Building Connection",
+  D07: "Being Professional",
+  D08: "Finding the Decision-Makers",
+  D09: "Understanding Problems & Goals",
+  D10: "Understanding What They're Doing Now",
+  D11: "Understanding the Real Impact",
+  D12: "Understanding How They Will Decide",
+  D13: "Matching the Right Solution",
+  D14: "Explaining the Solution Clearly",
+  D15: "Talking About Price & Budget",
+  D16: "Handling Objections",
+  D17: "Asking for the Decision",
+  D18: "Setting Clear Next Steps",
+};
+
+/** A fixed evaluation on an earlier gold set: how each pipeline agrees with the coach. */
+function CheckpointPanel({ point }: { point: Checkpoint }) {
+  const labels = point.labels;
+  const dimensions = Object.keys(DIMENSIONS).filter((id) =>
+    point.scorers.some((scorer) => scorer.dimensions[id]?.labels),
+  );
+  const empty = { agree: 0, rated: 0 };
+  return (
+    <Panel
+      title={`Checkpoint · ${point.title || point.checkpoint}`}
+      sub={`${point.date} · ${point.calls} calls · ${labels.total ?? 0} labels from ${point.notes_mapped} notes (${labels.positive ?? 0} praise, ${labels.negative ?? 0} criticism, ${labels.mixed ?? 0} mixed)`}
+      tools={<Why detail={point.source} more={point.limits.join(" ")} />}
+    >
+      <Table label="Agreement with the coach by pipeline">
+        <thead>
+          <tr>
+            <th scope="col">Pipeline</th>
+            <th scope="col">Agrees with the coach</th>
+            <th scope="col" data-num="">
+              Praise kept
+            </th>
+            <th scope="col" data-num="">
+              Criticism caught
+            </th>
+            <th scope="col" data-num="">
+              Mixed
+            </th>
+            <th scope="col" data-num="">
+              Rated
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {point.scorers.map((scorer) => (
+            <tr key={scorer.scorer}>
+              <th scope="row">{scorer.scorer}</th>
+              <td>
+                {withInterval(scorer.overall.agreement, scorer.overall.wilson)}
+              </td>
+              <td data-num="">{ratio(scorer.by_label.positive ?? empty)}</td>
+              <td data-num="">{ratio(scorer.by_label.negative ?? empty)}</td>
+              <td data-num="">{ratio(scorer.by_label.mixed ?? empty)}</td>
+              <td data-num="">
+                {scorer.overall.rated}/{scorer.overall.labels}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      <Table label="Agreement with the coach by dimension">
+        <thead>
+          <tr>
+            <th scope="col">Dimension</th>
+            {point.scorers.map((scorer) => (
+              <th scope="col" data-num="" key={scorer.scorer}>
+                {scorer.scorer}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {dimensions.map((id) => (
+            <tr key={id}>
+              <th scope="row">
+                {id} {DIMENSIONS[id]}
+              </th>
+              {point.scorers.map((scorer) => (
+                <td data-num="" key={scorer.scorer}>
+                  {ratio(scorer.dimensions[id] ?? empty)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Panel>
+  );
+}
 
 /**
  * Brain 4.0 (the coaching lead's 18-dimension rubric) against his gold set, beside
@@ -207,6 +309,9 @@ export default async function Brain4EvaluationPage() {
               </tbody>
             </Table>
           </Panel>
+          {data.checkpoints.map((point) => (
+            <CheckpointPanel key={point.checkpoint} point={point} />
+          ))}
           {Object.keys(data.stability).length ? (
             <Panel
               title="Run to run"

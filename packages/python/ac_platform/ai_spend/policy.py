@@ -42,6 +42,7 @@ FEATURES: Final[dict[str, str]] = {
     "lead_desk_ai": "AI replies to leads",
     "partner_quote_facts": "Partner quote facts",
     "one_pass": "One pass (Google): deep call data and pointer review in one read",
+    "brain4_shadow": "Brain 4.0 shadow reads (beta): gold calls and Brain 4.0 beta workspaces",
 }
 # Customer call analysis has its own budget (Execution & budget); never capped here.
 ANALYSIS: Final[frozenset[str]] = frozenset({"call_transcription", "call_facts", "call_report"})
@@ -49,11 +50,13 @@ ANALYSIS: Final[frozenset[str]] = frozenset({"call_transcription", "call_facts",
 BACKGROUND: Final[frozenset[str]] = frozenset(FEATURES) - ANALYSIS
 # Features whose own cap lives here (the call data engine and AI replies keep theirs).
 # The one-pass trial (21 Oct 2026) starts at ₹0 everywhere: raising it is the approval.
+# So do Brain 4.0's shadow reads (21 Oct 2026, brain4_shadow).
 CAPPED_HERE: Final[tuple[str, ...]] = (
     "canary",
     "pointer_review",
     "partner_quote_facts",
     "one_pass",
+    "brain4_shadow",
 )
 # Where the other features' caps live in Admin.
 CAP_ELSEWHERE: Final[dict[str, str]] = {
@@ -91,6 +94,7 @@ _DEFAULTS: Final[dict[str, dict[str, Any]]] = {
             "pointer_review": 20,
             "partner_quote_facts": 10,
             "one_pass": 0,
+            "brain4_shadow": 0,
         },
     },
     "staging": {
@@ -104,6 +108,7 @@ _DEFAULTS: Final[dict[str, dict[str, Any]]] = {
             "pointer_review": 30,
             "partner_quote_facts": 20,
             "one_pass": 0,
+            "brain4_shadow": 0,
         },
     },
     "production": {
@@ -117,6 +122,7 @@ _DEFAULTS: Final[dict[str, dict[str, Any]]] = {
             "pointer_review": 200,
             "partner_quote_facts": 100,
             "one_pass": 0,
+            "brain4_shadow": 0,
         },
     },
 }

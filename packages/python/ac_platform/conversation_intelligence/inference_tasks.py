@@ -1057,7 +1057,13 @@ def prepare_fact_inputs(
                 transcript_revision=str(validated["transcript_revision"]),
                 profile_revision=None,
                 input_sha256=hashlib.sha256(payload).hexdigest(),
-                payload_kind="gemini_json" if provider == "gemini" else "groq_json",
+                payload_kind=(
+                    "gemini_json"
+                    if provider == "gemini"
+                    else "openai_json"
+                    if provider == "openai"
+                    else "groq_json"
+                ),
                 payload=payload,
                 max_completion_tokens=max_completion_tokens,
                 chunk_index=index,

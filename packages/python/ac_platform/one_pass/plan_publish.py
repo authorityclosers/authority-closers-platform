@@ -171,6 +171,10 @@ def answer(storage_root: Path, read: Read) -> dict[str, Any] | None:
         GeminiTaskError,
         decode_gemini_object,
     )
+    from ac_platform.conversation_intelligence.openai_tasks import (
+        OpenAITaskError,
+        decode_openai_object,
+    )
     from ac_platform.conversation_intelligence.storage import (
         ObjectKey,
         ObjectKind,
@@ -186,10 +190,12 @@ def answer(storage_root: Path, read: Read) -> dict[str, Any] | None:
             )
         )
         response = json.loads(raw)
-        if read.provider != "gemini" or not isinstance(response, dict):
+        if not isinstance(response, dict):
             return None
+        if read.provider == "openai":
+            return decode_openai_object(response, expected_model=read.model)
         return decode_gemini_object(response)
-    except (StorageError, OSError, ValueError, GeminiTaskError):
+    except (StorageError, OSError, ValueError, GeminiTaskError, OpenAITaskError):
         return None
 
 

@@ -165,3 +165,21 @@ def test_calibration_fit_keeps_order_and_needs_enough_pairs() -> None:
         Dataset(tuple(lines[:3]), runs), revision="brain4-calibration/1"
     )
     assert few.maps == {}
+
+
+def test_the_gold_v1_checkpoint_is_counts_only_and_in_the_evaluation() -> None:
+    import json
+
+    found = brain4_eval.checkpoints()
+    assert [item["checkpoint"] for item in found] == ["gold-v1/2026-10-21"]
+    gold = found[0]
+    assert gold["calls"] == 6 and gold["labels"]["total"] == 43
+    for scorer in gold["scorers"]:
+        overall = scorer["overall"]
+        assert 0 <= overall["agree"] <= overall["rated"] <= overall["labels"] == 43
+        assert set(scorer["dimensions"]) <= set(brain4.DIMENSION_IDS)
+    # Counts and agreement only: no call id, quote or note.
+    text = json.dumps(gold)
+    assert "rc-" not in text and "statement" not in text and "quote" not in text
+    result = brain4_eval.evaluate(Dataset((), {}), now=START)
+    assert result["checkpoints"][0]["checkpoint"] == "gold-v1/2026-10-21"

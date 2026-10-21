@@ -112,6 +112,8 @@ export function normalizePipeline(raw: unknown): PipelineSettings {
 export type GeminiTier = {
   model: string;
   profileId: string;
+  /** Why this configuration can't be prepared yet (e.g. no OpenAI entry), if so. */
+  unavailable: string | null;
   configurationSha256: string | null;
   savedRevision: number | null;
   approved: boolean;
@@ -129,6 +131,8 @@ export type Transcription = {
     flex: boolean;
     /** The active configuration's C4 is the one-pass request. */
     onePass: boolean;
+    /** Some route of the active configuration sends call content to OpenAI. */
+    openai: boolean;
   } | null;
   /** C2 on Gemini 3.1 Flash-Lite, standard tier. */
   gemini: GeminiTier;
@@ -138,6 +142,12 @@ export type Transcription = {
   onePass: GeminiTier;
   /** The one-pass configuration on Gemini Flex. */
   onePassFlex: GeminiTier;
+  /** One pass and C5 on OpenAI GPT-6 Luna (the cheapest; the OpenAI DPA gate). */
+  luna: GeminiTier;
+  /** The Luna configuration on OpenAI Flex. */
+  lunaFlex: GeminiTier;
+  /** What the owner types to switch any route onto OpenAI (its DPA is signed). */
+  openaiConfirm: string;
   classicRevision: number | null;
   confirm: string;
 };
@@ -147,6 +157,7 @@ const geminiTier = (raw: unknown, model: string): GeminiTier => {
   return {
     model: read.string(tier.model, model),
     profileId: read.string(tier.profile_id),
+    unavailable: read.optionalString(tier.unavailable),
     configurationSha256: read.optionalString(tier.configuration_sha256),
     savedRevision: read.optionalNumber(tier.saved_revision),
     approved: read.boolean(tier.approved),
@@ -168,12 +179,16 @@ export function normalizeTranscription(raw: unknown): Transcription {
           model: read.optionalString(route.model),
           flex: read.boolean(active.flex),
           onePass: read.boolean(active.one_pass),
+          openai: read.boolean(active.openai),
         }
       : null,
     gemini: geminiTier(body.gemini, "gemini-3.1-flash-lite"),
     geminiFlex: geminiTier(body.gemini_flex, "gemini-3.1-flash-lite:flex"),
     onePass: geminiTier(body.one_pass, "gemini-3.1-flash-lite"),
     onePassFlex: geminiTier(body.one_pass_flex, "gemini-3.1-flash-lite:flex"),
+    luna: geminiTier(body.luna, "gemini-3.1-flash-lite"),
+    lunaFlex: geminiTier(body.luna_flex, "gemini-3.1-flash-lite:flex"),
+    openaiConfirm: read.string(body.openai_confirm, "openai_dpa_signed"),
     classicRevision: read.optionalNumber(body.classic_revision),
     confirm: read.string(body.confirm, "one_pass"),
   };
