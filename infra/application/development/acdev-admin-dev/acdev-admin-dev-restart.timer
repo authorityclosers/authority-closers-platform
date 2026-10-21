@@ -1,0 +1,10 @@
+[Unit]
+Description=Restart the Admin dev server nightly at 04:10 IST
+
+[Timer]
+# Ten minutes after the Sales Xray dev server restart and ac-disk-hygiene (22:30 UTC).
+OnCalendar=*-*-* 22:40:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target

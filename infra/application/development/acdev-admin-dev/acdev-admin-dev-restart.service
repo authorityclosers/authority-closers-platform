@@ -1,0 +1,12 @@
+[Unit]
+Description=Nightly restart of the Admin dev server; clears its Turbopack cache above 512 MiB
+
+[Service]
+Type=oneshot
+# The cache sits under the WorkingDirectory of acdev-admin-dev.service. 512 MiB: a busy day adds about 490 MiB
+# (19-20 Oct), so the cache is reset every one or two busy days and stays under about 1 GB, below the unit's
+# MemoryHigh 1200M. The probe page is the watchdog's.
+ExecStart=%h/.local/bin/acdev-dev-restart acdev-admin-dev.service %h/src/dev-live/authority-closers-platform/apps/admin-web/.next/dev/cache/turbopack 512 http://127.0.0.1:3028/login admin-dev.authorityclosers.com
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=20min
