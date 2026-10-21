@@ -47,7 +47,8 @@ APPLE_TEAM_ID = "ABCDE12345"
 APPLE_KEY_ID = "KEY1234567"
 REDIRECT = "https://salesxray.example.test/v1/auth/{provider}/callback"
 NOW = 1_800_000_000
-# google-auth checks identity-token times against the real clock.
+# google-auth checks identity-token times against the real clock. Valid tokens read it when they are made
+# (a slow shard outlives a module-level stamp); TOKEN_NOW only dates the already-expired case.
 TOKEN_NOW = int(time.time())
 
 
@@ -358,8 +359,8 @@ def _id_token(transaction: AuthTransaction, **overrides: Any) -> str:
         "iss": APPLE_ISSUER,
         "aud": APPLE_SERVICE_ID,
         "sub": "001234.abcdef0123456789.0123",
-        "iat": TOKEN_NOW,
-        "exp": TOKEN_NOW + 600,
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 600,
         "nonce": transaction.nonce,
         "nonce_supported": True,
         "email": "x7k2@privaterelay.appleid.com",
@@ -505,8 +506,8 @@ def test_apple_refuses_a_token_signed_by_anyone_else() -> None:
         "iss": APPLE_ISSUER,
         "aud": APPLE_SERVICE_ID,
         "sub": "forged",
-        "iat": TOKEN_NOW,
-        "exp": TOKEN_NOW + 600,
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 600,
         "nonce": transaction.nonce,
         "email": "victim@example.com",
         "email_verified": "true",
