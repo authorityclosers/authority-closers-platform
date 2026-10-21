@@ -154,5 +154,21 @@ passed the contract.
   his criticisms; Luna catches his criticisms and misses his praise, and repeats its own rating on re-read 69% of the
   time. Neither is closer to the coach than today's pointer review on these 6 calls.
 
+**Can Gemini be made to catch the coach's criticisms?** (orchestrator, 21 Oct; same approved routes, ₹1.93 more,
+₹8.64 of ₹10 in all)
+
+| Variant                                                                            | Calls | Agrees with the coach (95% CI) | Praise kept | Criticism caught |
+| ---------------------------------------------------------------------------------- | ----- | ------------------------------ | ----------- | ---------------- |
+| Ensemble, mean of Gemini and Luna ratings (rule fixed before scoring; no new read) | 7     | 49% (33–64%)                   | 11/23       | 1/8              |
+| Ensemble, Gemini capped at 3 where Luna's mean is 2.5 or lower (no new read)       | 6     | 55% (38–70%)                   | 11/19       | 1/8              |
+| Gemini, product prompt (same 2 calls)                                              | 2     | 67% (39–86%)                   | 5/6         | 1/4              |
+| Gemini, product prompt + a "find what went wrong" critic step                      | 2     | 55% (28–79%)                   | 4/6         | 0/3              |
+
+The critic step ran on the 3 calls with the most criticisms; Gemini's Flex tier was busy twice on one of them, so the
+paired comparison has 2 calls. Neither change helps: the coach's criticisms are mostly single moments inside a skill he
+otherwise praises, while the rubric rates the whole pattern ("one small miss can still be 4"). Whether Brain 4.0 catches
+his criticisms is better measured on its coaching words, moment by moment, than on its 1–5 rating, and the fair test
+needs his own blind ratings of the dimensions (section 6).
+
 Shown in Admin → Gold set → Brain 4.0 evaluation as checkpoint "gold-v1/2026-10-21". From here on, new judgements
 come from fresh `/review` assignments and pair with Brain 4.0 automatically.
