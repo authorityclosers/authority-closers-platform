@@ -1,0 +1,118 @@
+{
+  "dataset": "gold-v1",
+  "source": "The coaching lead's correction doc ('1. Language simplicity', shared 17 Oct 2026) on 7 real calls; his notes normalised one per numbered note in the analysis-cost research (realcalls/truths.json on ac, mode 700). Owner, 21 Oct 2026: 'The doc I sent with corrections and audio calls are the only data Dipak gave, and just use that and make it possible.'",
+  "version": "gold-v1/2026-10-21",
+  "mapping_by": "Brain 4.0 session (inferred): which Brain 4.0 dimension each note judges. The coaching lead's own words stay the cited source; every mapping here is an inference for his review.",
+  "polarity": "strength = positive, improvement = negative, observation = not a judgement of the salesperson (unmapped); 'mixed' where his note praises and criticises the same moment.",
+  "unmapped": {
+    "rc-01": ["d01", "d09", "d16"],
+    "rc-03": ["d01"],
+    "rc-05": ["d01", "d11"],
+    "rc-06": ["d01", "d04", "d05", "d13"],
+    "rc-07": ["d10"]
+  },
+  "unmapped_why": {
+    "rc-03:d01": "wording of a check-in phrase; Brain 4.0 never scores language mixing or grammar",
+    "observations": "about the prospect or the call (buying signals, call type), not a judgement of the salesperson"
+  },
+  "calls_without_notes": ["rc-02"],
+  "notes": {
+    "rc-01": {
+      "d02": [["D14", "positive"]],
+      "d03": [["D05", "positive"]],
+      "d04": [["D05", "positive"]],
+      "d05": [["D04", "negative"]],
+      "d06": [["D14", "positive"]],
+      "d07": [["D14", "positive"]],
+      "d08": [["D14", "positive"]],
+      "d10": [["D05", "positive"]],
+      "d11": [["D03", "positive"]],
+      "d12": [["D14", "positive"]],
+      "d13": [["D07", "positive"]],
+      "d14": [["D07", "positive"]],
+      "d15": [["D15", "positive"]],
+      "d17": [["D18", "positive"]]
+    },
+    "rc-03": {
+      "d02": [["D03", "positive"]],
+      "d03": [["D01", "negative"]],
+      "d04": [["D02", "positive"]],
+      "d05": [
+        ["D05", "positive"],
+        ["D03", "positive"]
+      ],
+      "d06": [
+        ["D05", "positive"],
+        ["D09", "positive"]
+      ],
+      "d07": [["D05", "positive"]],
+      "d08": [["D05", "positive"]],
+      "d09": [["D16", "negative"]],
+      "d10": [["D05", "positive"]],
+      "d11": [["D05", "negative"]],
+      "d12": [["D05", "negative"]]
+    },
+    "rc-04": {
+      "d01": [["D03", "positive"]],
+      "d02": [["D04", "positive"]],
+      "d03": [["D05", "positive"]],
+      "d04": [["D05", "negative"]],
+      "d05": [["D05", "negative"]],
+      "d06": [["D02", "positive"]],
+      "d07": [["D04", "negative"]],
+      "d08": [["D05", "positive"]],
+      "d09": [["D03", "negative"]],
+      "d10": [["D14", "positive"]],
+      "d11": [["D16", "mixed"]],
+      "d12": [
+        ["D03", "negative"],
+        ["D14", "negative"]
+      ],
+      "d13": [["D07", "positive"]],
+      "d14": [["D03", "negative"]],
+      "d15": [["D03", "negative"]],
+      "d16": [["D15", "negative"]],
+      "d17": [["D15", "negative"]],
+      "d18": [
+        ["D13", "negative"],
+        ["D14", "negative"]
+      ]
+    },
+    "rc-05": {
+      "d02": [["D02", "positive"]],
+      "d03": [["D14", "positive"]],
+      "d04": [["D15", "negative"]],
+      "d05": [["D09", "negative"]],
+      "d06": [["D10", "positive"]],
+      "d07": [["D05", "negative"]],
+      "d08": [["D09", "negative"]],
+      "d09": [["D05", "negative"]],
+      "d10": [
+        ["D05", "positive"],
+        ["D06", "positive"]
+      ]
+    },
+    "rc-06": {
+      "d02": [["D01", "positive"]],
+      "d03": [["D14", "positive"]],
+      "d06": [["D04", "positive"]],
+      "d07": [["D04", "positive"]],
+      "d08": [["D15", "positive"]],
+      "d09": [["D05", "positive"]],
+      "d10": [["D06", "positive"]],
+      "d11": [["D14", "positive"]],
+      "d12": [["D10", "negative"]]
+    },
+    "rc-07": {
+      "d01": [["D03", "positive"]],
+      "d02": [["D01", "positive"]],
+      "d03": [["D14", "positive"]],
+      "d04": [["D14", "positive"]],
+      "d05": [["D17", "negative"]],
+      "d06": [["D07", "positive"]],
+      "d07": [["D05", "positive"]],
+      "d08": [["D15", "positive"]],
+      "d09": [["D07", "positive"]]
+    }
+  }
+}

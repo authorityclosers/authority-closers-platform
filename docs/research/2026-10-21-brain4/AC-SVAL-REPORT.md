@@ -113,3 +113,38 @@ The product's Brain 4.0 part, exactly as the shadow read sends it, answered by G
   read, about ₹120 in all). Nothing leaves production.
 - **The figures** appear on Admin → Gold set → Brain 4.0 evaluation as answers are saved: acceptance of today's
   review per pointer, and Brain 4.0 against the endorsed band per dimension, with intervals and counts.
+
+## 8. Checkpoint gold v1 (21 Oct 2026): the coaching lead's correction doc
+
+The owner, 21 Oct 2026: "The doc I sent with corrections and audio calls are the only data Dipak gave, and
+just use that and make it possible. Reviews on the app were never done."
+
+**Gold v1** is that doc ("1. Language simplicity") on 7 real calls; 6 have notes. Of 81 numbered notes, 70 are
+mapped to the Brain 4.0 dimensions they judge (`gold-v1-mapping.json`, note ids only: an inference for his
+review); 11 are observations about the prospect or wording the rubric does not score. That gives 43 call-dimension
+labels: 27 praise, 9 criticism, 7 mixed. His words and the calls stay in the research folder on ac (mode 700).
+
+Scored offline (`gold_v1.py`, aggregates in `checkpoint-gold-v1.json`) against each pipeline's saved read of the
+same calls, all on the same Gemini 3.1 Flash-Lite transcripts. Brain 4.0 rating 4-5 reads as praise and 1-3 as
+criticism; pointer scores 70+ read as praise; a mixed label agrees with a middle reading.
+
+| Pipeline                                          | Agrees with the coach (95% CI) | Praise kept | Criticism caught | Mixed | Rated |
+| ------------------------------------------------- | ------------------------------ | ----------- | ---------------- | ----- | ----- |
+| Today's pointer review (Gemini 3.8 Flash)         | 64% (49–77%)                   | 19/26       | 2/9              | 6/7   | 42/43 |
+| One pass (research build, Gemini 3.8 Flash)       | 72% (57–83%)                   | 22/27       | 2/9              | 7/7   | 43/43 |
+| Brain 4.0, research prompt (Gemini 3.8 Flash)     | 60% (44–73%)                   | 16/26       | 2/9              | 7/7   | 42/43 |
+| Brain 4.0, research prompt (GPT-6 Luna)           | 40% (26–56%)                   | 3/23        | 6/7              | 5/5   | 35/43 |
+| Brain 4.0 + coach-notes prompt (Gemini 3.8 Flash) | 59% (43–72%)                   | 16/26       | 1/8              | 7/7   | 41/43 |
+
+**What it says:**
+
+- Every interval overlaps: on 6 calls no pipeline is shown better than another.
+- The Gemini readers keep the coach's praise but catch almost none of his criticisms (1–2 of 9). Luna catches his
+  criticisms (6 of 7) but agrees with his praise only 3 times in 23: it rates low across the board. Each model
+  leans its own way, so a per-model display calibration (`brain4.Calibration`) is the lever once labels allow.
+- Per dimension there are 1–6 labelled calls: no dimension can be graded, let alone made official.
+- Not yet in the table: the product's own Brain 4.0 prompt (as the shadow read sends it; same rubric digest),
+  pending the approved key route for these real calls.
+
+Shown in Admin → Gold set → Brain 4.0 evaluation as checkpoint "gold-v1/2026-10-21". From here on, new judgements
+come from fresh `/review` assignments and pair with Brain 4.0 automatically.

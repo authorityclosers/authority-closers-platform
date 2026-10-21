@@ -24,12 +24,15 @@ written. Counts, labels and scores only: never the reviewer's note or transcript
 
 from __future__ import annotations
 
+import functools
+import json
 import math
 import random
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Final
 
 from ac_platform.conversation_intelligence import brain4
@@ -394,6 +397,21 @@ def _events(
     return [(p.created_at, result) for p in items if (result := test(p)) is not None]
 
 
+CHECKPOINTS_FILE: Final = Path(__file__).with_name("profiles") / "brain4_checkpoints.json"
+
+
+@functools.cache
+def checkpoints() -> tuple[dict[str, Any], ...]:
+    """Fixed evaluations on earlier gold sets (counts and agreement only), newest last.
+
+    Gold v1 (21 Oct 2026) is the coaching lead's correction doc on 7 real calls, scored
+    offline against each pipeline (docs/research/2026-10-21-brain4/gold_v1.py); its notes
+    and the calls stay in the research folder on ac.
+    """
+    document = json.loads(CHECKPOINTS_FILE.read_text(encoding="utf-8"))
+    return tuple(document.get("checkpoints") or ())
+
+
 def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
@@ -459,6 +477,7 @@ def evaluate(dataset: Dataset, *, now: datetime) -> dict[str, Any]:
         "dimensions": dimensions,
         "stability": stability(dataset.brain4),
         "alerts": alerts,
+        "checkpoints": list(checkpoints()),
         "limits": [
             "One reviewer, who saw today's AI answer before judging: an agreement makes "
             "today's band the gold band, which favours today's review.",

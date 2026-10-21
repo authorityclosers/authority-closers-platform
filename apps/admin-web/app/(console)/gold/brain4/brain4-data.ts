@@ -63,6 +63,41 @@ const drop = z
   .catch(null)
   .default(null);
 
+const checkpointRate = z
+  .object({
+    labels: z.number().catch(0).default(0),
+    rated: z.number().catch(0).default(0),
+    agree: z.number().catch(0).default(0),
+    agreement: rate,
+    wilson: interval,
+  })
+  .catch({ labels: 0, rated: 0, agree: 0, agreement: null, wilson: null });
+
+/** A fixed evaluation on an earlier gold set (gold v1: the coaching lead's doc). */
+const checkpoint = z.object({
+  checkpoint: z.string(),
+  title: z.string().catch("").default(""),
+  date: z.string().catch("").default(""),
+  source: z.string().catch("").default(""),
+  calls: z.number().catch(0).default(0),
+  notes_mapped: z.number().catch(0).default(0),
+  labels: z.record(z.string(), z.number()).catch({}).default({}),
+  scorers: z
+    .array(
+      z.object({
+        scorer: z.string(),
+        overall: checkpointRate,
+        by_label: z.record(z.string(), checkpointRate).catch({}).default({}),
+        dimensions: z.record(z.string(), checkpointRate).catch({}).default({}),
+      }),
+    )
+    .catch([])
+    .default([]),
+  limits: z.array(z.string()).catch([]).default([]),
+});
+
+export type Checkpoint = z.infer<typeof checkpoint>;
+
 export const brain4Evaluation = z.object({
   version: z.string().catch("").default(""),
   generated_at: z.string().catch("").default(""),
@@ -125,6 +160,7 @@ export const brain4Evaluation = z.object({
     .catch([])
     .default([]),
   limits: z.array(z.string()).catch([]).default([]),
+  checkpoints: z.array(checkpoint).catch([]).default([]),
 });
 
 export type Brain4Evaluation = z.infer<typeof brain4Evaluation>;
@@ -182,3 +218,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
   understanding_the_buyer: "How Well You Understand the Buyer",
   moving_the_sale_forward: "How Well You Move the Sale Forward",
 };
+
+/** "4/6" for a rate, "—" when nothing was compared. */
+export function ratio(value: { agree: number; rated: number }): string {
+  return value.rated ? `${value.agree}/${value.rated}` : "—";
+}
