@@ -1670,13 +1670,25 @@ it("desktop and mobile Analyse navigation explicitly starts a new call", async (
   const desktop = container.querySelector<HTMLAnchorElement>(
     'aside[aria-label="Sales Xray navigation"] a[aria-label="New analysis"]',
   );
-  const mobile = Array.from(
-    container.querySelectorAll<HTMLAnchorElement>(
-      'nav[aria-label="Mobile Sales Xray navigation"] a',
-    ),
-  ).find((link) => link.textContent?.trim() === "New");
   expect(desktop?.getAttribute("href")).toBe("/analysis/new");
-  expect(mobile?.getAttribute("href")).toBe("/analysis/new");
+  // Phones: a visitor's New goes straight there; a signed-in + asks first,
+  // and its Add a call goes there (owner, 22 Oct).
+  const nav = container.querySelector(
+    'nav[aria-label="Mobile Sales Xray navigation"]',
+  )!;
+  const visitorNew = nav.querySelector('a[aria-label="New analysis"]');
+  const add = nav.querySelector<HTMLButtonElement>(
+    'button[aria-label="Add a lead or a call"]',
+  );
+  if (visitorNew) {
+    expect(visitorNew.getAttribute("href")).toBe("/analysis/new");
+    return;
+  }
+  await act(async () => add?.click());
+  const addCall = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>("dialog a"),
+  ).find((link) => link.textContent?.includes("Add a call"));
+  expect(addCall?.getAttribute("href")).toBe("/analysis/new");
 });
 
 it("explicit new-call entry skips remembered work and claim prompts without mutating either", async () => {

@@ -56,14 +56,13 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
   const desktopNewAnalysis = desktopNav?.querySelector(
     'a[aria-label="New analysis"][data-next-client-link="true"]',
   );
-  const mobileNewAnalysis = Array.from(
-    mobileNav?.querySelectorAll<HTMLAnchorElement>(
-      'a[data-next-client-link="true"]',
-    ) ?? [],
-  ).find((link) => link.textContent?.trim() === "New");
   expect(desktopNewAnalysis?.getAttribute("href")).toBe("/sales-xray?new=1");
-  expect(mobileNewAnalysis?.getAttribute("href")).toBe("/sales-xray?new=1");
-  expect(mobileNewAnalysis?.getAttribute("aria-label")).toBe("New analysis");
+  // Phones: the + asks what to add, a lead or a call (owner, 22 Oct).
+  const mobileAdd = mobileNav?.querySelector(
+    'button[aria-label="Add a lead or a call"]',
+  );
+  expect(mobileAdd?.textContent?.trim()).toBe("Add");
+  expect(mobileAdd?.getAttribute("aria-haspopup")).toBe("dialog");
   expect(
     desktopNav?.querySelector(
       'a[aria-label="Calls"][href="/analysis/calls"][data-next-client-link="true"]',
@@ -143,8 +142,8 @@ it("keeps the phone tab bar to its five tabs, plus a dev settings control", () =
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Home", "Leads", "New", "Calls", "More", "Settings"]
-        : ["Home", "Leads", "New", "Calls", "More"],
+        ? ["Home", "Leads", "Add", "Calls", "More", "Settings"]
+        : ["Home", "Leads", "Add", "Calls", "More"],
     );
     // Owner, 17 Oct: Prospects and Coaching open from the More sheet.
     expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
@@ -178,7 +177,7 @@ it("keeps the five tabs for an unconfirmed session; signed out offers Home, New 
         <p>Dashboard</p>
       </AcquisitionShell>,
     ),
-  ).toEqual(["Home", "Leads", "New", "Calls", "More"]);
+  ).toEqual(["Home", "Leads", "Add", "Calls", "More"]);
   // B22: Leads and Calls only lead to a sign-in prompt for a visitor.
   expect(
     tabs(

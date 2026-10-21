@@ -1,0 +1,88 @@
+/* The + sheet's two choices (owner, 22 Oct 2026): tokens only. */
+
+.choices {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-height: 76px;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--sx-dur-base) var(--sx-spring),
+    border-color var(--sx-dur-fast) var(--sx-ease-out),
+    background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.choice:active {
+  transform: scale(var(--sx-press-scale));
+  transition-duration: var(--sx-dur-instant);
+}
+
+.choice:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) {
+  .choice:hover {
+    border-color: var(--lx-teal-edge);
+    background: var(--lx-teal-tint);
+  }
+}
+
+.icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: var(--sx-radius-md);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.icon[data-tone="call"] {
+  background: var(--lx-missed-soft);
+  color: var(--lx-missed-ink);
+}
+
+.words {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.words strong {
+  font: var(--sx-text-panel);
+}
+
+.words small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.chevron {
+  color: var(--sx-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choice,
+  .choice:active {
+    transition: none;
+    transform: none;
+  }
+}

@@ -5,6 +5,8 @@
  * built from an older or partial answer still renders.
  */
 
+import { displayName } from "../../display-name";
+
 export const INSIGHTS_PATH = "/v1/conversation/acquisition/insights";
 
 export const RANGES = [
@@ -204,7 +206,7 @@ function group(value: unknown): Group {
   const raw = record(value);
   return {
     key: str(raw.key),
-    name: str(raw.name) ?? "Unassigned",
+    name: displayName(str(raw.name) ?? "Unassigned"),
     team: str(raw.team),
     calls: num(raw.calls),
     minutes: num(raw.minutes),
@@ -330,7 +332,7 @@ export function parseInsights(body: unknown): Insights {
           ? [
               {
                 key,
-                name: str(item.name) ?? "Unassigned",
+                name: displayName(str(item.name) ?? "Unassigned"),
                 team: str(item.team),
               },
             ]

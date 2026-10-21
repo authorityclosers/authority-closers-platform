@@ -15,6 +15,7 @@ import { count, day, money } from "../billing/money";
 import type { DisplayTopUpPack } from "./plans-catalogue-fixture";
 import type { PurchaseQuote } from "./plans-screen";
 import styles from "./plans.module.css";
+import { useBackClose } from "../ui/back-close";
 
 export type CheckoutDrawerItem =
   | {
@@ -66,6 +67,10 @@ export function CheckoutDrawer({
   const panelRef = summaryRef ?? localSummaryRef;
   const visible = open && item !== null;
   const dismiss = useEffectEvent(() => {
+    if (!busy) onClose();
+  });
+  // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
+  useBackClose(visible, () => {
     if (!busy) onClose();
   });
   const providerHasFocus = useEffectEvent(

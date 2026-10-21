@@ -1,3 +1,5 @@
+import { displayName } from "./display-name";
+
 /**
  * Who may change a call. The server lets only a call's owner rename or delete
  * it; organisation owners and admins may read members' calls, not edit them.
@@ -18,7 +20,7 @@ export function ownerLabel(
   owner: { personId: string; name: string },
   viewerId: string | null,
 ): string {
-  return ownsCall(owner, viewerId) ? "You" : owner.name;
+  return ownsCall(owner, viewerId) ? "You" : displayName(owner.name);
 }
 
 /** Fired to switch workspace from outside the sidebar (the shell owns it). */

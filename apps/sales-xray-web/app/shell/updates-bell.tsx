@@ -8,6 +8,7 @@ import {
   type UpdateNotification,
 } from "./updates-client";
 import styles from "./updates-bell.module.css";
+import { useBackClose } from "../ui/back-close";
 
 export function UpdatesBell({
   notifications,
@@ -33,6 +34,8 @@ export function UpdatesBell({
     setOpen(false);
     trigger.current?.focus();
   };
+  // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
+  useBackClose(open, () => setOpen(false));
   useLayoutEffect(() => {
     if (!open) return;
     const measure = () => {

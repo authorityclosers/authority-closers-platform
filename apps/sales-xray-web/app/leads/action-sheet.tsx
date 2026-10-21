@@ -4,12 +4,13 @@
  * A sheet that rises from the bottom on a phone (a small card in the middle on
  * a computer): the long-press menu and the message composer. Native <dialog>,
  * so it sits above an open lead, keeps focus inside and closes on Escape, a
- * tap outside or a swipe down on its grabber.
+ * tap outside, a swipe down on its grabber or Back.
  */
 
 import { X } from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
+import { useBackClose } from "../ui/back-close";
 import styles from "./leads.module.css";
 
 export function ActionSheet({
@@ -30,6 +31,7 @@ export function ActionSheet({
   const drag = useRef<{ y: number; moved: number } | null>(null);
   // The tap that ends a long-press can land on the new backdrop: ignore it.
   const openedAt = useRef(0);
+  useBackClose(open, onClose);
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;

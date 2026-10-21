@@ -9,6 +9,7 @@ import {
 } from "react";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import styles from "./review-dialog.module.css";
+import { useBackClose } from "./ui/back-close";
 
 type Props = {
   open: boolean;
@@ -53,6 +54,8 @@ export function ReviewDialog({
   const heading = useRef<HTMLHeadingElement>(null);
   const previousPosition = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
+  useBackClose(open, onClose);
 
   useEffect(() => {
     if (

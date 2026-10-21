@@ -6,6 +6,8 @@
  * after a dropped connection never records the same thing twice.
  */
 
+import { withDisplayNames } from "../display-name";
+
 export const LEADS_PATH = "/leads";
 const API = "/v1/lead-desk";
 
@@ -380,8 +382,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       response.status,
     );
   }
-  return (await response.json()) as T;
+  // Names with capitals on every screen (owner, 22 Oct); stored as typed.
+  return withDisplayNames((await response.json()) as T, PEOPLE);
 }
+
+/** Lead and person names in Lead Desk answers (not stages, sources or files). */
+const PEOPLE: ReadonlySet<string> = new Set([
+  "name",
+  "owner_name",
+  "actor_name",
+  "previous_owner_name",
+]);
 
 function json(method: string, body: unknown): RequestInit {
   return {
