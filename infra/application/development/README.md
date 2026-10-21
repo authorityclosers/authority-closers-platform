@@ -573,6 +573,9 @@ it was cleared and how long the first compile took.
   first compiles never share the box. The deletion decision above applies here
   too: the cache is build output, deleted without owner approval, and nothing
   else under `.next` is touched.
+  The first run, through the recorded unit on 21 Oct at 13:40 UTC, cleared
+  1,070 MiB (the stale `v16.3.6` cache with it); `/login` answered 200 after
+  9 s and memory was 731M.
 
 Why: nothing prunes the Admin cache either. On 21 Oct it was 1,070 MiB. Of that,
 1,002 MiB was in `v16.3.6-a758ffcf`, which next dev stopped reading when the app
