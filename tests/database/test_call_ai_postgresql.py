@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import select
 
+from ac_platform.call_ai import policy as call_ai_policy
 from ac_platform.call_ai import store
 from ac_platform.call_ai.models import CallAiDecision, CallAiSettings
 from ac_platform.conversation_intelligence.models import (
@@ -23,6 +24,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationProcessingPlan,
 )
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
+from ac_platform.tenancy.models import Organisation
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_processing_plan_postgresql import (
     _accept,
@@ -303,6 +305,64 @@ def test_settings_are_new_revisions_and_a_stale_save_is_refused(
                 assert (await store.read(database, tenant)).config["people"] == {
                     str(person): "full"
                 }
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize("organisation", [True, False])
+def test_a_short_call_in_an_organisation_keeps_only_its_transcript(
+    postgres_harness: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch, organisation: bool
+) -> None:
+    """Owner, 21 Oct 2026: in every organisation a call under a minute (here the 1-second
+    fixture, so no conversation) stops after its transcript, its reason recorded; a personal
+    workspace runs in full as before."""
+    monkeypatch.setattr(call_ai_policy, "SHORT_RULE_OFF", frozenset())
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            if organisation:
+                async with setup.sessions() as database, database.begin():
+                    database.add(
+                        Organisation(
+                            tenant_id=setup.prepared.state.tenant_id,
+                            creation_command_id=uuid4(),
+                            domain_verification_token="fictional-organisation-" + "x" * 43,
+                        )
+                    )
+            quote = await _quote(setup, "short-quote")
+            await _accept(setup, quote, "short-accept")
+            plan_id = UUID(quote["id"])
+            if not organisation:
+                completed = await _drive_to_completion(setup, plan_id)
+                assert completed["report_ready"] is True
+                assert await _stages(setup) == ["C2", "C4", "C5"]
+                assert await _decisions(setup) == []
+                return
+            held = await _run_until_held(setup, plan_id)
+            assert held.progress["failure_code"] == "ai_no_conversation"
+            assert held.progress["ai_skip_reason"] == "no_conversation"
+            assert held.progress["ai_level"] == "full"
+            assert await _stages(setup) == ["C2"]
+            assert setup.broker.routes == ["elevenlabs"]
+            async with setup.sessions() as database:
+                row = await database.scalar(select(CallAiDecision))
+                assert row is not None
+                assert (row.decision, row.level, row.stage, row.reason) == (
+                    "skipped",
+                    "full",
+                    "C4",
+                    "no_conversation",
+                )
+                assert not await database.run_sync(
+                    lambda session: store.runs_beyond_transcript(
+                        session.connection(),
+                        setup.prepared.state.tenant_id,
+                        setup.prepared.recording_id,
+                    )
+                )
         finally:
             await setup.engine.dispose()
 

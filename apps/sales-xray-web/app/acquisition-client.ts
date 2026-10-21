@@ -142,7 +142,10 @@ export type Progress = {
   ai_skip?: AiSkip | null;
 };
 export type AiSkip = {
-  level: "off" | "data_only" | null;
+  /** The seller's level when the call stopped. */
+  level: "off" | "data_only" | "auto" | "full" | null;
+  /** Why: the seller's level, or the short-call rule (owner, 21 Oct 2026). */
+  reason: "level" | "short_call" | "no_conversation";
   stopped_before: string | null;
   /** The viewer is an organisation owner or admin: "Get full report". */
   can_upgrade: boolean;
@@ -177,7 +180,13 @@ function liveProgress(
     if (typeof row.can_upgrade === "boolean")
       live.ai_skip = {
         level:
-          row.level === "off" || row.level === "data_only" ? row.level : null,
+          (["off", "data_only", "auto", "full"] as const).find(
+            (level) => level === row.level,
+          ) ?? null,
+        reason:
+          row.reason === "short_call" || row.reason === "no_conversation"
+            ? row.reason
+            : "level",
         stopped_before:
           typeof row.stopped_before === "string" &&
           STAGE_ID.test(row.stopped_before)

@@ -146,6 +146,7 @@ const stopped = (
   retry_available: false,
   ai_skip: {
     level,
+    reason: "level",
     stopped_before: level === "off" ? "C2" : "C4",
     can_upgrade: canUpgrade,
   },
@@ -174,6 +175,26 @@ export function CallAiPreview() {
             <ProcessingStatusCopy
               submissionId="00000000-0000-4000-8000-000000000501"
               progress={stopped("data_only", true)}
+              title="Call"
+              paused={false}
+              needsAttention
+            />
+          </div>
+        </Panel>
+        <Panel title="A call under a minute (every organisation)">
+          <div style={{ padding: 16 }}>
+            <ProcessingStatusCopy
+              submissionId="00000000-0000-4000-8000-000000000503"
+              progress={{
+                ...stopped("data_only", true),
+                failure_code: "ai_short_call",
+                ai_skip: {
+                  level: "full",
+                  reason: "short_call",
+                  stopped_before: "C4",
+                  can_upgrade: true,
+                },
+              }}
               title="Call"
               paused={false}
               needsAttention

@@ -13,3 +13,11 @@ def test_call_ai_tables_are_in_all_consumers() -> None:
             "call_ai_settings",
             "call_ai_decisions",
         )
+
+
+def test_call_ai_reason_head_keeps_the_same_tables() -> None:
+    for module in (backup, proof, drill):
+        assert module.parity_contract_for_head("20261021_0120") == "ac-postgres-parity-v87"
+        assert module.parity_tables_for_head("20261021_0120") == module.parity_tables_for_head(
+            "20261021_0119"
+        )
