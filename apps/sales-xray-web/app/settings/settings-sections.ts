@@ -12,6 +12,7 @@ import {
   CreditCard,
   Code,
   LifeBuoy,
+  PhoneCall,
   Route,
   Sparkles,
   ShieldCheck,
@@ -22,6 +23,7 @@ import {
 
 export type SettingsSectionId =
   | "profile"
+  | "selling"
   | "security"
   | "plan"
   | "organisation"
@@ -51,6 +53,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     label: "Profile",
     hint: "Your name, photo, phone and theme",
     icon: CircleUserRound,
+    group: "Account",
+  },
+  {
+    // Owner, 22 Oct 2026: salespeople need "much more settings".
+    id: "selling",
+    label: "Selling",
+    hint: "Taking new leads, calling from your phone, alerts, AI on your calls",
+    icon: PhoneCall,
     group: "Account",
   },
   {

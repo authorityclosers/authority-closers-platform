@@ -61,11 +61,16 @@ import { PhoneSetupBar } from "./phone-setup";
 import { UnknownCallsCard } from "./unknown-calls-card";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
-import { DeskView, dueNow, type RowActions } from "./desk-view";
+import { ActionSheet } from "./action-sheet";
+import { DeskView, dueNow, whyLine, type RowActions } from "./desk-view";
 import { usePullToRefresh } from "./gestures";
 import { readJourney, type JourneyView } from "./journey/journey-client";
 import { LeadActions } from "./lead-actions";
-import { LEAD_ADDED_EVENT, takeHandedLead } from "./lead-handoff";
+import {
+  LEAD_ADDED_EVENT,
+  takeHandedLead,
+  type HandedLead,
+} from "./lead-handoff";
 import { CallingLoop, LeadSheet, type LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
@@ -161,6 +166,9 @@ export function LeadsRoute() {
   const [openLead, setOpenLead] = useState<string | null>(null);
   const [intent, setIntent] = useState<LeadIntent | null>(null);
   const [holding, setHolding] = useState<LeadRow | null>(null);
+  // A swipe right asks once before it calls: a sloppy sideways scroll must
+  // never ring a lead (Redmi audit #13, 22 Oct 2026).
+  const [dialling, setDialling] = useState<LeadRow | null>(null);
   const waiters = useRef<(() => void)[]>([]);
   const lastRead = useRef(0);
   const [calling, setCalling] = useState(false);
@@ -215,13 +223,14 @@ export function LeadsRoute() {
   };
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
-  // A lead added from the + sheet opens here, ready to call (owner, 22 Oct).
+  // A lead added from the + sheet, or Home's "Call <name>", opens here
+  // (owner, 22 Oct).
   useEffect(() => {
-    const show = (leadId: string | null) => {
-      if (!leadId) return;
+    const show = (handed: HandedLead | null) => {
+      if (!handed) return;
       setHolding(null);
-      setIntent(null);
-      setOpenLead(leadId);
+      setIntent(handed.call ? "call" : null);
+      setOpenLead(handed.leadId);
       refresh();
     };
     show(takeHandedLead());
@@ -450,7 +459,7 @@ export function LeadsRoute() {
     setOpenLead(leadId);
   };
   const rowActions: RowActions = {
-    onCall: (row) => open(row.lead_id, "call"),
+    onCall: (row) => setDialling(row),
     onMessage: (row) => open(row.lead_id, "message"),
     onHold: (row) => setHolding(row),
   };
@@ -778,6 +787,27 @@ export function LeadsRoute() {
           }}
           onChanged={refresh}
         />
+        <ActionSheet
+          open={!!dialling}
+          title={dialling ? `Call ${dialling.name}?` : "Call"}
+          sub={dialling ? whyLine(dialling) : undefined}
+          onClose={() => setDialling(null)}
+        >
+          <div className={styles.confirmCall}>
+            <button
+              type="button"
+              className={styles.callBarButton}
+              onClick={() => {
+                const row = dialling;
+                setDialling(null);
+                if (row) open(row.lead_id, "call");
+              }}
+            >
+              <PhoneCall size={18} aria-hidden="true" />
+              Call now
+            </button>
+          </div>
+        </ActionSheet>
         {holding ? (
           <LeadActions
             key={holding.lead_id}

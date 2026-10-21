@@ -272,6 +272,7 @@ export function ChatsRoute() {
       authenticated
       active="chats"
       mobileFit
+      immersive={!!opened}
       pageName={unread ? `Chats (${unread})` : "Chats"}
     >
       <ChatsFrame

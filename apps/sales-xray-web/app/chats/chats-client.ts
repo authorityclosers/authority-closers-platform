@@ -129,7 +129,10 @@ function toThread(
     key: threadKey(channel, row.leadId ?? null, row.accountId, String(index)),
     channel,
     leadId: row.leadId ?? null,
-    leadName: row.leadName ? displayName(row.leadName) : CHANNEL_LABEL[channel],
+    // No name yet: say so, not just the app's name (owner, 22 Oct 2026).
+    leadName: row.leadName
+      ? displayName(row.leadName)
+      : `New ${CHANNEL_LABEL[channel]} contact`,
     lastText: row.lastText ?? null,
     lastAt: row.lastAt,
     waiting: Boolean(row.waiting),

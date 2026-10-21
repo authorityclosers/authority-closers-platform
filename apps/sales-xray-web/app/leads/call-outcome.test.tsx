@@ -131,6 +131,23 @@ describe("the after-call sheet (UX study item 6)", () => {
     ).toHaveLength(0);
   });
 
+  // Owner, 22 Oct 2026: Save looked dead after We talked, and nothing said why.
+  it("says what Save still needs, and saves nothing until it is picked", async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify(lead("new"))),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await show(lead("new"));
+    await act(async () => tile("We talked").click());
+    const hint = () => host.querySelector('p[role="status"]');
+    expect(hint()?.textContent).toBe("Pick what happens next to save");
+    const save = tile("Save");
+    expect(save.disabled).toBe(false);
+    await act(async () => save.click());
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(hint()?.getAttribute("data-nudged")).toBe("true");
+  });
+
   it("pre-fills No network when the phone had none", async () => {
     await show(lead("new"), heard("no_network"));
     expect(tile("No network").getAttribute("aria-pressed")).toBe("true");
