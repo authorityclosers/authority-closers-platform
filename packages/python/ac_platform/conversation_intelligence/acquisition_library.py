@@ -552,6 +552,9 @@ def _report_columns() -> tuple[Any, Any]:
             case(
                 (held & (failure == "ai_data_only"), "data_only"),
                 (held & (failure == "ai_off"), "ai_off"),
+                # Short calls (owner, 21 Oct 2026): transcript and lead details only.
+                (held & (failure == "ai_short_call"), "short_call"),
+                (held & (failure == "ai_no_conversation"), "short_call"),
                 else_=plan.state,
             )
         )

@@ -642,8 +642,11 @@ class AcquisitionReports:
             and plan.progress.get("failure_code") in call_ai_policy.FAILURE_CODES
         ):
             level = plan.progress.get("ai_level")
+            reason = plan.progress.get("ai_skip_reason")
             ai_skip = {
                 "level": level if level in call_ai_policy.LEVELS else None,
+                # Why: the seller's level, or the short-call rule (owner, 21 Oct 2026).
+                "reason": reason if reason in call_ai_policy.REASONS else "level",
                 "stopped_before": plan.progress.get("current_stage"),
                 "can_upgrade": actor is not None
                 and await self.ownership.organisation_call_reader(actor),
