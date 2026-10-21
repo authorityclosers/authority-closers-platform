@@ -1,4 +1,4 @@
-torch==2.5.1
+torch==2.13.0
 kokoro==0.9.4
 misaki[en]==0.9.4
 soundfile==0.12.1
