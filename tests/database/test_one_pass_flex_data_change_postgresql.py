@@ -420,3 +420,18 @@ def test_the_cli_takes_only_its_own_commands() -> None:
         script.main(["--environment", "test", "--control-email", "x@y", "bogus"])
     with pytest.raises(SystemExit):
         script.main(["--environment", "test", "--control-email", "x@y", "--tier", "slow", "status"])
+
+
+def test_each_switch_carries_the_owners_own_words() -> None:
+    base = {"action": "prepare", "environment": "test", "control_email": "x@y"}
+    assert script.Command(**base, tier="standard").words == script.STANDARD_REASON
+    one_pass = script.Command(**base, tier="standard", one_pass=True)
+    assert one_pass.words == script.ONE_PASS_REASON and one_pass.variant == "one_pass"
+    assert "Gemini one-pass on standard after v0.76" in script.ONE_PASS_REASON
+    assert "Keep Luna sealed and ready but off." in script.ONE_PASS_REASON
+    assert script.Command(**base, one_pass=True, luna=True).words == script.LUNA_REASON
+    given = "Owner, 22 Oct 2026: other words"
+    assert script.Command(**base, one_pass=True, reason=given).words == given
+    # A reason too short to be the owner's words is refused before anything runs.
+    arguments = ["--environment", "test", "--control-email", "x@y", "--reason", "ok", "status"]
+    assert script.main(arguments) == 2

@@ -514,9 +514,11 @@ Watch it with `journalctl --user -u 'acdev-dev-watchdog@*'`.
   stopped on purpose stays stopped; a failed one is started; a watchdog that was
   off stays off. The script only ever moves or deletes a directory named
   `.../.next/dev/cache/turbopack`, never a symlink, and nothing else under
-  `.next`. The cache is a build cache: next dev rebuilds it (orchestrator, 21 Oct:
-  compiler output with no customer data or audit history, so deleting it needs no
-  owner approval).
+  `.next`. The cache is a build cache that next dev rebuilds. Deleting it needs no
+  owner approval: decision of the xray-dev-watchdog orchestrator session, 21 Oct,
+  under the owner's 18 Oct order that only permanent deletion of customer data
+  waits on him (compiler output, no customer data, no audit history). The first
+  reset ran on 21 Oct at 12:06 UTC: 9,822 MiB cleared, `/login` 200 after 23 s.
 
 Why: next dev 16.3.8 keeps a Turbopack file-system cache that nothing prunes.
 Between 11 and 21 Oct it grew to 9.6 GB, about 2 GB on a busy day. As it grew,
@@ -550,3 +552,53 @@ A changed drop-in reaches the running server at its next restart, the nightly on
 at the latest. Watch it with `journalctl --user -u acdev-xray-dev-restart.service`:
 one line a night with the memory peak since the last start, the cache size, whether
 it was cleared and how long the first compile took.
+
+## Admin dev server unit and its nightly cache cap (acdev user units)
+
+`acdev-admin-dev/` records the Admin dev server (`next dev --turbopack` on
+`127.0.0.1:3028`, run from the shared dev-live workbench) as installed in acdev's
+`~/.config/systemd/user/`:
+
+- `acdev-admin-dev.service`, verbatim (`cmp`-identical to the live file on
+  21 Oct). It has no drop-ins: `MemoryHigh` 1200M, `MemoryMax` 1600M and swap
+  256M are in the unit itself.
+- `acdev-admin-dev-restart.timer` (22:40 UTC, 04:10 IST) starts
+  `acdev-admin-dev-restart.service`, which runs the same `acdev-dev-restart.sh`
+  as Sales Xray (see the section above) on the Admin unit, its cache
+  `apps/admin-web/.next/dev/cache/turbopack`, a cap of 512 MiB and the
+  watchdog's probe (`http://127.0.0.1:3028/login`, Host
+  `admin-dev.authorityclosers.com`). It pauses
+  `acdev-dev-watchdog@acdev-admin-dev.timer` for the restart. It runs ten minutes
+  after the Sales Xray restart and `ac-disk-hygiene` (both 22:30 UTC), so two
+  first compiles never share the box. The deletion decision above applies here
+  too: the cache is build output, deleted without owner approval, and nothing
+  else under `.next` is touched.
+  The first run, through the recorded unit on 21 Oct at 13:40 UTC, cleared
+  1,070 MiB (the stale `v16.3.6` cache with it); `/login` answered 200 after
+  9 s and memory was 731M.
+
+Why: nothing prunes the Admin cache either. On 21 Oct it was 1,070 MiB. Of that,
+1,002 MiB was in `v16.3.6-a758ffcf`, which next dev stopped reading when the app
+moved to 16.3.8 that morning, and 68 MiB was in the live `v16.3.8-b0fad0d4`. A
+busy day added about 490 MiB (19 and 20 Oct). The unit's memory peak since its
+03:09 UTC start was already 1,015 MiB with only that small live cache, close to
+its `MemoryHigh` of 1200M, so it would reach the throttling wall that Sales Xray
+hit at 9.6 GB much sooner. The cap is checked once a night, so the cache can
+reach the cap plus one busy day. With 512 MiB, one busy day's cache is kept for a
+warm morning, a second busy day's is cleared, and the cache stays under about
+1 GB. A 768 MiB cap would reset on the same nights at 490 MiB a day but would
+let the cache reach about 1.25 GB, above `MemoryHigh`.
+
+Install or update, as acdev (`XDG_RUNTIME_DIR=/run/user/1002`):
+
+```bash
+D=infra/application/development
+install -m 755 $D/acdev-dev-restart.sh ~/.local/bin/acdev-dev-restart
+install -m 644 $D/acdev-admin-dev/acdev-admin-dev.service $D/acdev-admin-dev/acdev-admin-dev-restart.service $D/acdev-admin-dev/acdev-admin-dev-restart.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now acdev-admin-dev-restart.timer
+```
+
+Watch it with `journalctl --user -u acdev-admin-dev-restart.service`: one line a
+night with the memory peak since the last start, the cache size, whether it was
+cleared and how long the first compile took.

@@ -1,0 +1,139 @@
+/* AI on calls: Settings section, the seller's rules field and the call's notice. Tokens only. */
+
+.stack {
+  display: grid;
+  gap: 16px;
+}
+
+.body {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px 16px;
+}
+
+.lead,
+.yours,
+.foot,
+.empty {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.yours strong {
+  color: var(--sx-ink);
+}
+
+.foot,
+.empty {
+  padding: 12px 16px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 0;
+}
+
+.foot a {
+  color: var(--sx-accent);
+  font-weight: 650;
+}
+
+.choices {
+  display: grid;
+  gap: 8px;
+}
+
+.choice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 10px;
+  background: var(--sx-surface);
+  cursor: pointer;
+}
+
+.choice:hover {
+  background: var(--sx-sunken);
+}
+
+.choice[data-checked] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+.choice input {
+  flex: none;
+  margin: 3px 0 0;
+  accent-color: var(--sx-accent);
+}
+
+.choice:focus-within {
+  box-shadow: var(--sx-focus-ring);
+}
+
+.choiceText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.choiceText strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.choiceText small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs, 12px);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.people {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.people li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-top: 1px solid var(--sx-line);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.people li:first-child {
+  border-top: 0;
+}
+
+.select {
+  width: 100%;
+}
+
+/* The call page: why there is no report, and the one action. */
+.notice {
+  display: grid;
+  gap: 8px;
+}
+
+.notice p {
+  margin: 0;
+}

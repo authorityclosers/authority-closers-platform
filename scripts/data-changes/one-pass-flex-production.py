@@ -17,20 +17,22 @@ and after printed, one transaction, idempotent, audited with the approver and th
 ``gemini-flash-lite-c2``): the same Flash-Lite C2 and Gemini 3.8 Flash C4/C5, without Flex.
 
 ``--one-pass`` makes the facts route the one-pass C4 request (profiles ``gemini-one-pass``,
-``-flex``). ``--one-pass --luna`` puts that request on OpenAI GPT-6 Luna (owner, 21 Oct
-2026: "build B together with the Luna route"; "Yes, I have signed the OpenAI DPA for
-Authority Closers"); ``--report-on gemini`` (the default, the hybrid the orchestrator chose
-on the real-call trial: Luna's own coaching read worse) keeps C5 on Gemini 3.8 Flash
-(profiles ``luna-c4-one-pass``, ``-flex``), ``--report-on luna`` moves C5 to Luna too
-(``luna-one-pass``, ``-flex``). Luna's provider entry is built from existing records only
-and lives in the Luna configuration itself, so today's classic configuration, its sealed
-Gemini profiles and the ``back`` fallback stay exactly as they are: ``--openai-credential-ref``
-(the hosted service manifest's OpenAI credential, AUT-2179) and ``--openai-permission-ref``
-(the real-call processing permission) must be given; the terms, privacy and endpoint
-approval references default to those the OpenAI C5 adapter's entry already carries
-(25 Sep 2026); a fictional-benchmark permission is refused. When the classic configuration
-already carries a GPT-6 Luna entry, that one is used and none may be given. Switching onto
-OpenAI asks Admin's OpenAI word (``openai_dpa_signed``: the owner confirmed the DPA).
+``-flex``; owner, 21 Oct 2026, relayed: "Switch production to Gemini one-pass on standard
+after v0.76 ... Keep Luna sealed and ready but off."). ``--one-pass --luna`` puts that
+request on OpenAI GPT-6 Luna (owner, 21 Oct 2026: "build B together with the Luna route";
+"Yes, I have signed the OpenAI DPA for Authority Closers"); ``--report-on gemini`` (the
+default, the hybrid the orchestrator chose on the real-call trial: Luna's own coaching read
+worse) keeps C5 on Gemini 3.8 Flash (profiles ``luna-c4-one-pass``, ``-flex``),
+``--report-on luna`` moves C5 to Luna too (``luna-one-pass``, ``-flex``). Luna's provider
+entry is built from existing records only and lives in the Luna configuration itself, so
+today's classic configuration, its sealed Gemini profiles and the ``back`` fallback stay
+exactly as they are: ``--openai-credential-ref`` (the hosted service manifest's OpenAI
+credential, AUT-2179) and ``--openai-permission-ref`` (the real-call processing permission)
+must be given; the terms, privacy and endpoint approval references default to those the
+OpenAI C5 adapter's entry already carries (25 Sep 2026); a fictional-benchmark permission is
+refused. When the classic configuration already carries a GPT-6 Luna entry, that one is used
+and none may be given. Switching onto OpenAI asks Admin's OpenAI word
+(``openai_dpa_signed``: the owner confirmed the DPA).
 
 It calls the same service functions as the Admin actions, nothing reimplemented:
 
@@ -117,6 +119,11 @@ LUNA_REASON = (
     'beta-labelled calibrated scores, call data written in production)" and (relayed) "Yes, '
     'I have signed the OpenAI DPA for Authority Closers".'
 )
+ONE_PASS_REASON = (
+    "Owner, 21 Oct 2026 (relayed): "  # noqa: S105 - the owner's words, not a secret
+    '"Switch production to Gemini one-pass on standard after v0.76 (about ₹0.39–0.43/min, '
+    'reports in about 1 minute). Keep Luna sealed and ready but off."'
+)
 TIERS = ("flex", "standard")
 # The references the OpenAI C5 adapter's provider entry already carries (25 Sep 2026); its
 # permission was for fictional benchmark calls only, so the real-call one must be given.
@@ -152,7 +159,7 @@ class Command:
     openai: tuple[tuple[str, str], ...] = ()  # the Luna entry's references, given
     approver: str = APPROVER
     issue: str = ISSUE
-    reason: str | None = None  # the owner's words for the tier (REASONS) unless given
+    reason: str | None = None  # the owner's words for this switch, verbatim (--reason)
 
     @property
     def variant(self) -> str:
@@ -166,7 +173,9 @@ class Command:
     def words(self) -> str:
         if self.reason:
             return self.reason
-        return LUNA_REASON if self.luna else REASONS[self.tier]
+        if self.luna:
+            return LUNA_REASON
+        return ONE_PASS_REASON if self.one_pass else REASONS[self.tier]
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -184,6 +193,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("action", choices=COMMANDS)
     parser.add_argument("what", nargs="?", choices=("classic", *TIERS, "target"))
     parser.add_argument("--digest")
+    parser.add_argument(
+        "--reason", help="the owner's words for this change, verbatim (else the recorded ones)"
+    )
     return parser
 
 
@@ -685,12 +697,15 @@ def main(
             one_pass=bool(args.one_pass),
             luna=bool(args.luna),
             report_on=args.report_on,
+            reason=args.reason,
             openai=tuple(
                 (field, value)
                 for field in (*OPENAI_REQUIRED, *OPENAI_RECORDS)
                 if (value := getattr(args, "openai_" + field))
             ),
         )
+        if command.reason is not None and len(command.reason.strip()) < 10:
+            raise Refused("reason_must_be_the_owners_words")
         from ac_platform.application.asyncio_runtime import run_async
         from ac_platform.application.release_identity import require_baked_release_id
         from ac_platform.application.settings import Settings

@@ -51,11 +51,17 @@ export function AnalysisRetryAction({
   submissionId,
   recordingId,
   label,
+  fullReport = false,
 }: {
   submissionId: string;
   recordingId: string;
   /** The first button's words, e.g. "Continue analysis" (default "Try again"). */
   label?: string;
+  /**
+   * AI on calls: an owner or admin upgrades a call its seller's level stopped
+   * (POST …/full-report), then accepts the fresh plan exactly as a retry.
+   */
+  fullReport?: boolean;
 }) {
   const [plan, setPlan] = useState<ProcessingPlan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -83,7 +89,7 @@ export function AnalysisRetryAction({
     try {
       key.current ??= retryKey(submissionId);
       const value = await acquisition(
-        `${submissionPath(submissionId)}/${plan ? "plan" : "retry"}`,
+        `${submissionPath(submissionId)}/${plan ? "plan" : fullReport ? "full-report" : "retry"}`,
         {
           method: "POST",
           signal: controller.signal,
@@ -211,7 +217,11 @@ export function AnalysisRetryAction({
     <div>
       {plan && (
         <div>
-          <p>Review this retry’s approval.</p>
+          <p>
+            {fullReport
+              ? "Review this full report’s approval."
+              : "Review this retry’s approval."}
+          </p>
           <details>
             <summary>Providers and privacy terms</summary>
             {plan.stages.map((stage) => (
@@ -230,9 +240,13 @@ export function AnalysisRetryAction({
           onClick={() => void retry()}
         >
           {busy
-            ? "Checking retry…"
+            ? fullReport
+              ? "Preparing the full report…"
+              : "Checking retry…"
             : plan
-              ? "Accept and retry analysis"
+              ? fullReport
+                ? "Accept and get full report"
+                : "Accept and retry analysis"
               : (label ?? "Try again")}
         </button>
       </div>

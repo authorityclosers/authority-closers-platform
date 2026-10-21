@@ -1,0 +1,26 @@
+[Unit]
+Description=Admin web dev server from the live dev branch (AUT-1798; owner 11 Oct: admin-dev shows committed work within ~2 minutes)
+After=network-online.target
+
+[Service]
+# dev/live = origin/main + every lane's committed task branch (ac-dev-live-sync, every 2 minutes).
+WorkingDirectory=%h/src/dev-live/authority-closers-platform
+Environment=PATH=%h/.local/opt/node/bin:%h/.local/bin:/usr/bin:/bin
+Environment=NEXT_TELEMETRY_DISABLED=1
+# Development runtime: pages render without the production session gate; every data read and command is still
+# checked by the API. Server reads go through the dev edge as admin-dev, so they reach the same API as the browser.
+Environment=AC_ADMIN_LOCAL_PREVIEW=1
+Environment=AC_ADMIN_DEV_HOST=admin-dev.authorityclosers.com
+Environment=AC_ADMIN_DEV_EDGE_ORIGIN=http://127.0.0.1:3017
+Environment=AC_ADMIN_DEV_ALLOWED_ORIGINS=admin-dev.authorityclosers.com
+# 3027 still belongs to the old admin-dev container until Root stops it (AUT-1796).
+ExecStart=%h/.local/bin/pnpm --filter @ac/admin-web exec next dev --turbopack --hostname 127.0.0.1 --port 3028
+Restart=on-failure
+RestartSec=5
+Nice=5
+MemoryHigh=1200M
+MemoryMax=1600M
+MemorySwapMax=256M
+
+[Install]
+WantedBy=default.target

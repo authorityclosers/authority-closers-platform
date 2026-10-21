@@ -106,7 +106,11 @@ class ImportSessions(AcquisitionSessions):
         key: str,
         token: str | None = None,
         actor: ActorContext | None = None,
+        allow_organisation_start: bool = False,
     ) -> UUID:
+        # An import grant covers only the uploader's own exact call: the organisation
+        # start path ("Get full report") is accepted here but never forwarded.
+        del allow_organisation_start
         _, item = await self.imports.authorize(self.uploader, self.reference)
         if (
             actor != self.uploader

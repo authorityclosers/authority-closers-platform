@@ -45,8 +45,15 @@ async def prepare_analysis_retry(
     key: str,
     token: str | None = None,
     actor: ActorContext | None = None,
+    allow_organisation_start: bool = False,
 ) -> dict[str, Any]:
-    scope = await ownership.require_submission_owner(submission_id, token=token, actor=actor)
+    # ``allow_organisation_start`` is only for "Get full report" on a call its seller's
+    # AI level stopped (owner, 21 Oct 2026); every other retry stays the uploader's. Left
+    # out otherwise, so an imported call's own retry override is called as before.
+    start: dict[str, Any] = {"allow_organisation_start": True} if allow_organisation_start else {}
+    scope = await ownership.require_submission_owner(
+        submission_id, token=token, actor=actor, **start
+    )
     if not scope.claimed_account:
         raise ConversationDenied(
             "Claim this saved call with the same AC account before processing it."
@@ -156,12 +163,14 @@ async def prepare_analysis_retry(
             "The failed analysis is still being recovered. Try again shortly."
         )
     usage_id = await ownership.sessions.reserve_report_retry(
-        submission_id, key=key, token=token, actor=actor
+        submission_id, key=key, token=token, actor=actor, **start
     )
     grant = await ownership.ensure_processing_continuation(
-        submission_id, key=key, token=token, actor=actor
+        submission_id, key=key, token=token, actor=actor, **start
     )
-    processing = await ownership.resolve_processing_actor(submission_id, token=token, actor=actor)
+    processing = await ownership.resolve_processing_actor(
+        submission_id, token=token, actor=actor, **start
+    )
     replay = await app._replay(processing, key, "processing_retry_prepared", intent)
     if replay is not None and replay.result_id is not None:
         return await saved_retry(replay.result_id)

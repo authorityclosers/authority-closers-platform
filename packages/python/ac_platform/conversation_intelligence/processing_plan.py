@@ -16,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ac_platform.call_ai import policy as call_ai_policy
+from ac_platform.call_ai import store as call_ai_store
 from ac_platform.conversation_intelligence.activation_contract import StageApproval
 from ac_platform.conversation_intelligence.analysis_settings import latest_analysis_settings
 from ac_platform.conversation_intelligence.application import (
@@ -1448,6 +1450,43 @@ class ConversationProcessingPlans:
             _LOGGER.warning("speaker_roles_snapshot_invalid")
             return None
 
+    async def _hold_for_call_level(
+        self,
+        row: ConversationProcessingPlan,
+        call: call_ai_store.CallLevel,
+        stage: str,
+        tasks: list[ConversationInferenceTask],
+        reason: str = "level",
+    ) -> None:
+        """Stop the call before ``stage``: held with the level's or the short-call rule's
+        code, recorded once with why.
+
+        Holding releases the call's minutes as for any stopped call (minutes follow a
+        delivered report), and "Get full report" prepares a fresh plan that reuses the
+        saved transcript."""
+        row.state = "held"
+        row.progress = {
+            **_retained_progress(row),
+            "stage_run_ids": [str(task.run_id) for task in tasks],
+            "current_stage": stage,
+            "failure_code": call_ai_policy.SKIP_CODES[call.effective]
+            if reason == "level"
+            else call_ai_policy.SHORT_CODES[reason],
+            "ai_level": call.level,
+            "ai_level_source": call.source,
+            "ai_skip_reason": reason,
+        }
+        await call_ai_store.record_skip(
+            self.db,
+            tenant_id=row.tenant_id,
+            recording_id=row.recording_id,
+            plan_id=row.id,
+            call=call,
+            stage=stage,
+            now=utc(self.app.clock()),
+            reason=reason,
+        )
+
     async def advance(self, actor: ConversationActor, row: ConversationProcessingPlan) -> None:
         from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 
@@ -1460,6 +1499,14 @@ class ConversationProcessingPlans:
 
         if block := coaching_revision_runtime_block(value.coaching_prompt_revision):
             raise ConversationDenied(block)
+        # AI on calls (owner, 21 Oct 2026): the seller's level decides how far this
+        # call goes, read again before each paid stage. Off: no transcription. Data
+        # only: the transcript (the call data engine reads it for the CRM), no facts
+        # or coaching stages.
+        call_level = await call_ai_store.level_for_call(self.db, row.tenant_id, row.recording_id)
+        if call_level.skipped_from == "C2":
+            await self._hold_for_call_level(row, call_level, "C2", [])
+            return
         # Inspect the exact canonical task each time. A crash between polling
         # and enqueue cannot duplicate its immutable cache key or reservation.
         c2 = await self._enqueue(actor, row, value, None)
@@ -1467,6 +1514,9 @@ class ConversationProcessingPlans:
         current = "C2"
         repair_progress: dict[str, Any] | None = None
         if c2.state == "completed" and c2.checkpoint_id is not None:
+            if call_level.skipped_from == "C4":
+                await self._hold_for_call_level(row, call_level, "C4", tasks)
+                return
             c4 = value.stages[1]
             first_request = StageRequest(
                 stage="C4",
@@ -1485,6 +1535,18 @@ class ConversationProcessingPlans:
             )
             recording = await self.app._recording(actor, row.recording_id)
             first_plan = await ReportingPipeline(self.inference).plan(recording, first_request)
+            # Short calls (owner, 21 Oct 2026): in an organisation, a call under a minute
+            # or with no conversation keeps its transcript and the call data engine's lead
+            # details only, unless it is a release check or someone asked for its full
+            # report. Nothing is paid for until the next stage is enqueued.
+            if (
+                call_level.source not in {"canary", "upgrade"}
+                and call_ai_policy.short_rule_applies(getattr(self.authority, "environment", None))
+                and (short := call_ai_policy.short_call_reason(first_plan.transcript))
+                and await call_ai_store.in_organisation(self.db, row.tenant_id)
+            ):
+                await self._hold_for_call_level(row, call_level, "C4", tasks, reason=short)
+                return
             count = first_plan.prepared.chunk_count
             if count is None or count > c4.max_requests:
                 raise ConversationDenied(

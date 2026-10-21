@@ -2,7 +2,8 @@
 
 Who sees what: a seller sees the leads they own (and ones they added); an
 owner or admin of the workspace sees every lead, the team and the sources.
-Every change to a lead adds a history event; nothing is deleted.
+Every change to a lead adds a history event; nothing is deleted, except leads an
+owner or admin deletes after a confirm (deletion.py), and that is audited.
 """
 
 from __future__ import annotations
@@ -21,8 +22,9 @@ from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.audit.service import AuditRepository
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk import allocation
+from ac_platform.lead_desk import allocation, deletion
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk.capture import (
     REFERENCE_KEYS,
@@ -41,6 +43,7 @@ from ac_platform.lead_desk.contracts import (
     CallReport,
     Counts,
     DayCalls,
+    DeleteLeads,
     Desk,
     DeviceCommand,
     Disposition,
@@ -51,6 +54,7 @@ from ac_platform.lead_desk.contracts import (
     LeadEventView,
     LeadPage,
     LeadRow,
+    LeadsDeleted,
     Me,
     MessageSent,
     MessageTemplate,
@@ -132,6 +136,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "default_country": "91",
 }
 IST = ZoneInfo("Asia/Kolkata")
+# Meta's Lead Ads Testing Tool fills the answers with "<test lead: dummy data for …>".
+# Since 21 Oct 2026 capture files such leads as test data (connectors.meta.is_test_lead);
+# leads captured before that came in with test_data false, and the Test data filter
+# still finds them by this name.
+META_TEST_LEAD = "<test lead:%"
 
 
 class DeskError(Exception):
@@ -148,6 +157,8 @@ class Viewer:
     tenant_id: UUID
     role: str
     name: str
+    # The sign-in session, for audit events (a lead delete).
+    session_id: UUID | None = None
 
     @property
     def can_manage(self) -> bool:
@@ -815,11 +826,22 @@ class LeadDesk:
         search: str | None,
         offset: int,
         limit: int = PAGE_SIZE,
+        test_only: bool = False,
+        owner: UUID | None = None,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins see the whole team's leads.")
         where: list[Any] = [self._visible()]
+        if owner is not None:
+            # One seller's leads, for their profile (owner, 21 Oct 2026): the team list only.
+            if scope != "team":
+                raise DeskError(422, "Choose the team's leads to see one seller's.")
+            where.append(Lead.owner_person_id == owner)
+        if test_only:
+            # Test and sample leads (sandbox seed, practice workspaces, Meta's testing
+            # tool): easy to find and clear.
+            where.append(or_(Lead.test_data.is_(True), Lead.name.like(META_TEST_LEAD)))
         if scope == "mine":
             where.append(Lead.owner_person_id == self.viewer.person_id)
         elif scope == "unassigned":
@@ -1672,6 +1694,56 @@ class LeadDesk:
             )
         await self.db.flush()
         return await self.detail(lead.id)
+
+    async def delete_leads(self, command: DeleteLeads, *, one: bool = False) -> LeadsDeleted:
+        """Delete chosen leads for good (test, demo or junk leads), audited: deletion.py.
+
+        One: a single lead's own Delete, which says so when the lead isn't here."""
+        if not self.viewer.can_manage:
+            raise DeskError(403, "Only owners and admins delete leads.")
+        wanted = list(dict.fromkeys(command.lead_ids))
+        found: list[UUID] = []
+        before = await deletion.done_before(self.db, self.tenant_id, command.command_id)
+        if before is None:
+            found = await deletion.lock(self.db, self.tenant_id, wanted)
+            # A twin request (a second tap, a retry) may have finished while this one waited.
+            before = await deletion.done_before(self.db, self.tenant_id, command.command_id)
+        if before is not None:
+            return LeadsDeleted(
+                deleted=int(before.payload.get("deleted", 0)),
+                lead_ids=tuple(UUID(value) for value in before.payload.get("lead_ids", ())),
+                not_found=int(before.payload.get("not_found", 0)),
+            )
+        if not found:
+            if one:
+                raise DeskError(404, "This lead isn't on your desk.")
+            return LeadsDeleted(deleted=0, lead_ids=(), not_found=len(wanted))
+        removal = await deletion.remove(self.db, self.tenant_id, found, self.now)
+        present = set(found)
+        lead_ids = tuple(lead_id for lead_id in wanted if lead_id in present)
+        result = LeadsDeleted(
+            deleted=len(lead_ids), lead_ids=lead_ids, not_found=len(wanted) - len(lead_ids)
+        )
+        # Ids and counts only: never a lead's name, number or words.
+        await AuditRepository(self.db).append(
+            tenant_id=self.tenant_id,
+            actor_person_id=self.viewer.person_id,
+            session_id=self.viewer.session_id,
+            action=deletion.AUDIT_ACTION,
+            resource_type=deletion.AUDIT_RESOURCE,
+            resource_id=str(command.command_id),
+            payload={
+                "deleted": result.deleted,
+                "lead_ids": [str(lead_id) for lead_id in lead_ids],
+                "not_found": result.not_found,
+                "removed": removal.removed,
+                "emptied": removal.emptied,
+                "kept": removal.kept,
+            },
+            reason="Deleted in Leads after a confirm",
+            now=self.now,
+        )
+        return result
 
     async def simulation_target(self, lead_id: UUID) -> tuple[Lead, str | None, str]:
         """The lead, its test-data business (if any) and its owner's name, for a simulated call."""

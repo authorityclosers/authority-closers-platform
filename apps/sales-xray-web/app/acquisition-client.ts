@@ -135,6 +135,20 @@ export type Progress = {
   stage_progress?: StageProgress[];
   current_stage?: string | null;
   terminal_state?: "done" | "failed" | null;
+  /**
+   * AI on calls (owner, 21 Oct 2026): the seller's level stopped this call
+   * before a paid step (Off, Data only); absent on older servers.
+   */
+  ai_skip?: AiSkip | null;
+};
+export type AiSkip = {
+  /** The seller's level when the call stopped. */
+  level: "off" | "data_only" | "auto" | "full" | null;
+  /** Why: the seller's level, or the short-call rule (owner, 21 Oct 2026). */
+  reason: "level" | "short_call" | "no_conversation";
+  stopped_before: string | null;
+  /** The viewer is an organisation owner or admin: "Get full report". */
+  can_upgrade: boolean;
 };
 export type StageProgress = {
   stage: string;
@@ -151,11 +165,36 @@ const instant = (value: unknown) =>
 /** Additive live fields: kept when well formed, dropped (never thrown) otherwise. */
 function liveProgress(
   item: Record<string, unknown>,
-): Pick<Progress, "stage_progress" | "current_stage" | "terminal_state"> {
+): Pick<
+  Progress,
+  "stage_progress" | "current_stage" | "terminal_state" | "ai_skip"
+> {
   const live: Pick<
     Progress,
-    "stage_progress" | "current_stage" | "terminal_state"
+    "stage_progress" | "current_stage" | "terminal_state" | "ai_skip"
   > = {};
+  const skip = item.ai_skip;
+  if (skip === null) live.ai_skip = null;
+  else if (skip && typeof skip === "object" && !Array.isArray(skip)) {
+    const row = skip as Record<string, unknown>;
+    if (typeof row.can_upgrade === "boolean")
+      live.ai_skip = {
+        level:
+          (["off", "data_only", "auto", "full"] as const).find(
+            (level) => level === row.level,
+          ) ?? null,
+        reason:
+          row.reason === "short_call" || row.reason === "no_conversation"
+            ? row.reason
+            : "level",
+        stopped_before:
+          typeof row.stopped_before === "string" &&
+          STAGE_ID.test(row.stopped_before)
+            ? row.stopped_before
+            : null,
+        can_upgrade: row.can_upgrade,
+      };
+  }
   const stage = item.current_stage;
   if (stage === null || (typeof stage === "string" && STAGE_ID.test(stage)))
     live.current_stage = stage;

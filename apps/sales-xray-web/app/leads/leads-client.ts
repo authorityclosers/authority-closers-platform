@@ -446,19 +446,48 @@ export function readLeads(
     stage,
     search,
     offset = 0,
+    test = false,
+    owner,
   }: {
     scope: "mine" | "team" | "unassigned";
     stage?: string | null;
     search?: string;
     offset?: number;
+    /** Test and sample leads only, in every stage. */
+    test?: boolean;
+    /** One seller's leads (team scope, owners and admins): their profile. */
+    owner?: string;
   },
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ scope });
+  if (owner) params.set("owner", owner);
   if (stage) params.set("stage", stage);
   if (search?.trim()) params.set("search", search.trim().slice(0, 80));
   if (offset) params.set("offset", String(offset));
+  if (test) params.set("test", "only");
   return request<LeadPage>(`/leads?${params}`, { signal });
+}
+
+/** At most this many leads go in one delete. */
+export const DELETE_LIMIT = 500;
+
+export type LeadsDeleted = {
+  deleted: number;
+  lead_ids: string[];
+  /** Asked for but not here any more (deleted already). */
+  not_found: number;
+};
+
+/**
+ * Delete leads for good (owners and admins, after a confirm). Keep one command
+ * id per confirm: a retry after a dropped connection never deletes twice.
+ */
+export function deleteLeads(leadIds: string[], command = commandId()) {
+  return request<LeadsDeleted>(
+    "/leads/delete",
+    json("POST", { command_id: command, lead_ids: leadIds }),
+  );
 }
 
 export function readLead(leadId: string, signal?: AbortSignal) {
