@@ -50,7 +50,7 @@ MAX_HEADER_BYTES = 64 * 1024
 # A Flex route (gemini_tiers) may wait up to five minutes and then answer on standard,
 # so one provider call may take up to nine minutes; other routes still end at 180 s
 # inside the transport (providers.MAX_STREAM_SECONDS).
-MAX_TIMEOUT_SECONDS = 540.0
+MAX_TIMEOUT_SECONDS = 800.0
 MAX_FRAME_BYTES = 4 + MAX_HEADER_BYTES + MAX_AUDIO_BYTES
 MAX_OUTPUT_FRAME_BYTES = 4 + MAX_HEADER_BYTES + MAX_JSON_BYTES
 _FRAME_LENGTH = struct.Struct(">I")

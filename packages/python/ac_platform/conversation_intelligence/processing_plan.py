@@ -953,7 +953,11 @@ class ConversationProcessingPlans:
         ):
             item = approvals[stage]
             if (
-                not _implemented_text_provider(stage, item.provider_id)
+                not (
+                    _implemented_text_provider(stage, item.provider_id)
+                    # The one-pass C4 request, on its own routes (checked above).
+                    or (stage == "C4" and one_pass)
+                )
                 or item.max_completion_tokens < 256
                 or source.duration_ms > item.max_source_duration_ms
             ):

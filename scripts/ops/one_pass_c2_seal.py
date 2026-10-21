@@ -2,7 +2,10 @@
 
 Root runs this on the host with the environment's two current files (``--flex`` for the
 Flex configuration, a second profile beside the standard one; ``--one-pass`` for the
-configuration whose facts route is the one-pass C4 request) (owner, 21 Oct 2026:
+configuration whose facts route is the one-pass C4 request; ``--one-pass --luna
+--openai-governance FILE`` for that request and C5 on GPT-6 Luna, where FILE is Root's JSON
+of the OpenAI stages' privacy_revision, privacy_notice, retention_ref and
+professional_gate_ref, after the owner confirmed the OpenAI DPA) (owner, 21 Oct 2026:
 "So at least get this on prod now!!!"; docs/ops/ONE-PASS-PRODUCTION.md):
 
     python scripts/ops/one_pass_c2_seal.py \\
@@ -51,12 +54,31 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="seal the one-pass configuration (C4 as one request over the whole call)",
     )
+    parser.add_argument(
+        "--luna",
+        action="store_true",
+        help="with --one-pass: the one-pass request and C5 on OpenAI GPT-6 Luna",
+    )
+    parser.add_argument(
+        "--openai-governance",
+        type=Path,
+        help="with --luna: Root's JSON of the OpenAI stages' privacy and retention references",
+    )
     arguments = parser.parse_args(argv)
+    governance = None
+    if arguments.luna:
+        if not arguments.one_pass or arguments.openai_governance is None:
+            print(
+                json.dumps({"refused": "luna_needs_one_pass_and_openai_governance"}),
+                file=sys.stderr,
+            )
+            return 2
+        governance = json.loads(arguments.openai_governance.read_text())
     bundle = load_hosted_approval_bundle(arguments.bundle.read_bytes())
     classic = parse_registry_config(json.loads(arguments.classic.read_text()))
     saved = parse_registry_config(json.loads(arguments.configuration.read_text()))
     derived = c2_route.derive_configuration(
-        classic, flex=arguments.flex, one_pass=arguments.one_pass
+        classic, flex=arguments.flex, one_pass=arguments.one_pass, luna=arguments.luna
     )
     if saved.digest != derived.digest:
         print(
@@ -65,7 +87,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     sealed = c2_route.seal(
-        bundle, classic, derived, flex=arguments.flex, one_pass=arguments.one_pass
+        bundle,
+        classic,
+        derived,
+        flex=arguments.flex,
+        one_pass=arguments.one_pass,
+        luna=governance,
     )
     arguments.out.mkdir(parents=True, exist_ok=True, mode=0o700)
     (arguments.out / "hosted-approval.json").write_bytes(sealed.to_json())
@@ -83,7 +110,9 @@ def main(argv: list[str] | None = None) -> int:
                 "classic_configuration": classic.digest,
                 "gemini_c2_configuration": derived.digest,
                 "profile": (
-                    (
+                    (c2_route.LUNA_FLEX_PROFILE_ID if arguments.flex else c2_route.LUNA_PROFILE_ID)
+                    if arguments.luna
+                    else (
                         c2_route.ONE_PASS_FLEX_PROFILE_ID
                         if arguments.flex
                         else c2_route.ONE_PASS_PROFILE_ID

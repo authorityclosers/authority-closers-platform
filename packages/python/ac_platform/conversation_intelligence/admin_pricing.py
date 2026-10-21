@@ -269,6 +269,27 @@ PRICING_SNAPSHOTS.update(
         ),
     }
 )
+# GPT-6 Luna on OpenAI's Flex tier: half of every rate (evidence
+# docs/ops/pricing-evidence/openai-luna-flex-20261021.md).
+PRICING_SNAPSHOTS[("openai", "gpt-6-luna:flex")] = PricingSnapshot(
+    provider_id="openai",
+    model_id="gpt-6-luna:flex",
+    pricing_ref="ref:pricing/openai-gpt-6-luna-flex-20261021",
+    evidence_sha256="53277b04497d4023dcb038c367dfbb2ad62f489d1e2b275d04835a7976eb2c66",
+    source_url="https://developers.openai.com/api/docs/pricing",
+    rate_basis="per_million_tokens_with_cache_categories_and_long_context_tier",
+    evidence_release_sha=None,
+    source_date="2026-10-21",
+    input_usd_per_million_tokens=Decimal("0.05"),
+    output_usd_per_million_tokens=Decimal("0.25"),
+    cached_input_usd_per_million_tokens=Decimal("0.005"),
+    cache_write_usd_per_million_tokens=Decimal("0.0625"),
+    long_context_threshold_tokens=272_000,
+    long_input_usd_per_million_tokens=Decimal("0.10"),
+    long_cached_input_usd_per_million_tokens=Decimal("0.01"),
+    long_cache_write_usd_per_million_tokens=Decimal("0.125"),
+    long_output_usd_per_million_tokens=Decimal("0.375"),
+)
 
 
 def _ceil_paise(value: Decimal) -> int:

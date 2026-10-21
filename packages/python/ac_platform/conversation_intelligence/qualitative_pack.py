@@ -37,8 +37,8 @@ def supports_coaching_v6_route(provider: str, model: str) -> bool:
 
     from ac_platform.conversation_intelligence.gemini_tiers import base_model
 
-    if provider == "gemini":
-        model = base_model(model)
+    # A Flex route (Gemini or OpenAI) is its model's own route.
+    model = base_model(model)
     return (provider, model) in _COACHING_V6_C5_ROUTES
 
 

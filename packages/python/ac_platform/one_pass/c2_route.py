@@ -19,6 +19,12 @@ gives the C4 fact packet, the call data and the pointer review; today's C5 reads
 Its profile's C4 template is one request at the one-pass output bound, and the Gemini
 3.8 Flash entry's per-request ceiling covers the whole call's input.
 
+With ``luna`` (the cheapest choice, cost research 21 Oct 2026), the one-pass C4 request
+and C5 both go to OpenAI GPT-6 Luna (standard or Flex): the configuration must already
+carry an OpenAI GPT-6 Luna provider entry (its credential, terms, privacy and permission
+references are an admin's governance step in Providers, never made up here), and Root
+supplies the OpenAI stages' privacy notice and retention references when sealing.
+
 Admin activates either configuration; activating the classic one is the one-click
 fallback. Pure: no I/O. ``scripts/ops/one_pass_c2_seal.py`` runs it on the host's files.
 """
@@ -64,6 +70,22 @@ ONE_PASS_COMPLETION_TOKENS: Final = 16_000
 # Per request on Gemini 3.8 Flash at standard rates: a two-hour call's transcript, the
 # instructions and schema (about 300k input tokens) and the full output: about USD 0.30.
 ONE_PASS_MAX_COST_PAISE: Final = 3_000
+# GPT-6 Luna (OpenAI) for the one-pass C4 request and C5, standard or Flex.
+LUNA_MODEL: Final = "gpt-6-luna"
+LUNA_PROFILE_ID: Final = "luna-one-pass"
+LUNA_FLEX_PROFILE_ID: Final = "luna-one-pass-flex"
+LUNA_ENDPOINT: Final = "https://api.openai.com/v1/responses"
+LUNA_COMPLETION_TOKENS: Final = 20_000
+# Per request at standard rates: a two-hour call's transcript (about 255k input tokens)
+# and 20,000 output tokens is about USD 0.04; Rs 10 is the extended-output floor.
+LUNA_MAX_COST_PAISE: Final = 1_000
+# What Root supplies for the OpenAI stages (privacy notice and retention are governance).
+LUNA_GOVERNANCE_FIELDS: Final = (
+    "privacy_revision",
+    "privacy_notice",
+    "retention_ref",
+    "professional_gate_ref",
+)
 
 
 class SealError(ValueError):
@@ -102,12 +124,15 @@ def _entry(gemini: ProviderConfig, model: str, max_cost_paise: int | None) -> Pr
 
 
 def derive_configuration(
-    config: RegistryConfig, *, flex: bool = False, one_pass: bool = False
+    config: RegistryConfig, *, flex: bool = False, one_pass: bool = False, luna: bool = False
 ) -> RegistryConfig:
     """Today's (Scribe) configuration with the asr route on Gemini 3.1 Flash-Lite; with
     ``flex``, Flash-Lite and the Gemini 3.8 Flash C4/C5 routes on their Flex routes
     (gemini_tiers), each keeping its standard per-request ceiling (a fallback is billed at
-    standard); with ``one_pass``, the facts route is the one-pass C4 request."""
+    standard); with ``one_pass``, the facts route is the one-pass C4 request; with
+    ``luna`` too, it and the coaching route are on GPT-6 Luna (``flex``: Luna on Flex)."""
+    if luna and not one_pass:
+        raise SealError("luna_is_the_one_pass_route")
     asr = next((route for route in config.routes if route.task == "asr"), None)
     if asr is None:
         raise SealError("configuration_has_no_asr_route")
@@ -117,7 +142,7 @@ def derive_configuration(
     transcription_model = gemini_tiers.flex(MODEL) if flex else MODEL
     entries = [_entry(gemini, transcription_model, MAX_COST_PAISE)]
     text_models: dict[str, str] = {}
-    if flex:
+    if flex and not luna:
         for item in config.providers:
             if (item.provider_id, item.model_id) == (PROVIDER, TEXT_MODEL):
                 text_models[TEXT_MODEL] = gemini_tiers.flex(TEXT_MODEL)
@@ -146,9 +171,11 @@ def derive_configuration(
         else item
         for item in config.routes
     )
-    if one_pass:
+    if luna:
+        providers, routes = _luna(providers, routes, flex=flex)
+    elif one_pass:
         providers, routes = _one_pass(providers, routes, flex=flex)
-    suffix = ("-one-pass" if one_pass else "") + ("-flex" if flex else "")
+    suffix = ("-luna" if luna else "-one-pass" if one_pass else "") + ("-flex" if flex else "")
     revision = f"{config.revision}-gemini-c2{suffix}"[:128]
     return RegistryConfig(
         revision=revision, policy=config.policy, providers=providers, routes=routes
@@ -181,6 +208,101 @@ def _one_pass(
     return providers, routes
 
 
+def _luna(
+    providers: tuple[ProviderConfig, ...], routes: tuple[RouteConfig, ...], *, flex: bool
+) -> tuple[tuple[ProviderConfig, ...], tuple[RouteConfig, ...]]:
+    """The facts route as the one-pass request and the coaching route, both on GPT-6
+    Luna, with the configuration's own OpenAI entry's references."""
+    openai = next(
+        (item for item in providers if (item.provider_id, item.model_id) == ("openai", LUNA_MODEL)),
+        None,
+    )
+    if openai is None:
+        raise SealError("configuration_has_no_openai_luna_provider")
+    model = LUNA_MODEL + (":flex" if flex else "")
+    if ("openai", model) not in markers.ROUTES:
+        raise SealError("luna_is_not_one_pass_capable")
+    entry = ProviderConfig(
+        provider_id="openai",
+        model_id=model,
+        endpoint=LUNA_ENDPOINT,
+        endpoint_sha256=hashlib.sha256(LUNA_ENDPOINT.encode()).hexdigest(),
+        credential_ref=openai.credential_ref,
+        provider_terms_ref=openai.provider_terms_ref,
+        privacy_ref=openai.privacy_ref,
+        pricing_ref=PRICING_SNAPSHOTS[("openai", model)].pricing_ref,
+        free_allowance_ref=None,
+        permission_ref=openai.permission_ref,
+        endpoint_approval_ref=openai.endpoint_approval_ref,
+        local_endpoint_approval_ref=openai.local_endpoint_approval_ref,
+        max_cost_paise=LUNA_MAX_COST_PAISE,
+    )
+    providers = tuple(
+        item for item in providers if (item.provider_id, item.model_id) != ("openai", model)
+    ) + (entry,)
+    if not any(route.task == "facts" for route in routes) or not any(
+        route.task == "coaching" for route in routes
+    ):
+        raise SealError("configuration_has_no_text_routes")
+    routes = tuple(
+        replace(
+            route,
+            provider_id="openai",
+            model_id=model,
+            recipe_revision=markers.RECIPE,
+            prompt_revision=markers.PROMPT_REVISION,
+        )
+        if route.task == "facts"
+        else replace(route, provider_id="openai", model_id=model)
+        if route.task == "coaching"
+        else route
+        for route in routes
+    )
+    return providers, routes
+
+
+def _luna_stages(
+    c4: Any, c5: Any, new: RegistryConfig, *, flex: bool, governance: Any
+) -> tuple[Any, Any]:
+    """The C4 (one-pass) and C5 templates on GPT-6 Luna: the classic templates' bounds,
+    the configuration's OpenAI references and Root's OpenAI governance."""
+    if not isinstance(governance, dict) or set(governance) != set(LUNA_GOVERNANCE_FIELDS):
+        raise SealError("luna_needs_roots_openai_governance")
+    model = LUNA_MODEL + (":flex" if flex else "")
+    entry = next(
+        item for item in new.providers if (item.provider_id, item.model_id) == ("openai", model)
+    )
+    snapshot = PRICING_SNAPSHOTS[("openai", model)]
+    common = {
+        "configuration_sha256": new.digest,
+        "provider_id": "openai",
+        "model_id": model,
+        "permission_ref": entry.permission_ref,
+        "pricing_ref": snapshot.pricing_ref,
+        "provider_terms_ref": entry.provider_terms_ref,
+        "privacy_ref": entry.privacy_ref,
+        "credential_ref": entry.credential_ref,
+        "free_allowance_ref": None,
+        "zero_cost_basis": "paid_pricing_evidence",
+        "price_evidence_sha256": snapshot.evidence_sha256,
+        "max_cost_paise": entry.max_cost_paise,
+        **governance,
+    }
+    one_pass = {
+        **common,
+        "recipe_revision": markers.RECIPE,
+        "max_requests": 1,
+        "max_completion_tokens": LUNA_COMPLETION_TOKENS,
+        "max_input_bytes": max(c4.max_input_bytes, markers.MAX_INPUT_BYTES),
+        "max_source_duration_ms": min(c4.max_source_duration_ms, MAX_SOURCE_DURATION_MS),
+    }
+    coaching = {**common, "max_completion_tokens": min(c5.max_completion_tokens, 8_000)}
+    return (
+        type(c4).model_validate(c4.model_copy(update=one_pass).model_dump()),
+        type(c5).model_validate(c5.model_copy(update=coaching).model_dump()),
+    )
+
+
 def _profile(
     policy: AcquisitionProviderPolicy,
     classic_sha256: str,
@@ -188,6 +310,7 @@ def _profile(
     *,
     flex: bool = False,
     one_pass: bool = False,
+    luna: Any = None,
 ) -> AcquisitionProviderProfile:
     stage_set = next(
         (
@@ -261,6 +384,12 @@ def _profile(
                 )
         return type(stage).model_validate(stage.model_copy(update=update).model_dump())
 
+    if luna is not None:
+        luna_c4, luna_c5 = _luna_stages(c4, c5, new, flex=flex, governance=luna)
+        stages = (type(c2).model_validate(transcription.model_dump()), luna_c4, luna_c5)
+        return AcquisitionProviderProfile(
+            profile_id=LUNA_FLEX_PROFILE_ID if flex else LUNA_PROFILE_ID, stages=stages
+        )
     if one_pass and (c4.provider_id, c4.model_id) != (PROVIDER, TEXT_MODEL):
         raise SealError("policy_c4_is_not_gemini_flash")
     stages = (type(c2).model_validate(transcription.model_dump()), text(c4), text(c5))
@@ -281,8 +410,9 @@ def _with_profile(
     *,
     flex: bool = False,
     one_pass: bool = False,
+    luna: Any = None,
 ) -> AcquisitionProviderPolicy:
-    profile = _profile(policy, classic_sha256, new, flex=flex, one_pass=one_pass)
+    profile = _profile(policy, classic_sha256, new, flex=flex, one_pass=one_pass, luna=luna)
     kept = tuple(item for item in policy.profiles if item.profile_id != profile.profile_id)
     updated = policy.model_copy(update={"profiles": (*kept, profile)})
     # Strict models: revalidate through JSON, as the host loads the file.
@@ -296,6 +426,7 @@ def seal(
     *,
     flex: bool = False,
     one_pass: bool = False,
+    luna: Any = None,
 ) -> HostedApprovalBundle:
     """The bundle with every classic route kept and the Flash-Lite (or one-pass) profile
     added to each acquisition policy. Revalidated as a whole, exactly as the host loads it."""
@@ -303,13 +434,18 @@ def seal(
         raise SealError("bundle_has_no_acquisition_policy")
     update: dict[str, Any] = {
         "organisation_acquisition_policies": tuple(
-            _with_profile(item, classic.digest, new, flex=flex, one_pass=one_pass)
+            _with_profile(item, classic.digest, new, flex=flex, one_pass=one_pass, luna=luna)
             for item in bundle.organisation_acquisition_policies
         )
     }
     if bundle.acquisition_policy is not None:
         update["acquisition_policy"] = _with_profile(
-            bundle.acquisition_policy, classic.digest, new, flex=flex, one_pass=one_pass
+            bundle.acquisition_policy,
+            classic.digest,
+            new,
+            flex=flex,
+            one_pass=one_pass,
+            luna=luna,
         )
     sealed = load_hosted_approval_bundle(bundle.model_copy(update=update).to_json())
     for before, after in zip(

@@ -46,6 +46,10 @@ from ac_platform.tenancy.models import Membership
 # reason in the owner's words, a sign-in within ten minutes; it is audited. Switching back
 # stays one click.
 OWNER_CONFIRM_WORD = "one_pass"
+# Real calls go to OpenAI only once the owner has confirmed its DPA is signed: switching
+# any route onto OpenAI takes this word instead (orchestrator, 21 Oct 2026).
+OPENAI_CONFIRM_WORD = "openai_dpa_signed"
+OPENAI_DPA_CONFIRMED = "conversation.providers.openai_dpa_confirmed"
 MIN_OWNER_REASON = 10
 GEMINI_TRANSCRIPTION_ON = "conversation.providers.gemini_transcription_on"
 
@@ -426,6 +430,17 @@ class ConversationProviderAdmin:
             for route in config.routes
         )
 
+    @staticmethod
+    def _uses_openai(row: ConversationProviderConfiguration | None) -> bool:
+        """Whether any route of this configuration sends call content to OpenAI."""
+        if row is None:
+            return False
+        try:
+            config = parse_registry_config(row.configuration)
+        except (ProviderRegistryError, TypeError, ValueError):
+            return False
+        return any(route.provider_id == "openai" for route in config.routes)
+
     async def _owner_gate(
         self,
         actor: ActorContext,
@@ -446,7 +461,8 @@ class ConversationProviderAdmin:
         to_gemini = self._transcription_provider(target) == "gemini"
         to_flex = self._uses_flex(target)
         to_one_pass = self._uses_one_pass(target)
-        if not to_gemini and not to_flex and not to_one_pass:
+        to_openai = self._uses_openai(target)
+        if not to_gemini and not to_flex and not to_one_pass and not to_openai:
             return False
         active = await self._active(actor.tenant_id)
         current = (
@@ -458,9 +474,15 @@ class ConversationProviderAdmin:
             (not to_gemini or self._transcription_provider(current) == "gemini")
             and (not to_flex or self._uses_flex(current))
             and (not to_one_pass or self._uses_one_pass(current))
+            and (not to_openai or self._uses_openai(current))
         ):
             return False
-        if confirm != OWNER_CONFIRM_WORD:
+        if to_openai and not self._uses_openai(current):
+            if confirm != OPENAI_CONFIRM_WORD:
+                raise ConversationDenied(
+                    f"Type {OPENAI_CONFIRM_WORD} to confirm the OpenAI DPA is signed."
+                )
+        elif confirm != OWNER_CONFIRM_WORD:
             raise ConversationDenied(
                 f"Type {OWNER_CONFIRM_WORD} to switch transcription to Gemini 3.1 Flash-Lite."
             )
@@ -587,6 +609,7 @@ class ConversationProviderAdmin:
                     "transcription": self._transcription_provider(target),
                     "flex": self._uses_flex(target),
                     "one_pass": self._uses_one_pass(target),
+                    "openai": self._uses_openai(target),
                     "confirm": confirm,
                     "reason": (reason or "").strip()[:200],
                     "environment": bundle.environment,
@@ -597,4 +620,17 @@ class ConversationProviderAdmin:
                     ),
                 },
             )
+            if confirm == OPENAI_CONFIRM_WORD:
+                # The owner's confirmation that the OpenAI DPA is signed, on its own.
+                await AuditRepository(self.database).append_for_actor(
+                    actor,
+                    action=OPENAI_DPA_CONFIRMED,
+                    resource_type="conversation_provider_activation",
+                    resource_id=str(row.id),
+                    payload={
+                        "configuration_sha256": target.configuration_sha256,
+                        "reason": (reason or "").strip()[:200],
+                        "environment": bundle.environment,
+                    },
+                )
         return (await self.current(actor, bundle=bundle)) or {}

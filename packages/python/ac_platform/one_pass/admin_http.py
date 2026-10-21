@@ -74,7 +74,7 @@ _BENCH_CALL = re.compile(r"^[a-z]{2}-[0-9]{2}$")
 
 class PrepareCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    tier: Literal["standard", "flex", "one_pass", "one_pass_flex"] = "standard"
+    tier: Literal["standard", "flex", "one_pass", "one_pass_flex", "luna", "luna_flex"] = "standard"
 
 
 class SettingsCommand(BaseModel):
@@ -160,12 +160,22 @@ def _uses_one_pass(row: Any) -> bool:
     )
 
 
-# The prepared configurations: (name, Prepare's tier, flex, one pass, Root's profile).
+def _uses_openai(row: Any) -> bool:
+    try:
+        config = parse_registry_config(row.configuration)
+    except (ProviderRegistryError, TypeError, ValueError):
+        return False
+    return any(route.provider_id == "openai" for route in config.routes)
+
+
+# The prepared configurations: (name, Prepare's tier, flex, one pass, Luna, Root's profile).
 _TIERS = (
-    ("gemini", "standard", False, False, c2_route.PROFILE_ID),
-    ("gemini_flex", "flex", True, False, c2_route.FLEX_PROFILE_ID),
-    ("one_pass", "one_pass", False, True, c2_route.ONE_PASS_PROFILE_ID),
-    ("one_pass_flex", "one_pass_flex", True, True, c2_route.ONE_PASS_FLEX_PROFILE_ID),
+    ("gemini", "standard", False, False, False, c2_route.PROFILE_ID),
+    ("gemini_flex", "flex", True, False, False, c2_route.FLEX_PROFILE_ID),
+    ("one_pass", "one_pass", False, True, False, c2_route.ONE_PASS_PROFILE_ID),
+    ("one_pass_flex", "one_pass_flex", True, True, False, c2_route.ONE_PASS_FLEX_PROFILE_ID),
+    ("luna", "luna", False, True, True, c2_route.LUNA_PROFILE_ID),
+    ("luna_flex", "luna_flex", True, True, True, c2_route.LUNA_FLEX_PROFILE_ID),
 )
 
 
@@ -211,15 +221,22 @@ async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str,
         )
     )
     tiers: dict[str, Any] = {}
-    for tier, _, flex, one_pass, profile_id in _TIERS:
+    for tier, _, flex, one_pass, luna, profile_id in _TIERS:
         derived = None
+        unavailable = None if classic is not None else "no_classic_configuration"
         if classic is not None:
             try:
                 derived = c2_route.derive_configuration(
-                    parse_registry_config(classic.configuration), flex=flex, one_pass=one_pass
+                    parse_registry_config(classic.configuration),
+                    flex=flex,
+                    one_pass=one_pass,
+                    luna=luna,
                 )
-            except (c2_route.SealError, ProviderRegistryError, TypeError, ValueError):
-                derived = None
+            except c2_route.SealError as error:
+                # e.g. Luna needs an OpenAI GPT-6 Luna entry, added in Providers first.
+                derived, unavailable = None, str(error)
+            except (ProviderRegistryError, TypeError, ValueError):
+                derived, unavailable = None, "configuration_unreadable"
         saved = next(
             (
                 revision
@@ -231,6 +248,7 @@ async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str,
         tiers[tier] = {
             "model": c2_route.MODEL + (":flex" if flex else ""),
             "profile_id": profile_id,
+            "unavailable": unavailable,
             "configuration_sha256": None if derived is None else derived.digest,
             "saved_revision": saved,
             "approved": saved is not None and saved in options,
@@ -246,12 +264,14 @@ async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str,
             "transcription": in_use,
             "flex": _uses_flex(active),
             "one_pass": _uses_one_pass(active),
+            "openai": _uses_openai(active),
         },
         **tiers,
         "classic_revision": None
         if classic is None or classic.revision not in options
         else classic.revision,
         "confirm": OWNER_CONFIRM_WORD,
+        "openai_confirm": provider_admin.OPENAI_CONFIRM_WORD,
     }
 
 
@@ -460,7 +480,7 @@ def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None
             raise HTTPException(403, "Use this Admin page to continue.") from None
         actor = await admit(request, response, auth)
         tier_name = "standard" if command is None else command.tier
-        name, _, flex, one_pass, _ = next(item for item in _TIERS if item[1] == tier_name)
+        name, _, flex, one_pass, luna, _ = next(item for item in _TIERS if item[1] == tier_name)
         view = await _transcription_view(auth, actor, settings)
         tier = view[name]
         if tier["saved_revision"] is not None:
@@ -485,7 +505,7 @@ def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None
         if classic is None:
             raise HTTPException(409, "There is no Scribe configuration to start from.")
         derived = c2_route.derive_configuration(
-            parse_registry_config(classic.configuration), flex=flex, one_pass=one_pass
+            parse_registry_config(classic.configuration), flex=flex, one_pass=one_pass, luna=luna
         )
         service = provider_admin.ConversationProviderAdmin(ConversationApplication(auth.database))
         try:

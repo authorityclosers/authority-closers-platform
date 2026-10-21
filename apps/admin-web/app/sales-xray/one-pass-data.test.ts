@@ -59,6 +59,15 @@ describe("one-pass trial data", () => {
         saved_revision: null,
         approved: false,
       },
+      luna: {
+        model: "gemini-3.1-flash-lite",
+        profile_id: "luna-one-pass",
+        configuration_sha256: null,
+        saved_revision: null,
+        approved: false,
+        unavailable: "configuration_has_no_openai_luna_provider",
+      },
+      openai_confirm: "openai_dpa_signed",
       one_pass: {
         model: "gemini-3.1-flash-lite",
         profile_id: "gemini-one-pass",
@@ -86,6 +95,12 @@ describe("one-pass trial data", () => {
       approved: false,
     });
     expect(view.onePassFlex.savedRevision).toBeNull();
+    expect(view.luna).toMatchObject({
+      profileId: "luna-one-pass",
+      unavailable: "configuration_has_no_openai_luna_provider",
+    });
+    expect(view.openaiConfirm).toBe("openai_dpa_signed");
+    expect(view.active?.openai).toBe(false);
     expect(view.active?.onePass).toBe(false);
     expect(view.classicRevision).toBe(6);
     const empty = normalizeTranscription(null);

@@ -144,13 +144,19 @@ def test_catalog_distinguishes_current_transport_from_planned_provider_options()
     assert view["ollama"]["deployment"] == "local"
     assert view["openai_compatible_gateway"]["deployment"] == "gateway"
     openai_models = {model["model_id"]: model for model in view["openai"]["models"]}
-    assert set(openai_models) == {"gpt-6-luna", "gpt-6-sol", "gpt-6-astra"}
+    # gpt-6-luna:flex is Luna on OpenAI's Flex tier (openai_tasks), its own route.
+    assert set(openai_models) == {"gpt-6-luna", "gpt-6-sol", "gpt-6-astra", "gpt-6-luna:flex"}
     assert all(
         model["endpoint"] == "https://api.openai.com/v1/responses"
         and model["readiness"] == "request_only_account_access_unverified"
         and {item["task"]: item["status"] for item in model["task_support"]}
-        == {"coaching": "implemented"}
-        for model in openai_models.values()
+        == (
+            # GPT-6 Luna also answers the one-pass C4 request (one_pass.stage).
+            {"facts": "implemented", "coaching": "implemented"}
+            if model_id.startswith("gpt-6-luna")
+            else {"coaching": "implemented"}
+        )
+        for model_id, model in openai_models.items()
     )
     assert openai_models["gpt-6-luna"]["task_support"]
     scribe = next(

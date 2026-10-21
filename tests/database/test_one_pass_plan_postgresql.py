@@ -43,7 +43,7 @@ from ac_platform.conversation_intelligence.provider_registry import (
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.one_pass import calibration, markers, plan_publish
-from tests.database.test_conversation_authority_postgresql import _setup
+from tests.database.test_conversation_authority_postgresql import _provider, _refs, _setup
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_processing_plan_postgresql import (
     _accept,
@@ -55,6 +55,8 @@ from tests.database.test_conversation_worker_postgresql import _postgres_harness
 from tests.unit.one_pass.test_one_pass import _review
 
 MODEL = "gemini-3.8-flash"
+LUNA = "gpt-6-luna"
+LUNA_ENDPOINT = "https://api.openai.com/v1/responses"
 COST = 3_000
 
 
@@ -63,71 +65,99 @@ def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
 
+def _answer(segment: dict[str, Any]) -> dict[str, Any]:
+    """Call data, a note and the fixture review, citing this call's own first segment."""
+    first = segment["id"]
+    review = json.loads(
+        json.dumps(_review()).replace('"s1"', f'"{first}"').replace('"s3"', f'"{first}"')
+    )
+    review["prospect_profile"] = {
+        **{key: {"value": None, "evidence": []} for key in plan_publish_profile_fields()},
+        "follow_up": {"when": None, "about": None, "evidence": []},
+        **review.pop("prospect"),
+    }
+    return {
+        "call_data": {
+            "speakers": [{"speaker_id": segment["speaker_id"], "role": "prospect"}],
+            "facts": [
+                {
+                    "type": "company.name",
+                    "value": {"text": "Synthetic Buyers"},
+                    "confidence": 0.9,
+                    "basis": "observed",
+                    "segments": [first],
+                }
+            ],
+        },
+        "notes": [{"fact": "The speaker greeted the buyer.", "segments": [first]}],
+        "review": review,
+    }
+
+
 class OnePassBroker(ReportingBroker):
-    """Answer the one-pass C4 request with call data, a note and a review; everything
-    else as the reporting broker does."""
+    """Answer the one-pass C4 request (Gemini or GPT-6 Luna) with call data, a note and a
+    review; everything else as the reporting broker does."""
 
     async def execute(self, reservation: Any, payload: bytes) -> ProviderResult:
-        if reservation.quote.provider_id == "gemini":
-            body = json.loads(payload)
-            system = body["systemInstruction"]["parts"][0]["text"]
-            if system.startswith("AC_TASK_ADAPTER: gemini-json-v9\n"):
-                self.routes.append("gemini")
-                self.calls += 1
-                self.payloads.append(payload)
-                user = json.loads(body["contents"][0]["parts"][0]["text"])
-                segment = user["segments"][0]
-                first = segment["id"]
-                # The fixture review, citing this call's own first segment.
-                review = json.loads(
-                    json.dumps(_review())
-                    .replace('"s1"', f'"{first}"')
-                    .replace('"s3"', f'"{first}"')
-                )
-                review["prospect_profile"] = {
-                    **{
-                        key: {"value": None, "evidence": []}
-                        for key in plan_publish_profile_fields()
-                    },
-                    "follow_up": {"when": None, "about": None, "evidence": []},
-                    **review.pop("prospect"),
-                }
-                answer = {
-                    "call_data": {
-                        "speakers": [{"speaker_id": segment["speaker_id"], "role": "prospect"}],
-                        "facts": [
+        provider = reservation.quote.provider_id
+        body = json.loads(payload) if provider in {"gemini", "openai"} else {}
+        envelope: dict[str, Any] | None = None
+        if provider == "gemini" and body["systemInstruction"]["parts"][0]["text"].startswith(
+            "AC_TASK_ADAPTER: gemini-json-v9\n"
+        ):
+            user = json.loads(body["contents"][0]["parts"][0]["text"])
+            envelope = {
+                "candidates": [
+                    {
+                        "finishReason": "STOP",
+                        "content": {
+                            "role": "model",
+                            "parts": [{"text": json.dumps(_answer(user["segments"][0]))}],
+                        },
+                    }
+                ]
+            }
+        elif provider == "openai" and markers.is_one_pass(body.get("instructions")):
+            user = json.loads(body["input"])
+            envelope = {
+                "id": "resp_synthetic",
+                "object": "response",
+                "model": body["model"],
+                "status": "completed",
+                "incomplete_details": None,
+                "error": None,
+                "store": False,
+                "service_tier": "default",
+                "output": [
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "status": "completed",
+                        "content": [
                             {
-                                "type": "company.name",
-                                "value": {"text": "Synthetic Buyers"},
-                                "confidence": 0.9,
-                                "basis": "observed",
-                                "segments": [first],
+                                "type": "output_text",
+                                "text": json.dumps(_answer(user["segments"][0])),
                             }
                         ],
-                    },
-                    "notes": [{"fact": "The speaker greeted the buyer.", "segments": [first]}],
-                    "review": review,
-                }
-                envelope = {
-                    "candidates": [
-                        {
-                            "finishReason": "STOP",
-                            "content": {"role": "model", "parts": [{"text": json.dumps(answer)}]},
-                        }
-                    ]
-                }
-                raw = canonical(envelope)
-                return ProviderResult(
-                    provider="gemini",
-                    model=reservation.quote.provider_model,
-                    request_id="synthetic-one-pass",
-                    response_sha256=hashlib.sha256(raw).hexdigest(),
-                    raw_json=raw,
-                    data=envelope,
-                    usage={"total_tokens": 20},
-                    input_sha256=reservation.quote.input_sha256,
-                )
-        return await super().execute(reservation, payload)
+                    }
+                ],
+            }
+        if envelope is None:
+            return await super().execute(reservation, payload)
+        self.routes.append(provider)
+        self.calls += 1
+        self.payloads.append(payload)
+        raw = canonical(envelope)
+        return ProviderResult(
+            provider=provider,
+            model=reservation.quote.provider_model,
+            request_id="synthetic-one-pass",
+            response_sha256=hashlib.sha256(raw).hexdigest(),
+            raw_json=raw,
+            data=envelope,
+            usage={"total_tokens": 20},
+            input_sha256=reservation.quote.input_sha256,
+        )
 
 
 def plan_publish_profile_fields() -> tuple[str, ...]:
@@ -136,26 +166,40 @@ def plan_publish_profile_fields() -> tuple[str, ...]:
     return tuple(PROFILE_FROM)
 
 
-async def _one_pass(setup: Any) -> Any:
-    """The setup's configuration with its facts route as the one-pass request, saved, and
-    its bundle's stages bound to it (C4 one request at the one-pass bound, priced by the
-    Gemini 3.8 Flash list-price evidence, as Root's seal does)."""
-    snapshot = PRICING_SNAPSHOTS[("gemini", MODEL)]
+async def _one_pass(setup: Any, provider: str) -> Any:
+    """The setup's configuration with its facts route as the one-pass request (on Gemini
+    3.8 Flash, or on GPT-6 Luna with an OpenAI entry), saved, and its bundle's stages
+    bound to it (C4 one request at the one-pass bound, priced by list-price evidence, as
+    Root's seal does). C5 stays on Gemini."""
+    gemini = PRICING_SNAPSHOTS[("gemini", MODEL)]
+    luna = PRICING_SNAPSHOTS[("openai", LUNA)]
     config: RegistryConfig = setup.config
     providers = tuple(
-        replace(item, pricing_ref=snapshot.pricing_ref, max_cost_paise=COST)
+        replace(item, pricing_ref=gemini.pricing_ref, max_cost_paise=COST)
         if (item.provider_id, item.model_id) == ("gemini", MODEL)
         else item
         for item in config.providers
     )
+    if provider == "openai":
+        providers += (
+            replace(
+                _provider("openai", LUNA, LUNA_ENDPOINT, max_cost_paise=COST),
+                pricing_ref=luna.pricing_ref,
+            ),
+        )
     routes = tuple(
-        replace(route, recipe_revision=markers.RECIPE, prompt_revision=markers.PROMPT_REVISION)
+        replace(
+            route,
+            recipe_revision=markers.RECIPE,
+            prompt_revision=markers.PROMPT_REVISION,
+            **({"provider_id": "openai", "model_id": LUNA} if provider == "openai" else {}),
+        )
         if route.task == "facts"
         else route
         for route in config.routes
     )
     one_pass = RegistryConfig(
-        revision="hosted-test-config-one-pass",
+        revision=f"hosted-test-config-one-pass-{provider}",
         policy=config.policy,
         providers=providers,
         routes=routes,
@@ -170,8 +214,8 @@ async def _one_pass(setup: Any) -> Any:
         update: dict[str, Any] = {"configuration_sha256": view["configuration_sha256"]}
         if stage.stage in {"C4", "C5"}:
             update.update(
-                pricing_ref=snapshot.pricing_ref,
-                price_evidence_sha256=snapshot.evidence_sha256,
+                pricing_ref=gemini.pricing_ref,
+                price_evidence_sha256=gemini.evidence_sha256,
                 max_cost_paise=COST,
             )
         if stage.stage == "C4":
@@ -181,6 +225,19 @@ async def _one_pass(setup: Any) -> Any:
                 max_completion_tokens=16_000,
                 max_input_bytes=max(stage.max_input_bytes, markers.MAX_INPUT_BYTES),
             )
+            if provider == "openai":
+                refs = _refs("openai", paid=True)
+                update.update(
+                    provider_id="openai",
+                    model_id=LUNA,
+                    max_completion_tokens=20_000,
+                    credential_ref=refs["credential_ref"],
+                    provider_terms_ref=refs["provider_terms_ref"],
+                    privacy_ref=refs["privacy_ref"],
+                    permission_ref=refs["permission_ref"],
+                    pricing_ref=luna.pricing_ref,
+                    price_evidence_sha256=luna.evidence_sha256,
+                )
         stages.append(StageApproval.model_validate({**stage.model_dump(), **update}))
     bundle = load_hosted_approval_bundle(
         setup.bundle.model_copy(update={"stages": tuple(stages)}).to_json()
@@ -189,8 +246,8 @@ async def _one_pass(setup: Any) -> Any:
     broker = OnePassBroker(setup.prepared.data)
     router = FixedProviderRouter(
         {
-            provider: ProviderRoute(provider, f"ref:credential:{provider}", broker)
-            for provider in ("elevenlabs", "gemini")
+            name: ProviderRoute(name, f"ref:credential:{name}", broker)
+            for name in ("elevenlabs", "gemini", "openai")
         },
         authority=setup.authority,
     )
@@ -200,19 +257,20 @@ async def _one_pass(setup: Any) -> Any:
     return replace(setup, config=saved, bundle=bundle, broker=broker, worker=worker)
 
 
+@pytest.mark.parametrize("provider", ["gemini", "openai"])
 def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
-    postgres_harness: Any, tmp_path: Any
+    postgres_harness: Any, tmp_path: Any, provider: str
 ) -> None:
     async def exercise() -> None:
         setup = await _setup(
             postgres_harness, tmp_path, text_provider="gemini", funded=True, text_cost_paise=COST
         )
         try:
-            setup = await _one_pass(setup)
+            setup = await _one_pass(setup, provider)
             quote = await _quote(setup, "one-pass-plan-quote")
             assert [stage["provider"] for stage in quote["stages"]] == [
                 "elevenlabs",
-                "gemini",
+                provider,
                 "gemini",
             ]
             accepted = await _accept(setup, quote, "one-pass-plan-accept")
@@ -220,7 +278,7 @@ def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
             completed = await _drive_to_completion(setup, UUID(quote["id"]))
             assert completed["state"] == "completed"
             # One C4 request over the whole call, then today's C5.
-            assert setup.broker.routes == ["elevenlabs", "gemini", "gemini"]
+            assert setup.broker.routes == ["elevenlabs", provider, "gemini"]
             async with setup.sessions() as db, db.begin():
                 tasks = (await db.scalars(select(ConversationInferenceTask))).all()
                 assert sorted(task.stage for task in tasks) == ["C2", "C4", "C5"]

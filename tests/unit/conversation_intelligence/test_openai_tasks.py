@@ -152,5 +152,6 @@ def test_returned_model_must_match_the_exact_approved_route(reported: object) ->
 @pytest.mark.parametrize("model", sorted(OPENAI_REASONING_EFFORTS))
 def test_each_supported_model_preserves_its_reported_identity(model: str) -> None:
     response = _complete_response()
-    response["model"] = model
+    # A Flex route (gpt-6-luna:flex) is answered by its model, which reports its own id.
+    response["model"] = model.removesuffix(":flex")
     assert decode_openai_object(response, expected_model=model) == {"ok": True}

@@ -28,14 +28,18 @@ from ac_platform.conversation_intelligence.openai_tasks import (
     OpenAITaskError,
     openai_prompt_view,
 )
+from ac_platform.conversation_intelligence.openai_tasks import is_flex as openai_is_flex
 from ac_platform.conversation_intelligence.provider_failure_observation import (
     MAX_ERROR_RESPONSE_BODY_BYTES,
     MAX_RETRY_AFTER_SECONDS,
     ProviderFailureObservation,
 )
 from ac_platform.one_pass.markers import MAX_COMPLETION_TOKENS as ONE_PASS_MAX_COMPLETION_TOKENS
+from ac_platform.one_pass.markers import is_one_pass
 
 MAX_JSON_BYTES = 4 * 1024 * 1024
+# OpenAI's Flex tier may queue: ten minutes, then the default tier (luna-route-spec).
+OPENAI_FLEX_WINDOW_SECONDS = 600
 MAX_STREAM_SECONDS = 180
 _PROVIDER_REQUEST_ID = re.compile(r"^[!-~]{1,128}$", re.ASCII)
 _RETRY_AFTER_SECONDS = re.compile(r"^[0-9]{1,5}$", re.ASCII)
@@ -629,10 +633,15 @@ class BoundedProviders:
             headers = {"Authorization": "Bearer " + self._credentials.get("groq", "")}
         elif provider == "openai" and model in OPENAI_TASK_MODELS:
             maximum = body.get("max_output_tokens")
-            if type(maximum) is not int or not 256 <= maximum <= 8_000:
+            # The one-pass C4 request (Luna) answers up to 20,000; coaching up to 8,000.
+            one_pass = is_one_pass(body.get("instructions"))
+            limit = ONE_PASS_MAX_COMPLETION_TOKENS if one_pass else 8_000
+            if type(maximum) is not int or not 256 <= maximum <= limit:
                 raise ProviderError("provider_output_budget_required")
             try:
-                openai_prompt_view(body, model=model, maximum=maximum, task="coaching")
+                openai_prompt_view(
+                    body, model=model, maximum=maximum, task="facts" if one_pass else "coaching"
+                )
             except OpenAITaskError:
                 raise ProviderError("provider_payload_invalid") from None
             url = "https://api.openai.com/v1/responses"
@@ -644,6 +653,8 @@ class BoundedProviders:
             return self._gemini_post(
                 reservation, model, url, headers, body, deadline_seconds=MAX_STREAM_SECONDS
             )
+        if provider == "openai" and openai_is_flex(model):
+            return self._openai_flex_post(reservation, model, url, headers, body)
         return self._post(
             provider,
             model,
@@ -652,6 +663,47 @@ class BoundedProviders:
             headers=headers,
             json_body=body,
             input_sha256=reservation.quote.input_sha256,
+        )
+
+    def _openai_flex_post(
+        self,
+        reservation: Reservation,
+        model: str,
+        url: str,
+        headers: dict[str, str],
+        body: dict[str, Any],
+    ) -> ProviderResult:
+        """An OpenAI Flex route: the same request with ``service_tier: flex`` for up to
+        ten minutes (luna-route-spec, 21 Oct 2026), then, after a busy, lost or too-slow
+        answer, once on the default tier. The receipt says Flex was asked and whether it
+        fell back (billed at the default rate)."""
+        try:
+            result = self._post(
+                "openai",
+                model,
+                url,
+                reservation=reservation,
+                headers=headers,
+                json_body={**body, "service_tier": "flex"},
+                input_sha256=reservation.quote.input_sha256,
+                deadline_seconds=OPENAI_FLEX_WINDOW_SECONDS,
+            )
+            return replace(result, usage={**result.usage, gemini_tiers.FLEX_USAGE: 1})
+        except ProviderError as error:
+            if not _flex_retryable(str(error)):
+                raise
+        result = self._post(
+            "openai",
+            model,
+            url,
+            reservation=reservation,
+            headers=headers,
+            json_body=body,
+            input_sha256=reservation.quote.input_sha256,
+        )
+        return replace(
+            result,
+            usage={**result.usage, gemini_tiers.FLEX_USAGE: 1, gemini_tiers.FALLBACK_USAGE: 1},
         )
 
 

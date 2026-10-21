@@ -46,6 +46,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.openai_tasks import api_model
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.recovery_models import (
     ConversationRetainedC5Version,
@@ -182,7 +183,9 @@ def _provider_stage_view(
         duration_ms=duration_ms if task.stage == "C2" else None,
     )
     if safe_provider == "openai" and (
-        receipt.get("model_verified") is not True or receipt.get("reported_model") != safe_model
+        receipt.get("model_verified") is not True
+        or safe_model is None
+        or receipt.get("reported_model") != api_model(safe_model)
     ):
         usage_estimate = {
             "paise": None,

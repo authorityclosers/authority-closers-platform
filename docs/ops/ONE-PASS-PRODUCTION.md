@@ -205,6 +205,37 @@ calibrated scores, as the review computes it. Statuses, evidence and words are u
 - **Versioned:** the saved review carries `calibration: {version, label: "beta"}`. A later
   calibration is a new version and never rewrites a saved review.
 
+## Slice L: the Luna route (the cheapest choice)
+
+The cost research (21 Oct 2026, luna-route-spec) found this the cheapest configuration:
+Flash-Lite C2 on Gemini Flex, with the one-pass C4 request and C5 on OpenAI **GPT-6 Luna**
+on OpenAI's Flex tier.
+
+- **Request:** the one-pass C4 request on Luna is the measured one. It uses the
+  Responses API with its own JSON schema (not strict), the provider's default
+  reasoning, up to 20,000 output tokens, and `store: false`. C5 on Luna is today's
+  OpenAI C5 adapter, one-shot with no repair.
+- **Flex:** `gpt-6-luna:flex` sends the same request with `service_tier: flex`. It waits
+  up to ten minutes, then retries once on the default tier, billed there. The receipt
+  records `serviceTierFlex` and `flexFellBack`. The broker's limit for one provider call
+  is now 800 s and the worker's 860 s. Prices are half of every Luna rate (evidence
+  `docs/ops/pricing-evidence/openai-luna-flex-20261021.md`). Admin verifies costs
+  against the model Luna reports.
+- **Configuration:** derived only from a configuration that already carries an OpenAI
+  GPT-6 Luna entry. An admin adds OpenAI in Providers with its credential, terms, privacy
+  and permission references; nothing here invents them. Without that entry, Admin shows
+  "Add OpenAI GPT-6 Luna in Providers first".
+- **Approval:** profiles `luna-one-pass` and `luna-one-pass-flex`, built with
+  `python scripts/ops/one_pass_c2_seal.py --one-pass --luna [--flex] --openai-governance
+  FILE ...`. FILE is Root's JSON of the OpenAI stages' `privacy_revision`,
+  `privacy_notice`, `retention_ref` and `professional_gate_ref`. The consent wording is
+  governance, never inferred.
+- **Switch:** onto any OpenAI route, the owner types `openai_dpa_signed`, confirming the
+  OpenAI DPA is signed, and gives the reason, per environment. This is audited twice:
+  the switch (`openai: true`) and `conversation.providers.openai_dpa_confirmed`. Off
+  OpenAI is one click. The owner confirmed the DPA on 21 Oct 2026 (relayed by the
+  orchestrator); the privacy page names OpenAI since v0.71.
+
 ## A good first production analysis (after the C2 switch)
 
 Read-only checks, on the first real call after the switch:
