@@ -1,0 +1,17 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "9f7d38125d500b931c05198ada2ee65ac61b7dbe",
+  "full": false,
+  "checks": [
+    "e2e"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/ds/ds.module.css",
+    "apps/sales-xray-web/app/ds/scale.css"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
