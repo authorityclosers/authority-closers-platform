@@ -627,6 +627,9 @@ class RecordingCommand(Command):
 
     command_id: UUID
     submission_id: UUID
+    # The call on this lead it is the recording of (a call the phone logged by itself,
+    # owner 22 Oct 2026): it joins that call in the history instead of adding another.
+    call_event_id: UUID | None = None
 
 
 class PushConfig(Model):
@@ -671,6 +674,15 @@ class PhoneBook(Model):
     work_hours: WorkHoursView | None = None
 
 
+class PhoneLogged(Model):
+    """A call-history row that is on a lead: the phone looks for its recording."""
+
+    log_id: str
+    lead_id: UUID
+    event_id: UUID
+    connected: bool
+
+
 class PhoneLogResult(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     logged: int
@@ -678,6 +690,10 @@ class PhoneLogResult(Model):
     already: int
     # No lead with that number here, too old or not a call worth logging.
     skipped: int
+    # The rows on a lead's history (logged now or before), so the phone can attach
+    # each call's recording to its own call (owner, 22 Oct 2026). Calls the app's
+    # after-call sheet logged are not here: that sheet offers their recording.
+    calls: tuple[PhoneLogged, ...] = ()
 
 
 class DeviceView(Model):

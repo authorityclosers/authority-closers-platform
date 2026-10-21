@@ -817,15 +817,23 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                 assert refused.status_code == 403
                 sent = await client.post(f"{BASE}/phone-log", json=body, headers=WRITE)
                 assert sent.status_code == 200, sent.text
-                assert sent.json() | {"schema": None} == {
+                assert sent.json() | {"schema": None, "calls": None} == {
                     "schema": None,
                     "logged": 2,
                     "already": 0,
                     "skipped": 3,
+                    "calls": None,
                 }
+                # Each row now on a lead names its call, so the phone can attach that
+                # call's own recording to it (owner, 22 Oct 2026).
+                refs = {ref["log_id"]: ref for ref in sent.json()["calls"]}
+                assert sorted(refs) == ["101", "102"]
+                assert {ref["lead_id"] for ref in refs.values()} == {leads["Ravi Kulkarni"]}
+                assert (refs["101"]["connected"], refs["102"]["connected"]) == (True, False)
                 # The phone sends the same rows again after a dropped connection.
                 again = await client.post(f"{BASE}/phone-log", json=body, headers=WRITE)
                 assert (again.json()["logged"], again.json()["already"]) == (0, 2)
+                assert {ref["log_id"]: ref for ref in again.json()["calls"]} == refs
 
                 # A call placed from the lead in the app is logged by its after-call sheet;
                 # the same call found in the call history later is not counted twice.
@@ -844,6 +852,8 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                     headers=WRITE,
                 )
                 assert (same.json()["logged"], same.json()["already"]) == (0, 1)
+                # Its recording is offered by the after-call sheet, not the call log.
+                assert same.json()["calls"] == []
 
                 detail = (await client.get(f"{BASE}/leads/{leads['Ravi Kulkarni']}")).json()
                 phone_events = [event for event in detail["events"] if event.get("via")]
@@ -856,6 +866,49 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                 assert detail["lead"]["calls"] == 2
                 assert detail["lead"]["stage"] == "new"
                 assert detail["first_call_minutes"] == 0
+
+                # The dialler call's recording, uploaded later, joins that call's row
+                # (Redmi audit #55): no second "call" row, and the call count stays.
+                ravi = leads["Ravi Kulkarni"]
+                submission = str(uuid4())
+                attached = await client.post(
+                    f"{BASE}/leads/{ravi}/recordings",
+                    json={
+                        "command_id": str(uuid4()),
+                        "submission_id": submission,
+                        "call_event_id": refs["101"]["event_id"],
+                    },
+                    headers=WRITE,
+                )
+                assert attached.status_code == 200, attached.text
+                calls_now = [e for e in attached.json()["events"] if e["kind"] == "call"]
+                assert len(calls_now) == len([e for e in detail["events"] if e["kind"] == "call"])
+                joined = next(e for e in calls_now if e.get("event_id") == refs["101"]["event_id"])
+                assert (joined["via"], joined["recording"], joined["submission_id"]) == (
+                    "phone",
+                    True,
+                    submission,
+                )
+                assert attached.json()["lead"]["calls"] == 2
+                # A call that isn't on this lead is refused.
+                stray = await client.post(
+                    f"{BASE}/leads/{ravi}/recordings",
+                    json={
+                        "command_id": str(uuid4()),
+                        "submission_id": str(uuid4()),
+                        "call_event_id": str(uuid4()),
+                    },
+                    headers=WRITE,
+                )
+                assert stray.status_code == 404, stray.text
+                # Without a call, a recording is still its own row, as before.
+                loose = await client.post(
+                    f"{BASE}/leads/{ravi}/recordings",
+                    json={"command_id": str(uuid4()), "submission_id": str(uuid4())},
+                    headers=WRITE,
+                )
+                assert loose.status_code == 200, loose.text
+                assert sum(1 for e in loose.json()["events"] if e.get("recording")) == 2
 
                 desk = (await client.get(BASE)).json()
                 # The dialer call counts in My day; the missed call does not.

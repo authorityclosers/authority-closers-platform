@@ -67,6 +67,7 @@ from ac_platform.lead_desk.contracts import (
     PhoneHealth,
     PhoneLog,
     PhoneLogCall,
+    PhoneLogged,
     PhoneLogResult,
     PhoneReport,
     Reassign,
@@ -914,6 +915,9 @@ class LeadDesk:
         names = await self._names(people)
         day_end = self._day_start() + timedelta(days=1)
         hidden = await self._private_calls(lead_id=lead.id)
+        # A recording that names its call joins that call's row (owner, 22 Oct 2026).
+        joined = self._joined_recordings(events)
+        absorbed = {str(recording.id) for recording in joined.values()}
         can_edit = self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id
         reps: tuple[RepOption, ...] = ()
         if self.viewer.can_manage:
@@ -947,10 +951,11 @@ class LeadDesk:
             fields=fields,
             source_fields=self._source_fields(lead.payload),
             events=tuple(
-                self._event_view(event, names, hidden=hidden)
+                self._event_view(event, names, hidden=hidden, recording=joined.get(str(event.id)))
                 for event in events
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
                 and (str(event.id) not in hidden or event.actor_person_id == self.viewer.person_id)
+                and str(event.id) not in absorbed
             ),
             can_edit=can_edit,
             can_assign=self.viewer.can_manage,
@@ -995,12 +1000,33 @@ class LeadDesk:
         except ValueError:
             return None
 
+    @staticmethod
+    def _joined_recordings(events: Sequence[LeadEvent]) -> dict[str, LeadEvent]:
+        """Call event id -> the newest recording event naming that call.
+
+        Only calls in ``events`` count: a recording whose call is older than the
+        shown history stays a row of its own.
+        """
+        present = {str(event.id) for event in events}
+        joined: dict[str, LeadEvent] = {}
+        for event in events:  # newest first
+            target = event.data.get("for_call") if event.kind == "call" else None
+            if (
+                isinstance(target, str)
+                and event.data.get("recording") is True
+                and target in present
+                and target not in joined
+            ):
+                joined[target] = event
+        return joined
+
     def _event_view(
         self,
         event: LeadEvent,
         names: Mapping[UUID, str],
         *,
         hidden: frozenset[str] = frozenset(),
+        recording: LeadEvent | None = None,
     ) -> LeadEventView:
         phone_call = event.kind == "call" and event.data.get("via") == "phone"
         data = event.data
@@ -1025,12 +1051,12 @@ class LeadDesk:
             previous_owner_name=names.get(previous) if previous else None,
             allocation_reason=data.get("reason_text"),
             source_label=data.get("source_label"),
-            submission_id=self._uuid(data.get("submission_id")),
+            submission_id=self._uuid((recording.data if recording else data).get("submission_id")),
             changed=tuple(str(name) for name in data["changed"])
             if isinstance(data.get("changed"), list)
             else None,
             simulated=data.get("simulated") if isinstance(data.get("simulated"), bool) else None,
-            recording=True if data.get("recording") is True else None,
+            recording=True if recording is not None or data.get("recording") is True else None,
             duration_seconds=int(data["duration_seconds"])
             if isinstance(data.get("duration_seconds"), (int, float))
             else None,
@@ -1810,25 +1836,46 @@ class LeadDesk:
         return await self.detail(lead.id)
 
     async def attach_recording(
-        self, lead_id: UUID, *, command_id: UUID, submission_id: UUID
+        self,
+        lead_id: UUID,
+        *,
+        command_id: UUID,
+        submission_id: UUID,
+        call_event_id: UUID | None = None,
     ) -> LeadDetail:
-        """Puts an uploaded call recording on the lead; the call itself was already counted."""
+        """Puts an uploaded call recording on the lead; the call itself was already counted.
+
+        With ``call_event_id`` (a call already on this lead, such as one the phone
+        logged by itself) the recording joins that call in the history. The call's
+        own event is never changed: this event names it, and the newest one wins.
+        """
         seen = await self._command_seen(command_id)
         if seen is not None:
             return await self.detail(seen.lead_id)
         lead = await self._lead(lead_id, lock=True)
         if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
             raise DeskError(403, "Only the lead's owner or a manager can add its call recording.")
+        data: dict[str, Any] = {
+            "submission_id": str(submission_id),
+            "simulated": False,
+            "recording": True,
+        }
+        if call_event_id is not None:
+            call = await self.db.scalar(
+                select(LeadEvent.id).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.lead_id == lead.id,
+                    LeadEvent.id == call_event_id,
+                    LeadEvent.kind == "call",
+                )
+            )
+            if call is None:
+                raise DeskError(404, "That call isn't on this lead.")
+            data["for_call"] = str(call_event_id)
         lead.last_submission_id = submission_id
         lead.revision += 1
         lead.updated_at = self.now
-        self._event(
-            lead,
-            "call",
-            {"submission_id": str(submission_id), "simulated": False, "recording": True},
-            actor=self.viewer.person_id,
-            command_id=command_id,
-        )
+        self._event(lead, "call", data, actor=self.viewer.person_id, command_id=command_id)
         await self.db.flush()
         return await self.detail(lead.id)
 
@@ -1889,16 +1936,27 @@ class LeadDesk:
         if not wanted:
             await self._phone_seen(command.device_id)
             return PhoneLogResult(logged=0, already=already, skipped=skipped)
-        seen = set(
-            (
-                await self.db.scalars(
-                    select(LeadEvent.command_id).where(
-                        LeadEvent.tenant_id == self.tenant_id,
-                        LeadEvent.command_id.in_(list(wanted)),
+        refs: list[PhoneLogged] = []
+        seen: set[UUID] = set()
+        for key, event_id, lead_id, data in (
+            await self.db.execute(
+                select(LeadEvent.command_id, LeadEvent.id, LeadEvent.lead_id, LeadEvent.data).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.command_id.in_(list(wanted)),
+                )
+            )
+        ).all():
+            seen.add(key)
+            # Sent again (after a dropped answer): the phone still learns which call it is.
+            if isinstance(data, dict) and data.get("via") == "phone":
+                refs.append(
+                    PhoneLogged(
+                        log_id=wanted[key][0].log_id,
+                        lead_id=lead_id,
+                        event_id=event_id,
+                        connected=data.get("connected") is True,
                     )
                 )
-            ).all()
-        )
         already += len(seen)
         fresh = sorted(
             ((key, call, phone) for key, (call, phone) in wanted.items() if key not in seen),
@@ -1958,7 +2016,7 @@ class LeadDesk:
                 lead.last_contact_at = max(lead.last_contact_at or contact, contact)
                 lead.first_contact_at = min(lead.first_contact_at or contact, contact)
                 lead.updated_at = self.now
-            self._event(
+            event = self._event(
                 lead,
                 "call",
                 {
@@ -1972,13 +2030,18 @@ class LeadDesk:
                 command_id=key,
                 at=min(start, self.now),
             )
+            refs.append(
+                PhoneLogged(
+                    log_id=call.log_id, lead_id=lead.id, event_id=event.id, connected=talked
+                )
+            )
             logged += 1
         try:
             await self.db.flush()
         except IntegrityError:
             raise DeskError(409, "These calls are being logged already. Try again.") from None
         await self._phone_seen(command.device_id)
-        return PhoneLogResult(logged=logged, already=already, skipped=skipped)
+        return PhoneLogResult(logged=logged, already=already, skipped=skipped, calls=tuple(refs))
 
     async def _private_calls(
         self, since: datetime | None = None, *, lead_id: UUID | None = None

@@ -458,7 +458,10 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.attach_recording(
-                lead_id, command_id=command.command_id, submission_id=command.submission_id
+                lead_id,
+                command_id=command.command_id,
+                submission_id=command.submission_id,
+                call_event_id=command.call_event_id,
             )
 
     @router.get("/team", response_model=Team, response_model_by_alias=True)
