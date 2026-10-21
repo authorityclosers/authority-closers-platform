@@ -266,6 +266,40 @@ async def test_exact_current_approval_selects_deepgram_c2_child() -> None:
 
 
 @pytest.mark.asyncio
+async def test_exact_current_approval_selects_gemini_audio_c2_child() -> None:
+    """C2 on Gemini 3.1 Flash-Lite (owner, 21 Oct 2026): only its own audio operation."""
+    child = FakeChild()
+    stage = _stage(
+        provider_id="gemini",
+        model_id="gemini-3.1-flash-lite",
+        recipe_revision="gemini-3.1-flash-lite-audio-v1",
+    )
+    bundle = _bundle(stage)
+    reservation = _reservation(
+        bundle,
+        provider_id="gemini",
+        provider_model="gemini-3.1-flash-lite",
+        recipe_revision="gemini-3.1-flash-lite-audio-v1",
+        operation="transcribe_gemini_audio",
+    )
+
+    result = await _router({"bundle": bundle}, child).execute(reservation, SOURCE)
+
+    assert result.provider == "gemini"
+    assert child.calls == [(reservation, SOURCE)]
+    text = _reservation(
+        bundle,
+        provider_id="gemini",
+        provider_model="gemini-3.1-flash-lite",
+        recipe_revision="gemini-3.1-flash-lite-audio-v1",
+        operation="extract_context_evidence",
+    )
+    with pytest.raises(ProviderRouterError, match="broker_router_route_mismatch"):
+        await _router({"bundle": bundle}, child).execute(text, SOURCE)
+    assert len(child.calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_changed_credential_reference_is_rejected_before_child() -> None:
     child = FakeChild()
     bundle_box = {"bundle": _bundle(_stage(credential_ref="ref:credential/elevenlabs/v2"))}

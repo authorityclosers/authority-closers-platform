@@ -27,13 +27,14 @@ _MAX_DURATION_MS = 7_200_000
 _MAX_SEGMENTS = 2_000
 _PLAYBACK_TAIL_TOLERANCE_MS = 1_000
 _NATIVE_TRANSCRIPT_TIMEBASES = frozenset(
-    {"elevenlabs-scribe-native-seconds", "deepgram-native-seconds"}
+    {"elevenlabs-scribe-native-seconds", "deepgram-native-seconds", "gemini-audio-mmss-v1"}
 )
 _KNOWN_TRANSCRIPT_TIMEBASES = frozenset(
     {
         "decoded_audio_track",
         "elevenlabs-scribe-native-seconds",
         "deepgram-native-seconds",
+        "gemini-audio-mmss-v1",
     }
 )
 

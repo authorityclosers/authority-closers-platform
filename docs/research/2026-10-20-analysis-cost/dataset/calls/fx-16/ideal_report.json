@@ -1,0 +1,202 @@
+{
+  "summary": "Long follow-up call from Vasudha Mehervel (Neelpankh Parisar Vikas) to Devesh Zhorpal about shop B-17 on the ground floor of Ambarpankh Vyapar Prangan. Devesh runs Zhorpal Gruhasamagri Bhandar from about 270 sq ft rented in Vardhparna Haat at ₹27,000 a month and wants his own shop; he and his wife Revati Zhorpal decide together (his brother only advises). He had seen an upper-floor shop at Rangparna Chowk Vyapar Bhavan for ₹65 lakh. Vasudha quoted the ₹72 lakh base price before asking budget, then apologised: his comfortable all-in budget is ₹70 lakh, stretch ₹80 lakh with a loan, own funds ₹40 lakh, loan about ₹35 lakh. B-17: 320 sq ft carpet, 455 sq ft sale area, 12 ft frontage, about 26 ft 8 in deep, about 11 ft height; the shared corridor cannot be used for display; the shop is about 55 m inside from the main entrance and is not street-facing; deliveries by 8 am three times a week over a 70 m route need written confirmation. Costs: base ₹72 lakh, facility fee ₹1.8 lakh, maintenance deposit ₹1.2 lakh, subtotal ₹75 lakh excluding statutory and registration costs and fit-out; proposed maintenance ₹8 per sq ft of sale area (₹3,640 a month plus tax); a ₹2 lakh discount request is not approved. Loan approval rests with the bank; land is under a development agreement with a separate owner; proposed possession end of March 2027; 21 of 34 ground-floor shops allocated but none operating; no private parking, toilet or tap; 5 kW proposed load with shared backup only; no rental guarantee. After Devesh said he would not pay today, Vasudha suggested a ₹50,000 token to hold the shop for three days, claiming it was fully refundable; he challenged it and she withdrew the claim. Payment stages 20/30/30/20 (₹14.4 lakh first at the current base). Next: Vasudha sends a status list of available documents and pending answers by Thursday 22 October at 6 pm; a one-hour inspection with Revati is provisionally set for Saturday 24 October at 11 am, depending on that list. No payment, reservation or application.",
+  "strengths": [
+    {
+      "title": "Corrected the 'ground floor means street-facing' assumption",
+      "explanation": "When Devesh asked how far the road is, you said the internal route from the main entrance is about 55 m, the shop face is visible only after the entrance turn, and 'मैं उसे सड़क-मुखी दुकान नहीं कहूँगी'. He said this was important because the advert's 'ground floor' had made him assume street frontage. You were equally clear that the corridor is shared and signage is only on the common board.",
+      "evidence": [{"segment_id": "s23"}, {"segment_id": "s24"}, {"segment_id": "s25"}, {"segment_id": "s26"}, {"segment_id": "s27"}]
+    },
+    {
+      "title": "Dated document-status list with open items marked",
+      "explanation": "You read back the pending questions (8 am unloading, parking charges, deposit refund terms, land owner and development rights, permissions, handover condition, use limits, draft agreement), restated that token terms are unconfirmed, and committed to a status list by Thursday 22 October at 6 pm, without promising every answer. You let him cancel Saturday's visit if key documents are missing.",
+      "evidence": [{"segment_id": "s145"}, {"segment_id": "s147"}, {"segment_id": "s148"}, {"segment_id": "s149"}, {"segment_id": "s153"}]
+    },
+    {
+      "title": "Itemised costs and no guarantees on uncertain points",
+      "explanation": "You separated base price, facility fee and deposit (₹75 lakh) from statutory costs and fit-out, explained that maintenance is charged on sale area, and refused to promise bank approval, possession, parking, rental income or footfall without written terms. For a buyer burned by inflated areas and small print, this was the right stance.",
+      "evidence": [{"segment_id": "s39"}, {"segment_id": "s43"}, {"segment_id": "s51"}, {"segment_id": "s65"}, {"segment_id": "s91"}, {"segment_id": "s125"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Brought back a token after he ruled out paying today",
+      "explanation": "Devesh had said he would not commit today, asked only to register interest, and said family and lawyer must come first. Right after agreeing, you suggested a ₹50,000 token to hold B-17 for three days, even before the visit. He asked 'ये बात फिर क्यों आ गई?'. When a buyer sets a no-payment boundary, keep it for the whole call: 'आज कोई भुगतान नहीं; reservation की शर्तें लिखित भेजूँगी, आप आराम से पढ़िए।'",
+      "evidence": [{"segment_id": "s58"}, {"segment_id": "s102"}, {"segment_id": "s104"}, {"segment_id": "s105"}, {"segment_id": "s106"}]
+    },
+    {
+      "title": "Claimed the token was fully refundable without written terms",
+      "explanation": "You said there was no loss and the money comes back if he changes his mind, while the token terms were not in front of you. He caught the contradiction with your own 'read the written terms' advice, and you withdrew it: 'वापसी को बिना शर्त कहना गलत था'. Never describe refund terms you have not read; say 'Token की refund शर्तें लिखित भेजती हूँ।'",
+      "evidence": [{"segment_id": "s105"}, {"segment_id": "s106"}, {"segment_id": "s107"}, {"segment_id": "s109"}]
+    },
+    {
+      "title": "Quoted the base price before the all-in budget",
+      "explanation": "You gave B-17's ₹72 lakh base price before knowing his budget, then apologised and asked. He replied that his ₹70 lakh is all-in and he wants to know the full total from the start. Ask the all-in budget and funding split before naming any unit price.",
+      "evidence": [{"segment_id": "s13"}, {"segment_id": "s14"}, {"segment_id": "s15"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "His renting pains not used as the value case",
+      "explanation": "Devesh said he pays ₹27,000 rent with unpredictable increases, fights over corridor display, and fears being asked to vacate. The call stayed on what the shop does not include. Without promising returns, you could tie the visit to his own reasons: 'आप किराये की अनिश्चितता से निकलना चाहते हैं; दौरे में देखेंगे कि बी सत्रह आपके रोज के काम के लिए बैठती है या नहीं।'",
+      "evidence": [{"segment_id": "s4"}, {"segment_id": "s6"}, {"segment_id": "s22"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Inflated area fear",
+      "explanation": "Carpet and sale area stated separately, with on-site measurement and the approved plan as the final basis.",
+      "evidence": [{"segment_id": "s8"}, {"segment_id": "s9"}]
+    },
+    {
+      "title": "Street visibility and signage",
+      "explanation": "Not street-facing, 55 m internal route, name only on the shared directory board.",
+      "evidence": [{"segment_id": "s25"}, {"segment_id": "s26"}, {"segment_id": "s27"}]
+    },
+    {
+      "title": "Morning deliveries",
+      "explanation": "Recorded as a must-have condition with no promise of 8 am access until confirmed in writing.",
+      "evidence": [{"segment_id": "s32"}, {"segment_id": "s33"}, {"segment_id": "s34"}, {"segment_id": "s35"}]
+    },
+    {
+      "title": "Total cost and discount",
+      "explanation": "₹75 lakh subtotal explained; statutory costs extra; ₹2 lakh discount only a request; maintenance deposit refund left open.",
+      "evidence": [{"segment_id": "s40"}, {"segment_id": "s45"}, {"segment_id": "s46"}, {"segment_id": "s47"}]
+    },
+    {
+      "title": "Loan dependence",
+      "explanation": "Bank decides; no verbal bank assurance; refund if the loan fails is not promised until written terms are seen.",
+      "evidence": [{"segment_id": "s50"}, {"segment_id": "s51"}, {"segment_id": "s110"}, {"segment_id": "s111"}]
+    },
+    {
+      "title": "Land ownership and possession date",
+      "explanation": "Development agreement with a separate land owner disclosed; possession end of March 2027 is proposed, not January; delay remedies to be read in the draft.",
+      "evidence": [{"segment_id": "s60"}, {"segment_id": "s61"}, {"segment_id": "s66"}, {"segment_id": "s67"}]
+    },
+    {
+      "title": "Occupancy, anchor tenant and parking",
+      "explanation": "21 of 34 allocated, none operating; no confirmed anchor; no private parking and charges undecided. No footfall claims.",
+      "evidence": [{"segment_id": "s91"}, {"segment_id": "s93"}, {"segment_id": "s97"}, {"segment_id": "s99"}]
+    },
+    {
+      "title": "Rental income expectations",
+      "explanation": "No rental guarantee; the brother's ₹50,000-a-month guess recorded as unverified, not as income.",
+      "evidence": [{"segment_id": "s123"}, {"segment_id": "s124"}, {"segment_id": "s125"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Interest without payment, then a token push",
+      "explanation": "You correctly said he can register interest without payment and is under no obligation, then two turns later proposed a token. The correction afterwards was good, but the push cost trust.",
+      "evidence": [{"segment_id": "s103"}, {"segment_id": "s105"}, {"segment_id": "s107"}, {"segment_id": "s108"}]
+    },
+    {
+      "title": "Bounded inspection, conditional on documents",
+      "explanation": "Saturday 24 October at 11 am, about one hour, Devesh and Revati only, no purchase meeting or group sales pitch, and he may postpone if Thursday's list shows key documents missing. Friday afternoon message to confirm; no Friday night calls.",
+      "evidence": [{"segment_id": "s134"}, {"segment_id": "s135"}, {"segment_id": "s137"}, {"segment_id": "s149"}, {"segment_id": "s150"}]
+    },
+    {
+      "title": "Read-back and permissions respected",
+      "explanation": "You read back price items, area, frontage and possession, and confirmed no contact with his fitter, son, brother or bank, and no document collection or application without both spouses' explicit permission.",
+      "evidence": [{"segment_id": "s137"}, {"segment_id": "s139"}, {"segment_id": "s141"}, {"segment_id": "s143"}, {"segment_id": "s153"}]
+    }
+  ],
+  "verdict": "A careful, honest consultation with a very detail-oriented buyer: clear on area, frontage, costs, ownership and every open item, ending in a dated document list and a conditional inspection. The one serious lapse was assuming readiness: pushing a ₹50,000 token with an unverified 'fully refundable' claim after he had ruled out payment. The base price also came before the all-in budget. The decision depends on Thursday's document list and Revati's budget check.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Trust was built through candour (s25, s45, s107) and respect for boundaries (s141, s143). The token push (s105) briefly undercut it."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Good discovery of use, current space, decision makers, budget split and operations (s3-s6, s10, s14-s16, s31-s32). Budget came only after the price (s13)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Budget comfort and stretch, funding split, joint authority with Revati and her ledger check are clear (s14, s16, s74). Loan eligibility is still unknown (s54)."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "His pains (rent increases, eviction fear, corridor fights) were heard (s6) but not used to build the case for ownership."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "B-17 was described against his needs: storage, deliveries, elderly customers, signage (s19, s25, s29, s33). Limitations were stated plainly."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Objections on area, frontage, costs, loan, title, possession, occupancy and rent were handled without guarantees (s9, s25, s47, s51, s61, s67, s91, s125). One false claim on token refund (s105), withdrawn (s107)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Dated status list and a conditional inspection (s147-s149). Assumed readiness once with the token (s105) despite earlier boundaries (s58, s104)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Clear read-backs and repetition after the noisy-line moment (s87, s137-s139). Voice tone cannot be judged from text."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Excellent honesty and process for a cautious buyer, marred by one moment of assumed readiness with an unverified refund claim.",
+      "evidence": [{"segment_id": "s105"}, {"segment_id": "s107"}, {"segment_id": "s147"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "Document status list by Thursday 22 October at 6 pm; inspection provisionally on Saturday 24 October at 11 am. No payment, reservation or application.",
+      "evidence": [{"segment_id": "s147"}, {"segment_id": "s153"}, {"segment_id": "s154"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Written token and reservation terms", "8 am unloading confirmation", "Bank loan eligibility", "Revati Zhorpal's budget check", "Decision on the ₹2 lakh discount request"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "Visibility drives his daily sales; correcting the assumption early prevents a lost deal or a complaint after purchase."},
+      {"finding_index": 1, "why_it_matters": "He wants to see gaps before he gets attached to the space; a dated list lets him decide whether the visit is worth it."},
+      {"finding_index": 2, "why_it_matters": "He has been misled before on area and small print; itemised costs keep his ₹70-80 lakh range realistic."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "After agreeing to interest-only registration, you proposed a ₹50,000 token before the visit.", "evidence": [{"segment_id": "s103"}, {"segment_id": "s105"}]},
+        "why_it_matters": "It contradicted his stated boundary and your own advice, and made him question the rest of the call.",
+        "replacement_behavior": "Once a buyer rules out payment, mention reservation only as written terms he can read later.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Effect on his willingness to visit"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "You said the token is fully refundable with no loss, without the written terms.", "evidence": [{"segment_id": "s105"}]},
+        "why_it_matters": "A wrong refund claim on money can become a dispute and a complaint.",
+        "replacement_behavior": "Refer to the written refund clauses and send them before any discussion of payment.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Actual token refund clauses"]}
+      },
+      {
+        "finding_index": 2,
+        "what_happened": {"text": "₹72 lakh was quoted before his all-in budget; you then apologised and asked.", "evidence": [{"segment_id": "s13"}, {"segment_id": "s14"}]},
+        "why_it_matters": "A base price heard first can be taken as the total and shapes the family's expectation.",
+        "replacement_behavior": "Ask the all-in budget and funding before naming any unit price.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Final all-in cost including statutory charges"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 2, "why_effective": "'मैं उसे सड़क-मुखी दुकान नहीं कहूँगी' corrected a costly assumption in one clear sentence."},
+      {"strength_index": 1, "evidence_index": 1, "why_effective": "A dated promise that separates what will be sent from what may still be pending matched his need for honesty."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "He described ₹27,000 rent, unpredictable increases, corridor fights and fear of being asked to vacate.", "evidence": [{"segment_id": "s6"}]},
+        "closer_response": {"text": "You moved to the available unit and its carpet area.", "evidence": [{"segment_id": "s7"}]},
+        "follow_up": "During the visit, check B-17 against each of his renting pains (space, display, security of tenure).",
+        "potential_impact": "Keeps the decision anchored to his own reasons rather than to the list of exclusions."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "He said the shop visit is only looking until Revati marks the household ledger.", "evidence": [{"segment_id": "s74"}]}, "possible_concern": "Revati's budget check may decide the outcome more than the inspection.", "interpretation_kind": "inference"},
+      {"source": {"text": "He said a past project showed 500 sq ft that measured 280.", "evidence": [{"segment_id": "s8"}]}, "possible_concern": "He will verify every number; any mismatch on site may end the deal.", "interpretation_kind": "inference"},
+      {"source": {"text": "His son was excited by the ground-floor photos.", "evidence": [{"segment_id": "s140"}]}, "possible_concern": "Family expectations may need resetting after the not-street-facing reality.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Token push with an unconditional refund claim.", "purpose": "must_watch", "evidence": [{"segment_id": "s105"}]},
+      {"text": "Not street-facing, said plainly.", "purpose": "repeat", "evidence": [{"segment_id": "s25"}]},
+      {"text": "Dated document-status commitment.", "purpose": "watch", "evidence": [{"segment_id": "s147"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "He asked how far the road is, as his older customers need easy access.", "evidence": [{"segment_id": "s24"}]},
+      "change": {"text": "You gave the 55 m internal route and said the shop is not street-facing.", "evidence": [{"segment_id": "s25"}]},
+      "after": {"text": "He said this was important, revised his view against the upper-floor option and asked about signage.", "evidence": [{"segment_id": "s26"}]},
+      "possible_effect": "The early correction may have increased his trust in the rest of your answers.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "An unconditional token refund was claimed without written terms, then withdrawn after he challenged it.", "evidence": [{"segment_id": "s105"}, {"segment_id": "s107"}]},
+      {"text": "No document scanning, application or bank sharing without both spouses' explicit permission.", "evidence": [{"segment_id": "s143"}, {"segment_id": "s153"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "Keep a buyer's no-payment boundary for the whole call; offer reservation only as written terms to read later.", "target": "On the Saturday visit and the next follow-up, no token or payment is suggested unless the buyer raises it."},
+    "practice": {"improvement_index": 0, "instructions": "Write the buyer's stated boundaries at the top of your call notes and practise two lines that move to next steps without payment, for example sending reservation terms in writing.", "success_condition": "In role-play with a buyer who has said 'no payment today', you close the call with a document step and no payment mention."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Plain corrections of buyer assumptions and itemised, guarantee-free answers.",
+      "fix_first": "Do not reintroduce payment after a clear no, and never state refund terms you have not read.",
+      "next_focus": "Deliver Thursday's list on time and confirm the 8 am unloading answer before the visit.",
+      "assessment": "High-trust process with one lapse; the deal now depends on documents and the family budget check."
+    }
+  }
+}

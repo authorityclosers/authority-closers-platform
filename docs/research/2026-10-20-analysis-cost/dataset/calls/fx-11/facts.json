@@ -1,0 +1,418 @@
+[
+  {
+    "id": "f01",
+    "type": "person_name",
+    "slot": "seller.name",
+    "value": "सानिका वेरुळे",
+    "normalized": "Sanika Verule",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "सानिका वेरुळे",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f02",
+    "type": "company",
+    "slot": "seller.company",
+    "value": "लेखपर्ण करसाथी",
+    "normalized": "Lekhaparna Karsathi",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "लेखपर्ण करसाथी",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f03",
+    "type": "product",
+    "slot": "service.name",
+    "value": "व्यापारी कर नोंद",
+    "normalized": "trader tax records",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "व्यापारी कर नोंद",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f04",
+    "type": "person_name",
+    "slot": "prospect.name",
+    "value": "मिलिंद झेरवळ",
+    "normalized": "Milind Zherval",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "मिलिंद झेरवळ",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.037,
+    "trap": null
+  },
+  {
+    "id": "f05",
+    "type": "company",
+    "slot": "prospect.shop",
+    "value": "पानवेल धान्य भांडार",
+    "normalized": "Panvel Dhanya Bhandar",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "पानवेल धान्य भांडार",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.111,
+    "trap": null
+  },
+  {
+    "id": "f06",
+    "type": "personal_detail",
+    "slot": "bookkeeper.relationship",
+    "value": "पुतण्या",
+    "normalized": "nephew",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "माझा पुतण्या संध्याकाळी entry करतो",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.111,
+    "trap": null
+  },
+  {
+    "id": "f07",
+    "type": "person_name",
+    "slot": "existing.accountant",
+    "value": "दामोदर खेरपुळे",
+    "normalized": "Damodar Kherpule",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "दामोदर खेरपुळे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.111,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f08",
+    "type": "quantity",
+    "slot": "monthly.bills",
+    "value": "तीनशे वीस",
+    "normalized": "320 bills/month",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "दोन्ही मिळून तीनशे वीस bills",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.185,
+    "trap": "self_correction"
+  },
+  {
+    "id": "f09",
+    "type": "quantity",
+    "slot": "service.bill_limit",
+    "value": "चारशे",
+    "normalized": "400 bills/month",
+    "turn_ids": [
+      "t007"
+    ],
+    "evidence": "महिन्याचे 400 bills पर्यंत",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.222,
+    "trap": null
+  },
+  {
+    "id": "f10",
+    "type": "pain_point",
+    "slot": "receipt.delay",
+    "value": "दोन दिवस",
+    "normalized": "2 days",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "receipt दोन दिवसांनी मिळाली",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.185,
+    "trap": null
+  },
+  {
+    "id": "f11",
+    "type": "requirement",
+    "slot": "filing.approval",
+    "value": "summary approval",
+    "normalized": "prior approval",
+    "turn_ids": [
+      "t011"
+    ],
+    "evidence": "तुमचा होकार आल्याशिवाय submit करणार नाही",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.37,
+    "trap": null
+  },
+  {
+    "id": "f12",
+    "type": "budget",
+    "slot": "prospect.budget",
+    "value": "पंधरा हजार",
+    "normalized": "15000 INR/year",
+    "turn_ids": [
+      "t012"
+    ],
+    "evidence": "वर्षाला पंधरा हजारांपर्यंत budget",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.407,
+    "trap": null
+  },
+  {
+    "id": "f13",
+    "type": "price",
+    "slot": "service.fee",
+    "value": "अठरा हजार",
+    "normalized": "18000 INR/year",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "वर्षाला अठरा हजार रुपये",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.444,
+    "trap": null
+  },
+  {
+    "id": "f14",
+    "type": "payment_terms",
+    "slot": "service.tax",
+    "value": "कर वेगळा",
+    "normalized": "tax additional",
+    "turn_ids": [
+      "t015"
+    ],
+    "evidence": "कर वेगळा आहे sir",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.519,
+    "trap": null
+  },
+  {
+    "id": "f15",
+    "type": "requirement",
+    "slot": "scope.exclusion",
+    "value": "notice आणि जुनी दुरुस्ती वगळली",
+    "normalized": "notice replies and prior-year correction excluded",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "Notice ला उत्तर देणं आणि मागील वर्षाची दुरुस्ती यात included नाही",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.444,
+    "trap": null
+  },
+  {
+    "id": "f16",
+    "type": "competitor_price",
+    "slot": "existing.fee",
+    "value": "बारा हजार",
+    "normalized": "12000 INR/year",
+    "turn_ids": [
+      "t016"
+    ],
+    "evidence": "बारा हजार घेतात वर्षाला",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.556,
+    "trap": "competitor_price"
+  },
+  {
+    "id": "f17",
+    "type": "requirement",
+    "slot": "service.review",
+    "value": "महिन्यात एक",
+    "normalized": "1 review/month",
+    "turn_ids": [
+      "t017"
+    ],
+    "evidence": "महिन्यात एक review call",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.593,
+    "trap": null
+  },
+  {
+    "id": "f18",
+    "type": "contact_preference",
+    "slot": "reminders.frequency",
+    "value": "बुधवारचा एक message",
+    "normalized": "weekly Wednesday message",
+    "turn_ids": [
+      "t019"
+    ],
+    "evidence": "बुधवारचा एक consolidated message",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.667,
+    "trap": null
+  },
+  {
+    "id": "f19",
+    "type": "objection",
+    "slot": "family.contact",
+    "value": "पत्नीचा contact नाही",
+    "normalized": "do not contact wife",
+    "turn_ids": [
+      "t020"
+    ],
+    "evidence": "तिचा contact देणार नाही",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.704,
+    "trap": null
+  },
+  {
+    "id": "f20",
+    "type": "requirement",
+    "slot": "sample.redaction",
+    "value": "नाव व account लपवणे",
+    "normalized": "redacted samples",
+    "turn_ids": [
+      "t022"
+    ],
+    "evidence": "नावं आणि account details लपवून",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.778,
+    "trap": null
+  },
+  {
+    "id": "f21",
+    "type": "quantity",
+    "slot": "sample.count",
+    "value": "दहा",
+    "normalized": "10 bills",
+    "turn_ids": [
+      "t024"
+    ],
+    "evidence": "दहा bills देता येतील",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.852,
+    "trap": null
+  },
+  {
+    "id": "f22",
+    "type": "price",
+    "slot": "sample.fee",
+    "value": "निःशुल्क",
+    "normalized": "0 INR",
+    "turn_ids": [
+      "t025"
+    ],
+    "evidence": "Sample review साठी पैसे नाहीत",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.889,
+    "trap": null
+  },
+  {
+    "id": "f23",
+    "type": "date",
+    "slot": "callback.date",
+    "value": "बावीस ऑक्टोबर",
+    "normalized": "2026-10-22",
+    "turn_ids": [
+      "t025"
+    ],
+    "evidence": "गुरुवार बावीस ऑक्टोबर",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.889,
+    "trap": null
+  },
+  {
+    "id": "f24",
+    "type": "time",
+    "slot": "callback.time",
+    "value": "दुपारी अडीच",
+    "normalized": "14:30",
+    "turn_ids": [
+      "t025"
+    ],
+    "evidence": "दुपारी अडीचला",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.889,
+    "trap": null
+  },
+  {
+    "id": "f25",
+    "type": "commitment",
+    "slot": "prospect.sample",
+    "value": "उद्या संध्याकाळपर्यंत",
+    "normalized": "2026-10-21 evening",
+    "turn_ids": [
+      "t026"
+    ],
+    "evidence": "उद्या संध्याकाळपर्यंत दहा bills पाठवेन",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.926,
+    "trap": null
+  },
+  {
+    "id": "f26",
+    "type": "next_step",
+    "slot": "service.review_only",
+    "value": "फक्त review",
+    "normalized": "review not activation",
+    "turn_ids": [
+      "t026"
+    ],
+    "evidence": "फक्त review आहे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.926,
+    "trap": null
+  }
+]

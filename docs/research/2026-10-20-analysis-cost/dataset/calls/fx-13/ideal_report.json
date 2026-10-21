@@ -1,0 +1,219 @@
+{
+  "summary": "Call from Tanvi (IronLeaf Fitness) to Sudhir Nair, HR head of Quillstone Analytics (40 people, data analytics for retail clients abroad, long screen hours with back and neck complaints), later joined by Ankita from employee engagement. Offer: corporate annual plan at ₹1,800 per head per month (minimum 25, all four centres, classes, monthly trainer assessment); nearest centre Sector 21, 3.5 km away. Sudhir's objections: wellness budget already spent on an insurance top-up (next cycle April, CFO can approve small items mid-year); a FlexZone tie-up two years ago where only 9 of 40 used a fully paid plan; distance and evening traffic; about 25 people on the 2 to 11 pm US shift and 15 on 9 to 6. Tanvi asked why people stopped going and offered a monthly usage report and pay-per-visit (₹180 a visit, ₹30,000 monthly minimum). She misstated weekday opening as 5:30 before correcting it to 6 am, confirmed free parking, three free trials and women-only slots with a female trainer (Ankita said 12 women, and half had asked for a gym last month). Sudhir mentioned the office moves to a new tower in January; Tanvi moved on to price. On PulseHub's ₹1,350 quote she claimed they lacked showers and lockers; Sudhir had visited and contradicted her, and she withdrew it. She refused to match and offered a three-month, no-lock-in pilot: 20 people at ₹1,600 (₹32,000 a month, ₹96,000 total, plus 18% GST), transferable seats, a 50-50 co-pay (company share ₹16,000), member waiver, aggregate-only data, and a possible six-month term after the pilot subject to approval. Sudhir's ceiling is ₹50,000 a month; CFO Harish Bhat decides at next Tuesday's budget review. Next: proposal by Thursday with the usage report and pilot exit clause on page one, reference call with Bluefern Design Studio this week, on-site fitness camp tentatively on Friday 6 November, coordination via Ankita, no calls to Sudhir before 11 am. Fifteen freshers join in February.",
+  "strengths": [
+    {
+      "title": "Diagnosed the FlexZone failure before answering",
+      "explanation": "When Sudhir said only nine of forty used the last gym, you asked 'why did people stop going? Was it the centre, the timing, or something else?' His answer (crowding, changing trainers, no tracking) let you offer a monthly usage report and a pay-per-visit model that directly address paying for forty and finding out only at renewal.",
+      "evidence": [{"segment_id": "s26"}, {"segment_id": "s27"}, {"segment_id": "s28"}, {"segment_id": "s29"}, {"segment_id": "s31"}, {"segment_id": "s33"}]
+    },
+    {
+      "title": "Refused to match the competitor price and removed the risk instead",
+      "explanation": "Asked to match ₹1,350, you said 'I can't match thirteen fifty, sir, I'd be lying if I said yes' and offered a three-month, no-lock-in pilot for 20 people at ₹1,600. That protected the annual price and answered his real fear of paying for a full year.",
+      "evidence": [{"segment_id": "s67"}, {"segment_id": "s68"}, {"segment_id": "s69"}, {"segment_id": "s70"}, {"segment_id": "s72"}]
+    },
+    {
+      "title": "Answered risk objections and fitted under his ceiling",
+      "explanation": "Attrition (transfer the seat to a new joiner), payment (50-50 co-pay through payroll), liability (member waiver, certified first-aid trained trainers) and privacy (aggregate data only) were each answered. When he set ₹50,000 a month as the limit, you showed the pilot at ₹32,000 and the company share at ₹16,000. He said 'That I can maybe sell.'",
+      "evidence": [{"segment_id": "s76"}, {"segment_id": "s80"}, {"segment_id": "s85"}, {"segment_id": "s87"}, {"segment_id": "s88"}, {"segment_id": "s89"}, {"segment_id": "s90"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Made a false claim about the competitor",
+      "explanation": "You said PulseHub has no proper showers or lockers at Sector 18. Sudhir had been there last week and said they renovated, and you had to take it back. Your follow-up (check whether classes and trainer assessment are included) was the right argument and needed no attack. Compare on what you know: 'At thirteen fifty, please check if group classes and the monthly assessment are included; with us they are.'",
+      "evidence": [{"segment_id": "s61"}, {"segment_id": "s62"}, {"segment_id": "s63"}, {"segment_id": "s64"}]
+    },
+    {
+      "title": "Wrong opening time during a timing objection",
+      "explanation": "In the middle of the shift-timing discussion you said the centre opens at 5:30, then corrected to 6 am on weekdays (5:30 only at weekends). On the exact point being questioned, a wrong fact costs credibility. Keep centre timings written in front of you and state them once, correctly.",
+      "evidence": [{"segment_id": "s45"}, {"segment_id": "s46"}, {"segment_id": "s47"}]
+    },
+    {
+      "title": "Assumed morning workouts before knowing the shifts",
+      "explanation": "On the distance objection you said most corporate members go in the morning, before knowing that half the team works until 11 pm. Sudhir had to bring Ankita in to correct it. Ask first: 'What are the team's shift timings?' then match centre hours to them.",
+      "evidence": [{"segment_id": "s38"}, {"segment_id": "s39"}, {"segment_id": "s40"}, {"segment_id": "s43"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Women's demand not used to shape the pilot",
+      "explanation": "Ankita said twelve women want a ladies-only batch and that half of them asked for a gym last month. That is ready demand and a ready pilot group. You said 'Great!' and started listing classes. Build on it: 'Then let's make the women-only slots part of the pilot; could those who asked be the first ten?'",
+      "evidence": [{"segment_id": "s53"}, {"segment_id": "s54"}, {"segment_id": "s55"}, {"segment_id": "s56"}]
+    },
+    {
+      "title": "January office move skipped",
+      "explanation": "Sudhir said the office moves to a new tower opposite the metro depot in January, so the nearest centre may change. You went straight to 'the investment part'. Ask where the new tower is and which of the four centres is closest; that may solve the distance objection or show a problem early.",
+      "evidence": [{"segment_id": "s59"}, {"segment_id": "s60"}]
+    },
+    {
+      "title": "Fifteen freshers in February only noted",
+      "explanation": "Sudhir asked you to keep room in the numbers because fifteen freshers join in February. You said 'Noted'. Put it in the proposal as a pre-agreed expansion rate after the pilot, so Harish Bhat sees the full path.",
+      "evidence": [{"segment_id": "s100"}, {"segment_id": "s101"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Budget already spent",
+      "explanation": "You asked when the next cycle opens and learned the CFO can approve small items mid-year, which later shaped the small pilot.",
+      "evidence": [{"segment_id": "s20"}, {"segment_id": "s21"}, {"segment_id": "s22"}]
+    },
+    {
+      "title": "Past low uptake (FlexZone)",
+      "explanation": "Strong diagnostic question, then tracking and pay-per-visit answers.",
+      "evidence": [{"segment_id": "s27"}, {"segment_id": "s29"}, {"segment_id": "s33"}]
+    },
+    {
+      "title": "₹30,000 minimum on pay-per-visit",
+      "explanation": "You explained it covers about 166 visits, roughly ten regular users. Sudhir remained doubtful about ten regulars.",
+      "evidence": [{"segment_id": "s34"}, {"segment_id": "s35"}, {"segment_id": "s36"}]
+    },
+    {
+      "title": "Distance and shift timing",
+      "explanation": "Generic morning suggestion, then the opening-time slip; recovered with the empty late-morning window for US-shift staff, free parking and three free trials.",
+      "evidence": [{"segment_id": "s39"}, {"segment_id": "s46"}, {"segment_id": "s48"}, {"segment_id": "s50"}, {"segment_id": "s52"}]
+    },
+    {
+      "title": "Home yoga with videos",
+      "explanation": "Answered with live classes and posture correction included in the membership.",
+      "evidence": [{"segment_id": "s57"}, {"segment_id": "s58"}]
+    },
+    {
+      "title": "Competitor PulseHub at ₹1,350",
+      "explanation": "False claim about facilities, withdrawn; then a fair inclusions comparison and an honest refusal to match with a pilot alternative.",
+      "evidence": [{"segment_id": "s62"}, {"segment_id": "s64"}, {"segment_id": "s68"}, {"segment_id": "s70"}]
+    },
+    {
+      "title": "Attrition, lock-in, liability and privacy",
+      "explanation": "Seat transfer, six-month term to be sought but not committed, waiver and aggregate-only reporting. Honest about what still needs approval.",
+      "evidence": [{"segment_id": "s75"}, {"segment_id": "s76"}, {"segment_id": "s77"}, {"segment_id": "s78"}, {"segment_id": "s85"}, {"segment_id": "s87"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Decision maker and timeline uncovered",
+      "explanation": "You asked who else decides and learned CFO Harish Bhat has the final say at next Tuesday's budget review, with the proposal needed by Thursday.",
+      "evidence": [{"segment_id": "s91"}, {"segment_id": "s92"}, {"segment_id": "s93"}]
+    },
+    {
+      "title": "Proposal designed for the CFO's question",
+      "explanation": "You agreed to put a sample usage report and the pilot exit clause on page one, answering 'how do I know FlexZone won't repeat'. Reference call with Bluefern Design Studio set for this week.",
+      "evidence": [{"segment_id": "s95"}, {"segment_id": "s98"}, {"segment_id": "s99"}]
+    },
+    {
+      "title": "Clear recap and engagement step",
+      "explanation": "Fitness camp tentatively on Friday 6 November, coordination via Ankita, email to Sudhir, no calls before 11 am, and a full recap at the end.",
+      "evidence": [{"segment_id": "s103"}, {"segment_id": "s104"}, {"segment_id": "s105"}, {"segment_id": "s108"}]
+    }
+  ],
+  "verdict": "A good objection-heavy call that turned a sceptical HR head with a bad gym history into 'that I can maybe sell': diagnosis of the past failure, an honest refusal to match price, and a low-risk pilot under his ₹50,000 ceiling. Credibility slipped twice (the PulseHub claim and the opening time), and three strong signals (women's demand, the January move, February freshers) were passed over. Next: Thursday's proposal for CFO Harish Bhat.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Invited his scepticism (s5) and asked about his own routine (s9). The false competitor claim (s62) and the timing slip (s46) cost trust, partly recovered by honest retraction (s64) and the 'I'd be lying' line (s68)."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Good questions on work type and the FlexZone failure (s7, s27). Shift patterns were not asked before proposing (s39), and the January move was skipped (s59-s60)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Budget timing (s21-s22), ₹50,000 ceiling (s88) and the CFO as final approver with a dated review (s92) were all established."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "Back and neck pain from screen time (s8) and staff demand for a gym (s55) were stated but not used to build desire; the call stayed on risk reduction."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "Pilot, pay-per-visit, women-only slots and trials fit stated concerns (s33, s52, s54, s70). A generic class list (s56) replaced building on the women's demand."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Strong on FlexZone, price matching and attrition (s27-s33, s68-s70, s76); weak on competitor facts and opening time (s62, s46)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Decision maker, deadline, page-one content, reference call and camp were all fixed with a recap (s92-s108)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Clear and quick; you checked the broken line with Ankita (s44). The tendency to move on after signals (s56, s60, s101) shows in the text. Voice tone cannot be judged from text."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Risk-removal selling worked; listening to the buyer's own signals and staying accurate on facts would have made the proposal stronger.",
+      "evidence": [{"segment_id": "s56"}, {"segment_id": "s62"}, {"segment_id": "s70"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "Proposal by Thursday for next Tuesday's budget review with CFO Harish Bhat; reference call this week; fitness camp tentatively on 6 November. No commitment yet.",
+      "evidence": [{"segment_id": "s92"}, {"segment_id": "s93"}, {"segment_id": "s108"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["CFO decision at the budget review", "Nearest centre to the new office", "Approval of a six-month post-pilot term"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "Knowing why the last tie-up failed let you offer remedies for each cause rather than a generic pitch."},
+      {"finding_index": 1, "why_it_matters": "Matching the price would have cut margin and confirmed the CFO's doubt; a no-lock-in pilot changes the question from price to proof."},
+      {"finding_index": 2, "why_it_matters": "Fitting under ₹50,000 gives Sudhir something he can table without fighting the budget."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "You said PulseHub lacks showers and lockers; he had visited and contradicted you.", "evidence": [{"segment_id": "s62"}, {"segment_id": "s63"}]},
+        "why_it_matters": "A sceptical buyer now has a reason to double-check your other claims, including the usage-report promise.",
+        "replacement_behavior": "Compare only on verified inclusions and invite the buyer to check them.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["PulseHub's actual inclusions"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "You gave 5:30 as weekday opening and corrected it to 6 am.", "evidence": [{"segment_id": "s46"}]},
+        "why_it_matters": "Timing was the objection on the table; uncertainty there weakens the US-shift answer.",
+        "replacement_behavior": "Keep a fact card of timings per centre and quote from it.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Shift-wise usage expectations"]}
+      },
+      {
+        "finding_index": 2,
+        "what_happened": {"text": "You suggested morning workouts before knowing about the US shift.", "evidence": [{"segment_id": "s39"}, {"segment_id": "s40"}]},
+        "why_it_matters": "Proposing before asking makes the buyer correct you and suggests a standard pitch.",
+        "replacement_behavior": "Ask about shifts and commute first, then propose time windows.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Commute patterns of the team"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 1, "why_effective": "A simple 'why did people stop going' opened the real causes and the path to every later answer."},
+      {"strength_index": 1, "evidence_index": 1, "why_effective": "An honest no on price, immediately followed by a risk-free alternative, kept both credibility and margin."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "Ankita said half the women had asked for a gym last month.", "evidence": [{"segment_id": "s55"}]},
+        "closer_response": {"text": "You moved to listing group classes.", "evidence": [{"segment_id": "s56"}]},
+        "follow_up": "Propose a pilot group that starts with the women who asked, using the women-only slots.",
+        "potential_impact": "Higher early usage, which is exactly what the CFO needs to see."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "Sudhir said the office moves to a new tower in January.", "evidence": [{"segment_id": "s59"}]},
+        "closer_response": {"text": "You moved to price.", "evidence": [{"segment_id": "s60"}]},
+        "follow_up": "Ask Ankita for the new address and show the nearest centre in the proposal.",
+        "potential_impact": "May turn the distance objection into an advantage, or flag a risk before the pilot."
+      },
+      {
+        "finding_index": 2,
+        "prospect_signal": {"text": "Sudhir said fifteen freshers join in February.", "evidence": [{"segment_id": "s100"}]},
+        "closer_response": {"text": "You said you would keep it in mind.", "evidence": [{"segment_id": "s101"}]},
+        "follow_up": "Add an expansion option for new joiners after the pilot in the proposal.",
+        "potential_impact": "Shows the CFO a growth path beyond the 20-person pilot."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "Sudhir said his CFO laughs at the word gym and will ask how FlexZone won't repeat.", "evidence": [{"segment_id": "s24"}, {"segment_id": "s98"}]}, "possible_concern": "The proposal will be judged on proof of usage, not on features.", "interpretation_kind": "inference"},
+      {"source": {"text": "Sudhir said he is personally not a gym person.", "evidence": [{"segment_id": "s10"}]}, "possible_concern": "He may not champion it personally; Ankita may be the stronger internal supporter.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "False claim about PulseHub's facilities.", "purpose": "must_watch", "evidence": [{"segment_id": "s62"}]},
+      {"text": "Honest refusal to match price with a pilot offer.", "purpose": "repeat", "evidence": [{"segment_id": "s68"}]},
+      {"text": "Women's demand followed by a class list.", "purpose": "watch", "evidence": [{"segment_id": "s56"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "Sudhir asked you directly to match ₹1,350.", "evidence": [{"segment_id": "s67"}]},
+      "change": {"text": "You refused honestly and offered a three-month, no-lock-in pilot.", "evidence": [{"segment_id": "s68"}, {"segment_id": "s70"}]},
+      "after": {"text": "He started working the numbers: ₹32,000 a month and GST.", "evidence": [{"segment_id": "s71"}, {"segment_id": "s73"}]},
+      "possible_effect": "Removing the year-long risk may have moved him from price comparison to evaluating a pilot.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "An unverified negative claim about a competitor's facilities was made and then retracted.", "evidence": [{"segment_id": "s62"}, {"segment_id": "s64"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "Compare with competitors only on verified inclusions, never on claims about their facilities.", "target": "On the reference call and in Thursday's proposal, every competitor point is something the buyer can check and you have verified."},
+    "practice": {"improvement_index": 0, "instructions": "List three verified differences between IronLeaf and PulseHub and practise answering 'they're cheaper' using only those.", "success_condition": "In role-play you make no statement about the competitor that you have not verified."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Diagnosing past failures and refusing to discount by offering a risk-free pilot.",
+      "fix_first": "Stay accurate: no unverified competitor claims and no guessed timings.",
+      "next_focus": "Build the proposal around the women's demand, the new office location and the February freshers.",
+      "assessment": "Strong position for the budget review if the proposal shows proof of usage."
+    }
+  }
+}

@@ -46,6 +46,8 @@ type Query = {
   sort?: string;
   org?: string;
   feature?: string;
+  person?: string;
+  fx?: string;
 };
 
 const pick = (
@@ -75,7 +77,7 @@ export default async function UsagePage({
     tests: query.tests === "1",
     // The Overview's chosen charts and compared pair (owner, 19 Oct 2026).
     ...chartView(query),
-    // One organisation and one feature (owner, 20 Oct 2026).
+    // One organisation, person and feature, and the rate (owner and orchestrator, 20 Oct).
     ...scopeView(query),
   };
   const keep = [
@@ -83,7 +85,9 @@ export default async function UsagePage({
     current.env !== "all" ? `env=${current.env}` : "",
     current.tests ? "tests=1" : "",
     current.org ? `org=${current.org}` : "",
+    current.person ? `person=${current.person}` : "",
     current.feature ? `feature=${current.feature}` : "",
+    current.fx ? `fx=${current.fx}` : "",
   ]
     .filter(Boolean)
     .join("&");
@@ -97,6 +101,8 @@ export default async function UsagePage({
             : ""
         }${current.org ? `&company=${current.org}` : ""}${
           current.feature ? `&stage=${current.feature}` : ""
+        }${current.person ? `&person=${current.person}` : ""}${
+          current.fx ? `&fx=${current.fx}` : ""
         }`,
         normalizeMetrics,
       );

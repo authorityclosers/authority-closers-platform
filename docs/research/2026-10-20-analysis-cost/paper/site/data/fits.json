@@ -1,0 +1,316 @@
+{
+ "fits": {
+  "deepgram/nova-3|asr": {
+   "calls": 16,
+   "fixed_inr": 0.0001,
+   "inr_per_min": 0.52,
+   "mean_inr_per_min": 0.52
+  },
+  "sarvam/saaras:v4|asr": {
+   "calls": 11,
+   "fixed_inr": 0.0002,
+   "inr_per_min": 0.59,
+   "mean_inr_per_min": 0.59
+  },
+  "assemblyai/universal-2|asr": {
+   "calls": 16,
+   "fixed_inr": 0.0,
+   "inr_per_min": 0.2833,
+   "mean_inr_per_min": 0.2833
+  },
+  "assemblyai/universal-3-5-pro|asr": {
+   "calls": 16,
+   "fixed_inr": 0.0001,
+   "inr_per_min": 0.3833,
+   "mean_inr_per_min": 0.3833
+  },
+  "google/gemini-3.8-flash|today:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 6.3664,
+   "inr_per_min": 0.1981,
+   "mean_inr_per_min": 0.5836
+  },
+  "google/gemini-3.8-flash|onepass:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 1.8249,
+   "inr_per_min": 0.0303,
+   "mean_inr_per_min": 0.1408
+  },
+  "groq/whisper-large-v3-turbo|asr": {
+   "calls": 14,
+   "fixed_inr": 0.0,
+   "inr_per_min": 0.0667,
+   "mean_inr_per_min": 0.0667
+  },
+  "google/gemini-3.1-flash-lite|asr": {
+   "calls": 16,
+   "fixed_inr": 0.0896,
+   "inr_per_min": 0.1375,
+   "mean_inr_per_min": 0.1429
+  },
+  "groq/whisper-large-v3|asr": {
+   "calls": 14,
+   "fixed_inr": 0.0,
+   "inr_per_min": 0.185,
+   "mean_inr_per_min": 0.185
+  },
+  "google/gemini-3.8-flash|asr": {
+   "calls": 16,
+   "fixed_inr": 0.1261,
+   "inr_per_min": 0.2205,
+   "mean_inr_per_min": 0.2281
+  },
+  "google/gemini-3.5-flash-lite|asr": {
+   "calls": 16,
+   "fixed_inr": -0.0304,
+   "inr_per_min": 0.1435,
+   "mean_inr_per_min": 0.1416
+  },
+  "google/gemini-3.1-flash-lite|onepass:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.3873,
+   "inr_per_min": 0.0135,
+   "mean_inr_per_min": 0.037
+  },
+  "google/gemini-3.5-flash-lite|onepass:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 1.0458,
+   "inr_per_min": 0.012,
+   "mean_inr_per_min": 0.0754
+  },
+  "anthropic/claude-haiku-5.5|onepass:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.4122,
+   "inr_per_min": 0.008,
+   "mean_inr_per_min": 0.033
+  },
+  "google/gemini-3.1-flash-lite|onepass2:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.4942,
+   "inr_per_min": 0.0133,
+   "mean_inr_per_min": 0.0432
+  },
+  "openai/gpt-6-luna|onepass:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.3254,
+   "inr_per_min": 0.0106,
+   "mean_inr_per_min": 0.0303
+  },
+  "google/gemini-3.8-flash|onepass2:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 1.9903,
+   "inr_per_min": 0.0342,
+   "mean_inr_per_min": 0.1547
+  },
+  "deepseek/deepseek-v4.1-flash|onepass:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.6217,
+   "inr_per_min": 0.0119,
+   "mean_inr_per_min": 0.0496
+  },
+  "google/gemini-3.8-flash|onepass:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 2.0025,
+   "inr_per_min": 0.0157,
+   "mean_inr_per_min": 0.137
+  },
+  "google/gemini-3.8-flash|onepass2:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 2.0304,
+   "inr_per_min": 0.0314,
+   "mean_inr_per_min": 0.1544
+  },
+  "z-ai/glm-5.3-flash|onepass:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.126,
+   "inr_per_min": 0.0132,
+   "mean_inr_per_min": 0.0208
+  },
+  "google/gemini-3.8-flash|onepass:asr_openrouter_google_gemini-3.8-flash_phone_8k:r1": {
+   "calls": 12,
+   "fixed_inr": 1.7278,
+   "inr_per_min": 0.0355,
+   "mean_inr_per_min": 0.1663
+  },
+  "google/gemini-3.8-flash|onepass2:asr_openrouter_google_gemini-3.8-flash_phone_8k:r1": {
+   "calls": 14,
+   "fixed_inr": 2.0764,
+   "inr_per_min": 0.031,
+   "mean_inr_per_min": 0.1594
+  },
+  "google/gemini-3.8-flash|onepass2:asr_deepgram_nova-3_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 2.1353,
+   "inr_per_min": 0.0214,
+   "mean_inr_per_min": 0.1507
+  },
+  "openai/gpt-6-luna|onepass:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.3259,
+   "inr_per_min": 0.0109,
+   "mean_inr_per_min": 0.0307
+  },
+  "google/gemini-3.8-flash|onepass2:asr_groq_whisper-large-v3-turbo_phone_8k:r1": {
+   "calls": 14,
+   "fixed_inr": 1.851,
+   "inr_per_min": 0.0335,
+   "mean_inr_per_min": 0.1523
+  },
+  "anthropic/claude-haiku-5.5|onepass2:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.4068,
+   "inr_per_min": 0.0134,
+   "mean_inr_per_min": 0.038
+  },
+  "xiaomi/mimo-v2.6-flash|onepass:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.1586,
+   "inr_per_min": 0.0162,
+   "mean_inr_per_min": 0.0258
+  },
+  "google/gemini-3.1-flash-lite|audio1:phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": -0.0355,
+   "inr_per_min": 0.2572,
+   "mean_inr_per_min": 0.255
+  },
+  "openai/gpt-6-luna|onepass:asr_openrouter_google_gemini-3.8-flash_phone_8k:r1": {
+   "calls": 14,
+   "fixed_inr": 0.3617,
+   "inr_per_min": 0.0072,
+   "mean_inr_per_min": 0.0296
+  },
+  "anthropic/claude-haiku-5.5|onepass2:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.4397,
+   "inr_per_min": 0.0129,
+   "mean_inr_per_min": 0.0395
+  },
+  "openai/gpt-6-luna|onepass:oracle:r2": {
+   "calls": 16,
+   "fixed_inr": 0.3156,
+   "inr_per_min": 0.0106,
+   "mean_inr_per_min": 0.0298
+  },
+  "openai/gpt-oss-120b|onepass:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.1404,
+   "inr_per_min": -0.0007,
+   "mean_inr_per_min": 0.0078
+  },
+  "google/gemini-3.8-flash|onepass2:oracle:r2": {
+   "calls": 16,
+   "fixed_inr": 1.9864,
+   "inr_per_min": 0.0317,
+   "mean_inr_per_min": 0.152
+  },
+  "openai/gpt-6-luna|onepass2:oracle:r1": {
+   "calls": 16,
+   "fixed_inr": 0.4141,
+   "inr_per_min": 0.0126,
+   "mean_inr_per_min": 0.0377
+  },
+  "google/gemini-3.8-flash|today:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 6.3027,
+   "inr_per_min": 0.2585,
+   "mean_inr_per_min": 0.6402
+  },
+  "openai/gpt-6-luna|onepass3:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.3439,
+   "inr_per_min": 0.0122,
+   "mean_inr_per_min": 0.033
+  },
+  "openai/gpt-6-luna|brain4:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.5001,
+   "inr_per_min": 0.0138,
+   "mean_inr_per_min": 0.0441
+  },
+  "__scribe__": {
+   "fixed_inr": 0.0,
+   "inr_per_min": 0.367,
+   "calls": 0,
+   "mean_inr_per_min": 0.367
+  },
+  "__pr__": {
+   "fixed_inr": 1.6295250000000001,
+   "inr_per_min": 0.03255,
+   "calls": 0,
+   "mean_inr_per_min": null
+  }
+ },
+ "pipelines": {
+  "Today: Scribe + today's 6 stages on 3.8 Flash": {
+   "4.5": 1.98,
+   "13.8": 1.026,
+   "60.0": 0.671
+  },
+  "Scribe + one pass 3.8 Flash (v2 prompt)": {
+   "4.5": 0.85,
+   "13.8": 0.546,
+   "60.0": 0.432
+  },
+  "3.1 Flash-Lite transcript + one pass 3.8 Flash (v2), standard": {
+   "4.5": 0.64,
+   "13.8": 0.323,
+   "60.0": 0.204
+  },
+  "3.1 Flash-Lite transcript + one pass 3.8 Flash (v2), Flex": {
+   "4.5": 0.32,
+   "13.8": 0.161,
+   "60.0": 0.102
+  },
+  "Same, Flex, today's pointer review kept": {
+   "4.5": 0.517,
+   "13.8": 0.237,
+   "60.0": 0.132
+  },
+  "Same, Flex, from 1 Jan 2027 (3.8 Flash price x2)": {
+   "4.5": 0.561,
+   "13.8": 0.251,
+   "60.0": 0.135
+  },
+  "Same, Flex, pointer review kept, from 1 Jan 2027": {
+   "4.5": 0.956,
+   "13.8": 0.401,
+   "60.0": 0.194
+  },
+  "3.8 Flash transcript + one pass 3.8 Flash (v2), Flex": {
+   "4.5": 0.37,
+   "13.8": 0.206,
+   "60.0": 0.144
+  },
+  "3.1 Flash-Lite transcript (Flex) + one pass GPT-6 Luna": {
+   "4.5": 0.162,
+   "13.8": 0.107,
+   "60.0": 0.086
+  },
+  "3.1 Flash-Lite transcript (Flex) + one pass GPT-6 Luna, Luna Flex": {
+   "4.5": 0.12,
+   "13.8": 0.089,
+   "60.0": 0.078
+  },
+  "3.1 Flash-Lite transcript (Flex) + one pass Haiku 5.5 (v2)": {
+   "4.5": 0.189,
+   "13.8": 0.117,
+   "60.0": 0.09
+  },
+  "3.1 Flash-Lite transcript (Flex) + GPT-6 Luna, coaching prompt (v3)": {
+   "4.5": 0.167,
+   "13.8": 0.109,
+   "60.0": 0.087
+  },
+  "Lean: 3.1 Flash-Lite + GPT-6 Luna Brain 4.0, standard": {
+   "4.5": 0.282,
+   "13.8": 0.194,
+   "60.0": 0.161
+  },
+  "Lean: 3.1 Flash-Lite (Flex) + GPT-6 Luna Brain 4.0 (batch)": {
+   "4.5": 0.141,
+   "13.8": 0.097,
+   "60.0": 0.081
+  }
+ }
+}

@@ -2,7 +2,9 @@
 
 ``GET /v1/admin/conversation/metrics`` reads the separate metrics store that the
 host collector fills with each environment's usage numbers. It opens no other
-environment's database and changes nothing; see ``cost_metrics``.
+environment's database; in its own it reads organisation and person names live
+for the signed-in control account (the store holds none) and changes nothing
+except making this environment's pseudonym key once; see ``cost_metrics``.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from ac_platform.conversation_intelligence.application import (
 from ac_platform.conversation_intelligence.cost_metrics import AdminCostMetrics
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_admin_surface
 
-_FILTERS = {"days", "env", "tests", "sort", "steps", "company", "stage"}
+_FILTERS = {"days", "env", "tests", "sort", "steps", "company", "stage", "person", "fx"}
 
 
 def install_cost_metrics_routes(
@@ -38,6 +40,8 @@ def install_cost_metrics_routes(
         steps: Annotated[int, Query(ge=0, le=1)] = 0,
         company: Annotated[str | None, Query(min_length=36, max_length=36)] = None,
         stage: Annotated[str | None, Query(min_length=1, max_length=8)] = None,
+        person: Annotated[str | None, Query(min_length=18, max_length=18)] = None,
+        fx: Literal["daily", "planning"] = "daily",
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
         """Spend, usage, revenue against cost and hold health; numbers only, never content."""
@@ -48,7 +52,8 @@ def install_cost_metrics_routes(
         if names - _FILTERS or any(len(request.query_params.getlist(n)) != 1 for n in names):
             raise HTTPException(
                 422,
-                "Cost and usage takes days, env, tests, sort, steps, company and stage once each.",
+                "Cost and usage takes days, env, tests, sort, steps, company, stage, person and"
+                " fx once each.",
             )
         if settings.operations_tenant_id is None:
             raise HTTPException(503, "Cost and usage is not configured.")
@@ -67,6 +72,8 @@ def install_cost_metrics_routes(
                 call_steps=bool(steps),
                 company=company,
                 stage=stage,
+                person=person,
+                fx=fx,
             )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None

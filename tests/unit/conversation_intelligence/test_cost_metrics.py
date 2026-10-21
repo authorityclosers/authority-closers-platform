@@ -382,7 +382,13 @@ def test_revenue_counts_live_money_against_cost() -> None:
 async def test_summary_admits_only_operations_and_bounds_filters(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    application = SimpleNamespace(database=None, clock=lambda: NOW)
+    made: list[object] = []
+
+    class _Database:
+        async def run_sync(self, work: object) -> None:
+            made.append(work)  # the pseudonym key, made once in this environment
+
+    application = SimpleNamespace(database=_Database(), clock=lambda: NOW)
     service = AdminCostMetrics(
         application,  # type: ignore[arg-type]
         OPS,
@@ -400,19 +406,33 @@ async def test_summary_admits_only_operations_and_bounds_filters(
             return None
 
     monkeypatch.setattr(cost_metrics, "ConversationProviderAdmin", _Admin)
+
+    class _Rates:
+        problem = None
+
+        async def rates(self, _database: object, _now: object) -> dict[object, object]:
+            return {}
+
+    monkeypatch.setattr(cost_metrics, "REFRESHER", _Rates())
     actor = SimpleNamespace(tenant_id=OPS)
     for days in (0, 121):
         with pytest.raises(ConversationError):
             await service.summary(actor, days=days)  # type: ignore[arg-type]
     with pytest.raises(ConversationError):
         await service.summary(actor, environment="laptop")  # type: ignore[arg-type]
+    with pytest.raises(ConversationError, match="person"):
+        await service.summary(actor, person="p_NOT-A-PSEUDONYM")  # type: ignore[arg-type]
+    with pytest.raises(ConversationError, match="daily or planning"):
+        await service.summary(actor, fx="weekly")  # type: ignore[arg-type]
     (tmp_path / "staging").mkdir()
     (tmp_path / "staging" / "usage.json").write_text(json.dumps(_document()))
     result = await service.summary(actor, days=30)  # type: ignore[arg-type]
     assert result["available"] == ["staging"] and result["problems"] == []
-    assert result["here"] == "staging"
+    assert result["here"] == "staging" and made  # this environment's key was ensured
     assert AdminCostMetrics(application, OPS, store_root=None, here="test").here is None  # type: ignore[arg-type]
     assert result["sources"][0]["stale"] is False
+    # No stored rate and no feed: the planning rate, said so.
+    assert result["fx"]["mode"] == "planning" and result["fx"]["usd_to_inr"] == 100.0
 
 
 def test_export_sql_is_one_read_only_statement_without_call_content() -> None:
@@ -443,6 +463,11 @@ def test_export_sql_is_one_read_only_statement_without_call_content() -> None:
         "verdict",
         "verdict",
     ]
+    # No organisation or person name, and person ids only inside the HMAC (20 Oct 2026).
+    assert "'name'" not in body and "t.name" not in body
+    assert body.count("convert_to(person_id::text, 'UTF8')") == 2
+    # Selected from calls and call data runs (AI replies: requested_by_person_id), hashed twice.
+    assert len(re.findall(r"\bperson_id\b", body)) == 4
     # Admin budget settings: amounts and periods, never the reason text (19 Oct 2026).
     assert set(re.findall(r"payload -> '(?:before|after)' ->> '(\w+)'", body)) == {
         "ceiling_paise",
@@ -569,7 +594,7 @@ def test_filters_narrow_to_one_organisation_or_feature_and_offer_choices() -> No
     assert set(names) == {"Sunrise Rooftops", "Other Fictional Co"}
     assert {row["stage"] for row in whole["choices"]["stages"]} >= {"C2", "C4", "C5", "PR"}
     one = build_metrics([parse_export("staging", document)], _scope(company="co-2"))
-    assert one["filters"] == {"company": "co-2", "stage": None}
+    assert one["filters"] == {"company": "co-2", "stage": None, "person": None}
     assert [row["stage"] for row in one["overview"]["by_stage"]] == ["PR"]
     assert one["overview"]["spend_window"] == 0.15
     # The choices still list every organisation, so the filter can be changed back.

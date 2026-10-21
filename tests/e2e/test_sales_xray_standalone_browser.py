@@ -947,6 +947,16 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             accepted_aborts.update(
                 failure for failure in request_failures if page_probe.fullmatch(failure)
             )
+            # A cancelled probe is only accepted as a cancellation: any probe the server
+            # answered must not be a server error (a real 5xx still fails the proof).
+            proof["page_probe_server_errors"] = [
+                f"{item['method']} {item['path']}: {item['status']}"
+                for item in network
+                if item["method"] == "HEAD"
+                and isinstance(item["status"], int)
+                and item["status"] >= 500
+            ]
+            assert not proof["page_probe_server_errors"]
             proof["navigation_cancellations"] = [
                 failure for failure in request_failures if failure in accepted_aborts
             ]

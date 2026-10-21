@@ -1,0 +1,137 @@
+[
+ {
+  "arm": "assemblyai_universal-2",
+  "variant": "phone_8k",
+  "judge": "anthropic_claude-haiku-5.5",
+  "critical_facts": 535,
+  "failed_calls": 0,
+  "retained": 0.7570093457943925,
+  "garbled": 0.19626168224299065,
+  "by_lang": {
+   "en-IN": 0.895,
+   "hi": 0.93,
+   "hi-en": 0.807,
+   "mr-en": 0.494
+  }
+ },
+ {
+  "arm": "assemblyai_universal-3-5-pro",
+  "variant": "phone_8k",
+  "judge": "anthropic_claude-haiku-5.5",
+  "critical_facts": 535,
+  "failed_calls": 0,
+  "retained": 0.8037383177570093,
+  "garbled": 0.15700934579439252,
+  "by_lang": {
+   "en-IN": 0.895,
+   "hi": 0.849,
+   "hi-en": 0.848,
+   "mr-en": 0.656
+  }
+ },
+ {
+  "arm": "deepgram_nova-3",
+  "variant": "phone_8k",
+  "judge": "anthropic_claude-haiku-5.5",
+  "critical_facts": 535,
+  "failed_calls": 0,
+  "retained": 0.7663551401869159,
+  "garbled": 0.1925233644859813,
+  "by_lang": {
+   "en-IN": 0.863,
+   "hi": 0.872,
+   "hi-en": 0.877,
+   "mr-en": 0.506
+  }
+ },
+ {
+  "arm": "groq_whisper-large-v3",
+  "variant": "phone_8k",
+  "judge": "anthropic_claude-haiku-5.5",
+  "critical_facts": 489,
+  "failed_calls": 0,
+  "retained": 0.8118609406952966,
+  "garbled": 0.147239263803681,
+  "by_lang": {
+   "en-IN": 0.863,
+   "hi": 0.872,
+   "hi-en": 0.807,
+   "mr-en": 0.713
+  }
+ },
+ {
+  "arm": "groq_whisper-large-v3-turbo",
+  "variant": "phone_8k",
+  "judge": "anthropic_claude-haiku-5.5",
+  "critical_facts": 489,
+  "failed_calls": 0,
+  "retained": 0.8016359918200409,
+  "garbled": 0.15132924335378323,
+  "by_lang": {
+   "en-IN": 0.863,
+   "hi": 0.849,
+   "hi-en": 0.83,
+   "mr-en": 0.648
+  }
+ },
+ {
+  "arm": "openrouter_google_gemini-3.1-flash-lite",
+  "variant": "phone_8k",
+  "judge": "anthropic_claude-haiku-5.5",
+  "critical_facts": 535,
+  "failed_calls": 0,
+  "retained": 0.9327102803738317,
+  "garbled": 0.06542056074766354,
+  "by_lang": {
+   "en-IN": 0.911,
+   "hi": 0.977,
+   "hi-en": 0.959,
+   "mr-en": 0.896
+  }
+ },
+ {
+  "arm": "openrouter_google_gemini-3.5-flash-lite",
+  "variant": "phone_8k",
+  "judge": "anthropic_claude-haiku-5.5",
+  "critical_facts": 535,
+  "failed_calls": 0,
+  "retained": 0.8280373831775701,
+  "garbled": 0.102803738317757,
+  "by_lang": {
+   "en-IN": 0.871,
+   "hi": 0.919,
+   "hi-en": 0.889,
+   "mr-en": 0.675
+  }
+ },
+ {
+  "arm": "openrouter_google_gemini-3.8-flash",
+  "variant": "phone_8k",
+  "judge": "anthropic_claude-haiku-5.5",
+  "critical_facts": 477,
+  "failed_calls": 0,
+  "retained": 0.960167714884696,
+  "garbled": 0.03773584905660377,
+  "by_lang": {
+   "en-IN": 0.952,
+   "hi": 1.0,
+   "hi-en": 0.959,
+   "mr-en": 0.938
+  }
+ },
+ {
+  "arm": "sarvam_saaras-v4",
+  "variant": "phone_8k",
+  "judge": "anthropic_claude-haiku-5.5",
+  "critical_facts": 336,
+  "failed_calls": 5,
+  "retained": 0.8898809523809523,
+  "garbled": 0.11011904761904762,
+  "by_lang": {
+   "en-IN": 0.879,
+   "hi": 1.0,
+   "hi-en": 0.91,
+   "mr-en": 0.861
+  }
+ }
+]

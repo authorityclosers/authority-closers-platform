@@ -4,7 +4,7 @@
 `wb-ci` on ac pushes a request commit to `refs/heads/wb-ci/<slot>`. The commit carries `.wb-ci/request.json`:
 
     {"schema": "wb-ci/2", "source_sha": "<workbench commit>", "full": false,
-     "checks": [] | ["web", "py", "visual"], "changed_files": ["apps/...", ...], "routes": [], "py_tests": [],
+     "checks": [] | ["web", "py", "visual", "e2e"], "changed_files": ["apps/...", ...], "routes": [], "py_tests": [],
      "py_shards": 17, "requested_by": "..."}
 
 Python shards come in two families that partition the tests: (a) files that may need the codec/browser/native
@@ -202,6 +202,7 @@ def cmd_plan() -> int:
     # A full run does tsc inside the lint job, so 17 Python shards fit GitHub Free's 20 concurrent jobs.
     web_tasks = ["vitest"] if full else ["tsc", "vitest"]
     out(web=str("web" in fams).lower(), py=str("py" in fams).lower(), visual=str("visual" in fams).lower(),
+        e2e=str("e2e" in fams).lower(),
         lint=str(bool(fams & {"web", "py"})).lower(), web_matrix=json.dumps(web_tasks),
         py_matrix=json.dumps({"include": py_matrix if "py" in fams else []}),
         py_count_a=str(count_a), py_count_b=str(count_b), scope="full" if full else "changed")

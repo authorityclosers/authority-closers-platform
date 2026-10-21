@@ -1,0 +1,228 @@
+{
+  "summary": "Video-call demo by Anand Kelkar (Panchaganga Dairy Solutions) of the Sheetdhara 2,000-litre DX bulk milk chiller for Shivajinagar Vikas Dudh Sanstha, Kadegaon taluka, with chairman Tanajirao More and secretary Vitthal Khot. The society collects 2,000 litres a day (1,150 morning, after Vitthal corrected 1,200; 850 evening; 70% cow, 30% buffalo) from 140 farmer members and sends it in 40-litre cans 28 km to the Karad chilling centre. Pain: a ₹2 per litre union penalty above 10°C (₹50,000 in three months) and 700 litres lost last May (₹40,000); village chilling earns ₹0.50 per litre, which Anand put at ₹30,000 a month. The board has decided to install a 2,000-litre BMC before next summer. Anand covered the SS 304 tank (2.5 mm inner, 1.5 mm outer, 50 mm PUF at 38 kg/m³), 2.5-3 hour cooling, 30 RPM agitator, 7.5 HP Emerson Copeland scroll compressor, R404A gas, condenser rated for 46°C, voltage protection, CIP cleaning, a 15 kVA silent DG set (2-2.25 litres of diesel an hour), a 15 x 20 ft room, 25-50% subsidy schemes and approved-vendor registration (auditor Sadashiv Patil's condition). He told the chairman the tank must not be used to make ice. List price ₹11.9 lakh plus 18% GST; he offered 10%, countered Sahyadri Agro Pune's ₹7.8 lakh quote (SS 202 tank, reconditioned compressor), refused ₹10.5 lakh and settled at ₹11.25 lakh including GST for the full turnkey package, with a five-year tank guarantee, one-year compressor and DG warranty, four free service visits, 24-hour breakdown response and three days of operator training. The proposal goes to a board pre-meeting and then the annual general meeting on 15 November, with the work order right after approval; brochure, subsidy proforma invoice and final quote to be sent this evening to Vitthal Khot.",
+  "strengths": [
+    {
+      "title": "Cheaper competitor countered on material, not price",
+      "explanation": "When Vitthal mentioned Sahyadri Agro Pune at ₹7.8 lakh with an SS 202 tank and a reconditioned compressor, you explained that lactic acid in milk corrodes SS 202 within two years, and contrasted it with full SS 304 and a new Copeland scroll compressor. The chairman agreed he does not want light material that puts farmers at risk. Keep the facts and drop words like 'महापाप'; the comparison is strong enough on its own.",
+      "evidence": [{"segment_id": "s70"}, {"segment_id": "s71"}, {"segment_id": "s72"}]
+    },
+    {
+      "title": "Honest 'no' on making ice in the tank",
+      "explanation": "When the chairman asked whether the chiller could make ice in summer, you said no plainly: the BMC only keeps milk at 4°C, freezing water could damage the dimple jacket, and ice needs a separate deep freezer. Correcting a buyer's wrong assumption protects the equipment and makes your other claims more believable.",
+      "evidence": [{"segment_id": "s50"}, {"segment_id": "s51"}]
+    },
+    {
+      "title": "Discovery with numbers before the demo",
+      "explanation": "You asked for collection volumes and the cow-buffalo mix before choosing a model, probed the summer losses on the 28 km route, and turned the ₹0.50 per litre incentive into ₹30,000 a month. That gave the demo a clear money case: ₹50,000 of penalties in three months and a ₹40,000 loss last May.",
+      "evidence": [{"segment_id": "s4"}, {"segment_id": "s6"}, {"segment_id": "s9"}, {"segment_id": "s11"}, {"segment_id": "s14"}, {"segment_id": "s17"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "About 20% off the list price, with nothing asked in return",
+      "explanation": "At the chairman's first 'what discount?' you offered 10% at once. After his ₹10.5 lakh counter you went to ₹11.25 lakh including GST, against a list of ₹11.9 lakh plus 18% GST (about ₹14 lakh). You asked for nothing: no price validity to the AGM, no work-order date, no advance. Tie the move to a commitment: 'हा आकडा पंधरा नोव्हेंबरच्या सभेपर्यंत valid ठेवतो, मंजुरीनंतर सात दिवसांत work order आणि advance — चालेल?'",
+      "evidence": [{"segment_id": "s68"}, {"segment_id": "s69"}, {"segment_id": "s72"}, {"segment_id": "s73"}]
+    },
+    {
+      "title": "Cooling time not matched to the 9 am target",
+      "explanation": "The chairman said farmers pour milk by 7:30 and it must be at 4°C by 9:00. You answered 2.5-3 hours for the tank, after saying earlier that milk must reach 4°C within two hours to stay safe. The gap was never addressed. Restate his target and answer it directly, for example what temperature the 1,150-litre morning load reaches by 9 am, and what you will guarantee in writing.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s26"}, {"segment_id": "s27"}]
+    },
+    {
+      "title": "Price figures not consistent",
+      "explanation": "Asked whether the CIP pump was in the original quote, you called the pump and spray ball a ₹60,000 unit in the CIP package; later the CIP line was ₹65,000. The 18% GST came up only when the chairman called ₹11.9 lakh the price. A cooperative quote has to survive the auditor and the AGM, so answer 'included?' with yes or no and the line item, and state every figure as with or without GST from the start.",
+      "evidence": [{"segment_id": "s48"}, {"segment_id": "s49"}, {"segment_id": "s68"}, {"segment_id": "s69"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Evening voltage is below the cut-off",
+      "explanation": "The chairman said evening voltage drops to 320 V. You explained the protection that cuts power below 360 V, without noting that the chiller would then stop during evening collection (850 litres). Ask how long the low voltage lasts and offer a solution, such as a stabiliser or running on the DG set during low voltage.",
+      "evidence": [{"segment_id": "s44"}, {"segment_id": "s45"}]
+    },
+    {
+      "title": "No payback case before the discount",
+      "explanation": "When the chairman said ₹11.9 lakh is a big amount for a cooperative, you went straight to a discount. You had the numbers for a payback: ₹30,000 a month in incentive, ₹50,000 of penalties in three months, the ₹40,000 May loss, against diesel at 2-2.25 litres an hour during load shedding. That is what the board needs to win the vote.",
+      "evidence": [{"segment_id": "s11"}, {"segment_id": "s17"}, {"segment_id": "s61"}, {"segment_id": "s68"}, {"segment_id": "s69"}]
+    },
+    {
+      "title": "Site readiness not checked",
+      "explanation": "You said the system needs a 415 V three-phase supply with at least a 15 HP connection, and a 15 x 20 ft room with a concrete base and drain, but did not ask what the society has today. A load upgrade or civil work found late can push installation past the summer deadline.",
+      "evidence": [{"segment_id": "s56"}, {"segment_id": "s57"}, {"segment_id": "s62"}, {"segment_id": "s63"}]
+    },
+    {
+      "title": "No follow-up booked before the AGM",
+      "explanation": "The decision goes to a board pre-meeting and the AGM on 15 November. You promised documents by this evening but did not ask the pre-meeting date, offer to answer members' questions, or book a call after the pre-meeting.",
+      "evidence": [{"segment_id": "s78"}, {"segment_id": "s79"}, {"segment_id": "s80"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Power cuts and load shedding",
+      "explanation": "Answered well: insulation keeps chilled milk safe through outages, and the 15 kVA DG set with automatic changeover covers the weekly full-day cut and four hours of daily load shedding.",
+      "evidence": [{"segment_id": "s22"}, {"segment_id": "s23"}, {"segment_id": "s58"}, {"segment_id": "s59"}, {"segment_id": "s61"}]
+    },
+    {
+      "title": "Low evening voltage",
+      "explanation": "You explained the protection devices, but the stated 360 V cut-off is above their 320 V evening supply, so the concern was protected against, not solved.",
+      "evidence": [{"segment_id": "s44"}, {"segment_id": "s45"}]
+    },
+    {
+      "title": "Approved-vendor condition for the subsidy",
+      "explanation": "You confirmed registration with the state Dairy Development Department and NDDB lists and said the number appears on the quotation, which answers the auditor's condition.",
+      "evidence": [{"segment_id": "s66"}, {"segment_id": "s67"}]
+    },
+    {
+      "title": "Price too high for a cooperative",
+      "explanation": "Your first answer was a 10% discount; value and payback were not restated.",
+      "evidence": [{"segment_id": "s68"}, {"segment_id": "s69"}]
+    },
+    {
+      "title": "Sahyadri Agro Pune at ₹7.8 lakh",
+      "explanation": "Handled on material grade and compressor condition; the chairman accepted the argument.",
+      "evidence": [{"segment_id": "s70"}, {"segment_id": "s71"}, {"segment_id": "s72"}]
+    },
+    {
+      "title": "₹10.5 lakh budget counter",
+      "explanation": "You held that ₹10.5 lakh is not possible with the generator and offered ₹11.25 lakh including GST for the full package; the price moved again without a commitment.",
+      "evidence": [{"segment_id": "s72"}, {"segment_id": "s73"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Clear documents step",
+      "explanation": "Technical brochure, subsidy proforma invoice and the ₹11.25 lakh final quote by this evening on email and WhatsApp, to Vitthal Khot's number.",
+      "evidence": [{"segment_id": "s79"}, {"segment_id": "s80"}]
+    },
+    {
+      "title": "Price given without validity or commitment",
+      "explanation": "₹11.25 lakh including GST was offered before the AGM, with no validity date, work-order timeline or advance attached.",
+      "evidence": [{"segment_id": "s73"}, {"segment_id": "s78"}]
+    },
+    {
+      "title": "Decision handed to the AGM without a next contact",
+      "explanation": "The call ended on thanks and goodwill; no follow-up call, visit or pre-meeting attendance was agreed.",
+      "evidence": [{"segment_id": "s80"}, {"segment_id": "s81"}, {"segment_id": "s82"}]
+    }
+  ],
+  "verdict": "A strong technical demo: discovery with numbers, specific answers to every practical concern, an honest 'no' on ice-making and a firm competitor defence. The weak spot is commercial: about 20% came off the list price in two moves with nothing asked in return, the figures were not consistent, and the evening-voltage and 9 am cooling gaps were left open. The decision now sits with the AGM on 15 November with no follow-up booked.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Respectful opening that recognised the society's standing (s4); the honest answer on ice-making (s51) built credibility, and the chairman praised the clarity (s81)."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Good opening questions on volume and milk mix (s4, s6) and summer losses (s9); site power and room were not explored (s57, s63)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Decision path surfaced: board decision (s18), the auditor's approved-vendor rule (s66), board pre-meeting and AGM on 15 November (s78, s80). Budget of ₹10.5 lakh came only at s72."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "Losses were quantified by the buyers (s11, s14) and the incentive turned into ₹30,000 a month (s17), but this was not reused in the price discussion (s69-s73)."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "Answers matched their conditions: outages (s23), buffalo fat (s31), summer heat (s41), voltage (s45). The 9 am cooling target was not reconciled (s26-s27)."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Strong on the competitor (s71) and power cuts (s59); missed that the 360 V cut-off sits above their 320 V evening supply (s44-s45)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Clear documents step (s79-s80), but the discount carried no commitment (s73) and no follow-up was set before the AGM (s78)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Clear technical explanations in plain Marathi; the subsidy answer was addressed to Tanajirao though Vitthal had asked (s64-s65). Voice tone cannot be judged from text."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Value was built well, but the price was cut before the payback case or any commitment was on the table, and the deal now waits on an AGM with no follow-up booked.",
+      "evidence": [{"segment_id": "s69"}, {"segment_id": "s73"}, {"segment_id": "s78"}]
+    },
+    "outcome": {
+      "kind": "future_date",
+      "text": "Proposal at ₹11.25 lakh including GST goes to a board pre-meeting and the AGM on 15 November; work order immediately after approval. Documents to Vitthal Khot this evening.",
+      "evidence": [{"segment_id": "s73"}, {"segment_id": "s78"}, {"segment_id": "s80"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Margin at ₹11.25 lakh including GST", "Subsidy the society will actually receive"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "For a cooperative spending farmers' money, a durability argument the chairman can repeat at the AGM is worth more than a price match."},
+      {"finding_index": 1, "why_it_matters": "Refusing a misuse protects the tank and the warranty relationship, and makes every other claim more believable."},
+      {"finding_index": 2, "why_it_matters": "Volume, milk mix and money lost let you size the chiller correctly and justify the price."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "You offered 10% at the first discount question, then ₹11.25 lakh including GST against ₹11.9 lakh plus 18% GST, asking nothing in return.", "evidence": [{"segment_id": "s69"}, {"segment_id": "s73"}]},
+        "why_it_matters": "The board will carry this number to the AGM; it is now the floor for any further negotiation.",
+        "replacement_behavior": "Show the payback first, then tie any discount to a commitment: price valid until the AGM, work order within a set number of days after approval, and an advance.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Margin at ₹11.25 lakh including GST", "Whether the price holds after 15 November"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "The chairman needs 4°C by 9 am after a 7:30 collection; you quoted 2.5-3 hours after saying milk must reach 4°C within two hours.", "evidence": [{"segment_id": "s12"}, {"segment_id": "s26"}, {"segment_id": "s27"}]},
+        "why_it_matters": "If the tank misses his target in the first summer, the board will feel misled after approving it at the AGM.",
+        "replacement_behavior": "Restate the buyer's target and answer it directly, with a cooling time you will commit to in writing.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Cooling time for the 1,150-litre morning load"]}
+      },
+      {
+        "finding_index": 2,
+        "what_happened": {"text": "The CIP unit was ₹60,000 in the demo and ₹65,000 in the price list; GST was mentioned only after the chairman quoted ₹11.9 lakh.", "evidence": [{"segment_id": "s49"}, {"segment_id": "s69"}]},
+        "why_it_matters": "Mismatched figures invite doubt from the auditor and members.",
+        "replacement_behavior": "Answer inclusion questions with yes or no and the line item, and state every price with or without GST from the first mention.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Whether the first quotation showed GST"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 1, "why_effective": "A concrete failure mechanism (lactic acid corroding SS 202) turned a ₹7.8 lakh quote into a risk to farmers' money."},
+      {"strength_index": 1, "evidence_index": 1, "why_effective": "Saying no to the chairman's idea, with the reason, showed you put the society's equipment ahead of pleasing him."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "Said evening voltage drops to 320 V.", "evidence": [{"segment_id": "s44"}]},
+        "closer_response": {"text": "Described a cut-off below 360 V without noting it would stop the chiller.", "evidence": [{"segment_id": "s45"}]},
+        "follow_up": "Ask how long the voltage stays below 360 V and propose a stabiliser or DG operation during low voltage.",
+        "potential_impact": "Evening milk could go unchilled and the board would blame the machine."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "Said ₹11.9 lakh is a big amount for a cooperative.", "evidence": [{"segment_id": "s68"}]},
+        "closer_response": {"text": "Went straight to a 10% discount.", "evidence": [{"segment_id": "s69"}]},
+        "follow_up": "Lay out monthly incentive, avoided penalties and losses against diesel cost and price before any discount.",
+        "potential_impact": "Without a payback sheet the AGM debate stays on price."
+      },
+      {
+        "finding_index": 2,
+        "prospect_signal": {"text": "Vitthal asked about load and three-phase supply; the chairman asked about room and civil work.", "evidence": [{"segment_id": "s56"}, {"segment_id": "s62"}]},
+        "closer_response": {"text": "Stated the requirements without asking what the society already has.", "evidence": [{"segment_id": "s57"}, {"segment_id": "s63"}]},
+        "follow_up": "Ask their sanctioned load and planned room, and offer a site survey before the AGM.",
+        "potential_impact": "Late discovery of a load upgrade or civil work can delay installation past summer."
+      },
+      {
+        "finding_index": 3,
+        "prospect_signal": {"text": "Said the proposal goes to a board pre-meeting and the AGM on 15 November.", "evidence": [{"segment_id": "s78"}, {"segment_id": "s80"}]},
+        "closer_response": {"text": "Promised documents by evening; no call or visit was booked.", "evidence": [{"segment_id": "s79"}]},
+        "follow_up": "Ask the pre-meeting date, offer to answer members' questions, and book a call after the pre-meeting.",
+        "potential_impact": "Members' questions may be answered without you, or by a competitor."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "Agreed farmers should not get light material, then asked for ₹10.5 lakh including GST.", "evidence": [{"segment_id": "s72"}]}, "possible_concern": "He wants quality but must defend the amount to members; a payback case may help him more than a discount.", "interpretation_kind": "inference"},
+      {"source": {"text": "Vitthal relayed auditor Sadashiv Patil's rule that the quote must come from an approved-panel vendor.", "evidence": [{"segment_id": "s66"}]}, "possible_concern": "The audit is a decision gate; inconsistencies in the quote may be questioned.", "interpretation_kind": "inference"},
+      {"source": {"text": "Vitthal asked for the PDFs on his number and mentioned the board pre-meeting.", "evidence": [{"segment_id": "s80"}]}, "possible_concern": "Vitthal likely prepares the board papers; he is the person to equip.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "₹11.25 lakh including GST offered with nothing asked in return.", "purpose": "must_watch", "evidence": [{"segment_id": "s73"}]},
+      {"text": "SS 202 corrosion argument against the cheaper competitor.", "purpose": "repeat", "evidence": [{"segment_id": "s71"}]},
+      {"text": "Voltage cut-off at 360 V against a 320 V evening supply.", "purpose": "watch", "evidence": [{"segment_id": "s45"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "Vitthal cited Sahyadri Agro Pune's ₹7.8 lakh quote.", "evidence": [{"segment_id": "s70"}]},
+      "change": {"text": "You explained how lactic acid corrodes SS 202 and contrasted SS 304 and a new scroll compressor.", "evidence": [{"segment_id": "s71"}]},
+      "after": {"text": "The chairman rejected light material and negotiated with you instead.", "evidence": [{"segment_id": "s72"}]},
+      "possible_effect": "The competitor quote stopped being the benchmark; the talk moved to your price.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "Said 25-50% capital subsidy is sanctioned for cooperative BMCs and that there is no difficulty in getting it. Present it as eligibility subject to scheme approval so the board does not count on it at the AGM.", "evidence": [{"segment_id": "s65"}, {"segment_id": "s67"}]},
+      {"text": "Called R404A eco-friendly and easily available when asked about future gas supply. It is ozone-safe but a high global-warming refrigerant under international phase-down; answer the availability question accurately.", "evidence": [{"segment_id": "s38"}, {"segment_id": "s39"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "Build the payback case first, then trade any discount for a dated commitment.", "target": "On the next quote, no discount before the buyer has seen the payback, and every discount is tied to a validity date, order date or advance."},
+    "practice": {"improvement_index": 0, "instructions": "Write a one-page payback sheet for Shivajinagar: ₹30,000 a month incentive, ₹50,000 of penalties in three months, the ₹40,000 May loss and diesel at 2-2.25 litres an hour, against ₹11.25 lakh. Role-play the chairman's 'what discount?' with your manager, answering with the payback and one 'if… then…' offer.", "success_condition": "In the role-play the payback comes before any discount, and the discount offered depends on a dated commitment."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Discovery with numbers, honest product limits and a quality-based competitor defence.",
+      "fix_first": "Do not cut price before showing payback, and tie every cut to a commitment.",
+      "next_focus": "Check site realities (voltage, load, room) and book the follow-up before the AGM.",
+      "assessment": "Strong technical demo; the commercial part gave away value and left the decision without a follow-up."
+    }
+  }
+}

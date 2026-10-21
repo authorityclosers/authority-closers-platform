@@ -1150,6 +1150,10 @@ class ConversationApplication:
 
         # Every call object and decision goes with its call (call data engine, 19 Oct).
         await erase_call_data_for_recording(self.database, recording.id, now)
+        from ac_platform.one_pass.store import erase_one_pass_for_recording
+
+        # Every one-pass transcript and result goes with its call (one-pass trial, 21 Oct).
+        await erase_one_pass_for_recording(self.database, recording.id, now)
         recording.state, recording.deleted_at = "deleted", now
         # Flush all retention clears before acknowledging the deletion job so
         # the durable erasure is visible before the worker lease is completed.

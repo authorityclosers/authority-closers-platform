@@ -4,11 +4,15 @@
 -- the environment it runs in. Run by ac-metrics-collect inside each
 -- environment's own postgres container with default_transaction_read_only=on.
 --
--- Never selected: call titles, transcripts, reports, prompts, audio, people,
+-- Never selected: call titles, transcripts, reports, prompts, audio, names,
 -- emails, phone numbers, payloads. Rows carry opaque ids (call, company), dates,
--- stage/provider/model/version labels and counters. Company names are business
--- names from tenants.name. Prices are NOT computed here: the Admin API prices
--- the counters from the repo price sheet when the page is read.
+-- stage/provider/model/version labels and counters. People appear only as
+-- pseudonyms: 'p_' and 16 hex characters of HMAC-SHA-256(this environment's key,
+-- the person id), from the pads in metrics_pseudonym_keys (usage_people.pseudonyms),
+-- which never leave the database. No organisation or person name is exported:
+-- each environment's Admin reads its own names live (orchestrator, 20 Oct 2026).
+-- Prices are NOT computed here: the Admin API prices the counters from the repo
+-- price sheet when the page is read.
 --
 -- Settings (PGOPTIONS -c ...): ac.metrics_environment, ac.metrics_days (default
 -- 120), ac.metrics_fixtures (comma list of bundled canary fixture sha256).
@@ -20,6 +24,20 @@ WITH params AS (
 ),
 win AS (
   SELECT now() - make_interval(days => p.days) AS since FROM params p
+),
+-- This environment's HMAC pads, read only where their table exists (through
+-- query_to_xml, so an older schema still parses and exports no person).
+pkey_xml AS (
+  SELECT query_to_xml(
+    'SELECT encode(inner_pad, ''hex'') AS i, encode(outer_pad, ''hex'') AS o'
+    || ' FROM metrics_pseudonym_keys WHERE id = 1',
+    false, false, '') AS x
+  WHERE to_regclass('metrics_pseudonym_keys') IS NOT NULL
+),
+pkey AS (
+  SELECT decode((xpath('/table/row/i/text()', x))[1]::text, 'hex') AS inner_pad,
+         decode((xpath('/table/row/o/text()', x))[1]::text, 'hex') AS outer_pad
+  FROM pkey_xml
 ),
 fixture AS (
   SELECT DISTINCT fixture_sha256 AS sha FROM conversation_canary_submissions
@@ -88,7 +106,7 @@ pointer AS (
 -- the engine counts it), AI replies and partner quote facts. Counters and labels only.
 ai_work AS (
   SELECT CASE WHEN d.pipeline = 'deep' THEN 'CDD' ELSE 'CDF' END AS stage,
-         d.recording_id AS call_id, d.tenant_id AS company_id,
+         d.recording_id AS call_id, d.tenant_id AS company_id, d.person_id,
          coalesce(d.provider, 'gemini') AS provider, d.model_id AS model,
          d.state AS status, d.trigger AS work_trigger,
          coalesce(d.input_tokens, 0) AS input_tokens, coalesce(d.output_tokens, 0) AS output_tokens,
@@ -99,12 +117,13 @@ ai_work AS (
     AND (d.state <> 'running'
          OR NOT EXISTS (SELECT 1 FROM call_data_runs o WHERE o.supersedes_id = d.id))
   UNION ALL
-  SELECT 'AR', NULL, a.tenant_id, coalesce(a.provider, 'gemini'), a.model, a.outcome, a.mode,
+  SELECT 'AR', NULL, a.tenant_id, a.requested_by_person_id,
+         coalesce(a.provider, 'gemini'), a.model, a.outcome, a.mode,
          coalesce(a.input_tokens, 0), coalesce(a.output_tokens, 0), a.cost_inr, a.created_at
   FROM lead_desk_ai_replies a
   WHERE a.created_at >= (SELECT since FROM win) AND a.input_tokens IS NOT NULL
   UNION ALL
-  SELECT 'QF', f.recording_id, f.tenant_id, 'gemini', f.model_id, f.status, 'auto',
+  SELECT 'QF', f.recording_id, f.tenant_id, NULL::uuid, 'gemini', f.model_id, f.status, 'auto',
          coalesce(f.input_tokens, 0), coalesce(f.output_tokens, 0), NULL, f.created_at
   FROM partner_quote_facts f
   WHERE f.created_at >= (SELECT since FROM win) AND f.input_tokens IS NOT NULL
@@ -149,6 +168,7 @@ call AS (
   SELECT
     r.id AS call_id,
     r.tenant_id AS company_id,
+    r.person_id,
     r.created_at AS at,
     r.state AS recording_state,
     CASE WHEN split_part(r.request_key, ':', 1) = 'syn' THEN 'synthetic'
@@ -284,7 +304,7 @@ subscription AS (
   FROM billing_subscriptions s JOIN billing_accounts a ON a.id = s.account_id
 ),
 company AS (
-  SELECT t.id AS company_id, t.name, t.slug,
+  SELECT t.id AS company_id, t.slug,
     CASE WHEN starts_with(t.slug, 'ac-sandbox-') THEN 'sandbox'
          WHEN t.slug = 'authority-closers-public-learners' THEN 'personal'
          WHEN starts_with(t.slug, 'authority-closers') THEN 'internal'
@@ -298,9 +318,10 @@ SELECT json_build_object(
   'generated_at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
   'window_days', (SELECT days FROM params),
   'migration', (SELECT max(version_num) FROM alembic_version),
-  'companies', coalesce((SELECT json_agg(json_build_object('id', company_id, 'name', name, 'kind', kind) ORDER BY name) FROM company), '[]'::json),
+  'companies', coalesce((SELECT json_agg(json_build_object('id', company_id, 'kind', kind) ORDER BY company_id) FROM company), '[]'::json),
   'calls', coalesce((SELECT json_agg(json_build_object(
-      'id', call_id, 'company', company_id, 'at', at, 'kind', kind, 'state', recording_state,
+      'id', call_id, 'company', company_id, 'person', 'p_' || left(encode(sha256((SELECT outer_pad FROM pkey) || sha256((SELECT inner_pad FROM pkey) || convert_to(person_id::text, 'UTF8'))), 'hex'), 16),
+      'at', at, 'kind', kind, 'state', recording_state,
       'source', capture_source, 'audio_ms', audio_ms, 'plan', plan_state,
       'accepted_at', accepted_at, 'delivered_at', delivered_at, 'billed_s', billed_s,
       'prompt', prompt_revision, 'facts', fact_revision, 'settings', settings_revision,
@@ -321,7 +342,8 @@ SELECT json_build_object(
       'input_tokens', input_tokens, 'output_tokens', output_tokens, 'by', created_by, 'at', at
     ) ORDER BY at) FROM pointer), '[]'::json),
   'ai_work', coalesce((SELECT json_agg(json_build_object(
-      'stage', stage, 'call', call_id, 'company', company_id, 'provider', provider,
+      'stage', stage, 'call', call_id, 'company', company_id,
+      'person', 'p_' || left(encode(sha256((SELECT outer_pad FROM pkey) || sha256((SELECT inner_pad FROM pkey) || convert_to(person_id::text, 'UTF8'))), 'hex'), 16), 'provider', provider,
       'model', model, 'status', status, 'trigger', work_trigger,
       'input_tokens', input_tokens, 'output_tokens', output_tokens, 'cost_inr', cost_inr, 'at', at
     ) ORDER BY at) FROM ai_work), '[]'::json),

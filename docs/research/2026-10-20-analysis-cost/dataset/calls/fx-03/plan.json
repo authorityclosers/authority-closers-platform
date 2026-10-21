@@ -1,0 +1,190 @@
+{
+ "call_id": "fx-03",
+ "call_type": "demo",
+ "language_mix": "en-IN",
+ "target_minutes": 12,
+ "scenario": "CRM software demo to a 20-person real-estate brokerage",
+ "seller": {
+  "company": "Brickline Labs Pvt Ltd",
+  "product": "Brickline CRM (lead management CRM for real-estate brokers)",
+  "price_list": [
+   "Starter ₹799 per user per month, billed annually",
+   "Growth ₹1,199 per user per month, billed annually (portal integrations, call recording)",
+   "One-time onboarding and data migration ₹25,000",
+   "10% off for annual upfront payment (rep's discretion)"
+  ]
+ },
+ "speakers": [
+  {
+   "id": "S1",
+   "role": "salesperson",
+   "name": "Nikhil Deshpande",
+   "gender": "m",
+   "age_band": "30s",
+   "style": "energetic account executive, loves showing features, rushes ahead"
+  },
+  {
+   "id": "S2",
+   "role": "prospect",
+   "name": "Farhan Qureshi",
+   "gender": "m",
+   "age_band": "40s",
+   "style": "owner of Anchorpoint Realty, impatient, on the road, wants price first"
+  },
+  {
+   "id": "S3",
+   "role": "prospect",
+   "name": "Meenal Rao",
+   "gender": "f",
+   "age_band": "30s",
+   "style": "operations and back-office head, practical, detail questions"
+  }
+ ],
+ "sections": [
+  {
+   "name": "opening",
+   "minutes": 1.4,
+   "facts": [
+    "f01",
+    "f02",
+    "f03",
+    "f04",
+    "f05",
+    "f06",
+    "f07"
+   ],
+   "turns": [
+    "t001",
+    "t010"
+   ]
+  },
+  {
+   "name": "discovery",
+   "minutes": 2.4,
+   "facts": [
+    "f08",
+    "f09",
+    "f10",
+    "f11",
+    "f12",
+    "f13",
+    "f14",
+    "f15",
+    "f16",
+    "f17",
+    "f18",
+    "f19",
+    "f20"
+   ],
+   "turns": [
+    "t011",
+    "t029"
+   ]
+  },
+  {
+   "name": "demo",
+   "minutes": 4.4,
+   "facts": [
+    "f21",
+    "f22",
+    "f23",
+    "f24",
+    "f25",
+    "f26",
+    "f27",
+    "f28",
+    "f29",
+    "f30",
+    "f31"
+   ],
+   "turns": [
+    "t030",
+    "t058"
+   ]
+  },
+  {
+   "name": "price_objection",
+   "minutes": 2.4,
+   "facts": [
+    "f32",
+    "f33",
+    "f34",
+    "f35",
+    "f36",
+    "f37",
+    "f38",
+    "f39",
+    "f40",
+    "f41"
+   ],
+   "turns": [
+    "t059",
+    "t073"
+   ]
+  },
+  {
+   "name": "next_steps",
+   "minutes": 1.6,
+   "facts": [
+    "f42",
+    "f43",
+    "f44",
+    "f45",
+    "f46",
+    "f47"
+   ],
+   "turns": [
+    "t074",
+    "t087"
+   ]
+  }
+ ],
+ "coaching_truths": [
+  {
+   "id": "k01",
+   "kind": "price_too_early",
+   "turn_ids": [
+    "t011",
+    "t012"
+   ],
+   "statement": "When the owner asked for price up front, Nikhil quoted both per-user prices before learning team size, lead volume or pain, so the price landed with no value attached."
+  },
+  {
+   "id": "k02",
+   "kind": "talked_over",
+   "turn_ids": [
+    "t043",
+    "t044",
+    "t045"
+   ],
+   "statement": "Nikhil cut Meenal off mid-question on data migration to show his favourite feature; she had to ask again who cleans the old data."
+  },
+  {
+   "id": "k03",
+   "kind": "wrong_info_given",
+   "turn_ids": [
+    "t052"
+   ],
+   "statement": "He first said the app supports Marathi, then corrected himself: only English and Hindi today, Marathi planned for Q1."
+  },
+  {
+   "id": "k04",
+   "kind": "ignored_buying_signal",
+   "turn_ids": [
+    "t055",
+    "t056"
+   ],
+   "statement": "Meenal said they could have the whole team live before the January launches; Nikhil moved on to another report instead of locking a go-live date."
+  },
+  {
+   "id": "k05",
+   "kind": "good_objection_handling",
+   "turn_ids": [
+    "t060",
+    "t066",
+    "t064"
+   ],
+   "statement": "On the PropDesk price comparison he asked why they dropped it, tied the price to their own 60 missed leads and commission per booking, and answered the adoption worry with a weekly adoption report."
+  }
+ ]
+}

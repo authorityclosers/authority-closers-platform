@@ -51,6 +51,15 @@ OPENROUTER: dict[str, Any] = {
 }
 
 
+def test_openai_is_listed_with_its_approved_data_terms() -> None:
+    view = hub_view([], fetched_at=None, problem=None, selected="openai")
+    openai = next(row for row in view["providers"] if row["id"] == "openai")
+    assert openai["models"] > 0
+    terms = openai["data_terms"]
+    assert "not used to train" in terms and "store: false" in terms and "30 days" in terms
+    assert next(row for row in view["providers"] if row["id"] == "groq")["data_terms"] is None
+
+
 def test_search_finds_providers_by_name_alias_or_kind() -> None:
     assert [p.id for p in find("groq")] == ["groq"]
     assert [p.id for p in find("claude")] == ["anthropic"]

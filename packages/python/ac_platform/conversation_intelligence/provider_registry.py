@@ -401,7 +401,7 @@ def _model(
 
 
 DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
-    revision="provider-catalog-20260924-openai-c5-v1",
+    revision="provider-catalog-20261021-gemini-audio-c2-v1",
     providers=(
         ProviderCatalogEntry(
             "local",
@@ -442,11 +442,19 @@ DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
                     ("facts", "implemented"),
                     ("coaching", "implemented"),
                 ),
+                _model(
+                    "gemini-3.1-flash-lite",
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+                    ("asr", "implemented"),
+                ),
             ),
             (
                 "Gemini 3.8 Flash and 3.1 Pro have bounded native JSON facts/coaching adapters "
-                "with source validation. Implementation does not attest provider quality, "
-                "free allowance or hosted activation. Older 2.5 tasks remain contract-only."
+                "with source validation. Gemini 3.1 Flash-Lite transcribes C2 audio (speech MP3, "
+                "strict schema, provider speaker labels and MM:SS times; speaker identity and "
+                "alignment to AudioAtlas remain unverified). Implementation does not attest "
+                "provider quality, free allowance or hosted activation. Older 2.5 tasks remain "
+                "contract-only."
             ),
         ),
         ProviderCatalogEntry(

@@ -1,0 +1,12 @@
+[
+ {
+  "arm": "text/onepass/openai_gpt-6-luna/oracle",
+  "pointer_pairs": 432,
+  "pointer_agreement": 0.8425925925925926
+ },
+ {
+  "arm": "text/onepass2/google_gemini-3.8-flash/oracle",
+  "pointer_pairs": 432,
+  "pointer_agreement": 0.9097222222222222
+ }
+]

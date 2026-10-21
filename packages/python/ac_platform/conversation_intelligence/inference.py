@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
+from ac_platform.conversation_intelligence import gemini_audio
 from ac_platform.conversation_intelligence.application import (
     AUDIOATLAS_HOSTED_RECIPE,
     AUDIOATLAS_RECIPES,
@@ -71,9 +72,11 @@ if TYPE_CHECKING:
 INFERENCE_JOB = "conversation.infer_provider.v1"
 TRANSCRIPT_RECIPE = "scribe-v2-native-normalized-v1"
 DEEPGRAM_TRANSCRIPT_RECIPE = "deepgram-nova-3-multilingual-v1"
+GEMINI_AUDIO_TRANSCRIPT_RECIPE = gemini_audio.RECIPE
 TRANSCRIPT_RECIPE_BY_ROUTE = {
     ("elevenlabs", "scribe_v2"): TRANSCRIPT_RECIPE,
     ("deepgram", "nova-3"): DEEPGRAM_TRANSCRIPT_RECIPE,
+    ("gemini", gemini_audio.MODEL): GEMINI_AUDIO_TRANSCRIPT_RECIPE,
 }
 TRANSCRIPT_RECIPES = frozenset(TRANSCRIPT_RECIPE_BY_ROUTE.values())
 

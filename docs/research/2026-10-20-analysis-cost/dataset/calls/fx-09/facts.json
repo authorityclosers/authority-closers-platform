@@ -1,0 +1,770 @@
+[
+ {
+  "id": "f01",
+  "type": "person_name",
+  "slot": "seller.engineer",
+  "value": "आनंद केळकर",
+  "normalized": "Anand Kelkar",
+  "turn_ids": [
+   "t001"
+  ],
+  "evidence": "आनंद केळकर बोलतोय",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.0,
+  "trap": null
+ },
+ {
+  "id": "f02",
+  "type": "company",
+  "slot": "seller.company",
+  "value": "पंचगंगा डेअरी सोल्युशन्स",
+  "normalized": "Panchaganga Dairy Solutions",
+  "turn_ids": [
+   "t001"
+  ],
+  "evidence": "पंचगंगा डेअरी सोल्युशन्स मधून",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.0,
+  "trap": null
+ },
+ {
+  "id": "f03",
+  "type": "person_name",
+  "slot": "prospect.chairman",
+  "value": "तानाजीराव मोरे",
+  "normalized": "Tanajirao More",
+  "turn_ids": [
+   "t002"
+  ],
+  "evidence": "तानाजीराव मोरे बोलतोय",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.012,
+  "trap": null
+ },
+ {
+  "id": "f04",
+  "type": "company",
+  "slot": "prospect.cooperative",
+  "value": "शिवाजीनगर विकास दुग्ध संस्था",
+  "normalized": "Shivajinagar Vikas Dudh Sanstha",
+  "turn_ids": [
+   "t002"
+  ],
+  "evidence": "शिवाजीनगर विकास दुग्ध संस्थेचा चेअरमन",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.012,
+  "trap": null
+ },
+ {
+  "id": "f05",
+  "type": "person_name",
+  "slot": "prospect.secretary",
+  "value": "विठ्ठल खोत",
+  "normalized": "Vitthal Khot",
+  "turn_ids": [
+   "t002"
+  ],
+  "evidence": "सेक्रेटरी विठ्ठल खोत पण आहेत",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.012,
+  "trap": "third_party_name"
+ },
+ {
+  "id": "f06",
+  "type": "location",
+  "slot": "society.taluka",
+  "value": "कडेगाव",
+  "normalized": "Kadegaon",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "आम्ही कडेगाव तालुक्यातून बोलतोय",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.025,
+  "trap": null
+ },
+ {
+  "id": "f07",
+  "type": "quantity",
+  "slot": "society.morning_collection",
+  "value": "अकराशे पन्नास लिटर",
+  "normalized": "1150 litres morning collection",
+  "turn_ids": [
+   "t005"
+  ],
+  "evidence": "अकराशे पन्नास लिटर आहे आणि संध्याकाळचे",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.049,
+  "trap": "self_correction"
+ },
+ {
+  "id": "f08",
+  "type": "quantity",
+  "slot": "society.evening_collection",
+  "value": "आठशे पन्नास लिटर",
+  "normalized": "850 litres evening collection",
+  "turn_ids": [
+   "t005"
+  ],
+  "evidence": "संध्याकाळचे आठशे पन्नास लिटर आहे",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.049,
+  "trap": null
+ },
+ {
+  "id": "f09",
+  "type": "quantity",
+  "slot": "society.daily_total_milk",
+  "value": "दोन हजार लिटर",
+  "normalized": "2000 litres daily milk",
+  "turn_ids": [
+   "t005"
+  ],
+  "evidence": "दिवसाला दोन हजार लिटर दूध गोळा होते",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.049,
+  "trap": null
+ },
+ {
+  "id": "f10",
+  "type": "quantity",
+  "slot": "society.members_count",
+  "value": "एकशे चाळीस",
+  "normalized": "140 farmer members",
+  "turn_ids": [
+   "t005"
+  ],
+  "evidence": "आमच्याकडे एकशे चाळीस शेतकरी सभासद आहेत",
+  "said_by": "S3",
+  "critical": false,
+  "needle": false,
+  "depth": 0.049,
+  "trap": null
+ },
+ {
+  "id": "f11",
+  "type": "location",
+  "slot": "destination.chilling_centre",
+  "value": "कराड",
+  "normalized": "Karad",
+  "turn_ids": [
+   "t008"
+  ],
+  "evidence": "कराडच्या चिलिंग सेंटरला पाठवावे लागते",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.086,
+  "trap": null
+ },
+ {
+  "id": "f12",
+  "type": "quantity",
+  "slot": "logistics.distance",
+  "value": "अठ्ठावीस किलोमीटर",
+  "normalized": "28 km distance to chilling centre",
+  "turn_ids": [
+   "t008"
+  ],
+  "evidence": "अंतर अठ्ठावीस किलोमीटर आहे",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.086,
+  "trap": null
+ },
+ {
+  "id": "f13",
+  "type": "pain_point",
+  "slot": "cooperative.souring_loss_incident",
+  "value": "मे महिन्यात ७०० लिटर दूध नासले",
+  "normalized": "May heatwave loss of 700L milk costing 40k INR",
+  "turn_ids": [
+   "t014"
+  ],
+  "evidence": "मागच्या मे महिन्यात अचानक तापमान बेचाळीस अंश झाल्यावर आमचे सातशे लिटर दूध रस्त्यातच फाटले आणि संस्थेला चाळीस हजार रुपयांचा फटका बसला",
+  "said_by": "S2",
+  "critical": true,
+  "needle": true,
+  "depth": 0.16,
+  "trap": null
+ },
+ {
+  "id": "f14",
+  "type": "price",
+  "slot": "loss.amount",
+  "value": "चाळीस हजार रुपयांचा",
+  "normalized": "40000 INR loss",
+  "turn_ids": [
+   "t014"
+  ],
+  "evidence": "चाळीस हजार रुपयांचा फटका बसला",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.16,
+  "trap": null
+ },
+ {
+  "id": "f15",
+  "type": "requirement",
+  "slot": "cooling.target_temp",
+  "value": "चार अंशांपर्यंत",
+  "normalized": "4 degrees Celsius target temperature",
+  "turn_ids": [
+   "t012"
+  ],
+  "evidence": "चार अंशांपर्यंत थंड झाले नाही",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.136,
+  "trap": null
+ },
+ {
+  "id": "f16",
+  "type": "price",
+  "slot": "incentive.chilling_rate",
+  "value": "पन्नास पैसे प्रति लिटर",
+  "normalized": "0.50 INR per litre chilling incentive",
+  "turn_ids": [
+   "t016"
+  ],
+  "evidence": "प्रति लिटर पन्नास पैसे अतिरिक्त चिलिंग इन्सेंटिव्ह",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.185,
+  "trap": null
+ },
+ {
+  "id": "f17",
+  "type": "price",
+  "slot": "incentive.monthly_revenue",
+  "value": "तीस हजार रुपये",
+  "normalized": "30000 INR monthly incentive revenue",
+  "turn_ids": [
+   "t017"
+  ],
+  "evidence": "महिन्याचे तीस हजार रुपये संस्थेला निव्वळ नफा",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.198,
+  "trap": null
+ },
+ {
+  "id": "f18",
+  "type": "product",
+  "slot": "chiller.model_name",
+  "value": "शीतधारा",
+  "normalized": "Sheetdhara 2000L DX BMC",
+  "turn_ids": [
+   "t018"
+  ],
+  "evidence": "शीतधारा मॉडेलचे संपूर्ण डिझाईन",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.21,
+  "trap": null
+ },
+ {
+  "id": "f19",
+  "type": "requirement",
+  "slot": "tank.material_grade",
+  "value": "एसएस ३०४",
+  "normalized": "SS 304 food-grade stainless steel",
+  "turn_ids": [
+   "t021"
+  ],
+  "evidence": "फूड-ग्रेड स्टेनलेस स्टील एसएस ३०४ मटेरियलपासून",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.247,
+  "trap": null
+ },
+ {
+  "id": "f20",
+  "type": "quantity",
+  "slot": "tank.inner_thickness",
+  "value": "अडीच मिलिमीटर",
+  "normalized": "2.5 mm inner shell thickness",
+  "turn_ids": [
+   "t021"
+  ],
+  "evidence": "आतील शेल हा अडीच मिलिमीटर जाडीचा",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.247,
+  "trap": null
+ },
+ {
+  "id": "f21",
+  "type": "quantity",
+  "slot": "tank.outer_thickness",
+  "value": "दीड मिलिमीटर",
+  "normalized": "1.5 mm outer shell thickness",
+  "turn_ids": [
+   "t021"
+  ],
+  "evidence": "बाहेरील आवरण दीड मिलिमीटर",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.247,
+  "trap": null
+ },
+ {
+  "id": "f22",
+  "type": "quantity",
+  "slot": "tank.insulation_thickness",
+  "value": "पन्नास मिलिमीटर",
+  "normalized": "50 mm PUF insulation",
+  "turn_ids": [
+   "t021"
+  ],
+  "evidence": "पन्नास मिलिमीटर जाडीचे हाय-डेन्सिटी पॉलीयुरेथेन फोम",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.247,
+  "trap": null
+ },
+ {
+  "id": "f23",
+  "type": "quantity",
+  "slot": "insulation.density",
+  "value": "अडतीस किलोग्रॅम प्रति क्युबिक मीटर",
+  "normalized": "38 kg/m3 PUF density",
+  "turn_ids": [
+   "t023"
+  ],
+  "evidence": "अडतीस किलोग्रॅम प्रति क्युबिक मीटर आहे साहेब",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.272,
+  "trap": null
+ },
+ {
+  "id": "f24",
+  "type": "duration",
+  "slot": "cooling.duration_standard",
+  "value": "अडीच ते तीन तास",
+  "normalized": "2.5 to 3 hours cooling time",
+  "turn_ids": [
+   "t027"
+  ],
+  "evidence": "जास्तीत जास्त अडीच ते तीन तास लागतात",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.321,
+  "trap": null
+ },
+ {
+  "id": "f25",
+  "type": "quantity",
+  "slot": "agitator.speed_rpm",
+  "value": "तीस आरपीएम",
+  "normalized": "30 RPM agitator speed",
+  "turn_ids": [
+   "t031"
+  ],
+  "evidence": "स्पीड बरोबर तीस आरपीएम म्हणजेच तीस फेरे",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.37,
+  "trap": null
+ },
+ {
+  "id": "f26",
+  "type": "product",
+  "slot": "compressor.brand_model",
+  "value": "इमर्सन कोपलँड स्क्रोल कॉम्प्रेसर",
+  "normalized": "Emerson Copeland scroll compressor",
+  "turn_ids": [
+   "t035"
+  ],
+  "evidence": "इमर्सन कोपलँड ब्रँडचा स्क्रोल कॉम्प्रेसर वापरतो",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.42,
+  "trap": null
+ },
+ {
+  "id": "f27",
+  "type": "quantity",
+  "slot": "compressor.power_hp",
+  "value": "साडेसात हॉर्सपॉवरचा",
+  "normalized": "7.5 HP compressor",
+  "turn_ids": [
+   "t035"
+  ],
+  "evidence": "दोन हजार लिटरसाठी साडेसात हॉर्सपॉवरचा",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.42,
+  "trap": null
+ },
+ {
+  "id": "f28",
+  "type": "requirement",
+  "slot": "equipment.refrigerant_type",
+  "value": "आर चारशे चार ए रेफ्रिजरंट",
+  "normalized": "R404A eco-friendly refrigerant",
+  "turn_ids": [
+   "t039"
+  ],
+  "evidence": "पर्यावरणपूरक आर चारशे चार ए रेफ्रिजरंट गॅस वापरतो",
+  "said_by": "S1",
+  "critical": false,
+  "needle": true,
+  "depth": 0.469,
+  "trap": null
+ },
+ {
+  "id": "f29",
+  "type": "requirement",
+  "slot": "condenser.ambient_rating",
+  "value": "४६ अंश सेल्सिअस",
+  "normalized": "46 degrees C ambient temperature design",
+  "turn_ids": [
+   "t041"
+  ],
+  "evidence": "४६ अंश सेल्सिअस ॲम्बियंट तापमानासाठी केलेली आहे",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.494,
+  "trap": null
+ },
+ {
+  "id": "f30",
+  "type": "quantity",
+  "slot": "cip.pump_capacity",
+  "value": "पाच हजार लिटर प्रति तास",
+  "normalized": "5000 LPH sanitary pump capacity",
+  "turn_ids": [
+   "t049"
+  ],
+  "evidence": "क्षमता पाच हजार लिटर प्रति तास आहे",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.593,
+  "trap": null
+ },
+ {
+  "id": "f31",
+  "type": "objection",
+  "slot": "equipment.ice_making_limitation",
+  "value": "बर्फ बनवू नये",
+  "normalized": "cannot make ice in BMC",
+  "turn_ids": [
+   "t051"
+  ],
+  "evidence": "पाण्याचा बर्फ बनवण्यासाठी वेगळे डीप फ्रीझर लागते",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.617,
+  "trap": "retracted"
+ },
+ {
+  "id": "f32",
+  "type": "requirement",
+  "slot": "power.supply_spec",
+  "value": "४१५ व्होल्ट थ्री फेज",
+  "normalized": "415V 3-phase 50Hz",
+  "turn_ids": [
+   "t057"
+  ],
+  "evidence": "४१५ व्होल्ट थ्री फेज ५० हर्ट्झ वीज पुरवठा लागतो",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.691,
+  "trap": null
+ },
+ {
+  "id": "f33",
+  "type": "quantity",
+  "slot": "power.connected_load",
+  "value": "साडेसात किलोवॅट",
+  "normalized": "7.5 kW connected load",
+  "turn_ids": [
+   "t057"
+  ],
+  "evidence": "एकूण कनेक्टेड लोड साडेसात किलोवॅट",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.691,
+  "trap": null
+ },
+ {
+  "id": "f34",
+  "type": "product",
+  "slot": "generator.capacity",
+  "value": "पंधरा केव्हीए",
+  "normalized": "15 kVA silent diesel generator",
+  "turn_ids": [
+   "t059"
+  ],
+  "evidence": "पंधरा केव्हीएचा सायलेंट डिझेल जनरेटर सेट",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.716,
+  "trap": null
+ },
+ {
+  "id": "f35",
+  "type": "quantity",
+  "slot": "generator.fuel_consumption",
+  "value": "दोन ते सव्वादोन लिटर",
+  "normalized": "2.0 to 2.25 L/hr diesel consumption",
+  "turn_ids": [
+   "t061"
+  ],
+  "evidence": "प्रति तास साधारण दोन ते सव्वादोन लिटर डिझेल",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.741,
+  "trap": null
+ },
+ {
+  "id": "f36",
+  "type": "person_name",
+  "slot": "auditor.name",
+  "value": "सदाशिव पाटील",
+  "normalized": "Sadashiv Patil",
+  "turn_ids": [
+   "t066"
+  ],
+  "evidence": "ऑडिटर सदाशिव पाटील साहेबांनी आम्हाला सांगितले",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.802,
+  "trap": "third_party_name"
+ },
+ {
+  "id": "f37",
+  "type": "price",
+  "slot": "seller.list_price_bmc",
+  "value": "आठ लाख पंच्याऐंशी हजार",
+  "normalized": "885000 INR base BMC price",
+  "turn_ids": [
+   "t069"
+  ],
+  "evidence": "२,००० लिटर डीएक्स बीएमसी आठ लाख पंच्याऐंशी हजार",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.84,
+  "trap": "alt_number_form"
+ },
+ {
+  "id": "f38",
+  "type": "price",
+  "slot": "seller.list_price_cip",
+  "value": "पासष्ट हजार",
+  "normalized": "65000 INR CIP system price",
+  "turn_ids": [
+   "t069"
+  ],
+  "evidence": "सीआयपी सिस्टिम पासष्ट हजार",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.84,
+  "trap": null
+ },
+ {
+  "id": "f39",
+  "type": "price",
+  "slot": "seller.list_price_dg",
+  "value": "दोन लाख चाळीस हजार",
+  "normalized": "240000 INR DG set price",
+  "turn_ids": [
+   "t069"
+  ],
+  "evidence": "१५ केव्हीए सायलेंट डीजी सेट दोन लाख चाळीस हजार",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.84,
+  "trap": null
+ },
+ {
+  "id": "f40",
+  "type": "price",
+  "slot": "seller.initial_total_quote",
+  "value": "अकरा लाख नव्वद हजार",
+  "normalized": "1190000 INR total turnkey list price",
+  "turn_ids": [
+   "t069"
+  ],
+  "evidence": "एकूण खर्च अकरा लाख नव्वद हजार",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.84,
+  "trap": "alt_number_form"
+ },
+ {
+  "id": "f41",
+  "type": "competitor",
+  "slot": "competitor.name",
+  "value": "सह्याद्री ॲग्रो",
+  "normalized": "Sahyadri Agro Pune",
+  "turn_ids": [
+   "t070"
+  ],
+  "evidence": "पुण्याच्या सह्याद्री ॲग्रोने आम्हाला",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.852,
+  "trap": null
+ },
+ {
+  "id": "f42",
+  "type": "competitor_price",
+  "slot": "competitor.quote",
+  "value": "सात लाख ऐंशी हजार रुपयांचा",
+  "normalized": "780000 INR competitor quote",
+  "turn_ids": [
+   "t070"
+  ],
+  "evidence": "सात लाख ऐंशी हजार रुपयांचा कोट दिला होता",
+  "said_by": "S3",
+  "critical": true,
+  "needle": false,
+  "depth": 0.852,
+  "trap": "competitor_price"
+ },
+ {
+  "id": "f43",
+  "type": "price",
+  "slot": "negotiation.final_package_price",
+  "value": "अकरा लाख पंचवीस हजार रुपयांत",
+  "normalized": "1125000 INR final negotiated turnkey price incl GST",
+  "turn_ids": [
+   "t073"
+  ],
+  "evidence": "जीएसटीसहित अकरा लाख पंचवीस हजार रुपयांत पूर्ण करून देऊ",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.889,
+  "trap": null
+ },
+ {
+  "id": "f44",
+  "type": "duration",
+  "slot": "warranty.tank",
+  "value": "पाच वर्षांची",
+  "normalized": "5 years SS tank guarantee",
+  "turn_ids": [
+   "t075"
+  ],
+  "evidence": "स्टेनलेस स्टील टँकवर पाच वर्षांची गॅरंटी",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.914,
+  "trap": null
+ },
+ {
+  "id": "f45",
+  "type": "duration",
+  "slot": "warranty.compressor",
+  "value": "एक वर्षाची",
+  "normalized": "1 year warranty on compressor and DG set",
+  "turn_ids": [
+   "t075"
+  ],
+  "evidence": "कॉम्प्रेसर आणि जनरेटरवर एक वर्षाची पूर्ण वॉरंटी",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.914,
+  "trap": null
+ },
+ {
+  "id": "f46",
+  "type": "quantity",
+  "slot": "service.free_visits",
+  "value": "चार मोफत सर्व्हिसिंग व्हिजिट्स",
+  "normalized": "4 free maintenance visits in first year",
+  "turn_ids": [
+   "t075"
+  ],
+  "evidence": "पहिल्या वर्षात चार मोफत सर्व्हिसिंग व्हिजिट्स",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.914,
+  "trap": null
+ },
+ {
+  "id": "f47",
+  "type": "duration",
+  "slot": "training.period",
+  "value": "तीन दिवस",
+  "normalized": "3 days operator training on site",
+  "turn_ids": [
+   "t077"
+  ],
+  "evidence": "कमिशनिंग इंजिनिअर तीन दिवस तुमच्या गावात थांबतील",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.938,
+  "trap": null
+ },
+ {
+  "id": "f48",
+  "type": "date",
+  "slot": "cooperative.annual_general_meeting",
+  "value": "पंधरा नोव्हेंबर",
+  "normalized": "2026-11-15",
+  "turn_ids": [
+   "t078"
+  ],
+  "evidence": "सर्वसाधारण सभेची वार्षिक बैठक पंधरा नोव्हेंबरला आहे, त्या दिवशी सर्व सभासद शेतकऱ्यांसमोर हा प्रस्ताव मंजुरीसाठी ठेवणार आहोत",
+  "said_by": "S2",
+  "critical": true,
+  "needle": true,
+  "depth": 0.951,
+  "trap": null
+ }
+]

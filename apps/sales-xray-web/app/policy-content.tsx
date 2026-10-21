@@ -29,7 +29,7 @@ const TITLES: Record<PolicySlug, string> = {
 const UPDATED: Record<PolicySlug, [string, string]> = {
   pricing: ["2026-10-03", "3 October 2026"],
   terms: ["2026-10-03", "3 October 2026"],
-  privacy: ["2026-10-20", "20 October 2026"],
+  privacy: ["2026-10-21", "21 October 2026"],
   refunds: ["2026-10-16", "16 October 2026"],
   delivery: ["2026-10-03", "3 October 2026"],
   contact: ["2026-10-16", "16 October 2026"],
@@ -273,6 +273,17 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "Razorpay for payments made through its hosted checkout.",
         "Google (the Gemini API, provided by Google LLC), to draft replies to messages, only for a business that switches on AI replies. See AI replies to messages, below.",
         "Sales Xray does not use your recordings or reports to target advertising.",
+      ],
+    },
+    {
+      title: "AI service providers for call analysis",
+      bullets: [
+        "ElevenLabs (its Scribe speech-to-text API): the call audio, to transcribe the call. ElevenLabs keeps the data under its published API terms.",
+        "Google (the Gemini API, provided by Google LLC): the call transcript, to prepare and score your coaching report. Under Google's paid Gemini API terms, the data is not used to train Google's models.",
+        "OpenAI (the OpenAI API, provided by OpenAI, L.L.C., USA): the call transcript as text, never the audio, to prepare and score your coaching report. Data sent to the OpenAI API is not used to train OpenAI's models. Sales Xray asks OpenAI not to store its answers. OpenAI keeps API data in its abuse-monitoring logs for up to 30 days, or longer only where the law requires; once OpenAI grants zero data retention for Sales Xray, it keeps none there.",
+      ],
+      paragraphs: [
+        "Before an analysis starts, the upload terms for that call name which of these providers will process it, and you accept that processing. These providers may process the data outside India.",
       ],
     },
     {

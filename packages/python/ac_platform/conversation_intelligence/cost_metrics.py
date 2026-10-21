@@ -6,7 +6,10 @@ collector (``infra/metrics/ac-metrics-collect``) into a separate metrics store,
 ``<store root>/<environment>/usage.json``; this module only reads that store.
 It never opens another environment's database, never writes anything, and
 never reads call content: the export holds opaque ids, dates, labels and
-counters only.
+counters only. People appear only as per-environment pseudonyms
+(``usage_people.pseudonyms``), and exports from 21 Oct carry no names: for this
+Admin's own environment, organisation and person names are read live from its
+own database for the signed-in control account, and never stored.
 
 Money here is a list-price estimate: provider counters (tokens, audio length)
 priced with the repo price sheet (``admin_pricing``). It is not an invoice and
@@ -27,10 +30,13 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from statistics import median
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
+
+from sqlalchemy import select
 
 from ac_platform.conversation_intelligence.admin_pricing import (
     FX_SET_ON,
@@ -45,7 +51,11 @@ from ac_platform.conversation_intelligence.application import (
     utc,
 )
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
+from ac_platform.fx.reference import rate_on
+from ac_platform.fx.store import REFRESHER
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.tenancy.models import Tenant
+from ac_platform.usage_people import pseudonyms
 
 SCHEMA = "ac.sales-xray.usage-metrics/1"
 # Upstream first: a row that also exists upstream is a copy and counts there.
@@ -82,10 +92,16 @@ AI_WORK_STAGES = ("CDF", "CDD", "AR", "QF")
 FALLBACK_MODEL = "gemini-3.8-flash"
 FX = {
     "currency": "USD",
+    "mode": "planning",
     "usd_to_inr": float(FX_USD_TO_INR),
     "set_on": FX_SET_ON.isoformat(),
-    "source": "The price sheet's planning rate; providers bill in US dollars.",
+    "planning_usd_to_inr": float(FX_USD_TO_INR),
+    "latest": None,
+    "unrated_steps": 0,
+    "problem": None,
+    "source": "The planning rate, set with the price sheet; providers bill in US dollars.",
 }
+FX_MODES = ("daily", "planning")
 HOLD_REFS = {
     "provider-cost-reconciliation": "Waiting for settlement or an invoice check",
     "provider-outcome-reconciliation": "Provider outcome unknown: invoice check",
@@ -122,6 +138,8 @@ class Call:
     report_at: datetime | None
     version: Version
     gold: tuple[int, int, int]
+    # Pseudonymous person id (usage_people.pseudonyms): never a person id or name.
+    person: str | None = None
 
 
 @dataclass(frozen=True)
@@ -140,6 +158,7 @@ class Step:
     elapsed_ms: int | None
     paise: int | None
     at: datetime
+    person: str | None = None
 
 
 @dataclass
@@ -154,7 +173,9 @@ class Export:
     budgets: list[dict[str, Any]] = field(default_factory=list)
     payments: list[dict[str, Any]] = field(default_factory=list)
     subscriptions: list[dict[str, Any]] = field(default_factory=list)
-    companies: dict[str, dict[str, str]] = field(default_factory=dict)
+    companies: dict[str, dict[str, str | None]] = field(default_factory=dict)
+    # Names for this Admin's own environment only, read live (never from the store).
+    people: dict[str, str] = field(default_factory=dict)
     synthetic: dict[str, int] = field(default_factory=dict)
     # Calls waiting for AI budget at export time (they resume by themselves).
     waiting_calls: int = 0
@@ -185,6 +206,11 @@ def _when(value: Any) -> datetime | None:
 def _rows(document: Mapping[str, Any], key: str) -> list[dict[str, Any]]:
     value = document.get(key)
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _person(value: Any) -> str | None:
+    text = _text(value)
+    return text if text is not None and pseudonyms.PATTERN.fullmatch(text) else None
 
 
 def _usage_tokens(provider: str | None, usage: Mapping[str, Any] | None) -> tuple[int, int]:
@@ -223,8 +249,9 @@ def parse_export(environment: str, document: Mapping[str, Any]) -> Export:
     )
     for row in _rows(document, "companies"):
         if (company := _text(row.get("id"))) is not None:
+            # Exports from 21 Oct carry no names; Admin reads its own environment's live.
             export.companies[company] = {
-                "name": _text(row.get("name")) or "Unnamed",
+                "name": _text(row.get("name")),
                 "kind": _text(row.get("kind")) or "other",
             }
     calls: dict[str, Call] = {}
@@ -254,6 +281,7 @@ def parse_export(environment: str, document: Mapping[str, Any]) -> Export:
                 _text(row.get("settings")),
             ),
             gold=(_int(gold.get("agree")), _int(gold.get("partly")), _int(gold.get("disagree"))),
+            person=_person(row.get("person")),
         )
     for row in _rows(document, "steps"):
         at = _when(row.get("at"))
@@ -383,8 +411,15 @@ def parse_export(environment: str, document: Mapping[str, Any]) -> Export:
                 elapsed_ms=None,
                 paise=paise,
                 at=at,
+                person=_person(row.get("person")),
             )
         )
+    # A call's steps belong to the person whose call it is.
+    owner = {call.id: call.person for call in export.calls if call.person}
+    export.steps = [
+        step if step.person or not step.call else replace(step, person=owner.get(step.call))
+        for step in export.steps
+    ]
     export.holds = list(_rows(document, "holds"))
     export.budgets = list(_rows(document, "budgets"))
     export.payments = list(_rows(document, "payments"))
@@ -524,6 +559,8 @@ class Scope:
     # Usage filters (owner, 20 Oct 2026): one organisation, one feature (stage).
     company: str | None = None
     stage: str | None = None
+    # One person (a pseudonym from the people filter).
+    person: str | None = None
 
     @property
     def since(self) -> datetime:
@@ -554,20 +591,26 @@ def _company(
     known = exports[environment].companies.get(company or "") if environment in exports else None
     if known and known["kind"] == "personal":
         return {"id": company or "", "name": "Personal accounts", "kind": "personal"}
+    name = known.get("name") if known else None
     return {
         "id": company or "",
-        "name": known["name"] if known else "Unknown",
-        "kind": known["kind"] if known else "other",
+        # Names never sit in the shared store: other environments show the id's start.
+        "name": name or (f"Organisation {company[:8]}" if company else "Unknown"),
+        "kind": (known.get("kind") if known else None) or "other",
     }
 
 
-def _narrow(export: Export, company: str | None, stage: str | None) -> Export:
-    """One organisation's and/or one feature's rows only (the Usage filters)."""
+def _narrow(
+    export: Export, company: str | None, stage: str | None, person: str | None = None
+) -> Export:
+    """One organisation's, one feature's and/or one person's rows only (the Usage filters)."""
 
     steps = [
         step
         for step in export.steps
-        if (company is None or step.company == company) and (stage is None or step.stage == stage)
+        if (company is None or step.company == company)
+        and (stage is None or step.stage == stage)
+        and (person is None or step.person == person)
     ]
     kept = {step.call for step in steps}
     return replace(
@@ -576,7 +619,9 @@ def _narrow(export: Export, company: str | None, stage: str | None) -> Export:
         calls=[
             call
             for call in export.calls
-            if (company is None or call.company == company) and (stage is None or call.id in kept)
+            if (company is None or call.company == company)
+            and (stage is None or call.id in kept)
+            and (person is None or call.person == person)
         ],
         payments=[
             row
@@ -598,6 +643,7 @@ def _choices(
     features that ran, so a choice never shows an empty page."""
 
     spend: Counter[tuple[str, str]] = Counter()
+    people: Counter[tuple[str, str]] = Counter()
     stages: set[str] = set()
     for export in exports:
         for step in export.steps:
@@ -606,6 +652,8 @@ def _choices(
             stages.add(step.stage)
             if step.company:
                 spend[(export.environment, step.company)] += step.paise or 0
+            if step.person:
+                people[(export.environment, step.person)] += step.paise or 0
     companies: dict[str, dict[str, Any]] = {}
     for (environment, company), paise in spend.most_common():
         row = companies.setdefault(
@@ -615,6 +663,19 @@ def _choices(
         row.setdefault("environment", environment)
     return {
         "companies": list(companies.values())[:MAX_COMPANIES],
+        # Who spent most: pseudonyms, named only for this Admin's own environment.
+        "people": [
+            {
+                "id": person,
+                "environment": environment,
+                "name": by_env[environment].people.get(person) if environment in by_env else None,
+                "rupees": round(paise / 100, 2),
+            }
+            for (environment, person), paise in people.most_common(MAX_COMPANIES)
+        ],
+        "people_available": sorted(
+            {export.environment for export in exports if any(c.person for c in export.calls)}
+        ),
         "stages": [
             {"stage": stage, "label": STAGE_LABELS.get(stage, stage)}
             for stage in sorted(
@@ -680,6 +741,56 @@ def _routes(steps: Iterable[Step]) -> list[dict[str, Any]]:
     return rows
 
 
+def at_daily_rates(
+    exports: Sequence[Export], rates: Mapping[date, Decimal], since: datetime | None = None
+) -> tuple[list[Export], dict[str, Any]]:
+    """Provider costs at each day's reference rate instead of the planning rate.
+
+    Only provider steps move: they are dollars converted at the planning rate, so each is
+    rescaled by its India day's rate (that day's, else the latest earlier one). Revenue,
+    payments and budget caps are rupees already and stay as they are. Dollars stay exact
+    through the window's average rate, which the page divides by."""
+    if not rates:
+        return list(exports), dict(FX)
+    planning = Decimal(FX_USD_TO_INR)
+    before = after = Decimal(0)
+    unrated = 0
+    moved: list[Export] = []
+    for export in exports:
+        steps = []
+        for step in export.steps:
+            if step.paise is None:
+                steps.append(step)
+                continue
+            found = rate_on(rates, india_day(step.at))
+            if found is None:
+                unrated += 1
+                steps.append(step)
+                continue
+            exact = Decimal(step.paise) * found[1] / planning
+            if since is None or step.at >= since:
+                # The average comes from unrounded rupees, so dollars stay exact.
+                before += step.paise
+                after += exact
+            steps.append(replace(step, paise=round(exact)))
+        moved.append(replace(export, steps=steps))
+    latest_day = max(rates)
+    latest = rates[latest_day]
+    average = (after / before * planning) if before else latest
+    return moved, {
+        "currency": "USD",
+        "mode": "daily",
+        "usd_to_inr": float(average.quantize(Decimal("0.01"))),
+        "set_on": latest_day.isoformat(),
+        "planning_usd_to_inr": float(planning),
+        "latest": {"day": latest_day.isoformat(), "usd_to_inr": float(latest)},
+        "unrated_steps": unrated,
+        "problem": None,
+        "source": "ECB euro reference rates: each day's costs at that day's rate, dollars at"
+        " this window's average.",
+    }
+
+
 def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
     by_env = {export.environment: export for export in exports}
     chosen = [
@@ -688,8 +799,8 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         if scope.environment == "all" or export.environment == scope.environment
     ]
     choices = _choices(chosen, by_env, scope)
-    if scope.company is not None or scope.stage is not None:
-        chosen = [_narrow(export, scope.company, scope.stage) for export in chosen]
+    if scope.company is not None or scope.stage is not None or scope.person is not None:
+        chosen = [_narrow(export, scope.company, scope.stage, scope.person) for export in chosen]
     calls = {(call.environment, call.id): call for export in chosen for call in export.calls}
 
     def kind_of(step: Step) -> str:
@@ -1033,7 +1144,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         "environment": scope.environment,
         "tests": scope.tests,
         "fx": FX,
-        "filters": {"company": scope.company, "stage": scope.stage},
+        "filters": {"company": scope.company, "stage": scope.stage, "person": scope.person},
         "routes": _routes(window_steps),
         "choices": choices,
         "sources": [
@@ -1474,6 +1585,8 @@ class AdminCostMetrics:
         call_steps: bool = False,
         company: str | None = None,
         stage: str | None = None,
+        person: str | None = None,
+        fx: str = "daily",
     ) -> dict[str, Any]:
         if actor.tenant_id != self.operations_tenant_id:
             raise ConversationDenied("Cost and usage requires the AC operations workspace.")
@@ -1488,8 +1601,18 @@ class AdminCostMetrics:
             raise ConversationError("Choose an organisation from the list.")
         if stage is not None and stage not in STAGE_LABELS:
             raise ConversationError("Choose a feature from the list.")
+        if person is not None and not pseudonyms.PATTERN.fullmatch(person):
+            raise ConversationError("Choose a person from the list.")
+        if fx not in FX_MODES:
+            raise ConversationError("Choose daily or planning rates.")
         exports, problems = read_store(self.store_root)
         now = utc(self.application.clock())
+        await self._name_here(exports, now)
+        fx_view = dict(FX)
+        if fx == "daily":
+            rates = await REFRESHER.rates(self.application.database, now)
+            exports, fx_view = at_daily_rates(exports, rates, now - timedelta(days=days))
+            fx_view["problem"] = REFRESHER.problem
         result = build_metrics(
             exports,
             Scope(
@@ -1501,16 +1624,45 @@ class AdminCostMetrics:
                 call_steps=call_steps,
                 company=company,
                 stage=stage,
+                person=person,
             ),
         )
+        result["fx"] = fx_view
         result["problems"] = problems
         result["available"] = [export.environment for export in exports]
         result["here"] = self.here
         return result
 
+    async def _name_here(self, exports: Sequence[Export], now: datetime) -> None:
+        """This environment's organisation and person names, read live from its own database
+        for this signed-in control account; never written to the store."""
+        if self.here is None:
+            return
+        database = self.application.database
+        # This environment's pseudonym key, made here once, so its next export carries people.
+        await database.run_sync(lambda sync: pseudonyms.ensure_key(sync.connection(), now))
+        mine = next((export for export in exports if export.environment == self.here), None)
+        if mine is None:
+            return
+        ids = [UUID(key) for key in mine.companies if COMPANY_ID.fullmatch(key)]
+        if ids:
+            rows = await database.execute(select(Tenant.id, Tenant.name).where(Tenant.id.in_(ids)))
+            for tenant_id, name in rows:
+                known = mine.companies.get(str(tenant_id))
+                if known is not None and name:
+                    known["name"] = str(name)
+        wanted = {call.person for call in mine.calls if call.person} | {
+            step.person for step in mine.steps if step.person
+        }
+        if wanted:
+            mine.people = await database.run_sync(
+                lambda sync: pseudonyms.names_for(sync.connection(), wanted, now)
+            )
+
 
 __all__ = [
     "AdminCostMetrics",
+    "at_daily_rates",
     "ENVIRONMENTS",
     "Scope",
     "build_metrics",

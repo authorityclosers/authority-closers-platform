@@ -1,0 +1,130 @@
+{
+  "call_id": "fx-15",
+  "call_type": "multi_party",
+  "language_mix": "mr-en",
+  "target_minutes": 20,
+  "seller": {
+    "company": "ज्ञानदीप गुरुकुल इंटरनॅशनल स्कूल",
+    "product": "इयत्ता पहिली सीबीएसई प्रवेश २०२७-२८",
+    "price_list": [
+      "वार्षिक शैक्षणिक शुल्क: एक लाख वीस हजार रुपये",
+      "प्रवेश ठेव (परतावापात्र): पंचवीस हजार रुपये",
+      "बस वाहतूक शुल्क (परिसर पाच किमी): अठ्ठावीस हजार रुपये"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "मेघना सरपोतदार",
+      "gender": "f",
+      "age_band": "30s",
+      "style": "warm, articulate academic counsellor, knowledgeable about pedagogy and student care"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "संजय भागवत",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "analytical IT professional, focused on STEM curriculum, sports facilities and practical logistics"
+    },
+    {
+      "id": "S3",
+      "role": "family_member",
+      "name": "अंजली भागवत",
+      "gender": "f",
+      "age_band": "30s",
+      "style": "observant mother and architect, deeply attentive to child safety, student-teacher ratio and nutrition"
+    },
+    {
+      "id": "S4",
+      "role": "colleague",
+      "name": "मंदार कानेटकर",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "methodical senior accounts officer, clear on installment deadlines, transport slabs and documentation"
+    }
+  ],
+  "sections": [
+    {
+      "name": "Introduction, Child's Profile, Pedagogy & Classroom",
+      "minutes": 6.0,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10",
+        "f11",
+        "f12",
+        "f13",
+        "f14",
+        "f15",
+        "f16",
+        "f17"
+      ]
+    },
+    {
+      "name": "Infrastructure, Sports, Safety, Health & Nutrition",
+      "minutes": 8.0,
+      "facts": [
+        "f18",
+        "f19",
+        "f20",
+        "f21",
+        "f22",
+        "f23",
+        "f24",
+        "f25",
+        "f26",
+        "f27"
+      ]
+    },
+    {
+      "name": "Fee structure, Transport, Refund rules & Closing formalities",
+      "minutes": 6.0,
+      "facts": [
+        "f28",
+        "f29",
+        "f30",
+        "f31",
+        "f32",
+        "f33",
+        "f34",
+        "f35",
+        "f36",
+        "f37",
+        "f38",
+        "f39",
+        "f40",
+        "f41",
+        "f42",
+        "f43"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "good_rapport",
+      "turn_ids": [
+        "t077"
+      ],
+      "statement": "Counsellor politely explained school sibling policy without conflict while keeping parents engaged."
+    },
+    {
+      "id": "k02",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t050"
+      ],
+      "statement": "School counsellor promptly addressed the child's severe food allergy concern by describing strict kitchen oil standards and special staff alerts."
+    }
+  ]
+}

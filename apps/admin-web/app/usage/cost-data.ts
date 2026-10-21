@@ -56,8 +56,21 @@ export const CHANGE_AT: Record<string, { href: string; label: string }> = {
   AR: { href: "/settings", label: "All settings · AI replies" },
 };
 
-/** How rupees were made from the dollars providers bill (one rate, and since when). */
-export type Fx = { currency: string; usdToInr: number; setOn: string | null };
+/**
+ * How rupees were made from the dollars providers bill: each day's ECB reference rate
+ * ("daily", the default since 21 Oct 2026), or the price sheet's planning rate.
+ */
+export type Fx = {
+  currency: string;
+  /** Daily: this window's average, so dollars stay exact; planning: the one rate. */
+  usdToInr: number;
+  setOn: string | null;
+  mode: "daily" | "planning";
+  planningUsdToInr: number;
+  latest: { day: string; usdToInr: number } | null;
+  unratedSteps: number;
+  problem: string | null;
+};
 
 export const KIND_LABEL: Record<string, string> = {
   real: "Real",
@@ -274,7 +287,7 @@ export type TopCall = {
   rupees: number;
 };
 
-/** What the organisation and feature filters offer, and what is chosen. */
+/** What the organisation, person and feature filters offer. */
 export type Choices = {
   companies: {
     id: string;
@@ -282,6 +295,15 @@ export type Choices = {
     environment: string;
     rupees: number;
   }[];
+  /** Pseudonyms, named only for this Admin's own environment. */
+  people: {
+    id: string;
+    environment: string;
+    name: string | null;
+    rupees: number;
+  }[];
+  /** Environments whose export carries people yet. */
+  peopleAvailable: string[];
   stages: { stage: string; label: string }[];
 };
 
@@ -289,7 +311,11 @@ export type Metrics = {
   days: number;
   fx: Fx;
   routes: Route[];
-  filters: { company: string | null; stage: string | null };
+  filters: {
+    company: string | null;
+    stage: string | null;
+    person: string | null;
+  };
   choices: Choices;
   environment: string;
   tests: boolean;
@@ -424,7 +450,11 @@ export function normalizeMetrics(raw: unknown): Metrics {
   const choices = read.object(body.choices);
   return {
     days: n(window.days, 30),
-    filters: { company: os(filters.company), stage: os(filters.stage) },
+    filters: {
+      company: os(filters.company),
+      stage: os(filters.stage),
+      person: os(filters.person),
+    },
     routes: read.array(body.routes).map((item) => {
       const row = read.object(item);
       const stage = s(row.stage);
@@ -459,6 +489,16 @@ export function normalizeMetrics(raw: unknown): Metrics {
           rupees: n(row.rupees),
         };
       }),
+      people: read.array(choices.people).map((item) => {
+        const row = read.object(item);
+        return {
+          id: s(row.id),
+          environment: s(row.environment),
+          name: os(row.name),
+          rupees: n(row.rupees),
+        };
+      }),
+      peopleAvailable: read.strings(choices.people_available),
       stages: read.array(choices.stages).map((item) => {
         const row = read.object(item);
         const stage = s(row.stage);
@@ -469,6 +509,16 @@ export function normalizeMetrics(raw: unknown): Metrics {
       currency: s(fx.currency, "USD"),
       usdToInr: n(fx.usd_to_inr, 100) || 100,
       setOn: os(fx.set_on),
+      mode: s(fx.mode) === "daily" ? "daily" : "planning",
+      planningUsdToInr: n(fx.planning_usd_to_inr, 100) || 100,
+      latest: fx.latest
+        ? {
+            day: s(read.object(fx.latest).day),
+            usdToInr: n(read.object(fx.latest).usd_to_inr),
+          }
+        : null,
+      unratedSteps: n(fx.unrated_steps),
+      problem: os(fx.problem),
     },
     environment: s(body.environment, "all"),
     tests: read.boolean(body.tests),
@@ -781,14 +831,34 @@ export const usd = (rupees: number | null, fx: Fx) =>
 export const money = (rupees: number | null, fx: Fx) =>
   rupees === null ? "–" : `${usd(rupees, fx)} · ${inr(rupees)}`;
 
-/** The rate in words: "₹100 per $1, set 19 Sep 2026". */
+const DAY_WORDS = new Intl.DateTimeFormat("en-IN", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+const dayWords = (iso: string | null) => {
+  const day = iso ? Date.parse(`${iso}T00:00:00Z`) : Number.NaN;
+  return Number.isNaN(day) ? "" : DAY_WORDS.format(day);
+};
+
+/**
+ * The rate in words: "each day's ECB rate (latest ₹88.3 per $1, 20 Oct 2026)", or the
+ * planning rate "₹100 per $1, set 19 Sep 2026".
+ */
 export function rateWords(fx: Fx): string {
-  const day = fx.setOn ? Date.parse(`${fx.setOn}T00:00:00Z`) : Number.NaN;
-  const when = Number.isNaN(day)
-    ? ""
-    : `, set ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(day)}`;
-  return `₹${fx.usdToInr} per $1${when}`;
+  if (fx.mode === "daily" && fx.latest) {
+    const when = dayWords(fx.latest.day);
+    return `each day's ECB rate (latest ₹${fx.latest.usdToInr} per $1${when ? `, ${when}` : ""})`;
+  }
+  const when = dayWords(fx.setOn);
+  return `₹${fx.usdToInr} per $1${when ? `, set ${when}` : ""}`;
 }
+
+/** A person by name where this Admin can read it, else by the start of the pseudonym. */
+export const personWords = (person: { id: string; name: string | null }) =>
+  person.name ?? `Person ${person.id.slice(2, 8)}`;
 
 /** Rupees per audio minute, always with paise. */
 export const perMin = (value: number | null) =>
@@ -864,7 +934,9 @@ export function costQuery(
   }
   if (next.sort && next.sort !== "newest") params.set("sort", next.sort);
   if (next.org) params.set("org", next.org);
+  if (next.person) params.set("person", next.person);
   if (next.feature) params.set("feature", next.feature);
+  if (next.fx === "planning") params.set("fx", "planning");
   for (const [key, value] of Object.entries(extra)) params.set(key, value);
   const text = params.toString();
   return text ? `/usage?${text}` : "/usage";
@@ -1062,19 +1134,34 @@ export type ChartView = {
   /** One organisation (its id) and one feature (a stage key), else everything. */
   org?: string;
   feature?: string;
+  /** One person (a pseudonym), else everyone. */
+  person?: string;
+  /** "planning": the price sheet's rate instead of each day's ECB rate. */
+  fx?: string;
 };
 
 const ORG = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const PERSON = /^p_[0-9a-f]{16}$/;
 
-/** The organisation and feature filters from a link; anything else is ignored. */
-export function scopeView(query: { org?: string; feature?: string }): {
+/** The organisation, person, feature and rate choices from a link; anything else is ignored. */
+export function scopeView(query: {
   org?: string;
   feature?: string;
+  person?: string;
+  fx?: string;
+}): {
+  org?: string;
+  feature?: string;
+  person?: string;
+  fx?: string;
 } {
   return {
     org: query.org && ORG.test(query.org) ? query.org : undefined,
     feature:
       query.feature && query.feature in STAGE_LABEL ? query.feature : undefined,
+    person:
+      query.person && PERSON.test(query.person) ? query.person : undefined,
+    fx: query.fx === "planning" ? "planning" : undefined,
   };
 }
 

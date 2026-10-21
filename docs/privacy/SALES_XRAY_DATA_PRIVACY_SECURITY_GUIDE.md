@@ -3,24 +3,27 @@
 **For:** Wise Life · **From:** Authority Closers (AC) · 19 Oct 2026 · **Covers:** Sales X-Ray as AC hosts it for you (production, release v0.66), read from the code and the live server configuration. These are facts about Sales X-Ray; your counsel confirms the legal reading (DPDP Act 2023).
 
 ## 1. Roles
+
 - **Wise Life decides** which calls and leads go into Sales X-Ray and why.
 - **AC processes them** to provide the service, on its own server and through the AI providers named in section 4.
 
 ## 2. What we store for each call, and where
+
 All of it sits on one AC virtual server in **Mumbai, India**.
 
-| Data | Where |
-|---|---|
-| Call audio | Private file store on the server. The folder is readable only by the Sales X-Ray service account. Each file is named by its SHA-256 fingerprint and checked against it on every read. |
-| Voice measures (loudness, pitch, pauses) and the waveform | Worked out on our server from the audio and kept in the same store. They never leave the server. |
-| Transcript, report, coaching, pointer review and prospect profile | PostgreSQL database on the same server. The database has no public port, and each service uses its own login. |
-| Call data engine facts (from v0.66) | The same database. Each fact (for example "team size: 8 people") has a type, a confidence score, the quote and timestamps it came from, and the version that produced it. Corrections are added as new rows; old ones are never overwritten. |
-| Lead Desk (if you use it) | The same database. Per lead: name, phone, email, company, city, language, interest, stage, owner, notes and the raw form answers, plus a history of changes. For the phone app's call log, only calls to numbers that match your leads are recorded: number, start time, duration and direction. Leads come in only from sources you connect: Meta Lead Ads, Google Ads lead forms, a webhook, a sheet or a CSV file. |
-| Sign-in | The database. A session token is stored only as a keyed hash, along with the browser's user agent and IP address. |
+| Data                                                              | Where                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Call audio                                                        | Private file store on the server. The folder is readable only by the Sales X-Ray service account. Each file is named by its SHA-256 fingerprint and checked against it on every read.                                                                                                                                                                                                                                 |
+| Voice measures (loudness, pitch, pauses) and the waveform         | Worked out on our server from the audio and kept in the same store. They never leave the server.                                                                                                                                                                                                                                                                                                                      |
+| Transcript, report, coaching, pointer review and prospect profile | PostgreSQL database on the same server. The database has no public port, and each service uses its own login.                                                                                                                                                                                                                                                                                                         |
+| Call data engine facts (from v0.66)                               | The same database. Each fact (for example "team size: 8 people") has a type, a confidence score, the quote and timestamps it came from, and the version that produced it. Corrections are added as new rows; old ones are never overwritten.                                                                                                                                                                          |
+| Lead Desk (if you use it)                                         | The same database. Per lead: name, phone, email, company, city, language, interest, stage, owner, notes and the raw form answers, plus a history of changes. For the phone app's call log, only calls to numbers that match your leads are recorded: number, start time, duration and direction. Leads come in only from sources you connect: Meta Lead Ads, Google Ads lead forms, a webhook, a sheet or a CSV file. |
+| Sign-in                                                           | The database. A session token is stored only as a keyed hash, along with the browser's user agent and IP address.                                                                                                                                                                                                                                                                                                     |
 
 Development, staging and production run on the same machine. Each has its own database, file store and secrets.
 
 ## 3. Who can see it
+
 - **Sign-in:**
   - Methods: Google, a 6-digit email code (valid for 10 minutes, 5 tries) or a password.
   - A session lasts 30 days.
@@ -41,13 +44,16 @@ Development, staging and production run on the same machine. Each has its own da
   - Sign-ins themselves are not audit events. The session record keeps the time, user agent and IP address.
 
 ## 4. AI providers: what they receive
-| Provider | Receives | Why |
-|---|---|---|
-| **ElevenLabs** (Scribe v2) | The call audio | Transcription. All production calls in the last 30 days used it. |
-| **Google Gemini** (paid API) | Transcript text only, never audio | The report, coaching, pointer review and prospect profile. From v0.66, also the call data engine's facts and segment labels. |
 
-- **Where they process:** both providers may process data outside India.
+| Provider                              | Receives                          | Why                                                                                                                                     |
+| ------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **ElevenLabs** (Scribe v2)            | The call audio                    | Transcription. All production calls in the last 30 days used it.                                                                        |
+| **Google Gemini** (paid API)          | Transcript text only, never audio | The report, coaching, pointer review and prospect profile. From v0.66, also the call data engine's facts and segment labels.            |
+| **OpenAI** (API; OpenAI, L.L.C., USA) | Transcript text only, never audio | The coaching report (C5), for calls whose upload terms name OpenAI. Approved by the owner on 21 Oct 2026; available from release v0.71. |
+
+- **Where they process:** these providers may process data outside India.
 - **What they keep:** each provider keeps data under its own published API terms. ElevenLabs' zero-retention mode is not switched on for our account. Under Google's paid Gemini API terms, the data is not used to train Google's models.
+- **OpenAI:** data sent to the OpenAI API is not used to train OpenAI's models. Every request is sent with `store: false`, and the app refuses an answer that does not confirm it. OpenAI keeps API data in its abuse-monitoring logs for up to 30 days (longer only where the law requires); once OpenAI approves zero data retention for our account, it keeps none there. The owner accepted OpenAI's data processing addendum. Keys sit in Infisical per environment.
 - **The call data engine** never sends segments marked sensitive, never quotes them, and never extracts phone numbers or email addresses. It fills a lead field only when it is confident and the value is quoted from the call, and it never overwrites a value a person entered.
 - **Never leaves our server:**
   - the voice measures and waveform;
@@ -57,11 +63,13 @@ Development, staging and production run on the same machine. Each has its own da
 - **Live transcription** during a call is built but switched off. It stays off until a privacy and provider review passes.
 
 ## 5. Consent
+
 - **Account:** before signing in, each person ticks a box confirming they are 18 or older and accept AC's Terms and Privacy notice (version `ac-learner-terms-privacy-2026-10-18-v2`). The acceptance is recorded with an audit event.
-- **Each upload:** the person accepts that upload's terms. The terms name the AI providers (ElevenLabs and Google Gemini), say the call is kept until deleted, and give the deletion contact. We record a fingerprint of the exact terms, the audio's hash and the time.
+- **Each upload:** the person accepts that upload's terms. The terms name the AI providers for that call (ElevenLabs and Google Gemini today; OpenAI too once a call is routed to it), say the call is kept until deleted, and give the deletion contact. We record a fingerprint of the exact terms, the audio's hash and the time.
 - **The other party:** our Terms require the consent of everyone on the call. Your team is responsible for telling the other party that the call is recorded and analysed. Wise Life staff open each call with a recording line, which does this.
 
 ## 6. Retention, deletion and backups
+
 - **How long calls are kept:** each call is kept until it is deleted, with a technical limit of 10 years. This has applied since 18 Oct 2026, and earlier calls were extended to match.
 - **Deleting a call** (the uploader uses "Delete call" in the app):
   - The call becomes unreadable at once, and an erase job removes:
@@ -75,23 +83,24 @@ Development, staging and production run on the same machine. Each has its own da
   - lead details already filled in from it.
 
   Lead Desk has no delete button yet. Ask us to delete a lead or a prospect.
+
 - **How a customer asks for deletion:**
   - Email **admin@authorityclosers.com** with "Delete my data" (a call, a lead, or a whole account).
   - Our data-deletion page commits to finishing within 2 days.
   - There is no in-app account deletion or "download my data" yet.
 - **Backups:**
 
-  | Backup | How often | Where | Kept for |
-  |---|---|---|---|
-  | Database dump | Every 5 minutes | On the server, plus an encrypted copy in Cloudflare R2 | About 27 hours |
-  | Database copy | Hourly | On the server (newest 24), plus Google Drive | 14 days on Drive |
-  | Whole-server backup, including the audio | Daily | Encrypted copy in Cloudflare R2 | 7 daily, 4 weekly, 6 monthly |
-
+  | Backup                                   | How often       | Where                                                  | Kept for                     |
+  | ---------------------------------------- | --------------- | ------------------------------------------------------ | ---------------------------- |
+  | Database dump                            | Every 5 minutes | On the server, plus an encrypted copy in Cloudflare R2 | About 27 hours               |
+  | Database copy                            | Hourly          | On the server (newest 24), plus Google Drive           | 14 days on Drive             |
+  | Whole-server backup, including the audio | Daily           | Encrypted copy in Cloudflare R2                        | 7 daily, 4 weekly, 6 monthly |
   - Deleted data stays in these backups until they age out, which takes up to about 6 months.
   - The hourly Google Drive copies are not encrypted. **Being fixed.**
   - The weekly restore drills exist but failed on their last run. **Being fixed.**
 
 ## 7. Encryption and security
+
 - **In transit:**
   - All traffic reaches the server only over HTTPS through Cloudflare (a Cloudflare Tunnel). The server publishes no public web or database port.
   - Pages send these security headers: HSTS (1 year), a Content Security Policy, X-Frame-Options DENY, no-referrer, and no-store on private pages.

@@ -1,0 +1,486 @@
+[
+ {
+  "id": "f01",
+  "type": "person_name",
+  "slot": "salesperson.name",
+  "value": "Aman",
+  "normalized": "Aman",
+  "turn_ids": [
+   "t001"
+  ],
+  "evidence": "अमन बोल रहा हूँ",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.0,
+  "trap": null
+ },
+ {
+  "id": "f02",
+  "type": "company",
+  "slot": "seller.company",
+  "value": "Raftaar Pre-Owned Motors",
+  "normalized": "Raftaar Pre-Owned Motors",
+  "turn_ids": [
+   "t001"
+  ],
+  "evidence": "Raftaar Pre-Owned Motors",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.0,
+  "trap": null
+ },
+ {
+  "id": "f03",
+  "type": "person_name",
+  "slot": "prospect.name",
+  "value": "Rohit",
+  "normalized": "Rohit",
+  "turn_ids": [
+   "t001"
+  ],
+  "evidence": "रोहित sir",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.0,
+  "trap": null
+ },
+ {
+  "id": "f04",
+  "type": "product",
+  "slot": "deal.vehicle_model",
+  "value": "Pravah XT",
+  "normalized": "Pravah XT",
+  "turn_ids": [
+   "t001"
+  ],
+  "evidence": "Pravah XT",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.0,
+  "trap": null
+ },
+ {
+  "id": "f05",
+  "type": "date",
+  "slot": "test_drive.date",
+  "value": "Saturday 24 October",
+  "normalized": "2026-10-24",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "Saturday 24 को",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.08,
+  "trap": null
+ },
+ {
+  "id": "f06",
+  "type": "time",
+  "slot": "test_drive.time",
+  "value": "11:30 am (11 am was offered, then corrected)",
+  "normalized": "11:30",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "सुबह ग्यारह बजे— sorry, ग्यारह already book है, साढ़े ग्यारह कर दूँ",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.08,
+  "trap": "self_correction"
+ },
+ {
+  "id": "f07",
+  "type": "person_name",
+  "slot": "prospect.spouse_name",
+  "value": "Kavya (prospect's wife), joining the test drive",
+  "normalized": "Kavya (prospect's wife), joining the test drive",
+  "turn_ids": [
+   "t004"
+  ],
+  "evidence": "Wife काव्या भी आएगी",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.12,
+  "trap": "third_party_name"
+ },
+ {
+  "id": "f08",
+  "type": "duration",
+  "slot": "test_drive.duration",
+  "value": "20-25 minutes, up to the highway",
+  "normalized": "20-25 min",
+  "turn_ids": [
+   "t005"
+  ],
+  "evidence": "बीस-पच्चीस मिनट का drive",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.17,
+  "trap": null
+ },
+ {
+  "id": "f09",
+  "type": "product",
+  "slot": "vehicle.model_year",
+  "value": "2019",
+  "normalized": "2019",
+  "turn_ids": [
+   "t007"
+  ],
+  "evidence": "2019 का diesel",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.25,
+  "trap": null
+ },
+ {
+  "id": "f10",
+  "type": "product",
+  "slot": "vehicle.fuel",
+  "value": "diesel",
+  "normalized": "diesel",
+  "turn_ids": [
+   "t007"
+  ],
+  "evidence": "का diesel",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.25,
+  "trap": null
+ },
+ {
+  "id": "f11",
+  "type": "product",
+  "slot": "vehicle.colour",
+  "value": "white",
+  "normalized": "white",
+  "turn_ids": [
+   "t007"
+  ],
+  "evidence": "diesel, white",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.25,
+  "trap": null
+ },
+ {
+  "id": "f12",
+  "type": "quantity",
+  "slot": "vehicle.odometer_km",
+  "value": "48,000 km",
+  "normalized": "48000 km",
+  "turn_ids": [
+   "t007"
+  ],
+  "evidence": "अड़तालीस हज़ार चला है",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.25,
+  "trap": null
+ },
+ {
+  "id": "f13",
+  "type": "product",
+  "slot": "vehicle.ownership",
+  "value": "first owner",
+  "normalized": "first owner",
+  "turn_ids": [
+   "t007"
+  ],
+  "evidence": "First owner",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.25,
+  "trap": null
+ },
+ {
+  "id": "f14",
+  "type": "price",
+  "slot": "vehicle.listed_price",
+  "value": "₹7.85 lakh",
+  "normalized": "785000 INR",
+  "turn_ids": [
+   "t008",
+   "t009"
+  ],
+  "evidence": "7.85 listed है",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.29,
+  "trap": "alt_number_form"
+ },
+ {
+  "id": "f15",
+  "type": "objection",
+  "slot": "prospect.price_objection",
+  "value": "Finds ₹7.85 lakh a bit high",
+  "normalized": "Finds ₹7.85 lakh a bit high",
+  "turn_ids": [
+   "t008"
+  ],
+  "evidence": "थोड़ा ज़्यादा है yaar",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.29,
+  "trap": null
+ },
+ {
+  "id": "f16",
+  "type": "discount",
+  "slot": "deal.negotiation_offer",
+  "value": "Some negotiation possible at the showroom; no figure given",
+  "normalized": "Some negotiation possible at the showroom; no figure given",
+  "turn_ids": [
+   "t009"
+  ],
+  "evidence": "आप आइए तो, थोड़ा बहुत हो जाएगा",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.33,
+  "trap": null
+ },
+ {
+  "id": "f17",
+  "type": "competitor",
+  "slot": "competitor.name",
+  "value": "Speedline Car Bazaar",
+  "normalized": "Speedline Car Bazaar",
+  "turn_ids": [
+   "t010"
+  ],
+  "evidence": "Speedline Car Bazaar",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.38,
+  "trap": null
+ },
+ {
+  "id": "f18",
+  "type": "competitor_price",
+  "slot": "competitor.price",
+  "value": "₹7.4 lakh for the same model (competitor, not our price)",
+  "normalized": "740000 INR",
+  "turn_ids": [
+   "t010"
+  ],
+  "evidence": "7.4 में दे रहे हैं",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.38,
+  "trap": "competitor_price"
+ },
+ {
+  "id": "f19",
+  "type": "date",
+  "slot": "vehicle.insurance_valid_till",
+  "value": "March 2027",
+  "normalized": "2027-03",
+  "turn_ids": [
+   "t011"
+  ],
+  "evidence": "March 2027 तक valid है",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.42,
+  "trap": null
+ },
+ {
+  "id": "f20",
+  "type": "product",
+  "slot": "vehicle.service_history",
+  "value": "Withdrawn: claimed full company service history, then said he will check the file and confirm",
+  "normalized": "Withdrawn: claimed full company service history, then said he will check the file and confirm",
+  "turn_ids": [
+   "t011"
+  ],
+  "evidence": "service record file में check करके बताता हूँ, अभी पक्का नहीं बोलूँगा",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.42,
+  "trap": "retracted"
+ },
+ {
+  "id": "f21",
+  "type": "requirement",
+  "slot": "prospect.exchange_vehicle",
+  "value": "2014 Chirag LX petrol for exchange",
+  "normalized": "2014 Chirag LX petrol for exchange",
+  "turn_ids": [
+   "t012"
+  ],
+  "evidence": "2014 की Chirag LX है, petrol",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.46,
+  "trap": null
+ },
+ {
+  "id": "f22",
+  "type": "quantity",
+  "slot": "prospect.exchange_vehicle_km",
+  "value": "about 92,000 km",
+  "normalized": "92000 km",
+  "turn_ids": [
+   "t014",
+   "t016"
+  ],
+  "evidence": "ninety-two thousand",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.54,
+  "trap": null
+ },
+ {
+  "id": "f23",
+  "type": "payment_terms",
+  "slot": "deal.finance_down_payment",
+  "value": "Minimum ₹1.5 lakh down payment",
+  "normalized": "150000 INR",
+  "turn_ids": [
+   "t019"
+  ],
+  "evidence": "minimum डेढ़ लाख down payment",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.75,
+  "trap": null
+ },
+ {
+  "id": "f24",
+  "type": "payment_terms",
+  "slot": "deal.loan_tenure",
+  "value": "Loan up to 5 years",
+  "normalized": "60 months",
+  "turn_ids": [
+   "t019"
+  ],
+  "evidence": "पाँच साल तक का loan",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.75,
+  "trap": null
+ },
+ {
+  "id": "f25",
+  "type": "requirement",
+  "slot": "prospect.payment_mode",
+  "value": "Will not pay full cash; wants a loan",
+  "normalized": "Will not pay full cash; wants a loan",
+  "turn_ids": [
+   "t018"
+  ],
+  "evidence": "पूरा cash नहीं दूँगा",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.71,
+  "trap": null
+ },
+ {
+  "id": "f26",
+  "type": "location",
+  "slot": "showroom.location",
+  "value": "Ring Road showroom, opposite Kamla petrol pump",
+  "normalized": "Ring Road showroom, opposite Kamla petrol pump",
+  "turn_ids": [
+   "t021"
+  ],
+  "evidence": "Ring Road वाला showroom, कमला petrol pump के सामने",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.83,
+  "trap": null
+ },
+ {
+  "id": "f27",
+  "type": "next_step",
+  "slot": "next_step.send_location",
+  "value": "Aman to WhatsApp the showroom location now",
+  "normalized": "Aman to WhatsApp the showroom location now",
+  "turn_ids": [
+   "t021"
+  ],
+  "evidence": "अभी WhatsApp करता हूँ",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.83,
+  "trap": null
+ },
+ {
+  "id": "f28",
+  "type": "next_step",
+  "slot": "next_step.prospect_brings",
+  "value": "Bring original driving licence; bring exchange car for evaluation on Saturday",
+  "normalized": "Bring original driving licence; bring exchange car for evaluation on Saturday",
+  "turn_ids": [
+   "t021",
+   "t017"
+  ],
+  "evidence": "Driving licence original ले आना",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.83,
+  "trap": null
+ },
+ {
+  "id": "f29",
+  "type": "contact_preference",
+  "slot": "prospect.contact_preference",
+  "value": "No daytime calls; call after 7 pm or WhatsApp",
+  "normalized": "No daytime calls; call after 7 pm or WhatsApp",
+  "turn_ids": [
+   "t022"
+  ],
+  "evidence": "सात बजे के बाद करो या WhatsApp कर दो",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.88,
+  "trap": null
+ },
+ {
+  "id": "f30",
+  "type": "commitment",
+  "slot": "deal.test_drive_confirmed",
+  "value": "Test drive confirmed for Saturday 11:30",
+  "normalized": "Test drive confirmed for Saturday 11:30",
+  "turn_ids": [
+   "t023",
+   "t024"
+  ],
+  "evidence": "हाँ confirm है",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.92,
+  "trap": null
+ }
+]

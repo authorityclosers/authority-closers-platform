@@ -1,0 +1,674 @@
+[
+  {
+    "id": "f01",
+    "type": "person_name",
+    "slot": "seller.name",
+    "value": "मीरा धवलके",
+    "normalized": "Meera Dhavalke",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "मीरा धवलके",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f02",
+    "type": "company",
+    "slot": "seller.company",
+    "value": "सुरवृक्ष सुरक्षा सलाह",
+    "normalized": "Survriksh Suraksha Salah",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "सुरवृक्ष सुरक्षा सलाह",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f03",
+    "type": "person_name",
+    "slot": "prospect.name",
+    "value": "राघव बेरसुले",
+    "normalized": "Raghav Bersule",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "राघव बेरसुले",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.014,
+    "trap": null
+  },
+  {
+    "id": "f04",
+    "type": "quantity",
+    "slot": "prospect.age",
+    "value": "बयालीस",
+    "normalized": "42 years",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "मेरी age बयालीस",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.042,
+    "trap": null
+  },
+  {
+    "id": "f05",
+    "type": "quantity",
+    "slot": "spouse.age",
+    "value": "सैंतीस",
+    "normalized": "37 years",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "पत्नी सैंतीस",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.042,
+    "trap": null
+  },
+  {
+    "id": "f06",
+    "type": "quantity",
+    "slot": "daughter.age",
+    "value": "नौ",
+    "normalized": "9 years",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "बेटी नौ साल",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.042,
+    "trap": null
+  },
+  {
+    "id": "f07",
+    "type": "quantity",
+    "slot": "son.age",
+    "value": "छह",
+    "normalized": "6 years",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "बेटा छह",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.042,
+    "trap": null
+  },
+  {
+    "id": "f08",
+    "type": "company",
+    "slot": "prospect.company",
+    "value": "वलयधान मसाला भंडार",
+    "normalized": "Valaydhan Masala Bhandar",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "वलयधान मसाला भंडार",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.07,
+    "trap": null
+  },
+  {
+    "id": "f09",
+    "type": "price",
+    "slot": "household.expense",
+    "value": "सत्तर हजार",
+    "normalized": "70000 INR/month",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "घर का खर्च महीने का सत्तर हजार",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.07,
+    "trap": null
+  },
+  {
+    "id": "f10",
+    "type": "price",
+    "slot": "debt.outstanding",
+    "value": "नौ लाख",
+    "normalized": "900000 INR",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "अब नौ लाख बाकी हैं",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.099,
+    "trap": "self_correction"
+  },
+  {
+    "id": "f11",
+    "type": "duration",
+    "slot": "debt.remaining",
+    "value": "छह साल",
+    "normalized": "6 years",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "छह साल की अवधि बची",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.099,
+    "trap": null
+  },
+  {
+    "id": "f12",
+    "type": "price",
+    "slot": "existing.health_cover",
+    "value": "पाँच लाख",
+    "normalized": "500000 INR",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "पाँच लाख family cover",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.127,
+    "trap": null
+  },
+  {
+    "id": "f13",
+    "type": "date",
+    "slot": "existing.renewal",
+    "value": "दिसंबर",
+    "normalized": "2026-12",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "Renewal दिसंबर में",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.127,
+    "trap": null
+  },
+  {
+    "id": "f14",
+    "type": "person_name",
+    "slot": "relative.name",
+    "value": "सुशील पेरसुले",
+    "normalized": "Sushil Persule",
+    "turn_ids": [
+      "t012"
+    ],
+    "evidence": "मामा सुशील पेरसुले",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.155,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f15",
+    "type": "contact_preference",
+    "slot": "prospect.accessibility",
+    "value": "पहले voice message",
+    "normalized": "voice summary first",
+    "turn_ids": [
+      "t016"
+    ],
+    "evidence": "लंबी PDF की जगह पहले voice message",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.211,
+    "trap": null
+  },
+  {
+    "id": "f16",
+    "type": "personal_detail",
+    "slot": "prospect.test_history",
+    "value": "पिछले साल borderline sugar",
+    "normalized": "borderline sugar reported last year",
+    "turn_ids": [
+      "t018"
+    ],
+    "evidence": "पिछले साल sugar borderline",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.239,
+    "trap": null
+  },
+  {
+    "id": "f17",
+    "type": "requirement",
+    "slot": "spouse.history",
+    "value": "operation papers pending",
+    "normalized": "surgical history pending",
+    "turn_ids": [
+      "t020"
+    ],
+    "evidence": "no medical history मत tick कर देना",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.268,
+    "trap": null
+  },
+  {
+    "id": "f18",
+    "type": "duration",
+    "slot": "health.initial_wait",
+    "value": "तीस दिन",
+    "normalized": "30 days",
+    "turn_ids": [
+      "t023"
+    ],
+    "evidence": "initial waiting तीस दिन",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.31,
+    "trap": null
+  },
+  {
+    "id": "f19",
+    "type": "duration",
+    "slot": "health.preexisting_wait",
+    "value": "छत्तीस महीने",
+    "normalized": "36 months",
+    "turn_ids": [
+      "t023"
+    ],
+    "evidence": "छत्तीस महीने लिखे हैं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.31,
+    "trap": null
+  },
+  {
+    "id": "f20",
+    "type": "location",
+    "slot": "preferred.hospital",
+    "value": "नीलकुसुम उपचार केंद्र",
+    "normalized": "Neelkusum Upchar Kendra",
+    "turn_ids": [
+      "t030"
+    ],
+    "evidence": "नीलकुसुम उपचार केंद्र पास",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.408,
+    "trap": null
+  },
+  {
+    "id": "f21",
+    "type": "price",
+    "slot": "term.cover",
+    "value": "एक करोड़",
+    "normalized": "10000000 INR",
+    "turn_ids": [
+      "t035"
+    ],
+    "evidence": "एक करोड़ term",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.479,
+    "trap": null
+  },
+  {
+    "id": "f22",
+    "type": "quantity",
+    "slot": "term.end_age",
+    "value": "पैंसठ",
+    "normalized": "65 years",
+    "turn_ids": [
+      "t035"
+    ],
+    "evidence": "उम्र 65 तक",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.479,
+    "trap": null
+  },
+  {
+    "id": "f23",
+    "type": "price",
+    "slot": "term.annual_estimate",
+    "value": "उन्नीस हजार",
+    "normalized": "19000 INR/year indicative",
+    "turn_ids": [
+      "t035"
+    ],
+    "evidence": "annual premium का indicative estimate उन्नीस हजार",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.479,
+    "trap": null
+  },
+  {
+    "id": "f24",
+    "type": "price",
+    "slot": "health.cover",
+    "value": "दस लाख",
+    "normalized": "1000000 INR",
+    "turn_ids": [
+      "t037"
+    ],
+    "evidence": "Health का दस लाख family cover",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.507,
+    "trap": null
+  },
+  {
+    "id": "f25",
+    "type": "quantity",
+    "slot": "health.members",
+    "value": "चार",
+    "normalized": "4",
+    "turn_ids": [
+      "t037"
+    ],
+    "evidence": "चार लोगों के लिए",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.507,
+    "trap": null
+  },
+  {
+    "id": "f26",
+    "type": "price",
+    "slot": "health.annual_estimate",
+    "value": "बयालीस हजार",
+    "normalized": "42000 INR/year indicative",
+    "turn_ids": [
+      "t037"
+    ],
+    "evidence": "अनुमान बयालीस हजार साल",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.507,
+    "trap": null
+  },
+  {
+    "id": "f27",
+    "type": "price",
+    "slot": "combined.annual_estimate",
+    "value": "इकसठ हजार",
+    "normalized": "61000 INR/year indicative incl taxes",
+    "turn_ids": [
+      "t037"
+    ],
+    "evidence": "इकसठ हजार रुपये वार्षिक अनुमान",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.507,
+    "trap": null
+  },
+  {
+    "id": "f28",
+    "type": "budget",
+    "slot": "prospect.annual_budget",
+    "value": "पचास हजार",
+    "normalized": "50000 INR/year",
+    "turn_ids": [
+      "t038"
+    ],
+    "evidence": "कुल budget पचास हजार साल",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.521,
+    "trap": null
+  },
+  {
+    "id": "f29",
+    "type": "competitor",
+    "slot": "other.seller",
+    "value": "अमरबेल सुरक्षा",
+    "normalized": "Amarbel Suraksha",
+    "turn_ids": [
+      "t040"
+    ],
+    "evidence": "अमरबेल सुरक्षा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.549,
+    "trap": null
+  },
+  {
+    "id": "f30",
+    "type": "competitor_price",
+    "slot": "other.health_quote",
+    "value": "छत्तीस हजार",
+    "normalized": "36000 INR/year health only",
+    "turn_ids": [
+      "t040"
+    ],
+    "evidence": "छत्तीस हजार बताया है",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.549,
+    "trap": "competitor_price"
+  },
+  {
+    "id": "f31",
+    "type": "requirement",
+    "slot": "term.maturity",
+    "value": "survival payout नहीं",
+    "normalized": "no maturity benefit",
+    "turn_ids": [
+      "t043"
+    ],
+    "evidence": "survival पर maturity payout नहीं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.592,
+    "trap": null
+  },
+  {
+    "id": "f32",
+    "type": "person_name",
+    "slot": "spouse.name",
+    "value": "अन्विता बेरसुले",
+    "normalized": "Anvita Bersule",
+    "turn_ids": [
+      "t046"
+    ],
+    "evidence": "पत्नी का नाम अन्विता बेरसुले",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.634,
+    "trap": null
+  },
+  {
+    "id": "f33",
+    "type": "payment_terms",
+    "slot": "monthly.correction",
+    "value": "total बदल सकता है",
+    "normalized": "monthly total not equal annual divided by twelve",
+    "turn_ids": [
+      "t053"
+    ],
+    "evidence": "Frequency बदलने पर total और charges बदल सकते हैं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.732,
+    "trap": "retracted"
+  },
+  {
+    "id": "f34",
+    "type": "requirement",
+    "slot": "health.opd",
+    "value": "routine OPD excluded",
+    "normalized": "routine outpatient excluded from estimate",
+    "turn_ids": [
+      "t061"
+    ],
+    "evidence": "routine outpatient consultation शामिल नहीं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.845,
+    "trap": null
+  },
+  {
+    "id": "f35",
+    "type": "decision_maker",
+    "slot": "family.approval",
+    "value": "पत्नी के साथ खर्च डायरी पर फैसला",
+    "normalized": "joint decision after spouse budget review",
+    "turn_ids": [
+      "t064"
+    ],
+    "evidence": "लाल खर्च वाली डायरी लेकर बैठेंगी, तभी हमारा हाँ-ना होगा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": true,
+    "depth": 0.887,
+    "trap": null
+  },
+  {
+    "id": "f36",
+    "type": "date",
+    "slot": "review.date",
+    "value": "चौबीस अक्टूबर",
+    "normalized": "2026-10-24",
+    "turn_ids": [
+      "t066"
+    ],
+    "evidence": "शनिवार चौबीस अक्टूबर",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.915,
+    "trap": "self_correction"
+  },
+  {
+    "id": "f37",
+    "type": "time",
+    "slot": "review.time",
+    "value": "शाम सात",
+    "normalized": "19:00",
+    "turn_ids": [
+      "t066"
+    ],
+    "evidence": "शाम सात बजे रखिए",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.915,
+    "trap": null
+  },
+  {
+    "id": "f38",
+    "type": "duration",
+    "slot": "review.duration",
+    "value": "आधा घंटा",
+    "normalized": "30 minutes",
+    "turn_ids": [
+      "t066"
+    ],
+    "evidence": "आधा घंटा मिलेगा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.915,
+    "trap": null
+  },
+  {
+    "id": "f39",
+    "type": "commitment",
+    "slot": "seller.summary",
+    "value": "गुरुवार शाम तक",
+    "normalized": "2026-10-22 evening",
+    "turn_ids": [
+      "t067"
+    ],
+    "evidence": "गुरुवार शाम तक voice summary",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.93,
+    "trap": null
+  },
+  {
+    "id": "f40",
+    "type": "next_step",
+    "slot": "review.status",
+    "value": "review only",
+    "normalized": "no purchase commitment",
+    "turn_ids": [
+      "t072"
+    ],
+    "evidence": "Saturday सिर्फ review",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 1.0,
+    "trap": null
+  },
+  {
+    "id": "f41",
+    "type": "price",
+    "slot": "prospect.protected_fund",
+    "value": "चौदह लाख",
+    "normalized": "1400000 INR education fund unavailable for household support",
+    "turn_ids": [
+      "t034"
+    ],
+    "evidence": "बेटी के कॉलेज वाला लिफाफा नहीं खोलूँगा, उसमें चौदह लाख हैं",
+    "said_by": "S2",
+    "critical": true,
+    "needle": true,
+    "depth": 0.465,
+    "trap": null
+  },
+  {
+    "id": "f42",
+    "type": "requirement",
+    "slot": "health.mother_excluded",
+    "value": "माँ इस family proposal में शामिल नहीं",
+    "normalized": "mother excluded from current family cover discussion",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "मेरी माँ उसमें नहीं हैं, वो अलग रहती हैं",
+    "said_by": "S2",
+    "critical": false,
+    "needle": true,
+    "depth": 0.127,
+    "trap": null
+  }
+]

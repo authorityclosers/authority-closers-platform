@@ -1,0 +1,194 @@
+[
+ {
+  "arm": "text/onepass2/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "calls": 16,
+  "metrics": {
+   "recall": {
+    "arm": 0.7108,
+    "today": 0.6837,
+    "diff": 0.0271,
+    "lo": -0.045,
+    "hi": 0.1027
+   },
+   "critical": {
+    "arm": 0.7682,
+    "today": 0.7271,
+    "diff": 0.0411,
+    "lo": -0.0352,
+    "hi": 0.119
+   },
+   "needles": {
+    "arm": 0.7083,
+    "today": 0.5833,
+    "diff": 0.125,
+    "lo": -0.1667,
+    "hi": 0.375
+   },
+   "traps": {
+    "arm": 0.8452,
+    "today": 0.8452,
+    "diff": 0.0,
+    "lo": -0.0822,
+    "hi": 0.0824
+   },
+   "unsupported": {
+    "arm": 0.0521,
+    "today": 0.0397,
+    "diff": 0.0124,
+    "lo": -0.003,
+    "hi": 0.0287
+   },
+   "coaching": {
+    "arm": 0.7881,
+    "today": 0.7712,
+    "diff": 0.0169,
+    "lo": -0.0636,
+    "hi": 0.1087
+   }
+  }
+ },
+ {
+  "arm": "text/onepass/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "calls": 16,
+  "metrics": {
+   "recall": {
+    "arm": 0.8886,
+    "today": 0.6837,
+    "diff": 0.2048,
+    "lo": 0.1647,
+    "hi": 0.243
+   },
+   "critical": {
+    "arm": 0.886,
+    "today": 0.7271,
+    "diff": 0.1589,
+    "lo": 0.1222,
+    "hi": 0.1924
+   },
+   "needles": {
+    "arm": 0.875,
+    "today": 0.5833,
+    "diff": 0.2917,
+    "lo": 0.1111,
+    "hi": 0.4848
+   },
+   "traps": {
+    "arm": 0.9048,
+    "today": 0.8452,
+    "diff": 0.0595,
+    "lo": 0.0125,
+    "hi": 0.1149
+   },
+   "unsupported": {
+    "arm": 0.0281,
+    "today": 0.0397,
+    "diff": -0.0117,
+    "lo": -0.0263,
+    "hi": 0.0014
+   },
+   "coaching": {
+    "arm": 0.7203,
+    "today": 0.7712,
+    "diff": -0.0508,
+    "lo": -0.1641,
+    "hi": 0.0556
+   }
+  }
+ },
+ {
+  "arm": "text/onepass2/anthropic_claude-haiku-5.5/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "calls": 16,
+  "metrics": {
+   "recall": {
+    "arm": 0.8976,
+    "today": 0.6837,
+    "diff": 0.2139,
+    "lo": 0.1568,
+    "hi": 0.2686
+   },
+   "critical": {
+    "arm": 0.8897,
+    "today": 0.7271,
+    "diff": 0.1626,
+    "lo": 0.1134,
+    "hi": 0.2121
+   },
+   "needles": {
+    "arm": 0.9167,
+    "today": 0.5833,
+    "diff": 0.3333,
+    "lo": 0.0667,
+    "hi": 0.6
+   },
+   "traps": {
+    "arm": 0.9286,
+    "today": 0.8452,
+    "diff": 0.0833,
+    "lo": 0.0,
+    "hi": 0.1667
+   },
+   "unsupported": {
+    "arm": 0.035,
+    "today": 0.0397,
+    "diff": -0.0048,
+    "lo": -0.016,
+    "hi": 0.0067
+   },
+   "coaching": {
+    "arm": 0.5339,
+    "today": 0.7712,
+    "diff": -0.2373,
+    "lo": -0.3214,
+    "hi": -0.1583
+   }
+  }
+ },
+ {
+  "arm": "text/onepass3/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "calls": 16,
+  "metrics": {
+   "recall": {
+    "arm": 0.9111,
+    "today": 0.6837,
+    "diff": 0.2274,
+    "lo": 0.1722,
+    "hi": 0.2817
+   },
+   "critical": {
+    "arm": 0.914,
+    "today": 0.7271,
+    "diff": 0.1869,
+    "lo": 0.1339,
+    "hi": 0.2366
+   },
+   "needles": {
+    "arm": 0.875,
+    "today": 0.5833,
+    "diff": 0.2917,
+    "lo": 0.1111,
+    "hi": 0.4815
+   },
+   "traps": {
+    "arm": 0.9643,
+    "today": 0.8452,
+    "diff": 0.119,
+    "lo": 0.05,
+    "hi": 0.1954
+   },
+   "unsupported": {
+    "arm": 0.0273,
+    "today": 0.0397,
+    "diff": -0.0125,
+    "lo": -0.0304,
+    "hi": 0.0029
+   },
+   "coaching": {
+    "arm": 0.7119,
+    "today": 0.7712,
+    "diff": -0.0593,
+    "lo": -0.1667,
+    "hi": 0.0312
+   }
+  }
+ }
+]

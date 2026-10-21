@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, NoReturn, cast
 
-from ac_platform.conversation_intelligence import reports
+from ac_platform.conversation_intelligence import gemini_audio, reports
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 from ac_platform.conversation_intelligence.gemini_tasks import (
@@ -105,6 +105,7 @@ _DEEPGRAM_OPERATION = "transcribe_deepgram_nova3"
 _ASR_ROUTES = {
     ("elevenlabs", "scribe_v2"): _SCRIBE_OPERATION,
     ("deepgram", "nova-3"): _DEEPGRAM_OPERATION,
+    ("gemini", gemini_audio.MODEL): gemini_audio.OPERATION,
 }
 _MAX_METADATA_BYTES = 4_096
 _MAX_TEXT_PAYLOAD_BYTES = 512 * 1024
@@ -413,7 +414,7 @@ class PreparedTaskInput:
             if _ASR_ROUTES.get((self.provider, self.model)) != self.operation:
                 _fail("scribe_input_invalid")
             if (
-                self.operation not in {_SCRIBE_OPERATION, _DEEPGRAM_OPERATION}
+                self.operation not in set(_ASR_ROUTES.values())
                 or self.transcript_revision is not None
             ):
                 _fail("scribe_input_invalid")
@@ -835,7 +836,13 @@ def validate_scribe_result(
     if not isinstance(source_metadata, dict) or source_metadata.get("duration_ms") != duration:
         _fail("scribe_duration_mismatch")
     try:
-        normalizer = deepgram_transcript if task_input.provider == "deepgram" else scribe_transcript
+        normalizer = (
+            deepgram_transcript
+            if task_input.provider == "deepgram"
+            else gemini_audio.gemini_audio_transcript
+            if task_input.provider == "gemini"
+            else scribe_transcript
+        )
         transcript = normalizer(
             result, duration_ms=duration, source_sha256=task_input.source_sha256
         )

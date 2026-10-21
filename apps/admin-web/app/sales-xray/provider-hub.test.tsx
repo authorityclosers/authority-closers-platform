@@ -27,6 +27,7 @@ const RAW = {
       kind_label: "Language models",
       blurb: "Gemini Flash and Pro.",
       console: "https://aistudio.google.com",
+      data_terms: "Not used to train Google's models.",
       aliases: ["google"],
       pipeline: "ready",
       models: 3,
@@ -218,6 +219,9 @@ it("filters providers as you type and models by chip, with prices and stages", a
   expect(
     host.querySelector('a[href="https://aistudio.google.com"]'),
   ).not.toBeNull();
+  expect(host.textContent).toContain(
+    "Data terms. Not used to train Google's models.",
+  );
 });
 
 it("asks for a provider when none is chosen and says when the catalogue is down", async () => {

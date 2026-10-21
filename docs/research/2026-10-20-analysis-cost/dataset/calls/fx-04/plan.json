@@ -1,0 +1,140 @@
+{
+  "call_id": "fx-04",
+  "call_type": "objection_heavy",
+  "language_mix": "hi-en",
+  "target_minutes": 18,
+  "seller": {
+    "company": "सुरवृक्ष सुरक्षा सलाह",
+    "product": "परिवार कवच स्वास्थ्य और जीवन अवधि सुरक्षा",
+    "price_list": [
+      "स्वास्थ्य: बयालीस हजार वार्षिक अनुमान",
+      "अवधि सुरक्षा: उन्नीस हजार वार्षिक अनुमान"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "मीरा धवलके",
+      "gender": "f",
+      "age_band": "30s",
+      "style": "patient, sometimes overconfident"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "राघव बेरसुले",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "family business owner, distrustful of claims"
+    }
+  ],
+  "sections": [
+    {
+      "name": "context and mistrust",
+      "minutes": 3,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10",
+        "f11",
+        "f12",
+        "f13",
+        "f14",
+        "f42"
+      ]
+    },
+    {
+      "name": "claim objections and disclosures",
+      "minutes": 4,
+      "facts": [
+        "f15",
+        "f16",
+        "f17",
+        "f18",
+        "f19",
+        "f20"
+      ]
+    },
+    {
+      "name": "term amount and price resistance",
+      "minutes": 4,
+      "facts": [
+        "f21",
+        "f22",
+        "f23",
+        "f24",
+        "f25",
+        "f26",
+        "f27",
+        "f28",
+        "f29",
+        "f30",
+        "f31",
+        "f32",
+        "f41"
+      ]
+    },
+    {
+      "name": "payment, limits and seller correction",
+      "minutes": 4,
+      "facts": [
+        "f33",
+        "f34"
+      ]
+    },
+    {
+      "name": "bounded follow-up",
+      "minutes": 3,
+      "facts": [
+        "f35",
+        "f36",
+        "f37",
+        "f38",
+        "f39",
+        "f40"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "wrong_info_given",
+      "turn_ids": [
+        "t051"
+      ],
+      "statement": "Seller wrongly equated monthly and annual payment totals before correcting the statement after challenge."
+    },
+    {
+      "id": "k02",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t013"
+      ],
+      "statement": "Seller validated claim concerns without inventing a reason for a third party’s deductions."
+    },
+    {
+      "id": "k03",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t027"
+      ],
+      "statement": "Seller cautioned that portability acceptance must be confirmed before cancelling existing coverage."
+    },
+    {
+      "id": "k04",
+      "kind": "other",
+      "turn_ids": [
+        "t053"
+      ],
+      "statement": "Seller withdrew the assumed debit setup and committed to separate written payment totals."
+    }
+  ]
+}

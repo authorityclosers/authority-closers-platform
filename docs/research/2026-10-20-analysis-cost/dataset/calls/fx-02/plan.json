@@ -1,0 +1,99 @@
+{
+  "call_id": "fx-02",
+  "call_type": "inbound_followup",
+  "language_mix": "mr-en",
+  "target_minutes": 5,
+  "seller": {
+    "company": "चित्रांगण किचन स्टुडिओ",
+    "product": "अमृता एल-आकार अक्रिलिक किचन",
+    "price_list": [
+      "एल-आकार आठ बाय दहा: दोन लाख पस्तीस हजार रुपये",
+      "अप्लायन्स कॉम्बो पॅकेज: तीस हजार रुपये"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "रोहिणी चितळेकर",
+      "gender": "f",
+      "age_band": "20s",
+      "style": "enthusiastic, professional and eager to book site visit"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "दिगंबर मांडके",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "pragmatic government officer, cautious on pricing and timeline"
+    }
+  ],
+  "sections": [
+    {
+      "name": "enquiry verification and kitchen dimensions",
+      "minutes": 1.5,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10",
+        "f11",
+        "f12",
+        "f13",
+        "f14",
+        "f15"
+      ]
+    },
+    {
+      "name": "material selection, finish and budget discussion",
+      "minutes": 2.0,
+      "facts": [
+        "f16",
+        "f17",
+        "f18",
+        "f19",
+        "f20",
+        "f21",
+        "f22"
+      ]
+    },
+    {
+      "name": "site visit booking and document sharing",
+      "minutes": 1.5,
+      "facts": [
+        "f23",
+        "f24",
+        "f25",
+        "f26",
+        "f27",
+        "f28",
+        "f29"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "price_too_early",
+      "turn_ids": [
+        "t009"
+      ],
+      "statement": "Salesperson quoted the standard base price of ₹2.35 lakh before discovering the buyer's actual budget or specific scope requirements."
+    },
+    {
+      "id": "k02",
+      "kind": "good_rapport",
+      "turn_ids": [
+        "t021"
+      ],
+      "statement": "Salesperson welcomed the spouse's participation in colour and finish selection and scheduled the visit at the buyer's preferred weekend slot."
+    }
+  ]
+}

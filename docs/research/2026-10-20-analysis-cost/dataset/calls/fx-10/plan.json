@@ -1,0 +1,232 @@
+{
+ "call_id": "fx-10",
+ "call_type": "negotiation_close",
+ "language_mix": "en-IN",
+ "target_minutes": 22,
+ "scenario": "annual IT support contract for a 3-branch clinic chain",
+ "seller": {
+  "company": "Nirmal Techcare Solutions Pvt Ltd",
+  "product": "Annual IT support contract (helpdesk, onsite SLA, resident engineer, backups, network) for Arogyam Family Clinics",
+  "price_list": [
+   "Proposal: ₹6.8 lakh per year + GST, up to 50 endpoints, resident engineer 3 days a week",
+   "Critical SLA: remote pickup 15 minutes, onsite 4 hours; non-critical next business day",
+   "Helpdesk 8 a.m. to 10 p.m., 7 days",
+   "Parts excluded: procured at cost + 10% handling; labour included"
+  ]
+ },
+ "speakers": [
+  {
+   "id": "S1",
+   "role": "salesperson",
+   "name": "Rahul Menon",
+   "gender": "m",
+   "age_band": "30s",
+   "style": "account manager, polite, eager to close, concedes a little fast, recovers well"
+  },
+  {
+   "id": "S2",
+   "role": "prospect",
+   "name": "Dr. Anjali Venkatesh",
+   "gender": "f",
+   "age_band": "40s",
+   "style": "founder and senior doctor, busy, decisive, sharp on value"
+  },
+  {
+   "id": "S3",
+   "role": "prospect",
+   "name": "Prakash Iyer",
+   "gender": "m",
+   "age_band": "50s+",
+   "style": "admin and finance manager, meticulous, reads every line, hard negotiator"
+  },
+  {
+   "id": "S4",
+   "role": "colleague",
+   "name": "Sneha Pillai",
+   "gender": "f",
+   "age_band": "30s",
+   "style": "seller's service delivery lead, calm, precise on SLA terms"
+  }
+ ],
+ "sections": [
+  {
+   "name": "opening",
+   "minutes": 2.5,
+   "facts": [
+    "f01",
+    "f02",
+    "f03",
+    "f04",
+    "f05",
+    "f06",
+    "f07",
+    "f08",
+    "f09"
+   ],
+   "turns": [
+    "t001",
+    "t019"
+   ]
+  },
+  {
+   "name": "scope",
+   "minutes": 3.5,
+   "facts": [
+    "f10",
+    "f11",
+    "f12",
+    "f13",
+    "f14",
+    "f15",
+    "f16"
+   ],
+   "turns": [
+    "t020",
+    "t045"
+   ]
+  },
+  {
+   "name": "sla",
+   "minutes": 3.1,
+   "facts": [
+    "f17",
+    "f18",
+    "f19",
+    "f20",
+    "f21",
+    "f22",
+    "f23"
+   ],
+   "turns": [
+    "t046",
+    "t068"
+   ]
+  },
+  {
+   "name": "price",
+   "minutes": 4.7,
+   "facts": [
+    "f24",
+    "f25",
+    "f26",
+    "f27",
+    "f28",
+    "f29",
+    "f30",
+    "f31",
+    "f32",
+    "f33",
+    "f34",
+    "f35",
+    "f36",
+    "f37",
+    "f38",
+    "f39"
+   ],
+   "turns": [
+    "t069",
+    "t105"
+   ]
+  },
+  {
+   "name": "terms",
+   "minutes": 6.2,
+   "facts": [
+    "f40",
+    "f41",
+    "f42",
+    "f43",
+    "f44",
+    "f45",
+    "f46",
+    "f47",
+    "f48",
+    "f49",
+    "f50",
+    "f51",
+    "f52"
+   ],
+   "turns": [
+    "t106",
+    "t156"
+   ]
+  },
+  {
+   "name": "close",
+   "minutes": 2.7,
+   "facts": [
+    "f53",
+    "f54",
+    "f55",
+    "f56",
+    "f57",
+    "f58",
+    "f59"
+   ],
+   "turns": [
+    "t157",
+    "t180"
+   ]
+  }
+ ],
+ "coaching_truths": [
+  {
+   "id": "k01",
+   "kind": "other",
+   "turn_ids": [
+    "t071",
+    "t072",
+    "t073"
+   ],
+   "statement": "Rahul conceded ₹40,000 (₹6.8 lakh to ₹6.4 lakh) the moment he heard the competitor number, before asking what that quote covered; the founder read it as a sign of more room."
+  },
+  {
+   "id": "k02",
+   "kind": "good_objection_handling",
+   "turn_ids": [
+    "t074",
+    "t075",
+    "t076"
+   ],
+   "statement": "He then asked what the TechSaathi quote included and compared it against their own outage: 8-hour response, no Sunday cover, no resident engineer."
+  },
+  {
+   "id": "k03",
+   "kind": "wrong_info_given",
+   "turn_ids": [
+    "t079",
+    "t080"
+   ],
+   "statement": "He said hardware replacement was included, then corrected it to labour only, with parts at cost plus 10%."
+  },
+  {
+   "id": "k04",
+   "kind": "talked_over",
+   "turn_ids": [
+    "t060",
+    "t061",
+    "t062"
+   ],
+   "statement": "He cut Prakash off with a track-record claim when Prakash asked about SLA penalties; Prakash had to insist on finishing."
+  },
+  {
+   "id": "k05",
+   "kind": "good_objection_handling",
+   "turn_ids": [
+    "t084",
+    "t097",
+    "t102"
+   ],
+   "statement": "Later concessions were traded, not given: ₹6.1 lakh for a two-year term and quarterly advance, ₹5.95 lakh with director approval, and the free DR drill to close the backup worry."
+  },
+  {
+   "id": "k06",
+   "kind": "ignored_buying_signal",
+   "turn_ids": [
+    "t164",
+    "t165"
+   ],
+   "statement": "The founder said a fourth clinic opens by Holi; Rahul only congratulated her and did not offer to add it to the contract or price it."
+  }
+ ]
+}

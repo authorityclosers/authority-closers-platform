@@ -69,6 +69,7 @@ def test_admin_sees_where_ai_money_goes_and_raises_caps_in_one_click(
                     "canary",
                     "pointer_review",
                     "partner_quote_facts",
+                    "one_pass",
                 }
                 assert [line["feature"] for line in view["elsewhere"]] == [
                     "call_data_fast",
