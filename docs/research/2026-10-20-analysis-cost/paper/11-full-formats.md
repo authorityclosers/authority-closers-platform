@@ -76,3 +76,53 @@ Two caveats:
 
 Real calls go to OpenAI only after the DPA and the privacy-page update (owner approval of 21 Oct, conditions
 pending).
+
+## 11.5 Signal and judge noise: three judgements of the same answers (orchestrator's request, 21 Oct)
+
+The same subscription judge ran three times on the same outputs. "vs today" pairs each call's counts averaged over
+the three runs, 20,000 resamples.
+
+| Pipeline | Metric | Run 1 / 2 / 3 | Mean | Spread | vs today |
+|---|---|---|---:|---:|---|
+| Today | fact recall | 60.7 / 60.4 / 69.6% | 63.5% | 9.2 | |
+| Today | critical facts | 63.9 / 65.2 / 72.2% | 67.1% | 8.2 | |
+| Today | coaching truths | 81.4 / 83.0 / 83.0% | 82.5% | 1.7 | |
+| Luna, report-depth prompt | fact recall | 74.7 / 73.3 / 68.4% | 72.1% | 6.3 | +8.8 [−3.1, +18.9] |
+| Luna, report-depth prompt | critical facts | 78.3 / 76.0 / 71.0% | 75.1% | 7.4 | +7.8 [−2.0, +15.5] |
+| Luna, report-depth prompt | unsupported | 1.7 / 3.0 / 1.8% | 2.1% | 1.3 | −1.0 [−2.9, +0.6] |
+| Luna, report-depth prompt | coaching truths | 78.7 / 82.4 / 76.8% | 79.3% | 5.6 | −3.1 [−11.4, +4.2] |
+| Hybrid (Luna facts + Gemini report) | coaching truths | 84.3 / 88.9 / 82.4% | 85.2% | 6.5 | +2.8 [−3.9, +9.1] |
+
+- **Noise:** one judgement of the same answers moves by 6–9 points on facts and 2–7 points on coaching.
+- **Signal, with judgements averaged:** Luna trends +9 on facts and −3 on coaching; the hybrid trends +3 on coaching.
+- **Significance:** no difference is significant on 16 calls. The defensible claim is "at least as good as today,
+  at a fifth of the cost or less". Telling smaller differences apart needs more calls, not more judgements.
+
+## 11.6 A compact transcript for real calls (projection; measurement waits for a Gemini key)
+
+On the seven real calls, Gemini 3.1 Flash-Lite writes about 1,120 output tokens per audio minute (no thinking
+tokens) against 420 on the fictional calls, and output is about 80% of the transcription cost (₹0.24 a minute
+standard).
+
+Per minute of the stored real transcripts:
+
+| Form | Characters per minute |
+|---|---:|
+| JSON | 2,136 |
+| Words only | 961 |
+| Compact lines ("A 754 words", start second only) | 1,090 |
+
+The format overhead is about 360 tokens a minute: 18 segments a minute, each carrying a JSON key set, a speaker
+label and two MM:SS timestamps.
+
+**Projection:**
+
+| Form | Output tokens per minute | Transcription, standard | Transcription, Flex | Full Lean pipeline on Flex |
+|---|---:|---:|---:|---:|
+| Today's JSON | about 1,120 | ₹0.24 | ₹0.12 | about ₹0.15 |
+| Compact lines | about 800 | about ₹0.20 | about ₹0.10 | about ₹0.13 |
+| Compact, Hindi and Marathi in Latin letters (34% of the characters are Devanagari) | perhaps 500 | | | about ₹0.11 |
+
+- The romanised form needs a fidelity check before use.
+- The runner is ready (`harness/compact_asr.py`, styles `json`, `compact` and `compact_roman`, direct Gemini only).
+  The bench Gemini key still answers 403, and OpenRouter use has stopped.

@@ -352,6 +352,15 @@ transcript + measurements ──► ONE analysis pass ──► facts for the CR
   facts answer, which the subscription judge scored between 62% and 79% (mean 70.6%), so fact differences under about
   10 points are judge noise. OpenAI Flex (not judged; same model and prompts) answered all 32 requests on the Flex
   tier in about 4.4 minutes a call, at half price: ₹0.18 / 0.11 / 0.08 a minute with Flash-Lite on Flex.</p>
+  <h3>What is signal and what is judge noise: three judgements of the same answers</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Pipeline</th><th>Measure</th><th class="n">Run 1 / 2 / 3</th><th class="n">Mean</th><th class="n">Spread</th><th class="n">vs today (runs averaged)</th></tr></thead>
+    <tbody id="noiseTable"></tbody>
+  </table></div>
+  <p class="note">The same subscription judge, three times on the same outputs. One judgement moves by 6–9 points on
+  facts and 2–7 on coaching; averaged, Luna trends +9 on facts and −3 on coaching, the hybrid +3 on coaching, and no
+  difference is significant on 16 calls. The defensible claim: at least as good as today, at a fifth of the cost or
+  less. Smaller differences need more calls, not more judgements.</p>
 </section>
 
 <section id="cost">
@@ -634,6 +643,12 @@ transcript + measurements ──► ONE analysis pass ──► facts for the CR
     const money = (c) => c ? `${inr(c["4.5"], 2)} / ${inr(c["13.8"], 2)} / ${inr(c["60.0"], 2)}` : "—";
     document.getElementById("r8Table").innerHTML = R8.length ? R8.map(r => `<tr${r.arm.startsWith("Today") ? ' class="ref"' : ""}><td>${r.arm}</td>${cell(r.metrics.recall)}${cell(r.metrics.critical)}${cell(r.metrics.unsupported, true)}${coach(r)}<td class="n">${pct(r.contracts.c5)} / ${pct(r.contracts.pointer_review)}</td><td class="n">${money(r.cost)}</td><td class="n">${r.latency && r.latency.median_s ? Math.round(r.latency.median_s) + " s" : "—"}</td></tr>`).join("") : `<tr><td colspan="8"><span class="pill pending">running</span> full-format runs and judging</td></tr>`;
   }
+  // ---- judge noise
+  document.getElementById("noiseTable").innerHTML = (D.judgenoise || []).map(r => Object.entries(r.metrics).filter(([m]) => !(r.arm.startsWith("Hybrid") && m !== "coaching")).map(([m, e]) => {
+    const f = (v) => (v >= 0 ? "+" : "−") + Math.abs(100 * v).toFixed(1);
+    const name = {recall: "fact recall", critical: "critical facts", unsupported: "unsupported facts", coaching: "coaching truths"}[m];
+    return `<tr${r.arm.startsWith("Today") ? ' class="ref"' : ""}><td>${r.arm}</td><td>${name}</td><td class="n">${e.runs.map(v => (100 * v).toFixed(1)).join(" / ")}%</td><td class="n">${pct(e.mean, 1)}</td><td class="n">${(100 * e.spread).toFixed(1)}</td><td class="n">${e.diff == null ? "—" : `${f(e.diff)} [${f(e.lo)}, ${f(e.hi)}]`}</td></tr>`;
+  }).join("")).join("");
   // ---- consistency
   (D.consistency || []).forEach(c => {
     if (c.arm.includes("onepass2/google_gemini-3.8-flash")) document.getElementById("consG").textContent = pct(c.pointer_agreement);
