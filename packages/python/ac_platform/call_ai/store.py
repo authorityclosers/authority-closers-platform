@@ -176,8 +176,10 @@ async def record_skip(
     call: CallLevel,
     stage: str,
     now: datetime,
+    reason: str = "level",
 ) -> None:
-    """One 'skipped' row per plan: the call, its level and the first stage left out."""
+    """One 'skipped' row per plan: the call, its level, the first stage left out and why
+    (the seller's level, or the short-call rule)."""
     await db.execute(
         pg_insert(CallAiDecision)
         .values(
@@ -192,6 +194,7 @@ async def record_skip(
             settings_revision=call.settings_revision,
             actor_person_id=None,
             created_at=now,
+            reason=reason,
         )
         .on_conflict_do_nothing(constraint="uq_call_ai_decision_plan")
     )
@@ -243,7 +246,41 @@ def level_for_call_sync(connection: Any, tenant_id: UUID, recording_id: UUID) ->
     )
 
 
+_NEWEST_PLAN_CODE = text(
+    "SELECT progress ->> 'failure_code' FROM conversation_processing_plans"
+    " WHERE recording_id = :recording AND erased_at IS NULL"
+    " ORDER BY created_at DESC, id DESC LIMIT 1"
+)
+
+
 def runs_beyond_transcript(connection: Any, tenant_id: UUID, recording_id: UUID) -> bool:
-    """False when the call's level stops at its transcript (Off or Data only): readers
-    that would analyse the call further (deep call data, one pass) leave it alone."""
-    return level_for_call_sync(connection, tenant_id, recording_id).skipped_from is None
+    """False when the call stops at its transcript, by its level (Off or Data only) or
+    because its plan was held as a short call: readers that would analyse the call
+    further (deep call data, one pass) leave it alone."""
+    if level_for_call_sync(connection, tenant_id, recording_id).skipped_from is not None:
+        return False
+    code = connection.scalar(_NEWEST_PLAN_CODE, {"recording": recording_id})
+    return code not in set(policy.SHORT_CODES.values())
+
+
+def fast_reads_call(
+    connection: Any, tenant_id: UUID, recording_id: UUID, environment: str | None
+) -> bool:
+    """Whether the fast call data engine reads this call. Everywhere but production it
+    reads every call, as before. On production it reads only the calls that stop at their
+    transcript (Data only, short calls): a call that runs in full gets its call data from
+    the plan's one-pass read, so nothing is written twice. A call not yet stopped is read
+    on a later pass once its plan has decided."""
+    if environment != "production":
+        return True
+    return not runs_beyond_transcript(connection, tenant_id, recording_id)
+
+
+async def in_organisation(db: AsyncSession, tenant_id: UUID) -> bool:
+    """The short-call rule is for organisations; a personal workspace runs as before."""
+    return bool(
+        await db.scalar(
+            text("SELECT EXISTS (SELECT 1 FROM organisations WHERE tenant_id = :tenant)"),
+            {"tenant": tenant_id},
+        )
+    )

@@ -22,6 +22,7 @@ import pytest
 from sqlalchemy import select, update
 
 from ac_platform.audit.models import AuditEvent
+from ac_platform.call_ai import policy as call_ai_policy
 from ac_platform.call_ai.http import install_call_ai_http
 from ac_platform.call_ai.models import CallAiDecision, CallAiSettings
 from ac_platform.conversation_intelligence.acquisition_models import (
@@ -207,10 +208,19 @@ def test_only_owners_and_admins_change_levels_and_every_save_is_audited(
     run(exercise())
 
 
-def test_a_data_only_call_stops_after_its_transcript_and_an_admin_gets_its_full_report(
-    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("why", ["data_only", "short_call"])
+def test_a_stopped_call_keeps_its_transcript_and_an_admin_gets_its_full_report(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, why: str
 ) -> None:
+    """Data only (the seller's level) and a short call (owner, 21 Oct 2026: under a minute
+    or no conversation, in every organisation) stop after the transcript the same way."""
     monkeypatch.setattr(RetryPolicy, "delay_for_attempt", lambda *a, **k: timedelta(microseconds=1))
+    if why == "short_call":
+        # The test environment keeps the rule off for its fixture calls; this test turns it on.
+        monkeypatch.setattr(call_ai_policy, "SHORT_RULE_OFF", frozenset())
+    seller_level = "data_only" if why == "data_only" else "full"
+    code = "ai_data_only" if why == "data_only" else "ai_no_conversation"
+    reason = "level" if why == "data_only" else "no_conversation"
 
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path, gemini=True)
@@ -226,7 +236,7 @@ def test_a_data_only_call_stops_after_its_transcript_and_an_admin_gets_its_full_
                         id=uuid4(),
                         tenant_id=tenant,
                         revision=1,
-                        config={"default": "full", "people": {str(seller.person_id): "data_only"}},
+                        config={"default": "full", "people": {str(seller.person_id): seller_level}},
                         created_by_person_id=setup.state.person_id,
                         created_at=datetime.now(UTC),
                     )
@@ -288,11 +298,12 @@ def test_a_data_only_call_stops_after_its_transcript_and_an_admin_gets_its_full_
                 await drive(UUID(first["id"]), "held")
 
                 stopped = (await client.get(path)).json()
-                assert stopped["failure_code"] == "ai_data_only"
+                assert stopped["failure_code"] == code
                 assert (stopped["run_state"], stopped["minute_state"]) == ("failed", "released")
                 assert stopped["retry_available"] is False
                 assert stopped["ai_skip"] == {
-                    "level": "data_only",
+                    "level": seller_level,
+                    "reason": reason,
                     "stopped_before": "C4",
                     "can_upgrade": False,
                 }
@@ -352,9 +363,9 @@ def test_a_data_only_call_stops_after_its_transcript_and_an_admin_gets_its_full_
                         .order_by(CallAiDecision.created_at)
                     )
                 ).all()
-                assert [(row.decision, row.level, row.stage) for row in decisions] == [
-                    ("skipped", "data_only", "C4"),
-                    ("upgraded", "data_only", None),
+                assert [(row.decision, row.level, row.stage, row.reason) for row in decisions] == [
+                    ("skipped", seller_level, "C4", reason),
+                    ("upgraded", seller_level, None, None),
                 ]
                 assert decisions[0].person_id == seller.person_id
                 assert decisions[1].actor_person_id == setup.state.person_id
