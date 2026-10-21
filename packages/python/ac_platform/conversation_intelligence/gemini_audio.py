@@ -11,7 +11,10 @@ Pure helpers; the bounded transport (``providers.BoundedProviders``) does the ne
   shape the research measured; it also keeps an hour of speech under the inline limit;
 - ``plan_parts`` / ``cut``: a call longer than 15 minutes goes as 10-minute parts heard 30
   seconds into each other, sent at once (the broker allows 180 seconds for the whole call);
-- ``request_body``: the research's prompt and strict schema (speaker, start, end, text);
+- ``request_body``: the research's prompt and strict schema (speaker, start, end, text),
+  or the compact format (cost research v2.3, 21 Oct 2026): one ``[MM:SS] S1: words``
+  line per turn, no schema, fewer output tokens, each turn ending where the next starts.
+  The request's recipe picks the format; this route's recipe is the JSON one;
 - ``gemini_audio_transcript``: the answer as today's C2 transcript contract. Times come
   back as MM:SS and are normalised: ordered, at least 300 ms, inside the call; speakers
   (A, B, ...) become ``speaker_0``, ``speaker_1`` in order of first speech. Parts are
@@ -32,17 +35,33 @@ import subprocess
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 if TYPE_CHECKING:
     from ac_platform.conversation_intelligence.providers import ProviderResult
+
+TranscriptFormat = Literal["json", "compact"]
 
 MODEL: Final = "gemini-3.1-flash-lite"
 # The same model on Flex is its own approved route (gemini_tiers).
 MODELS: Final = frozenset({MODEL, MODEL + ":flex"})
 OPERATION: Final = "transcribe_gemini_audio"
-RECIPE: Final = "gemini-3.1-flash-lite-audio-v1"
-PROMPT_REVISION: Final = "gemini-audio-transcript/1"
+FORMAT_RECIPES: Final[dict[TranscriptFormat, str]] = {
+    "json": "gemini-3.1-flash-lite-audio-v1",
+    "compact": "gemini-3.1-flash-lite-audio-compact-v1",
+}
+FORMAT_PROMPT_REVISIONS: Final[dict[TranscriptFormat, str]] = {
+    "json": "gemini-audio-transcript/1",
+    "compact": "gemini-audio-transcript-compact/1",
+}
+# This route's format, recipe and prompt revision (what Root sealed in v0.72). They never
+# change for this route: every C2 checkpoint and every report read re-derives its recipe
+# from the route (provider, model), so a changed recipe would fail the integrity check of
+# every transcript already made. A compact route in production is a route of its own (a
+# model suffix, as Flex is), sealed by Root; a request carries its format in its recipe.
+TRANSCRIPT_FORMAT: Final[TranscriptFormat] = "json"
+RECIPE: Final = FORMAT_RECIPES["json"]
+PROMPT_REVISION: Final = FORMAT_PROMPT_REVISIONS["json"]
 TIMEBASE: Final = "gemini-audio-mmss-v1"
 MIN_SEGMENT_MS: Final = 300
 MS_PER_WORD: Final = 400  # when a segment comes back without a usable end
@@ -89,7 +108,21 @@ SCHEMA: Final[dict[str, Any]] = {
     },
     "required": ["segments"],
 }
+COMPACT_PROMPT: Final = """Transcribe this recorded phone call verbatim, every word, from start to end.
+Write ONE line per speaker turn, nothing else, in exactly this form:
+[MM:SS] S1: words
+- [MM:SS]: when the turn starts, minutes and seconds from the start of the call.
+- S1, S2, S3...: the speaker, decided by the voice and kept consistent for the whole call (the first voice heard is
+  S1). Start a new line with the other label every time the voice changes; sales calls mostly alternate between two
+  voices.
+- words: exactly what is said. Hindi and Marathi in Devanagari script; English words (including English words inside
+  Hindi/Marathi sentences) in Latin script. Do not translate, correct, summarise or skip anything.
+- Numbers: write amounts, dates and times as digits when spoken as numbers ("12.5 lakh", "27 October", "2:30").
+- Split a turn longer than ~30 seconds into lines. If something is inaudible write [inaudible]; never guess words.
+- Never repeat a line you have already written. No JSON, no headings, no blank lines."""  # noqa: E501 - the measured prompt
 _CLOCK = re.compile(r"^\s*(?:(\d{1,2}):)?(\d{1,3}):(\d{1,2}(?:\.\d{1,3})?)\s*$")
+# One compact line: "[MM:SS] S1: words" (or "[H:MM:SS]"); the research harness's rule.
+_LINE = re.compile(r"^\s*\[(\d{1,3}):(\d{2})(?::(\d{2}))?\]\s*(S\d+|[A-Z])\s*:\s*(.+?)\s*$")
 
 
 class GeminiAudioError(ValueError):
@@ -213,21 +246,31 @@ def audio_part(audio: bytes, *, file_uri: str | None = None) -> dict[str, Any]:
     }
 
 
-def request_body(part: Mapping[str, Any]) -> dict[str, Any]:
-    """The research's prompt with its strict schema; temperature 0, thinking low."""
+def format_of(recipe: str) -> TranscriptFormat:
+    """The answer format a C2 recipe asks for."""
+    return "compact" if recipe == FORMAT_RECIPES["compact"] else "json"
+
+
+def request_body(
+    part: Mapping[str, Any], *, fmt: TranscriptFormat = TRANSCRIPT_FORMAT
+) -> dict[str, Any]:
+    """The research's prompt with its strict schema, or the compact prompt with none;
+    temperature 0, thinking low."""
+    config: dict[str, Any] = {
+        "candidateCount": 1,
+        "maxOutputTokens": MAX_OUTPUT_TOKENS,
+        "temperature": 0.0,
+    }
+    if fmt == "json":
+        config["responseMimeType"] = "application/json"
+        config["responseJsonSchema"] = SCHEMA
+    config["thinkingConfig"] = {"thinkingLevel": "LOW", "includeThoughts": False}
     return {
-        "systemInstruction": {"parts": [{"text": PROMPT}]},
+        "systemInstruction": {"parts": [{"text": COMPACT_PROMPT if fmt == "compact" else PROMPT}]},
         "contents": [
             {"role": "user", "parts": [dict(part), {"text": "Transcribe the call above."}]}
         ],
-        "generationConfig": {
-            "candidateCount": 1,
-            "maxOutputTokens": MAX_OUTPUT_TOKENS,
-            "temperature": 0.0,
-            "responseMimeType": "application/json",
-            "responseJsonSchema": SCHEMA,
-            "thinkingConfig": {"thinkingLevel": "LOW", "includeThoughts": False},
-        },
+        "generationConfig": config,
     }
 
 
@@ -243,8 +286,33 @@ def clock_ms(value: Any) -> int | None:
     return round(total * 1000)
 
 
+def compact_answer(text: str) -> dict[str, Any]:
+    """Compact lines as the JSON answer's segments: each turn ends where the next one
+    starts (the last one's end is left to ``normalized_segments``). A line without a
+    time continues the turn before it; code fences and text before the first turn are
+    not speech."""
+    rows: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        match = _LINE.match(line)
+        if match is None:
+            words = " ".join(line.split())
+            if rows and words and not words.startswith("```"):
+                rows[-1]["text"] += " " + words
+            continue
+        first, second, third, speaker, words = match.groups()
+        clock = f"{first}:{second}:{third}" if third else f"{first}:{second}"
+        rows.append({"speaker": speaker, "start": clock, "text": words})
+    if not rows:
+        raise GeminiAudioError("gemini_audio_answer_unreadable")
+    for row, following in zip(rows, rows[1:], strict=False):
+        row["end"] = following["start"]
+    rows[-1]["end"] = None
+    return {"segments": rows}
+
+
 def answer_of(response: Mapping[str, Any]) -> dict[str, Any]:
-    """The JSON answer inside a generateContent response (thoughts left out)."""
+    """The answer inside a generateContent response (thoughts left out): the JSON object
+    the schema asked for, or compact lines read as the same segments."""
     try:
         candidate = response["candidates"][0]
         finish = candidate.get("finishReason")
@@ -257,6 +325,8 @@ def answer_of(response: Mapping[str, Any]) -> dict[str, Any]:
         raise GeminiAudioError("gemini_audio_response_invalid") from None
     if finish == "MAX_TOKENS":
         raise GeminiAudioError("gemini_audio_answer_too_long")
+    if not text.lstrip().startswith("{"):
+        return compact_answer(text)
     try:
         value = json.loads(text)
     except ValueError:

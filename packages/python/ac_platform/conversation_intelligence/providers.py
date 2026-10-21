@@ -462,7 +462,9 @@ class BoundedProviders:
                 model,
                 gemini_audio.URL.format(model=gemini_tiers.base_model(model)),
                 {"x-goog-api-key": key},
-                gemini_audio.request_body(part),
+                gemini_audio.request_body(
+                    part, fmt=gemini_audio.format_of(reservation.quote.recipe_revision)
+                ),
                 deadline_seconds=gemini_audio.DEADLINE_SECONDS,
             )
         finally:

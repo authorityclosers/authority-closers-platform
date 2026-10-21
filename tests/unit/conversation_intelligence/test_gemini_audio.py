@@ -2,6 +2,7 @@
 transcript contract. Fake credentials, intercepted HTTPS, fictional words only."""
 
 import base64
+import dataclasses
 import hashlib
 import json
 import shutil
@@ -440,3 +441,135 @@ def test_the_flex_text_route_sends_the_same_prompt_to_the_base_model() -> None:
     assert sent[0]["service_tier"] == "flex"
     assert {k: v for k, v in sent[0].items() if k != "service_tier"} == body
     assert result.usage[gemini_tiers.FLEX_USAGE] == 1
+
+
+COMPACT = """[00:00] S1: Namaste, main Rohan.
+[00:04] S2: Haan ji, main Amit.
+aur aap kaise hain?
+```
+[00:09] S1: Friday ko baat karte hain.
+[1:00:05] S2: Late in a long call."""
+
+
+def _compact_grant():
+    g = _grant()
+    quote = dataclasses.replace(g.quote, recipe_revision=gemini_audio.FORMAT_RECIPES["compact"])
+    permission = dataclasses.replace(g.permission, quote_fingerprint=quote.fingerprint)
+    return dataclasses.replace(g, quote=quote, permission=permission)
+
+
+def _text_response(text):
+    return {
+        "candidates": [{"content": {"parts": [{"text": text}]}, "finishReason": "STOP"}],
+        "usageMetadata": {"promptTokenCount": 640, "candidatesTokenCount": 40},
+    }
+
+
+def test_this_route_keeps_the_json_recipe_root_sealed() -> None:
+    # Root sealed this recipe and prompt revision (v0.72), and every Flash-Lite C2
+    # checkpoint re-derives it from the route; compact is a different recipe.
+    assert gemini_audio.TRANSCRIPT_FORMAT == "json"
+    assert gemini_audio.RECIPE == "gemini-3.1-flash-lite-audio-v1"
+    assert gemini_audio.PROMPT_REVISION == "gemini-audio-transcript/1"
+    for model in gemini_audio.MODELS:
+        assert transcription_recipe_for_route("gemini", model) == gemini_audio.RECIPE
+    assert gemini_audio.FORMAT_RECIPES["compact"] != gemini_audio.RECIPE
+    assert gemini_audio.format_of(gemini_audio.RECIPE) == "json"
+    assert gemini_audio.format_of(gemini_audio.FORMAT_RECIPES["compact"]) == "compact"
+
+
+def test_a_compact_recipe_asks_for_lines_without_a_schema(monkeypatch) -> None:
+    monkeypatch.setattr(gemini_audio, "speech_mp3", lambda audio: SPEECH)
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.read()))
+        return httpx.Response(200, json=_text_response(COMPACT))
+
+    g = _compact_grant()
+    result = client(handler).transcribe(g, AUDIO)
+    config = sent[0]["generationConfig"]
+    assert "responseJsonSchema" not in config and "responseMimeType" not in config
+    assert config["maxOutputTokens"] == gemini_audio.MAX_OUTPUT_TOKENS
+    assert config["temperature"] == 0.0
+    assert sent[0]["systemInstruction"]["parts"][0]["text"] == gemini_audio.COMPACT_PROMPT
+    transcript = gemini_audio.gemini_audio_transcript(
+        result, duration_ms=60_000, source_sha256=g.quote.source.source_sha256
+    )
+    # Each turn ends where the next starts; a line without a time continues its turn;
+    # the fence is not speech; the last turn gets the word-count guess; a turn after the
+    # call's end is left out.
+    assert transcript["segments"] == [
+        {
+            "id": "s1",
+            "speaker_id": "speaker_0",
+            "start_ms": 0,
+            "end_ms": 4000,
+            "text": "Namaste, main Rohan.",
+        },
+        {
+            "id": "s2",
+            "speaker_id": "speaker_1",
+            "start_ms": 4000,
+            "end_ms": 9000,
+            "text": "Haan ji, main Amit. aur aap kaise hain?",
+        },
+        {
+            "id": "s3",
+            "speaker_id": "speaker_0",
+            "start_ms": 9000,
+            "end_ms": 60_000,
+            "text": "Friday ko baat karte hain.",
+        },
+    ]
+
+
+def test_compact_lines_read_as_the_json_answers_segments() -> None:
+    answer = gemini_audio.compact_answer(COMPACT)
+    assert [(row["speaker"], row["start"], row["end"]) for row in answer["segments"]] == [
+        ("S1", "00:00", "00:04"),
+        ("S2", "00:04", "00:09"),
+        ("S1", "00:09", "1:00:05"),
+        ("S2", "1:00:05", None),
+    ]
+    assert gemini_audio.clock_ms("1:00:05") == 3_605_000
+    # The same answer as JSON gives the same segments.
+    as_json = gemini_audio.normalized_segments({"segments": answer["segments"]}, duration_ms=60_000)
+    as_lines = gemini_audio.normalized_segments(
+        gemini_audio.answer_of(_text_response(COMPACT)), duration_ms=60_000
+    )
+    assert as_json == as_lines
+    with pytest.raises(gemini_audio.GeminiAudioError, match="unreadable"):
+        gemini_audio.compact_answer("Here is the transcript:\n```\n```")
+    with pytest.raises(gemini_audio.GeminiAudioError, match="too_long"):
+        gemini_audio.answer_of(
+            {
+                **_text_response(COMPACT),
+                "candidates": [
+                    {"content": {"parts": [{"text": COMPACT}]}, "finishReason": "MAX_TOKENS"}
+                ],
+            }
+        )
+
+
+def test_compact_parts_join_with_one_speaker_per_voice() -> None:
+    first = gemini_audio.compact_answer(
+        "[00:00] S1: Namaste, main Rohan bol raha hoon.\n"
+        "[05:00] S2: Haan ji, boliye, main Amit.\n"
+        "[10:05] S1: Aapki team kitne logon ki hai abhi?"
+    )
+    # The second part's model happened to hear the prospect first.
+    second = gemini_audio.compact_answer(
+        "[00:05] S2: Aapki team kitne logon ki hai abhi?\n"
+        "[00:21] S1: Aath log hain aur revenue chaar lakh.\n"
+        "[01:00] S2: Theek hai, Friday ko baat karte hain."
+    )
+    rows = gemini_audio.stitched_rows([(0, first), (600_000, second)])
+    segments, _ = gemini_audio.normalized_segments(duration_ms=700_000, rows=rows)
+    assert [(s["speaker_id"], s["start_ms"]) for s in segments] == [
+        ("speaker_0", 0),
+        ("speaker_1", 300_000),
+        ("speaker_0", 605_000),
+        ("speaker_1", 621_000),
+        ("speaker_0", 660_000),
+    ]
