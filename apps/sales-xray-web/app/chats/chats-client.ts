@@ -23,6 +23,7 @@ import {
   type WaTemplate,
   type WaThread,
 } from "../leads/whatsapp-client";
+import { displayName, displayNameOf } from "../display-name";
 
 export const CHATS_PATH = "/chats";
 
@@ -128,7 +129,7 @@ function toThread(
     key: threadKey(channel, row.leadId ?? null, row.accountId, String(index)),
     channel,
     leadId: row.leadId ?? null,
-    leadName: row.leadName || CHANNEL_LABEL[channel],
+    leadName: row.leadName ? displayName(row.leadName) : CHANNEL_LABEL[channel],
     lastText: row.lastText ?? null,
     lastAt: row.lastAt,
     waiting: Boolean(row.waiting),
@@ -140,7 +141,7 @@ function toThread(
     lastStatus: row.lastStatus ?? null,
     waitingSince: row.waitingSince ?? null,
     ownerId: row.ownerId ?? null,
-    ownerName: row.ownerName ?? null,
+    ownerName: displayNameOf(row.ownerName ?? null),
     unread: typeof row.unread === "number" ? row.unread : null,
   };
 }

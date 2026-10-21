@@ -51,6 +51,7 @@ import {
 } from "../call-ownership";
 import { RecentCallItem } from "./recent-call-item";
 import { newCallHref } from "../new-call-navigation";
+import { displayName as withCapitals } from "../display-name";
 import { ProfileMenu } from "../profile-menu";
 import { SettingsDialogHost } from "../settings-dialog";
 import { notify } from "../notice-center";
@@ -352,7 +353,8 @@ function LightboxShellFrame({
     authenticated,
     process.env.NODE_ENV !== "test",
   );
-  const profileName = profile?.name?.trim() || null;
+  // Your own name with capitals too (owner, 22 Oct).
+  const profileName = profile?.name?.trim() ? withCapitals(profile.name) : null;
   const [recentCalls, setRecentCalls] = useState(() =>
     recentCallsForContext(cached, recentContextKey),
   );

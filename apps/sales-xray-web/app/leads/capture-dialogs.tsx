@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
-import { Button, Dialog, Field, Segmented } from "../ui/kit";
+import { Button, Dialog, Field, kitStyles, Segmented } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import {
   addLead,
@@ -415,15 +415,20 @@ export function AddLeadDialog({
           </div>
         ) : null}
         {canManage ? (
-          <Segmented
-            label="Who gets it"
-            value={assign}
-            onChange={setAssign}
-            items={[
-              { key: "rules", label: "Best fit by the rules" },
-              { key: "me", label: "Me" },
-            ]}
-          />
+          <div className={styles.whoGets}>
+            <span className={kitStyles.fieldLabel} aria-hidden="true">
+              Who gets it
+            </span>
+            <Segmented
+              label="Who gets it"
+              value={assign}
+              onChange={setAssign}
+              items={[
+                { key: "rules", label: "Best fit by the rules" },
+                { key: "me", label: "Me" },
+              ]}
+            />
+          </div>
         ) : null}
         <p className={styles.hint}>
           {canManage

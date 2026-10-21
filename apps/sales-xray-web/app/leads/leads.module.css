@@ -762,6 +762,11 @@
   grid-column: 1 / -1;
 }
 
+.whoGets {
+  display: grid;
+  gap: 6px;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;

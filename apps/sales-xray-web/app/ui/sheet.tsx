@@ -220,8 +220,19 @@ export function Sheet({
     void leave(panel, scrim, wide).then(() => {
       if (cancelled) return;
       settle(panel, scrim);
+      // Closing a modal hands focus back to what opened it. When the next
+      // sheet has already taken over (the + sheet into Add lead), the focus
+      // stays in that sheet, with the keyboard up.
+      const active = document.activeElement;
+      const handedOn =
+        active instanceof HTMLElement &&
+        !dialog.contains(active) &&
+        active.closest("dialog[open]")
+          ? active
+          : null;
       if (typeof dialog.close === "function") dialog.close();
       else dialog.removeAttribute("open");
+      handedOn?.focus({ preventScroll: true });
       setShown(false);
     });
     return () => {

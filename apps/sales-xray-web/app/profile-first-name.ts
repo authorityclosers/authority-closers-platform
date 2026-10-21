@@ -1,9 +1,10 @@
 "use client";
 
+import { displayName } from "./display-name";
 import { useShellProfile } from "./shell/profile-store";
 
 export function firstNameOf(name: string | null | undefined): string | null {
-  return name?.trim().split(/\s+/)[0] || null;
+  return name ? displayName(name).split(" ")[0] || null : null;
 }
 
 /**
