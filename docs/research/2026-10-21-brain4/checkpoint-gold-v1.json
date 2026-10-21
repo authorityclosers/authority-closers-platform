@@ -12,6 +12,8 @@
   "scorers": [
     {
       "scorer": "classic: pointer review (Gemini 3.8 Flash)",
+      "repeat_same": null,
+      "repeat_pairs": 0,
       "reads_per_call": 1,
       "overall": {
         "labels": 43,
@@ -172,6 +174,8 @@
     },
     {
       "scorer": "one pass (research build, Gemini 3.8 Flash)",
+      "repeat_same": null,
+      "repeat_pairs": 0,
       "reads_per_call": 1,
       "overall": {
         "labels": 43,
@@ -331,7 +335,333 @@
       }
     },
     {
+      "scorer": "Brain 4.0 product prompt (Gemini 3.8 Flash Flex)",
+      "repeat_same": null,
+      "repeat_pairs": 0,
+      "reads_per_call": 0.83,
+      "overall": {
+        "labels": 43,
+        "rated": 33,
+        "agree": 18,
+        "agreement": 0.545,
+        "wilson": [0.3799, 0.7016],
+        "by_call_ci": [0.3235, 0.6857]
+      },
+      "by_label": {
+        "positive": {
+          "labels": 27,
+          "rated": 19,
+          "agree": 11,
+          "agreement": 0.579,
+          "wilson": [0.3628, 0.7686],
+          "by_call_ci": [0.2917, 0.8462]
+        },
+        "negative": {
+          "labels": 9,
+          "rated": 8,
+          "agree": 1,
+          "agreement": 0.125,
+          "wilson": [0.0224, 0.4709],
+          "by_call_ci": [0.0, 0.3333]
+        },
+        "mixed": {
+          "labels": 7,
+          "rated": 6,
+          "agree": 6,
+          "agreement": 1.0,
+          "wilson": [0.6097, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        }
+      },
+      "dimensions": {
+        "D01": {
+          "labels": 3,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D02": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 2,
+          "agreement": 0.667,
+          "wilson": [0.2077, 0.9385],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D03": {
+          "labels": 4,
+          "rated": 0,
+          "agree": 0,
+          "agreement": null,
+          "wilson": null,
+          "by_call_ci": null
+        },
+        "D04": {
+          "labels": 3,
+          "rated": 3,
+          "agree": 1,
+          "agreement": 0.333,
+          "wilson": [0.0615, 0.7923],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D05": {
+          "labels": 6,
+          "rated": 5,
+          "agree": 3,
+          "agreement": 0.6,
+          "wilson": [0.2307, 0.8824],
+          "by_call_ci": [0.2, 1.0]
+        },
+        "D06": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D07": {
+          "labels": 3,
+          "rated": 2,
+          "agree": 2,
+          "agreement": 1.0,
+          "wilson": [0.3424, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        },
+        "D09": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D10": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D13": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.7935],
+          "by_call_ci": null
+        },
+        "D14": {
+          "labels": 5,
+          "rated": 4,
+          "agree": 2,
+          "agreement": 0.5,
+          "wilson": [0.15, 0.85],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D15": {
+          "labels": 5,
+          "rated": 4,
+          "agree": 2,
+          "agreement": 0.5,
+          "wilson": [0.15, 0.85],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D16": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 1,
+          "agreement": 0.5,
+          "wilson": [0.0945, 0.9055],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D17": {
+          "labels": 1,
+          "rated": 0,
+          "agree": 0,
+          "agreement": null,
+          "wilson": null,
+          "by_call_ci": null
+        },
+        "D18": {
+          "labels": 1,
+          "rated": 1,
+          "agree": 1,
+          "agreement": 1.0,
+          "wilson": [0.2065, 1.0],
+          "by_call_ci": null
+        }
+      }
+    },
+    {
+      "scorer": "Brain 4.0 product prompt (GPT-6 Luna Flex)",
+      "repeat_same": 0.686,
+      "repeat_pairs": 35,
+      "reads_per_call": 2,
+      "overall": {
+        "labels": 86,
+        "rated": 70,
+        "agree": 27,
+        "agreement": 0.386,
+        "wilson": [0.2805, 0.5028],
+        "by_call_ci": [0.2059, 0.5278]
+      },
+      "by_label": {
+        "positive": {
+          "labels": 54,
+          "rated": 46,
+          "agree": 7,
+          "agreement": 0.152,
+          "wilson": [0.0757, 0.2822],
+          "by_call_ci": [0.05, 0.2778]
+        },
+        "negative": {
+          "labels": 18,
+          "rated": 14,
+          "agree": 10,
+          "agreement": 0.714,
+          "wilson": [0.4535, 0.8828],
+          "by_call_ci": [0.4, 0.9375]
+        },
+        "mixed": {
+          "labels": 14,
+          "rated": 10,
+          "agree": 10,
+          "agreement": 1.0,
+          "wilson": [0.7225, 1.0],
+          "by_call_ci": [1.0, 1.0]
+        }
+      },
+      "dimensions": {
+        "D01": {
+          "labels": 6,
+          "rated": 6,
+          "agree": 1,
+          "agreement": 0.167,
+          "wilson": [0.0301, 0.5635],
+          "by_call_ci": [0.0, 0.5]
+        },
+        "D02": {
+          "labels": 6,
+          "rated": 6,
+          "agree": 3,
+          "agreement": 0.5,
+          "wilson": [0.1876, 0.8124],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D03": {
+          "labels": 8,
+          "rated": 0,
+          "agree": 0,
+          "agreement": null,
+          "wilson": null,
+          "by_call_ci": null
+        },
+        "D04": {
+          "labels": 6,
+          "rated": 6,
+          "agree": 3,
+          "agreement": 0.5,
+          "wilson": [0.1876, 0.8124],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D05": {
+          "labels": 12,
+          "rated": 12,
+          "agree": 6,
+          "agreement": 0.5,
+          "wilson": [0.2538, 0.7462],
+          "by_call_ci": [0.1667, 0.8333]
+        },
+        "D06": {
+          "labels": 4,
+          "rated": 4,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.4899],
+          "by_call_ci": [0.0, 0.0]
+        },
+        "D07": {
+          "labels": 6,
+          "rated": 6,
+          "agree": 0,
+          "agreement": 0.0,
+          "wilson": [0.0, 0.3903],
+          "by_call_ci": [0.0, 0.0]
+        },
+        "D09": {
+          "labels": 4,
+          "rated": 4,
+          "agree": 2,
+          "agreement": 0.5,
+          "wilson": [0.15, 0.85],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D10": {
+          "labels": 4,
+          "rated": 4,
+          "agree": 2,
+          "agreement": 0.5,
+          "wilson": [0.15, 0.85],
+          "by_call_ci": [0.0, 1.0]
+        },
+        "D13": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 2,
+          "agreement": 1.0,
+          "wilson": [0.3424, 1.0],
+          "by_call_ci": null
+        },
+        "D14": {
+          "labels": 10,
+          "rated": 10,
+          "agree": 3,
+          "agreement": 0.3,
+          "wilson": [0.1078, 0.6032],
+          "by_call_ci": [0.0, 0.7]
+        },
+        "D15": {
+          "labels": 10,
+          "rated": 8,
+          "agree": 3,
+          "agreement": 0.375,
+          "wilson": [0.1368, 0.6943],
+          "by_call_ci": [0.0, 0.75]
+        },
+        "D16": {
+          "labels": 4,
+          "rated": 0,
+          "agree": 0,
+          "agreement": null,
+          "wilson": null,
+          "by_call_ci": null
+        },
+        "D17": {
+          "labels": 2,
+          "rated": 0,
+          "agree": 0,
+          "agreement": null,
+          "wilson": null,
+          "by_call_ci": null
+        },
+        "D18": {
+          "labels": 2,
+          "rated": 2,
+          "agree": 2,
+          "agreement": 1.0,
+          "wilson": [0.3424, 1.0],
+          "by_call_ci": null
+        }
+      }
+    },
+    {
       "scorer": "Brain 4.0 research prompt (Gemini 3.8 Flash)",
+      "repeat_same": null,
+      "repeat_pairs": 0,
       "reads_per_call": 1,
       "overall": {
         "labels": 43,
@@ -492,6 +822,8 @@
     },
     {
       "scorer": "Brain 4.0 research prompt (GPT-6 Luna)",
+      "repeat_same": null,
+      "repeat_pairs": 0,
       "reads_per_call": 1,
       "overall": {
         "labels": 43,
@@ -649,166 +981,6 @@
           "by_call_ci": null
         }
       }
-    },
-    {
-      "scorer": "Brain 4.0 + coach-notes prompt (Gemini 3.8 Flash)",
-      "reads_per_call": 1,
-      "overall": {
-        "labels": 43,
-        "rated": 41,
-        "agree": 24,
-        "agreement": 0.585,
-        "wilson": [0.4337, 0.7224],
-        "by_call_ci": [0.3889, 0.7442]
-      },
-      "by_label": {
-        "positive": {
-          "labels": 27,
-          "rated": 26,
-          "agree": 16,
-          "agreement": 0.615,
-          "wilson": [0.4253, 0.7757],
-          "by_call_ci": [0.3462, 0.9091]
-        },
-        "negative": {
-          "labels": 9,
-          "rated": 8,
-          "agree": 1,
-          "agreement": 0.125,
-          "wilson": [0.0224, 0.4709],
-          "by_call_ci": [0.0, 0.3333]
-        },
-        "mixed": {
-          "labels": 7,
-          "rated": 7,
-          "agree": 7,
-          "agreement": 1.0,
-          "wilson": [0.6457, 1.0],
-          "by_call_ci": [1.0, 1.0]
-        }
-      },
-      "dimensions": {
-        "D01": {
-          "labels": 3,
-          "rated": 3,
-          "agree": 2,
-          "agreement": 0.667,
-          "wilson": [0.2077, 0.9385],
-          "by_call_ci": [0.0, 1.0]
-        },
-        "D02": {
-          "labels": 3,
-          "rated": 3,
-          "agree": 2,
-          "agreement": 0.667,
-          "wilson": [0.2077, 0.9385],
-          "by_call_ci": [0.0, 1.0]
-        },
-        "D03": {
-          "labels": 4,
-          "rated": 4,
-          "agree": 3,
-          "agreement": 0.75,
-          "wilson": [0.3006, 0.9544],
-          "by_call_ci": [0.25, 1.0]
-        },
-        "D04": {
-          "labels": 3,
-          "rated": 3,
-          "agree": 1,
-          "agreement": 0.333,
-          "wilson": [0.0615, 0.7923],
-          "by_call_ci": [0.0, 1.0]
-        },
-        "D05": {
-          "labels": 6,
-          "rated": 6,
-          "agree": 4,
-          "agreement": 0.667,
-          "wilson": [0.3, 0.9032],
-          "by_call_ci": [0.3333, 1.0]
-        },
-        "D06": {
-          "labels": 2,
-          "rated": 2,
-          "agree": 1,
-          "agreement": 0.5,
-          "wilson": [0.0945, 0.9055],
-          "by_call_ci": [0.0, 1.0]
-        },
-        "D07": {
-          "labels": 3,
-          "rated": 3,
-          "agree": 2,
-          "agreement": 0.667,
-          "wilson": [0.2077, 0.9385],
-          "by_call_ci": [0.0, 1.0]
-        },
-        "D09": {
-          "labels": 2,
-          "rated": 2,
-          "agree": 1,
-          "agreement": 0.5,
-          "wilson": [0.0945, 0.9055],
-          "by_call_ci": [0.0, 1.0]
-        },
-        "D10": {
-          "labels": 2,
-          "rated": 2,
-          "agree": 1,
-          "agreement": 0.5,
-          "wilson": [0.0945, 0.9055],
-          "by_call_ci": [0.0, 1.0]
-        },
-        "D13": {
-          "labels": 1,
-          "rated": 1,
-          "agree": 0,
-          "agreement": 0.0,
-          "wilson": [0.0, 0.7935],
-          "by_call_ci": null
-        },
-        "D14": {
-          "labels": 5,
-          "rated": 5,
-          "agree": 2,
-          "agreement": 0.4,
-          "wilson": [0.1176, 0.7693],
-          "by_call_ci": [0.0, 0.8]
-        },
-        "D15": {
-          "labels": 5,
-          "rated": 4,
-          "agree": 3,
-          "agreement": 0.75,
-          "wilson": [0.3006, 0.9544],
-          "by_call_ci": [0.25, 1.0]
-        },
-        "D16": {
-          "labels": 2,
-          "rated": 2,
-          "agree": 1,
-          "agreement": 0.5,
-          "wilson": [0.0945, 0.9055],
-          "by_call_ci": [0.0, 1.0]
-        },
-        "D17": {
-          "labels": 1,
-          "rated": 0,
-          "agree": 0,
-          "agreement": null,
-          "wilson": null,
-          "by_call_ci": null
-        },
-        "D18": {
-          "labels": 1,
-          "rated": 1,
-          "agree": 1,
-          "agreement": 1.0,
-          "wilson": [0.2065, 1.0],
-          "by_call_ci": null
-        }
-      }
     }
   ],
   "limits": [
@@ -816,5 +988,8 @@
     "Notes say what the coach chose to mention, not a rating of every dimension; a dimension he did not mention has no label.",
     "The note-to-dimension mapping is an inference for the coaching lead's review.",
     "Today's pointer review and the one pass score pointers (0-100), mapped to dimensions through the primary pointers; Brain 4.0 rates dimensions (1-5)."
-  ]
+  ],
+  "title": "Gold v1: the coaching lead's correction doc",
+  "date": "2026-10-21",
+  "cost_inr": 6.71
 }

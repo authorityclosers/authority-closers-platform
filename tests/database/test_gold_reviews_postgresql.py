@@ -17,6 +17,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.checkpoints import content_hash
+from ac_platform.conversation_intelligence.gold_checkpoint import EVERY_CALL
 from ac_platform.conversation_intelligence.gold_review_contracts import GoldSave
 from ac_platform.conversation_intelligence.gold_review_job import assign_saved_reviews
 from ac_platform.conversation_intelligence.gold_review_models import GoldAssignment, GoldRow
@@ -41,11 +42,9 @@ from tests.database.test_conversation_reviews_postgresql import (
 )
 
 
-def gold_migration():
-    path = (
-        Path(__file__).resolve().parents[2] / "db/migrations/versions/20261016_0094_gold_reviews.py"
-    )
-    spec = importlib.util.spec_from_file_location("gold_migration_test", path)
+def gold_migration(name: str = "20261016_0094_gold_reviews.py"):
+    path = Path(__file__).resolve().parents[2] / "db/migrations/versions" / name
+    spec = importlib.util.spec_from_file_location(f"gold_migration_test_{name[:13]}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -56,10 +55,14 @@ def test_empty_gold_migration_downgrade_and_reupgrade(postgres_harness) -> None:
     from scripts.ops.migration_safety import classify_source
 
     module = gold_migration()
-    path = Path(module.__file__)
-    item = classify_source(path.read_text(), str(path))
-    check_operations([item], set())
-    assert item.verdict == "additive"
+    # 0118 (21 Oct) adds the assignment's mode and checkpoint to the same table.
+    checkpoints = gold_migration("20261021_0118_gold_checkpoints.py")
+    assert (checkpoints.revision, checkpoints.down_revision) == ("20261021_0118", "20261021_0117")
+    for item in (module, checkpoints):
+        path = Path(item.__file__)
+        verdict = classify_source(path.read_text(), str(path))
+        check_operations([verdict], set())
+        assert verdict.verdict == "additive"
     tables = {
         "conversation_gold_reviewers",
         "conversation_gold_assignments",
@@ -70,9 +73,15 @@ def test_empty_gold_migration_downgrade_and_reupgrade(postgres_harness) -> None:
         # Match env.py so Alembic applies the repository's constraint names.
         context = MigrationContext.configure(connection, opts={"target_metadata": model_metadata()})
         with Operations.context(context):
+            checkpoints.downgrade()
+            columns = {
+                c["name"] for c in inspect(connection).get_columns("conversation_gold_assignments")
+            }
+            assert not {"mode", "checkpoint"} & columns
             module.downgrade()
             assert not tables & set(inspect(connection).get_table_names())
             module.upgrade()
+            checkpoints.upgrade()
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
 
 
@@ -126,10 +135,16 @@ async def prepare(case: ReviewCase):
             True,
         )
         assert (
-            await assign_saved_reviews(db, case.operations_tenant_id, case.prepared.state.now) == 1
+            await assign_saved_reviews(
+                db, case.operations_tenant_id, case.prepared.state.now, checkpoint=EVERY_CALL
+            )
+            == 1
         )
         assert (
-            await assign_saved_reviews(db, case.operations_tenant_id, case.prepared.state.now) == 0
+            await assign_saved_reviews(
+                db, case.operations_tenant_id, case.prepared.state.now, checkpoint=EVERY_CALL
+            )
+            == 0
         )
         assignment = await db.scalar(
             select(GoldAssignment).where(GoldAssignment.review_id == review.id)
@@ -332,7 +347,9 @@ def test_reader_excludes_sandbox_and_serializes_duplicate_workers(gold_case) -> 
             )
             await db.flush()
             assert (
-                await assign_saved_reviews(db, case.operations_tenant_id, case.prepared.state.now)
+                await assign_saved_reviews(
+                    db, case.operations_tenant_id, case.prepared.state.now, checkpoint=EVERY_CALL
+                )
                 == 0
             )
             await db.rollback()
@@ -340,7 +357,7 @@ def test_reader_excludes_sandbox_and_serializes_duplicate_workers(gold_case) -> 
         async def worker():
             async with case.sessions() as db, db.begin():
                 return await assign_saved_reviews(
-                    db, case.operations_tenant_id, case.prepared.state.now
+                    db, case.operations_tenant_id, case.prepared.state.now, checkpoint=EVERY_CALL
                 )
 
         assert sum(await asyncio.gather(worker(), worker())) == 1

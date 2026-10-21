@@ -1,0 +1,9 @@
+[Unit]
+Description=Restart the Sales Xray dev server nightly at 04:00 IST
+
+[Timer]
+OnCalendar=*-*-* 22:30:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target

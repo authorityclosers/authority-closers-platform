@@ -1,5 +1,5 @@
 [Unit]
-Description=Probe Admin's dev server every 30 seconds
+Description=Probe %i every 30 seconds
 
 [Timer]
 OnBootSec=2min

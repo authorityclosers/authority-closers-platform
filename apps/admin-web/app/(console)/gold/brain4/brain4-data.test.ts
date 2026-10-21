@@ -98,3 +98,53 @@ describe("Brain 4.0 evaluation data", () => {
     expect(lean(0)).toBe("0.00");
   });
 });
+
+describe("Blind ratings and the checkpoint sample", () => {
+  it("reads blind figures and defaults a missing or broken section", () => {
+    const data = normalizeBrain4({
+      blind: {
+        ratings: 36,
+        calls: 2,
+        calls_with_brain4: 2,
+        reviewers: 1,
+        dimensions: [
+          {
+            id: "D16",
+            label: "Handling Objections",
+            ratings: 2,
+            brain4: { calls: 2, rated: 2, exact: 0.5, lean: 1 },
+            readiness: { state: "needs_data", needs: ["at least 20"] },
+          },
+          {
+            id: "D03",
+            brain4: "broken",
+            readiness: { state: "undecidable", needs: ["audio"] },
+            undecidable: "audio",
+          },
+        ],
+        between_raters: { pairs: 0 },
+        moments: { moments: 3, criticisms: 2, marked: 1, caught_rate: 0.5 },
+      },
+      sample: {
+        name: "fresh-1",
+        mode: "brain4_blind",
+        total: 25,
+        chosen: 4,
+        minutes: [10, 30],
+        at_least: { price: { want: 15, have: 3 } },
+      },
+    });
+    expect(data.blind.ratings).toBe(36);
+    expect(data.blind.dimensions[0].brain4.exact).toBe(0.5);
+    expect(data.blind.dimensions[1].brain4.rated).toBe(0);
+    expect(data.blind.dimensions[1].undecidable).toBe("audio");
+    expect(data.blind.between_raters.gate0).toBe(false);
+    expect(data.blind.moments.caught_rate).toBe(0.5);
+    expect(data.sample?.at_least.price).toEqual({ want: 15, have: 3 });
+    expect(data.sample?.minutes).toEqual([10, 30]);
+    const old = normalizeBrain4({ blind: "broken" });
+    expect(old.blind.ratings).toBe(0);
+    expect(old.blind.dimensions).toEqual([]);
+    expect(old.sample).toBeNull();
+  });
+});

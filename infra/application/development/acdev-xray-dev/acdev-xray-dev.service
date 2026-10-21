@@ -1,0 +1,17 @@
+[Unit]
+Description=Sales Xray web dev server (live reload, loopback only)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/src/lanes/ui/authority-closers-platform
+Environment=PATH=%h/.local/opt/node/bin:%h/.local/bin:/usr/bin:/bin
+# AUT-364: the dev API accepts Host localhost (AC_PUBLIC_APP_URL), not 127.0.0.1; Next rewrites send the destination host.
+Environment=AC_CONVERSATION_API_ORIGIN=http://localhost:8100
+Environment=AC_SALES_XRAY_DEV_ALLOWED_ORIGINS=salesxray-dev.authorityclosers.com
+ExecStart=%h/.local/bin/pnpm --filter @ac/sales-xray-web exec next dev --turbopack --hostname 127.0.0.1 --port 3026
+Restart=on-failure
+RestartSec=5
+MemoryMax=2G
+
+[Install]
+WantedBy=default.target

@@ -5,7 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from ac_platform.conversation_intelligence import brain4, brain4_eval
-from ac_platform.conversation_intelligence.brain4_eval import Dataset, GoldLine, Label
+from ac_platform.conversation_intelligence.brain4_eval import (
+    BlindRating,
+    Dataset,
+    GoldLine,
+    Label,
+    Moment,
+)
 
 START = datetime(2026, 10, 16, tzinfo=UTC)
 
@@ -176,10 +182,92 @@ def test_the_gold_v1_checkpoint_is_counts_only_and_in_the_evaluation() -> None:
     assert gold["calls"] == 6 and gold["labels"]["total"] == 43
     for scorer in gold["scorers"]:
         overall = scorer["overall"]
-        assert 0 <= overall["agree"] <= overall["rated"] <= overall["labels"] == 43
+        assert 0 <= overall["agree"] <= overall["rated"] <= overall["labels"]
+        assert overall["labels"] % 43 == 0  # one set of labels per read of each call
         assert set(scorer["dimensions"]) <= set(brain4.DIMENSION_IDS)
     # Counts and agreement only: no call id, quote or note.
     text = json.dumps(gold)
     assert "rc-" not in text and "statement" not in text and "quote" not in text
     result = brain4_eval.evaluate(Dataset((), {}), now=START)
     assert result["checkpoints"][0]["checkpoint"] == "gold-v1/2026-10-21"
+
+
+def blind(
+    call: str, dimension: str, rating: int | None, *, who: str = "r1", skip: str | None = None
+) -> BlindRating:
+    return BlindRating(
+        recording_id=call,
+        review_id=f"review-{call}",
+        reviewer_id=who,
+        dimension=dimension,
+        created_at=START,
+        rating=rating,
+        skip=skip if rating is None else None,
+    )
+
+
+def test_blind_ratings_are_compared_rating_for_rating() -> None:
+    ratings, runs = [], {}
+    for n in range(24):
+        call = f"c{n}"
+        # He rates objections 2 where Brain 4.0 says 4; next steps match exactly.
+        ratings.append(blind(call, "D16", 2))
+        ratings.append(blind(call, "D18", 3))
+        # "-" on decision-makers: it did not come up; Brain 4.0 rated it anyway.
+        ratings.append(blind(call, "D08", None, skip="not_applicable"))
+        # "Not sure" is never a judgement.
+        ratings.append(blind(call, "D09", None, skip="not_sure"))
+        runs[f"review-{call}"] = [review(D16=4, D18=3, D08=3)]
+    result = brain4_eval.evaluate(Dataset((), runs, tuple(ratings)), now=START)
+    section = result["blind"]
+    assert (section["ratings"], section["calls"], section["calls_with_brain4"]) == (96, 24, 24)
+    dims = {d["id"]: d for d in section["dimensions"]}
+    assert dims["D18"]["brain4"]["exact"] == 1.0
+    assert dims["D16"]["brain4"]["exact"] == 0.0
+    assert dims["D16"]["brain4"]["within_one"] == 0.0
+    assert dims["D16"]["brain4"]["lean"] == 2.0  # Brain 4.0 two points too generous
+    assert dims["D16"]["readiness"]["state"] == "beta"
+    assert dims["D08"]["brain4"]["rated"] == 0
+    assert dims["D08"]["brain4"]["judgeable_agree"] == 0.0
+    assert dims["D09"]["brain4"]["lines"] == 0
+    assert dims["D03"]["readiness"]["state"] == "undecidable"
+    assert dims["D03"]["undecidable"]
+    assert {d["id"]: d for d in result["dimensions"]}["D03"]["readiness"]["state"] == (
+        "undecidable"
+    )
+
+
+def test_two_blind_raters_give_gate_zero_agreement() -> None:
+    ratings = []
+    for n in range(10):
+        ratings.append(blind(f"c{n}", "D04", 1 + n % 5, who="r1"))
+        ratings.append(blind(f"c{n}", "D04", 1 + n % 5, who="r2"))
+        ratings.append(blind(f"c{n}", "D05", 3, who="r1"))
+    raters = brain4_eval.between_raters(ratings)
+    assert (raters["calls"], raters["pairs"], raters["rated"]) == (10, 10, 10)
+    assert raters["kappa"] == 1.0 and raters["gate0"] is True
+    assert brain4_eval.between_raters(ratings[2::3])["pairs"] == 0
+
+
+def test_moments_measure_what_brain4_caught() -> None:
+    def moment(
+        call: str, caught: str | None, *, kind: str = "criticism", blind: bool = True
+    ) -> Moment:
+        return Moment(call, "r1", START, kind, "D16", caught, blind)
+
+    found = brain4_eval.coverage(
+        [
+            moment("c1", "yes"),
+            moment("c1", "no"),
+            moment("c2", "partly", blind=False),
+            moment("c2", None),
+            moment("c3", None, kind="praise"),
+        ]
+    )
+    assert (found["moments"], found["criticisms"], found["praise"]) == (5, 4, 1)
+    assert (found["marked"], found["written_blind"]) == (3, 4)
+    assert found["caught"] == {"yes": 1, "partly": 1, "no": 1}
+    assert found["caught_rate"] == 0.5
+    assert found["by_dimension"] == [
+        {"id": "D16", "criticisms": 4, "marked": 3, "caught_rate": 0.5}
+    ]

@@ -14,13 +14,16 @@ import {
 import {
   CATEGORY_LABELS,
   READINESS,
+  SAMPLE_WORDS,
   decimal,
   lean,
   normalizeBrain4,
   percent,
   ratio,
   withInterval,
+  type Blind,
   type Checkpoint,
+  type Sample,
 } from "./brain4-data";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +85,9 @@ function CheckpointPanel({ point }: { point: Checkpoint }) {
             <th scope="col" data-num="">
               Rated
             </th>
+            <th scope="col" data-num="">
+              Same on re-read
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -97,6 +103,7 @@ function CheckpointPanel({ point }: { point: Checkpoint }) {
               <td data-num="">
                 {scorer.overall.rated}/{scorer.overall.labels}
               </td>
+              <td data-num="">{percent(scorer.repeat_same)}</td>
             </tr>
           ))}
         </tbody>
@@ -125,6 +132,155 @@ function CheckpointPanel({ point }: { point: Checkpoint }) {
               ))}
             </tr>
           ))}
+        </tbody>
+      </Table>
+    </Panel>
+  );
+}
+
+const BLIND_HOW =
+  "In blind mode the reviewer rates each Brain 4.0 skill 1-5 (or '-') before Brain 4.0's " +
+  "ratings are shown (AC-SVAL-01 section 8.1). Exact: the same rating; within one: at most " +
+  "one point apart; kappa: quadratic weighted kappa on the 1-5 scale; lean: Brain 4.0 minus " +
+  "the reviewer. Intervals resample whole calls. Moments: what he would correct, and whether " +
+  "Brain 4.0's coaching caught it (yes 1, partly 1/2).";
+
+/** Where the gold checkpoint's chosen sample stands (counts only). */
+function SamplePanel({ sample }: { sample: Sample }) {
+  const counts = [
+    ...Object.entries(sample.at_least).map(([key, value]) => ({
+      key,
+      value,
+      need: true,
+    })),
+    ...Object.entries(sample.mix).map(([key, value]) => ({
+      key,
+      value,
+      need: false,
+    })),
+  ];
+  return (
+    <Panel
+      title={`Checkpoint ${sample.name} · ${sample.chosen} of ${sample.total} calls chosen`}
+      sub={`${sample.mode === "brain4_blind" ? "Blind Brain 4.0 rating" : "Line review"} · up to ${sample.daily} a day · ${sample.workspaces === "company" ? "our own workspaces" : "every workspace"}${sample.minutes ? ` · ${sample.minutes[0]}–${sample.minutes[1]} min` : ""} · ${sample.salespeople} salespeople so far`}
+    >
+      <Table label="Checkpoint sample">
+        <thead>
+          <tr>
+            <th scope="col">Calls that</th>
+            <th scope="col" data-num="">
+              Chosen
+            </th>
+            <th scope="col" data-num="">
+              Wanted
+            </th>
+            <th scope="col">Kind</th>
+          </tr>
+        </thead>
+        <tbody>
+          {counts.map(({ key, value, need }) => (
+            <tr key={key}>
+              <th scope="row">{SAMPLE_WORDS[key] ?? key}</th>
+              <td data-num="">{value.have}</td>
+              <td data-num="">{value.want}</td>
+              <td>{need ? "at least" : "about"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Panel>
+  );
+}
+
+/** Blind ratings against Brain 4.0, rater agreement and moment coverage. */
+function BlindPanel({ blind }: { blind: Blind }) {
+  const raters = blind.between_raters;
+  const moments = blind.moments;
+  return (
+    <Panel
+      title="Blind ratings"
+      sub={`${blind.calls} calls · ${blind.ratings} ratings · ${blind.reviewers} reviewers · ${blind.calls_with_brain4} calls read by Brain 4.0`}
+      tools={<Why detail={BLIND_HOW} />}
+    >
+      <Tiles label="Blind evidence">
+        <Kpi
+          label="Two blind raters (Gate 0)"
+          value={decimal(raters.kappa)}
+          tone={raters.pairs ? (raters.gate0 ? "good" : "bad") : undefined}
+          note={
+            raters.pairs
+              ? `${raters.calls} calls · ${raters.rated} rated pairs · needs 0.70`
+              : "needs a second blind reviewer"
+          }
+        />
+        <Kpi
+          label="Criticism caught by Brain 4.0"
+          value={percent(moments.caught_rate)}
+          note={
+            moments.marked
+              ? `${withInterval(moments.caught_rate, moments.caught_ci)} · ${moments.marked} marked`
+              : "no moments marked yet"
+          }
+        />
+        <Kpi
+          label="Moments"
+          value={moments.moments}
+          note={`${moments.criticisms} to correct · ${moments.praise} went well · ${moments.written_blind} written blind`}
+        />
+      </Tiles>
+      <Table label="Brain 4.0 against blind ratings by dimension">
+        <thead>
+          <tr>
+            <th scope="col">Dimension</th>
+            <th scope="col" data-num="">
+              Calls · rated
+            </th>
+            <th scope="col">Exact</th>
+            <th scope="col">Within one</th>
+            <th scope="col">Weighted kappa</th>
+            <th scope="col">Lean</th>
+            <th scope="col" data-num="">
+              Same &ldquo;–&rdquo;
+            </th>
+            <th scope="col">State</th>
+          </tr>
+        </thead>
+        <tbody>
+          {blind.dimensions.map((row) => {
+            const state = READINESS[row.readiness.state] ?? READINESS.beta;
+            return (
+              <tr key={row.id}>
+                <th scope="row">
+                  {row.id} {row.label}
+                  <br />
+                  <small>{CATEGORY_LABELS[row.category] ?? row.category}</small>
+                </th>
+                <td data-num="">
+                  {row.brain4.calls} · {row.brain4.rated}
+                </td>
+                <td>{withInterval(row.brain4.exact, row.brain4.exact_ci)}</td>
+                <td>
+                  {withInterval(
+                    row.brain4.within_one,
+                    row.brain4.within_one_ci,
+                  )}
+                </td>
+                <td>
+                  {withInterval(row.brain4.kappa, row.brain4.kappa_ci, (n) =>
+                    decimal(n),
+                  )}
+                </td>
+                <td>{lean(row.brain4.lean)}</td>
+                <td data-num="">{percent(row.brain4.judgeable_agree)}</td>
+                <td>
+                  <Badge tone={state.tone}>{state.label}</Badge>
+                  {row.readiness.needs.length ? (
+                    <small> {row.readiness.needs.join("; ")}</small>
+                  ) : null}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </Table>
     </Panel>
@@ -193,7 +349,9 @@ export default async function Brain4EvaluationPage() {
                   <li key={`${alert.scorer}-${alert.dimension ?? "all"}`}>
                     {alert.scorer === "classic"
                       ? "Today's pointer review"
-                      : `Brain 4.0 ${alert.dimension}`}
+                      : alert.scorer === "brain4_blind"
+                        ? `Brain 4.0 ${alert.dimension} against blind ratings`
+                        : `Brain 4.0 ${alert.dimension}`}
                     : {percent(alert.before)} before, {percent(alert.recent)} in
                     the newest answers
                   </li>
@@ -201,6 +359,8 @@ export default async function Brain4EvaluationPage() {
               </ul>
             </Panel>
           ) : null}
+          {data.sample ? <SamplePanel sample={data.sample} /> : null}
+          <BlindPanel blind={data.blind} />
           <Panel
             title="By dimension"
             sub="Brain 4.0 against the gold band, and today's review on the same lines"

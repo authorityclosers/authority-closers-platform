@@ -24,6 +24,7 @@ from ac_platform.ai_spend import ledger, policy
 from ac_platform.ai_spend.models import AiSpendSettings
 from ac_platform.call_data import engine as call_engine
 from ac_platform.call_data.models import CallDataRun
+from ac_platform.conversation_intelligence import pointer_review
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationReportDraft,
@@ -31,7 +32,7 @@ from ac_platform.conversation_intelligence.models import (
 from ac_platform.conversation_intelligence.pointer_review_models import (
     ConversationPointerReview,
 )
-from ac_platform.one_pass import publish
+from ac_platform.one_pass import calibration, publish
 from ac_platform.one_pass import settings as choices
 from ac_platform.one_pass.gemini import OnePassFailure, Reply
 from ac_platform.one_pass.models import OnePassRun
@@ -277,6 +278,21 @@ def test_one_read_becomes_the_deep_call_data_and_the_pointer_review(
         assert review.created_by == publish.AUTOMATIC
         assert review.report_draft_id == seeded["draft_id"]
         assert review.input_tokens is None and len(review.payload["pointers"]) == 27
+        # Calibrated to today's review and labelled beta, as in the plan (B3): the fake
+        # read scores 75, so each pointer loses its own lean and is banded again.
+        assert review.payload["calibration"] == {
+            "version": calibration.VERSION,
+            "label": "beta",
+            "basis": "one_pass_c4",
+        }
+        scored = {p["id"]: p for p in review.payload["pointers"] if p["score"] is not None}
+        for pointer_id, pointer in scored.items():
+            assert pointer["score"] == round(75 - calibration.OFFSETS[pointer_id])
+            assert pointer["status"] == pointer_review.band(pointer["score"])
+        assert scored["call_opening_first_impression"]["status"] == "average"  # 69
+        assert review.payload["overall"]["score"] == round(
+            sum(p["score"] for p in scored.values()) / len(scored)
+        )
         profile = review.payload["prospect_profile"]
         # Parsed again against the report's own transcript: a name only when said there.
         assert profile["name"]["value"] is None
