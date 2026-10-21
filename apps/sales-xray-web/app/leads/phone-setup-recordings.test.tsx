@@ -11,7 +11,7 @@ import {
   ALL_FILES_EXPLAINER,
   HIDDEN_TODO,
   recorderGuide,
-  TEST_RESULT_WORDS,
+  TEST_RESULT_LINE,
 } from "./phone-setup-words";
 
 /**
@@ -140,7 +140,7 @@ it("reads the new setup fields, and an older app sends none", () => {
   });
   expect(lineTodo("recordings", status)).toBe(HIDDEN_TODO);
   expect(lineTodo("testCall", { ...status, testResult: "only_you" })).toBe(
-    TEST_RESULT_WORDS.only_you,
+    TEST_RESULT_LINE.only_you,
   );
 });
 

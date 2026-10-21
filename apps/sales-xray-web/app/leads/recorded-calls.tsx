@@ -157,9 +157,11 @@ export function RecordedCallsCard({ me }: { me: Desk["me"] }) {
               : `${count} lead calls recorded`}
           </strong>
           <small>
-            {ready.length
-              ? "Analyse them to get each call's Report on its lead."
-              : "Your phone saved silent recordings. Check its call recording."}
+            {ready.length === 1
+              ? "Analyse it to get its Report on the lead."
+              : ready.length
+                ? "Analyse them to get each call's Report on its lead."
+                : "Your phone saved silent recordings. Check its call recording."}
           </small>
         </span>
         <Button variant="primary" onClick={() => setOpen(true)}>

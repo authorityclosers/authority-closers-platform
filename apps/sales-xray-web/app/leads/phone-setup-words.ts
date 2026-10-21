@@ -142,6 +142,17 @@ export const TEST_RESULT_WORDS: Record<TestCallResult, string | null> = {
   none: null,
 };
 
+/** The checklist line after a test call that didn't pass: short; the line's view has the rest. */
+export const TEST_RESULT_LINE: Record<TestCallResult, string | null> = {
+  both: null,
+  only_you: "Only your voice was recorded. The other side is missing.",
+  only_them: "Only the other person was recorded.",
+  silent: "The test recording was silent.",
+  not_found: "No recording was found for the test call.",
+  unknown: "Too short to check. Try again.",
+  none: null,
+};
+
 /** Truecaller's after-call screen covers "How did it go?" (Redmi audit #48). */
 export const TRUECALLER_NOTE =
   "Truecaller opens its own screen after each call, on top of Sales Xray. Close it to log your call, or tap the How did the call go? notification.";

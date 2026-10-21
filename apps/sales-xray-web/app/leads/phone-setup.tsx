@@ -46,6 +46,7 @@ import {
   HIDDEN_TODO,
   recorderGuide,
   TEST_CALL_STEPS,
+  TEST_RESULT_LINE,
   TEST_RESULT_WORDS,
   TRUECALLER_NOTE,
   type PhoneCheck,
@@ -78,7 +79,7 @@ export function lineTodo(key: PhoneCheck, status: SetupStatus): string {
     status.testResult !== "none" &&
     status.testResult !== "both"
   )
-    return TEST_RESULT_WORDS[status.testResult] ?? CHECK_TODO.testCall;
+    return TEST_RESULT_LINE[status.testResult] ?? CHECK_TODO.testCall;
   return CHECK_TODO[key];
 }
 
