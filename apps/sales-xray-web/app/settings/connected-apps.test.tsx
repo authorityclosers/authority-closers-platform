@@ -430,13 +430,16 @@ it("manages an app in a sheet: its connections, disconnect on a second press, an
   await act(async () => new Promise((resolve) => setTimeout(resolve, 700)));
   expect(host.querySelector("dialog")?.open ?? false).toBe(false);
   await act(async () => button(card("meta_leads"), "Manage")!.click());
+  await flush();
   sheet = host.querySelector("dialog")!;
+  // Lead ads are a guided setup; its Pages come from the health read when
+  // /meta/status can't be read.
   expect(sheet.textContent).toContain("Brightline Coaching");
   expect(sheet.querySelector('a[href="/leads?tab=sources"]')).not.toBeNull();
-  await act(async () => button(sheet, "Disconnect")!.click());
+  await act(async () => button(sheet, "Switch off")!.click());
   expect(calls.some((call) => call.key.includes("/disconnect"))).toBe(false);
   await act(async () =>
-    button(sheet, "Disconnect Brightline Coaching?")!.click(),
+    button(sheet, "Switch off Brightline Coaching?")!.click(),
   );
   await flush();
   expect(calls.filter((call) => call.key.includes("/disconnect"))).toHaveLength(
@@ -445,10 +448,142 @@ it("manages an app in a sheet: its connections, disconnect on a second press, an
   expect(seen.notices).toEqual([
     expect.objectContaining({
       tone: "success",
-      title: "Brightline Coaching disconnected",
+      title: "Brightline Coaching switched off",
     }),
   ]);
   // The grid reads the apps again.
+  expect(
+    calls.filter((call) => call.key.endsWith("/integrations/health")),
+  ).toHaveLength(2);
+});
+
+const PENDING = {
+  state: "pending",
+  since: "2026-10-19",
+  worksNow:
+    "Until Meta approves Sales Xray, only Pages run by people added to our Meta app as testers can connect.",
+  after: "Once Meta approves it, any business can connect its own Pages here.",
+};
+
+it("sets lead ads up step by step, under an honest note on Meta's review", async () => {
+  routes["GET /v1/lead-desk/integrations/health"] = () =>
+    Response.json({
+      ...HEALTH,
+      apps: [
+        {
+          ...HEALTH.apps[0],
+          state: "not_connected",
+          connections: [],
+          lastEvent: null,
+          tests: [],
+          review: PENDING,
+        },
+      ],
+    });
+  routes["GET /v1/lead-desk/meta/status"] = () =>
+    Response.json({ configured: true, pages: [] });
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  expect(card("meta_leads").textContent).toContain(
+    "Meta approval pending: testers’ Pages only for now",
+  );
+  // Set up opens the steps first; the trip to Facebook waits for step 1.
+  await act(async () => button(card("meta_leads"), "Set up")!.click());
+  await flush();
+  expect(seen.trips).toEqual([]);
+  const sheet = host.querySelector("dialog")!;
+  const note = sheet.querySelector('[aria-label="Meta approval"]')!;
+  expect(note.textContent).toContain("Waiting for Meta’s approval");
+  expect(note.textContent).toContain("Sent for review 19 Oct");
+  expect(note.textContent).toContain("testers can connect");
+  expect(note.textContent).toContain("any business can connect");
+  const steps = [...sheet.querySelectorAll("ol > li")];
+  expect(steps.map((step) => step.getAttribute("data-state"))).toEqual([
+    "now",
+    "later",
+    "later",
+  ]);
+  await act(async () => button(sheet, "Connect Facebook")!.click());
+  expect(seen.trips).toEqual(["/v1/lead-desk/meta/connect"]);
+});
+
+it("turns a Page on with only the forms ticked, then reads the apps again", async () => {
+  routes["GET /v1/lead-desk/integrations/health"] = () =>
+    Response.json({
+      ...HEALTH,
+      apps: [
+        {
+          ...HEALTH.apps[0],
+          state: "not_connected",
+          connections: [
+            {
+              id: "111",
+              label: "Brightline Coaching",
+              detail: "Forms: all",
+              state: "off",
+              words: "Switched off.",
+            },
+          ],
+          tests: [],
+          review: PENDING,
+        },
+      ],
+    });
+  routes["GET /v1/lead-desk/meta/status"] = () =>
+    Response.json({
+      configured: true,
+      pages: [
+        {
+          pageId: "111",
+          name: "Brightline Coaching",
+          active: false,
+          forms: "all",
+          received: 0,
+          formsCovered: [],
+        },
+      ],
+    });
+  routes["GET /v1/lead-desk/meta/pages/111/forms"] = () =>
+    Response.json([
+      { id: "f1", name: "Spring intake", status: "ACTIVE" },
+      { id: "f2", name: "Old form", status: "ARCHIVED" },
+    ]);
+  routes["POST /v1/lead-desk/meta/pages/111"] = () =>
+    Response.json({ page: {}, imported: 2 });
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  await act(async () => button(card("meta_leads"), "Set up")!.click());
+  await flush();
+  const sheet = host.querySelector("dialog")!;
+  expect(sheet.textContent).toContain("Off: no new leads come in");
+  await act(async () => button(sheet, "Turn on")!.click());
+  await flush();
+  const radios = sheet.querySelectorAll<HTMLInputElement>(
+    'input[type="radio"]',
+  );
+  expect(radios[0].checked).toBe(true);
+  await act(async () => radios[1].click());
+  const boxes = sheet.querySelectorAll<HTMLInputElement>(
+    'input[type="checkbox"]',
+  );
+  expect(boxes).toHaveLength(2);
+  expect(sheet.textContent).toContain("Old form · archived");
+  // Nothing ticked yet: it can't be turned on with no forms.
+  expect(button(sheet, "Turn on this Page")!.disabled).toBe(true);
+  await act(async () => boxes[0].click());
+  await act(async () => button(sheet, "Turn on this Page")!.click());
+  await flush();
+  expect(
+    calls.find((call) => call.key === "POST /v1/lead-desk/meta/pages/111")
+      ?.body,
+  ).toEqual({ forms: ["f1"] });
+  expect(seen.notices).toEqual([
+    expect.objectContaining({
+      tone: "success",
+      title: "Brightline Coaching is on",
+      message: expect.stringContaining("2 leads from the last week came in"),
+    }),
+  ]);
   expect(
     calls.filter((call) => call.key.endsWith("/integrations/health")),
   ).toHaveLength(2);

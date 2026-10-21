@@ -129,10 +129,10 @@ export function LeadLine({
             Call
           </span>
           <span data-side="left">
-            WhatsApp
             <span className={styles.swipeIcon}>
               <ChannelMark channel="whatsapp" size={22} />
             </span>
+            WhatsApp
           </span>
         </span>
       ) : null}

@@ -18,6 +18,7 @@ import {
 } from "react";
 import {
   CheckCircle2,
+  Hourglass,
   Loader2,
   Lock,
   PhoneCall,
@@ -39,6 +40,7 @@ import { parseSignInMethods, type ConnectOption } from "../sign-in-methods";
 import { Badge, Button, Empty, Skeleton, type Tone } from "../ui/kit";
 import { BrandTile } from "../ui/brand-tile";
 import {
+  ago,
   AppsError,
   disconnect,
   followTest,
@@ -54,6 +56,7 @@ import {
   type TestResult,
 } from "./connected-apps-client";
 import { Sheet } from "../ui/sheet";
+import { MetaSetup } from "./meta-setup";
 import styles from "./connected-apps.module.css";
 
 const LOGOS: Record<AppKey, { brands?: string[]; icon?: LucideIcon }> = {
@@ -78,7 +81,7 @@ const STATUS: Record<AppState, { label: string; tone: Tone }> = {
 
 // Where an app's full settings live, for what the sheet doesn't hold itself.
 const MORE: Partial<Record<AppKey, { href: string; label: string }>> = {
-  meta_leads: { href: "/leads?tab=sources", label: "Forms and lead sources" },
+  meta_leads: { href: "/leads?tab=sources", label: "Older leads and ad spend" },
   google_ads: { href: "/leads?tab=sources", label: "Forms and lead sources" },
   webhook_sources: { href: "/leads?tab=sources", label: "Webhooks and sheets" },
   phone_calls: {
@@ -87,6 +90,10 @@ const MORE: Partial<Record<AppKey, { href: string; label: string }>> = {
   },
   ai_replies: { href: "/settings/ai-replies", label: "AI replies settings" },
 };
+
+// Set up step by step in its sheet, so Meta's review and each step show before
+// the trip to Facebook (owner, 22 Oct 2026).
+const GUIDED = new Set<AppKey>(["meta_leads"]);
 
 const NEED_LABELS: Record<string, string> = {
   pageId: "Page",
@@ -206,25 +213,6 @@ const SKELETON_GROUPS = [4, 3, 2];
 const POLL_MS = 2000;
 const POLL_LIMIT = 45;
 
-function ago(value: string | null): string | null {
-  if (!value) return null;
-  const at = new Date(value).getTime();
-  if (Number.isNaN(at)) return null;
-  const seconds = Math.round((Date.now() - at) / 1000);
-  const ahead = seconds < 0;
-  const size = Math.abs(seconds);
-  const words =
-    size < 60
-      ? "a moment"
-      : size < 3600
-        ? `${Math.round(size / 60)} min`
-        : size < 86_400
-          ? `${Math.round(size / 3600)} h`
-          : `${Math.round(size / 86_400)} d`;
-  if (size < 60) return ahead ? "in a moment" : "just now";
-  return ahead ? `in ${words}` : `${words} ago`;
-}
-
 type Loaded =
   | { state: "loading" }
   | { state: "failed"; message: string }
@@ -327,6 +315,12 @@ function AppCard({
         </div>
       </div>
       <p className={styles.words}>{cardWords(app)}</p>
+      {app.review?.state === "pending" ? (
+        <p className={styles.reviewLine}>
+          <Hourglass size={13} aria-hidden="true" />
+          Meta approval pending: testers’ Pages only for now
+        </p>
+      ) : null}
       <div className={styles.actions}>
         {!app.page && app.state === "problem" && app.connect ? (
           // Its own words ask to connect again: that is the one filled button.
@@ -361,10 +355,10 @@ function AppCard({
           <Button
             variant="secondary"
             className={styles.tinted}
-            onClick={() => connectApp(app)}
+            onClick={() => (GUIDED.has(app.app) ? onManage() : connectApp(app))}
           >
             <PlugZap size={15} aria-hidden="true" />
-            Connect
+            {GUIDED.has(app.app) ? "Set up" : "Connect"}
           </Button>
         ) : (
           <Button variant="secondary" onClick={onManage}>
@@ -682,6 +676,33 @@ function ManageSheet({
     mode === "test" && offer
       ? [offer]
       : app.tests.filter((item) => item.needs.length || item.confirm);
+  const guided = mode === "manage" && GUIDED.has(app.app);
+  const runsIn =
+    offers.length && workspace ? (
+      <p className={styles.runsIn}>
+        Runs in <strong>{workspace}</strong>, with its own Pages, numbers and
+        leads.
+      </p>
+    ) : null;
+  const tests = offers.map((item) => (
+    <section
+      key={item.kind}
+      className={styles.sheetPart}
+      aria-label={item.label}
+    >
+      {mode === "manage" && !guided ? <h3>{item.label}</h3> : null}
+      <TestForm
+        app={app}
+        offer={item}
+        running={result?.status === "waiting"}
+        onRun={(body) => onRun(item, body)}
+      />
+    </section>
+  ));
+  const outcome =
+    result && (mode === "test" || offers.length) ? (
+      <Outcome result={result} onDismiss={onDismiss} />
+    ) : null;
   async function drop(item: Connection) {
     try {
       await disconnect(item.disconnect!);
@@ -714,7 +735,22 @@ function ManageSheet({
       lead={<BrandTile {...LOGOS[app.app]} size={36} />}
       onClose={onClose}
     >
-      {mode === "manage" ? (
+      {guided ? (
+        <MetaSetup
+          app={app}
+          passed={result?.status === "passed"}
+          onConnect={() => connectApp(app)}
+          onChanged={onChanged}
+          test={
+            <>
+              {runsIn}
+              {tests}
+              {outcome}
+            </>
+          }
+        />
+      ) : null}
+      {mode === "manage" && !guided ? (
         <>
           <div className={styles.sheetStatus}>
             <Badge tone={status.tone}>{status.label}</Badge>
@@ -765,30 +801,13 @@ function ManageSheet({
           ) : null}
         </>
       ) : null}
-      {offers.length && workspace ? (
-        <p className={styles.runsIn}>
-          Runs in <strong>{workspace}</strong>, with its own Pages, numbers and
-          leads.
-        </p>
-      ) : null}
-      {offers.map((item) => (
-        <section
-          key={item.kind}
-          className={styles.sheetPart}
-          aria-label={item.label}
-        >
-          {mode === "manage" ? <h3>{item.label}</h3> : null}
-          <TestForm
-            app={app}
-            offer={item}
-            running={result?.status === "waiting"}
-            onRun={(body) => onRun(item, body)}
-          />
-        </section>
-      ))}
-      {result && (mode === "test" || offers.length) ? (
-        <Outcome result={result} onDismiss={onDismiss} />
-      ) : null}
+      {guided ? null : (
+        <>
+          {runsIn}
+          {tests}
+          {outcome}
+        </>
+      )}
       {mode === "manage" && app.app === "whatsapp" ? (
         <section className={styles.sheetPart} aria-label="WhatsApp settings">
           <IntegrationsPanel parts={["whatsapp"]} />

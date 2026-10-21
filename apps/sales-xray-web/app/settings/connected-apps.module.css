@@ -145,6 +145,22 @@
   gap: 8px;
 }
 
+/* Meta lead ads while Meta reviews Sales Xray: one quiet line on the card. */
+.reviewLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.reviewLine svg {
+  flex: none;
+  color: var(--sx-warn);
+}
+
 .linkButton {
   display: inline-flex;
   align-items: center;

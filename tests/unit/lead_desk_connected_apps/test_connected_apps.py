@@ -63,6 +63,14 @@ def test_views_are_camel_case_and_name_no_amount() -> None:
     assert all("₹" not in name for name in apps.NAMES.values())
 
 
+def test_meta_lead_ads_say_honestly_where_meta_review_stands() -> None:
+    review = apps.meta_review()
+    assert review.state == "pending" and review.since.isoformat() == "2026-10-19"
+    assert "testers" in review.works_now and review.after
+    dumped = review.model_dump(by_alias=True)
+    assert "worksNow" in dumped and dumped["state"] == "pending"
+
+
 def test_the_lead_stages_card_says_where_stages_go_and_what_waits() -> None:
     from ac_platform.lead_desk.journey import mapping
     from ac_platform.lead_desk.journey.model import default_journey
