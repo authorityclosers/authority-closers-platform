@@ -16,6 +16,22 @@ and after printed, one transaction, idempotent, audited with the approver and th
 ``gemini-flash-lite-c2-flex``); ``--tier standard`` is the standard one (profile
 ``gemini-flash-lite-c2``): the same Flash-Lite C2 and Gemini 3.8 Flash C4/C5, without Flex.
 
+``--one-pass`` makes the facts route the one-pass C4 request (profiles ``gemini-one-pass``,
+``-flex``). ``--one-pass --luna`` puts that request on OpenAI GPT-6 Luna (owner, 21 Oct
+2026: "build B together with the Luna route"; "Yes, I have signed the OpenAI DPA for
+Authority Closers"); ``--report-on gemini`` (the default, the hybrid the orchestrator chose
+on the real-call trial: Luna's own coaching read worse) keeps C5 on Gemini 3.8 Flash
+(profiles ``luna-c4-one-pass``, ``-flex``), ``--report-on luna`` moves C5 to Luna too
+(``luna-one-pass``, ``-flex``). Luna's provider entry is built from existing records only
+and lives in the Luna configuration itself, so today's classic configuration, its sealed
+Gemini profiles and the ``back`` fallback stay exactly as they are: ``--openai-credential-ref``
+(the hosted service manifest's OpenAI credential, AUT-2179) and ``--openai-permission-ref``
+(the real-call processing permission) must be given; the terms, privacy and endpoint
+approval references default to those the OpenAI C5 adapter's entry already carries
+(25 Sep 2026); a fictional-benchmark permission is refused. When the classic configuration
+already carries a GPT-6 Luna entry, that one is used and none may be given. Switching onto
+OpenAI asks Admin's OpenAI word (``openai_dpa_signed``: the owner confirmed the DPA).
+
 It calls the same service functions as the Admin actions, nothing reimplemented:
 
 - ``prepare``: ``c2_route.derive_configuration(classic, flex=<tier is flex>)`` from today's
@@ -62,6 +78,11 @@ container's environment the database URL, operations tenant and approval file):
     ... switch [--tier standard] --digest <digest> [--apply]  (after Root's seal is deployed)
     ... back [--apply]                                     (the fallback)
 
+    ... --tier standard --one-pass --luna --openai-credential-ref R1 \\
+          --openai-permission-ref R2 prepare [--apply]
+    ... (the same options) export target > luna-configuration.json   (Root, for the seal)
+    ... (the same options) switch --digest <digest> [--apply]
+
 On production: take a database snapshot before ``--apply``, show the owner the dry run.
 """
 
@@ -91,7 +112,20 @@ STANDARD_REASON = (
     'the script)."'
 )
 REASONS = {"flex": REASON, "standard": STANDARD_REASON}
+LUNA_REASON = (
+    'Owner, 21 Oct 2026: "build B together with the Luna route (one-pass in the sealed plan, '
+    'beta-labelled calibrated scores, call data written in production)" and (relayed) "Yes, '
+    'I have signed the OpenAI DPA for Authority Closers".'
+)
 TIERS = ("flex", "standard")
+# The references the OpenAI C5 adapter's provider entry already carries (25 Sep 2026); its
+# permission was for fictional benchmark calls only, so the real-call one must be given.
+OPENAI_RECORDS = {
+    "provider_terms_ref": "ref:provider-terms/openai-api-20260925",
+    "privacy_ref": "ref:privacy/openai-api-20260925",
+    "endpoint_approval_ref": "ref:approval/openai-responses-20260925",
+}
+OPENAI_REQUIRED = ("credential_ref", "permission_ref")
 DATA_CHANGE = "scripts/data-changes/one-pass-flex-production.py"
 OPERATOR = "claude-laptop:one-pass-flex-production"
 PREPARED = "analysis_pipeline.gemini_transcription_prepared"
@@ -112,13 +146,27 @@ class Command:
     digest: str | None = None
     export: str | None = None
     tier: str = "flex"
+    one_pass: bool = False
+    luna: bool = False
+    report_on: str = "gemini"
+    openai: tuple[tuple[str, str], ...] = ()  # the Luna entry's references, given
     approver: str = APPROVER
     issue: str = ISSUE
     reason: str | None = None  # the owner's words for the tier (REASONS) unless given
 
     @property
+    def variant(self) -> str:
+        """standard, flex, one_pass[_flex], luna_c4[_flex] (C5 on Gemini) or luna[_flex]."""
+        if not self.one_pass:
+            return self.tier
+        base = ("luna_c4" if self.report_on == "gemini" else "luna") if self.luna else "one_pass"
+        return base + ("_flex" if self.tier == "flex" else "")
+
+    @property
     def words(self) -> str:
-        return self.reason or REASONS[self.tier]
+        if self.reason:
+            return self.reason
+        return LUNA_REASON if self.luna else REASONS[self.tier]
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -128,10 +176,68 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--control-email", required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--tier", choices=TIERS, default="flex")
+    parser.add_argument("--one-pass", action="store_true")
+    parser.add_argument("--luna", action="store_true")
+    parser.add_argument("--report-on", choices=("gemini", "luna"), default="gemini")
+    for field in (*OPENAI_REQUIRED, *OPENAI_RECORDS):
+        parser.add_argument("--openai-" + field.removesuffix("_ref").replace("_", "-") + "-ref")
     parser.add_argument("action", choices=COMMANDS)
-    parser.add_argument("what", nargs="?", choices=("classic", *TIERS))
+    parser.add_argument("what", nargs="?", choices=("classic", *TIERS, "target"))
     parser.add_argument("--digest")
     return parser
+
+
+def _openai_entry(command: Command, classic: Any) -> Any:
+    """The GPT-6 Luna provider entry for a Luna configuration: None when the classic
+    configuration carries one (it is used as it is), else built from the given references
+    and the records above; pricing and ceiling are the code's own (c2_route)."""
+    import hashlib
+
+    from ac_platform.conversation_intelligence.admin_pricing import PRICING_SNAPSHOTS
+    from ac_platform.conversation_intelligence.provider_registry import ProviderConfig
+    from ac_platform.one_pass import c2_route
+
+    given = dict(command.openai)
+    existing = next(
+        (
+            item
+            for item in classic.providers
+            if (item.provider_id, item.model_id) == ("openai", c2_route.LUNA_MODEL)
+        ),
+        None,
+    )
+    if existing is not None:
+        if given:
+            raise Refused("the_classic_configuration_already_has_a_luna_entry_give_no_refs")
+        entry = existing
+    else:
+        missing = [field for field in OPENAI_REQUIRED if not given.get(field)]
+        if missing:
+            raise Refused("openai_refs_needed:" + ",".join(missing))
+        refs = {**OPENAI_RECORDS, **given}
+        if any(not str(value).startswith("ref:") for value in refs.values()):
+            raise Refused("openai_refs_must_be_ref_strings")
+        endpoint = c2_route.LUNA_ENDPOINT
+        entry = ProviderConfig(
+            provider_id="openai",
+            model_id=c2_route.LUNA_MODEL,
+            endpoint=endpoint,
+            endpoint_sha256=hashlib.sha256(endpoint.encode()).hexdigest(),
+            credential_ref=refs["credential_ref"],
+            provider_terms_ref=refs["provider_terms_ref"],
+            privacy_ref=refs["privacy_ref"],
+            pricing_ref=PRICING_SNAPSHOTS[("openai", c2_route.LUNA_MODEL)].pricing_ref,
+            free_allowance_ref=None,
+            permission_ref=refs["permission_ref"],
+            endpoint_approval_ref=refs["endpoint_approval_ref"],
+            local_endpoint_approval_ref=None,
+            max_cost_paise=c2_route.LUNA_MAX_COST_PAISE,
+        )
+    if "fictional" in str(entry.permission_ref or "") or "benchmark" in str(
+        entry.permission_ref or ""
+    ):
+        raise Refused("a_fictional_benchmark_permission_never_covers_real_calls")
+    return None if existing is not None else entry
 
 
 def _approval(command: Command) -> dict[str, str]:
@@ -141,6 +247,23 @@ def _approval(command: Command) -> dict[str, str]:
         "data_change": DATA_CHANGE,
         "operator": OPERATOR,
     }
+
+
+def _derive(command: Command, classic: Any, variant: str) -> Any:
+    from ac_platform.one_pass import c2_route
+
+    flex = variant.endswith("flex")
+    if variant in TIERS:
+        return c2_route.derive_configuration(classic, flex=flex)
+    luna = variant.startswith("luna")
+    return c2_route.derive_configuration(
+        classic,
+        flex=flex,
+        one_pass=True,
+        luna=luna,
+        openai=_openai_entry(command, classic) if luna else None,
+        luna_report=not variant.startswith("luna_c4"),
+    )
 
 
 async def _actor(database: Any, command: Command, operations_tenant_id: UUID) -> Any:
@@ -203,11 +326,13 @@ def _transcription(row: Any) -> str | None:
     return None if route is None else route.provider_id
 
 
-async def _state(database: Any, actor: Any, service: Any) -> dict[str, Any]:
-    """Today's classic configuration, the Flex and standard ones derived from it (and their
-    saved revisions, if any), and what is active."""
+async def _state(
+    database: Any, actor: Any, service: Any, command: Command | None = None
+) -> dict[str, Any]:
+    """Today's classic configuration, the Flex and standard ones derived from it and the
+    command's own variant (one pass, Luna; with their saved revisions, if any), and what is
+    active."""
     from ac_platform.conversation_intelligence.provider_registry import parse_registry_config
-    from ac_platform.one_pass import c2_route
 
     rows = await _rows(database, actor.tenant_id)
     active_id = await service._active(actor.tenant_id)
@@ -228,26 +353,24 @@ async def _state(database: Any, actor: Any, service: Any) -> dict[str, Any]:
             None,
         )
     )
-    derived = (
-        {}
-        if classic is None
-        else {
-            tier: c2_route.derive_configuration(
-                parse_registry_config(classic.configuration), flex=tier == "flex"
-            )
-            for tier in TIERS
-        }
-    )
+    variants = list(TIERS)
+    if command is not None and command.variant not in variants:
+        variants.append(command.variant)
+    derived: dict[str, Any] = {}
+    if classic is not None:
+        config = parse_registry_config(classic.configuration)
+        for variant in variants:
+            derived[variant] = _derive(command or Command("status", "", ""), config, variant)
     saved = {
-        tier: next(
+        variant: next(
             (
                 row
                 for _, row in sorted(rows.items(), reverse=True)
-                if tier in derived and row.configuration_sha256 == derived[tier].digest
+                if variant in derived and row.configuration_sha256 == derived[variant].digest
             ),
             None,
         )
-        for tier in TIERS
+        for variant in variants
     }
     return {
         "rows": rows,
@@ -278,9 +401,25 @@ def _summary(state: dict[str, Any]) -> dict[str, Any]:
         "classic": row(state["classic"]),
         "latest_revision": state["latest_revision"],
     }
-    for tier in TIERS:
-        summary[f"{tier}_saved"] = row(state["saved"][tier])
-        summary[f"{tier}_digest"] = derived[tier].digest if tier in derived else None
+    for variant in state["saved"]:
+        summary[f"{variant}_saved"] = row(state["saved"][variant])
+        summary[f"{variant}_digest"] = derived[variant].digest if variant in derived else None
+    # Every OpenAI provider entry saved here, references only (the records Root checks).
+    entries = {
+        json.dumps(
+            {
+                key: value
+                for key, value in sorted(item.items())
+                if key == "model_id" or key.endswith("_ref")
+            },
+            sort_keys=True,
+        )
+        for config in (row.configuration for row in state["rows"].values())
+        if isinstance(config, dict)
+        for item in config.get("providers") or []
+        if isinstance(item, dict) and item.get("provider_id") == "openai"
+    }
+    summary["openai_entries"] = [json.loads(item) for item in sorted(entries)]
     return summary
 
 
@@ -307,6 +446,40 @@ def _sealed(state: dict[str, Any], tenant_id: UUID, bundle: Any) -> dict[str, bo
     return result
 
 
+def _governance_draft(state: dict[str, Any], bundle: Any) -> dict[str, Any]:
+    """A draft of Root's ``--openai-governance`` JSON from the existing records only: the
+    pinned approval's own values for today's classic C4 stage (privacy revision, notice,
+    retention and professional gate). Root verifies it; when the notice does not name
+    OpenAI, the OpenAI stage needs a notice that does, which is Root's and the owner's
+    wording, never this script's."""
+    from ac_platform.one_pass import c2_route
+
+    classic = state["classic"]
+    if classic is None:
+        return {"refused": "no_classic_configuration"}
+    policies = [
+        *(() if bundle.acquisition_policy is None else (bundle.acquisition_policy,)),
+        *bundle.organisation_acquisition_policies,
+    ]
+    drafts = []
+    for policy in policies:
+        for stages in policy.stage_sets():
+            if {item.configuration_sha256 for item in stages} == {classic.configuration_sha256}:
+                c4 = next(item for item in stages if item.stage == "C4")
+                drafts.append(
+                    {field: getattr(c4, field) for field in c2_route.LUNA_GOVERNANCE_FIELDS}
+                )
+    if not drafts:
+        return {"refused": "the_pinned_approval_does_not_approve_the_classic_configuration"}
+    draft = drafts[0]
+    return {
+        "governance": draft,
+        "notice_names_openai": "openai" in str(draft["privacy_notice"]).casefold(),
+        "same_in_every_policy": all(item == draft for item in drafts),
+        "policies": len(drafts),
+    }
+
+
 async def execute(
     database: Any,
     command: Command,
@@ -319,10 +492,18 @@ async def execute(
     from ac_platform.audit.service import AuditRepository
     from ac_platform.conversation_intelligence.application import ConversationApplication
     from ac_platform.conversation_intelligence.provider_admin import (
+        OPENAI_CONFIRM_WORD,
         OWNER_CONFIRM_WORD,
         ConversationProviderAdmin,
     )
 
+    tier = command.tier
+    if tier not in TIERS:
+        raise Refused("tier_must_be_flex_or_standard")
+    if command.luna and not command.one_pass:
+        raise Refused("luna_is_the_one_pass_route_add_one_pass")
+    if command.openai and not command.luna:
+        raise Refused("openai_refs_are_for_luna_only")
     actor = await _actor(database, command, operations_tenant_id)
     application = (
         ConversationApplication(database)
@@ -330,26 +511,35 @@ async def execute(
         else ConversationApplication(database, clock=clock)
     )
     service = ConversationProviderAdmin(application)
-    state = await _state(database, actor, service)
+    state = await _state(database, actor, service, command)
     before = _summary(state)
     result: dict[str, Any] = {"action": command.action, "apply": command.apply, "before": before}
     if command.action == "status":
+        governance: Any = None
         try:
-            sealed: Any = _sealed(state, actor.tenant_id, load_bundle())
+            bundle = load_bundle()
+            sealed: Any = _sealed(state, actor.tenant_id, bundle)
+            if command.luna:
+                governance = _governance_draft(state, bundle)
         except Exception as error:  # noqa: BLE001 - no pinned approval here: say which
             sealed = f"approval_unreadable:{type(error).__name__}"
-        return {**result, "after": before, "sealed": sealed, "status": "read_only"}
+        return {
+            **result,
+            "after": before,
+            "sealed": sealed,
+            **({"openai_governance_draft": governance} if command.luna else {}),
+            "status": "read_only",
+        }
+    variant = command.variant
     if command.action == "export":
-        item = state["classic"] if command.export == "classic" else state["saved"][command.export]
+        name = variant if command.export == "target" else command.export
+        item = state["classic"] if name == "classic" else state["saved"].get(name or "")
         if item is None:
-            raise Refused(f"no_saved_{command.export}_configuration")
-        return {"export": command.export, "configuration": item.configuration}
-    tier = command.tier
-    if tier not in TIERS:
-        raise Refused("tier_must_be_flex_or_standard")
+            raise Refused(f"no_saved_{name}_configuration")
+        return {"export": name, "configuration": item.configuration}
     if state["classic"] is None or not state["derived"]:
         raise Refused("no_classic_scribe_configuration_to_start_from")
-    derived, saved = state["derived"][tier], state["saved"][tier]
+    derived, saved = state["derived"][variant], state["saved"][variant]
 
     if command.action == "prepare":
         if saved is not None:
@@ -370,6 +560,7 @@ async def execute(
                     "from_revision": state["classic"].revision,
                     "configuration_sha256": derived.digest,
                     "tier": tier,
+                    "variant": variant,
                     "reason": command.words,
                     "approval": _approval(command),
                 },
@@ -377,9 +568,9 @@ async def execute(
             status = "applied" if command.apply else "dry_run"
     elif command.action == "switch":
         if command.digest is None or command.digest != derived.digest:
-            raise Refused(f"digest_is_not_the_{tier}_configuration_derived_from_today")
+            raise Refused(f"digest_is_not_the_{variant}_configuration_derived_from_today")
         if saved is None:
-            raise Refused(f"{tier}_configuration_not_prepared_run_prepare_first")
+            raise Refused(f"{variant}_configuration_not_prepared_run_prepare_first")
         bundle = load_bundle()
         try:
             ConversationProviderAdmin._approved_configuration(saved, bundle)
@@ -388,14 +579,18 @@ async def execute(
         if state["active"] is not None and state["active"].id == saved.id:
             status = "no_op"
         else:
+            # Onto OpenAI, Admin's word confirms the owner signed its DPA.
+            onto_openai = ConversationProviderAdmin._uses_openai(
+                saved
+            ) and not ConversationProviderAdmin._uses_openai(state["active"])
             await service.activate(
                 actor,
                 target_revision=saved.revision,
                 expected_revision=state["latest_revision"],
-                key=f"one-pass-{tier}-switch:{saved.configuration_sha256[:24]}:"
+                key=f"one-pass-{variant}-switch:{saved.configuration_sha256[:24]}:"
                 f"{state['activation']}",
                 bundle=bundle,
-                confirm=OWNER_CONFIRM_WORD,
+                confirm=OPENAI_CONFIRM_WORD if onto_openai else OWNER_CONFIRM_WORD,
                 reason=command.words,
                 owner_approval=_approval(command),
             )
@@ -408,6 +603,7 @@ async def execute(
                 resource_id=saved.configuration_sha256,
                 payload={
                     "tier": tier,
+                    "variant": variant,
                     "target_revision": saved.revision,
                     "configuration_sha256": saved.configuration_sha256,
                     "from_configuration_sha256": None
@@ -436,7 +632,7 @@ async def execute(
             status = "applied" if command.apply else "dry_run"
     else:
         raise Refused("unknown_command")
-    after = _summary(await _state(database, actor, service))
+    after = _summary(await _state(database, actor, service, command))
     return {**result, "after": after, "status": status, "approval": _approval(command)}
 
 
@@ -477,7 +673,7 @@ def main(
     try:
         args = _parser().parse_args(argv)
         if args.action == "export" and args.what is None:
-            raise Refused("export_needs_classic_flex_or_standard")
+            raise Refused("export_needs_classic_flex_standard_or_target")
         command = Command(
             action=args.action,
             environment=args.environment,
@@ -486,6 +682,14 @@ def main(
             digest=args.digest,
             export=args.what,
             tier=args.tier,
+            one_pass=bool(args.one_pass),
+            luna=bool(args.luna),
+            report_on=args.report_on,
+            openai=tuple(
+                (field, value)
+                for field in (*OPENAI_REQUIRED, *OPENAI_RECORDS)
+                if (value := getattr(args, "openai_" + field))
+            ),
         )
         from ac_platform.application.asyncio_runtime import run_async
         from ac_platform.application.release_identity import require_baked_release_id

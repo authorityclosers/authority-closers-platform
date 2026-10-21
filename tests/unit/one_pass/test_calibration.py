@@ -119,3 +119,33 @@ def test_the_report_shows_a_calibrated_score_as_a_beta() -> None:
         "label": "beta",
     }
     assert beta["overview"]["score_status"] == "ai_draft"
+
+
+def test_a_luna_read_takes_lunas_own_calibration() -> None:
+    review = _review()
+    for model in ("gpt-6-luna", "gpt-6-luna:flex"):
+        luna = calibration.calibrate(review, model=model)
+        assert luna["calibration"] == {
+            "version": calibration.LUNA_VERSION,
+            "label": "beta",
+            "basis": "one_pass_c4_luna",
+        }
+        for before, after in zip(review["pointers"], luna["pointers"], strict=True):
+            if before["score"] is None:
+                assert after["score"] is None and after["status"] == before["status"]
+                continue
+            offset = calibration.LUNA_OFFSETS.get(before["id"], calibration.LUNA_GLOBAL_OFFSET)
+            assert after["score"] == max(0, min(100, round(before["score"] - offset)))
+            assert after["status"] == pointer_review.band(after["score"])
+    # Gemini's (or no model named) stays calibration v1, unchanged.
+    assert calibration.calibrate(review, model="gemini-3.8-flash:flex") == calibration.calibrate(
+        review
+    )
+    assert calibration.calibrate(review)["calibration"]["version"] == calibration.VERSION
+
+
+def test_lunas_table_covers_every_pointer_and_leans_the_other_way() -> None:
+    assert set(calibration.LUNA_OFFSETS) == set(pointer_review.POINTER_IDS)
+    # Luna reads harsher than today's review (the trial): its offsets raise scores.
+    assert calibration.LUNA_GLOBAL_OFFSET < 0
+    assert all(-25 < offset < 10 for offset in calibration.LUNA_OFFSETS.values())

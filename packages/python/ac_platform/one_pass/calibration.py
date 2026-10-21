@@ -16,6 +16,9 @@ again from its calibrated score (the review's own rule: a row never contradicts 
 score); not_observed, not_applicable and insufficient_evidence stay as they are. The
 overall is the mean of the calibrated scores, as the review computes it. Versioned: the
 saved review names its calibration, so a later version never rewrites an earlier one.
+
+Each model has its own table: a review read by GPT-6 Luna (the one-pass C4 request on an
+OpenAI route) takes Luna's (``LUNA_VERSION``), every other read Gemini's (``VERSION``).
 """
 
 from __future__ import annotations
@@ -59,20 +62,71 @@ OFFSETS: Final[dict[str, float]] = {
 }
 
 
-def calibrate(review: Mapping[str, Any]) -> dict[str, Any]:
+# OpenAI GPT-6 Luna reads the other way (orchestrator, 21 Oct 2026: "Add a Luna-specific
+# pointer calibration from the 16-call Luna trial, labelled beta"). Production's one-pass C4
+# request on Luna (Flex) over the same AC trial calls' Flash-Lite transcripts: 13 calls with a
+# usable review, 301 pointers scored by both; Luna scored every pointer 8.2 points lower than
+# today's review on average (sd 10.0), the overall 8.5 lower. Fitted the same way (prior of 8
+# pairs); leave-one-call-out the overall lean goes from -8.5 to -0.4, the overall mean
+# absolute difference 8.5 -> 3.0, per pointer 10.1 -> 7.2 (Gemini v1: 7.3 -> 7.1).
+LUNA_MODEL: Final = "gpt-6-luna"
+LUNA_VERSION: Final = "one-pass-pointer-calibration-luna/1"
+LUNA_GLOBAL_OFFSET: Final = -8.2
+LUNA_OFFSETS: Final[dict[str, float]] = {
+    "active_listening": -8.2,
+    "building_rapport": -6.5,
+    "business_impact": -6.3,
+    "call_control": -11.4,
+    "call_opening_first_impression": -8.4,
+    "checking_concerns": -7.9,
+    "closing_attitude": -3.2,
+    "creating_value": -11.6,
+    "current_solution": -11.5,
+    "decision_process": -6.5,
+    "discussing_pricing": -7.3,
+    "enough_questions": -12.5,
+    "handling_competition": -8.4,
+    "handling_objections": -14.9,
+    "handling_silence": -8.2,  # never scored by both: the global lean
+    "needs_challenges": -5.4,
+    "next_steps": 0.3,
+    "open_ended_questions": -6.4,
+    "overall_communication": -10.4,
+    "presenting_solution": -6.3,
+    "professionalism": -5.9,
+    "prospect_role": -13.4,
+    "purpose_agenda_setting": -8.0,
+    "question_talk_ratio": -9.5,
+    "solution_value": -10.6,
+    "stakeholders": -7.5,
+    "tone_energy": -6.5,
+}
+
+
+def _table(model: str | None) -> tuple[str, float, Mapping[str, float], str]:
+    """The calibration for the model that answered the one-pass C4 request: Luna's own
+    (any ``gpt-6-luna`` route), otherwise Gemini's (v1)."""
+    if model is not None and model.split(":", 1)[0] == LUNA_MODEL:
+        return LUNA_VERSION, LUNA_GLOBAL_OFFSET, LUNA_OFFSETS, "one_pass_c4_luna"
+    return VERSION, GLOBAL_OFFSET, OFFSETS, "one_pass_c4"
+
+
+def calibrate(review: Mapping[str, Any], *, model: str | None = None) -> dict[str, Any]:
     """A parsed pointer review (``pointer_review.parse_review``) with calibrated scores and
-    its calibration named; a review already calibrated is returned as it is."""
+    its calibration named, by the model that answered (``model``; Gemini's when not given);
+    a review already calibrated is returned as it is."""
     from ac_platform.conversation_intelligence.pointer_review import BAND_LABEL, SCORED, band
 
     result = copy.deepcopy(dict(review))
     if isinstance(result.get("calibration"), Mapping):
         return result
+    version, global_offset, offsets, basis = _table(model)
     scores: list[int] = []
     for pointer in result.get("pointers") or []:
         score = pointer.get("score")
         if isinstance(score, bool) or not isinstance(score, int | float):
             continue
-        offset = OFFSETS.get(str(pointer.get("id")), GLOBAL_OFFSET)
+        offset = offsets.get(str(pointer.get("id")), global_offset)
         pointer["score"] = max(0, min(100, round(score - offset)))
         scores.append(pointer["score"])
         if pointer.get("status") in SCORED:
@@ -85,5 +139,5 @@ def calibrate(review: Mapping[str, Any]) -> dict[str, Any]:
         overall["label"] = BAND_LABEL[band(value)] if value is not None else None
         overall["scored_pointers"] = len(scores)
         result["overall"] = overall
-    result["calibration"] = {"version": VERSION, "label": LABEL, "basis": "one_pass_c4"}
+    result["calibration"] = {"version": version, "label": LABEL, "basis": basis}
     return result

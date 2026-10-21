@@ -374,3 +374,132 @@ async def test_switching_onto_openai_needs_the_owners_dpa_word(monkeypatch) -> N
     )
     # Off OpenAI again is one click.
     assert not await _admin(luna)._owner_gate(actor, _row(standard), confirm=None, reason=None)
+
+
+def _openai_entry() -> object:
+    """A GPT-6 Luna entry built from records, as the production data change builds it."""
+    return next(
+        item for item in _with_openai(_classic()[0]).providers if item.provider_id == "openai"
+    )
+
+
+def test_the_hybrid_keeps_c5_on_gemini_and_takes_the_openai_entry_from_records() -> None:
+    from dataclasses import replace
+
+    from ac_platform.one_pass import markers
+
+    classic, bundle = _classic()
+    entry = _openai_entry()
+    with pytest.raises(c2_route.SealError, match="are_luna_options"):
+        c2_route.derive_configuration(classic, openai=entry)
+    for flex in (False, True):
+        hybrid = c2_route.derive_configuration(
+            classic, flex=flex, one_pass=True, luna=True, openai=entry, luna_report=False
+        )
+        luna_model = "gpt-6-luna" + (":flex" if flex else "")
+        text_model = "gemini-3.8-flash" + (":flex" if flex else "")
+        routes = {route.task: route for route in hybrid.routes}
+        assert routes["asr"].model_id == gemini_audio.MODEL + (":flex" if flex else "")
+        assert (routes["facts"].provider_id, routes["facts"].model_id) == ("openai", luna_model)
+        assert routes["facts"].recipe_revision == markers.RECIPE
+        assert (routes["coaching"].provider_id, routes["coaching"].model_id) == (
+            "gemini",
+            text_model,
+        )
+        # Today's classic configuration is untouched: its digest, routes and Gemini seals.
+        assert classic.digest == _classic()[0].digest
+        sealed = c2_route.seal(
+            bundle, classic, hybrid, flex=flex, one_pass=True, luna=GOVERNANCE, luna_report=False
+        )
+        policy, before = sealed.acquisition_policy, bundle.acquisition_policy
+        assert policy is not None and before is not None and policy.stages == before.stages
+        (profile,) = policy.profiles
+        assert profile.profile_id == (
+            c2_route.LUNA_C4_FLEX_PROFILE_ID if flex else c2_route.LUNA_C4_PROFILE_ID
+        )
+        _, c4, c5 = profile.stages
+        assert (c4.provider_id, c4.model_id, c4.recipe_revision) == (
+            "openai",
+            luna_model,
+            markers.RECIPE,
+        )
+        assert c4.privacy_notice == GOVERNANCE["privacy_notice"]
+        assert c4.credential_ref == entry.credential_ref
+        assert (c5.provider_id, c5.model_id) == ("gemini", text_model)
+        assert c5.privacy_notice == before.stages[2].privacy_notice  # Gemini's own
+        dispatches = ConversationProviderAdmin._approved_configuration(_row(hybrid), sealed)
+        assert [(d.provider_id, d.model_id) for d in dispatches][1:] == [
+            ("openai", luna_model),
+            ("gemini", text_model),
+        ]
+        # The classic configuration stays activatable: the one-click fallback.
+        assert ConversationProviderAdmin._approved_configuration(_row(classic), sealed)
+    # The entry is GPT-6 Luna's, and never a second one beside the configuration's own.
+    with pytest.raises(c2_route.SealError, match="not_gpt_6_luna"):
+        c2_route.derive_configuration(
+            classic, one_pass=True, luna=True, openai=replace(entry, model_id="gpt-6-sol")
+        )
+    with_openai = _with_openai(classic)
+    with pytest.raises(c2_route.SealError, match="another_openai_luna_entry"):
+        c2_route.derive_configuration(
+            with_openai,
+            one_pass=True,
+            luna=True,
+            openai=replace(entry, permission_ref="ref:permission/other"),
+        )
+    # The configuration's own entry given again changes nothing.
+    assert (
+        c2_route.derive_configuration(with_openai, one_pass=True, luna=True, openai=entry).digest
+        == c2_route.derive_configuration(with_openai, one_pass=True, luna=True).digest
+    )
+
+
+def test_the_host_script_seals_the_hybrid_with_the_entry_from_the_configuration(
+    tmp_path, capsys
+) -> None:
+    import json
+
+    from scripts.ops import one_pass_c2_seal
+
+    classic, bundle = _classic()
+    entry = _openai_entry()
+    for flex in (False, True):
+        hybrid = c2_route.derive_configuration(
+            classic, flex=flex, one_pass=True, luna=True, openai=entry, luna_report=False
+        )
+        (tmp_path / "bundle.json").write_bytes(bundle.to_json())
+        (tmp_path / "classic.json").write_text(json.dumps(classic.as_dict()))
+        (tmp_path / "luna.json").write_text(json.dumps(hybrid.as_dict()))
+        (tmp_path / "governance.json").write_text(json.dumps(GOVERNANCE))
+        out = tmp_path / ("out-flex" if flex else "out")
+        arguments = [
+            "--bundle",
+            str(tmp_path / "bundle.json"),
+            "--classic",
+            str(tmp_path / "classic.json"),
+            "--configuration",
+            str(tmp_path / "luna.json"),
+            "--out",
+            str(out),
+            "--one-pass",
+            "--luna",
+            "--luna-c4",
+            "--openai-governance",
+            str(tmp_path / "governance.json"),
+            *(["--flex"] if flex else []),
+        ]
+        assert one_pass_c2_seal.main(arguments) == 0
+        summary = json.loads(capsys.readouterr().out)
+        assert summary["profile"] == (
+            c2_route.LUNA_C4_FLEX_PROFILE_ID if flex else c2_route.LUNA_C4_PROFILE_ID
+        )
+        assert summary["gemini_c2_configuration"] == hybrid.digest
+        assert summary["openai_entry"]["from"] == "configuration"
+        assert summary["openai_entry"]["credential_ref"] == entry.credential_ref
+        assert summary["openai_entry"]["permission_ref"] == entry.permission_ref
+        sealed = load_hosted_approval_bundle((out / "hosted-approval.json").read_bytes())
+        assert ConversationProviderAdmin._approved_configuration(_row(hybrid), sealed)
+        # Sealed as C4 and C5 on Luna instead, it is not the configuration given.
+        assert one_pass_c2_seal.main([a for a in arguments if a != "--luna-c4"]) == 2
+        capsys.readouterr()
+    assert one_pass_c2_seal.main(["--luna-c4", *arguments[:8]]) == 2
