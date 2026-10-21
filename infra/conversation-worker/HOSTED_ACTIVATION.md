@@ -82,6 +82,28 @@ Both hosted validators require this exact dedicated leaf and reject broader
 The ordinary overlay does not request or mount an OpenAI identity, so existing
 activations remain on the original four-identity contract.
 
+**21 October 2026 access status:** [AUT-2179](/AUT/issues/AUT-2179) authorizes
+environment-specific `OPENAI_API_KEY` reads in project
+`b421c44e-4599-4394-8df6-758ed8aedfed`: staging uses
+`staging:/sales-xray/openai`, and production uses `prod:/sales-xray/openai`.
+Root's runtime identity verified SHA256 prefixes `f1044ecfa216` and
+`24aa6dfd9fbe`, respectively. These are secret-store checks, not worker proof.
+Current worker tokens inject neither key; the historical OpenAI service token
+returns metadata HTTP404. Separate read-only token provisioning is the required
+output of [AUT-2180](/AUT/issues/AUT-2180).
+
+Do not add staging/prod scopes to the shared Gemini token or copy a broad root
+identity into a container. The current validators require a single fixed
+OpenAI host directory shared by the hosted overlays. Supporting separate
+staging/production OpenAI credentials therefore needs an environment-specific
+directory contract in the release-owned source before activation. The
+container-visible leaf stays `/run/ac-sales-xray/identities/openai/token`.
+Keep existing providers and their approval references intact; use the normal
+release path for manifest/mount changes. Worker acceptance requires
+`infisical run` under each actual worker identity to produce the expected
+fingerprint with a nonempty key; process exit zero alone does not prove it.
+See the [operator receipt](../../docs/evidence/20261021_AUT2179_OPENAI_WORKER_ACCESS.md).
+
 An OpenAI mount grants no model, task, recording, or spending approval. The
 hash-pinned hosted approval must separately authorize the exact C5 provider,
 model, source/owner, credential reference, bounded requests/input/completion,
