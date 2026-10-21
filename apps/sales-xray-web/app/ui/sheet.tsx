@@ -13,7 +13,8 @@
  * in the middle (short tasks).
  *
  * It is a native <dialog>: focus stays inside, Escape closes it, and so
- * does a tap on the dimmed page. Reduce motion: fades only.
+ * does a tap on the dimmed page. Back (the button, the phone's gesture or
+ * key) closes it too (back-close.ts). Reduce motion: fades only.
  */
 import { X } from "lucide-react";
 import {
@@ -25,6 +26,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { useBackClose } from "./back-close";
 import { tick } from "./haptics";
 import styles from "./sheet.module.css";
 
@@ -195,6 +197,7 @@ export function Sheet({
   useEffect(() => {
     latest.current = { open, onClose };
   });
+  useBackClose(open, onClose);
 
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
