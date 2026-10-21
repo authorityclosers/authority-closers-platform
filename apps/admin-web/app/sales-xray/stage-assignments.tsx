@@ -4,7 +4,8 @@
  * Call data (fast and deep) and AI replies change here, through their own audited settings,
  * with an estimate per model before saving. Transcription, facts and the report change in
  * Routes (advanced) until the production approval design is decided. Phones get one card
- * per job, so the change is never off-screen.
+ * per job, so the change is never off-screen. The analysis pipeline row (owner, 21 Oct:
+ * the one-pass trial) switches today's pipeline to both side by side, with its comparison.
  */
 import Link from "next/link";
 
@@ -19,7 +20,12 @@ import {
 } from "./provider-hub-data";
 import styles from "./provider-hub.module.css";
 
-type Job = { stage: string; label: string; setting?: string };
+type Job = {
+  stage: string;
+  label: string;
+  setting?: string;
+  link?: { href: string; label: string };
+};
 
 export const JOBS: readonly Job[] = [
   { stage: "C2", label: "Transcription" },
@@ -29,6 +35,12 @@ export const JOBS: readonly Job[] = [
   { stage: "CDF", label: "Call data · fast", setting: "call_data.fast.model" },
   { stage: "CDD", label: "Call data · deep", setting: "call_data.deep.model" },
   { stage: "AR", label: "AI replies", setting: "lead_desk_ai.model" },
+  {
+    stage: "OP",
+    label: "Analysis pipeline (one-pass trial)",
+    setting: "analysis_pipeline.mode",
+    link: { href: "/sales-xray/one-pass", label: "Compare side by side" },
+  },
 ];
 
 const ROUTES = "/sales-xray/providers?tab=providers";
@@ -104,6 +116,9 @@ function Estimates({ view, props }: { view: View; props: Props }) {
 }
 
 function Change({ view, props }: { view: View; props: Props }) {
+  const link = view.job.link ? (
+    <Link href={view.job.link.href}>{view.job.link.label}</Link>
+  ) : null;
   if (view.control)
     return (
       <div className={styles.change}>
@@ -112,8 +127,10 @@ function Change({ view, props }: { view: View; props: Props }) {
           answer={view.control.answer}
         />
         <Estimates view={view} props={props} />
+        {link}
       </div>
     );
+  if (link) return link;
   if (view.job.stage === "PR")
     return <span className={styles.muted}>Set in code</span>;
   return (

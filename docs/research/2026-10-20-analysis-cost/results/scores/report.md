@@ -1,0 +1,29 @@
+| arm | judge | calls | no report | truth coverage | fully covered | false claims / call |
+|---|---|---:|---:|---:|---:|---:|
+| audio1/google_gemini-3.1-flash-lite/phone_8k/run1 | anthropic_claude-haiku-5.5 | 14 | 2 | 28.0% | 15.3% | 2.21 |
+| text/brain4/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 73.7% | 61.0% | 1.38 |
+| text/devlive_onepass/google_gemini-3.8-flash/asr_gemini-3.1-flash-lite/run1 | anthropic_claude-haiku-5.5 | 9 | 7 | 33.9% | 28.8% | 2.11 |
+| text/onepass/anthropic_claude-haiku-5.5/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 58.5% | 44.1% | 1.50 |
+| text/onepass/deepseek_deepseek-v4.1-flash/oracle/run1 | anthropic_claude-haiku-5.5 | 13 | 3 | 45.8% | 33.9% | 1.15 |
+| text/onepass/google_gemini-3.1-flash-lite/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 42.4% | 33.9% | 2.12 |
+| text/onepass/google_gemini-3.5-flash-lite/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 55.9% | 42.4% | 1.38 |
+| text/onepass/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 74.6% | 66.1% | 1.94 |
+| text/onepass/google_gemini-3.8-flash/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 74.6% | 67.8% | 0.88 |
+| text/onepass/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 72.0% | 59.3% | 1.94 |
+| text/onepass/openai_gpt-6-luna/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 67.8% | 55.9% | 1.31 |
+| text/onepass/openai_gpt-6-luna/oracle/run2 | anthropic_claude-haiku-5.5 | 16 | 0 | 65.3% | 49.2% | 1.06 |
+| text/onepass/openai_gpt-oss-120b/oracle/run1 | anthropic_claude-haiku-5.5 | 14 | 2 | 31.4% | 18.6% | 3.43 |
+| text/onepass/xiaomi_mimo-v2.6-flash/oracle/run1 | anthropic_claude-haiku-5.5 | 14 | 2 | 63.6% | 54.2% | 1.93 |
+| text/onepass/z-ai_glm-5.3-flash/oracle/run1 | anthropic_claude-haiku-5.5 | 14 | 2 | 59.3% | 47.5% | 1.79 |
+| text/onepass2/anthropic_claude-haiku-5.5/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 53.4% | 39.0% | 1.75 |
+| text/onepass2/anthropic_claude-haiku-5.5/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 67.8% | 50.8% | 1.25 |
+| text/onepass2/google_gemini-3.1-flash-lite/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 43.2% | 32.2% | 1.88 |
+| text/onepass2/google_gemini-3.8-flash/asr_deepgram_nova-3_phone_8k/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 70.3% | 59.3% | 1.94 |
+| text/onepass2/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 78.8% | 71.2% | 1.50 |
+| text/onepass2/google_gemini-3.8-flash/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 78.8% | 66.1% | 1.00 |
+| text/onepass2/google_gemini-3.8-flash/oracle/run2 | anthropic_claude-haiku-5.5 | 16 | 0 | 74.6% | 66.1% | 1.44 |
+| text/onepass2/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1 | anthropic_claude-haiku-5.5 | 6 | 1 | 60.0% | 52.0% | 1.50 |
+| text/onepass2/openai_gpt-6-luna/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 61.9% | 44.1% | 1.06 |
+| text/onepass3/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 71.2% | 59.3% | 1.69 |
+| text/today/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 77.1% | 66.1% | 1.31 |
+| text/today/google_gemini-3.8-flash/oracle/run1 | anthropic_claude-haiku-5.5 | 16 | 0 | 72.0% | 64.4% | 1.12 |

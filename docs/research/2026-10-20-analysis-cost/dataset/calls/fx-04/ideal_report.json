@@ -1,0 +1,203 @@
+{
+  "summary": "Callback from Meera Dhavalke (Survriksh Suraksha Salah) to Raghav Bersule, owner of Valaydhan Masala Bhandar, about Parivar Kavach health and term cover. Raghav (42) said upfront he will not pay today and does not want the two products bundled. Family: wife Anvita (37), daughter 9, son 6; his mother is excluded from this discussion. Household spend ₹70,000 a month, business loan ₹9 lakh with six years left (he corrected an older ₹12 lakh figure), no term cover, ₹5 lakh family health cover through a traders' association renewing in December, and ₹14 lakh set aside for his daughter's college that must not count as household support. He fears claim deductions (his uncle Sushil Persule's cashless claim), small print and disclosure penalties; he reported borderline sugar last year, and his wife's past operation details are pending. Meera stated 30-day initial and 36-month pre-existing waiting periods, warned not to cancel the old policy before portability acceptance, and will confirm Neelkusum Upchar Kendra's network status in writing. Indicative annual estimates: term ₹1 crore to age 65 about ₹19,000, health ₹10 lakh for four about ₹42,000, together about ₹61,000, against his ₹50,000 annual budget; Amarbel Suraksha quoted ₹36,000 for health only. Basic term has no maturity payout; OPD is not included. Meera wrongly said monthly equals annual divided by twelve and offered direct debit, then corrected herself and withdrew the debit. Next step: joint review with Anvita on Saturday 24 October, 7 pm, 30 minutes; voice summary, wording and separate annual and monthly totals by Thursday evening. No purchase commitment.",
+  "strengths": [
+    {
+      "title": "Validated the claim fear without inventing a reason",
+      "explanation": "When Raghav described his uncle's cashless claim with later deductions, you acknowledged it, explained that cashless approval does not mean every bill line is paid, and refused to guess the cause without seeing the file. With a distrustful buyer this is exactly right; keep explaining the mechanism, not the third party's case.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s13"}, {"segment_id": "s15"}]
+    },
+    {
+      "title": "Portability: do not cancel before acceptance",
+      "explanation": "When an earlier agent had told him everything transfers automatically, you said clearly that waiting-period credit and the new insurer's acceptance both need confirmation, and that he must not stop the old policy on an unaccepted proposal. You also repeated it after the line dropped. This protects him from a coverage gap.",
+      "evidence": [{"segment_id": "s24"}, {"segment_id": "s25"}, {"segment_id": "s26"}, {"segment_id": "s27"}]
+    },
+    {
+      "title": "Owned the payment mistake and withdrew the debit",
+      "explanation": "When Raghav challenged the monthly-equals-annual claim and the direct debit he had not agreed to, you said 'आपने सही पकड़ा, मैंने गलत कहा', withdrew the debit setup and committed to separate written annual and monthly totals, including the correction in the summary. He said the correction increased his trust.",
+      "evidence": [{"segment_id": "s52"}, {"segment_id": "s53"}, {"segment_id": "s54"}, {"segment_id": "s67"}, {"segment_id": "s71"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Answered the monthly question without calculating, and assumed a debit",
+      "explanation": "Raghav asked whether monthly payment would cost the same as annual. You said annual divided by twelve gives the monthly and that you would set up direct debit, without a calculation and without his permission. He caught it immediately. On payment frequency, say only what you can confirm: 'Monthly का total अलग हो सकता है; मैं दोनों written totals मँगाकर दिखाऊँगी।' Never propose a debit before he has seen terms.",
+      "evidence": [{"segment_id": "s50"}, {"segment_id": "s51"}, {"segment_id": "s52"}]
+    },
+    {
+      "title": "Cover need not shown as a calculation",
+      "explanation": "Raghav asked why everyone sells ₹1 crore and asked you to show the arithmetic from his expenses. You gave the annual spend (₹8.4 lakh) and listed factors, but kept ₹1 crore only as a comparison point. A rough worked range would answer his question: 'साल का ₹8.4 लाख खर्च, [कितने साल] तक, plus ₹9 लाख loan, minus जो savings घर के लिए available हैं' and let him choose the years.",
+      "evidence": [{"segment_id": "s32"}, {"segment_id": "s33"}, {"segment_id": "s34"}, {"segment_id": "s35"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Cash-flow concern not explored",
+      "explanation": "Raghav said paying a year at once is hard, festival stock has tied up cash and he does not want to use the family account. Instead of asking when his cash flow is better or what monthly amount is comfortable, you went straight to an incorrect monthly answer.",
+      "evidence": [{"segment_id": "s50"}, {"segment_id": "s51"}]
+    },
+    {
+      "title": "Priority between term and health within ₹50,000 not tested",
+      "explanation": "He said if disclosure, hospital and budget do not fit he will keep his existing health cover and may consider term separately. That was the moment to ask which protection matters more if the budget fits only one fully, so the Saturday sheets can show a term-first option.",
+      "evidence": [{"segment_id": "s38"}, {"segment_id": "s39"}, {"segment_id": "s62"}, {"segment_id": "s63"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Claim deductions",
+      "explanation": "Acknowledged, mechanism explained, no invented reason for the uncle's case; offered a summary alongside the original wording.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s13"}, {"segment_id": "s15"}]
+    },
+    {
+      "title": "Disclosure and premium fear",
+      "explanation": "On borderline sugar and his wife's operation you said the underwriter decides, gave no normal-rate guarantee, warned that hiding history causes claim problems, and kept the wife's field pending instead of ticking 'no history'.",
+      "evidence": [{"segment_id": "s18"}, {"segment_id": "s19"}, {"segment_id": "s20"}, {"segment_id": "s21"}]
+    },
+    {
+      "title": "Waiting period and portability",
+      "explanation": "Specific waiting periods for this variant (30 days, 36 months for listed pre-existing conditions) and a clear warning not to cancel the old cover before acceptance.",
+      "evidence": [{"segment_id": "s22"}, {"segment_id": "s23"}, {"segment_id": "s27"}]
+    },
+    {
+      "title": "Budget gap: ₹61,000 against ₹50,000",
+      "explanation": "You rejected the emotional 'for your children' line he expected and promised to show trade-offs openly instead of hiding conditions to look cheaper. Good; the actual options will decide it on Saturday.",
+      "evidence": [{"segment_id": "s37"}, {"segment_id": "s38"}, {"segment_id": "s39"}]
+    },
+    {
+      "title": "Competitor quote from Amarbel Suraksha",
+      "explanation": "You compared health with health (₹42,000 against ₹36,000), kept term separate, and refused to call their quote wrong without seeing it.",
+      "evidence": [{"segment_id": "s40"}, {"segment_id": "s41"}]
+    },
+    {
+      "title": "No maturity return",
+      "explanation": "Stated plainly that basic term has no survival payout and that a return product costs more and does not suit his budget. He valued the clarity.",
+      "evidence": [{"segment_id": "s42"}, {"segment_id": "s43"}, {"segment_id": "s44"}]
+    },
+    {
+      "title": "Monthly payment",
+      "explanation": "Handled badly at first (annual divided by twelve, direct debit), then corrected with separate written totals and no debit.",
+      "evidence": [{"segment_id": "s50"}, {"segment_id": "s51"}, {"segment_id": "s53"}]
+    },
+    {
+      "title": "Restoration, room limit and OPD",
+      "explanation": "No 'double money' or 'no limit' promises; proportionate deduction risk named; OPD stated as not included. Clauses to be sent in writing.",
+      "evidence": [{"segment_id": "s55"}, {"segment_id": "s57"}, {"segment_id": "s59"}, {"segment_id": "s61"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Bounded joint review booked",
+      "explanation": "Saturday 24 October, 7 pm, 30 minutes with Anvita, after Raghav moved it from Friday. You read it back and listed what you will send by Thursday evening: voice summary, wording, annual and monthly totals, and Neelkusum's status clearly marked pending.",
+      "evidence": [{"segment_id": "s66"}, {"segment_id": "s67"}]
+    },
+    {
+      "title": "No-pressure status confirmed",
+      "explanation": "You confirmed no form or policy request is being submitted and that today is information only. Raghav repeated: no payment today, Saturday only a review, and asked to be told clearly if the quote cannot fit ₹50,000.",
+      "evidence": [{"segment_id": "s54"}, {"segment_id": "s69"}, {"segment_id": "s72"}]
+    },
+    {
+      "title": "Decision sits with the family diary",
+      "explanation": "Raghav said yes or no happens only when Anvita reviews the household expense diary. You accepted that and did not treat his interest as a commitment.",
+      "evidence": [{"segment_id": "s64"}, {"segment_id": "s65"}]
+    }
+  ],
+  "verdict": "A disciplined, honest consultation with a very distrustful buyer: claim, portability, disclosure, maturity and competitor objections were handled without overclaiming. One overconfident answer on monthly payment and an unrequested debit nearly undid that, but the immediate correction raised his trust. The outcome is a bounded Saturday review with no commitment; the ₹11,000 budget gap is the open issue.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Trust was built through restraint: accepted 'no payment today' (s3), offered a voice summary for his reading difficulty (s16, s67), and owned a mistake openly (s53), which he said increased his trust (s54)."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Family, expenses, loan, existing cover, renewal, hospital preference and the earmarked ₹14 lakh were all drawn out (s4-s11, s29-s35). Cash-flow timing was not explored (s50)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Budget ₹50,000 a year (s38), joint decision with Anvita (s28, s64), December renewal (s10) and disclosures pending (s18-s21) are clear."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "Core needs (household support without business sale, claim certainty) were heard (s34, s12). The cover amount was not tied to a shown calculation (s32-s35)."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "Health and term kept separate as he asked (s5, s63), indicative figures clearly labelled non-final (s35, s37), like-for-like comparison with the competitor (s41)."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Many objections handled without guarantees or invented reasons (s13, s19, s27, s43, s57, s59, s61). One wrong, overconfident answer on monthly payment (s51), corrected at s53."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Clear review slot, deliverables and deadline (s67), information-only status confirmed (s69). Decision correctly left with the couple (s64-s65)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Plain commitments and repetition after the line dropped (s26). He was confused by 'premium' and annual figures once (s36); keep stating 'per year' with every figure. Voice tone cannot be judged from text."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Trust-led selling to a sceptical buyer worked; the only real slip was an unverified payment claim, and the open commercial issue is a ₹61,000 estimate against a ₹50,000 budget.",
+      "evidence": [{"segment_id": "s37"}, {"segment_id": "s38"}, {"segment_id": "s51"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "No purchase or approval. Joint review with Anvita on Saturday 24 October at 7 pm for 30 minutes; summary and totals by Thursday evening.",
+      "evidence": [{"segment_id": "s66"}, {"segment_id": "s67"}, {"segment_id": "s72"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Underwriter offer after disclosures", "Written monthly and annual totals", "Neelkusum Upchar Kendra network status", "Anvita Bersule's budget review"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "He came in expecting promises followed by deductions; refusing to speculate showed you are not that kind of seller."},
+      {"finding_index": 1, "why_it_matters": "Cancelling a three-year-old policy before acceptance could leave the family uncovered and lose waiting credit."},
+      {"finding_index": 2, "why_it_matters": "Raghav tests every statement; a quick, written correction proved your notes can be relied on."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "You said monthly would equal annual divided by twelve and offered direct debit; he challenged both.", "evidence": [{"segment_id": "s51"}, {"segment_id": "s52"}]},
+        "why_it_matters": "A wrong payment figure or an unagreed debit can become a mis-selling complaint and break the trust you built for 50 turns.",
+        "replacement_behavior": "Say: 'Frequency बदलने पर total बदल सकता है, मैं annual और monthly दोनों written totals लाऊँगी', and mention payment methods only after he asks.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Actual monthly premium totals"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "He asked for the calculation behind ₹1 crore; you gave the annual spend and kept ₹1 crore as a comparison point.", "evidence": [{"segment_id": "s32"}, {"segment_id": "s33"}]},
+        "why_it_matters": "Without a visible calculation the cover amount looks like the standard pitch he distrusts, and it drives the budget gap.",
+        "replacement_behavior": "Show a simple range on a sheet with his expenses, loan and years of support, and let the couple pick the years.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Years of support the couple want", "Other savings available for household use"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 1, "why_effective": "'उनकी file देखे बिना deduction का कारण नहीं बोलूँगी' disarmed his biggest fear with honesty."},
+      {"strength_index": 1, "evidence_index": 3, "why_effective": "A clear 'don't cancel before acceptance' protected him from what the previous agent had implied."},
+      {"strength_index": 2, "evidence_index": 1, "why_effective": "An immediate, specific admission turned a mistake into a trust gain."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "He said annual payment is hard because cash is tied up in festival stock.", "evidence": [{"segment_id": "s50"}]},
+        "closer_response": {"text": "You gave an unverified monthly figure and offered direct debit.", "evidence": [{"segment_id": "s51"}]},
+        "follow_up": "On Saturday ask which months his cash is freer and what monthly amount is comfortable.",
+        "potential_impact": "Helps choose a payment mode he can keep up without stress."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "He said he may keep existing health and consider term separately if the three conditions do not fit.", "evidence": [{"segment_id": "s62"}]},
+        "closer_response": {"text": "You agreed to two separate sheets.", "evidence": [{"segment_id": "s63"}]},
+        "follow_up": "Prepare a term-first option within ₹50,000 alongside the full combination.",
+        "potential_impact": "Keeps a fit option on the table even if health does not work."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "He said the previous agent promised 'just understand' and then chased for booking.", "evidence": [{"segment_id": "s2"}]}, "possible_concern": "Any push for payment or documents before Saturday may end the conversation.", "interpretation_kind": "inference"},
+      {"source": {"text": "He said yes or no happens only when Anvita sits with the red expense diary.", "evidence": [{"segment_id": "s64"}]}, "possible_concern": "The household budget, not the product features, may decide the outcome.", "interpretation_kind": "inference"},
+      {"source": {"text": "He cited Amarbel Suraksha's ₹36,000 health quote.", "evidence": [{"segment_id": "s40"}]}, "possible_concern": "He may choose health on price unless the like-for-like comparison shows clear differences.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Monthly-equals-annual claim and assumed direct debit.", "purpose": "must_watch", "evidence": [{"segment_id": "s51"}]},
+      {"text": "The correction that raised trust.", "purpose": "repeat", "evidence": [{"segment_id": "s53"}]},
+      {"text": "Portability caution.", "purpose": "watch", "evidence": [{"segment_id": "s27"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "You claimed monthly equals annual divided by twelve and offered direct debit; he challenged it.", "evidence": [{"segment_id": "s51"}, {"segment_id": "s52"}]},
+      "change": {"text": "You admitted the error, withdrew the debit and promised separate written totals.", "evidence": [{"segment_id": "s53"}]},
+      "after": {"text": "He said the correction gave him more trust, while still not approving any amount.", "evidence": [{"segment_id": "s54"}]},
+      "possible_effect": "The open correction may have strengthened his confidence in the written summary.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "Advised full disclosure of borderline sugar and kept the wife's history pending instead of ticking 'no history'.", "evidence": [{"segment_id": "s19"}, {"segment_id": "s21"}]},
+      {"text": "Proposed a direct debit without consent, then withdrew it when challenged.", "evidence": [{"segment_id": "s51"}, {"segment_id": "s53"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "Answer payment and premium questions only with verified figures; never propose a debit or payment method unasked.", "target": "In the Saturday review, every total quoted comes from the written annual and monthly sheets."},
+    "practice": {"improvement_index": 0, "instructions": "Write three questions a customer may ask about payment frequency and practise a 'verify first' answer for each, without giving numbers you have not checked.", "success_condition": "In role-play you give no unverified figure and do not mention debit or payment setup."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Explaining mechanisms and limits without guarantees, and correcting yourself openly.",
+      "fix_first": "No unverified payment statements and no assumed debits.",
+      "next_focus": "Bring a worked cover calculation and a term-first option within ₹50,000 to the Saturday review.",
+      "assessment": "High-trust, objection-heavy call handled well apart from one overconfident moment; deal pending the joint review."
+    }
+  }
+}

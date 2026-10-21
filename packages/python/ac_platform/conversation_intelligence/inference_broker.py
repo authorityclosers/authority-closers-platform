@@ -833,6 +833,7 @@ def _request_header(reservation: Reservation, payload: bytes) -> dict[str, Any]:
     if quote.operation not in {
         "transcribe_scribe_v2",
         "transcribe_deepgram_nova3",
+        "transcribe_gemini_audio",
         "extract_context_evidence",
     }:
         raise InferenceBrokerError("broker_operation_not_supported")
@@ -1151,6 +1152,7 @@ def _child_execute(frame: bytes) -> bytes:
         if operation not in {
             "transcribe_scribe_v2",
             "transcribe_deepgram_nova3",
+            "transcribe_gemini_audio",
             "extract_context_evidence",
         }:
             raise InferenceBrokerError("broker_operation_not_supported")
@@ -1192,7 +1194,8 @@ def _child_execute(frame: bytes) -> bytes:
         adapter = BoundedProviders(credentials={provider: credential}, authorize=authorize)
         result = (
             adapter.transcribe(reservation, payload)
-            if operation in {"transcribe_scribe_v2", "transcribe_deepgram_nova3"}
+            if operation
+            in {"transcribe_scribe_v2", "transcribe_deepgram_nova3", "transcribe_gemini_audio"}
             else adapter.generate(reservation, cast(dict[str, Any], body))
         )
         response_sha = hashlib.sha256(result.raw_json).hexdigest()

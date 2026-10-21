@@ -1,0 +1,418 @@
+[
+  {
+    "id": "f01",
+    "type": "person_name",
+    "slot": "seller.name",
+    "value": "काव्या मोरवेल",
+    "normalized": "Kavya Morvel",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "काव्या मोरवेल",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f02",
+    "type": "company",
+    "slot": "seller.company",
+    "value": "धूपकिरण छत ऊर्जा",
+    "normalized": "Dhoopkiran Chhat Urja",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "धूपकिरण छत ऊर्जा",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f03",
+    "type": "person_name",
+    "slot": "prospect.name",
+    "value": "नरेन पालखे",
+    "normalized": "Naren Palkhe",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "नरेन पालखे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.059,
+    "trap": null
+  },
+  {
+    "id": "f04",
+    "type": "product",
+    "slot": "seller.product",
+    "value": "उजास रूफ सोलर",
+    "normalized": "Ujaas Roof Solar",
+    "turn_ids": [
+      "t003"
+    ],
+    "evidence": "उजास रूफ सोलर",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.118,
+    "trap": null
+  },
+  {
+    "id": "f05",
+    "type": "quantity",
+    "slot": "system.capacity",
+    "value": "तीन किलोवाट",
+    "normalized": "3 kW",
+    "turn_ids": [
+      "t003"
+    ],
+    "evidence": "3 किलोवाट",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.118,
+    "trap": null
+  },
+  {
+    "id": "f06",
+    "type": "price",
+    "slot": "seller.price",
+    "value": "₹1.85 लाख",
+    "normalized": "185000 INR",
+    "turn_ids": [
+      "t003"
+    ],
+    "evidence": "एक लाख पचासी हजार रुपये",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.118,
+    "trap": null
+  },
+  {
+    "id": "f07",
+    "type": "company",
+    "slot": "prospect.company",
+    "value": "तरुपंख किराना",
+    "normalized": "Tarupankh Kirana",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "तरुपंख किराना",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.176,
+    "trap": null
+  },
+  {
+    "id": "f08",
+    "type": "requirement",
+    "slot": "roof.permission",
+    "value": "भाई की अनुमति",
+    "normalized": "brother permission required",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "बिना उसकी permission कुछ नहीं होगा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.176,
+    "trap": null
+  },
+  {
+    "id": "f09",
+    "type": "price",
+    "slot": "prospect.summer_bill",
+    "value": "₹8000",
+    "normalized": "8000 INR/month",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "गर्मी में आठ हजार",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.294,
+    "trap": null
+  },
+  {
+    "id": "f10",
+    "type": "price",
+    "slot": "prospect.current_bill",
+    "value": "₹6000",
+    "normalized": "6000 INR/month",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "अभी छह हजार रुपये",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.294,
+    "trap": null
+  },
+  {
+    "id": "f11",
+    "type": "quantity",
+    "slot": "prospect.freezers",
+    "value": "दो",
+    "normalized": "2",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "दो freezer",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.294,
+    "trap": null
+  },
+  {
+    "id": "f12",
+    "type": "time",
+    "slot": "shop.hours",
+    "value": "सुबह नौ से रात नौ",
+    "normalized": "09:00-21:00",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "सुबह नौ से रात नौ",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.294,
+    "trap": null
+  },
+  {
+    "id": "f13",
+    "type": "quantity",
+    "slot": "roof.area",
+    "value": "चार सौ वर्ग फुट",
+    "normalized": "400 sq ft approximate",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "चार सौ वर्ग फुट",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.294,
+    "trap": null
+  },
+  {
+    "id": "f14",
+    "type": "pain_point",
+    "slot": "roof.shade",
+    "value": "दोपहर बाद टंकी की छाया",
+    "normalized": "afternoon tank shadow",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "दोपहर बाद पानी की टंकी की छाया",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.412,
+    "trap": null
+  },
+  {
+    "id": "f15",
+    "type": "decision_maker",
+    "slot": "roof.owner",
+    "value": "भुवन पालखे",
+    "normalized": "Bhuvan Palkhe",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "भुवन पालखे छत का फैसला करेगा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.412,
+    "trap": null
+  },
+  {
+    "id": "f16",
+    "type": "budget",
+    "slot": "prospect.budget",
+    "value": "डेढ़ लाख",
+    "normalized": "150000 INR",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "डेढ़ लाख से ऊपर नहीं",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.529,
+    "trap": null
+  },
+  {
+    "id": "f17",
+    "type": "objection",
+    "slot": "prospect.finance",
+    "value": "EMI नहीं चाहिए",
+    "normalized": "no instalments",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "EMI नहीं चाहिए",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.529,
+    "trap": null
+  },
+  {
+    "id": "f18",
+    "type": "payment_terms",
+    "slot": "quote.subsidy",
+    "value": "बिना कटौती",
+    "normalized": "no subsidy deducted",
+    "turn_ids": [
+      "t011"
+    ],
+    "evidence": "बिना किसी subsidy deduction",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.588,
+    "trap": null
+  },
+  {
+    "id": "f19",
+    "type": "price",
+    "slot": "survey.fee",
+    "value": "निःशुल्क",
+    "normalized": "0 INR",
+    "turn_ids": [
+      "t009"
+    ],
+    "evidence": "free site visit",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.471,
+    "trap": null
+  },
+  {
+    "id": "f20",
+    "type": "requirement",
+    "slot": "prospect.backup",
+    "value": "freezer चलते रहें",
+    "normalized": "freezer continuity",
+    "turn_ids": [
+      "t012"
+    ],
+    "evidence": "freezer बंद नहीं होने चाहिए",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.647,
+    "trap": null
+  },
+  {
+    "id": "f21",
+    "type": "product",
+    "slot": "system.backup",
+    "value": "सामान्य system backup नहीं देगा",
+    "normalized": "no outage backup",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "सामान्य system backup नहीं देगा",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.706,
+    "trap": null
+  },
+  {
+    "id": "f22",
+    "type": "next_step",
+    "slot": "seller.callback",
+    "value": "शनिवार ग्यारह बजे",
+    "normalized": "2026-10-24 11:00",
+    "turn_ids": [
+      "t015"
+    ],
+    "evidence": "शनिवार, सुबह ग्यारह बजे",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.824,
+    "trap": null
+  },
+  {
+    "id": "f23",
+    "type": "date",
+    "slot": "callback.date",
+    "value": "चौबीस अक्टूबर",
+    "normalized": "2026-10-24",
+    "turn_ids": [
+      "t015"
+    ],
+    "evidence": "चौबीस अक्टूबर",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.824,
+    "trap": null
+  },
+  {
+    "id": "f24",
+    "type": "contact_preference",
+    "slot": "prospect.messages",
+    "value": "इसी माध्यम पर छोटा message",
+    "normalized": "same call medium",
+    "turn_ids": [
+      "t016"
+    ],
+    "evidence": "message इसी call वाले माध्यम पर",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.882,
+    "trap": null
+  },
+  {
+    "id": "f25",
+    "type": "location",
+    "slot": "shop.market",
+    "value": "कचनार चौक बाजार",
+    "normalized": "Kachnar Chowk Bazaar",
+    "turn_ids": [
+      "t016"
+    ],
+    "evidence": "कचनार चौक बाजार",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.882,
+    "trap": null
+  },
+  {
+    "id": "f26",
+    "type": "commitment",
+    "slot": "prospect.family_check",
+    "value": "भाई से पूछना",
+    "normalized": "consult brother",
+    "turn_ids": [
+      "t014"
+    ],
+    "evidence": "पहले भाई से पूछूँगा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.765,
+    "trap": null
+  }
+]

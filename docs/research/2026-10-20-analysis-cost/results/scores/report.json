@@ -1,0 +1,245 @@
+[
+ {
+  "arm": "audio1/google_gemini-3.1-flash-lite/phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 14,
+  "no_report": 2,
+  "truth_coverage": 0.2796610169491525,
+  "fully_covered": 0.15254237288135594,
+  "false_claims_per_call": 2.2142857142857144
+ },
+ {
+  "arm": "text/brain4/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.7372881355932204,
+  "fully_covered": 0.6101694915254238,
+  "false_claims_per_call": 1.375
+ },
+ {
+  "arm": "text/devlive_onepass/google_gemini-3.8-flash/asr_gemini-3.1-flash-lite/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 9,
+  "no_report": 7,
+  "truth_coverage": 0.3389830508474576,
+  "fully_covered": 0.288135593220339,
+  "false_claims_per_call": 2.111111111111111
+ },
+ {
+  "arm": "text/onepass/anthropic_claude-haiku-5.5/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.5847457627118644,
+  "fully_covered": 0.4406779661016949,
+  "false_claims_per_call": 1.5
+ },
+ {
+  "arm": "text/onepass/deepseek_deepseek-v4.1-flash/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 13,
+  "no_report": 3,
+  "truth_coverage": 0.4576271186440678,
+  "fully_covered": 0.3389830508474576,
+  "false_claims_per_call": 1.1538461538461537
+ },
+ {
+  "arm": "text/onepass/google_gemini-3.1-flash-lite/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.423728813559322,
+  "fully_covered": 0.3389830508474576,
+  "false_claims_per_call": 2.125
+ },
+ {
+  "arm": "text/onepass/google_gemini-3.5-flash-lite/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.559322033898305,
+  "fully_covered": 0.423728813559322,
+  "false_claims_per_call": 1.375
+ },
+ {
+  "arm": "text/onepass/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.7457627118644068,
+  "fully_covered": 0.6610169491525424,
+  "false_claims_per_call": 1.9375
+ },
+ {
+  "arm": "text/onepass/google_gemini-3.8-flash/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.7457627118644068,
+  "fully_covered": 0.6779661016949152,
+  "false_claims_per_call": 0.875
+ },
+ {
+  "arm": "text/onepass/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.7203389830508474,
+  "fully_covered": 0.5932203389830508,
+  "false_claims_per_call": 1.9375
+ },
+ {
+  "arm": "text/onepass/openai_gpt-6-luna/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.6779661016949152,
+  "fully_covered": 0.559322033898305,
+  "false_claims_per_call": 1.3125
+ },
+ {
+  "arm": "text/onepass/openai_gpt-6-luna/oracle/run2",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.652542372881356,
+  "fully_covered": 0.4915254237288136,
+  "false_claims_per_call": 1.0625
+ },
+ {
+  "arm": "text/onepass/openai_gpt-oss-120b/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 14,
+  "no_report": 2,
+  "truth_coverage": 0.3135593220338983,
+  "fully_covered": 0.1864406779661017,
+  "false_claims_per_call": 3.4285714285714284
+ },
+ {
+  "arm": "text/onepass/xiaomi_mimo-v2.6-flash/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 14,
+  "no_report": 2,
+  "truth_coverage": 0.635593220338983,
+  "fully_covered": 0.5423728813559322,
+  "false_claims_per_call": 1.9285714285714286
+ },
+ {
+  "arm": "text/onepass/z-ai_glm-5.3-flash/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 14,
+  "no_report": 2,
+  "truth_coverage": 0.5932203389830508,
+  "fully_covered": 0.4745762711864407,
+  "false_claims_per_call": 1.7857142857142858
+ },
+ {
+  "arm": "text/onepass2/anthropic_claude-haiku-5.5/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.5338983050847458,
+  "fully_covered": 0.3898305084745763,
+  "false_claims_per_call": 1.75
+ },
+ {
+  "arm": "text/onepass2/anthropic_claude-haiku-5.5/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.6779661016949152,
+  "fully_covered": 0.5084745762711864,
+  "false_claims_per_call": 1.25
+ },
+ {
+  "arm": "text/onepass2/google_gemini-3.1-flash-lite/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.4322033898305085,
+  "fully_covered": 0.3220338983050847,
+  "false_claims_per_call": 1.875
+ },
+ {
+  "arm": "text/onepass2/google_gemini-3.8-flash/asr_deepgram_nova-3_phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.7033898305084746,
+  "fully_covered": 0.5932203389830508,
+  "false_claims_per_call": 1.9375
+ },
+ {
+  "arm": "text/onepass2/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.788135593220339,
+  "fully_covered": 0.711864406779661,
+  "false_claims_per_call": 1.5
+ },
+ {
+  "arm": "text/onepass2/google_gemini-3.8-flash/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.788135593220339,
+  "fully_covered": 0.6610169491525424,
+  "false_claims_per_call": 1.0
+ },
+ {
+  "arm": "text/onepass2/google_gemini-3.8-flash/oracle/run2",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.7457627118644068,
+  "fully_covered": 0.6610169491525424,
+  "false_claims_per_call": 1.4375
+ },
+ {
+  "arm": "text/onepass2/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 6,
+  "no_report": 1,
+  "truth_coverage": 0.6,
+  "fully_covered": 0.52,
+  "false_claims_per_call": 1.5
+ },
+ {
+  "arm": "text/onepass2/openai_gpt-6-luna/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.6186440677966102,
+  "fully_covered": 0.4406779661016949,
+  "false_claims_per_call": 1.0625
+ },
+ {
+  "arm": "text/onepass3/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.711864406779661,
+  "fully_covered": 0.5932203389830508,
+  "false_claims_per_call": 1.6875
+ },
+ {
+  "arm": "text/today/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.7711864406779662,
+  "fully_covered": 0.6610169491525424,
+  "false_claims_per_call": 1.3125
+ },
+ {
+  "arm": "text/today/google_gemini-3.8-flash/oracle/run1",
+  "judge": "anthropic_claude-haiku-5.5",
+  "calls": 16,
+  "no_report": 0,
+  "truth_coverage": 0.7203389830508474,
+  "fully_covered": 0.6440677966101694,
+  "false_claims_per_call": 1.125
+ }
+]

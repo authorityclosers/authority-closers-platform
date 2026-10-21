@@ -1,0 +1,183 @@
+{
+  "call_id": "fx-16",
+  "call_type": "inbound_followup",
+  "language_mix": "hi",
+  "target_minutes": 45,
+  "seller": {
+    "company": "नीलपंख परिसर विकास",
+    "product": "अंबरपंख व्यापार प्रांगण",
+    "price_list": [
+      "दुकान: बहत्तर लाख रुपये मूल कीमत"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "वसुधा मेहरवेल",
+      "gender": "f",
+      "age_band": "30s",
+      "style": "patient, sometimes assumes readiness"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "देवेश झोरपल",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "detail-oriented family retailer"
+    }
+  ],
+  "sections": [
+    {
+      "name": "enquiry and family purpose",
+      "minutes": 5,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10",
+        "f11",
+        "f12",
+        "f13",
+        "f14",
+        "f15",
+        "f16",
+        "f17",
+        "f18",
+        "f19",
+        "f20"
+      ]
+    },
+    {
+      "name": "area, frontage and everyday movement",
+      "minutes": 6,
+      "facts": [
+        "f21",
+        "f22",
+        "f23",
+        "f24",
+        "f25",
+        "f26",
+        "f27",
+        "f28",
+        "f29"
+      ]
+    },
+    {
+      "name": "price arithmetic and cash plan",
+      "minutes": 6,
+      "facts": [
+        "f30",
+        "f31",
+        "f32",
+        "f33",
+        "f34",
+        "f35",
+        "f36",
+        "f37"
+      ]
+    },
+    {
+      "name": "documents, ownership and permission",
+      "minutes": 6,
+      "facts": [
+        "f38",
+        "f39",
+        "f40",
+        "f41"
+      ]
+    },
+    {
+      "name": "operations, occupancy and honest uncertainty",
+      "minutes": 6,
+      "facts": [
+        "f42",
+        "f43",
+        "f44",
+        "f45"
+      ]
+    },
+    {
+      "name": "parking, holding money and seller correction",
+      "minutes": 6,
+      "facts": [
+        "f46",
+        "f47",
+        "f48",
+        "f49",
+        "f50"
+      ]
+    },
+    {
+      "name": "exit routes, family safeguards and visit preparation",
+      "minutes": 5,
+      "facts": [
+        "f51",
+        "f52",
+        "f53",
+        "f54",
+        "f55"
+      ]
+    },
+    {
+      "name": "readback, pending answers and bounded commitment",
+      "minutes": 5,
+      "facts": [
+        "f56",
+        "f57",
+        "f58",
+        "f59",
+        "f60"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "price_too_early",
+      "turn_ids": [
+        "t013"
+      ],
+      "statement": "Seller quoted the unit before asking for the all-in budget and later acknowledged the omission."
+    },
+    {
+      "id": "k02",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t025"
+      ],
+      "statement": "Seller corrected the buyer’s assumption that ground floor meant direct street frontage."
+    },
+    {
+      "id": "k03",
+      "kind": "wrong_info_given",
+      "turn_ids": [
+        "t105"
+      ],
+      "statement": "Seller promised unconditional token refund without the written terms, then withdrew the claim after challenge."
+    },
+    {
+      "id": "k04",
+      "kind": "ignored_buying_signal",
+      "turn_ids": [
+        "t105"
+      ],
+      "statement": "Seller reintroduced payment before inspection after buyer had explicitly ruled out paying that day."
+    },
+    {
+      "id": "k05",
+      "kind": "other",
+      "turn_ids": [
+        "t147"
+      ],
+      "statement": "Seller committed to a dated document-status list while clearly identifying unresolved operational and legal questions."
+    }
+  ]
+}

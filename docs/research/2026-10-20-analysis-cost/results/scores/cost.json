@@ -1,0 +1,407 @@
+[
+ {
+  "model": "anthropic/claude-haiku-5.5",
+  "arm": "onepass2:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.1044,
+  "usd_per_min": 0.00039508927726725153,
+  "inr_per_min": 0.03950892772672515
+ },
+ {
+  "model": "anthropic/claude-haiku-5.5",
+  "arm": "onepass2:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.1004,
+  "usd_per_min": 0.000379865153799093,
+  "inr_per_min": 0.0379865153799093
+ },
+ {
+  "model": "anthropic/claude-haiku-5.5",
+  "arm": "onepass:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.0871,
+  "usd_per_min": 0.00032953812968697767,
+  "inr_per_min": 0.03295381296869777
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "arm": "brain4:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1",
+  "calls": 1,
+  "audio_min": 3.3,
+  "usd": 0.1218,
+  "usd_per_min": 0.03673001508295626,
+  "inr_per_min": 3.673001508295626
+ },
+ {
+  "model": "assemblyai/universal-2",
+  "arm": "stt",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.7487,
+  "usd_per_min": 0.0028333104174681966,
+  "inr_per_min": 0.28333104174681967
+ },
+ {
+  "model": "assemblyai/universal-3-5-pro",
+  "arm": "stt",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 1.013,
+  "usd_per_min": 0.0038333003260780443,
+  "inr_per_min": 0.3833300326078044
+ },
+ {
+  "model": "deepgram/nova-3",
+  "arm": "stt",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 1.3741,
+  "usd_per_min": 0.005199959634439392,
+  "inr_per_min": 0.5199959634439393
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "arm": "onepass:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.131,
+  "usd_per_min": 0.0004958341480028509,
+  "inr_per_min": 0.04958341480028509
+ },
+ {
+  "model": "google/gemini-3.1-flash-lite",
+  "arm": "asr:phone_8k",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.3776,
+  "usd_per_min": 0.001428872728648826,
+  "inr_per_min": 0.1428872728648826
+ },
+ {
+  "model": "google/gemini-3.1-flash-lite",
+  "arm": "audio1:phone_8k:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.6739,
+  "usd_per_min": 0.0025504058630976783,
+  "inr_per_min": 0.25504058630976784
+ },
+ {
+  "model": "google/gemini-3.1-flash-lite",
+  "arm": "devlive:onepass",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.3687,
+  "usd_per_min": 0.0013953847657851414,
+  "inr_per_min": 0.13953847657851415
+ },
+ {
+  "model": "google/gemini-3.1-flash-lite",
+  "arm": "onepass2:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.1141,
+  "usd_per_min": 0.00043178535613146564,
+  "inr_per_min": 0.04317853561314656
+ },
+ {
+  "model": "google/gemini-3.1-flash-lite",
+  "arm": "onepass:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.0977,
+  "usd_per_min": 0.000369715738153654,
+  "inr_per_min": 0.0369715738153654
+ },
+ {
+  "model": "google/gemini-3.5-flash-lite",
+  "arm": "asr:phone_8k",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.3743,
+  "usd_per_min": 0.0014163127321808128,
+  "inr_per_min": 0.14163127321808128
+ },
+ {
+  "model": "google/gemini-3.5-flash-lite",
+  "arm": "onepass:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.1991,
+  "usd_per_min": 0.0007535846509955787,
+  "inr_per_min": 0.07535846509955788
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "asr:phone_8k",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.6028,
+  "usd_per_min": 0.002281037647192386,
+  "inr_per_min": 0.22810376471923857
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "devlive:onepass",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 1.0363,
+  "usd_per_min": 0.003921471955396056,
+  "inr_per_min": 0.3921471955396056
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass2:asr_deepgram_nova-3_phone_8k:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.3981,
+  "usd_per_min": 0.0015066167983803318,
+  "inr_per_min": 0.15066167983803316
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass2:asr_groq_whisper-large-v3-turbo_phone_8k:r1",
+  "calls": 14,
+  "audio_min": 218.1,
+  "usd": 0.3323,
+  "usd_per_min": 0.0015232204529478286,
+  "inr_per_min": 0.15232204529478285
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass2:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.4079,
+  "usd_per_min": 0.0015437821268866172,
+  "inr_per_min": 0.15437821268866173
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass2:asr_openrouter_google_gemini-3.8-flash_phone_8k:r1",
+  "calls": 14,
+  "audio_min": 226.4,
+  "usd": 0.3609,
+  "usd_per_min": 0.001594373062564888,
+  "inr_per_min": 0.1594373062564888
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass2:asr_sarvam_saaras-v4_phone_8k:r1",
+  "calls": 3,
+  "audio_min": 21.0,
+  "usd": 0.0616,
+  "usd_per_min": 0.002927370672581795,
+  "inr_per_min": 0.2927370672581795
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass2:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.4089,
+  "usd_per_min": 0.0015474188116126669,
+  "inr_per_min": 0.1547418811612667
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass2:oracle:r2",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.4016,
+  "usd_per_min": 0.0015197633569009339,
+  "inr_per_min": 0.1519763356900934
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.3619,
+  "usd_per_min": 0.0013696110399808266,
+  "inr_per_min": 0.13696110399808265
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass:asr_openrouter_google_gemini-3.8-flash_phone_8k:r1",
+  "calls": 12,
+  "audio_min": 158.5,
+  "usd": 0.2636,
+  "usd_per_min": 0.0016632641473724055,
+  "inr_per_min": 0.16632641473724055
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "onepass:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.3721,
+  "usd_per_min": 0.0014083089983664564,
+  "inr_per_min": 0.14083089983664565
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "today:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 1.6916,
+  "usd_per_min": 0.006401503617132659,
+  "inr_per_min": 0.6401503617132659
+ },
+ {
+  "model": "google/gemini-3.8-flash",
+  "arm": "today:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 1.5422,
+  "usd_per_min": 0.005836133483863235,
+  "inr_per_min": 0.5836133483863235
+ },
+ {
+  "model": "groq/whisper-large-v3",
+  "arm": "stt",
+  "calls": 14,
+  "audio_min": 218.1,
+  "usd": 0.4035,
+  "usd_per_min": 0.0018499893028515542,
+  "inr_per_min": 0.18499893028515543
+ },
+ {
+  "model": "groq/whisper-large-v3-turbo",
+  "arm": "stt",
+  "calls": 14,
+  "audio_min": 218.1,
+  "usd": 0.1454,
+  "usd_per_min": 0.0006666585164583269,
+  "inr_per_min": 0.06666585164583269
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "arm": "brain4:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.1165,
+  "usd_per_min": 0.000440901665710087,
+  "inr_per_min": 0.0440901665710087
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "arm": "onepass2:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1",
+  "calls": 7,
+  "audio_min": 75.0,
+  "usd": 0.0391,
+  "usd_per_min": 0.0005214755263391668,
+  "inr_per_min": 0.05214755263391668
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "arm": "onepass2:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.0995,
+  "usd_per_min": 0.0003766901501724997,
+  "inr_per_min": 0.03766901501724997
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "arm": "onepass3:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.0872,
+  "usd_per_min": 0.0003300263006855838,
+  "inr_per_min": 0.03300263006855837
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "arm": "onepass:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.081,
+  "usd_per_min": 0.00030656003431072645,
+  "inr_per_min": 0.030656003431072644
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "arm": "onepass:asr_openrouter_google_gemini-3.8-flash_phone_8k:r1",
+  "calls": 14,
+  "audio_min": 226.4,
+  "usd": 0.0669,
+  "usd_per_min": 0.00029576985663900564,
+  "inr_per_min": 0.029576985663900563
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "arm": "onepass:asr_sarvam_saaras-v4_phone_8k:r1",
+  "calls": 3,
+  "audio_min": 21.0,
+  "usd": 0.0119,
+  "usd_per_min": 0.000564778578784758,
+  "inr_per_min": 0.05647785787847579
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "arm": "onepass:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.0801,
+  "usd_per_min": 0.00030326393400230845,
+  "inr_per_min": 0.030326393400230845
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "arm": "onepass:oracle:r2",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.0786,
+  "usd_per_min": 0.0002975383315147807,
+  "inr_per_min": 0.029753833151478074
+ },
+ {
+  "model": "openai/gpt-oss-120b",
+  "arm": "onepass:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.0206,
+  "usd_per_min": 7.788408776986585e-05,
+  "inr_per_min": 0.007788408776986585
+ },
+ {
+  "model": "qwen/qwen3.8-flash",
+  "arm": "onepass:oracle:r1",
+  "calls": 4,
+  "audio_min": 40.7,
+  "usd": 0.0323,
+  "usd_per_min": 0.0007951955398868575,
+  "inr_per_min": 0.07951955398868575
+ },
+ {
+  "model": "sarvam/saaras:v4",
+  "arm": "stt",
+  "calls": 11,
+  "audio_min": 123.1,
+  "usd": 0.726,
+  "usd_per_min": 0.0058999972912208475,
+  "inr_per_min": 0.5899997291220848
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-flash",
+  "arm": "onepass:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.0681,
+  "usd_per_min": 0.0002577164445509647,
+  "inr_per_min": 0.025771644455096467
+ },
+ {
+  "model": "z-ai/glm-5.3-flash",
+  "arm": "onepass:oracle:r1",
+  "calls": 16,
+  "audio_min": 264.3,
+  "usd": 0.055,
+  "usd_per_min": 0.00020825223429685088,
+  "inr_per_min": 0.02082522342968509
+ }
+]

@@ -1,0 +1,152 @@
+{
+ "call_id": "fx-07",
+ "call_type": "callback",
+ "language_mix": "hi-en",
+ "target_minutes": 2,
+ "scenario": "used-car dealer calling back about a test drive slot",
+ "seller": {
+  "company": "Raftaar Pre-Owned Motors",
+  "product": "Used 2019 Pravah XT diesel SUV (white, first owner)",
+  "price_list": [
+   "Pravah XT 2019 diesel listed at ₹7.85 lakh",
+   "Finance: minimum ₹1.5 lakh down payment, loan up to 5 years",
+   "Exchange evaluation free at showroom"
+  ]
+ },
+ "speakers": [
+  {
+   "id": "S1",
+   "role": "salesperson",
+   "name": "Aman Chauhan",
+   "gender": "m",
+   "age_band": "20s",
+   "style": "quick, eager, slightly over-promises, says sir every line"
+  },
+  {
+   "id": "S2",
+   "role": "prospect",
+   "name": "Rohit Sabharwal",
+   "gender": "m",
+   "age_band": "30s",
+   "style": "busy, in office, curt, price-conscious"
+  }
+ ],
+ "sections": [
+  {
+   "name": "opening",
+   "minutes": 0.2,
+   "facts": [
+    "f01",
+    "f02",
+    "f03",
+    "f04"
+   ],
+   "turns": [
+    "t001",
+    "t002"
+   ]
+  },
+  {
+   "name": "slot",
+   "minutes": 0.3,
+   "facts": [
+    "f05",
+    "f06",
+    "f07",
+    "f08"
+   ],
+   "turns": [
+    "t003",
+    "t005"
+   ]
+  },
+  {
+   "name": "car_and_price",
+   "minutes": 0.8,
+   "facts": [
+    "f09",
+    "f10",
+    "f11",
+    "f12",
+    "f13",
+    "f14",
+    "f15",
+    "f16",
+    "f17",
+    "f18",
+    "f19",
+    "f20",
+    "f21"
+   ],
+   "turns": [
+    "t006",
+    "t012"
+   ]
+  },
+  {
+   "name": "exchange_and_finance",
+   "minutes": 0.4,
+   "facts": [
+    "f22",
+    "f23",
+    "f24",
+    "f25"
+   ],
+   "turns": [
+    "t013",
+    "t019"
+   ]
+  },
+  {
+   "name": "close",
+   "minutes": 0.4,
+   "facts": [
+    "f26",
+    "f27",
+    "f28",
+    "f29",
+    "f30"
+   ],
+   "turns": [
+    "t020",
+    "t025"
+   ]
+  }
+ ],
+ "coaching_truths": [
+  {
+   "id": "k01",
+   "kind": "wrong_info_given",
+   "turn_ids": [
+    "t011"
+   ],
+   "statement": "Aman claimed a full company service history before checking the file, then had to take it back; the prospect said that point matters to him."
+  },
+  {
+   "id": "k02",
+   "kind": "price_too_early",
+   "turn_ids": [
+    "t009"
+   ],
+   "statement": "Aman hinted at a discount ('थोड़ा बहुत हो जाएगा') as soon as the prospect pushed, before the prospect had even seen the car."
+  },
+  {
+   "id": "k03",
+   "kind": "missed_discovery",
+   "turn_ids": [
+    "t018",
+    "t019"
+   ],
+   "statement": "When the prospect asked for a loan, Aman gave terms but never asked his budget, monthly EMI comfort or the exchange car's condition and ownership."
+  },
+  {
+   "id": "k04",
+   "kind": "good_rapport",
+   "turn_ids": [
+    "t004",
+    "t005"
+   ],
+   "statement": "Aman welcomed the wife's test drive and set a clear 20-25 minute highway drive, which suits a joint family decision."
+  }
+ ]
+}

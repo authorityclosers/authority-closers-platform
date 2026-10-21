@@ -1,0 +1,123 @@
+{
+ "round": 1,
+ "assignments": {
+  "codex": [
+   {
+    "call_id": "fx-01",
+    "call_type": "cold_call",
+    "language_mix": "hi-en",
+    "target_minutes": 3,
+    "scenario": "solar rooftop installer calling a shop owner"
+   },
+   {
+    "call_id": "fx-04",
+    "call_type": "objection_heavy",
+    "language_mix": "hi-en",
+    "target_minutes": 18,
+    "scenario": "term + health insurance for a family business owner"
+   },
+   {
+    "call_id": "fx-08",
+    "call_type": "multi_party",
+    "language_mix": "hi-en",
+    "target_minutes": 30,
+    "scenario": "packaging supplier, buyer + their purchase manager + our technical person"
+   },
+   {
+    "call_id": "fx-11",
+    "call_type": "cold_call",
+    "language_mix": "mr-en",
+    "target_minutes": 6,
+    "scenario": "CA/tax filing services for a small trader"
+   },
+   {
+    "call_id": "fx-14",
+    "call_type": "lost_deal",
+    "language_mix": "mr-en",
+    "target_minutes": 14,
+    "scenario": "interior design for a 3BHK, prospect chose a cheaper local contractor"
+   },
+   {
+    "call_id": "fx-16",
+    "call_type": "inbound_followup",
+    "language_mix": "hi",
+    "target_minutes": 45,
+    "scenario": "commercial shop purchase in a mall project, long detailed discussion"
+   }
+  ],
+  "agy": [
+   {
+    "call_id": "fx-02",
+    "call_type": "inbound_followup",
+    "language_mix": "mr-en",
+    "target_minutes": 5,
+    "scenario": "modular kitchen enquiry from a website form"
+   },
+   {
+    "call_id": "fx-05",
+    "call_type": "negotiation_close",
+    "language_mix": "mr-en",
+    "target_minutes": 25,
+    "scenario": "2BHK flat booking in a new residential project near a tier-2 city"
+   },
+   {
+    "call_id": "fx-09",
+    "call_type": "demo",
+    "language_mix": "mr-en",
+    "target_minutes": 40,
+    "scenario": "dairy equipment (bulk milk chiller) for a cooperative society"
+   },
+   {
+    "call_id": "fx-12",
+    "call_type": "inbound_followup",
+    "language_mix": "hi-en",
+    "target_minutes": 10,
+    "scenario": "international travel package (family of 5)"
+   },
+   {
+    "call_id": "fx-15",
+    "call_type": "multi_party",
+    "language_mix": "mr-en",
+    "target_minutes": 20,
+    "scenario": "school admission: both parents + admissions counsellor + fee officer"
+   }
+  ],
+  "claude": [
+   {
+    "call_id": "fx-03",
+    "call_type": "demo",
+    "language_mix": "en-IN",
+    "target_minutes": 12,
+    "scenario": "CRM software demo to a 20-person real-estate brokerage"
+   },
+   {
+    "call_id": "fx-06",
+    "call_type": "lost_deal",
+    "language_mix": "hi",
+    "target_minutes": 8,
+    "scenario": "coaching institute admission for a class 11 student (parent on call)"
+   },
+   {
+    "call_id": "fx-07",
+    "call_type": "callback",
+    "language_mix": "hi-en",
+    "target_minutes": 2,
+    "scenario": "used-car dealer calling back about a test drive slot"
+   },
+   {
+    "call_id": "fx-10",
+    "call_type": "negotiation_close",
+    "language_mix": "en-IN",
+    "target_minutes": 22,
+    "scenario": "annual IT support contract for a 3-branch clinic chain"
+   },
+   {
+    "call_id": "fx-13",
+    "call_type": "objection_heavy",
+    "language_mix": "en-IN",
+    "target_minutes": 15,
+    "scenario": "gym corporate membership for an office of 40"
+   }
+  ]
+ }
+}

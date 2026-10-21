@@ -15,6 +15,8 @@ export type HubProvider = {
   kindLabel: string;
   blurb: string;
   console: string | null;
+  /** How the provider treats our data, where an approval states it. */
+  dataTerms: string | null;
   compatible: boolean;
   aliases: string[];
   pipeline: PipelineState;
@@ -73,6 +75,7 @@ export function normalizeHub(raw: unknown): Hub {
         kindLabel: read.string(row.kind_label),
         blurb: read.string(row.blurb),
         console: read.optionalString(row.console),
+        dataTerms: read.optionalString(row.data_terms),
         compatible: read.boolean(row.compatible),
         aliases: read.strings(row.aliases),
         pipeline: (STATES as readonly string[]).includes(pipeline)

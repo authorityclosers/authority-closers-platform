@@ -1,0 +1,123 @@
+{
+  "call_id": "fx-14",
+  "call_type": "lost_deal",
+  "language_mix": "mr-en",
+  "target_minutes": 14,
+  "seller": {
+    "company": "आकारपर्ण गृहरेषा",
+    "product": "तीन बेडरूम अंतर्गत सजावट",
+    "price_list": [
+      "पूर्ण प्रस्ताव: साडेसोळा लाख रुपये"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "अमेय सोरवळ",
+      "gender": "m",
+      "age_band": "30s",
+      "style": "disappointed but courteous"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "प्राजक्ता केरदुळे",
+      "gender": "f",
+      "age_band": "40s",
+      "style": "clear decision, tired of follow-ups"
+    }
+  ],
+  "sections": [
+    {
+      "name": "decision and permission to understand",
+      "minutes": 3,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10",
+        "f11",
+        "f12"
+      ]
+    },
+    {
+      "name": "scope comparison without reopening",
+      "minutes": 4,
+      "facts": [
+        "f13",
+        "f14",
+        "f15",
+        "f16",
+        "f17",
+        "f18",
+        "f19",
+        "f20",
+        "f21"
+      ]
+    },
+    {
+      "name": "trust, warranty and drawings",
+      "minutes": 4,
+      "facts": [
+        "f22",
+        "f23",
+        "f24",
+        "f25",
+        "f26",
+        "f27",
+        "f28",
+        "f29"
+      ]
+    },
+    {
+      "name": "closed outcome",
+      "minutes": 3,
+      "facts": [
+        "f30",
+        "f31",
+        "f32"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "missed_discovery",
+      "turn_ids": [
+        "t006"
+      ],
+      "statement": "Buyer reports that the seller resisted a scope cut instead of adapting to the budget."
+    },
+    {
+      "id": "k02",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t025"
+      ],
+      "statement": "Seller declined to judge an unseen competitor’s workmanship and offered a practical checklist."
+    },
+    {
+      "id": "k03",
+      "kind": "ignored_buying_signal",
+      "turn_ids": [
+        "t055"
+      ],
+      "statement": "Seller reopened a price negotiation after buyer repeatedly explained the decision was final."
+    },
+    {
+      "id": "k04",
+      "kind": "other",
+      "turn_ids": [
+        "t041"
+      ],
+      "statement": "Seller agreed to stop unsolicited follow-up and deliver the remaining paid design documents."
+    }
+  ]
+}

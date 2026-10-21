@@ -1,0 +1,788 @@
+{
+ "call_id": "fx-03",
+ "turns": [
+  {
+   "id": "t001",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Hello, good afternoon! Am I audible? This is Nikhil from Brickline Labs, for the Anchorpoint Realty demo. I think Meenal has joined, and Farhan sir is also joining?",
+   "tts": "Hello, good afternoon! Am I audible? This is Nikhil from Brickline Labs, for the Anchorpoint Realty demo. I think Meenal has joined, and Farhan sir is also joining?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t002",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Hi Nikhil, yes, you're audible. Farhan is just parking, he was at a site. He'll join in a minute.",
+   "tts": "Hi Nikhil, yes, you're audible. Farhan is just parking, he was at a site. He'll join in a minute.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t003",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "No problem, no problem. Meanwhile, how's the weather your side? Here it's been raining since morning, full traffic jam.",
+   "tts": "No problem, no problem. Meanwhile, how's the weather your side? Here it's been raining since morning, full traffic jam.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t004",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Same here, ya. Our agents cancelled two site visits today because of the rain only.",
+   "tts": "Same here, ya. Our agents cancelled two site visits today because of the rain only.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t005",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hello? Hello, Nikhil? Sorry, sorry, I'm in the car, network is a bit patchy. Can you hear me?",
+   "tts": "Hello? Hello, Nikhil? Sorry, sorry, I'm in the car, network is a bit patchy. Can you hear me?",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t006",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes sir, I can hear you. Little bit breaking, but okay.",
+   "tts": "Yes sir, I can hear you. Little bit breaking, but okay.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t007",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Haan, now better? I've stopped the car. Go ahead. I have about twenty minutes, then a client meeting.",
+   "tts": "Haan, now better? I've stopped the car. Go ahead. I have about twenty minutes, then a client meeting.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t008",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sure sir. Site visit in this rain?",
+   "tts": "Sure sir. Site visit in this rain?",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t009",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Arre, resale three BHK, the client is very particular. Third time he's seeing the same flat. Anyway. Go ahead.",
+   "tts": "Arre, resale three BHK, the client is very particular. Third time he's seeing the same flat. Anyway. Go ahead.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t010",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Perfect sir, I'll keep it tight. So quickly about us, Brickline CRM is built only for real-estate brokers and channel partners. Around three hundred brokerages are using it. Before I share my screen, can I understand your setup a little?",
+   "tts": "Perfect sir, I'll keep it tight. So quickly about us, Brickline CRM is built only for real-estate brokers and channel partners. Around three hundred brokerages are using it. Before I share my screen, can I understand your setup a little?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t011",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Sure, but first tell me the price, yaar. Last time someone did a one-hour demo and at the end the price was crazy.",
+   "tts": "Sure, but first tell me the price, yaar. Last time someone did a one-hour demo and at the end the price was crazy.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t012",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Haha, fair enough sir. So two plans. Starter is ₹799 per user per month, and Growth is ₹1,199 per user per month, both billed annually. Most brokerages your size take Growth, because it has the portal integrations.",
+   "tts": "Haha, fair enough sir. So two plans. Starter is seven ninety-nine per user per month, and Growth is eleven ninety-nine per user per month, both billed annually. Most brokerages your size take Growth, because it has the portal integrations.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t013",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm. Okay. Continue.",
+   "tts": "Hmm. Okay. Continue.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t014",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "So how many people in the team, sir?",
+   "tts": "So how many people in the team, sir?",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t015",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "We are twenty people. Fourteen field agents, three telecallers, Meenal and one more in back office, and me.",
+   "tts": "We are twenty people. Fourteen field agents, three telecallers, Meenal and one more in back office, and me.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t016",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Actually twenty-two, Farhan. Two new agents are joining on Monday, remember? Sonal and that other boy.",
+   "tts": "Actually twenty-two, Farhan. Two new agents are joining on Monday, remember? Sonal and that other boy.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t017",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Haan haan, right, twenty-two. So twenty-two users.",
+   "tts": "Haan haan, right, twenty-two. So twenty-two users.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t018",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Got it, twenty-two. And where do the leads come from, and roughly how many in a month?",
+   "tts": "Got it, twenty-two. And where do the leads come from, and roughly how many in a month?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t019",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Mostly the property portals, then our website, some walk-ins and references. Around twelve hundred a month, more when a new project launches.",
+   "tts": "Mostly the property portals, then our website, some walk-ins and references. Around twelve hundred a month, more when a new project launches.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t020",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "The portal leads come on email and on their dashboards. I download them, put them in a spreadsheet and share in the WhatsApp group. That's the whole system right now.",
+   "tts": "The portal leads come on email and on their dashboards. I download them, put them in a spreadsheet and share in the WhatsApp group. That's the whole system right now.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t021",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "And out of that, how many bookings do you close in a month, roughly?",
+   "tts": "And out of that, how many bookings do you close in a month, roughly?",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t022",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Eight to ten, in a good month. Average commission is around one lakh per booking, sometimes more on the bigger flats.",
+   "tts": "Eight to ten, in a good month. Average commission is around one lakh per booking, sometimes more on the bigger flats.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t023",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "And who manages the telecallers day to day?",
+   "tts": "And who manages the telecallers day to day?",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t024",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "That's me. They call the fresh leads first, and if the client is interested, they pass it to an agent for the site visit.",
+   "tts": "That's me. They call the fresh leads first, and if the client is interested, they pass it to an agent for the site visit.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t025",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Okay. And what's the biggest problem with that?",
+   "tts": "Okay. And what's the biggest problem with that?",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t026",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Biggest problem is nobody knows who called whom. Two agents call the same client, the client gets irritated. And follow-ups just disappear. Last month we found sixty leads nobody had called back even once.",
+   "tts": "Biggest problem is nobody knows who called whom. Two agents call the same client, the client gets irritated. And follow-ups just disappear. Last month we found sixty leads nobody had called back even once.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t027",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And I have zero visibility, honestly. In the Monday meeting I ask, how many site visits? Everybody says sir, ten, twelve. I can't verify anything.",
+   "tts": "And I have zero visibility, honestly. In the Monday meeting I ask, how many site visits? Everybody says sir, ten, twelve. I can't verify anything.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t028",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Understood sir, that's very common. Okay, let me share my screen.",
+   "tts": "Understood sir, that's very common. Okay, let me share my screen.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t029",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Haan, go ahead, share it.",
+   "tts": "Haan, go ahead, share it.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t030",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Can you see my screen? The dashboard with the blue sidebar?",
+   "tts": "Can you see my screen? The dashboard with the blue sidebar?",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t031",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Yes, it is visible.",
+   "tts": "Yes, it is visible.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t032",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "So this is the lead inbox. Every lead from the portals, your website, even missed calls on your office number, lands here automatically. No downloading. And it gets assigned round-robin, or by project, or by locality, whatever rule you set.",
+   "tts": "So this is the lead inbox. Every lead from the portals, your website, even missed calls on your office number, lands here automatically. No downloading. And it gets assigned round-robin, or by project, or by locality, whatever rule you set.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t033",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "We are on three portals, plus the leads from our website form. All three will connect?",
+   "tts": "We are on three portals, plus the leads from our website form. All three will connect?",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t034",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "All the major portals are already integrated, ma'am, plus any web form. Setup takes one day, our team does it on a screen share with you.",
+   "tts": "All the major portals are already integrated, ma'am, plus any web form. Setup takes one day, our team does it on a screen share with you.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t035",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "What about duplicates? Same person enquires on two portals.",
+   "tts": "What about duplicates? Same person enquires on two portals.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t036",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Good question. We match on phone number, so if the same number comes again, it merges into the existing lead and the same agent gets an alert. So no two agents calling one client.",
+   "tts": "Good question. We match on phone number, so if the same number comes again, it merges into the existing lead and the same agent gets an alert. So no two agents calling one client.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t037",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm. That alone will save a lot of fights in the office.",
+   "tts": "Hmm. That alone will save a lot of fights in the office.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t038",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Correct sir, that is what most owners tell us.",
+   "tts": "Correct sir, that is what most owners tell us.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t039",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "One more thing, Nikhil. My biggest fear. An agent leaves, he takes all my client numbers with him. That has happened twice.",
+   "tts": "One more thing, Nikhil. My biggest fear. An agent leaves, he takes all my client numbers with him. That has happened twice.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t040",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Very valid, sir. So agents can only see their own leads, export is disabled for them, and you can mask the phone numbers, so they call from the app without seeing the full number. Only you and Meenal will have export rights.",
+   "tts": "Very valid, sir. So agents can only see their own leads, export is disabled for them, and you can mask the phone numbers, so they call from the app without seeing the full number. Only you and Meenal will have export rights.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t041",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Masking is good. That I want.",
+   "tts": "Masking is good. That I want.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t042",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Then for every lead, the agent has to set a next follow-up. If he misses it, it turns red, and after twenty-four hours it escalates to the team lead. Meenal, you'll get a daily missed follow-up report on WhatsApp at nine a.m.",
+   "tts": "Then for every lead, the agent has to set a next follow-up. If he misses it, it turns red, and after twenty-four hours it escalates to the team lead. Meenal, you'll get a daily missed follow-up report on WhatsApp at nine a.m.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t043",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And the old data? We have around eight thousand old contacts in spreadsheets, from the last three-four years. Can we bring all that—",
+   "tts": "And the old data? We have around eight thousand old contacts in spreadsheets, from the last three-four years. Can we bring all that—",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t044",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes yes, migration we do. Now see this, the site visit scheduler, this is my favourite part—",
+   "tts": "Yes yes, migration we do. Now see this, the site visit scheduler, this is my favourite part—",
+   "pause_before_ms": 0,
+   "overlap_prev_ms": 400
+  },
+  {
+   "id": "t045",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Sorry Nikhil, one second, I was asking, the old data has a lot of junk. Wrong numbers, duplicates. Who cleans that?",
+   "tts": "Sorry Nikhil, one second, I was asking, the old data has a lot of junk. Wrong numbers, duplicates. Who cleans that?",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t046",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Ah, sorry Meenal. Our onboarding team cleans and de-duplicates it before import. That's part of the one-time onboarding fee of ₹25,000. You just give us the files.",
+   "tts": "Ah, sorry Meenal. Our onboarding team cleans and de-duplicates it before import. That's part of the one-time onboarding fee of twenty-five thousand rupees. You just give us the files.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t047",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Okay. That's helpful.",
+   "tts": "Okay. That's helpful.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t048",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "So, site visit scheduler. Agent books the visit, client gets a WhatsApp confirmation with the location pin, and after the visit the agent has to mark feedback, hot, warm or cold. Farhan sir, this answers your Monday meeting question. Visits done, by agent, by project.",
+   "tts": "So, site visit scheduler. Agent books the visit, client gets a WhatsApp confirmation with the location pin, and after the visit the agent has to mark feedback, hot, warm or cold. Farhan sir, this answers your Monday meeting question. Visits done, by agent, by project.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t049",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "That I like. Can I see it on the phone? I'm mostly on the road.",
+   "tts": "That I like. Can I see it on the phone? I'm mostly on the road.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t050",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes sir, there's a mobile app, Android and iOS. It also logs calls automatically, and on the Growth plan the calls get recorded, so you can review the telecallers.",
+   "tts": "Yes sir, there's a mobile app, Android and iOS. It also logs calls automatically, and on the Growth plan the calls get recorded, so you can review the telecallers.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t051",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "One thing. Two of our telecallers are more comfortable in Marathi. Is the app in Marathi?",
+   "tts": "One thing. Two of our telecallers are more comfortable in Marathi. Is the app in Marathi?",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t052",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes, we have Hindi, Marathi... sorry, let me correct that. Today the app is in English and Hindi. Marathi is on the roadmap, planned for Q1. I don't want to promise something that's not live.",
+   "tts": "Yes, we have Hindi, Marathi... sorry, let me correct that. Today the app is in English and Hindi. Marathi is on the roadmap, planned for Q one. I don't want to promise something that's not live.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t053",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Okay. Hindi will also work for them, more or less.",
+   "tts": "Okay. Hindi will also work for them, more or less.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t054",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "And last thing, inventory. You load your projects, towers, units, and mark available, blocked, sold. When an agent shares a unit on WhatsApp, it goes with the floor plan and the price sheet.",
+   "tts": "And last thing, inventory. You load your projects, towers, units, and mark available, blocked, sold. When an agent shares a unit on WhatsApp, it goes with the floor plan and the price sheet.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t055",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Honestly this looks good. If this works, we can have the whole team on it before the January launches. That's our busiest season.",
+   "tts": "Honestly this looks good. If this works, we can have the whole team on it before the January launches. That's our busiest season.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t056",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Great. And there's also the reports section, let me show you the source-wise conversion report, this one is really cool—",
+   "tts": "Great. And there's also the reports section, let me show you the source-wise conversion report, this one is really cool—",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t057",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Nikhil, reports we'll see later. Let's talk numbers now.",
+   "tts": "Nikhil, reports we'll see later. Let's talk numbers now.",
+   "pause_before_ms": 0,
+   "overlap_prev_ms": 300
+  },
+  {
+   "id": "t058",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sure sir, tell me what you have in mind.",
+   "tts": "Sure sir, tell me what you have in mind.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t059",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "See, we did a trial of PropDesk CRM in June. They were giving it at ₹650 per user. Your Growth plan is almost double.",
+   "tts": "See, we did a trial of PropDesk CRM in June. They were giving it at six fifty per user. Your Growth plan is almost double.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t060",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sir, may I ask, why didn't you continue with them?",
+   "tts": "Sir, may I ask, why didn't you continue with them?",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t061",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Too clunky. The agents stopped using it in two weeks. No portal integration, everything manual again.",
+   "tts": "Too clunky. The agents stopped using it in two weeks. No portal integration, everything manual again.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t062",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Understood. Honestly, that is the most common reason a CRM fails.",
+   "tts": "Understood. Honestly, that is the most common reason a CRM fails.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t063",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And what's the guarantee your one won't go the same way? Three months later the agents stop using it, and I'm paying for twenty-two licences.",
+   "tts": "And what's the guarantee your one won't go the same way? Three months later the agents stop using it, and I'm paying for twenty-two licences.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t064",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Fair point, sir. Two things. Onboarding includes two training sessions for the agents, and every Monday you get an adoption report, who logged in, who updated follow-ups. So you'll know in week one, not month three.",
+   "tts": "Fair point, sir. Two things. Onboarding includes two training sessions for the agents, and every Monday you get an adoption report, who logged in, who updated follow-ups. So you'll know in week one, not month three.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t065",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm. Weekly report is useful. Okay.",
+   "tts": "Hmm. Weekly report is useful. Okay.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t066",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Right. So sir, see it this way. At twenty-two users on Growth, it's around ₹26,400 a month. You get twelve hundred leads a month, and sixty went without a single call last month. If even one of those sixty becomes a booking, your commission on one flat covers the whole year.",
+   "tts": "Right. So sir, see it this way. At twenty-two users on Growth, it's around twenty-six thousand four hundred a month. You get twelve hundred leads a month, and sixty went without a single call last month. If even one of those sixty becomes a booking, your commission on one flat covers the whole year.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t067",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm. That's the standard line, Nikhil. But okay, not wrong. Tell me, what discount can you do for year one?",
+   "tts": "Hmm. That's the standard line, Nikhil. But okay, not wrong. Tell me, what discount can you do for year one?",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t068",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "If you pay annually upfront, I can do ten percent off. So around 3.16 lakh a year becomes roughly 2.85 lakh. On the onboarding fee, I'll have to check with my manager if we can waive it.",
+   "tts": "If you pay annually upfront, I can do ten percent off. So around three point one six lakh a year becomes roughly two point eight five lakh. On the onboarding fee, I'll have to check with my manager if we can waive it.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t069",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Make it fifteen percent, then we'll talk.",
+   "tts": "Make it fifteen percent, then we'll talk.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t070",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Fifteen I can't promise, sir. Let me take fifteen to my manager along with the onboarding waiver, and I'll come back to you. Ten I can confirm today.",
+   "tts": "Fifteen I can't promise, sir. Let me take fifteen to my manager along with the onboarding waiver, and I'll come back to you. Ten I can confirm today.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t071",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm, okay. Two point eight five... See, anything above two lakh, my partner Vikram Saxena has to sign off. He handles the money side.",
+   "tts": "Hmm, okay. Two point eight five... See, anything above two lakh, my partner Vikram Saxena has to sign off. He handles the money side.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t072",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sure sir. Would it help if I join a short call with Mr. Saxena?",
+   "tts": "Sure sir. Would it help if I join a short call with Mr. Saxena?",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t073",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Let me first talk to him. He's travelling till the twenty-eighth.",
+   "tts": "Let me first talk to him. He's travelling till the twenty-eighth.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t074",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Can we try it before deciding? With our own data, not your demo leads.",
+   "tts": "Can we try it before deciding? With our own data, not your demo leads.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t075",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Absolutely. I'll set up a fourteen-day trial sandbox. Meenal, if you send me a sample sheet of about five hundred leads, we'll load it, so your team sees their own leads.",
+   "tts": "Absolutely. I'll set up a fourteen-day trial sandbox. Meenal, if you send me a sample sheet of about five hundred leads, we'll load it, so your team sees their own leads.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t076",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "I can send that by tomorrow.",
+   "tts": "I can send that by tomorrow.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t077",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "And I'd like to do a separate thirty-minute session for the three telecallers, because they'll use the dialer the most. Is Thursday four p.m. okay?",
+   "tts": "And I'd like to do a separate thirty-minute session for the three telecallers, because they'll use the dialer the most. Is Thursday four p.m. okay?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t078",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Thursday four works. On video is fine.",
+   "tts": "Thursday four works. On video is fine.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t079",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And support? If something stops working on a Sunday, who do I call?",
+   "tts": "And support? If something stops working on a Sunday, who do I call?",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t080",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "WhatsApp support is nine to nine, all seven days, sir. And for the first ninety days you get a dedicated account manager, that'll be me only, so you can call me directly.",
+   "tts": "WhatsApp support is nine to nine, all seven days, sir. And for the first ninety days you get a dedicated account manager, that'll be me only, so you can call me directly.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t081",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Okay, that is reassuring.",
+   "tts": "Okay, that is reassuring.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t082",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Great. And I'll send the proposal with the discounted pricing by Wednesday evening, on email, to both of you.",
+   "tts": "Great. And I'll send the proposal with the discounted pricing by Wednesday evening, on email, to both of you.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t083",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Fine. See, I want to close this by month end. If Vikram is okay, we start in November.",
+   "tts": "Fine. See, I want to close this by month end. If Vikram is okay, we start in November.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t084",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Perfect sir. So, summary: sample data from Meenal tomorrow, sandbox after that, telecaller session Thursday four p.m., proposal by Wednesday evening, and decision by month end with Mr. Saxena.",
+   "tts": "Perfect sir. So, summary: sample data from Meenal tomorrow, sandbox after that, telecaller session Thursday four p.m., proposal by Wednesday evening, and decision by month end with Mr. Saxena.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t085",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Done. Thanks Nikhil. Okay, my client is here, I have to go.",
+   "tts": "Done. Thanks Nikhil. Okay, my client is here, I have to go.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t086",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Thanks Nikhil, I'll mail the sheet.",
+   "tts": "Thanks Nikhil, I'll mail the sheet.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t087",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Thank you both, have a good day!",
+   "tts": "Thank you both, have a good day!",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  }
+ ]
+}

@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # wb-ci: run workbench checks on GitHub-hosted runners instead of on ac (owner, 20 Oct 2026; full run < 5 min).
 #
-#   wb-ci [--sha <sha>] [--changed [<base>] | --full] [--web] [--py] [--visual [route ...]]
+#   wb-ci [--sha <sha>] [--changed [<base>] | --full] [--web] [--py] [--visual [route ...]] [--e2e]
 #         [--py-tests <path> ...] [--include <path> ...] [--no-wait] [--keep]
 #   wb-ci --refresh-durations <run-id>[,<run-id>...]   rebalance the Python shards (per-file mean over the runs)
 #
 #   default      --changed: only the jobs the commit's paths touch; lint, tsc, vitest and ruff on the changed files
 #   --changed B  changed files in B..<sha> (default B = <sha>^)        --full   every job (20 jobs: lint+tsc, vitest, visual, 17 Python shards; < 5 min)
 #   --web/--py/--visual   force these families (with the scope above); --visual takes optional routes
+#   --e2e        also run the release's Sales Xray browser proofs (static export + acquisition journey, ~15 min);
+#                opt-in, never part of --full. Run before every release cut and after navigation/label changes.
 #   --py-tests   one pytest job for these paths instead of the 17 shards
 #   --include    also test these uncommitted workbench files (read only; nothing in the checkout changes)
 #   --no-wait    print the run URL and return     --keep    keep the wb-ci branch after the run
@@ -53,6 +55,7 @@ while [ $# -gt 0 ]; do
     --web) checks+=(web); shift; mode="" ;;
     --py) checks+=(py); shift; mode="" ;;
     --visual) checks+=(visual); shift; mode=routes ;;
+    --e2e) checks+=(e2e); shift; mode="" ;;
     --py-tests) checks+=(py); shift; mode=py_tests ;;
     --include) shift; mode=include ;;
     --no-wait) wait=0; shift; mode="" ;;

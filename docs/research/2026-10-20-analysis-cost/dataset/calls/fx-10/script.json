@@ -1,0 +1,1625 @@
+{
+ "call_id": "fx-10",
+ "turns": [
+  {
+   "id": "t001",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Good afternoon, Dr. Anjali? Rahul here, from Nirmal Techcare.",
+   "tts": "Good afternoon, Dr. Anjali? Rahul here, from Nirmal Techcare.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t002",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Yes, Rahul, hi. Give me one second... okay. I've put you on speaker, Prakash is also here in my cabin.",
+   "tts": "Yes, Rahul, hi. Give me one second... okay. I've put you on speaker, Prakash is also here in my cabin.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t003",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Hello Rahul, good afternoon.",
+   "tts": "Hello Rahul, good afternoon.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t004",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Good afternoon, Prakash sir. How are things at the clinic? I heard it's quite a rush these days.",
+   "tts": "Good afternoon, Prakash sir. How are things at the clinic? I heard it's quite a rush these days.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t005",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Don't ask. Dengue season. Lakeview Road OPD had a hundred and forty patients yesterday. I've barely had lunch.",
+   "tts": "Don't ask. Dengue season. Lakeview Road OPD had a hundred and forty patients yesterday. I've barely had lunch.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t006",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Oh, then I'll be quick, ma'am, I don't want to eat into your time.",
+   "tts": "Oh, then I'll be quick, ma'am, I don't want to eat into your time.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t007",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "No, no, take the time, this needs to get closed. We've been postponing it since August.",
+   "tts": "No, no, take the time, this needs to get closed. We've been postponing it since August.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t008",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "And ma'am, the last time I visited, the new X-ray room at Station Road was still under renovation. Is that running now?",
+   "tts": "And ma'am, the last time I visited, the new X-ray room at Station Road was still under renovation. Is that running now?",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t009",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Started last week, finally. One more machine for you people to worry about.",
+   "tts": "Started last week, finally. One more machine for you people to worry about.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t010",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Ha, don't worry ma'am, that's one more reason for the contract.",
+   "tts": "Ha, don't worry ma'am, that's one more reason for the contract.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t011",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Anyway. Prakash, you have the papers?",
+   "tts": "Anyway. Prakash, you have the papers?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t012",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Yes ma'am, right here. All marked in red.",
+   "tts": "Yes ma'am, right here. All marked in red.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t013",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Red pen is a good sign, sir, at least it has been read properly. So just to recap, last Thursday I sent the proposal for the annual IT support contract for all three Arogyam branches, Lakeview Road, Station Road and Gandhi Nagar. Comprehensive support at ₹6.8 lakh a year plus GST.",
+   "tts": "Red pen is a good sign, sir, at least it has been read properly. So just to recap, last Thursday I sent the proposal for the annual IT support contract for all three Arogyam branches, Lakeview Road, Station Road and Gandhi Nagar. Comprehensive support at six point eight lakh a year plus GST.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t014",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Yes, I've gone through it line by line. Few things on scope first, then we'll talk about the number. Because the number, honestly, is not happening.",
+   "tts": "Yes, I've gone through it line by line. Few things on scope first, then we'll talk about the number. Because the number, honestly, is not happening.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t015",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Fair enough, sir, let's start with scope. Before that, can I ask what triggered this now? You mentioned August.",
+   "tts": "Fair enough, sir, let's start with scope. Before that, can I ask what triggered this now? You mentioned August.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t016",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "See, the reason we're even doing this. Last month the billing system went down in the middle of the Monday OPD rush, and we were writing bills by hand for almost two hours. Patients were shouting at reception. That cannot happen again.",
+   "tts": "See, the reason we're even doing this. Last month the billing system went down in the middle of the Monday OPD rush, and we were writing bills by hand for almost two hours. Patients were shouting at reception. That cannot happen again.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t017",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That's exactly what this contract is meant to prevent, sir. Do you know what caused it?",
+   "tts": "That's exactly what this contract is meant to prevent, sir. Do you know what caused it?",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t018",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Our guy said the server's hard disk was full, some log files. He came after lunch.",
+   "tts": "Our guy said the server's hard disk was full, some log files. He came after lunch.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t019",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Okay. That's a monitoring gap, sir. With us, disk space alerts come to our helpdesk well before it fills up.",
+   "tts": "Okay. That's a monitoring gap, sir. With us, disk space alerts come to our helpdesk well before it fills up.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t020",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Okay. Now, in your proposal you've written forty-five endpoints. That's wrong.",
+   "tts": "Okay. Now, in your proposal you've written forty-five endpoints. That's wrong.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t021",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Oh, let me check, sir. Forty-five desktops and laptops across three branches, that's what Manoj had given us on the walkthrough.",
+   "tts": "Oh, let me check, sir. Forty-five desktops and laptops across three branches, that's what Manoj had given us on the walkthrough.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t022",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Forty-five plus... no, wait. Forty-eight. Forty-five is without the three lab machines at Gandhi Nagar. Those also need cover, the analyser connects to them.",
+   "tts": "Forty-five plus... no, wait. Forty-eight. Forty-five is without the three lab machines at Gandhi Nagar. Those also need cover, the analyser connects to them.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t023",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Got it, forty-eight endpoints, including the three lab machines. That's fine, our plan covers up to fifty, so no change in price for that.",
+   "tts": "Got it, forty-eight endpoints, including the three lab machines. That's fine, our plan covers up to fifty, so no change in price for that.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t024",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Good. Then one main server at Lakeview Road, which runs ClinicPad, and one backup storage box, the NAS.",
+   "tts": "Good. Then one main server at Lakeview Road, which runs ClinicPad, and one backup storage box, the NAS.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t025",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "One server, one NAS. And printers?",
+   "tts": "One server, one NAS. And printers?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t026",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Twelve printers, including the two barcode printers at the lab. And three CCTV recorders, one in each branch.",
+   "tts": "Twelve printers, including the two barcode printers at the lab. And three CCTV recorders, one in each branch.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t027",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "For CCTV, sir, we cover the recorders and the network. The cameras themselves are not in scope. If a camera dies, we'll diagnose it, but replacement is separate.",
+   "tts": "For CCTV, sir, we cover the recorders and the network. The cameras themselves are not in scope. If a camera dies, we'll diagnose it, but replacement is separate.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t028",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "That's fine. The camera vendor gives warranty anyway.",
+   "tts": "That's fine. The camera vendor gives warranty anyway.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t029",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And ClinicPad, the software, is handled by their own company. You won't touch the application?",
+   "tts": "And ClinicPad, the software, is handled by their own company. You won't touch the application?",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t030",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "No, sir. ClinicPad's application support stays with them. We handle the server it runs on, the network, the backups, and we coordinate with their support when there's an issue. One window for you.",
+   "tts": "No, sir. ClinicPad's application support stays with them. We handle the server it runs on, the network, the backups, and we coordinate with their support when there's an issue. One window for you.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t031",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "That one window thing is very important. Right now when something breaks, Manoj says it's the software, the software people say it's the network, and I'm stuck in the middle with a patient queue.",
+   "tts": "That one window thing is very important. Right now when something breaks, Manoj says it's the software, the software people say it's the network, and I'm stuck in the middle with a patient queue.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t032",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Manoj is the freelance engineer, right ma'am? He continues till the end of October?",
+   "tts": "Manoj is the freelance engineer, right ma'am? He continues till the end of October?",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t033",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Till thirty-first October, yes. He's a nice boy, but he's alone, and he's handling four-five clinics. When we need him, he's at somebody else's place.",
+   "tts": "Till thirty-first October, yes. He's a nice boy, but he's alone, and he's handling four-five clinics. When we need him, he's at somebody else's place.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t034",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Understood. We'll need a handover call with him. Passwords, network diagram, whatever documentation exists.",
+   "tts": "Understood. We'll need a handover call with him. Passwords, network diagram, whatever documentation exists.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t035",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Documentation, haha. It's all in his head. But yes, we'll arrange the call.",
+   "tts": "Documentation, haha. It's all in his head. But yes, we'll arrange the call.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t036",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Ha, this time we will write it all down, sir.",
+   "tts": "Ha, this time we will write it all down, sir.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t037",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Oh, and one more. The patients keep asking for Wi-Fi in the waiting area. Right now the receptionist gives them the clinic password.",
+   "tts": "Oh, and one more. The patients keep asking for Wi-Fi in the waiting area. Right now the receptionist gives them the clinic password.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t038",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That has to stop, sir, honestly. We'll set up a separate guest Wi-Fi, isolated from the clinic network. Patient phones should never be on the same network as your server.",
+   "tts": "That has to stop, sir, honestly. We'll set up a separate guest Wi-Fi, isolated from the clinic network. Patient phones should never be on the same network as your server.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t039",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Okay, do that.",
+   "tts": "Okay, do that.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t040",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Any other pain points, sir, branch-wise?",
+   "tts": "Any other pain points, sir, branch-wise?",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t041",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Station Road internet. It drops two-three times a week, mostly in the evening. And the reception PC there is very slow, ten minutes to boot.",
+   "tts": "Station Road internet. It drops two-three times a week, mostly in the evening. And the reception PC there is very slow, ten minutes to boot.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t042",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "The internet drops we'll take up with the provider on your behalf, and we'll suggest a backup line, that's a small cost. The PC we'll check, might just need a disk upgrade.",
+   "tts": "The internet drops we'll take up with the provider on your behalf, and we'll suggest a backup line, that's a small cost. The PC we'll check, might just need a disk upgrade.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t043",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And backups. Manoj says backups are happening. But nobody has ever tested restoring them. If the server dies, I honestly don't know if we'll get the data back.",
+   "tts": "And backups. Manoj says backups are happening. But nobody has ever tested restoring them. If the server dies, I honestly don't know if we'll get the data back.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t044",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That's a serious risk, sir, with patient records especially. Let me come back to that, I have something for it.",
+   "tts": "That's a serious risk, sir, with patient records especially. Let me come back to that, I have something for it.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t045",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Please. Because that one worries me the most.",
+   "tts": "Please. Because that one worries me the most.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t046",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Ma'am, for the SLA part, I've asked Sneha to join, she heads service delivery. She'll be the one actually running your account. Sneha, are you on?",
+   "tts": "Ma'am, for the SLA part, I've asked Sneha to join, she heads service delivery. She'll be the one actually running your account. Sneha, are you on?",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t047",
+   "speaker": "S4",
+   "lang": "en-IN",
+   "text": "Yes Rahul, I'm on. Good afternoon, doctor. Good afternoon, Prakash sir.",
+   "tts": "Yes Rahul, I'm on. Good afternoon, doctor. Good afternoon, Prakash sir.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t048",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hello? Sneha, you're breaking a little.",
+   "tts": "Hello? Sneha, you're breaking a little.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t049",
+   "speaker": "S4",
+   "lang": "en-IN",
+   "text": "Sorry ma'am, I'm in the car, let me switch off the AC... is it better now?",
+   "tts": "Sorry ma'am, I'm in the car, let me switch off the AC... is it better now?",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t050",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Better. Okay, tell me, if the billing server goes down at ten in the morning, what happens?",
+   "tts": "Better. Okay, tell me, if the billing server goes down at ten in the morning, what happens?",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t051",
+   "speaker": "S4",
+   "lang": "en-IN",
+   "text": "So ma'am, that's priority one, critical. Our helpdesk picks it up remotely within fifteen minutes, and if it can't be fixed remotely, an engineer is on site within four hours.",
+   "tts": "So ma'am, that's priority one, critical. Our helpdesk picks it up remotely within fifteen minutes, and if it can't be fixed remotely, an engineer is on site within four hours.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t052",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Four hours is too long, Sneha. Four hours means my morning OPD is gone.",
+   "tts": "Four hours is too long, Sneha. Four hours means my morning OPD is gone.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t053",
+   "speaker": "S4",
+   "lang": "en-IN",
+   "text": "Understood, ma'am. That's why for Lakeview Road we've proposed a resident engineer. He'll be physically there three days a week, Monday, Wednesday, Friday, nine to six. On those days the response is immediate.",
+   "tts": "Understood, ma'am. That's why for Lakeview Road we've proposed a resident engineer. He'll be physically there three days a week, Monday, Wednesday, Friday, nine to six. On those days the response is immediate.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t054",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Three days is not enough. Tuesday and Thursday are also full OPD days. We need someone there five days.",
+   "tts": "Three days is not enough. Tuesday and Thursday are also full OPD days. We need someone there five days.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t055",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Five days changes the cost, sir, but let me note it, we'll come to it in the commercials.",
+   "tts": "Five days changes the cost, sir, but let me note it, we'll come to it in the commercials.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t056",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And Sunday. Station Road runs a Sunday morning OPD, eight to one. Who covers that?",
+   "tts": "And Sunday. Station Road runs a Sunday morning OPD, eight to one. Who covers that?",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t057",
+   "speaker": "S4",
+   "lang": "en-IN",
+   "text": "On Sunday the helpdesk is open, it runs eight a.m. to ten p.m., all seven days. And there's an on-call engineer. For Sunday onsite, we'd still target four hours.",
+   "tts": "On Sunday the helpdesk is open, it runs eight a.m. to ten p.m., all seven days. And there's an on-call engineer. For Sunday onsite, we'd still target four hours.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t058",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Hmm. And normal issues? A printer not working, someone's email not syncing?",
+   "tts": "Hmm. And normal issues? A printer not working, someone's email not syncing?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t059",
+   "speaker": "S4",
+   "lang": "en-IN",
+   "text": "Non-critical issues are next business day, sir. Most of them get solved remotely the same day, honestly.",
+   "tts": "Non-critical issues are next business day, sir. Most of them get solved remotely the same day, honestly.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t060",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Okay. Now if you miss the four hours, what's the penalty? Because on paper everyone promises four hours, then—",
+   "tts": "Okay. Now if you miss the four hours, what's the penalty? Because on paper everyone promises four hours, then—",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t061",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sir, our track record on the four-hour SLA is ninety-six percent, we have clinics and two hospitals with us, so penalties really won't be—",
+   "tts": "Sir, our track record on the four-hour SLA is ninety-six percent, we have clinics and two hospitals with us, so penalties really won't be—",
+   "pause_before_ms": 0,
+   "overlap_prev_ms": 300
+  },
+  {
+   "id": "t062",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Rahul, let me finish. I'm not asking about track record. I'm asking what's written in the contract if you miss it.",
+   "tts": "Rahul, let me finish. I'm not asking about track record. I'm asking what's written in the contract if you miss it.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t063",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sorry, sir. Please go ahead.",
+   "tts": "Sorry, sir. Please go ahead.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t064",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "I want a service credit. For every critical call where you miss the four hours, some percentage of that month's fee comes back to us.",
+   "tts": "I want a service credit. For every critical call where you miss the four hours, some percentage of that month's fee comes back to us.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t065",
+   "speaker": "S4",
+   "lang": "en-IN",
+   "text": "That's reasonable, sir. Our standard is five percent of the monthly fee per breach, capped at twenty percent in a month.",
+   "tts": "That's reasonable, sir. Our standard is five percent of the monthly fee per breach, capped at twenty percent in a month.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t066",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Five percent per breach, capped at twenty. Okay, I can live with that. Put it in writing.",
+   "tts": "Five percent per breach, capped at twenty. Okay, I can live with that. Put it in writing.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t067",
+   "speaker": "S4",
+   "lang": "en-IN",
+   "text": "Rahul, I'll drop off now if that's okay, I have a site visit. Ma'am, sir, thank you, I'll see you at the survey.",
+   "tts": "Rahul, I'll drop off now if that's okay, I have a site visit. Ma'am, sir, thank you, I'll see you at the survey.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t068",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Thanks, Sneha. We'll fix the survey date at the end.",
+   "tts": "Thanks, Sneha. We'll fix the survey date at the end.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t069",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Okay, Rahul. Now the number.",
+   "tts": "Okay, Rahul. Now the number.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t070",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes ma'am, tell me.",
+   "tts": "Yes ma'am, tell me.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t071",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "See, I'll be very transparent. We have another quote. TechSaathi Systems. ₹5.2 lakh a year. You're at six point eight. That's a big gap.",
+   "tts": "See, I'll be very transparent. We have another quote. TechSaathi Systems. five point two lakh a year. You're at six point eight. That's a big gap.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t072",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Understood, ma'am. Okay, if that's the gap, I can bring it down to ₹6.4 lakh if we sign for two years.",
+   "tts": "Understood, ma'am. Okay, if that's the gap, I can bring it down to six point four lakh if we sign for two years.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t073",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "You came down forty thousand in ten seconds, Rahul. That tells me there's a lot more room.",
+   "tts": "You came down forty thousand in ten seconds, Rahul. That tells me there's a lot more room.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t074",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Ha, no ma'am, that's the two-year benefit. But can I ask, what does the TechSaathi quote actually include?",
+   "tts": "Ha, no ma'am, that's the two-year benefit. But can I ask, what does the TechSaathi quote actually include?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t075",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Let me see... helpdesk, onsite support, quarterly preventive maintenance. Response time eight hours. Support hours nine to seven, Monday to Saturday.",
+   "tts": "Let me see... helpdesk, onsite support, quarterly preventive maintenance. Response time eight hours. Support hours nine to seven, Monday to Saturday.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t076",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "So sir, three differences. One, eight-hour response versus our four. Two, no Sunday, and your Station Road OPD runs on Sunday. Three, no resident engineer. On their model, every time the billing server hiccups, you wait eight hours. After what happened last month, is that okay?",
+   "tts": "So sir, three differences. One, eight-hour response versus our four. Two, no Sunday, and your Station Road OPD runs on Sunday. Three, no resident engineer. On their model, every time the billing server hiccups, you wait eight hours. After what happened last month, is that okay?",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t077",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "No, it's not okay. But five point two versus six point four is also not okay.",
+   "tts": "No, it's not okay. But five point two versus six point four is also not okay.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t078",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And Rahul, if a hard disk or a power supply fails, is the part included in your six point four?",
+   "tts": "And Rahul, if a hard disk or a power supply fails, is the part included in your six point four?",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t079",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes ma'am, hardware replacement is included, we replace any... actually, sorry, let me correct that. Parts are not included. Labour is included, any replacement work, no charge. Parts we procure at cost plus ten percent handling, or you can buy them yourself. I don't want to mislead you.",
+   "tts": "Yes ma'am, hardware replacement is included, we replace any... actually, sorry, let me correct that. Parts are not included. Labour is included, any replacement work, no charge. Parts we procure at cost plus ten percent handling, or you can buy them yourself. I don't want to mislead you.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t080",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Hmm. Good that you corrected it. I'd have caught it in the contract anyway.",
+   "tts": "Hmm. Good that you corrected it. I'd have caught it in the contract anyway.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t081",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Okay, here's where we are. Five point five lakh, five days resident engineer, everything else as discussed.",
+   "tts": "Okay, here's where we are. Five point five lakh, five days resident engineer, everything else as discussed.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t082",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Five point five with five days resident... sir, honestly, that's below my cost. The resident engineer alone is close to ₹2.4 lakh a year for three days. Five days is more.",
+   "tts": "Five point five with five days resident... sir, honestly, that's below my cost. The resident engineer alone is close to two point four lakh a year for three days. Five days is more.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t083",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "So what's your number?",
+   "tts": "So what's your number?",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t084",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "If you do a two-year term and pay quarterly in advance, I can go to ₹6.1 lakh, and I'll make the resident engineer five days.",
+   "tts": "If you do a two-year term and pay quarterly in advance, I can go to six point one lakh, and I'll make the resident engineer five days.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t085",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Six point one. Hmm. Prakash, what's our approval?",
+   "tts": "Six point one. Hmm. Prakash, what's our approval?",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t086",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "The board approved six lakh for IT support this year. That's before GST. Anything above six, I have to go back to them, and that's a whole drama.",
+   "tts": "The board approved six lakh for IT support this year. That's before GST. Anything above six, I have to go back to them, and that's a whole drama.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t087",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Rahul, make it five point eight and we close today, in principle.",
+   "tts": "Rahul, make it five point eight and we close today, in principle.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t088",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Ma'am, five point eight I genuinely cannot do on my own. Can I take two minutes? I'll message my director right now and come back on this call.",
+   "tts": "Ma'am, five point eight I genuinely cannot do on my own. Can I take two minutes? I'll message my director right now and come back on this call.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t089",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Go ahead. We'll wait.",
+   "tts": "Go ahead. We'll wait.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t090",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Thank you, ma'am. Just two minutes.",
+   "tts": "Thank you, ma'am. Just two minutes.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t091",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Prakash, honestly, I like that they have Sneha and a proper team behind them. Manoj alone is not working for us.",
+   "tts": "Prakash, honestly, I like that they have Sneha and a proper team behind them. Manoj alone is not working for us.",
+   "pause_before_ms": 2500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t092",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Yes ma'am. But don't tell him that.",
+   "tts": "Yes ma'am. But don't tell him that.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t093",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And whatever we agree today, Vivek lands back from his conference on the twenty-eighth, and nothing gets signed in this house without his initials.",
+   "tts": "And whatever we agree today, Vivek lands back from his conference on the twenty-eighth, and nothing gets signed in this house without his initials.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t094",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Yes ma'am, understood.",
+   "tts": "Yes ma'am, understood.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t095",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Hello? Ma'am, I'm back. Sorry for the wait.",
+   "tts": "Hello? Ma'am, I'm back. Sorry for the wait.",
+   "pause_before_ms": 1800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t096",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Yes, Rahul, go on.",
+   "tts": "Yes, Rahul, go on.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t097",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "So I spoke to my director. Best we can do is ₹5.95 lakh a year plus GST, on a two-year term, quarterly advance, five-day resident engineer. And he agreed, the price stays the same in year two, no escalation.",
+   "tts": "So I spoke to my director. Best we can do is five lakh ninety-five thousand a year plus GST, on a two-year term, quarterly advance, five-day resident engineer. And he agreed, the price stays the same in year two, no escalation.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t098",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Five ninety-five. And the year-two lock, that's in writing?",
+   "tts": "Five ninety-five. And the year-two lock, that's in writing?",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t099",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "In writing, ma'am. Same price in year two.",
+   "tts": "In writing, ma'am. Same price in year two.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t100",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Five ninety-five is under six. That I can approve without going back to the board.",
+   "tts": "Five ninety-five is under six. That I can approve without going back to the board.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t101",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Okay. Then add one thing and we have a deal in principle. The backup issue Prakash raised. I want somebody to actually test that our data can be restored.",
+   "tts": "Okay. Then add one thing and we have a deal in principle. The backup issue Prakash raised. I want somebody to actually test that our data can be restored.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t102",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That's what I was coming to, ma'am. In the first month, at no extra cost, we'll do a full backup audit and a restore drill, a proper disaster recovery test, and give you a written report.",
+   "tts": "That's what I was coming to, ma'am. In the first month, at no extra cost, we'll do a full backup audit and a restore drill, a proper disaster recovery test, and give you a written report.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t103",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Done. Deal in principle at five ninety-five.",
+   "tts": "Done. Deal in principle at five ninety-five.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t104",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "One practical thing. One consolidated invoice, but with a branch-wise breakup. Our accountant allocates costs branch-wise.",
+   "tts": "One practical thing. One consolidated invoice, but with a branch-wise breakup. Our accountant allocates costs branch-wise.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t105",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Consolidated invoice with a branch-wise annexure, sir. Done.",
+   "tts": "Consolidated invoice with a branch-wise annexure, sir. Done.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t106",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Now payment terms. Quarterly advance, okay. What's the quarterly amount?",
+   "tts": "Now payment terms. Quarterly advance, okay. What's the quarterly amount?",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t107",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Five lakh ninety-five thousand divided by four, that's ₹1,48,750 per quarter, plus GST.",
+   "tts": "Five lakh ninety-five thousand divided by four, that's one lakh forty-eight thousand seven hundred and fifty per quarter, plus GST.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t108",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And I want fifteen days' credit from the invoice date. Our accounts team runs payments on the fifteenth and the thirtieth.",
+   "tts": "And I want fifteen days' credit from the invoice date. Our accounts team runs payments on the fifteenth and the thirtieth.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t109",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Fifteen days from invoice is fine, sir.",
+   "tts": "Fifteen days from invoice is fine, sir.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t110",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "One more thing from my side, and this is non-negotiable. Patient data. Your engineers will have access to the server. I need an NDA, and nobody connects remotely without our permission.",
+   "tts": "One more thing from my side, and this is non-negotiable. Patient data. Your engineers will have access to the server. I need an NDA, and nobody connects remotely without our permission.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t111",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Absolutely, ma'am. Every engineer on your account signs a confidentiality agreement, and remote sessions happen only after approval from Prakash sir or whoever you nominate. We keep a log of every session, you can see it anytime.",
+   "tts": "Absolutely, ma'am. Every engineer on your account signs a confidentiality agreement, and remote sessions happen only after approval from Prakash sir or whoever you nominate. We keep a log of every session, you can see it anytime.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t112",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Good. Prakash will be the approver.",
+   "tts": "Good. Prakash will be the approver.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t113",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "How will the staff raise a complaint? I don't want twenty people calling you personally.",
+   "tts": "How will the staff raise a complaint? I don't want twenty people calling you personally.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t114",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "There's a helpdesk WhatsApp number, sir, and a simple web form. Every complaint gets a ticket number, so nothing gets lost.",
+   "tts": "There's a helpdesk WhatsApp number, sir, and a simple web form. Every complaint gets a ticket number, so nothing gets lost.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t115",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "WhatsApp is best, my staff will never fill a form. And the start date?",
+   "tts": "WhatsApp is best, my staff will never fill a form. And the start date?",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t116",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "We can start on the first of November, sir, the day after Manoj's last day. The first two weeks will be an onboarding audit. We'll document every device, every password, every cable.",
+   "tts": "We can start on the first of November, sir, the day after Manoj's last day. The first two weeks will be an onboarding audit. We'll document every device, every password, every cable.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t117",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Good. Finally someone will document it.",
+   "tts": "Good. Finally someone will document it.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t118",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And what if Manoj doesn't cooperate in the handover? He's not going to be very happy about this.",
+   "tts": "And what if Manoj doesn't cooperate in the handover? He's not going to be very happy about this.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t119",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "We've done takeovers before, sir. Worst case, during the audit we reset the admin passwords with your written approval. Nothing will be locked out.",
+   "tts": "We've done takeovers before, sir. Worst case, during the audit we reset the admin passwords with your written approval. Nothing will be locked out.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t120",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Let's try to keep it friendly with him. He's helped us a lot over the years.",
+   "tts": "Let's try to keep it friendly with him. He's helped us a lot over the years.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t121",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Of course, ma'am. We'll be respectful. We'll just need the information.",
+   "tts": "Of course, ma'am. We'll be respectful. We'll just need the information.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t122",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And what's excluded? I don't want surprises in the invoice.",
+   "tts": "And what's excluded? I don't want surprises in the invoice.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t123",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Three things, sir. Software licences, like your antivirus and office software renewals. New hardware purchases. And the CCTV cameras, as we discussed. Everything else in the scope sheet is covered.",
+   "tts": "Three things, sir. Software licences, like your antivirus and office software renewals. New hardware purchases. And the CCTV cameras, as we discussed. Everything else in the scope sheet is covered.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t124",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And an exit clause. Two years is long. If you miss the SLA three months in a row, I want the right to exit with notice.",
+   "tts": "And an exit clause. Two years is long. If you miss the SLA three months in a row, I want the right to exit with notice.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t125",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That's fair, sir. Ninety days' notice if the SLA is breached three consecutive months. I'll put that in.",
+   "tts": "That's fair, sir. Ninety days' notice if the SLA is breached three consecutive months. I'll put that in.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t126",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Ninety days. Okay.",
+   "tts": "Ninety days. Okay.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t127",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And Rahul, the backup internet line for Station Road you mentioned, send that separately. Don't mix it into this contract.",
+   "tts": "And Rahul, the backup internet line for Station Road you mentioned, send that separately. Don't mix it into this contract.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t128",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sure ma'am, separate quotation for the backup line.",
+   "tts": "Sure ma'am, separate quotation for the backup line.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t129",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And I want a monthly review. Not a big presentation, just what broke, how fast you fixed it, what's pending.",
+   "tts": "And I want a monthly review. Not a big presentation, just what broke, how fast you fixed it, what's pending.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t130",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "First Monday of every month, thirty minutes, ma'am. Sneha will present the ticket report and the SLA numbers. If you're busy, Prakash sir can take it.",
+   "tts": "First Monday of every month, thirty minutes, ma'am. Sneha will present the ticket report and the SLA numbers. If you're busy, Prakash sir can take it.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t131",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And if Sneha doesn't pick up? Who do I escalate to?",
+   "tts": "And if Sneha doesn't pick up? Who do I escalate to?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t132",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "There's an escalation matrix, sir. Level one helpdesk, level two Sneha, level three me, and level four our director, Mr. Kapoor. All the numbers will be in the contract annexure.",
+   "tts": "There's an escalation matrix, sir. Level one helpdesk, level two Sneha, level three me, and level four our director, Mr. Kapoor. All the numbers will be in the contract annexure.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t133",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Good. Put the matrix on page one, not hidden somewhere.",
+   "tts": "Good. Put the matrix on page one, not hidden somewhere.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t134",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Rahul, one minute... sorry, there's an emergency in the casualty, I have to step out. Prakash, you continue. I'll be back.",
+   "tts": "Rahul, one minute... sorry, there's an emergency in the casualty, I have to step out. Prakash, you continue. I'll be back.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t135",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Yes ma'am, go. Rahul, we'll continue.",
+   "tts": "Yes ma'am, go. Rahul, we'll continue.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t136",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sure, sir, no problem.",
+   "tts": "Sure, sir, no problem.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t137",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "So, security. Last year one of the reception PCs got a virus from a pen drive. Some patient's relative brought reports on a pen drive and it went everywhere.",
+   "tts": "So, security. Last year one of the reception PCs got a virus from a pen drive. Some patient's relative brought reports on a pen drive and it went everywhere.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t138",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Very common in clinics, sir. We'll lock USB storage on reception and billing machines, so only approved drives work. Antivirus will be managed from a central console, the licence renewal is yours, as we said.",
+   "tts": "Very common in clinics, sir. We'll lock USB storage on reception and billing machines, so only approved drives work. Antivirus will be managed from a central console, the licence renewal is yours, as we said.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t139",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And the staff? They click on everything. Somebody even replied to a fake bank email last month.",
+   "tts": "And the staff? They click on everything. Somebody even replied to a fake bank email last month.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t140",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "We'll do a short awareness session for staff once every six months. Fake emails, passwords, that kind of thing. That's included.",
+   "tts": "We'll do a short awareness session for staff once every six months. Fake emails, passwords, that kind of thing. That's included.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t141",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And festivals? Diwali, holidays, Station Road is open the day after Diwali.",
+   "tts": "And festivals? Diwali, holidays, Station Road is open the day after Diwali.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t142",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Helpdesk works through all holidays, sir. The resident engineer is off only on national holidays, and on those days the on-call engineer covers.",
+   "tts": "Helpdesk works through all holidays, sir. The resident engineer is off only on national holidays, and on those days the on-call engineer covers.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t143",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "I'm back, sorry. Where are we?",
+   "tts": "I'm back, sorry. Where are we?",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t144",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Security and holidays done, ma'am. All fine.",
+   "tts": "Security and holidays done, ma'am. All fine.",
+   "pause_before_ms": 400,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t145",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Okay. Rahul, one request. Can you keep a spare PC at Lakeview Road? If the reception PC dies at ten a.m., I don't want to wait. Just swap it.",
+   "tts": "Okay. Rahul, one request. Can you keep a spare PC at Lakeview Road? If the reception PC dies at ten a.m., I don't want to wait. Just swap it.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t146",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Good idea, ma'am. We'll keep one standby desktop at Lakeview Road, our own unit, at no extra cost, for the full contract period.",
+   "tts": "Good idea, ma'am. We'll keep one standby desktop at Lakeview Road, our own unit, at no extra cost, for the full contract period.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t147",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And my laptop at home, I do reports on it at night. Is that covered?",
+   "tts": "And my laptop at home, I do reports on it at night. Is that covered?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t148",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Two home laptops for doctors we can cover remotely, ma'am, no extra cost. Onsite visits at home are not included.",
+   "tts": "Two home laptops for doctors we can cover remotely, ma'am, no extra cost. Onsite visits at home are not included.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t149",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Remote is enough.",
+   "tts": "Remote is enough.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t150",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "And during the audit, ma'am, we'll put an asset sticker on every device, with the helpdesk number printed on it.",
+   "tts": "And during the audit, ma'am, we'll put an asset sticker on every device, with the helpdesk number printed on it.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t151",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Good. At least the receptionists will know whom to call.",
+   "tts": "Good. At least the receptionists will know whom to call.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t152",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And the contract should be in the name of Arogyam Healthcare LLP, that's the legal entity, not Arogyam Family Clinics.",
+   "tts": "And the contract should be in the name of Arogyam Healthcare LLP, that's the legal entity, not Arogyam Family Clinics.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t153",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Arogyam Healthcare LLP. Noted, sir, I'll correct it in the proposal.",
+   "tts": "Arogyam Healthcare LLP. Noted, sir, I'll correct it in the proposal.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t154",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "One more. We deduct two percent TDS on your invoices, so don't chase us for the short payment.",
+   "tts": "One more. We deduct two percent TDS on your invoices, so don't chase us for the short payment.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t155",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Yes sir, that's standard, our accounts team will reflect it.",
+   "tts": "Yes sir, that's standard, our accounts team will reflect it.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t156",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Okay. I think that's everything from our side.",
+   "tts": "Okay. I think that's everything from our side.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t157",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "So let me summarise the next steps. I'll send the revised proposal tomorrow by six p.m., with five ninety-five, the two-year price lock, five-day resident engineer, the SLA credits, the exit clause and the NDA.",
+   "tts": "So let me summarise the next steps. I'll send the revised proposal tomorrow by six p.m., with five ninety-five, the two-year price lock, five-day resident engineer, the SLA credits, the exit clause and the NDA.",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t158",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And the survey?",
+   "tts": "And the survey?",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t159",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sneha will do a site survey at Gandhi Nagar on Saturday at ten a.m., since that's the branch we haven't walked through yet.",
+   "tts": "Sneha will do a site survey at Gandhi Nagar on Saturday at ten a.m., since that's the branch we haven't walked through yet.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t160",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Saturday ten is fine. I'll inform the branch manager there.",
+   "tts": "Saturday ten is fine. I'll inform the branch manager there.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t161",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "And the PO, sir? When can we expect it?",
+   "tts": "And the PO, sir? When can we expect it?",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t162",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Once the revised proposal is in and ma'am approves, I'll release the PO by the thirtieth.",
+   "tts": "Once the revised proposal is in and ma'am approves, I'll release the PO by the thirtieth.",
+   "pause_before_ms": 450,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t163",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Thirtieth October. Perfect, that gives us time to start on the first.",
+   "tts": "Thirtieth October. Perfect, that gives us time to start on the first.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t164",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "And Rahul, keep your price sheet handy. By Holi there'll be a fourth board up, near the new bus depot.",
+   "tts": "And Rahul, keep your price sheet handy. By Holi there'll be a fourth board up, near the new bus depot.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t165",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "That's wonderful, ma'am! Congratulations.",
+   "tts": "That's wonderful, ma'am! Congratulations.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t166",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Rahul, before I forget. Give me one clinic reference, someone like us, I want to speak to the doctor directly.",
+   "tts": "Rahul, before I forget. Give me one clinic reference, someone like us, I want to speak to the doctor directly.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t167",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Of course, ma'am. Dr. Mehra's dental chain, four clinics, with us for three years. I'll share his contact on WhatsApp today itself.",
+   "tts": "Of course, ma'am. Dr. Mehra's dental chain, four clinics, with us for three years. I'll share his contact on WhatsApp today itself.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t168",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And for the onboarding group, add me and the three branch managers.",
+   "tts": "And for the onboarding group, add me and the three branch managers.",
+   "pause_before_ms": 200,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t169",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Sure, sir. Names, please?",
+   "tts": "Sure, sir. Names, please?",
+   "pause_before_ms": 350,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t170",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Lakeview Road is Sister Mary, Station Road is Imran, and Gandhi Nagar is Pooja. I'll send the numbers.",
+   "tts": "Lakeview Road is Sister Mary, Station Road is Imran, and Gandhi Nagar is Pooja. I'll send the numbers.",
+   "pause_before_ms": 800,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t171",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Got it, sir. And once more on the numbers, so there's no confusion later. Five ninety-five plus GST per year, quarterly ₹1,48,750 plus GST, two years, same price in year two.",
+   "tts": "Got it, sir. And once more on the numbers, so there's no confusion later. Five ninety-five plus GST per year, quarterly one forty-eight seven fifty plus GST, two years, same price in year two.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t172",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "Correct. That's what I've noted also.",
+   "tts": "Correct. That's what I've noted also.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t173",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "For anything commercial, talk to Prakash. Don't call me in the mornings, OPD runs till two. WhatsApp me if it's urgent.",
+   "tts": "For anything commercial, talk to Prakash. Don't call me in the mornings, OPD runs till two. WhatsApp me if it's urgent.",
+   "pause_before_ms": 500,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t174",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Noted, ma'am. Prakash sir for commercials, and WhatsApp to you only if urgent. I'll also create a small WhatsApp group with Sneha for the onboarding.",
+   "tts": "Noted, ma'am. Prakash sir for commercials, and WhatsApp to you only if urgent. I'll also create a small WhatsApp group with Sneha for the onboarding.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t175",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And send the proposal on email to me, with a copy to ma'am.",
+   "tts": "And send the proposal on email to me, with a copy to ma'am.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t176",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Will do, sir. To you, copy to Dr. Anjali.",
+   "tts": "Will do, sir. To you, copy to Dr. Anjali.",
+   "pause_before_ms": 250,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t177",
+   "speaker": "S3",
+   "lang": "en-IN",
+   "text": "And I'll set up the handover call with Manoj next week.",
+   "tts": "And I'll set up the handover call with Manoj next week.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t178",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Thank you, sir. That'll really help. And ma'am, please take care in this dengue season, don't skip lunch.",
+   "tts": "Thank you, sir. That'll really help. And ma'am, please take care in this dengue season, don't skip lunch.",
+   "pause_before_ms": 650,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t179",
+   "speaker": "S2",
+   "lang": "en-IN",
+   "text": "Ha, tell that to my patients. Okay Rahul, thank you, this was productive. Send the proposal.",
+   "tts": "Ha, tell that to my patients. Okay Rahul, thank you, this was productive. Send the proposal.",
+   "pause_before_ms": 300,
+   "overlap_prev_ms": 0
+  },
+  {
+   "id": "t180",
+   "speaker": "S1",
+   "lang": "en-IN",
+   "text": "Thank you ma'am, thank you Prakash sir. Tomorrow six p.m., it'll be in your inbox.",
+   "tts": "Thank you ma'am, thank you Prakash sir. Tomorrow six p.m., it'll be in your inbox.",
+   "pause_before_ms": 150,
+   "overlap_prev_ms": 0
+  }
+ ]
+}

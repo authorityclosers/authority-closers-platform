@@ -1,0 +1,29 @@
+# Analysis-cost research (20 Oct 2026): real-speech cross-check set from Google FLEURS (CC-BY-4.0, ungated).
+# Runs only for pushes to bench-rs/** refs. No secrets.
+name: bench-realspeech
+
+on:
+  push:
+    branches:
+      - "bench-rs/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+      - run: pip install -q numpy==1.26.4 scipy==1.14.1 soundfile==0.12.1 pyarrow==17.0.0
+      - run: python bench/realspeech.py --lang hi_in mr_in --n 70 --out out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: realspeech-fleurs
+          path: out
+          retention-days: 30

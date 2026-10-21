@@ -1,0 +1,181 @@
+{
+ "call_id": "fx-06",
+ "call_type": "lost_deal",
+ "language_mix": "hi",
+ "target_minutes": 8,
+ "scenario": "coaching institute admission for a class 11 student (parent on call)",
+ "seller": {
+  "company": "Dhruvtara Academy (Civil Lines branch)",
+  "product": "Two-year JEE classroom programme for class 11-12",
+  "price_list": [
+   "Two-year JEE programme ₹1,48,000; early-bird ₹1,44,000",
+   "DSAT scholarship test: up to 20% off",
+   "Bus service ₹1,200 per month (free only for scholarship students)",
+   "Foundation course class 8-10, weekend batch, ₹42,000 per year"
+  ]
+ },
+ "speakers": [
+  {
+   "id": "S1",
+   "role": "salesperson",
+   "name": "Shweta Raghuvanshi",
+   "gender": "f",
+   "age_band": "30s",
+   "style": "senior counsellor, warm but pushy, defensive about competitor, talks fast"
+  },
+  {
+   "id": "S2",
+   "role": "prospect",
+   "name": "Rajesh Bhardwaj",
+   "gender": "m",
+   "age_band": "40s",
+   "style": "father of the student, polite, a little apologetic, practical about money and distance"
+  }
+ ],
+ "sections": [
+  {
+   "name": "opening",
+   "minutes": 1.3,
+   "facts": [
+    "f01",
+    "f02",
+    "f03",
+    "f04",
+    "f05",
+    "f06",
+    "f07",
+    "f08",
+    "f09",
+    "f10"
+   ],
+   "turns": [
+    "t001",
+    "t011"
+   ]
+  },
+  {
+   "name": "reasons",
+   "minutes": 3.2,
+   "facts": [
+    "f11",
+    "f12",
+    "f13",
+    "f14",
+    "f15",
+    "f16",
+    "f17",
+    "f18",
+    "f19",
+    "f20",
+    "f21",
+    "f22",
+    "f23"
+   ],
+   "turns": [
+    "t012",
+    "t032"
+   ]
+  },
+  {
+   "name": "save_attempt",
+   "minutes": 1.7,
+   "facts": [
+    "f24",
+    "f25",
+    "f26",
+    "f27",
+    "f28",
+    "f29",
+    "f30",
+    "f31"
+   ],
+   "turns": [
+    "t033",
+    "t045"
+   ]
+  },
+  {
+   "name": "younger_daughter",
+   "minutes": 0.9,
+   "facts": [
+    "f32",
+    "f33",
+    "f34",
+    "f35",
+    "f36",
+    "f37"
+   ],
+   "turns": [
+    "t046",
+    "t054"
+   ]
+  },
+  {
+   "name": "close",
+   "minutes": 0.6,
+   "facts": [
+    "f38"
+   ],
+   "turns": [
+    "t055",
+    "t060"
+   ]
+  }
+ ],
+ "coaching_truths": [
+  {
+   "id": "k01",
+   "kind": "missed_discovery",
+   "turn_ids": [
+    "t024",
+    "t025"
+   ],
+   "statement": "At the first counselling nobody asked the school timing; the morning-only batch clashed with school and became a main reason for the loss. The counsellor admitted it."
+  },
+  {
+   "id": "k02",
+   "kind": "other",
+   "turn_ids": [
+    "t027",
+    "t028"
+   ],
+   "statement": "The counsellor badmouthed the competitor's faculty; the father pushed back with a teacher who left her own institute, which hurt her credibility."
+  },
+  {
+   "id": "k03",
+   "kind": "wrong_info_given",
+   "turn_ids": [
+    "t017"
+   ],
+   "statement": "She said the bus was free this year, then corrected it: free only for scholarship students, ₹1,200 a month for everyone else."
+  },
+  {
+   "id": "k04",
+   "kind": "talked_over",
+   "turn_ids": [
+    "t015",
+    "t016"
+   ],
+   "statement": "She cut in to defend the faculty while the father was listing his reasons; he had to ask her to let him finish."
+  },
+  {
+   "id": "k05",
+   "kind": "ignored_buying_signal",
+   "turn_ids": [
+    "t046",
+    "t049",
+    "t050"
+   ],
+   "statement": "When the father asked about a foundation course for his younger daughter, she steered back to re-selling Aarav and had to be told again."
+  },
+  {
+   "id": "k06",
+   "kind": "good_rapport",
+   "turn_ids": [
+    "t057",
+    "t059"
+   ],
+   "statement": "She accepted the loss gracefully and set a concrete end-of-March follow-up for the daughter, keeping the family warm."
+  }
+ ]
+}

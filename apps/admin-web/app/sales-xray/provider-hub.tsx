@@ -308,6 +308,11 @@ export function ProviderHub({
                 ? "Its key is sealed per environment and never shown again."
                 : "Keys are added here once this server offers it."}
             </p>
+            {chosen.dataTerms ? (
+              <p className={styles.keyNote}>
+                <strong>Data terms.</strong> {chosen.dataTerms}
+              </p>
+            ) : null}
             {keys ? <ProviderKey provider={chosen} keys={keys} /> : null}
             {health ? <HealthHere provider={chosen} health={health} /> : null}
             <div className={styles.modelTools}>

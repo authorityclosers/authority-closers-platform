@@ -29,6 +29,7 @@ def test_validate_fills_defaults_and_refuses_unknown_or_out_of_range() -> None:
         "canary": 5,
         "pointer_review": 30,
         "partner_quote_facts": 20,
+        "one_pass": 0,
     }
     for bad in (
         {"surprise": 1},

@@ -1,0 +1,103 @@
+{
+  "call_id": "fx-11",
+  "call_type": "cold_call",
+  "language_mix": "mr-en",
+  "target_minutes": 6,
+  "seller": {
+    "company": "लेखपर्ण करसाथी",
+    "product": "व्यापारी कर नोंद सेवा",
+    "price_list": [
+      "वर्षाला अठरा हजार रुपये"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "सानिका वेरुळे",
+      "gender": "f",
+      "age_band": "20s",
+      "style": "polite, occasionally interrupts"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "मिलिंद झेरवळ",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "small trader, practical"
+    }
+  ],
+  "sections": [
+    {
+      "name": "permission and bookkeeping discovery",
+      "minutes": 2,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10"
+      ]
+    },
+    {
+      "name": "scope and objections",
+      "minutes": 2.5,
+      "facts": [
+        "f11",
+        "f12",
+        "f13",
+        "f14",
+        "f15",
+        "f16",
+        "f17",
+        "f18",
+        "f19"
+      ]
+    },
+    {
+      "name": "limited next step",
+      "minutes": 1.5,
+      "facts": [
+        "f20",
+        "f21",
+        "f22",
+        "f23",
+        "f24",
+        "f25",
+        "f26"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "missed_discovery",
+      "turn_ids": [
+        "t019"
+      ],
+      "statement": "Seller assumed permission to involve the spouse before asking about contact preferences."
+    },
+    {
+      "id": "k02",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t015"
+      ],
+      "statement": "Seller refused to promise unconditional penalty reimbursement and directed the buyer to written liability terms."
+    },
+    {
+      "id": "k03",
+      "kind": "good_rapport",
+      "turn_ids": [
+        "t021"
+      ],
+      "statement": "Seller acknowledged the contact mistake and accepted buyer-controlled review."
+    }
+  ]
+}

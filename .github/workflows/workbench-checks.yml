@@ -26,13 +26,14 @@ env:
 
 jobs:
   plan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 3
     outputs:
       web: ${{ steps.plan.outputs.web }}
       py: ${{ steps.plan.outputs.py }}
       lint: ${{ steps.plan.outputs.lint }}
       visual: ${{ steps.plan.outputs.visual }}
+      e2e: ${{ steps.plan.outputs.e2e }}
       web_matrix: ${{ steps.plan.outputs.web_matrix }}
       py_matrix: ${{ steps.plan.outputs.py_matrix }}
       py_count_a: ${{ steps.plan.outputs.py_count_a }}
@@ -48,7 +49,7 @@ jobs:
   lint:
     needs: plan
     if: needs.plan.outputs.lint == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -83,7 +84,7 @@ jobs:
   web:
     needs: plan
     if: needs.plan.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -105,7 +106,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.py == 'true'
     name: py-tests (${{ matrix.fam }} ${{ matrix.shard }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -219,7 +220,7 @@ jobs:
   visual:
     needs: plan
     if: needs.plan.outputs.visual == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -252,10 +253,110 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
 
+  e2e:
+    # Opt-in (`wb-ci --e2e`), never part of --full: the release's Sales Xray browser proofs from application.yml
+    # (static export journeys and the production-standalone acquisition journey), so navigation or label drift shows
+    # up before a release cut instead of 35 minutes into one.
+    needs: plan
+    if: needs.plan.outputs.e2e == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_DB: ac_platform
+          POSTGRES_USER: ac_owner
+          POSTGRES_PASSWORD: local-owner-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ac_owner -d ac_platform"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      AC_ENVIRONMENT: test
+      AC_RELEASE_ID: wb-ci-${{ github.sha }}
+      AC_DATABASE_URL: postgresql+psycopg://ac_runtime:local-runtime-only@localhost:5432/ac_platform
+      AC_DATABASE_MIGRATOR_URL: postgresql+psycopg://ac_migrator:local-migrator-only@localhost:5432/ac_platform
+      AC_TEST_DATABASE_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      AC_CONVERSATION_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      AC_EXTERNAL_SIDE_EFFECTS_HOLD: "true"
+      AC_EMAIL_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check uv==0.12.7 && pnpm install --frozen-lockfile && uv sync --frozen
+      - name: Restore Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.cache/ms-playwright
+          key: wb-playwright-py-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - name: Require codec and locked browser
+        timeout-minutes: 13
+        run: uv run --frozen python scripts/ci/ci_prerequisites.py codec browser
+      - name: Build verified AudioAtlas
+        run: uv run --frozen python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
+      - name: Provision roles, the migration chain and the acquisition database
+        env:
+          PGPASSWORD: local-owner-only
+        run: |
+          set -euo pipefail
+          psql --set ON_ERROR_STOP=1 --host localhost --username ac_owner --dbname ac_platform --file infra/local/postgres/init/001-roles.sql
+          uv run alembic upgrade head
+          psql --set ON_ERROR_STOP=1 --host localhost --username ac_owner --dbname ac_platform -c 'CREATE DATABASE ac_sales_xray_browser'
+      - name: Build Sales Xray static preview
+        env:
+          AC_SALES_XRAY_STATIC_PREVIEW: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/sales-xray-web build
+      - name: Sales Xray static export browser journeys (as application.yml validate-python-gates)
+        timeout-minutes: 8
+        run: >-
+          uv run --frozen pytest
+          tests/e2e/test_sales_xray_standalone_browser.py
+          tests/e2e/test_sales_xray_report_browser.py
+          -r s
+          --junitxml="${{ runner.temp }}/sales-xray-static-browser.xml"
+      - name: Build Sales Xray production standalone
+        env:
+          AC_CONVERSATION_API_ORIGIN: http://127.0.0.1:18116
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/sales-xray-web build
+      - name: Sales Xray acquisition browser journey (as application.yml validate-sales-xray-acquisition-browser)
+        timeout-minutes: 20
+        env:
+          AC_TEST_DATABASE_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:5432/ac_sales_xray_browser
+          AC_CONVERSATION_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:5432/ac_sales_xray_browser
+        run: >-
+          uv run --frozen python
+          scripts/ci/verify_sales_xray_acquisition_browser.py
+          --evidence-dir "${{ runner.temp }}/sales-xray-acquisition-browser"
+      - name: Keep the browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-e2e-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/sales-xray-static-browser.xml
+            ${{ runner.temp }}/sales-xray-acquisition-browser/sales-xray-acquisition-browser-receipt.json
+
   summary:
-    needs: [plan, lint, web, py-tests, visual]
+    needs: [plan, lint, web, py-tests, visual, e2e]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803

@@ -1,0 +1,173 @@
+{
+  "summary": "Cold call from Sanika Verule (Lekhaparna Karsathi) to Milind Zherval of Panvel Dhanya Bhandar about the trader tax records service. His nephew does entries in the evening and an outside accountant, Damodar Kherpule, files returns for ₹12,000 a year; answers are slow and last month's return receipt came two days late. About 320 bills a month (he first said 200), no pending notices, some purchase bills on paper or phone photos. Sanika explained the basic scope (up to 400 bills a month, regular GST returns, year-end review), no filing without his approval, and no passwords over the phone. His budget is up to ₹15,000 a year; the fee is ₹18,000 a year plus tax, excluding notice replies and prior-year corrections, with her own typing errors fixed free. She refused to promise to pay every penalty. She offered a single Wednesday message instead of daily reminders, but then proposed sending details to his wife; he refused firmly and she apologised. Next step: he will send 10 redacted sample bills (five sale, five purchase) by tomorrow evening for a free review; call on Thursday 22 October at 2:30 pm with a message beforehand. He said this is only a review, not agreement to start, and he will first talk to his accountant.",
+  "strengths": [
+    {
+      "title": "No blanket promise on penalties",
+      "explanation": "When Milind asked whether you pay any penalty, you said you will not promise that in every case; responsibility depends on who caused the delay and will be written in the quotation. For a trader who was burned by hidden charges before, this clarity is worth more than a promise.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s14"}, {"segment_id": "s15"}]
+    },
+    {
+      "title": "Owned the contact mistake and let him control the review",
+      "explanation": "When he refused to share his wife's contact, you said 'मी गृहीत धरलं, तसं करायला नको होतं', limited all contact to him, and offered a small sample review. You then accepted no portal access, no fee, his redaction and his 'review only' condition.",
+      "evidence": [{"segment_id": "s20"}, {"segment_id": "s21"}, {"segment_id": "s23"}, {"segment_id": "s25"}, {"segment_id": "s27"}]
+    },
+    {
+      "title": "Permission-based opening and process discovery",
+      "explanation": "You asked for two minutes and offered to call later, then asked about his process before pitching: who keeps the bills, who files, volume, notices. You also told him not to share passwords on the phone and offered approval before every filing, which answered his access worry.",
+      "evidence": [{"segment_id": "s1"}, {"segment_id": "s3"}, {"segment_id": "s5"}, {"segment_id": "s10"}, {"segment_id": "s11"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Assumed you could message his wife",
+      "explanation": "Earlier Milind said his wife runs the counter and does not want the password hassle. Still, you said you would send all details to her so she could approve from the counter. He refused: 'तिचा contact देणार नाही. माझ्याशीच बोला.' Ask before involving anyone: 'Approval साठी कोणाला message करायचा, फक्त तुम्हाला की घरातल्या कोणाला?'",
+      "evidence": [{"segment_id": "s10"}, {"segment_id": "s19"}, {"segment_id": "s20"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Pain not linked to the ₹3,000 budget gap",
+      "explanation": "He told you he waits for his accountant's time and last month's receipt came two days late, which caused a family argument. When his ₹15,000 budget met your ₹18,000 plus tax, you suggested he compare scope, but never linked the extra cost to those delays. Ask: 'उत्तरासाठी थांबावं लागतं आणि receipt उशिरा येते, याचा तुम्हाला किती त्रास होतो?'",
+      "evidence": [{"segment_id": "s4"}, {"segment_id": "s6"}, {"segment_id": "s12"}, {"segment_id": "s13"}, {"segment_id": "s17"}]
+    },
+    {
+      "title": "Nephew's exam next month not planned for",
+      "explanation": "He said the nephew can collect documents weekly but has an exam next month. You did not ask who would handle the weekly collection during that time, which is exactly when the new process would start.",
+      "evidence": [{"segment_id": "s9"}, {"segment_id": "s10"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Already has someone; not looking to change",
+      "explanation": "You did not argue; you moved to understanding how the current process works, which kept the call going.",
+      "evidence": [{"segment_id": "s2"}, {"segment_id": "s3"}]
+    },
+    {
+      "title": "Uploading will add work",
+      "explanation": "Answered with first-month folder setup and weekly collection, and honestly mentioned that unclear photos may need resending.",
+      "evidence": [{"segment_id": "s8"}, {"segment_id": "s9"}]
+    },
+    {
+      "title": "Price above budget and comparison with ₹12,000",
+      "explanation": "You stated fee, tax and exclusions clearly and suggested comparing scope rather than switching for convenience. Honest, but the gap was not resolved.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s13"}, {"segment_id": "s16"}, {"segment_id": "s17"}]
+    },
+    {
+      "title": "Penalty reimbursement",
+      "explanation": "No blanket guarantee; liability terms to be written in the quotation.",
+      "evidence": [{"segment_id": "s14"}, {"segment_id": "s15"}]
+    },
+    {
+      "title": "Too many reminders",
+      "explanation": "Converted to one consolidated Wednesday message to match his early-closing day.",
+      "evidence": [{"segment_id": "s18"}, {"segment_id": "s19"}]
+    },
+    {
+      "title": "Loyalty to the existing accountant",
+      "explanation": "You accepted no access now and gave him time to speak to Damodar first: 'निर्णयाची घाई नाही'.",
+      "evidence": [{"segment_id": "s22"}, {"segment_id": "s23"}, {"segment_id": "s25"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Small, buyer-controlled next step",
+      "explanation": "Ten redacted bills by tomorrow evening, free review, call on Thursday 22 October at 2:30 pm with a message beforehand, and the three terms he asked for (400-bill limit, tax extra, old work charged separately) at the top of the quotation.",
+      "evidence": [{"segment_id": "s24"}, {"segment_id": "s25"}, {"segment_id": "s26"}, {"segment_id": "s27"}]
+    },
+    {
+      "title": "Status kept as review, not activation",
+      "explanation": "He said not to treat this as a yes; you confirmed nothing moves without his clear permission. He is still comparing on ₹18,000 plus tax.",
+      "evidence": [{"segment_id": "s26"}, {"segment_id": "s27"}, {"segment_id": "s28"}]
+    }
+  ],
+  "verdict": "A respectful cold call that earned a free sample review and a Thursday 2:30 pm call from a trader who did not want to switch. Penalty and access concerns were handled honestly. The slip was proposing to contact his wife after he had signalled she should stay out; the open issue is the ₹3,000-plus gap against his budget, which no pain was linked to.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Permission-based opening (s1), honest limits (s15, s17) and a quick apology (s21) built trust. Proposing to message his wife (s19) briefly broke it."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Process, volume, notices and receipt delay were explored (s3-s6). Contact preferences and who should approve were not asked (s19-s20)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Budget ₹15,000 (s12), current cost ₹12,000 (s16), and a decision that waits for a conversation with the existing accountant (s22)."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "Pains were stated (waiting for answers, late receipt, s4, s6) but not developed or tied to price."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "Scope matched his volume (400-bill limit against 320, s7), approval before filing (s11), Wednesday message (s19)."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Workload, access, penalty, reminders and loyalty objections were handled without overpromising (s9, s11, s15, s19, s23)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "A bounded next step with date, time and deliverable, and review-only status respected (s25-s27)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "He said key price words came too fast on a cutting line and asked again whether tax was included (s14); repeat price and tax slowly. Voice tone cannot be judged from text."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Trust-led cold call that won a review step; value was not connected to his pains, so the decision will come down to ₹18,000 plus tax against ₹12,000.",
+      "evidence": [{"segment_id": "s13"}, {"segment_id": "s16"}, {"segment_id": "s28"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "Ten redacted bills by tomorrow evening for a free review; call on Thursday 22 October at 2:30 pm. Review only, no agreement to start.",
+      "evidence": [{"segment_id": "s25"}, {"segment_id": "s26"}, {"segment_id": "s27"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Result of the sample review", "His conversation with the existing accountant", "Value he places on faster answers and receipts"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "He was charged for every correction by a previous provider; honest liability terms make your quotation credible."},
+      {"finding_index": 1, "why_it_matters": "Recovering quickly kept the call alive and turned it into a low-risk review he controls."},
+      {"finding_index": 2, "why_it_matters": "A busy trader stayed on the line because you asked about his process instead of pitching."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "You offered to send details to his wife; he refused and said to deal only with him.", "evidence": [{"segment_id": "s19"}, {"segment_id": "s20"}]},
+        "why_it_matters": "Contacting family members without permission can end a small-business relationship, and he had already signalled she should not be burdened.",
+        "replacement_behavior": "Ask who should receive messages and approvals before naming anyone.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Effect on his willingness to continue"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 2, "why_effective": "Refusing a blanket penalty guarantee while promising written terms answered his fear of hidden charges."},
+      {"strength_index": 1, "evidence_index": 1, "why_effective": "A short, direct apology and handing control back to him saved the call."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "He described waiting for the accountant and a receipt delayed by two days.", "evidence": [{"segment_id": "s4"}, {"segment_id": "s6"}]},
+        "closer_response": {"text": "You acknowledged it but later handled the budget gap only by suggesting a scope comparison.", "evidence": [{"segment_id": "s17"}]},
+        "follow_up": "On Thursday, ask what faster answers and same-day receipts are worth to him before discussing price.",
+        "potential_impact": "Gives him a reason beyond convenience to pay more than his current ₹12,000."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "His nephew collects documents but has an exam next month.", "evidence": [{"segment_id": "s10"}]},
+        "closer_response": {"text": "You moved to access and approvals without planning for that gap.", "evidence": [{"segment_id": "s11"}]},
+        "follow_up": "Ask who will send documents during the exam month.",
+        "potential_impact": "Prevents a weak first month that would confirm his fear of extra work."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "He said the previous provider quoted low and then charged for every correction.", "evidence": [{"segment_id": "s12"}]}, "possible_concern": "He will read the quotation for hidden charges and wants key terms in large print.", "interpretation_kind": "inference"},
+      {"source": {"text": "He does not want his accountant to feel the work was suddenly taken away.", "evidence": [{"segment_id": "s22"}]}, "possible_concern": "Loyalty may outweigh small service gains; a gradual or partial start may be easier for him.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Assuming the wife could be contacted.", "purpose": "must_watch", "evidence": [{"segment_id": "s19"}]},
+      {"text": "No blanket penalty guarantee.", "purpose": "repeat", "evidence": [{"segment_id": "s15"}]},
+      {"text": "Apology and buyer-controlled review.", "purpose": "watch", "evidence": [{"segment_id": "s21"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "You proposed sending details to his wife; he refused firmly.", "evidence": [{"segment_id": "s19"}, {"segment_id": "s20"}]},
+      "change": {"text": "You admitted the assumption and limited contact to him, offering a small sample review.", "evidence": [{"segment_id": "s21"}]},
+      "after": {"text": "He offered redacted samples, while keeping portal access for later.", "evidence": [{"segment_id": "s22"}]},
+      "possible_effect": "The quick apology may have kept him willing to take a small next step.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "Proposed contacting a family member without asking permission; withdrawn when he objected.", "evidence": [{"segment_id": "s19"}, {"segment_id": "s21"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "Ask who should receive messages and approvals before involving anyone else.", "target": "On Thursday's call and every new account, contact preferences are confirmed before any message is sent."},
+    "practice": {"improvement_index": 0, "instructions": "Add one contact-preference question to your call script and use it on your next five calls before proposing any reminder or approval flow.", "success_condition": "No other person is mentioned or contacted unless the prospect has named them."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Honest limits on liability and handing control back to the buyer.",
+      "fix_first": "Confirm contact preferences before involving family members.",
+      "next_focus": "On Thursday, connect the sample review findings to his delays before discussing price.",
+      "assessment": "Good cold call that earned a review; value still needs to justify the price gap."
+    }
+  }
+}

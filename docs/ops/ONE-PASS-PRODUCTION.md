@@ -1,0 +1,104 @@
+# One pass in production: what it is, how the owner switches it, how to check it
+
+Owner, 21 Oct 2026: "So at least get this on prod now!!!" (one pass on the standard
+tier, about ₹0.50 a minute; the ₹100 real-call trial on dev keeps running as the safety
+check). Design: `docs/architecture/ONE_PASS_ANALYSIS.md`.
+
+## What production runs today, and where the saving is
+
+Production runs C2 (ElevenLabs Scribe), C4 facts and C5 report on Gemini 3.8 Flash (C5
+already with its strict schema, direct to the Gemini API) and the AI pointer review. It
+runs no call data engine (`ac-call-data@` exists for development-live and staging only).
+
+For a 14-minute call at list price (₹100 a dollar; cost research, 20 Oct 2026):
+
+| stage | today | Google-only |
+|---|---|---|
+| C2 transcription | Scribe ₹5.08 | Gemini 3.1 Flash-Lite ≈ ₹1.85 |
+| C4 facts | ₹1.15 | ₹1.15 |
+| C5 report and coaching | ₹2.46 | ₹2.46 |
+| pointer review | ₹2.13 | ₹2.13 |
+| per call (per minute) | ₹10.8 (≈ ₹0.78) | ≈ ₹7.6 (≈ ₹0.55) |
+
+So in production the one-pass saving is the transcription route. The one-read analysis
+(`one_pass` mode: deep call data and pointer review in one request) replaces the call
+data engine's deep read, which production does not run; it is offered on development
+and staging only.
+
+## Slice 1 (8fced2da, rides v0.71): no re-seal
+
+- The C2 / C4 / C5 routes, their configuration digests and the hosted approval bundle
+  are unchanged; **every classic route stays and nothing needs sealing**.
+- New on every environment: `ac-one-pass@<env>` (host wrapper and unit, inside the
+  worker on staging and production, like `ac-call-data@`). With the pipeline on
+  `classic` (the default) it idles.
+- Root step for staging (optional, where `one_pass` is offered): install
+  `infra/application/scripts/ac-one-pass` to `/usr/local/sbin/ac-one-pass` (0755) and
+  `infra/application/systemd/ac-one-pass@.service`, then
+  `systemctl enable --now ac-one-pass@staging`.
+
+## Slice 2: Gemini 3.1 Flash-Lite as the sealed C2 route
+
+**Code.** C2 operation `transcribe_gemini_audio` (`conversation_intelligence/gemini_audio.py`):
+the broker child turns the admitted source into mono 16 kHz 32 kbps MP3 (ffmpeg, as C1
+already does in the worker), sends it inline (Files API above 14 MB, deleted at once) with
+the research's prompt and strict schema to `gemini-3.1-flash-lite` on the standard tier,
+and normalises the answer into today's C2 contract (timebase `gemini-audio-mmss-v1`,
+provider speaker labels, unverified identity). Recipe `gemini-3.1-flash-lite-audio-v1`;
+pricing snapshot `ref:pricing/gemini-31-flash-lite-audio-20261020` (USD 0.0020 a minute,
+evidence `docs/ops/pricing-evidence/gemini-3.1-flash-lite-audio-20261020.md`); at most two
+hours of audio and ₹24 a request. C4, C5 and the pointer review are unchanged.
+
+**What gets sealed.** One more finite route set per acquisition policy, beside the classic
+one (`one_pass/c2_route.py`, the exact rule; `scripts/ops/one_pass_c2_seal.py`, the tool):
+
+- profile `gemini-flash-lite-c2` for the configuration Admin prepares (today's active
+  configuration with only the asr route on `gemini / gemini-3.1-flash-lite`);
+- its C2 template: the classic C2 template with provider, model, recipe, the Flash-Lite
+  pricing reference and evidence digest, Gemini's own credential, terms, privacy and
+  permission references (as the C4/C5 Gemini stages), `paid_pricing_evidence`, 2,400
+  paise, at most 7,200,000 ms, 0 completion tokens;
+- its C4 and C5 templates: the classic ones with the new configuration digest;
+- **every classic stage, profile, allowance and exact-source approval is kept
+  byte-identical**; the tool refuses otherwise, and refuses any configuration other than
+  the one it derives itself.
+
+**Steps.**
+
+1. *Admin (control account):* Admin → Sales Xray → One pass → Transcription (C2) →
+   **Prepare Gemini 3.1 Flash-Lite transcription**. It saves the derived configuration as a
+   provider revision and shows its digest (audited `analysis_pipeline.gemini_transcription_prepared`).
+   Nothing changes for calls.
+2. *Root (P0 card):* export, read-only, the active and the prepared configurations (the
+   `configuration` column of `conversation_provider_configurations` for the two revisions
+   the page shows) and run:
+
+   ```
+   python scripts/ops/one_pass_c2_seal.py --bundle <current hosted-approval.json> \
+       --classic classic.json --configuration gemini.json --out /root/one-pass-c2-seal
+   ```
+
+   Check the summary (`classic_stages_unchanged: true`, one profile per policy), then
+   install `hosted-approval.json` and its `hosted-approval.sha256` in the release metadata
+   as for any re-seal, and restart the API and workers.
+3. *Owner:* the page then offers **Switch transcription to Gemini 3.1 Flash-Lite**: type
+   `one_pass`, give the reason in the owner's words, signed in within ten minutes. It is
+   the provider activation (`POST /v1/admin/conversation/providers/activate`), audited as
+   `conversation.providers.gemini_transcription_on`. New plans quote and run C2 on Gemini;
+   plans already running keep their frozen route.
+4. *Fallback, one click:* **Back to Scribe** activates the classic revision again.
+
+## A good first production analysis (after the C2 switch)
+
+Read-only checks, on the first real call after the switch:
+
+1. **Contracts pass.** The call's processing plan reaches `completed`; the C2 task's
+   provider receipt says `gemini` / `gemini-3.1-flash-lite`; the C4 and C5 tasks complete
+   and a report draft exists for the C5 run (no `held` plan, no C5 repair).
+2. **The report renders.** The person's Report shows summary, coaching and the 27
+   pointers (pointer review saved); the transcript view shows speakers and times.
+3. **Cost per minute.** Admin → AI spend → by feature: `call_transcription` for that
+   call ≈ ₹0.13 a minute (vs ≈ ₹0.37 on Scribe); all stages together ≤ ₹0.60 a minute.
+4. **Time.** Transcription under 2 minutes for a 15-minute call (standard tier).
+
+Fallback at any doubt: activate the previous (Scribe) revision in Admin → Providers.

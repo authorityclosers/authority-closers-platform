@@ -254,6 +254,7 @@ def hub_view(
                 "kind_label": KIND_LABEL[provider.kind],
                 "blurb": provider.blurb,
                 "console": provider.console or None,
+                "data_terms": provider.data_terms or None,
                 "compatible": provider.compatible,
                 "aliases": list(provider.aliases),
                 "pipeline": pipeline_state(provider),

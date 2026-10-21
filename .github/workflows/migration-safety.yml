@@ -17,7 +17,7 @@ concurrency:
 jobs:
   migration-safety:
     name: migration-safety
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}

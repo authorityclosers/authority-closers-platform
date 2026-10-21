@@ -1,0 +1,158 @@
+{
+  "summary": "Two-minute callback from Aman (Raftaar Pre-Owned Motors) to Rohit, who was in a meeting, about a 2019 Pravah XT diesel, white, 48,000 km, first owner, listed at ₹7.85 lakh. Test drive fixed for Saturday 24 October at 11:30 (11:00 was already booked); his wife Kavya will also drive, and Aman offered a 20-25 minute highway drive. Rohit said the price is a bit high and Aman immediately said something can be done at the showroom; Rohit cited Speedline Car Bazaar at ₹7.4 lakh for the same model. Aman pointed to insurance valid till March 2027, claimed full service history, then withdrew it and promised to check the file; Rohit said that matters. Rohit wants to exchange a 2014 Chirag LX petrol (about 92,000 km), to be evaluated on Saturday, and wants a loan; Aman gave minimum ₹1.5 lakh down payment and up to five years. Aman will WhatsApp the Ring Road showroom location (opposite Kamla petrol pump); Rohit should bring his original driving licence. No daytime calls: after 7 pm or WhatsApp.",
+  "strengths": [
+    {
+      "title": "Made the wife's test drive part of the plan",
+      "explanation": "When Rohit said Kavya will also drive, you answered at once with a clear 20-25 minute drive up to the highway. For a family car the spouse's comfort often decides; planning a proper drive for her supports a joint decision.",
+      "evidence": [{"segment_id": "s4"}, {"segment_id": "s5"}]
+    },
+    {
+      "title": "Fast, clear logistics for a busy buyer",
+      "explanation": "You fixed the slot, corrected 11:00 to 11:30 openly, sent the location on WhatsApp, asked for the original licence, noted the after-7 pm contact rule and confirmed Saturday 11:30 at the end. The whole call respected 'meeting में हूँ'.",
+      "evidence": [{"segment_id": "s3"}, {"segment_id": "s21"}, {"segment_id": "s22"}, {"segment_id": "s23"}, {"segment_id": "s24"}]
+    },
+    {
+      "title": "Used a concrete differentiator against the competitor price",
+      "explanation": "On Speedline's ₹7.4 lakh you pointed him to compare insurance and stated yours is valid till March 2027, instead of matching the price.",
+      "evidence": [{"segment_id": "s10"}, {"segment_id": "s11"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Discount hinted before he has seen the car",
+      "explanation": "At the first 'थोड़ा ज़्यादा है' you said 'आप आइए तो, थोड़ा बहुत हो जाएगा'. That told him the ₹7.85 lakh is soft before the test drive has built any value, and he immediately anchored on ₹7.4 lakh. Hold price until after the drive: 'Sir, पहले गाड़ी चला के देखिए, condition देख के price पे बैठ के बात करेंगे।'",
+      "evidence": [{"segment_id": "s8"}, {"segment_id": "s9"}, {"segment_id": "s10"}]
+    },
+    {
+      "title": "Claimed full service history before checking",
+      "explanation": "You said the service history is complete, then took it back and promised to check the file. Rohit said it is important to him. Your correction was right, but the first claim was a guess. Say only what you have verified: 'Service record file से check करके आज 7 बजे के बाद WhatsApp करता हूँ।'",
+      "evidence": [{"segment_id": "s11"}, {"segment_id": "s12"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Loan terms given without budget or EMI comfort",
+      "explanation": "Rohit said he will not pay full cash and wants a loan. You gave ₹1.5 lakh minimum down payment and up to five years, but did not ask his budget or what monthly EMI suits him. One question would do: 'Sir, down payment कितना रखना चाहेंगे और EMI महीने की कितनी तक comfortable है?'",
+      "evidence": [{"segment_id": "s18"}, {"segment_id": "s19"}, {"segment_id": "s20"}]
+    },
+    {
+      "title": "Exchange car's condition and ownership not asked",
+      "explanation": "For the 2014 Chirag LX you asked only the kilometres. Ownership (whose name, any loan on it), condition and his expected value were not asked, so the exchange figure on Saturday could surprise him and stall the deal.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s13"}, {"segment_id": "s16"}, {"segment_id": "s17"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Price 'a bit high'",
+      "explanation": "Answered with a discount hint instead of value or a question about his budget.",
+      "evidence": [{"segment_id": "s8"}, {"segment_id": "s9"}]
+    },
+    {
+      "title": "Competitor at ₹7.4 lakh",
+      "explanation": "Good first move with the insurance validity; then an unverified service-history claim that you had to withdraw.",
+      "evidence": [{"segment_id": "s10"}, {"segment_id": "s11"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Test drive confirmed with read-back",
+      "explanation": "Saturday 11:30 was confirmed twice, with location, licence and exchange car to bring. Clear next step.",
+      "evidence": [{"segment_id": "s17"}, {"segment_id": "s21"}, {"segment_id": "s23"}, {"segment_id": "s24"}]
+    },
+    {
+      "title": "Open items not scheduled",
+      "explanation": "The service-record answer has no time attached. Since Rohit allows only after-7 pm calls or WhatsApp, commit to send it on WhatsApp before Saturday.",
+      "evidence": [{"segment_id": "s11"}, {"segment_id": "s22"}]
+    }
+  ],
+  "verdict": "Efficient callback that secured a Saturday test drive with both decision-makers. Over-eagerness cost something: a discount hinted before the car was seen and a service-history claim that had to be withdrawn on a point the buyer cares about. Budget, EMI comfort and exchange-car details are still unknown.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Respected his time and welcomed his wife (s4-s5). The withdrawn service-history claim (s11) may make him check your other statements."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Very little discovery: only the exchange car's kilometres (s13). No budget, EMI comfort, usage or exchange ownership questions (s18-s19)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Payment mode (loan) and joint decision with Kavya are known (s4, s18). Budget and loan eligibility are not."},
+    {"dimension_id": "problem_impact_desire", "status": "insufficient_evidence", "observation": "No discussion of why he wants this SUV or what matters most to the family beyond service history (s12). Ask one need question at the test drive."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "Car facts were stated accurately (s7) and insurance used as a differentiator (s11)."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Price push met with a discount hint (s9); competitor price partly answered with insurance, then an overclaim on service history (s11)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Test drive confirmed with everything he needs to bring (s21, s23-s24). No time set for the service-record answer."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Short turns suited a buyer in a meeting; the number was checked again on a bad line (s15-s16). Voice tone cannot be judged from text."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Good logistics, weak control of price and facts: the discount hint and the withdrawn service claim came before any value was built.",
+      "evidence": [{"segment_id": "s9"}, {"segment_id": "s11"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "Test drive confirmed for Saturday 24 October at 11:30 at the Ring Road showroom, with the exchange car to be evaluated. No price agreed.",
+      "evidence": [{"segment_id": "s17"}, {"segment_id": "s23"}, {"segment_id": "s24"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Service record status", "Exchange evaluation of the Chirag LX", "Loan eligibility and budget"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "If Kavya is comfortable driving it, the joint decision is easier."},
+      {"finding_index": 1, "why_it_matters": "A curt, busy buyer stays engaged when the call is short and every detail is settled."},
+      {"finding_index": 2, "why_it_matters": "Comparing on insurance and condition moves the talk away from the ₹45,000 price gap."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "On his first price comment you promised some reduction at the showroom.", "evidence": [{"segment_id": "s9"}]},
+        "why_it_matters": "He will now come expecting a cut and has a ₹7.4 lakh anchor; the negotiation starts below list before the drive.",
+        "replacement_behavior": "Acknowledge and defer: 'Sir, condition देख लीजिए, फिर price पे बात करेंगे।'",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Final negotiated price"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "You claimed full service history, then withdrew it; he said it is important.", "evidence": [{"segment_id": "s11"}, {"segment_id": "s12"}]},
+        "why_it_matters": "If the file is incomplete, the earlier claim will look like a lie on Saturday.",
+        "replacement_behavior": "Check the file before answering and send the result on WhatsApp after 7 pm.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Actual service record"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 1, "why_effective": "An instant, specific plan for the wife's drive shows you take the family decision seriously."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "He said he wants a loan, not full cash.", "evidence": [{"segment_id": "s18"}]},
+        "closer_response": {"text": "You gave down payment and tenure without asking budget or EMI comfort.", "evidence": [{"segment_id": "s19"}]},
+        "follow_up": "Before Saturday, ask down payment and monthly EMI comfort on WhatsApp after 7 pm.",
+        "potential_impact": "Lets you prepare a finance option that fits, instead of negotiating only on price."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "He offered his 2014 Chirag LX for exchange.", "evidence": [{"segment_id": "s12"}]},
+        "closer_response": {"text": "You asked only the kilometres and said to bring it Saturday.", "evidence": [{"segment_id": "s13"}, {"segment_id": "s17"}]},
+        "follow_up": "Ask ownership, condition and his expected value before the evaluation.",
+        "potential_impact": "Reduces the risk of an exchange-value shock at the showroom."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "He cited Speedline Car Bazaar at ₹7.4 lakh for the same model.", "evidence": [{"segment_id": "s10"}]}, "possible_concern": "He may be using the competitor quote to negotiate and will expect you to come close.", "interpretation_kind": "inference"},
+      {"source": {"text": "He said service history is important.", "evidence": [{"segment_id": "s12"}]}, "possible_concern": "Proof of maintenance may matter more to him than a small price cut.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Discount hinted at the first price push.", "purpose": "must_watch", "evidence": [{"segment_id": "s9"}]},
+      {"text": "Service history claimed then withdrawn.", "purpose": "watch", "evidence": [{"segment_id": "s11"}]},
+      {"text": "Planning the wife's highway drive.", "purpose": "repeat", "evidence": [{"segment_id": "s5"}]}
+    ],
+    "conversation_change": null,
+    "ethics_notes": [
+      {"text": "Full service history claimed before checking, then withdrawn in the same answer.", "evidence": [{"segment_id": "s11"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "Hold price until after the test drive; answer a price comment with value or a question, not a discount.", "target": "At Saturday's drive and on the next callback, no discount is mentioned before the customer has driven the car."},
+    "practice": {"improvement_index": 0, "instructions": "Write two replies to 'thoda zyada hai' that defer price to after the drive, and one budget question. Practise them aloud with a colleague who quotes a cheaper dealer.", "success_condition": "In role-play you reach the end of the call without offering any discount or figure."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Short, clear logistics and involving the spouse.",
+      "fix_first": "No discount hints before the test drive.",
+      "next_focus": "Verify the service record, and ask budget, EMI comfort and exchange-car details before Saturday.",
+      "assessment": "Test drive booked; price and facts need tighter control."
+    }
+  }
+}

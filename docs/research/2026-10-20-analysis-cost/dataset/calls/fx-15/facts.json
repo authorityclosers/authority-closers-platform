@@ -1,0 +1,690 @@
+[
+  {
+    "id": "f01",
+    "type": "person_name",
+    "slot": "seller.counsellor",
+    "value": "मेघना सरपोतदार",
+    "normalized": "Meghna Sarpotdar",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "मेघना सरपोतदार बोलतेय",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f02",
+    "type": "company",
+    "slot": "seller.school_name",
+    "value": "ज्ञानदीप गुरुकुल इंटरनॅशनल स्कूल",
+    "normalized": "Dnyandeep Gurukul International School",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "ज्ञानदीप गुरुकुल इंटरनॅशनल स्कूल मधून",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f03",
+    "type": "person_name",
+    "slot": "prospect.father",
+    "value": "संजय भागवत",
+    "normalized": "Sanjay Bhagwat",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "संजय भागवत आणि सोबत माझी पत्नी",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.01,
+    "trap": null
+  },
+  {
+    "id": "f04",
+    "type": "person_name",
+    "slot": "prospect.mother",
+    "value": "अंजली भागवत",
+    "normalized": "Anjali Bhagwat",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "माझी पत्नी अंजली भागवत",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.01,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f05",
+    "type": "person_name",
+    "slot": "student.name",
+    "value": "तन्वी",
+    "normalized": "Tanvi Bhagwat",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "तन्वीच्या पहिलीच्या admission संदर्भात",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.01,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f06",
+    "type": "company",
+    "slot": "student.current_preschool",
+    "value": "किड्स पॅराडाइस प्रीस्कूल",
+    "normalized": "Kids Paradise Preschool",
+    "turn_ids": [
+      "t005"
+    ],
+    "evidence": "किड्स पॅराडाइस प्रीस्कूल मध्ये सीनियर केजी",
+    "said_by": "S3",
+    "critical": false,
+    "needle": false,
+    "depth": 0.041,
+    "trap": null
+  },
+  {
+    "id": "f07",
+    "type": "date",
+    "slot": "student.birth_date",
+    "value": "बारा एप्रिल दोन हजार एकवीस",
+    "normalized": "2021-04-12",
+    "turn_ids": [
+      "t005"
+    ],
+    "evidence": "बारा एप्रिल दोन हजार एकवीस आहे, तिच्या birth certificate",
+    "said_by": "S3",
+    "critical": true,
+    "needle": false,
+    "depth": 0.041,
+    "trap": "self_correction"
+  },
+  {
+    "id": "f08",
+    "type": "product",
+    "slot": "curriculum.board",
+    "value": "सीबीएसई",
+    "normalized": "CBSE Class 1",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "CBSE नियमांनुसार पहिलीच्या प्रवेशासाठी",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.052,
+    "trap": null
+  },
+  {
+    "id": "f09",
+    "type": "requirement",
+    "slot": "curriculum.pedagogy",
+    "value": "experiential learning",
+    "normalized": "NEP experiential learning framework",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "NEP आधारित experiential learning framework",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.072,
+    "trap": null
+  },
+  {
+    "id": "f10",
+    "type": "personal_detail",
+    "slot": "student.hobby_interest",
+    "value": "ब्लॉक्स आणि गाड्या बनवणे",
+    "normalized": "creative block and vehicle building",
+    "turn_ids": [
+      "t011"
+    ],
+    "evidence": "लहानपणापासून blocks जोडून नवनवीन घरे आणि गाड्या बनवण्याचा प्रचंड छंद",
+    "said_by": "S2",
+    "critical": false,
+    "needle": true,
+    "depth": 0.103,
+    "trap": null
+  },
+  {
+    "id": "f11",
+    "type": "quantity",
+    "slot": "library.book_count",
+    "value": "पाच हजारपेक्षा जास्त",
+    "normalized": "5000+ picture books in primary library",
+    "turn_ids": [
+      "t016"
+    ],
+    "evidence": "पाच हजारपेक्षा जास्त सचित्र पुस्तके",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.155,
+    "trap": null
+  },
+  {
+    "id": "f12",
+    "type": "quantity",
+    "slot": "class.max_strength",
+    "value": "तीस विद्यार्थी",
+    "normalized": "30 students max per section",
+    "turn_ids": [
+      "t018"
+    ],
+    "evidence": "एका तुकडीत कमाल तीस विद्यार्थी",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.175,
+    "trap": null
+  },
+  {
+    "id": "f13",
+    "type": "quantity",
+    "slot": "class.student_teacher_ratio",
+    "value": "पंधरास एक",
+    "normalized": "15:1 student-teacher ratio",
+    "turn_ids": [
+      "t018"
+    ],
+    "evidence": "student-teacher ratio हा पंधरास एक",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.175,
+    "trap": null
+  },
+  {
+    "id": "f14",
+    "type": "quantity",
+    "slot": "screen_time.daily_limit",
+    "value": "कमाल वीस मिनिटे",
+    "normalized": "max 20 minutes daily screen time",
+    "turn_ids": [
+      "t022"
+    ],
+    "evidence": "दिवसातून कमाल वीस मिनिटेच",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.216,
+    "trap": null
+  },
+  {
+    "id": "f15",
+    "type": "quantity",
+    "slot": "campus.area",
+    "value": "पाच एकर",
+    "normalized": "5 acres campus",
+    "turn_ids": [
+      "t030"
+    ],
+    "evidence": "पूर्णपणे पाच एकर जागेवर पसरलेला",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.299,
+    "trap": null
+  },
+  {
+    "id": "f16",
+    "type": "location",
+    "slot": "campus.area_location",
+    "value": "बालेवाडी",
+    "normalized": "Balewadi",
+    "turn_ids": [
+      "t030"
+    ],
+    "evidence": "आमचा बालेवाडी campus पूर्णपणे",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.299,
+    "trap": null
+  },
+  {
+    "id": "f17",
+    "type": "duration",
+    "slot": "sports.daily_duration",
+    "value": "पंचेचाळीस मिनिटे",
+    "normalized": "45 minutes daily physical education",
+    "turn_ids": [
+      "t032"
+    ],
+    "evidence": "दररोज दुपारी पंचेचाळीस मिनिटांचा physical education",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.32,
+    "trap": null
+  },
+  {
+    "id": "f18",
+    "type": "time",
+    "slot": "school.start_time",
+    "value": "सकाळी आठ",
+    "normalized": "08:00 AM",
+    "turn_ids": [
+      "t036"
+    ],
+    "evidence": "शाळेची वेळ सकाळी आठ",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.361,
+    "trap": null
+  },
+  {
+    "id": "f19",
+    "type": "time",
+    "slot": "school.end_time",
+    "value": "दुपारी दोन",
+    "normalized": "02:00 PM",
+    "turn_ids": [
+      "t036"
+    ],
+    "evidence": "दुपारी दोन अशी असते",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.361,
+    "trap": null
+  },
+  {
+    "id": "f20",
+    "type": "quantity",
+    "slot": "safety.cctv_count",
+    "value": "दोनशे चाळीस",
+    "normalized": "240+ HD CCTV cameras",
+    "turn_ids": [
+      "t040"
+    ],
+    "evidence": "दोनशे चाळीस पेक्षा जास्त high-definition CCTV कॅमेरे",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.402,
+    "trap": null
+  },
+  {
+    "id": "f21",
+    "type": "quantity",
+    "slot": "infirmary.bed_capacity",
+    "value": "दोन खाटांचे",
+    "normalized": "2-bed infirmary",
+    "turn_ids": [
+      "t042"
+    ],
+    "evidence": "दोन खाटांचे सुसज्ज इन्फर्मरी",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.423,
+    "trap": null
+  },
+  {
+    "id": "f22",
+    "type": "company",
+    "slot": "tieup.hospital",
+    "value": "संजीवनी मल्टिस्पेशालिटी हॉस्पिटल",
+    "normalized": "Sanjeevani Multispeciality Hospital",
+    "turn_ids": [
+      "t042"
+    ],
+    "evidence": "संजीवनी मल्टिस्पेशालिटी हॉस्पिटल सोबत करार",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.423,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f23",
+    "type": "requirement",
+    "slot": "food.kitchen_type",
+    "value": "शुद्ध शाकाहारी",
+    "normalized": "pure vegetarian in-house kitchen",
+    "turn_ids": [
+      "t046"
+    ],
+    "evidence": "इन-हाऊस शुद्ध शाकाहारी किचन",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.464,
+    "trap": null
+  },
+  {
+    "id": "f24",
+    "type": "pain_point",
+    "slot": "student.medical_allergy",
+    "value": "शेंगदाण्याची ॲलर्जी",
+    "normalized": "peanut allergy",
+    "turn_ids": [
+      "t049"
+    ],
+    "evidence": "तन्वीला शेंगदाण्याची ॲलर्जी आहे",
+    "said_by": "S3",
+    "critical": true,
+    "needle": true,
+    "depth": 0.495,
+    "trap": null
+  },
+  {
+    "id": "f25",
+    "type": "requirement",
+    "slot": "kitchen.cooking_oil",
+    "value": "सूर्यफूल तेल",
+    "normalized": "sunflower oil only, no peanuts",
+    "turn_ids": [
+      "t050"
+    ],
+    "evidence": "केवळ सूर्यफूल तेल वापरलं जातं",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.505,
+    "trap": null
+  },
+  {
+    "id": "f26",
+    "type": "person_name",
+    "slot": "school.principal",
+    "value": "डॉ. सुहासिनी जोशी",
+    "normalized": "Dr. Suhasini Joshi",
+    "turn_ids": [
+      "t056"
+    ],
+    "evidence": "मुख्याध्यापिका डॉ. सुहासिनी जोशी आहेत",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.567,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f27",
+    "type": "person_name",
+    "slot": "seller.accountant",
+    "value": "मंदार कानेटकर",
+    "normalized": "Mandar Kanetkar",
+    "turn_ids": [
+      "t064"
+    ],
+    "evidence": "accounts officer मंदार कानेटकर सरांना",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.649,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f28",
+    "type": "price",
+    "slot": "fee.annual_tuition",
+    "value": "एक लाख वीस हजार रुपये",
+    "normalized": "120000 INR annual tuition fee",
+    "turn_ids": [
+      "t067"
+    ],
+    "evidence": "Tuition Fee एक लाख वीस हजार रुपये आहे",
+    "said_by": "S4",
+    "critical": true,
+    "needle": false,
+    "depth": 0.68,
+    "trap": "alt_number_form"
+  },
+  {
+    "id": "f29",
+    "type": "price",
+    "slot": "fee.caution_deposit",
+    "value": "पंचवीस हजार रुपये",
+    "normalized": "25000 INR refundable caution deposit",
+    "turn_ids": [
+      "t067"
+    ],
+    "evidence": "Refundable Caution Deposit पंचवीस हजार रुपये आहे",
+    "said_by": "S4",
+    "critical": true,
+    "needle": false,
+    "depth": 0.68,
+    "trap": null
+  },
+  {
+    "id": "f30",
+    "type": "quantity",
+    "slot": "fee.installment_count",
+    "value": "चार समान तिमाही हप्ते",
+    "normalized": "4 quarterly installments",
+    "turn_ids": [
+      "t069"
+    ],
+    "evidence": "चार समान तिमाही हप्ते देतो",
+    "said_by": "S4",
+    "critical": true,
+    "needle": false,
+    "depth": 0.701,
+    "trap": null
+  },
+  {
+    "id": "f31",
+    "type": "price",
+    "slot": "fee.quarterly_amount",
+    "value": "तीस हजार रुपये",
+    "normalized": "30000 INR per quarter",
+    "turn_ids": [
+      "t069"
+    ],
+    "evidence": "तीस हजार रुपयांचा quarterly installment येतो",
+    "said_by": "S4",
+    "critical": true,
+    "needle": false,
+    "depth": 0.701,
+    "trap": null
+  },
+  {
+    "id": "f32",
+    "type": "discount",
+    "slot": "fee.full_payment_discount",
+    "value": "पाच टक्के",
+    "normalized": "5 percent flat discount on full payment",
+    "turn_ids": [
+      "t069"
+    ],
+    "evidence": "पाच टक्के flat discount मिळतो",
+    "said_by": "S4",
+    "critical": false,
+    "needle": false,
+    "depth": 0.701,
+    "trap": null
+  },
+  {
+    "id": "f33",
+    "type": "price",
+    "slot": "transport.annual_fee",
+    "value": "अठ्ठावीस हजार रुपये",
+    "normalized": "28000 INR annual bus fee within 5 km",
+    "turn_ids": [
+      "t073"
+    ],
+    "evidence": "वार्षिक बस वाहतूक शुल्क अठ्ठावीस हजार रुपये आहे",
+    "said_by": "S4",
+    "critical": true,
+    "needle": false,
+    "depth": 0.742,
+    "trap": null
+  },
+  {
+    "id": "f34",
+    "type": "quantity",
+    "slot": "bus.speed_limit",
+    "value": "चाळीस किलोमीटर प्रति तास",
+    "normalized": "40 km/h speed limit",
+    "turn_ids": [
+      "t075"
+    ],
+    "evidence": "कमाल चाळीस किलोमीटर प्रति तास गती मर्यादा",
+    "said_by": "S4",
+    "critical": false,
+    "needle": false,
+    "depth": 0.763,
+    "trap": null
+  },
+  {
+    "id": "f35",
+    "type": "discount",
+    "slot": "discount.sibling_status",
+    "value": "लागू होणार नाही",
+    "normalized": "sibling discount not applicable for single child",
+    "turn_ids": [
+      "t077"
+    ],
+    "evidence": "तन्वी तुमची एकुलती एक कन्या असल्यामुळे तो discount लागू होणार नाही",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.784,
+    "trap": "retracted"
+  },
+  {
+    "id": "f36",
+    "type": "price",
+    "slot": "kit.uniform_estimate",
+    "value": "आठ हजार रुपये",
+    "normalized": "8000 INR uniform kit",
+    "turn_ids": [
+      "t079"
+    ],
+    "evidence": "त्याचे अंदाजे आठ हजार रुपये होतात",
+    "said_by": "S4",
+    "critical": false,
+    "needle": false,
+    "depth": 0.804,
+    "trap": null
+  },
+  {
+    "id": "f37",
+    "type": "price",
+    "slot": "kit.books_estimate",
+    "value": "पाच हजार रुपये",
+    "normalized": "5000 INR books kit",
+    "turn_ids": [
+      "t079"
+    ],
+    "evidence": "वर्कबुक्सचे मिळून सुमारे पाच हजार रुपये होतात",
+    "said_by": "S4",
+    "critical": false,
+    "needle": false,
+    "depth": 0.804,
+    "trap": null
+  },
+  {
+    "id": "f38",
+    "type": "price",
+    "slot": "cancellation.processing_fee",
+    "value": "दोन हजार रुपये",
+    "normalized": "2000 INR processing fee on early cancellation",
+    "turn_ids": [
+      "t081"
+    ],
+    "evidence": "दोन हजार रुपये ॲडमिनिस्ट्रेटिव्ह प्रोसेसिंग फी वजा केली जाते",
+    "said_by": "S4",
+    "critical": false,
+    "needle": false,
+    "depth": 0.825,
+    "trap": null
+  },
+  {
+    "id": "f39",
+    "type": "date",
+    "slot": "document.deadline",
+    "value": "दहा नोव्हेंबर",
+    "normalized": "2025-11-10",
+    "turn_ids": [
+      "t085"
+    ],
+    "evidence": "अंतिम तारीख दहा नोव्हेंबर दोन हजार पंचवीस निश्चित केलेली आहे",
+    "said_by": "S4",
+    "critical": true,
+    "needle": false,
+    "depth": 0.866,
+    "trap": null
+  },
+  {
+    "id": "f40",
+    "type": "duration",
+    "slot": "admission_letter.turnaround",
+    "value": "अठ्ठेचाळीस तासांच्या आत",
+    "normalized": "48 hours for confirmation letter",
+    "turn_ids": [
+      "t091"
+    ],
+    "evidence": "अठ्ठेचाळीस तासांच्या आत पालकांच्या ईमेलवर",
+    "said_by": "S4",
+    "critical": false,
+    "needle": false,
+    "depth": 0.928,
+    "trap": null
+  },
+  {
+    "id": "f41",
+    "type": "timeline",
+    "slot": "family.father_travel_date",
+    "value": "पुढील महिन्यात जर्मनी दौरा",
+    "normalized": "father business trip to Germany next month",
+    "turn_ids": [
+      "t092"
+    ],
+    "evidence": "कंपनी मला पुढील महिन्यात पंधरा दिवसांसाठी जर्मनीच्या क्लायंट ऑफिसला पाठवणार आहे",
+    "said_by": "S2",
+    "critical": false,
+    "needle": true,
+    "depth": 0.938,
+    "trap": null
+  },
+  {
+    "id": "f42",
+    "type": "date",
+    "slot": "campus_visit.date",
+    "value": "चौवीस ऑक्टोबर",
+    "normalized": "2026-10-24",
+    "turn_ids": [
+      "t093"
+    ],
+    "evidence": "या शनिवारी म्हणजेच चौवीस ऑक्टोबर रोजी",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.948,
+    "trap": null
+  },
+  {
+    "id": "f43",
+    "type": "time",
+    "slot": "campus_visit.time",
+    "value": "सकाळी अकरा",
+    "normalized": "11:00 AM",
+    "turn_ids": [
+      "t093"
+    ],
+    "evidence": "सकाळी अकरा वाजता सपरिवार प्रत्यक्ष शाळेला भेट",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.948,
+    "trap": null
+  }
+]

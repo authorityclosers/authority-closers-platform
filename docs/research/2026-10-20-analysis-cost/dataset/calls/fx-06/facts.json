@@ -1,0 +1,611 @@
+[
+ {
+  "id": "f01",
+  "type": "person_name",
+  "slot": "salesperson.name",
+  "value": "Shweta",
+  "normalized": "Shweta",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "मैं श्वेता बोल रही हूँ",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.03,
+  "trap": null
+ },
+ {
+  "id": "f02",
+  "type": "company",
+  "slot": "seller.company",
+  "value": "Dhruvtara Academy",
+  "normalized": "Dhruvtara Academy",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "Dhruvtara Academy",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.03,
+  "trap": null
+ },
+ {
+  "id": "f03",
+  "type": "location",
+  "slot": "seller.branch",
+  "value": "Civil Lines branch",
+  "normalized": "Civil Lines branch",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "Civil Lines branch",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.03,
+  "trap": null
+ },
+ {
+  "id": "f04",
+  "type": "person_name",
+  "slot": "prospect.surname",
+  "value": "Bhardwaj",
+  "normalized": "Bhardwaj",
+  "turn_ids": [
+   "t001"
+  ],
+  "evidence": "भारद्वाज जी",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.0,
+  "trap": null
+ },
+ {
+  "id": "f05",
+  "type": "person_name",
+  "slot": "student.name",
+  "value": "Aarav",
+  "normalized": "Aarav",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "आरव के ग्यारहवीं के admission",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.03,
+  "trap": null
+ },
+ {
+  "id": "f06",
+  "type": "requirement",
+  "slot": "student.class_and_course",
+  "value": "Class 11 admission, JEE course",
+  "normalized": "Class 11 admission, JEE course",
+  "turn_ids": [
+   "t003"
+  ],
+  "evidence": "ग्यारहवीं के admission के लिए आप आए थे ना, JEE वाले course",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.03,
+  "trap": null
+ },
+ {
+  "id": "f07",
+  "type": "date",
+  "slot": "demo_class.date",
+  "value": "Previous Sunday (physics demo class)",
+  "normalized": "Previous Sunday (physics demo class)",
+  "turn_ids": [
+   "t007"
+  ],
+  "evidence": "पिछले Sunday आरव physics की demo class में बैठा था",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.1,
+  "trap": null
+ },
+ {
+  "id": "f08",
+  "type": "quantity",
+  "slot": "seller.morning_batch_seats_left",
+  "value": "6 seats left in the morning batch",
+  "normalized": "6",
+  "turn_ids": [
+   "t007"
+  ],
+  "evidence": "बस छह seats बची हैं",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.1,
+  "trap": null
+ },
+ {
+  "id": "f09",
+  "type": "competitor",
+  "slot": "competitor.name",
+  "value": "Saarthi Study Circle (admission already taken there)",
+  "normalized": "Saarthi Study Circle (admission already taken there)",
+  "turn_ids": [
+   "t010"
+  ],
+  "evidence": "Saarthi Study Circle",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.15,
+  "trap": null
+ },
+ {
+  "id": "f10",
+  "type": "date",
+  "slot": "competitor.fees_paid_on",
+  "value": "Day before yesterday",
+  "normalized": "Day before yesterday",
+  "turn_ids": [
+   "t010"
+  ],
+  "evidence": "परसों ही fees जमा की है",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.15,
+  "trap": null
+ },
+ {
+  "id": "f11",
+  "type": "price",
+  "slot": "seller.standard_fee",
+  "value": "₹1.48 lakh for two years",
+  "normalized": "148000 INR",
+  "turn_ids": [
+   "t012"
+  ],
+  "evidence": "एक लाख अड़तालीस हज़ार थी, दो साल की",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.19,
+  "trap": null
+ },
+ {
+  "id": "f12",
+  "type": "price",
+  "slot": "seller.early_bird_fee",
+  "value": "₹1.44 lakh (early-bird, ₹4,000 less)",
+  "normalized": "144000 INR",
+  "turn_ids": [
+   "t013"
+  ],
+  "evidence": "नहीं sir, sorry, आपके लिए एक लाख चवालीस बनती",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.2,
+  "trap": "self_correction"
+ },
+ {
+  "id": "f13",
+  "type": "competitor_price",
+  "slot": "competitor.fee",
+  "value": "₹1.15 lakh for two years at Saarthi (not our price)",
+  "normalized": "115000 INR",
+  "turn_ids": [
+   "t014"
+  ],
+  "evidence": "1.15 lakh",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.22,
+  "trap": "competitor_price"
+ },
+ {
+  "id": "f14",
+  "type": "objection",
+  "slot": "prospect.objection_price_gap",
+  "value": "₹30,000 difference is significant for the family",
+  "normalized": "30000 INR",
+  "turn_ids": [
+   "t014"
+  ],
+  "evidence": "तीस हज़ार का फ़र्क है madam",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.22,
+  "trap": null
+ },
+ {
+  "id": "f15",
+  "type": "objection",
+  "slot": "prospect.objection_distance",
+  "value": "Branch is 9 km from home, about 45 minutes each way in traffic",
+  "normalized": "9 km",
+  "turn_ids": [
+   "t016"
+  ],
+  "evidence": "आपकी branch हमारे घर से नौ किलोमीटर है",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.25,
+  "trap": null
+ },
+ {
+  "id": "f16",
+  "type": "location",
+  "slot": "competitor.distance_from_home",
+  "value": "Saarthi is 2 km from home; student cycles there",
+  "normalized": "2 km",
+  "turn_ids": [
+   "t016"
+  ],
+  "evidence": "Saarthi वाला दो किलोमीटर पे है",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.25,
+  "trap": null
+ },
+ {
+  "id": "f17",
+  "type": "price",
+  "slot": "seller.bus_fee",
+  "value": "₹1,200 per month; the claim that the bus is free was withdrawn (free only for scholarship students)",
+  "normalized": "1200 INR/month",
+  "turn_ids": [
+   "t017"
+  ],
+  "evidence": "गलत बोल गई, free सिर्फ़ scholarship वाले बच्चों के लिए है",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.27,
+  "trap": "retracted"
+ },
+ {
+  "id": "f18",
+  "type": "product",
+  "slot": "seller.morning_batch_timing",
+  "value": "Morning batch 7 to 10",
+  "normalized": "Morning batch 7 to 10",
+  "turn_ids": [
+   "t020"
+  ],
+  "evidence": "आपका morning batch सात से दस है",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.32,
+  "trap": null
+ },
+ {
+  "id": "f19",
+  "type": "objection",
+  "slot": "prospect.objection_timing",
+  "value": "School starts at 7:30, so the 7-10 morning batch was impossible",
+  "normalized": "School starts at 7:30, so the 7-10 morning batch was impossible",
+  "turn_ids": [
+   "t020"
+  ],
+  "evidence": "आरव का school साढ़े सात बजे लगता है",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.32,
+  "trap": null
+ },
+ {
+  "id": "f20",
+  "type": "product",
+  "slot": "seller.evening_batch",
+  "value": "No evening batch at Civil Lines yet; planned from next session",
+  "normalized": "No evening batch at Civil Lines yet; planned from next session",
+  "turn_ids": [
+   "t021"
+  ],
+  "evidence": "next session से start करने का plan है",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.34,
+  "trap": null
+ },
+ {
+  "id": "f21",
+  "type": "competitor",
+  "slot": "competitor.batch_timing",
+  "value": "Saarthi evening batch 4:30 to 7:30",
+  "normalized": "Saarthi evening batch 4:30 to 7:30",
+  "turn_ids": [
+   "t022"
+  ],
+  "evidence": "साढ़े चार से साढ़े सात",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.36,
+  "trap": null
+ },
+ {
+  "id": "f22",
+  "type": "pain_point",
+  "slot": "prospect.first_counselling_gap",
+  "value": "Nobody asked the school timing at the first counselling; they went straight to fees and scholarship",
+  "normalized": "Nobody asked the school timing at the first counselling; they went straight to fees and scholarship",
+  "turn_ids": [
+   "t024"
+  ],
+  "evidence": "किसी ने school का time पूछा ही नहीं",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.39,
+  "trap": null
+ },
+ {
+  "id": "f23",
+  "type": "person_name",
+  "slot": "student.friend",
+  "value": "Kunal, Aarav's best friend, also joined Saarthi",
+  "normalized": "Kunal, Aarav's best friend, also joined Saarthi",
+  "turn_ids": [
+   "t026"
+  ],
+  "evidence": "आरव का best friend कुणाल भी वहीं गया है",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.42,
+  "trap": "third_party_name"
+ },
+ {
+  "id": "f24",
+  "type": "date",
+  "slot": "seller.scholarship_test_date",
+  "value": "DSAT on Sunday 1 November",
+  "normalized": "2026-11-01",
+  "turn_ids": [
+   "t033"
+  ],
+  "evidence": "DSAT, एक November को, Sunday",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.54,
+  "trap": null
+ },
+ {
+  "id": "f25",
+  "type": "discount",
+  "slot": "seller.scholarship_discount",
+  "value": "Up to 20% off through the scholarship test, not guaranteed",
+  "normalized": "20%",
+  "turn_ids": [
+   "t033"
+  ],
+  "evidence": "बीस percent तक छूट मिल सकती है",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.54,
+  "trap": null
+ },
+ {
+  "id": "f26",
+  "type": "personal_detail",
+  "slot": "student.class10_score",
+  "value": "91% in class 10",
+  "normalized": "91%",
+  "turn_ids": [
+   "t035"
+  ],
+  "evidence": "दसवीं में 91 percent थे",
+  "said_by": "S1",
+  "critical": false,
+  "needle": false,
+  "depth": 0.58,
+  "trap": null
+ },
+ {
+  "id": "f27",
+  "type": "objection",
+  "slot": "prospect.sunk_cost",
+  "value": "₹25,000 registration already paid at Saarthi, non-refundable",
+  "normalized": "25000 INR",
+  "turn_ids": [
+   "t036"
+  ],
+  "evidence": "पच्चीस हज़ार registration दे चुके हैं, और वो non-refundable है",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.59,
+  "trap": null
+ },
+ {
+  "id": "f28",
+  "type": "payment_terms",
+  "slot": "seller.installments",
+  "value": "Three installments: first ₹50,000, then two installments six months apart",
+  "normalized": "3 installments; first 50000 INR",
+  "turn_ids": [
+   "t039"
+  ],
+  "evidence": "पहली installment सिर्फ़ पचास हज़ार",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.64,
+  "trap": null
+ },
+ {
+  "id": "f29",
+  "type": "commitment",
+  "slot": "prospect.switch_back",
+  "value": "Withdrawn: father briefly thought of shifting Aarav back, then said no",
+  "normalized": "Withdrawn: father briefly thought of shifting Aarav back, then said no",
+  "turn_ids": [
+   "t042"
+  ],
+  "evidence": "एक बार मेरा मन हुआ था कि shift करवा दें, आपका demo सच में अच्छा था... पर नहीं, अब नहीं",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.69,
+  "trap": "retracted"
+ },
+ {
+  "id": "f30",
+  "type": "decision_maker",
+  "slot": "prospect.co_decision_maker",
+  "value": "Aarav's mother (would not agree to a switch)",
+  "normalized": "Aarav's mother (would not agree to a switch)",
+  "turn_ids": [
+   "t042"
+  ],
+  "evidence": "आरव की मम्मी भी नहीं मानेंगी",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.69,
+  "trap": null
+ },
+ {
+  "id": "f31",
+  "type": "timeline",
+  "slot": "competitor.classes_started",
+  "value": "Classes at Saarthi started on Monday",
+  "normalized": "Classes at Saarthi started on Monday",
+  "turn_ids": [
+   "t044"
+  ],
+  "evidence": "Monday से वहाँ classes चालू हो गई हैं",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.73,
+  "trap": null
+ },
+ {
+  "id": "f32",
+  "type": "person_name",
+  "slot": "prospect.daughter",
+  "value": "Ananya, in class 8",
+  "normalized": "Ananya, in class 8",
+  "turn_ids": [
+   "t046"
+  ],
+  "evidence": "मेरी बेटी है, अनन्या, आठवीं में है",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.76,
+  "trap": null
+ },
+ {
+  "id": "f33",
+  "type": "requirement",
+  "slot": "prospect.daughter_school_board",
+  "value": "CBSE, same school",
+  "normalized": "CBSE, same school",
+  "turn_ids": [
+   "t048"
+  ],
+  "evidence": "same school, CBSE",
+  "said_by": "S2",
+  "critical": false,
+  "needle": false,
+  "depth": 0.8,
+  "trap": null
+ },
+ {
+  "id": "f34",
+  "type": "price",
+  "slot": "seller.foundation_fee",
+  "value": "Foundation weekend batch ₹42,000 per year",
+  "normalized": "42000 INR/year",
+  "turn_ids": [
+   "t051"
+  ],
+  "evidence": "बयालीस हज़ार साल का",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.85,
+  "trap": null
+ },
+ {
+  "id": "f35",
+  "type": "timeline",
+  "slot": "prospect.foundation_decision",
+  "value": "Next year in April, when Ananya moves to class 9",
+  "normalized": "Next year in April, when Ananya moves to class 9",
+  "turn_ids": [
+   "t052"
+  ],
+  "evidence": "अगले साल April में देखेंगे, जब नौवीं में जाएगी",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.86,
+  "trap": null
+ },
+ {
+  "id": "f36",
+  "type": "next_step",
+  "slot": "next_step.brochure",
+  "value": "Shweta to WhatsApp the foundation brochure",
+  "normalized": "Shweta to WhatsApp the foundation brochure",
+  "turn_ids": [
+   "t053"
+  ],
+  "evidence": "foundation का brochure WhatsApp कर देती हूँ",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.88,
+  "trap": null
+ },
+ {
+  "id": "f37",
+  "type": "contact_preference",
+  "slot": "prospect.contact_channel",
+  "value": "Same number; it is also his WhatsApp",
+  "normalized": "Same number; it is also his WhatsApp",
+  "turn_ids": [
+   "t054"
+  ],
+  "evidence": "इसी number पे, यही WhatsApp है",
+  "said_by": "S2",
+  "critical": true,
+  "needle": false,
+  "depth": 0.9,
+  "trap": null
+ },
+ {
+  "id": "f38",
+  "type": "next_step",
+  "slot": "next_step.followup_call",
+  "value": "Call at the end of March about Ananya",
+  "normalized": "Call at the end of March about Ananya",
+  "turn_ids": [
+   "t057",
+   "t058"
+  ],
+  "evidence": "March end में एक बार call करूँगी अनन्या के लिए",
+  "said_by": "S1",
+  "critical": true,
+  "needle": false,
+  "depth": 0.95,
+  "trap": null
+ }
+]

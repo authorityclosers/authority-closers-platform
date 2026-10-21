@@ -1,0 +1,963 @@
+[
+  {
+    "id": "f01",
+    "type": "person_name",
+    "slot": "seller.name",
+    "value": "वसुधा मेहरवेल",
+    "normalized": "Vasudha Mehervel",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "वसुधा मेहरवेल",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f02",
+    "type": "company",
+    "slot": "seller.company",
+    "value": "नीलपंख परिसर विकास",
+    "normalized": "Neelpankh Parisar Vikas",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "नीलपंख परिसर विकास",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f03",
+    "type": "product",
+    "slot": "project.name",
+    "value": "अंबरपंख व्यापार प्रांगण",
+    "normalized": "Ambarpankh Vyapar Prangan",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "अंबरपंख व्यापार प्रांगण",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f04",
+    "type": "person_name",
+    "slot": "buyer.name",
+    "value": "देवेश झोरपल",
+    "normalized": "Devesh Zhorpal",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "देवेश झोरपल",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.007,
+    "trap": null
+  },
+  {
+    "id": "f05",
+    "type": "company",
+    "slot": "buyer.business",
+    "value": "झोरपल गृहसामग्री भंडार",
+    "normalized": "Zhorpal Gruhasamagri Bhandar",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "झोरपल गृहसामग्री भंडार",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.02,
+    "trap": null
+  },
+  {
+    "id": "f06",
+    "type": "location",
+    "slot": "current.market",
+    "value": "वर्धपर्ण हाट",
+    "normalized": "Vardhparna Haat",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "वर्धपर्ण हाट",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.02,
+    "trap": null
+  },
+  {
+    "id": "f07",
+    "type": "quantity",
+    "slot": "current.area",
+    "value": "दो सौ सत्तर",
+    "normalized": "270 sq ft approx",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "दो सौ सत्तर वर्ग फुट",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.033,
+    "trap": null
+  },
+  {
+    "id": "f08",
+    "type": "price",
+    "slot": "current.rent",
+    "value": "सत्ताईस हजार",
+    "normalized": "27000 INR/month",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "महीने का सत्ताईस हजार",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.033,
+    "trap": null
+  },
+  {
+    "id": "f09",
+    "type": "location",
+    "slot": "shop.unit",
+    "value": "बी सत्रह भूतल",
+    "normalized": "B-17 ground floor",
+    "turn_ids": [
+      "t007"
+    ],
+    "evidence": "भूतल पर बी सत्रह",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.039,
+    "trap": null
+  },
+  {
+    "id": "f10",
+    "type": "quantity",
+    "slot": "shop.carpet",
+    "value": "तीन सौ बीस",
+    "normalized": "320 sq ft",
+    "turn_ids": [
+      "t009"
+    ],
+    "evidence": "320 कार्पेट",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.052,
+    "trap": null
+  },
+  {
+    "id": "f11",
+    "type": "quantity",
+    "slot": "shop.sale_area",
+    "value": "चार सौ पचपन",
+    "normalized": "455 sq ft",
+    "turn_ids": [
+      "t009"
+    ],
+    "evidence": "बिक्री क्षेत्र चार सौ पचपन",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.052,
+    "trap": null
+  },
+  {
+    "id": "f12",
+    "type": "person_name",
+    "slot": "spouse.name",
+    "value": "रेवती झोरपल",
+    "normalized": "Revati Zhorpal",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "रेवती झोरपल",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.059,
+    "trap": null
+  },
+  {
+    "id": "f13",
+    "type": "decision_maker",
+    "slot": "purchase.approval",
+    "value": "पति और पत्नी",
+    "normalized": "joint buyer and spouse",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "खरीद का फैसला हम दोनों करेंगे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.059,
+    "trap": null
+  },
+  {
+    "id": "f14",
+    "type": "competitor",
+    "slot": "other.project",
+    "value": "रंगपर्ण चौक व्यापार भवन",
+    "normalized": "Rangparna Chowk Vyapar Bhavan",
+    "turn_ids": [
+      "t012"
+    ],
+    "evidence": "रंगपर्ण चौक व्यापार भवन",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.072,
+    "trap": null
+  },
+  {
+    "id": "f15",
+    "type": "competitor_price",
+    "slot": "other.quote",
+    "value": "पैंसठ लाख",
+    "normalized": "6500000 INR upper-floor alternative",
+    "turn_ids": [
+      "t012"
+    ],
+    "evidence": "वहाँ पैंसठ लाख बताया",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.072,
+    "trap": "competitor_price"
+  },
+  {
+    "id": "f16",
+    "type": "price",
+    "slot": "shop.base",
+    "value": "बहत्तर लाख",
+    "normalized": "7200000 INR base",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "मूल कीमत बहत्तर लाख रुपये",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.078,
+    "trap": null
+  },
+  {
+    "id": "f17",
+    "type": "budget",
+    "slot": "buyer.comfort",
+    "value": "सत्तर लाख कुल",
+    "normalized": "7000000 INR all-in comfort",
+    "turn_ids": [
+      "t014"
+    ],
+    "evidence": "सत्तर लाख मेरा कुल सोचा हुआ था",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.085,
+    "trap": null
+  },
+  {
+    "id": "f18",
+    "type": "budget",
+    "slot": "buyer.stretch",
+    "value": "अस्सी लाख",
+    "normalized": "8000000 INR stretch",
+    "turn_ids": [
+      "t014"
+    ],
+    "evidence": "कर्ज जोड़कर अस्सी तक खींच",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.085,
+    "trap": null
+  },
+  {
+    "id": "f19",
+    "type": "price",
+    "slot": "buyer.own_funds",
+    "value": "चालीस लाख",
+    "normalized": "4000000 INR",
+    "turn_ids": [
+      "t016"
+    ],
+    "evidence": "चालीस लाख अपने पास हैं",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.098,
+    "trap": null
+  },
+  {
+    "id": "f20",
+    "type": "personal_detail",
+    "slot": "opening.keepsake",
+    "value": "पिता का पीतल का बाट",
+    "normalized": "father’s brass weight at opening",
+    "turn_ids": [
+      "t016"
+    ],
+    "evidence": "पिता का दिया पीतल का बाट",
+    "said_by": "S2",
+    "critical": true,
+    "needle": true,
+    "depth": 0.098,
+    "trap": null
+  },
+  {
+    "id": "f21",
+    "type": "quantity",
+    "slot": "shop.frontage",
+    "value": "बारह फुट",
+    "normalized": "12 ft",
+    "turn_ids": [
+      "t019"
+    ],
+    "evidence": "सामने की चौड़ाई बारह फुट",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.118,
+    "trap": null
+  },
+  {
+    "id": "f22",
+    "type": "quantity",
+    "slot": "shop.depth",
+    "value": "छब्बीस फुट आठ इंच",
+    "normalized": "26 ft 8 in approx",
+    "turn_ids": [
+      "t019"
+    ],
+    "evidence": "गहराई लगभग छब्बीस फुट आठ इंच",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.118,
+    "trap": null
+  },
+  {
+    "id": "f23",
+    "type": "requirement",
+    "slot": "corridor.use",
+    "value": "साझा निजी नहीं",
+    "normalized": "no assumed merchandise display",
+    "turn_ids": [
+      "t023"
+    ],
+    "evidence": "गलियारा साझा है, निजी बिक्री क्षेत्र नहीं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.144,
+    "trap": null
+  },
+  {
+    "id": "f24",
+    "type": "quantity",
+    "slot": "entrance.walk",
+    "value": "पचपन मीटर",
+    "normalized": "55 m approx internal route",
+    "turn_ids": [
+      "t025"
+    ],
+    "evidence": "अंदरूनी रास्ता लगभग पचपन मीटर",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.157,
+    "trap": null
+  },
+  {
+    "id": "f25",
+    "type": "requirement",
+    "slot": "shop.visibility",
+    "value": "सीधे सड़क-मुखी नहीं",
+    "normalized": "not street-facing",
+    "turn_ids": [
+      "t025"
+    ],
+    "evidence": "उसे सड़क-मुखी दुकान नहीं कहूँगी",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.157,
+    "trap": null
+  },
+  {
+    "id": "f26",
+    "type": "quantity",
+    "slot": "delivery.frequency",
+    "value": "हफ्ते में तीन",
+    "normalized": "3 deliveries/week",
+    "turn_ids": [
+      "t032"
+    ],
+    "evidence": "हफ्ते में तीन बार",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.203,
+    "trap": null
+  },
+  {
+    "id": "f27",
+    "type": "time",
+    "slot": "delivery.required",
+    "value": "सुबह आठ",
+    "normalized": "08:00 required not confirmed",
+    "turn_ids": [
+      "t032"
+    ],
+    "evidence": "सुबह आठ बजे तक माल उतर",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.203,
+    "trap": null
+  },
+  {
+    "id": "f28",
+    "type": "quantity",
+    "slot": "unloading.route",
+    "value": "सत्तर मीटर",
+    "normalized": "70 m approx",
+    "turn_ids": [
+      "t033"
+    ],
+    "evidence": "अनुमानित सत्तर मीटर",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.209,
+    "trap": null
+  },
+  {
+    "id": "f29",
+    "type": "quantity",
+    "slot": "shop.height",
+    "value": "ग्यारह फुट",
+    "normalized": "11 ft approx",
+    "turn_ids": [
+      "t037"
+    ],
+    "evidence": "साफ ऊँचाई लगभग ग्यारह फुट",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.235,
+    "trap": null
+  },
+  {
+    "id": "f30",
+    "type": "price",
+    "slot": "facility.fee",
+    "value": "एक लाख अस्सी हजार",
+    "normalized": "180000 INR one time",
+    "turn_ids": [
+      "t039"
+    ],
+    "evidence": "साझा सुविधा शुल्क एक लाख अस्सी हजार",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.248,
+    "trap": null
+  },
+  {
+    "id": "f31",
+    "type": "price",
+    "slot": "maintenance.deposit",
+    "value": "एक लाख बीस हजार",
+    "normalized": "120000 INR",
+    "turn_ids": [
+      "t039"
+    ],
+    "evidence": "रखरखाव जमा एक लाख बीस हजार",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.248,
+    "trap": null
+  },
+  {
+    "id": "f32",
+    "type": "price",
+    "slot": "listed.subtotal",
+    "value": "पचहत्तर लाख",
+    "normalized": "7500000 INR excludes statutory and fitout",
+    "turn_ids": [
+      "t039"
+    ],
+    "evidence": "तीन मदों का जोड़ पचहत्तर लाख रुपये",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.248,
+    "trap": null
+  },
+  {
+    "id": "f33",
+    "type": "price",
+    "slot": "maintenance.rate",
+    "value": "आठ प्रति फुट",
+    "normalized": "8 INR/sale sq ft/month plus tax proposed",
+    "turn_ids": [
+      "t043"
+    ],
+    "evidence": "बिक्री क्षेत्र पर आठ रुपये प्रति वर्ग फुट",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.275,
+    "trap": null
+  },
+  {
+    "id": "f34",
+    "type": "price",
+    "slot": "maintenance.monthly",
+    "value": "तीन हजार छह सौ चालीस",
+    "normalized": "3640 INR/month plus tax proposed",
+    "turn_ids": [
+      "t043"
+    ],
+    "evidence": "तीन हजार छह सौ चालीस रुपये महीना",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.275,
+    "trap": null
+  },
+  {
+    "id": "f35",
+    "type": "discount",
+    "slot": "buyer.request",
+    "value": "दो लाख",
+    "normalized": "200000 INR requested not approved",
+    "turn_ids": [
+      "t047"
+    ],
+    "evidence": "दो लाख की छूट का अनुरोध",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.301,
+    "trap": null
+  },
+  {
+    "id": "f36",
+    "type": "requirement",
+    "slot": "payment.mode",
+    "value": "दर्ज अधिकृत माध्यम",
+    "normalized": "documented payment to authorized recipient",
+    "turn_ids": [
+      "t048"
+    ],
+    "evidence": "सारा भुगतान दर्ज तरीके से होगा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.307,
+    "trap": null
+  },
+  {
+    "id": "f37",
+    "type": "price",
+    "slot": "buyer.loan_target",
+    "value": "पैंतीस लाख",
+    "normalized": "3500000 INR proposed loan",
+    "turn_ids": [
+      "t054"
+    ],
+    "evidence": "कर्ज करीब पैंतीस का सोच",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.346,
+    "trap": null
+  },
+  {
+    "id": "f38",
+    "type": "requirement",
+    "slot": "land.tenure",
+    "value": "विकास समझौता",
+    "normalized": "development agreement; underlying owner separate",
+    "turn_ids": [
+      "t061"
+    ],
+    "evidence": "विकास समझौते वाली व्यवस्था",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.392,
+    "trap": null
+  },
+  {
+    "id": "f39",
+    "type": "timeline",
+    "slot": "possession.target",
+    "value": "मार्च अंत दो हजार सत्ताईस",
+    "normalized": "2027-03-31 proposed not guaranteed",
+    "turn_ids": [
+      "t065",
+      "t067"
+    ],
+    "evidence": "मार्च के अंत तक बताया गया",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.431,
+    "trap": null
+  },
+  {
+    "id": "f40",
+    "type": "decision_maker",
+    "slot": "spouse.budget_gate",
+    "value": "नीली बही में पत्नी की रेखा",
+    "normalized": "spouse must approve household budget before purchase",
+    "turn_ids": [
+      "t074"
+    ],
+    "evidence": "नीली बही में खाली खाने पर उसकी रेखा नहीं पड़ती",
+    "said_by": "S2",
+    "critical": true,
+    "needle": true,
+    "depth": 0.477,
+    "trap": null
+  },
+  {
+    "id": "f41",
+    "type": "requirement",
+    "slot": "toilet.scope",
+    "value": "निजी नहीं साझा",
+    "normalized": "no private toilet in unit",
+    "turn_ids": [
+      "t077"
+    ],
+    "evidence": "निजी शौचालय शामिल नहीं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.497,
+    "trap": null
+  },
+  {
+    "id": "f42",
+    "type": "quantity",
+    "slot": "power.load",
+    "value": "पाँच किलोवाट",
+    "normalized": "5 kW proposed",
+    "turn_ids": [
+      "t083"
+    ],
+    "evidence": "स्वीकृत भार पाँच किलोवाट",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.536,
+    "trap": null
+  },
+  {
+    "id": "f43",
+    "type": "requirement",
+    "slot": "power.backup",
+    "value": "साझा जरूरी सेवाएँ",
+    "normalized": "not full shop backup",
+    "turn_ids": [
+      "t085"
+    ],
+    "evidence": "बैकअप साझा प्रकाश और आवश्यक सेवाओं के लिए",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.549,
+    "trap": null
+  },
+  {
+    "id": "f44",
+    "type": "quantity",
+    "slot": "ground.total_shops",
+    "value": "चौंतीस",
+    "normalized": "34 shops",
+    "turn_ids": [
+      "t091"
+    ],
+    "evidence": "भूतल की चौंतीस",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.588,
+    "trap": null
+  },
+  {
+    "id": "f45",
+    "type": "quantity",
+    "slot": "ground.allocated",
+    "value": "इक्कीस",
+    "normalized": "21 allocated not operational",
+    "turn_ids": [
+      "t091"
+    ],
+    "evidence": "इक्कीस दुकानों पर आवंटन",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.588,
+    "trap": null
+  },
+  {
+    "id": "f46",
+    "type": "requirement",
+    "slot": "parking.private",
+    "value": "शामिल नहीं",
+    "normalized": "no dedicated parking included",
+    "turn_ids": [
+      "t099"
+    ],
+    "evidence": "निजी गाड़ी की जगह शामिल नहीं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.641,
+    "trap": null
+  },
+  {
+    "id": "f47",
+    "type": "payment_terms",
+    "slot": "token.refund_correction",
+    "value": "बिना शर्त कथन वापस",
+    "normalized": "unconditional refund claim withdrawn; terms pending",
+    "turn_ids": [
+      "t107"
+    ],
+    "evidence": "पूरा वापस हो जाएगा वाला कथन वापस लें",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.693,
+    "trap": "retracted"
+  },
+  {
+    "id": "f48",
+    "type": "price",
+    "slot": "token.proposed",
+    "value": "पचास हजार",
+    "normalized": "50000 INR proposed not paid",
+    "turn_ids": [
+      "t105"
+    ],
+    "evidence": "पचास हजार का token",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.68,
+    "trap": null
+  },
+  {
+    "id": "f49",
+    "type": "payment_terms",
+    "slot": "stage.schedule",
+    "value": "बीस तीस तीस बीस",
+    "normalized": "20/30/30/20 percent of base proposed",
+    "turn_ids": [
+      "t113"
+    ],
+    "evidence": "बीस प्रतिशत, संरचना और सामने का काम प्रमाणित होने पर तीस प्रतिशत, सेवाओं के चरण पर तीस प्रतिशत और कब्जे पर बीस प्रतिशत",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.732,
+    "trap": null
+  },
+  {
+    "id": "f50",
+    "type": "price",
+    "slot": "first.stage_base",
+    "value": "चौदह लाख चालीस हजार",
+    "normalized": "1440000 INR at 20 percent of current base",
+    "turn_ids": [
+      "t114"
+    ],
+    "evidence": "पहली चौदह लाख चालीस हजार",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.739,
+    "trap": null
+  },
+  {
+    "id": "f51",
+    "type": "requirement",
+    "slot": "rental.guarantee",
+    "value": "नहीं",
+    "normalized": "no rental guarantee",
+    "turn_ids": [
+      "t125"
+    ],
+    "evidence": "कोई rental guarantee नहीं",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.81,
+    "trap": null
+  },
+  {
+    "id": "f52",
+    "type": "duration",
+    "slot": "fitout.needed",
+    "value": "तीस दिन",
+    "normalized": "30 days requested",
+    "turn_ids": [
+      "t128"
+    ],
+    "evidence": "तीस दिन का सजावट समय",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.83,
+    "trap": null
+  },
+  {
+    "id": "f53",
+    "type": "person_name",
+    "slot": "buyer.fitter",
+    "value": "अनिकेत वेरदुले",
+    "normalized": "Aniket Verdule; do not contact",
+    "turn_ids": [
+      "t132"
+    ],
+    "evidence": "फिटर का नाम अनिकेत वेरदुले",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.856,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f54",
+    "type": "date",
+    "slot": "visit.date",
+    "value": "चौबीस अक्टूबर",
+    "normalized": "2026-10-24 provisional",
+    "turn_ids": [
+      "t134"
+    ],
+    "evidence": "शनिवार चौबीस अक्टूबर सुबह ग्यारह बजे आ सकते हैं",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.869,
+    "trap": "self_correction"
+  },
+  {
+    "id": "f55",
+    "type": "time",
+    "slot": "visit.time",
+    "value": "ग्यारह",
+    "normalized": "11:00",
+    "turn_ids": [
+      "t135"
+    ],
+    "evidence": "सुबह ग्यारह, करीब एक घंटे",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.876,
+    "trap": null
+  },
+  {
+    "id": "f56",
+    "type": "requirement",
+    "slot": "application.consent",
+    "value": "पत्नी का बंद सफेद लिफाफा",
+    "normalized": "explicit document permission required; no automatic scan",
+    "turn_ids": [
+      "t142"
+    ],
+    "evidence": "रेवती मेरी तरफ से सफेद लिफाफा बंद करके तुम्हें दे, तभी application आगे करना",
+    "said_by": "S2",
+    "critical": true,
+    "needle": true,
+    "depth": 0.922,
+    "trap": null
+  },
+  {
+    "id": "f57",
+    "type": "commitment",
+    "slot": "seller.document_status",
+    "value": "बाईस अक्टूबर छह",
+    "normalized": "2026-10-22 18:00 available documents and pending list",
+    "turn_ids": [
+      "t147"
+    ],
+    "evidence": "गुरुवार बाईस अक्टूबर शाम छह बजे तक",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.954,
+    "trap": null
+  },
+  {
+    "id": "f58",
+    "type": "contact_preference",
+    "slot": "buyer.friday_evening",
+    "value": "रात फोन नहीं",
+    "normalized": "no Friday night calls",
+    "turn_ids": [
+      "t150"
+    ],
+    "evidence": "शुक्रवार रात को फोन मत करना",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.974,
+    "trap": null
+  },
+  {
+    "id": "f59",
+    "type": "commitment",
+    "slot": "buyer.questions",
+    "value": "आज रात तक",
+    "normalized": "2026-10-20 night",
+    "turn_ids": [
+      "t152"
+    ],
+    "evidence": "पत्नी के सवाल आज रात तक भेज दूँगा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.987,
+    "trap": null
+  },
+  {
+    "id": "f60",
+    "type": "next_step",
+    "slot": "visit.conditional",
+    "value": "कागज देखकर बदल सकता",
+    "normalized": "provisional inspection conditional on documents",
+    "turn_ids": [
+      "t154"
+    ],
+    "evidence": "दस्तावेज देखकर बदलना पड़ा तो संदेश कर दूँगा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 1.0,
+    "trap": null
+  }
+]

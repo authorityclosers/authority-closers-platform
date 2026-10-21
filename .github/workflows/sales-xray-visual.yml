@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   visual-advisory:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     # Deliberately advisory, including tool/setup failures. No status or PR writes.
     continue-on-error: true

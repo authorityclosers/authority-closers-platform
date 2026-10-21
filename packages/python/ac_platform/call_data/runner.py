@@ -408,6 +408,24 @@ def run_pass(
             if calls and spend_environment is not None:
                 skipped = spend_guard.skipped_tenants(connection, spend_environment)
                 calls = [call for call in calls if call.tenant_id not in skipped]
+            if calls and pipeline == "deep" and not arguments.recording:
+                # One pass reads these calls when the environment publishes it; a call is
+                # left to it only while it works on it (one_pass.publish.Handoff).
+                from ac_platform.one_pass import publish
+
+                handoff = publish.handoff(connection, spend_environment)
+                if handoff is not None:
+                    calls = [
+                        call
+                        for call in calls
+                        if not handoff.waits(
+                            connection,
+                            call.recording_id,
+                            call.transcript_revision,
+                            kind="deep",
+                            now=now,
+                        )
+                    ]
             stop = refused(connection, pipeline) if calls else None
             if stop is not None:
                 lines.append(stop)
