@@ -18,7 +18,8 @@ What changes for a call when this environment's analysis pipeline is ``one_pass`
   majority baseline);
 - its pointer review is saved, once the call's report is saved, as the call's pointer
   review (``save_review``: the review's own admission, in the saving transaction),
-  parsed again against the report's own transcript and withheld segments.
+  parsed again against the report's own transcript and withheld segments, its scores
+  calibrated to today's review and labelled beta (``calibration``), as in the plan.
 
 Fallback: whatever one pass does not finish (failed, refused, skipped, nothing valid, or a
 review not published within an hour) is left to today's deep pipeline and pointer review.
@@ -464,11 +465,12 @@ def publish_reviews(
     sessions: Any, *, apply: bool, now: datetime | None = None, limit: int = 10
 ) -> list[dict[str, Any]]:
     """Each succeeded read whose call now has its report: its pointer review, parsed
-    against that report's own transcript and withheld segments, saved through the
-    review's own admission. A review that no longer parses is left to today's review."""
+    against that report's own transcript and withheld segments, calibrated and labelled
+    beta, saved through the review's own admission. A review that no longer parses is
+    left to today's review."""
     from ac_platform.conversation_intelligence import pointer_review
     from ac_platform.conversation_intelligence.pointer_review_cli import _segments, _withheld
-    from ac_platform.one_pass import store
+    from ac_platform.one_pass import calibration, store
 
     now = now or datetime.now(UTC)
     lines: list[dict[str, Any]] = []
@@ -511,6 +513,9 @@ def publish_reviews(
             except pointer_review.PointerReviewError as error:
                 line["outcome"] = f"not_published:{str(error)[:48]}"
             else:
+                # One pass reads 4-5 points kinder than today's review: calibrated, and
+                # shown as a beta (one_pass.calibration; owner, 21 Oct 2026).
+                review = calibration.calibrate(review)
                 saved = pointer_review.save_review(
                     connection,
                     report=report,
