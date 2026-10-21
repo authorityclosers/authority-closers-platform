@@ -65,7 +65,11 @@ import { DeskView, dueNow, type RowActions } from "./desk-view";
 import { usePullToRefresh } from "./gestures";
 import { readJourney, type JourneyView } from "./journey/journey-client";
 import { LeadActions } from "./lead-actions";
-import { LEAD_ADDED_EVENT, takeHandedLead } from "./lead-handoff";
+import {
+  LEAD_ADDED_EVENT,
+  takeHandedLead,
+  type HandedLead,
+} from "./lead-handoff";
 import { CallingLoop, LeadSheet, type LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
@@ -215,13 +219,14 @@ export function LeadsRoute() {
   };
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
-  // A lead added from the + sheet opens here, ready to call (owner, 22 Oct).
+  // A lead added from the + sheet, or Home's "Call <name>", opens here
+  // (owner, 22 Oct).
   useEffect(() => {
-    const show = (leadId: string | null) => {
-      if (!leadId) return;
+    const show = (handed: HandedLead | null) => {
+      if (!handed) return;
       setHolding(null);
-      setIntent(null);
-      setOpenLead(leadId);
+      setIntent(handed.call ? "call" : null);
+      setOpenLead(handed.leadId);
       refresh();
     };
     show(takeHandedLead());

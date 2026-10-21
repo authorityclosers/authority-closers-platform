@@ -626,3 +626,12 @@
     transform: none;
   }
 }
+
+/* In an organisation, call analysis follows the sales block (22 Oct 2026). */
+.partTitle {
+  margin: 8px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--sx-line);
+  color: var(--lx-ink);
+  font: var(--sx-text-headline);
+}
