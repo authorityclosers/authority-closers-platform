@@ -90,25 +90,29 @@ export function RecordedCallsCard({ me }: { me: Desk["me"] }) {
     known.current = leads;
   });
 
-  const load = useCallback(async () => {
-    const next = await pendingRecordings();
-    if (!next) return;
-    setPending(next);
-    // Each call's lead, for its name; a lead that's gone or not mine stays out.
-    const missing = [...new Set(next.items.map((item) => item.leadId))].filter(
-      (id) => !(id in known.current),
-    );
-    if (!missing.length) return;
-    const found = await Promise.all(
-      missing.map((id) =>
-        readLead(id).then(
-          (detail) => [id, detail] as const,
-          () => [id, null] as const,
-        ),
-      ),
-    );
-    setLeads((current) => ({ ...current, ...Object.fromEntries(found) }));
-  }, []);
+  const load = useCallback(
+    () =>
+      pendingRecordings().then((next) => {
+        if (!next) return;
+        setPending(next);
+        // Each call's lead, for its name; a lead that's gone or not mine stays out.
+        const missing = [
+          ...new Set(next.items.map((item) => item.leadId)),
+        ].filter((id) => !(id in known.current));
+        if (!missing.length) return;
+        return Promise.all(
+          missing.map((id) =>
+            readLead(id).then(
+              (detail) => [id, detail] as const,
+              () => [id, null] as const,
+            ),
+          ),
+        ).then((found) =>
+          setLeads((current) => ({ ...current, ...Object.fromEntries(found) })),
+        );
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!inPhoneApp()) return;
