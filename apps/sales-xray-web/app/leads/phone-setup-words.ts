@@ -5,7 +5,7 @@
  * and the dot a manager sees for each seller's phone on Team.
  */
 
-import type { RecorderProfile } from "./native-phone";
+import type { RecorderProfile, TestCallResult } from "./native-phone";
 import { ago, type PhoneHealth } from "./leads-client";
 
 export type PhoneCheck =
@@ -53,7 +53,7 @@ export const CHECK_TODO: Record<PhoneCheck, string> = {
   battery: "Your phone lets Sales Xray run in the background.",
   autostart: "Your phone lets Sales Xray start by itself.",
   testCall:
-    "Call any lead from Sales Xray and talk for a few seconds. Ticks when the recording is found.",
+    "Call a colleague and check your phone records both of you. The recording stays on your phone.",
   callLog: "Calls with your leads from the phone dialer show on the lead.",
 };
 
@@ -100,6 +100,51 @@ export const EXPLAINERS: Partial<Record<PhoneCheck, Explainer>> = {
     allow: "Open battery settings",
   },
 };
+
+/**
+ * Xiaomi, Redmi and POCO keep call recordings in a folder other apps can't see
+ * (Redmi audit #49): Android shows it to Sales Xray only with All files access.
+ */
+export const ALL_FILES_EXPLAINER: Explainer = {
+  title: "Call recordings",
+  reads:
+    "Only your Phone app's call recordings folder. Sales Xray doesn't open your photos, documents or other files.",
+  sends:
+    "Only a recording you choose to analyse, after you agree to the terms. Nothing is sent by itself.",
+  why: "Your phone keeps call recordings in a hidden folder. Android lets Sales Xray see it only with All files access. Turn it on for Sales Xray, then come back.",
+  allow: "Open All files access",
+};
+
+/** The line under Call recordings while the folder is hidden. */
+export const HIDDEN_TODO =
+  "Your phone hides its call recordings. Allow All files access.";
+
+/** The setup test call: what to do, before the seller dials. */
+export const TEST_CALL_STEPS = [
+  "Call a colleague or a friend who is in another room, not next to you.",
+  "When they answer, stay quiet while they count to ten.",
+  "Then say a few words yourself, and hang up.",
+];
+
+/** What the test call found (#60: on some phones only your own voice is recorded). */
+export const TEST_RESULT_WORDS: Record<TestCallResult, string | null> = {
+  both: "Both of you were recorded. Recording works.",
+  only_you:
+    "Only your voice was recorded: the other person is silent. Your phone's recorder misses the other side, so Reports from this phone will be one-sided.",
+  only_them:
+    "Only the other person was recorded. Check your phone's microphone, then try again.",
+  silent:
+    "The recording is silent. Check that Record calls automatically is on, then try again.",
+  not_found:
+    "No recording was found for the test call. Turn on call recording in your Phone app, then try again.",
+  unknown:
+    "The recording was too short to check. Talk a little longer, then try again.",
+  none: null,
+};
+
+/** Truecaller's after-call screen covers "How did it go?" (Redmi audit #48). */
+export const TRUECALLER_NOTE =
+  "Truecaller opens its own screen after each call, on top of Sales Xray. Close it to log your call, or tap the How did the call go? notification.";
 
 /** "Record calls automatically" in each brand's own dialer. */
 export const RECORDER_STEPS: Record<string, string[]> = {
@@ -188,6 +233,12 @@ export function recorderGuide(
   }
   const found = recorder.folders.find((row) => row.state === "found");
   const where = found ?? recorder.folders[0];
+  if (where?.state === "hidden")
+    return {
+      lead: `${recorder.dialerLabel} saves recordings in ${where.path}, which your phone hides from other apps. Allow All files access for Sales Xray in Call recordings.`,
+      steps: recorderSteps(family),
+      closed: false,
+    };
   const lead =
     recorder.recording === "on"
       ? found

@@ -59,6 +59,7 @@ import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
 import { PhoneSetupBar } from "./phone-setup";
 import { UnknownCallsCard } from "./unknown-calls-card";
+import { RecordedCallsCard } from "./recorded-calls";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
@@ -746,6 +747,7 @@ export function LeadsRoute() {
                   <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
                   <AlertsCard />
                   <PhoneLogCard as="offer" />
+                  <RecordedCallsCard me={desk.me} />
                   <UnknownCallsCard onSave={setUnknownLead} />
                   {/* Owner, 20 Oct: chats live in Chats; the desk links there. */}
                   <DeskChats />
