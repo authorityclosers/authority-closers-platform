@@ -184,6 +184,22 @@ def facts_system_prompt(publish: bool = False) -> str:
 
 
 @functools.cache
+def stage_system_prompt() -> str:
+    """The C4 stage as one read (``one_pass.stage``): call data, notes (for the C4 fact
+    packet today's C5 reads) and the pointer review with its own instructions in full."""
+    return (
+        _header(("call_data", "notes", "review"))
+        + "\nPART call_data: CRM facts.\n"
+        + call_data_instructions()
+        + "\n"
+        + _NOTES
+        + "\n"
+        + "\nPART review: the 27-pointer review.\n"
+        + pointer_review._system_prompt({})
+    )
+
+
+@functools.cache
 def report_system_prompt() -> str:
     """The report request: the C5 coaching-v5 instructions, as the C5 stage builds them."""
     return _header(("report",)) + "\nPART report: the coaching report.\n" + report_instructions()
@@ -203,21 +219,39 @@ def _review_schema() -> dict[str, Any]:
     return schema
 
 
+def _notes_schema() -> dict[str, Any]:
+    text = {"type": "string"}
+    return {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {"fact": text, "segments": {"type": "array", "items": text}},
+            "required": ["fact", "segments"],
+        },
+    }
+
+
 @functools.cache
 def _facts_schema(publish: bool) -> dict[str, Any]:
-    text = {"type": "string"}
     properties: dict[str, Any] = {"call_data": extraction.response_schema(TYPES)}
     if not publish:
-        properties["notes"] = {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {"fact": text, "segments": {"type": "array", "items": text}},
-                "required": ["fact", "segments"],
-            },
-        }
+        properties["notes"] = _notes_schema()
     properties["review"] = pointer_review.response_schema() if publish else _review_schema()
     return {"type": "object", "properties": properties, "required": list(properties)}
+
+
+@functools.cache
+def _stage_schema() -> dict[str, Any]:
+    properties: dict[str, Any] = {
+        "call_data": extraction.response_schema(TYPES),
+        "notes": _notes_schema(),
+        "review": pointer_review.response_schema(),
+    }
+    return {"type": "object", "properties": properties, "required": list(properties)}
+
+
+def stage_schema() -> dict[str, Any]:
+    return copy.deepcopy(_stage_schema())
 
 
 @functools.cache
@@ -336,6 +370,20 @@ def fact_packet(
     withheld: frozenset[str],
 ) -> dict[str, Any]:
     """The C4 fact packet (style-independent facts/1, one chunk covering the call)."""
+    candidate = fact_candidate(drafts, notes, transcript, overview=overview, withheld=withheld)
+    return reports.parse_fact_packet(candidate, transcript).model_dump(mode="json", by_alias=True)
+
+
+def fact_candidate(
+    drafts: Sequence[Draft],
+    notes: Any,
+    transcript: Mapping[str, Any],
+    *,
+    overview: str,
+    withheld: frozenset[str],
+) -> dict[str, Any]:
+    """The fact packet's answer before the C4 parser checks it: each call data draft and
+    note as one observation with its segments' own words and times."""
     by_id = {
         str(segment["id"]): segment
         for segment in transcript["segments"]
@@ -355,12 +403,11 @@ def fact_packet(
         spans = _spans(ids if isinstance(ids, list) else [], by_id)
         if statement and spans:
             observations.append({"statement": statement, "evidence": spans})
-    candidate = {
+    return {
         "overview": " ".join(overview.split())[:4_000] or "A one-pass read of the whole call.",
         "observations": observations[:MAX_OBSERVATIONS],
         "uncertainties": [],
     }
-    return reports.parse_fact_packet(candidate, transcript).model_dump(mode="json", by_alias=True)
 
 
 def _profile(drafts: Sequence[Draft], prospect: Any, by_id: Mapping[str, Any]) -> dict[str, Any]:

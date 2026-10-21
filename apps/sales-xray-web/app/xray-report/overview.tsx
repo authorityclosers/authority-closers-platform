@@ -57,6 +57,18 @@ export function AiDraft() {
   );
 }
 
+/** A calibrated one-pass score (owner, 21 Oct 2026): a beta, never official. */
+export function BetaScore({ version }: { version: string }) {
+  return (
+    <span
+      className={`${styles.illustrative} ${styles.beta}`}
+      title={`Calibrated one-pass score${version ? ` (${version})` : ""}`}
+    >
+      Beta
+    </span>
+  );
+}
+
 /** Words with their first source as a small play chip, when it has one. */
 export function LineWithClip({
   line,
@@ -586,7 +598,12 @@ export function OverviewScore({
                 {view.illustrative ? (
                   <Illustrative />
                 ) : view.aiDraft && score ? (
-                  <AiDraft />
+                  <>
+                    <AiDraft />
+                    {view.beta ? (
+                      <BetaScore version={view.beta.version} />
+                    ) : null}
+                  </>
                 ) : null}
               </span>
               {score ? (

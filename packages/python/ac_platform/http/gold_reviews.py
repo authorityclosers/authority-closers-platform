@@ -67,6 +67,18 @@ def install_gold_routes(
         except ConversationError as error:
             raise failed(error) from None
 
+    @admin.get("/gold-evaluation")
+    async def gold_evaluation(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = admin_dependency,
+    ) -> Any:
+        admin_scope(request, response)
+        try:
+            return await GoldReviews(review_service(auth)).evaluation(auth.resolved.actor)
+        except ConversationError as error:
+            raise failed(error) from None
+
     if require_reviewer is None:
         return
 

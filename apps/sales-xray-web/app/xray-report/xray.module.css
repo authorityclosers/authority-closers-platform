@@ -1740,6 +1740,12 @@
   border-style: solid;
   color: var(--xr-purple);
 }
+.beta {
+  border-color: var(--xr-amber-line);
+  border-style: solid;
+  color: var(--xr-amber);
+  margin-left: 6px;
+}
 @media (pointer: coarse) {
   .iconButton {
     height: 44px;

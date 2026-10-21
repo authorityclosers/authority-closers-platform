@@ -551,7 +551,6 @@ def test_pr_check_allows_separate_lanes_with_separate_files() -> None:
         (pr(2, "task/platform/23-b", "docs/shared.md"), "same files: docs/shared.md"),
         (pr(2, "task/platform/23-b", "uv.lock"), "shared files"),
         (pr(2, "task/83-exclusive", "docs/b.md"), "exclusive task"),
-        (pr(2, "dependabot/npm/x", "docs/b.md"), "exclusive task"),
     ],
 )
 def test_pr_check_refuses_conflicting_work(other, expected) -> None:
@@ -560,6 +559,24 @@ def test_pr_check_refuses_conflicting_work(other, expected) -> None:
     repo.prs = [mine, other]
     problems = gate(repo).pr_check(1)
     assert problems and expected in problems[0]
+
+
+def test_dependabot_pull_requests_neither_block_nor_hold_a_lane() -> None:
+    repo = FakeRepo()
+    mine = pr(1, "task/devenv/9001-release-v0-73-0", "uv.lock", "apps/admin-web/package.json")
+    bot = pr(2, "dependabot/pip/pillow-13.0.0", "uv.lock", "pyproject.toml")
+    repo.prs = [mine, bot]
+    repo.branches.append("dependabot/pip/pillow-13.0.0")
+    assert gate(repo).pr_check(1) == []
+    repo.prs = [bot]
+    verdict = gate(repo).assess()
+    assert verdict.free and verdict.open_prs == []
+
+
+def test_a_dependabot_pull_request_is_itself_still_checked() -> None:
+    repo = FakeRepo()
+    repo.prs = [pr(1, "task/83-exclusive", "docs/a.md"), pr(2, "dependabot/npm/x", "docs/b.md")]
+    assert any("exclusive task" in problem for problem in gate(repo).pr_check(2))
 
 
 def test_pr_check_cli_exit_codes(capsys) -> None:

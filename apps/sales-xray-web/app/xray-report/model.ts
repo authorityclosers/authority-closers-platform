@@ -1,5 +1,6 @@
 import type { ReportEvidence } from "../report-contract";
 import type { Line, OutcomeStatus, StoryModel } from "../report-story-model";
+import type { Brain4View } from "./brain4";
 
 /**
  * The Report's three parts (owner doc "15th Oct sales x-ray structure"):
@@ -144,6 +145,10 @@ export type XrayView = {
   aiDraft: boolean;
   /** Why there are no scores yet (server-told); absent from older servers. */
   scoring?: Scoring;
+  /** A calibrated one-pass score, shown as a beta (owner, 21 Oct): its calibration. */
+  beta?: { version: string } | null;
+  /** Brain 4.0's 18 skills (Report settings "Brain 4.0 beta"), a beta. */
+  brain4?: Brain4View | null;
   overview: {
     summary: Line | null;
     score: { value: number; label: string; line: string } | null;

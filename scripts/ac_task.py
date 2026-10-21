@@ -13,6 +13,9 @@ merging its pull request deletes the branch and frees the lock.
   merges still wait for a green `main`.
 - Pull requests may not change the same file, and only one open pull request at
   a time may touch shared files (migrations, lockfiles, workflows, AGENTS.md).
+- Dependabot's pull requests (`dependabot/...`) are not tasks: they neither hold
+  nor block a lane, because their bumps are re-applied on the workbench and ship
+  in a release (21 Oct 2026, after #464, #510/#511 and #513/#514 blocked releases).
 
     python scripts/ac_task.py status [--json]          what is open, which lanes are free
     python scripts/ac_task.py start sales-xray 81-fix  claim a lane and branch from main
@@ -96,6 +99,12 @@ def lane_of(branch: str) -> str:
     if len(parts) == 3 and parts[0] == "task" and parts[1] in LANES:
         return parts[1]
     return EXCLUSIVE
+
+
+def is_bot_update(branch: str) -> bool:
+    """Dependabot's own branches; never a task and never a blocker."""
+
+    return branch.startswith("dependabot/")
 
 
 def is_shared(path: str) -> bool:
@@ -188,7 +197,11 @@ class Gate:
         """May work in `lane` go ahead? An exclusive task needs everything else closed."""
 
         verdict = Verdict()
-        branches = [name for name in self.remote_branches() if name not in ("main", own_branch)]
+        branches = [
+            name
+            for name in self.remote_branches()
+            if name not in ("main", own_branch) and not is_bot_update(name)
+        ]
         verdict.active_branches = branches
         verdict.lanes = {name: None for name in LANES}
         for name in branches:
@@ -197,7 +210,11 @@ class Gate:
         blocking = [
             name for name in branches if lane == EXCLUSIVE or lane_of(name) in (EXCLUSIVE, lane)
         ]
-        prs = [pr for pr in self.open_pull_requests() if pr.get("headRefName") != own_branch]
+        prs = [
+            pr
+            for pr in self.open_pull_requests()
+            if pr.get("headRefName") != own_branch and not is_bot_update(str(pr.get("headRefName")))
+        ]
         verdict.open_prs = [f"#{pr.get('number')} {pr.get('title')}" for pr in prs]
         blocking_prs = [
             f"#{pr.get('number')} {pr.get('title')}"
@@ -297,7 +314,7 @@ class Gate:
         files = {str(item.get("path")) for item in mine.get("files") or []}
         problems = []
         for other in prs:
-            if other is mine:
+            if other is mine or is_bot_update(str(other.get("headRefName"))):
                 continue
             label = f"#{other.get('number')} {other.get('title')}"
             other_lane = lane_of(str(other.get("headRefName")))

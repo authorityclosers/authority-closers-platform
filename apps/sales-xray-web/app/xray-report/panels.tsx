@@ -26,6 +26,7 @@ import {
 } from "./model";
 import { OverviewScore } from "./overview";
 import { readStructure } from "./structure";
+import { Brain4Analysis } from "./brain4-view";
 import { FinalOutcome } from "./outcome";
 import { CallAnalysis, PointerProgress } from "./pointers";
 import { ProspectPart } from "./prospect";
@@ -91,6 +92,8 @@ export function useXrayView(
       illustrative: false,
       guest: Boolean(data.report?.preview),
       aiDraft: api?.aiDraft ?? false,
+      beta: api?.beta ?? null,
+      brain4: api?.brain4 ?? null,
       scoring: api?.scoring ?? null,
       overview: {
         summary:
@@ -174,14 +177,20 @@ function OverviewPart(props: PartProps) {
 
 function AnalysisPart(props: PartProps) {
   const view = useXrayView(props.data, props.callId, props.illustration);
+  const look = useReportLook();
   return (
-    <CallAnalysis
-      pointers={view.pointers}
-      illustrative={view.illustrative}
-      aiDraft={view.aiDraft}
-      scoring={view.scoring}
-      onSelect={props.onSelect}
-    />
+    <>
+      {look.scoring === "brain4_beta" && view.brain4 ? (
+        <Brain4Analysis view={view.brain4} onSelect={props.onSelect} />
+      ) : null}
+      <CallAnalysis
+        pointers={view.pointers}
+        illustrative={view.illustrative}
+        aiDraft={view.aiDraft}
+        scoring={view.scoring}
+        onSelect={props.onSelect}
+      />
+    </>
   );
 }
 

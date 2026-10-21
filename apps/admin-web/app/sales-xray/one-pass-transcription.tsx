@@ -1,11 +1,13 @@
 "use client";
 
 /**
- * C2 transcription on Gemini 3.1 Flash-Lite, and the Flex routes (owner, 21 Oct
- * 2026: "So at least get this on prod now!!!"). Two configurations, both derived
- * from today's Scribe one: standard (only C2 on Flash-Lite) and Flex (C2, C4 and
- * C5 on Gemini Flex, half price, standard after five minutes of queueing). Three
- * steps each, all audited:
+ * C2 transcription on Gemini 3.1 Flash-Lite, the Flex routes and one pass in the
+ * plan (owner, 21 Oct 2026: "So at least get this on prod now!!!", then "build B
+ * ... one-pass in the sealed plan"). Four configurations, all derived from today's
+ * Scribe one: standard (only C2 on Flash-Lite), Flex (C2, C4 and C5 on Gemini Flex,
+ * half price, standard after five minutes of queueing), and each of those with C4
+ * as the one-pass request (one read gives the facts, call data and pointer review).
+ * Three steps each, all audited:
  * 1. Prepare: the configuration is saved as a provider revision (nothing changes).
  * 2. Root seals that revision's digest (docs/ops/ONE-PASS-PRODUCTION.md).
  * 3. The owner switches: type the confirm word and give the reason (signed in
@@ -26,17 +28,25 @@ function key(): string {
   return `one-pass-c2-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-type Tier = { id: "standard" | "flex"; label: string; state: GeminiTier };
+type TierId = "standard" | "flex" | "one_pass" | "one_pass_flex";
+type Tier = { id: TierId; label: string; state: GeminiTier };
 
 export function TranscriptionSwitch({ view }: { view: Transcription }) {
   const router = useRouter();
   const [reason, setReason] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [chosen, setChosen] = useState<"standard" | "flex" | null>(null);
+  const [chosen, setChosen] = useState<TierId | null>(null);
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
   const onGemini = view.active?.provider === "gemini";
   const onFlex = Boolean(view.active?.flex);
+  const onOnePass = Boolean(view.active?.onePass);
+  // The owner's action is needed only to add what the active configuration lacks
+  // (Flash-Lite, Flex or one pass); dropping one is a click, as on the server.
+  const needsOwner = (id: TierId) =>
+    !onGemini ||
+    (id.endsWith("flex") && !onFlex) ||
+    (id.startsWith("one_pass") && !onOnePass);
   const tiers: Tier[] = [
     {
       id: "standard",
@@ -47,6 +57,16 @@ export function TranscriptionSwitch({ view }: { view: Transcription }) {
       id: "flex",
       label: "Gemini Flex: transcription, facts and report at half price",
       state: view.geminiFlex,
+    },
+    {
+      id: "one_pass",
+      label: "One pass: facts, call data and pointer review in one read",
+      state: view.onePass,
+    },
+    {
+      id: "one_pass_flex",
+      label: "One pass on Gemini Flex",
+      state: view.onePassFlex,
     },
   ];
 
@@ -86,7 +106,7 @@ export function TranscriptionSwitch({ view }: { view: Transcription }) {
   const inUse = view.active
     ? `${view.active.provider ?? "unknown"} · ${view.active.model ?? "unknown"}${
         onFlex ? " (Flex)" : ""
-      } (revision ${view.active.revision})`
+      }${view.active.onePass ? " · one pass" : ""} (revision ${view.active.revision})`
     : "No provider configuration is active here.";
   const ready = confirm.trim() === view.confirm && reason.trim().length >= 10;
 
@@ -126,7 +146,7 @@ export function TranscriptionSwitch({ view }: { view: Transcription }) {
                 {tier.state.configurationSha256?.slice(0, 12)}…). Waiting for
                 Root to seal it.
               </small>
-            ) : tier.id === "standard" && onFlex ? (
+            ) : !needsOwner(tier.id) ? (
               <span className={styles.actions}>
                 <button
                   type="button"
@@ -136,11 +156,11 @@ export function TranscriptionSwitch({ view }: { view: Transcription }) {
                     activate(
                       tier.state.savedRevision,
                       false,
-                      "Back on the standard tier.",
+                      "Switched. New calls follow it.",
                     )
                   }
                 >
-                  Back to standard
+                  Switch back to this
                 </button>
               </span>
             ) : (

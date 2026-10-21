@@ -65,7 +65,7 @@ from ac_platform.http.auth import (
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.sign_in_methods import session_is_fresh
 from ac_platform.kernel.errors import DomainError
-from ac_platform.one_pass import c2_route, compare
+from ac_platform.one_pass import c2_route, compare, markers
 from ac_platform.one_pass import settings as choices
 
 PRIVATE = {"Cache-Control": "private, no-store"}
@@ -74,7 +74,7 @@ _BENCH_CALL = re.compile(r"^[a-z]{2}-[0-9]{2}$")
 
 class PrepareCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    tier: Literal["standard", "flex"] = "standard"
+    tier: Literal["standard", "flex", "one_pass", "one_pass_flex"] = "standard"
 
 
 class SettingsCommand(BaseModel):
@@ -150,9 +150,29 @@ def _uses_flex(row: Any) -> bool:
     return any(route.model_id.endswith(":flex") for route in config.routes)
 
 
+def _uses_one_pass(row: Any) -> bool:
+    try:
+        config = parse_registry_config(row.configuration)
+    except (ProviderRegistryError, TypeError, ValueError):
+        return False
+    return any(
+        route.task == "facts" and route.recipe_revision == markers.RECIPE for route in config.routes
+    )
+
+
+# The prepared configurations: (name, Prepare's tier, flex, one pass, Root's profile).
+_TIERS = (
+    ("gemini", "standard", False, False, c2_route.PROFILE_ID),
+    ("gemini_flex", "flex", True, False, c2_route.FLEX_PROFILE_ID),
+    ("one_pass", "one_pass", False, True, c2_route.ONE_PASS_PROFILE_ID),
+    ("one_pass_flex", "one_pass_flex", True, True, c2_route.ONE_PASS_FLEX_PROFILE_ID),
+)
+
+
 async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str, Any]:
-    """The C2 route in use and the two Gemini configurations' state (standard and Flex):
-    derived from today's Scribe configuration, saved? sealed? Ids and digests only."""
+    """The C2 route in use and the Gemini configurations' state (Flash-Lite C2, standard
+    and Flex, each with today's C4 or the one-pass C4 request): derived from today's Scribe
+    configuration, saved? sealed? Ids and digests only."""
     service = provider_admin.ConversationProviderAdmin(ConversationApplication(auth.database))
     bundle = None
     if settings.sales_xray_enabled and settings.sales_xray_approval_path:
@@ -191,12 +211,12 @@ async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str,
         )
     )
     tiers: dict[str, Any] = {}
-    for tier, flex in (("gemini", False), ("gemini_flex", True)):
+    for tier, _, flex, one_pass, profile_id in _TIERS:
         derived = None
         if classic is not None:
             try:
                 derived = c2_route.derive_configuration(
-                    parse_registry_config(classic.configuration), flex=flex
+                    parse_registry_config(classic.configuration), flex=flex, one_pass=one_pass
                 )
             except (c2_route.SealError, ProviderRegistryError, TypeError, ValueError):
                 derived = None
@@ -210,7 +230,7 @@ async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str,
         )
         tiers[tier] = {
             "model": c2_route.MODEL + (":flex" if flex else ""),
-            "profile_id": c2_route.FLEX_PROFILE_ID if flex else c2_route.PROFILE_ID,
+            "profile_id": profile_id,
             "configuration_sha256": None if derived is None else derived.digest,
             "saved_revision": saved,
             "approved": saved is not None and saved in options,
@@ -225,6 +245,7 @@ async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str,
             "configuration_sha256": active.configuration_sha256,
             "transcription": in_use,
             "flex": _uses_flex(active),
+            "one_pass": _uses_one_pass(active),
         },
         **tiers,
         "classic_revision": None
@@ -430,18 +451,18 @@ def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None
         auth: AuthenticatedTransaction = dependency,
         command: PrepareCommand | None = None,
     ) -> dict[str, Any]:
-        """Save today's Scribe configuration with C2 on Gemini 3.1 Flash-Lite (or, for
-        ``flex``, C2, C4 and C5 on Gemini Flex) as a new provider revision. Nothing changes
-        until Root seals it and the owner switches."""
+        """Save today's Scribe configuration with C2 on Gemini 3.1 Flash-Lite (``flex``:
+        C2, C4 and C5 on Gemini Flex; ``one_pass``: C4 as the one-pass request) as a new
+        provider revision. Nothing changes until Root seals it and the owner switches."""
         try:
             require_safe_origin(request, settings)
         except DomainError:
             raise HTTPException(403, "Use this Admin page to continue.") from None
         actor = await admit(request, response, auth)
         tier_name = "standard" if command is None else command.tier
-        flex = tier_name == "flex"
+        name, _, flex, one_pass, _ = next(item for item in _TIERS if item[1] == tier_name)
         view = await _transcription_view(auth, actor, settings)
-        tier = view["gemini_flex" if flex else "gemini"]
+        tier = view[name]
         if tier["saved_revision"] is not None:
             return view
         if tier["configuration_sha256"] is None:
@@ -464,7 +485,7 @@ def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None
         if classic is None:
             raise HTTPException(409, "There is no Scribe configuration to start from.")
         derived = c2_route.derive_configuration(
-            parse_registry_config(classic.configuration), flex=flex
+            parse_registry_config(classic.configuration), flex=flex, one_pass=one_pass
         )
         service = provider_admin.ConversationProviderAdmin(ConversationApplication(auth.database))
         try:

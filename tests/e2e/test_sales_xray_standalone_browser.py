@@ -54,6 +54,7 @@ from tests.database.test_conversation_reports_postgresql import _build_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 SALES_XRAY_BROWSER_ORIGIN_ENV = "AC_SALES_XRAY_STANDALONE_BROWSER_EVIDENCE_DIR"
+NAVIGATION_CANCEL_SECONDS = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -384,6 +385,43 @@ def _verify_cancelled_chunk(
         response.dispose()
 
 
+def _address(item: dict[str, Any]) -> str:
+    return item["path"] + (f"?{item['query']}" if item["query"] else "")
+
+
+def _navigation_cancelled_read(
+    failure: dict[str, Any],
+    *,
+    origin: str,
+    navigations: list[dict[str, Any]],
+    server_errors: set[str],
+) -> dict[str, Any] | None:
+    """Accept only a same-origin API GET that a main-frame navigation cancelled."""
+    if (
+        failure["method"] != "GET"
+        or failure["error"] != "net::ERR_ABORTED"
+        or failure["origin"] != origin
+        or not failure["path"].startswith("/v1/")
+        or failure["resource_type"] != "fetch"
+        or not failure["main_frame"]
+        or _address(failure) in server_errors
+    ):
+        return None
+    # The browser reports the cancelled read within milliseconds of the
+    # navigation's commit (before it for a document, after it for a route).
+    navigation = next(
+        (
+            item
+            for item in navigations
+            if abs(item["at"] - failure["failed_at"]) <= NAVIGATION_CANCEL_SECONDS
+        ),
+        None,
+    )
+    if navigation is None:
+        return None
+    return {"failure": failure["summary"], "query": failure["query"], "navigation": navigation}
+
+
 def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
     receipt_path = evidence / "standalone-auth-browser.json"
     assert not receipt_path.exists(), "Use a fresh standalone browser evidence directory."
@@ -441,7 +479,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 {
                     "summary": summary,
                     "method": failed.method,
+                    "origin": f"{parsed.scheme}://{parsed.netloc}",
                     "path": parsed.path,
+                    "query": parsed.query,
                     "error": failed.failure,
                     "same_origin": failed.url.startswith(backend.origin + "/")
                     and not parsed.query
@@ -463,12 +503,14 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
         )
 
         def record(response: Any) -> None:
-            path = urlsplit(response.url).path
+            parsed = urlsplit(response.url)
+            path = parsed.path
             if path.startswith(("/v1/", "/_next/static/")):
                 network.append(
                     {
                         "method": response.request.method,
                         "path": path,
+                        "query": parsed.query,
                         "status": response.status,
                         "cache_control": (response.header_value("cache-control") or "")[:128],
                         "content_type": (response.header_value("content-type") or "")[:128],
@@ -972,11 +1014,36 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             proof["component_unmount_cancellations"] = [
                 failure for failure in request_failures if failure in unmount_aborts
             ]
+            # The page cancels its own API reads when it navigates: a document
+            # navigation (the workspace switch and logout reload the page) ends
+            # every read in flight, and a route change unmounts readers that abort
+            # theirs. Background reads such as the shell's idle warm-up of the
+            # Calls list, about 1.5 s after each load, can be in flight then
+            # (wb-ci 39543483308, 21 Oct). A cancelled GET changed nothing: accept
+            # it only next to a main-frame navigation and only where no answer
+            # for that address was a server error. Writes and other failures stay
+            # fatal.
+            server_errors = {
+                _address(item)
+                for item in network
+                if isinstance(item["status"], int) and item["status"] >= 500
+            }
+            cancelled_reads: list[dict[str, Any]] = []
+            proof["navigation_cancelled_reads"] = cancelled_reads
             verified_chunks: list[dict[str, Any]] = []
             unexpected_failures: list[str] = []
             proof["verified_static_asset_cancellations"] = verified_chunks
             for failure in failure_details:
                 if failure["summary"] in accepted_aborts | unmount_aborts:
+                    continue
+                cancelled = _navigation_cancelled_read(
+                    failure,
+                    origin=backend.origin,
+                    navigations=navigations,
+                    server_errors=server_errors,
+                )
+                if cancelled is not None:
+                    cancelled_reads.append(cancelled)
                     continue
                 verified = _verify_cancelled_chunk(
                     failure,
@@ -991,7 +1058,11 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 else:
                     verified_chunks.append(verified)
             proof["unexpected_request_failures"] = unexpected_failures
-            assert not unexpected_failures
+            assert not unexpected_failures, [
+                {key: failure[key] for key in ("summary", "query", "resource_type", "failed_at")}
+                for failure in failure_details
+                if failure["summary"] in unexpected_failures
+            ]
             proof["passed"] = True
         finally:
             if not proof["passed"]:

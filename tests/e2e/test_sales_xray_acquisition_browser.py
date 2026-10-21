@@ -884,9 +884,15 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         library_page.get_by_role("heading", name="Calls", exact=True, level=1)
                     ).to_be_visible()
-                    await expect(
-                        library_page.locator(f'button[data-submission-id="{submission_id}"]')
-                    ).to_be_visible()
+                    # While the Calls link re-renders the page, the row the server
+                    # streamed can still sit in React's hidden container for a few
+                    # frames beside the new one. A CSS locator counts both (a
+                    # strict-mode error that fails at once, not a timeout; wb-ci
+                    # 39543912132), so match the visible row, as role locators do.
+                    saved_call = library_page.locator(
+                        f'button[data-submission-id="{submission_id}"]'
+                    ).filter(visible=True)
+                    await expect(saved_call).to_be_visible(timeout=20000)
                     await library_page.screenshot(
                         path=str(receipt / "account-library-desktop.png"), full_page=True
                     )
@@ -903,9 +909,6 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         path=str(receipt / "account-library-mobile.png"), full_page=True
                     )
                     await library_page.set_viewport_size({"width": 1440, "height": 1000})
-                    saved_call = library_page.locator(
-                        f'button[data-submission-id="{submission_id}"]'
-                    )
                     await saved_call.focus()
                     await saved_call.press("Enter")
                     await expect(

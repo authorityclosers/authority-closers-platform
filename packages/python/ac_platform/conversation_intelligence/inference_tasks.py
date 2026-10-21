@@ -68,6 +68,9 @@ from ac_platform.conversation_intelligence.reports import (
     parse_groq_response,
     validate_coaching_context,
 )
+from ac_platform.one_pass.markers import PROMPT_REVISION as ONE_PASS_PROMPT_REVISION
+from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
+from ac_platform.one_pass.markers import is_one_pass
 
 TaskName = Literal["asr", "facts", "coaching"]
 Checkpoint = Literal["C2", "C4", "C5"]
@@ -210,6 +213,26 @@ def _compact_fact_input(task_input: PreparedTaskInput) -> bool:
         _fail("task_prompt_invalid")
     system = messages[0].get("content") if isinstance(messages[0], Mapping) else None
     return isinstance(system, str) and FACT_PROMPT_COMPACT_MARKER in system
+
+
+def _fact_system(task_input: PreparedTaskInput) -> str | None:
+    assert task_input.max_completion_tokens is not None
+    body = _text_prompt_view(
+        task_input.as_provider_body(),
+        provider=task_input.provider,
+        model=task_input.model,
+        maximum=task_input.max_completion_tokens,
+        task="facts",
+    )
+    messages = body.get("messages")
+    if not isinstance(messages, list) or not messages:
+        _fail("task_prompt_invalid")
+    system = messages[0].get("content") if isinstance(messages[0], Mapping) else None
+    return system if isinstance(system, str) else None
+
+
+def _one_pass_fact_input(task_input: PreparedTaskInput) -> bool:
+    return task_input.task == "facts" and is_one_pass(_fact_system(task_input))
 
 
 def _text_response(result: ProviderResult) -> Mapping[str, Any]:
@@ -451,7 +474,12 @@ class PreparedTaskInput:
             if type(
                 self.max_completion_tokens
             ) is not int or not 256 <= self.max_completion_tokens <= completion_ceiling(
-                self.provider, self.model, "C5" if self.task == "coaching" else "C4"
+                self.provider,
+                self.model,
+                "C5" if self.task == "coaching" else "C4",
+                # A fact request above 4,000 must also be the one-pass request: its
+                # prompt view (below) admits no other body that large.
+                recipe=ONE_PASS_RECIPE if self.task == "facts" else None,
             ):
                 _fail("invalid_max_completion_tokens")
             if self.input_sha256 != self.payload_sha256:
@@ -954,19 +982,40 @@ def prepare_fact_inputs(
     model: str = GROQ_MODEL,
     max_input_chars: int = 16_000,
     max_completion_tokens: int = 1_400,
-    prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY,
+    prompt_revision: Literal["facts-v1", "facts-v2", "one-pass-v1"] = FACT_PROMPT_LEGACY,
+    call_date: str | None = None,
 ) -> tuple[PreparedTaskInput, ...]:
-    """Prepare immutable C4 style-independent fact requests for every chunk."""
+    """Prepare immutable C4 style-independent fact requests for every chunk; the one-pass
+    revision is one request over the whole call (``one_pass.stage``)."""
 
     validated = extract_style_independent_facts(transcript)
     try:
-        prompts = build_fact_groq_prompts(
-            transcript,
-            max_input_chars=max_input_chars,
-            max_completion_tokens=max_completion_tokens,
-            model=model,
-            prompt_revision=prompt_revision,
-        )
+        if prompt_revision == ONE_PASS_PROMPT_REVISION:
+            from ac_platform.one_pass import stage
+
+            if (provider, model) not in stage.ROUTES:
+                _fail("one_pass_route_not_supported")
+            if call_date is None:
+                _fail("one_pass_call_date_missing")
+            try:
+                prompts: tuple[dict[str, Any], ...] = (
+                    stage.prompt(
+                        transcript,
+                        model=model,
+                        max_completion_tokens=max_completion_tokens,
+                        date=call_date,
+                    ),
+                )
+            except stage.StageError as exc:
+                raise InferenceTaskError(str(exc)) from None
+        else:
+            prompts = build_fact_groq_prompts(
+                transcript,
+                max_input_chars=max_input_chars,
+                max_completion_tokens=max_completion_tokens,
+                model=model,
+                prompt_revision=prompt_revision,
+            )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
     prepared: list[PreparedTaskInput] = []
@@ -1060,13 +1109,18 @@ def validate_fact_result(
     )
     chunk = _chunk_for_input(task_input, transcript)
     try:
-        packet = parse_fact_packet(
-            _text_response(result),
-            transcript,
-            chunk=chunk,
-            compact=_compact_fact_input(task_input),
-            max_completion_tokens=task_input.max_completion_tokens or 1_400,
-        )
+        if _one_pass_fact_input(task_input):
+            from ac_platform.one_pass import stage
+
+            packet = stage.fact_packet(_text_response(result), transcript, chunk=chunk)
+        else:
+            packet = parse_fact_packet(
+                _text_response(result),
+                transcript,
+                chunk=chunk,
+                compact=_compact_fact_input(task_input),
+                max_completion_tokens=task_input.max_completion_tokens or 1_400,
+            )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
     return _output(

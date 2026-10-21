@@ -21,6 +21,7 @@ import httpx
 from ac_platform.conversation_intelligence import gemini_audio, gemini_tiers
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.entitlements import Reservation
+from ac_platform.conversation_intelligence.gemini_tasks import is_one_pass_body
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES as MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.openai_tasks import (
     OPENAI_TASK_MODELS,
@@ -32,6 +33,7 @@ from ac_platform.conversation_intelligence.provider_failure_observation import (
     MAX_RETRY_AFTER_SECONDS,
     ProviderFailureObservation,
 )
+from ac_platform.one_pass.markers import MAX_COMPLETION_TOKENS as ONE_PASS_MAX_COMPLETION_TOKENS
 
 MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_STREAM_SECONDS = 180
@@ -611,7 +613,10 @@ class BoundedProviders:
         ):
             config = body.get("generationConfig", {})
             maximum = config.get("maxOutputTokens") if isinstance(config, dict) else None
-            if type(maximum) is not int or not 1 <= maximum <= 8192:
+            # The one-pass C4 request answers up to 20,000 (one_pass.markers); every
+            # other text request stays inside 8,192.
+            limit = ONE_PASS_MAX_COMPLETION_TOKENS if is_one_pass_body(body) else 8192
+            if type(maximum) is not int or not 1 <= maximum <= limit:
                 raise ProviderError("provider_output_budget_required")
             api_model = gemini_tiers.base_model(model)
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent"
