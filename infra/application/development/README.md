@@ -440,23 +440,52 @@ specifies Root installation, the immutable API executable, dev network and
 input boundaries, access-manager prerequisites, preview/apply and rollback.
 Actual fixture application stays on [AUT-959](/AUT/issues/AUT-959).
 
-## Admin dev server watchdog (acdev user units)
+## Dev server watchdog (acdev user units)
 
-`acdev-admin-dev-watchdog.sh` probes `http://127.0.0.1:3028/login` (Host
-`admin-dev.authorityclosers.com`) every 30 seconds from acdev's user timer. A
-5xx, no answer or a 20-second timeout starts a "bad since" clock in
-`~/.local/state/acdev-admin-dev-watchdog/`; a good answer clears it. Two minutes
-bad restarts `acdev-admin-dev.service`, at most once every five minutes, with
-one journal line. It was added after Turbopack hung compiling a new route on
-20 Oct 2026 and every page failed until a manual restart. These are acdev's own
-user units, not system services: no Root step.
+`acdev-dev-watchdog.sh <unit> <url> [host]` probes one dev server's page every
+30 seconds from acdev's templated user timer `acdev-dev-watchdog@<unit>.timer`.
+A 5xx, no answer or a 20-second timeout starts a "bad since" clock in
+`~/.local/state/acdev-dev-watchdog/<unit>/`; a good answer clears it. Two
+minutes bad restarts the unit, at most once every five minutes, with one journal
+line naming the URL, the answer and the unit's memory. A unit that is not active
+(stopped on purpose, or failed) is left alone. Each instance reads its probe
+(`PROBE_URL`, `PROBE_HOST`) from `~/.config/acdev-dev-watchdog/<unit>.env`,
+installed from `acdev-dev-watchdog/`:
+
+- `acdev-admin-dev`: `http://127.0.0.1:3028/login`, Host `admin-dev.authorityclosers.com`
+- `acdev-xray-dev`: `http://127.0.0.1:3026/login`, Host `salesxray-dev.authorityclosers.com`
+
+Both login pages render without server-side API reads, so a down back end never
+restarts a web server. These are acdev's own user units, not system services: no
+Root step.
+
+Why: on 20 Oct 2026 Turbopack hung compiling a new Admin route, and on 21 Oct
+the Sales Xray dev server sat at its 3 GB `MemoryHigh` with its 512 MB swap full,
+less than two hours after the nightly restart. At `MemoryHigh` the kernel
+throttles a service instead of killing it, so `Restart=on-failure` never fired
+and every page timed out until a manual restart. Its Turbopack file-system cache
+(`apps/sales-xray-web/.next/dev/cache/turbopack`) had grown to 9.6 GB since
+11 Oct; restoring and compacting it is what fills the server's memory.
 
 Install or update, as acdev:
 
 ```bash
-install -m 755 infra/application/development/acdev-admin-dev-watchdog.sh ~/.local/bin/acdev-admin-dev-watchdog
-install -m 644 infra/application/development/acdev-admin-dev-watchdog.service infra/application/development/acdev-admin-dev-watchdog.timer ~/.config/systemd/user/
-systemctl --user daemon-reload && systemctl --user enable --now acdev-admin-dev-watchdog.timer
+install -m 755 infra/application/development/acdev-dev-watchdog.sh ~/.local/bin/acdev-dev-watchdog
+mkdir -p ~/.config/acdev-dev-watchdog
+install -m 644 infra/application/development/acdev-dev-watchdog/*.env ~/.config/acdev-dev-watchdog/
+install -m 644 infra/application/development/acdev-dev-watchdog@.service infra/application/development/acdev-dev-watchdog@.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now acdev-dev-watchdog@acdev-admin-dev.timer acdev-dev-watchdog@acdev-xray-dev.timer
 ```
 
-Watch it with `journalctl --user -u acdev-admin-dev-watchdog.service`.
+The `acdev-admin-dev` instance replaces the Admin-only watchdog of 20 Oct
+(`acdev-admin-dev-watchdog.*`). Remove that one once:
+
+```bash
+systemctl --user disable --now acdev-admin-dev-watchdog.timer
+rm -f ~/.config/systemd/user/acdev-admin-dev-watchdog.service ~/.config/systemd/user/acdev-admin-dev-watchdog.timer ~/.local/bin/acdev-admin-dev-watchdog
+rm -rf ~/.local/state/acdev-admin-dev-watchdog
+systemctl --user daemon-reload
+```
+
+Watch it with `journalctl --user -u 'acdev-dev-watchdog@*'`.
