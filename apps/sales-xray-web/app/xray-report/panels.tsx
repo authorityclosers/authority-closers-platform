@@ -91,6 +91,7 @@ export function useXrayView(
       illustrative: false,
       guest: Boolean(data.report?.preview),
       aiDraft: api?.aiDraft ?? false,
+      beta: api?.beta ?? null,
       scoring: api?.scoring ?? null,
       overview: {
         summary:

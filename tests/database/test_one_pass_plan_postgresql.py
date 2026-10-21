@@ -42,7 +42,7 @@ from ac_platform.conversation_intelligence.provider_registry import (
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.report_store import ConversationReports
-from ac_platform.one_pass import markers, plan_publish
+from ac_platform.one_pass import calibration, markers, plan_publish
 from tests.database.test_conversation_authority_postgresql import _setup
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_processing_plan_postgresql import (
@@ -295,6 +295,9 @@ def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
                 )
                 assert review is not None and review.created_by == plan_publish.PUBLISHER
                 assert review.prompt_sha256 == read.input_sha256
+                # Calibrated to today's review and labelled beta (B3).
+                assert review.payload["calibration"]["version"] == calibration.VERSION
+                assert review.payload["calibration"]["label"] == "beta"
                 deep = (
                     await db.scalars(
                         select(CallDataRun).where(

@@ -11,7 +11,8 @@ instead of reading the transcript again:
   reads that task's saved, receipt-bound provider response from storage;
 - ``publish``: the answer mapped by the publishing contracts (``analysis.map_publish``):
   the pointer review, parsed against the report's own transcript and withheld segments,
-  saved through the review's own admission; the call data saved as the call's deep call
+  its scores calibrated to today's review and labelled beta (``calibration``), saved
+  through the review's own admission; the call data saved as the call's deep call
   data run through the deep pipeline's own merge (call objects, prospect facts, lead
   fills), with the deep pipeline's audio measurements. No tokens or rupees here: the read
   was paid once, as the plan's C4 stage.
@@ -34,7 +35,7 @@ from uuid import UUID
 
 from sqlalchemy import select, text
 
-from ac_platform.one_pass import markers
+from ac_platform.one_pass import calibration, markers
 
 PUBLISHER: Final = "automatic:one-pass-plan"
 # Today's plans only: a report is published from its own plan's read.
@@ -269,6 +270,10 @@ def publish(
     transcript = {"segments": segments}
     published = analysis.map_publish(answer, transcript, withheld=frozenset(withheld))
     review = published.outputs.get("pointer_review")
+    if review is not None:
+        # One pass reads 4-5 points kinder than today's review: calibrated, and shown as
+        # a beta (one_pass.calibration; owner, 21 Oct 2026).
+        review = calibration.calibrate(review)
     if _reviewed(connection, report):
         line["review"] = "already_saved"
     elif review is None:

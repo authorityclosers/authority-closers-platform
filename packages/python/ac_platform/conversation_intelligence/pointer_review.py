@@ -697,6 +697,13 @@ def merge_into_structure(structure: dict[str, Any], review: dict[str, Any]) -> d
         overview["score_line"] = overall.get("line")
         overview["score_status"] = "ai_draft"
         overview["score_method"] = overall.get("method")
+        calibration = review.get("calibration")
+        if isinstance(calibration, dict):
+            # A calibrated one-pass score (one_pass.calibration): shown as a beta.
+            overview["score_calibration"] = {
+                "version": calibration.get("version"),
+                "label": calibration.get("label"),
+            }
     by_id = {pointer["id"]: pointer for pointer in review.get("pointers") or []}
     for pointer in merged.get("pointers") or []:
         item = by_id.get(pointer.get("id"))

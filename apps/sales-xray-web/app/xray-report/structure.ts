@@ -168,6 +168,8 @@ export type StructureView = {
   > | null;
   /** True when any score came from the analysis (shown as an AI draft). */
   aiDraft: boolean;
+  /** A calibrated one-pass score (shown as a beta), with its calibration version. */
+  beta: { version: string } | null;
   /** Why no score yet, when the server says (owner, 18 Oct). */
   scoring: Scoring;
   roles: StructureRoles;
@@ -204,6 +206,13 @@ export function readStructure(
         }
       : null;
   if (score) aiDraft = true;
+  const calibration = isObject(overview.score_calibration)
+    ? overview.score_calibration
+    : null;
+  const beta =
+    score && calibration && text(calibration.label, 20) === "beta"
+      ? { version: text(calibration.version, 80) ?? "" }
+      : null;
 
   const items = Array.isArray(structure.pointers)
     ? structure.pointers.filter(isObject)
@@ -297,6 +306,7 @@ export function readStructure(
     pointers,
     outcome: outcomeDetails(structure.call_outcome_details),
     aiDraft,
+    beta,
     scoring: aiDraft ? null : scoringFrom(structure.pointer_review),
     roles: apiRoles,
   };

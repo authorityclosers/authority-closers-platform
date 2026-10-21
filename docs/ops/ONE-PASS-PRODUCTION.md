@@ -185,6 +185,26 @@ transcript again (`one_pass/plan_publish.py`):
   for that call. The call's lead shows the filled fields, and `call_data_runs` has one
   `deep` run by `automatic:one-pass-plan`.
 
+## Slice B3: calibrated pointer scores, shown as a beta
+
+Owner, 21 Oct 2026: "beta-labelled calibrated scores". The trial compared 16 real calls
+(395 pointers scored by both). One pass scored each pointer **4.6 points higher** than
+today's pointer review (sd 8.8), and the overall score 4.3 higher. A published one-pass
+review is therefore calibrated before it is saved (`one_pass/calibration.py`, version
+`one-pass-pointer-calibration/1`). Each pointer's score drops by that pointer's measured
+lean, shrunk toward the 4.64 mean with a prior of 8 pairs. The overall is the mean of the
+calibrated scores, as the review computes it. Statuses, evidence and words are unchanged.
+
+- **What it fixes, checked leave-one-call-out on the same calls:** the overall lean goes
+  from +4.3 to −0.5. The per-call disagreement stays: the overall mean absolute difference
+  goes from 5.7 to 5.5, and per pointer from 7.3 to 7.1. Calibration removes the bias, not
+  the noise between two AI reads.
+- **What people see:** the Report's overall score keeps its "AI draft · not reviewed by
+  Dipak" badge and adds a **Beta** chip, whose tooltip names the calibration version. It
+  is never an official score (AC-SVAL gates).
+- **Versioned:** the saved review carries `calibration: {version, label: "beta"}`. A later
+  calibration is a new version and never rewrites a saved review.
+
 ## A good first production analysis (after the C2 switch)
 
 Read-only checks, on the first real call after the switch:

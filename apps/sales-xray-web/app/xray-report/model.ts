@@ -144,6 +144,8 @@ export type XrayView = {
   aiDraft: boolean;
   /** Why there are no scores yet (server-told); absent from older servers. */
   scoring?: Scoring;
+  /** A calibrated one-pass score, shown as a beta (owner, 21 Oct): its calibration. */
+  beta?: { version: string } | null;
   overview: {
     summary: Line | null;
     score: { value: number; label: string; line: string } | null;
