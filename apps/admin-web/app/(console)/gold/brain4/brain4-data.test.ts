@@ -5,6 +5,7 @@ import {
   lean,
   normalizeBrain4,
   percent,
+  ratio,
   withInterval,
 } from "./brain4-data";
 
@@ -50,6 +51,38 @@ describe("Brain 4.0 evaluation data", () => {
     expect(data.dimensions[1].readiness.state).toBe("needs_data");
     expect(data.alerts).toHaveLength(1);
     expect(normalizeBrain4(null).dimensions).toEqual([]);
+  });
+
+  it("reads a checkpoint and keeps a broken one out", () => {
+    const data = normalizeBrain4({
+      checkpoints: [
+        {
+          checkpoint: "gold-v1/2026-10-21",
+          title: "Gold v1",
+          calls: 6,
+          labels: { positive: 27, negative: 9, mixed: 7, total: 43 },
+          scorers: [
+            {
+              scorer: "classic",
+              overall: {
+                labels: 43,
+                rated: 42,
+                agree: 27,
+                agreement: 0.643,
+                wilson: [0.49, 0.77],
+              },
+              by_label: { negative: { labels: 9, rated: 9, agree: 2 } },
+              dimensions: { D05: { labels: 6, rated: 6, agree: 3 } },
+            },
+          ],
+        },
+      ],
+    });
+    const point = data.checkpoints[0];
+    expect(point.scorers[0].overall.agree).toBe(27);
+    expect(ratio(point.scorers[0].by_label.negative)).toBe("2/9");
+    expect(ratio({ agree: 0, rated: 0 })).toBe("—");
+    expect(normalizeBrain4({ checkpoints: "x" }).checkpoints).toEqual([]);
   });
 
   it("formats rates, intervals and lean in words", () => {

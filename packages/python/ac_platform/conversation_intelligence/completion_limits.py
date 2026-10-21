@@ -11,8 +11,8 @@ def completion_ceiling(provider: str, model: str, stage: str, *, recipe: str | N
     # request (the fact chunks) keeps 4,000.
     if stage == "C4" and recipe == ONE_PASS_RECIPE and (provider, model) in ONE_PASS_ROUTES:
         return ONE_PASS_MAX_COMPLETION_TOKENS
-    # A Flex route (gemini_tiers) has its model's own bounds.
-    if provider == "gemini" and model.endswith(":flex"):
+    # A Flex route (gemini_tiers, openai_tasks) has its model's own bounds.
+    if model.endswith(":flex"):
         model = model[: -len(":flex")]
     if (provider, model, stage) == ("gemini", "gemini-3.8-flash", "C5"):
         return 8_000

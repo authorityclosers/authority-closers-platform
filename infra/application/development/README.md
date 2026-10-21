@@ -69,6 +69,29 @@ receives neither provider directory nor the worker DB credential. The QA file
 is delivered for the specified QA contract; current API code has no QA-password
 file setting, so this unit does not invent a consumer or enable a QA login.
 
+### OpenAI worker access (21 October 2026)
+
+[AUT-2179](/AUT/issues/AUT-2179) authorizes the dev workers, including
+`ac-one-pass@development-live`, to read `OPENAI_API_KEY` from project
+`b421c44e-4599-4394-8df6-758ed8aedfed`, environment `dev`, path
+`/sales-xray-test/openai`. Provisioning is pending on
+[AUT-2180](/AUT/issues/AUT-2180); this is not installed worker access.
+
+The existing Gemini service token reads `dev:/sales-xray-test` and does not
+inject the key from the new OpenAI subfolder. `infisical run` can exit zero
+without `OPENAI_API_KEY`, so verification must require the variable and compare
+its SHA256 prefix with `4963df676805`. Root's broader runtime identity matches
+that fingerprint; the worker token does not. Keep the broader identity outside
+the worker.
+
+After the scoped credential is provisioned, use the existing per-provider
+directory ownership and read-only bind contract above, an OpenAI provider
+entry, and `infisical run` child injection. The one-pass launcher must receive
+both its existing Gemini credential and the separate dev OpenAI credential;
+its current Gemini-only re-exec is insufficient. Keys stay in child process
+memory. This credential work grants no analysis, route, budget or approval
+change. See the [operator receipt](../../../docs/evidence/20261021_AUT2179_OPENAI_WORKER_ACCESS.md).
+
 `api.env` supplies development settings, the dev DB URL and approval digest.
 It must omit `AC_SALES_XRAY_APPROVAL_PATH`,
 `AC_SALES_XRAY_CHALLENGE_SECRET_FILE`, `AC_DATABASE_MIGRATOR_URL`, and

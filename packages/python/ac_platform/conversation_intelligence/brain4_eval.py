@@ -24,12 +24,15 @@ written. Counts, labels and scores only: never the reviewer's note or transcript
 
 from __future__ import annotations
 
+import functools
+import json
 import math
 import random
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Final
 
 from ac_platform.conversation_intelligence import brain4
@@ -394,6 +397,21 @@ def _events(
     return [(p.created_at, result) for p in items if (result := test(p)) is not None]
 
 
+CHECKPOINTS_FILE: Final = Path(__file__).with_name("profiles") / "brain4_checkpoints.json"
+
+
+@functools.cache
+def checkpoints() -> tuple[dict[str, Any], ...]:
+    """Fixed evaluations on earlier gold sets (counts and agreement only), newest last.
+
+    Gold v1 (21 Oct 2026) is the coaching lead's correction doc on 7 real calls, scored
+    offline against each pipeline (docs/research/2026-10-21-brain4/gold_v1.py); its notes
+    and the calls stay in the research folder on ac.
+    """
+    document = json.loads(CHECKPOINTS_FILE.read_text(encoding="utf-8"))
+    return tuple(document.get("checkpoints") or ())
+
+
 def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
@@ -459,6 +477,7 @@ def evaluate(dataset: Dataset, *, now: datetime) -> dict[str, Any]:
         "dimensions": dimensions,
         "stability": stability(dataset.brain4),
         "alerts": alerts,
+        "checkpoints": list(checkpoints()),
         "limits": [
             "One reviewer, who saw today's AI answer before judging: an agreement makes "
             "today's band the gold band, which favours today's review.",
@@ -514,11 +533,13 @@ def fit_calibration(dataset: Dataset, *, revision: str, min_pairs: int = 8) -> b
 async def load(database: Any) -> Dataset:
     """The current gold lines and the Brain 4.0 runs of the calls they judge.
 
-    A Brain 4.0 run is a ``brain4`` block saved inside a pointer review of the same call,
-    run, source and transcript revision as the review the line judged.
+    A Brain 4.0 run is a ``brain4`` block saved inside a pointer review, or a saved shadow
+    read (``brain4_shadow``), of the same call, run, source and transcript revision as the
+    review the line judged.
     """
     from sqlalchemy import select
 
+    from ac_platform.conversation_intelligence.brain4_models import ConversationBrain4Review
     from ac_platform.conversation_intelligence.gold_review_models import GoldRow
     from ac_platform.conversation_intelligence.pointer_review_models import (
         ConversationPointerReview,
@@ -581,6 +602,24 @@ async def load(database: Any) -> Dataset:
     for row in reviews:
         if isinstance(row.payload, dict) and isinstance(row.payload.get("brain4"), dict):
             blocks[key(row)].append(row.payload["brain4"])
+    shadows = (
+        (
+            await database.scalars(
+                select(ConversationBrain4Review)
+                .where(
+                    ConversationBrain4Review.recording_id.in_(recordings),
+                    ConversationBrain4Review.state == "saved",
+                    ConversationBrain4Review.erased_at.is_(None),
+                )
+                .order_by(ConversationBrain4Review.created_at, ConversationBrain4Review.id)
+            )
+        ).all()
+        if recordings
+        else []
+    )
+    for shadow in shadows:
+        if isinstance(shadow.payload, dict):
+            blocks[key(shadow)].append(shadow.payload)
     judged = {line.review_id for line in lines}
     runs = {
         str(row.id): blocks[key(row)]

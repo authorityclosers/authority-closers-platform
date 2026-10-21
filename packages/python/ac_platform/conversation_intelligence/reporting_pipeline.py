@@ -174,7 +174,12 @@ class StageRequest(BaseModel):
             or self.coaching_prompt_revision not in reports.SPEAKER_ROLE_PROMPT_REVISIONS
         ):
             raise ValueError("speaker_roles_revision_undeclared")
-        if self.provider == "openai" and self.stage != "C5":
+        if (
+            self.provider == "openai"
+            and self.stage != "C5"
+            and self.fact_prompt_revision != ONE_PASS_PROMPT_REVISION
+        ):
+            # Coaching, and the one-pass C4 request (GPT-6 Luna).
             raise ValueError("OpenAI is approved for coaching only.")
         if self.provider == "openai" and self.repair is not None:
             raise ValueError("OpenAI coaching repair is not authorized.")

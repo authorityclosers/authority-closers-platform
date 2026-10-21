@@ -41,7 +41,14 @@ from ac_platform.lead_desk.ai_replies import admin_settings as lead_ai
 PRIVATE = {"Cache-Control": "private, no-store"}
 WINDOWS = (7, 14, 30)
 Target = Literal[
-    "daily", "monthly", "backfill", "canary", "pointer_review", "partner_quote_facts", "one_pass"
+    "daily",
+    "monthly",
+    "backfill",
+    "canary",
+    "pointer_review",
+    "partner_quote_facts",
+    "one_pass",
+    "brain4_shadow",
 ]
 
 

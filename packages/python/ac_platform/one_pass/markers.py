@@ -16,8 +16,16 @@ MARKER: Final = "FACT_OUTPUT: one-pass-facts-v1."
 MAX_COMPLETION_TOKENS: Final = 20_000
 # Input bound: the whole call's transcript envelope, its instructions and schema.
 MAX_INPUT_BYTES: Final = 512 * 1024
-# The routes the request is implemented for (Gemini 3.8 Flash, standard or Flex).
-ROUTES: Final = frozenset({("gemini", "gemini-3.8-flash"), ("gemini", "gemini-3.8-flash:flex")})
+# The routes the request is implemented for: Gemini 3.8 Flash and GPT-6 Luna (the
+# cheapest, cost research 21 Oct 2026), each standard or Flex.
+ROUTES: Final = frozenset(
+    {
+        ("gemini", "gemini-3.8-flash"),
+        ("gemini", "gemini-3.8-flash:flex"),
+        ("openai", "gpt-6-luna"),
+        ("openai", "gpt-6-luna:flex"),
+    }
+)
 
 
 IST: Final = ZoneInfo("Asia/Kolkata")
