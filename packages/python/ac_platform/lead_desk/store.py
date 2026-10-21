@@ -61,6 +61,8 @@ from ac_platform.lead_desk.contracts import (
     NewLead,
     NoteCommand,
     Numbers,
+    Outcomes,
+    Performance,
     PhoneBook,
     PhoneHealth,
     PhoneLog,
@@ -72,6 +74,7 @@ from ac_platform.lead_desk.contracts import (
     RepRules,
     RepView,
     SellerCalls,
+    SellerOutcome,
     SettingsCommand,
     SettingsView,
     StageChoice,
@@ -2300,6 +2303,154 @@ class LeadDesk:
             )
         sellers.sort(key=lambda seller: (-seller.calls, seller.name.lower()))
         return CallReport(start=start, end=end, sellers=tuple(sellers))
+
+    async def performance(self, days: int) -> Performance:
+        """How sales went over today, 7 or 30 days, India time (owners and admins).
+
+        Outcomes first (owner, 22 Oct 2026: "sales performance and business
+        benefit" before activity): different leads moved to an interested or a
+        won stage, leads called, new leads and speed to lead, beside the period
+        before for the trend. Calls count the way My day counts them; private
+        phone calls stay out. Then sellers ranked by what they won, and the open
+        leads by stage.
+        """
+        self._require_manager()
+        if days not in (1, 7, 30):
+            raise DeskError(422, "Pick today, 7 days or 30 days.")
+        end = self.now.astimezone(IST).date()
+        start = end - timedelta(days=days - 1)
+        begin = datetime.combine(start, time.min, tzinfo=IST).astimezone(UTC)
+        before = begin - timedelta(days=days)
+        rows = (
+            await self.db.execute(
+                select(
+                    LeadEvent.id,
+                    LeadEvent.actor_person_id,
+                    LeadEvent.lead_id,
+                    LeadEvent.kind,
+                    LeadEvent.data,
+                    LeadEvent.created_at,
+                ).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind.in_(("call", "result", "stage")),
+                    LeadEvent.created_at >= before,
+                )
+            )
+        ).all()
+        hidden = await self._private_calls(before)
+
+        def blank() -> dict[str, Any]:
+            return {"calls": 0, "connected": 0, "called": set(), "interested": set(), "won": set()}
+
+        current, previous = blank(), blank()
+        per: dict[UUID, dict[str, Any]] = {}
+        for event_id, actor, lead_id, kind, data, at in rows:
+            if not isinstance(data, dict) or str(event_id) in hidden:
+                continue
+            tallies = [current if at >= begin else previous]
+            if actor is not None and at >= begin:
+                tallies.append(per.setdefault(actor, blank()))
+            if kind == "result" or (kind == "call" and counted_phone_call(data)):
+                for tally in tallies:
+                    tally["calls"] += 1
+                    tally["called"].add(lead_id)
+                    tally["connected"] += 1 if data.get("connected") else 0
+            stage = data.get("stage")
+            if (
+                kind != "call"
+                and stage in ("interested", "won")
+                and stage != data.get("from_stage")
+            ):
+                for tally in tallies:
+                    tally[stage].add(lead_id)
+
+        async def arrived(since: datetime, until: datetime | None) -> tuple[int, int | None]:
+            where = [
+                Lead.tenant_id == self.tenant_id,
+                Lead.test_data.is_(False),
+                Lead.created_at >= since,
+            ]
+            if until is not None:
+                where.append(Lead.created_at < until)
+            leads = (
+                await self.db.execute(
+                    select(Lead.created_at, Lead.first_contact_at).where(*where).limit(50000)
+                )
+            ).all()
+            speeds = [
+                minutes
+                for created, first in leads
+                if (minutes := first_call_minutes(created, first)) is not None
+            ]
+            return len(leads), median(speeds)
+
+        def outcomes(tally: dict[str, Any], arrivals: tuple[int, int | None]) -> Outcomes:
+            return Outcomes(
+                calls=tally["calls"],
+                connected=tally["connected"],
+                leads_called=len(tally["called"]),
+                interested=len(tally["interested"]),
+                won=len(tally["won"]),
+                new_leads=arrivals[0],
+                first_call_minutes=arrivals[1],
+            )
+
+        late_rows = (
+            await self.db.execute(
+                select(Lead.owner_person_id, func.count())
+                .where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.stage.in_(OPEN_STAGES),
+                    Lead.next_action_at < self.now - timedelta(hours=1),
+                    Lead.owner_person_id.is_not(None),
+                )
+                .group_by(Lead.owner_person_id)
+            )
+        ).all()
+        late = {owner: int(count) for owner, count in late_rows}
+        sellers = []
+        for rep in await self._reps():
+            tally = per.get(rep.state.person_id, blank())
+            sellers.append(
+                SellerOutcome(
+                    person_id=rep.state.person_id,
+                    name=rep.state.name,
+                    calls=tally["calls"],
+                    connected=tally["connected"],
+                    interested=len(tally["interested"]),
+                    won=len(tally["won"]),
+                    open_leads=rep.state.open_leads,
+                    late=late.get(rep.state.person_id, 0),
+                )
+            )
+        sellers.sort(
+            key=lambda seller: (
+                -seller.won,
+                -seller.interested,
+                -seller.connected,
+                -seller.calls,
+                seller.name.lower(),
+            )
+        )
+        pipeline = {
+            str(stage): int(count)
+            for stage, count in (
+                await self.db.execute(
+                    select(Lead.stage, func.count())
+                    .where(Lead.tenant_id == self.tenant_id, Lead.stage.in_(OPEN_STAGES))
+                    .group_by(Lead.stage)
+                )
+            ).all()
+        }
+        return Performance(
+            days=days,
+            start=start,
+            end=end,
+            current=outcomes(current, await arrived(begin, None)),
+            previous=outcomes(previous, await arrived(before, begin)),
+            sellers=tuple(sellers),
+            pipeline=pipeline,
+        )
 
     async def save_rep(self, person_id: UUID, command: RepRules) -> Team:
         self._require_manager()

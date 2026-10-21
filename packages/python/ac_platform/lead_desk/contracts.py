@@ -327,6 +327,48 @@ class CallReport(Model):
     sellers: tuple[SellerCalls, ...]
 
 
+class Outcomes(Model):
+    """One period's sales outcomes, counted the way My day counts calls."""
+
+    calls: int
+    connected: int
+    # Different leads called at least once in the period.
+    leads_called: int
+    # Different leads moved to an interested or a won stage in the period.
+    interested: int
+    won: int
+    new_leads: int
+    # Speed to lead: the middle whole minutes from arriving to the first call.
+    first_call_minutes: int | None
+
+
+class SellerOutcome(Model):
+    person_id: UUID
+    name: str
+    calls: int
+    connected: int
+    interested: int
+    won: int
+    open_leads: int
+    # Open leads whose call is more than an hour late, now.
+    late: int
+
+
+class Performance(Model):
+    """How sales went (owners and admins; owner, 22 Oct 2026): outcomes first,
+    then sellers ranked by outcome, then the open leads by stage."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    days: int
+    start: date
+    end: date
+    current: Outcomes
+    # The period just before, as long: the trend.
+    previous: Outcomes
+    sellers: tuple[SellerOutcome, ...]
+    pipeline: dict[str, int]
+
+
 class ImportPreview(Model):
     file_name: str
     headers: tuple[str, ...]

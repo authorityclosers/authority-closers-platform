@@ -259,6 +259,26 @@ def test_a_sellers_day_on_the_desk(postgres_harness: Any, tmp_path: Path) -> Non
                     "result",
                     "reassigned",
                 ]
+
+                # Home for owners and admins: outcomes first, sellers ranked by them.
+                report = await client.get(f"{BASE}/reports/performance", params={"days": 7})
+                assert report.status_code == 200, report.text
+                week = report.json()
+                assert week["days"] == 7
+                assert week["current"]["calls"] == 2 and week["current"]["connected"] == 1
+                assert week["current"]["leads_called"] == 1
+                assert (week["current"]["interested"], week["current"]["won"]) == (1, 0)
+                assert week["current"]["new_leads"] == 1
+                assert week["previous"]["calls"] == 0 and week["previous"]["new_leads"] == 0
+                top = week["sellers"][0]
+                assert top["person_id"] == str(seller.person_id)
+                assert (top["calls"], top["interested"]) == (2, 1)
+                assert week["pipeline"] == {"interested": 1}
+                odd = await client.get(f"{BASE}/reports/performance", params={"days": 3})
+                assert odd.status_code == 422
+                as_(seller_token)
+                mine = await client.get(f"{BASE}/reports/performance", params={"days": 7})
+                assert mine.status_code == 403
         finally:
             await setup.engine.dispose()
 
