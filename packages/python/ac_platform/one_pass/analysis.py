@@ -107,6 +107,11 @@ address), and anything else the next conversation needs. One short fact per item
 English, with 1-3 segment ids. A 15-minute call usually has 30-60 facts across call_data and
 notes together; a 3-minute call 15-25. If a speaker corrects themselves, give only the
 corrected value. A competitor's price is never our price."""
+# The trial's word limits cost notes (fact recall) on 21 Oct 2026; notes are cheap output.
+_NOTES_WHOLE: Final = (
+    "The review's word limits never apply to call_data or notes: give every concrete fact,"
+    " with its names, numbers and dates."
+)
 
 _PROSPECT: Final = """And return prospect, about the buyer (their name, role, company, revenue,
 team size, industry, biggest problem, wants, blockers and follow-up come from call_data):
@@ -148,7 +153,7 @@ _LEAN_REVIEW: Final[tuple[tuple[str, str], ...]] = (
     (
         "Only include what the call says; leave a list empty rather than guess.\n",
         "Only include what the call says; leave a list empty rather than guess. Each\n"
-        "reason, objection, next step and note at most 12 words.\n",
+        "reason, objection and next step at most 12 words.\n",
     ),
 )
 
@@ -227,7 +232,7 @@ def facts_system_prompt(publish: bool = False) -> str:
     parts = ("call_data", "review") if publish else ("call_data", "notes", "review")
     text = _header(parts) + "\nPART call_data: CRM facts.\n" + call_data_instructions()
     if not publish:
-        text += "\n" + _NOTES + "\n"
+        text += "\n" + _NOTES + "\n" + _NOTES_WHOLE + "\n"
     review = pointer_review._system_prompt({}) if publish else review_instructions()
     return text + "\nPART review: the 27-pointer review.\n" + review
 

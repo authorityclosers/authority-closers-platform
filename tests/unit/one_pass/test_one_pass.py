@@ -295,6 +295,9 @@ def test_the_trial_asks_compact_json_and_lean_text() -> None:
     assert "one short sentence, at most 12 words, on what you did" in facts.system
     assert "one or two sentences on what you did" not in facts.system
     assert "([] when excellent, when not judged" in facts.system
+    # The limits never reach the facts: call data and notes are written whole.
+    assert "word limits never apply to call_data or notes" in facts.system
+    assert "next step and note at most" not in facts.system
     assert "training_topic" not in facts.system
     assert facts.schema is not None
     entry = facts.schema["properties"]["review"]["properties"]["pointers"]["items"]
@@ -311,6 +314,7 @@ def test_the_trial_asks_compact_json_and_lean_text() -> None:
         assert compact in system
         assert "training_topic: a short lesson title" in system
         assert "LENGTH (one pass)" not in system
+        assert "word limits never apply" not in system
 
 
 def test_the_lean_review_refuses_a_changed_pointer_review_prompt(
