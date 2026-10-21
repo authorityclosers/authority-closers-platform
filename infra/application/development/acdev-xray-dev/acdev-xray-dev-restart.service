@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly restart of the Sales Xray dev server; clears its Turbopack cache above 2 GiB
+
+[Service]
+Type=oneshot
+# The cache sits under the WorkingDirectory of zz-dev-live.conf. 2048 MiB: a busy day adds about 2 GB, so the cache
+# stays under about 4.5 GB and is reset every one or two busy days. The probe page is the watchdog's.
+ExecStart=%h/.local/bin/acdev-dev-restart acdev-xray-dev.service %h/src/dev-live/authority-closers-platform/apps/sales-xray-web/.next/dev/cache/turbopack 2048 http://127.0.0.1:3026/login salesxray-dev.authorityclosers.com
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=20min

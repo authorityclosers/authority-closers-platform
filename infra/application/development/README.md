@@ -489,3 +489,57 @@ systemctl --user daemon-reload
 ```
 
 Watch it with `journalctl --user -u 'acdev-dev-watchdog@*'`.
+
+## Sales Xray dev server units and its nightly cache cap (acdev user units)
+
+`acdev-xray-dev/` records the Sales Xray dev server (`next dev --turbopack` on
+`127.0.0.1:3026`) as installed in acdev's `~/.config/systemd/user/`:
+
+- `acdev-xray-dev.service` and its drop-ins in `acdev-xray-dev.service.d/`:
+  `30-asset-version.conf` (`NEXT_DEPLOYMENT_ID`), `50-CPUQuota.conf` (75 % of one
+  core, the same value as the 29 Sep `set-property` drop-in in
+  `~/.config/systemd/user.control/`, which takes precedence), `80-memory.conf`
+  (`MemoryHigh` 3G, `MemoryMax` 3584M, swap 512M; 1700M throttled it into
+  Cloudflare 524s on 11 Oct), `85-api-origin.conf` (server reads through the dev
+  edge on :3016) and `zz-dev-live.conf` (it runs from the shared workbench).
+- `acdev-xray-dev-restart.timer` (22:30 UTC, 04:00 IST) starts
+  `acdev-xray-dev-restart.service`, which runs
+  `acdev-dev-restart.sh <unit> <cache-dir> <cap-MiB> [<url> [<host>]]`. It notes
+  the unit's memory peak, stops it, moves its Turbopack cache
+  (`apps/sales-xray-web/.next/dev/cache/turbopack`) aside when the cache is above
+  2048 MiB, starts it, waits for the watchdog's probe page (the first compile),
+  then deletes the old cache at idle IO priority. A unit stopped on purpose stays
+  stopped; a failed one is started. The planned restart also starts the
+  watchdog's five-minute grace. The script only ever moves or deletes a directory
+  named `.../.next/dev/cache/turbopack`, never a symlink. The cache is a build
+  cache: next dev rebuilds it.
+
+Why: next dev 16.3.8 keeps a Turbopack file-system cache that nothing prunes.
+Between 11 and 21 Oct it grew to 9.6 GB, about 2 GB on a busy day. As it grew,
+a run's memory peak went from 1.4-1.9 GB (12-15 Oct) to 2.8-3.3 GB (16-20 Oct)
+with a JS heap under 0.6 GB (restoring and compacting the cache), and HMR went from 0.5 s (p50, 11 Oct)
+to 13-38 s (p50, 18-20 Oct). On 20 Oct the 22:30 restart read about 4.5 GB in
+ten minutes, filled the swap and hung at `MemoryHigh` until a manual restart. With
+the cap the cache stays under about 4.5 GB and is reset every one or two busy
+days. Next's default `experimental.turbopackMemoryEviction: 'auto'` does not see
+the unit's 3 GB limit (the host has about 8 GB free), so it rarely evicts. If daily
+peaks stay above about 2 GB with the cap, the next lever is `'full'` for dev in
+`apps/sales-xray-web/next.config.ts`, which trades memory for re-reads on every
+HMR.
+
+Install or update, as acdev (`XDG_RUNTIME_DIR=/run/user/1002`):
+
+```bash
+D=infra/application/development
+install -m 755 $D/acdev-dev-restart.sh ~/.local/bin/acdev-dev-restart
+install -m 644 $D/acdev-xray-dev/acdev-xray-dev.service $D/acdev-xray-dev/acdev-xray-dev-restart.service $D/acdev-xray-dev/acdev-xray-dev-restart.timer ~/.config/systemd/user/
+mkdir -p ~/.config/systemd/user/acdev-xray-dev.service.d
+install -m 644 $D/acdev-xray-dev/acdev-xray-dev.service.d/*.conf ~/.config/systemd/user/acdev-xray-dev.service.d/
+systemctl --user daemon-reload
+systemctl --user enable acdev-xray-dev-restart.timer
+```
+
+A changed drop-in reaches the running server at its next restart, the nightly one
+at the latest. Watch it with `journalctl --user -u acdev-xray-dev-restart.service`:
+one line a night with the memory peak since the last start, the cache size, whether
+it was cleared and how long the first compile took.
