@@ -180,6 +180,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "lead_desk_journey_versions",
         "lead_desk_conversions",
         "lead_desk_conversion_attempts",
+        "lead_desk_pipelines",
         "ai_spend_settings",
         "analysis_pipeline_settings",
         "one_pass_runs",

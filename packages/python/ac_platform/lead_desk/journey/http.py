@@ -13,6 +13,10 @@
   where and whether; ``PUT /journey/ads/{platform}/matches`` confirms matches;
   ``POST /journey/ads/events/{id}/retry`` tries a refused event again.
 - ``GET /journey/summary``: one line for Connected apps.
+- ``GET /pipelines``, ``POST /pipelines`` (a name, a kind of business and the lead
+  sources it takes) and ``PATCH /pipelines/{key}``: the organisation's pipelines. Every
+  stage route above takes ``?pipeline=`` (default ``main``); a lead's own routes use its
+  pipeline.
 
 Same workspace rule as the CRM's own routes: an organisation workspace, an active
 member. Nothing here shows a price or cost.
@@ -27,7 +31,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -37,7 +41,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.journey import catalogue, engine, mapping, signals
+from ac_platform.lead_desk.journey import catalogue, engine, mapping, pipelines, signals
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey.model import Journey, JourneyError
 from ac_platform.lead_desk.journey.providers import oauth
@@ -88,6 +92,36 @@ class JourneyView(_View):
     can_edit: bool = Field(alias="canEdit")
     kinds: dict[str, str]
     meanings: dict[str, str]
+    pipeline: str = "main"
+
+
+class PipelineView(_View):
+    key: str
+    name: str
+    position: int
+    main: bool
+    # The lead source kinds whose new leads come here; main takes every other one.
+    sources: list[str]
+    industry: str | None
+    leads: int
+
+
+class PipelinesView(_View):
+    pipelines: list[PipelineView]
+    # Every lead source a pipeline can take, in the page's words.
+    sources: dict[str, str]
+    can_edit: bool = Field(alias="canEdit")
+
+
+class PipelineCommand(_Command):
+    name: str = Field(min_length=1, max_length=60)
+    template: str = Field(min_length=1, max_length=40)
+    sources: list[str] = Field(default_factory=list, max_length=12)
+
+
+class PipelineChange(_Command):
+    name: str | None = Field(default=None, max_length=60)
+    sources: list[str] | None = Field(default=None, max_length=12)
 
 
 class TemplateStageView(_View):
@@ -342,6 +376,7 @@ def journey_view(journey: Journey, counts: dict[str, int], can_edit: bool) -> Jo
         can_edit=can_edit,
         kinds=dict(KIND_WORDS),
         meanings=dict(MILESTONE_WORDS),
+        pipeline=journey.pipeline,
     )
 
 
@@ -427,10 +462,92 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
         except DomainError:
             raise HTTPException(401, "Sign in to see your leads.", headers=PRIVATE) from None
 
-    async def current(desk: LeadDesk) -> JourneyView:
-        journey = await journeys.read(desk.db, desk.tenant_id)
+    async def current(desk: LeadDesk, pipeline: str = journeys.MAIN_PIPELINE) -> JourneyView:
+        journey = await journeys.read(desk.db, desk.tenant_id, pipeline)
         counts = await journeys.lead_counts(desk.db, desk.tenant_id, journey)
         return journey_view(journey, counts, desk.viewer.can_manage)
+
+    async def known(desk: LeadDesk, key: str) -> str:
+        """The pipeline's key, when the organisation has it (422 otherwise)."""
+        return pipelines.find(await pipelines.listed(desk.db, desk.tenant_id), key).key
+
+    async def pipelines_view(desk: LeadDesk) -> PipelinesView:
+        found = await pipelines.listed(desk.db, desk.tenant_id)
+        totals = await pipelines.lead_totals(desk.db, desk.tenant_id)
+        views = []
+        for item in found:
+            journey = await journeys.read(desk.db, desk.tenant_id, item.key)
+            views.append(
+                PipelineView(
+                    key=item.key,
+                    name=item.name,
+                    position=item.position,
+                    main=item.main,
+                    sources=list(item.sources),
+                    industry=journey.industry,
+                    leads=totals.get(item.key, 0),
+                )
+            )
+        return PipelinesView(
+            pipelines=views, sources=dict(pipelines.SOURCES), can_edit=desk.viewer.can_manage
+        )
+
+    # ----- pipelines ----------------------------------------------------------------------
+
+    @router.get("/pipelines", response_model=PipelinesView, response_model_by_alias=True)
+    async def list_pipelines(request: Request, response: Response) -> PipelinesView:
+        async with desk_for(request, response) as desk:
+            return await pipelines_view(desk)
+
+    @router.post("/pipelines", response_model=PipelinesView, response_model_by_alias=True)
+    async def create_pipeline(
+        command: PipelineCommand, request: Request, response: Response
+    ) -> PipelinesView:
+        """A new pipeline with a kind of business's stages, taking the sources picked."""
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            profile = next((item for item in TEMPLATES if item.id == command.template), None)
+            if profile is None:
+                raise JourneyError("Pick one of the listed kinds of business.")
+            made = await pipelines.create(
+                desk.db,
+                desk.tenant_id,
+                name=command.name,
+                sources=command.sources,
+                by=desk.viewer.person_id,
+                now=desk.now,
+            )
+            before = await journeys.read(desk.db, desk.tenant_id, made.key)
+            await journeys.save(
+                desk.db,
+                desk.tenant_id,
+                stages=journeys.from_template(command.template, before, {}),
+                industry=command.template,
+                expected_version=before.version,
+                note=f"Used the {profile.name} stages",
+                by=desk.viewer.person_id,
+                now=desk.now,
+                pipeline=made.key,
+            )
+            return await pipelines_view(desk)
+
+    @router.patch("/pipelines/{key}", response_model=PipelinesView, response_model_by_alias=True)
+    async def change_pipeline(
+        key: str, command: PipelineChange, request: Request, response: Response
+    ) -> PipelinesView:
+        """Rename a pipeline, or pick the lead sources whose new leads come to it."""
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            await pipelines.change(
+                desk.db,
+                desk.tenant_id,
+                key,
+                name=command.name,
+                sources=command.sources,
+                by=desk.viewer.person_id,
+                now=desk.now,
+            )
+            return await pipelines_view(desk)
 
     async def lock_settings(desk: LeadDesk) -> LeadDeskSettings:
         """The workspace's Lead Desk settings row, locked; made when missing. Writing
@@ -450,9 +567,13 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
     # ----- stages -------------------------------------------------------------------------
 
     @router.get("/journey", response_model=JourneyView, response_model_by_alias=True)
-    async def journey(request: Request, response: Response) -> JourneyView:
+    async def journey(
+        request: Request,
+        response: Response,
+        pipeline: str = Query(default=journeys.MAIN_PIPELINE, max_length=40),
+    ) -> JourneyView:
         async with desk_for(request, response) as desk:
-            return await current(desk)
+            return await current(desk, await known(desk, pipeline))
 
     @router.get(
         "/journey/templates", response_model=list[TemplateView], response_model_by_alias=True
@@ -475,11 +596,15 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @router.put("/journey", response_model=JourneyView, response_model_by_alias=True)
     async def save_journey(
-        command: JourneyCommand, request: Request, response: Response
+        command: JourneyCommand,
+        request: Request,
+        response: Response,
+        pipeline: str = Query(default=journeys.MAIN_PIPELINE, max_length=40),
     ) -> JourneyView:
         async with desk_for(request, response, write=True) as desk:
             desk._require_manager()
-            before = await journeys.read(desk.db, desk.tenant_id)
+            key = await known(desk, pipeline)
+            before = await journeys.read(desk.db, desk.tenant_id, key)
             counts = await journeys.lead_counts(desk.db, desk.tenant_id, before)
             stages = journeys.build(
                 [item.model_dump(exclude_none=True) for item in command.stages], before, counts
@@ -493,16 +618,21 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 note=journeys.change_note(before, stages),
                 by=desk.viewer.person_id,
                 now=desk.now,
+                pipeline=key,
             )
-            return await current(desk)
+            return await current(desk, key)
 
     @router.post("/journey/template", response_model=JourneyView, response_model_by_alias=True)
     async def use_template(
-        command: TemplateCommand, request: Request, response: Response
+        command: TemplateCommand,
+        request: Request,
+        response: Response,
+        pipeline: str = Query(default=journeys.MAIN_PIPELINE, max_length=40),
     ) -> JourneyView:
         async with desk_for(request, response, write=True) as desk:
             desk._require_manager()
-            before = await journeys.read(desk.db, desk.tenant_id)
+            key = await known(desk, pipeline)
+            before = await journeys.read(desk.db, desk.tenant_id, key)
             counts = await journeys.lead_counts(desk.db, desk.tenant_id, before)
             stages = journeys.from_template(command.template, before, counts)
             profile = next(item for item in TEMPLATES if item.id == command.template)
@@ -515,8 +645,9 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 note=f"Used the {profile.name} stages",
                 by=desk.viewer.person_id,
                 now=desk.now,
+                pipeline=key,
             )
-            return await current(desk)
+            return await current(desk, key)
 
     @router.post("/journey/guess", response_model=GuessView, response_model_by_alias=True)
     async def guess(command: GuessCommand, request: Request, response: Response) -> GuessView:
@@ -535,13 +666,17 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
         response_model=list[SuggestionView],
         response_model_by_alias=True,
     )
-    async def suggestions(request: Request, response: Response) -> list[SuggestionView]:
+    async def suggestions(
+        request: Request,
+        response: Response,
+        pipeline: str = Query(default=journeys.MAIN_PIPELINE, max_length=40),
+    ) -> list[SuggestionView]:
         """Stages the business already uses in an app it connected (Pulse's workflow steps)
         that aren't stages here yet. Offered only: a manager adds one with a tap."""
         async with desk_for(request, response) as desk:
             desk._require_manager()
             row = await desk.db.get(LeadDeskSettings, desk.tenant_id)
-            journey = await journeys.read(desk.db, desk.tenant_id)
+            journey = await journeys.read(desk.db, desk.tenant_id, await known(desk, pipeline))
             found = catalogue.suggestions((row.config if row else None) or {}, journey)
             counts, terms = await signals.heard(desk.db, desk.tenant_id, desk.now)
             found += signals.business_suggestions(counts, terms, journey)
@@ -561,20 +696,27 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
             lead = await desk._lead(lead_id)
             if not (desk.viewer.can_manage or lead.owner_person_id == desk.viewer.person_id):
                 raise DeskError(403, "Only the lead's owner or a manager sees this.")
-            journey = await journeys.read(desk.db, desk.tenant_id)
+            journey = await journeys.read(desk.db, desk.tenant_id, journeys.pipeline_of(lead))
             found = await signals.lead_suggestion(
                 desk.db, desk.tenant_id, lead.id, lead.stage, lead.step, journey
             )
             return LeadSuggestionView(**found) if found else None
 
     @router.get("/journey/history", response_model=list[HistoryItem], response_model_by_alias=True)
-    async def history(request: Request, response: Response) -> list[HistoryItem]:
+    async def history(
+        request: Request,
+        response: Response,
+        pipeline: str = Query(default=journeys.MAIN_PIPELINE, max_length=40),
+    ) -> list[HistoryItem]:
         async with desk_for(request, response) as desk:
             desk._require_manager()
             rows = (
                 await desk.db.scalars(
                     select(LeadJourneyVersion)
-                    .where(LeadJourneyVersion.tenant_id == desk.tenant_id)
+                    .where(
+                        LeadJourneyVersion.tenant_id == desk.tenant_id,
+                        journeys.version_in(pipeline),
+                    )
                     .order_by(LeadJourneyVersion.version.desc())
                     .limit(20)
                 )
@@ -596,14 +738,16 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
     ) -> MoveView:
         """A lead moves to one of the business's stages without a call."""
         async with desk_for(request, response, write=True) as desk:
-            journey = await journeys.read(desk.db, desk.tenant_id)
             seen = await desk._command_seen(command.command_id)
             if seen is not None:
                 if seen.lead_id != lead_id:
                     raise DeskError(409, "That request was already used for another lead.")
                 lead = await desk._lead(lead_id)
+                journey = await journeys.read(desk.db, desk.tenant_id, journeys.pipeline_of(lead))
             else:
                 lead = await desk._lead(lead_id, lock=True)
+                # The lead's own pipeline's stages.
+                journey = await journeys.read(desk.db, desk.tenant_id, journeys.pipeline_of(lead))
                 if not (desk.viewer.can_manage or lead.owner_person_id == desk.viewer.person_id):
                     raise DeskError(403, "Only the lead's owner or a manager can move it.")
                 if lead.revision != command.expected_revision:

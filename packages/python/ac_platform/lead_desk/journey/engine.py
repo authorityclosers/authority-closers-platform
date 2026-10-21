@@ -168,7 +168,12 @@ async def _collect_one(
     last: tuple[datetime, UUID] | None = None
     for event, lead in (await db.execute(query)).tuples():
         last = (event.created_at, event.id)
-        key = reached(journey, event.kind, event.data if isinstance(event.data, dict) else {})
+        data = event.data if isinstance(event.data, dict) else {}
+        # Ad platforms learn from the main pipeline's stages (its matches are the ones
+        # saved); a lead moving between pipelines reached no stage.
+        if journeys.pipeline_of(lead) != journey.pipeline or "pipeline" in data:
+            continue
+        key = reached(journey, event.kind, data)
         if key is None:
             continue
         for provider, settings, adapter in targets:

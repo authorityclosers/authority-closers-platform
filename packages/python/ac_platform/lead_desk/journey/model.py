@@ -1,4 +1,4 @@
-"""A business's own lead stages: one list per organisation, saved as versions.
+"""A business's own lead stages: one list per pipeline, saved as versions.
 
 Every save adds a version (``lead_desk_journey_versions``); nothing is overwritten,
 and a stage that was ever used stays in the list, archived, so old leads and old
@@ -9,6 +9,10 @@ changes for it until it picks its own.
 A lead keeps the desk's stage (``Lead.stage``, the stage's kind) and, when a seller
 picked one of the business's own stages, that stage's key (``Lead.step``). A lead
 with no step is in the business's stage for its kind (see ``Journey.resolve``).
+
+An organisation can run several pipelines, each with its own list (``pipelines.py``); a
+lead's step is read in its own pipeline's list. Version numbers stay unique per
+organisation across its pipelines.
 """
 
 from __future__ import annotations
@@ -37,6 +41,7 @@ from ac_platform.lead_desk.journey.templates import (
 )
 from ac_platform.lead_desk.models import Lead, LeadJourneyVersion
 
+MAIN_PIPELINE: Final[str] = "main"
 MAX_LIVE: Final[int] = 16
 MAX_ALL: Final[int] = 80
 MAX_LABEL: Final[int] = 40
@@ -82,6 +87,7 @@ class Journey:
     stages: tuple[Stage, ...]
     saved_at: datetime | None = None
     saved_by: UUID | None = None
+    pipeline: str = MAIN_PIPELINE
     by_key: dict[str, Stage] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -154,34 +160,48 @@ def from_rows(stages: Iterable[Mapping[str, Any]]) -> tuple[Stage, ...]:
     return tuple(out)
 
 
-async def read(db: AsyncSession, tenant_id: UUID) -> Journey:
-    """The organisation's newest version, or the default profile."""
+def lead_in(pipeline: str) -> Any:
+    """Leads in this pipeline; a lead from before pipelines (null) is in main."""
+    return func.coalesce(Lead.pipeline_key, MAIN_PIPELINE) == pipeline
+
+
+def version_in(pipeline: str) -> Any:
+    return func.coalesce(LeadJourneyVersion.pipeline_key, MAIN_PIPELINE) == pipeline
+
+
+def pipeline_of(lead: Lead) -> str:
+    return lead.pipeline_key or MAIN_PIPELINE
+
+
+async def read(db: AsyncSession, tenant_id: UUID, pipeline: str = MAIN_PIPELINE) -> Journey:
+    """The pipeline's newest version, or the default profile."""
     row = await db.scalar(
         select(LeadJourneyVersion)
-        .where(LeadJourneyVersion.tenant_id == tenant_id)
+        .where(LeadJourneyVersion.tenant_id == tenant_id, version_in(pipeline))
         .order_by(LeadJourneyVersion.version.desc())
         .limit(1)
     )
     if row is None:
-        return default_journey()
+        return replace(default_journey(), pipeline=pipeline)
     stages = from_rows(row.stages if isinstance(row.stages, list) else [])
     if not stages:
-        return replace(default_journey(), version=row.version)
+        return replace(default_journey(), version=row.version, pipeline=pipeline)
     return Journey(
         version=row.version,
         industry=row.industry,
         stages=stages,
         saved_at=row.created_at,
         saved_by=row.created_by_person_id,
+        pipeline=pipeline,
     )
 
 
 async def lead_counts(db: AsyncSession, tenant_id: UUID, journey: Journey) -> dict[str, int]:
-    """How many leads sit in each of the business's stages now."""
+    """How many of the pipeline's leads sit in each of its stages now."""
     counts: dict[str, int] = {}
     rows = await db.execute(
         select(Lead.stage, Lead.step, func.count())
-        .where(Lead.tenant_id == tenant_id)
+        .where(Lead.tenant_id == tenant_id, lead_in(journey.pipeline))
         .group_by(Lead.stage, Lead.step)
     )
     for kind, step, count in rows.tuples():
@@ -334,12 +354,18 @@ async def save(
     note: str,
     by: UUID,
     now: datetime,
+    pipeline: str = MAIN_PIPELINE,
 ) -> Journey:
-    """A new version, if nobody saved one since the page read it."""
-    current = await read(db, tenant_id)
+    """A new version of the pipeline's list, if nobody saved one since the page read it."""
+    current = await read(db, tenant_id, pipeline)
     if current.version != expected_version:
         raise JourneyError("Someone changed the stages just now. Check them and try again.")
-    version = current.version + 1
+    newest = await db.scalar(
+        select(func.max(LeadJourneyVersion.version)).where(
+            LeadJourneyVersion.tenant_id == tenant_id
+        )
+    )
+    version = int(newest or 0) + 1
     db.add(
         LeadJourneyVersion(
             tenant_id=tenant_id,
@@ -349,10 +375,11 @@ async def save(
             note=note[:200],
             created_by_person_id=by,
             created_at=now,
+            pipeline_key=pipeline,
         )
     )
     await db.flush()
-    return Journey(version, industry, stages, now, by)
+    return Journey(version, industry, stages, now, by, pipeline)
 
 
 def change_note(before: Journey, after: tuple[Stage, ...]) -> str:

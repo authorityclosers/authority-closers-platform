@@ -64,6 +64,7 @@ from ac_platform.lead_desk.contracts import (
     PhoneLog,
     PhoneLogResult,
     PhoneReport,
+    MovePipeline,
     PushConfig,
     Reassign,
     RecordingCommand,
@@ -209,8 +210,14 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         offset: int = 0,
         test: Literal["only"] | None = None,
         owner: UUID | None = None,
+        pipeline: str | None = None,
     ) -> LeadPage:
-        no_query(request, frozenset({"scope", "stage", "search", "offset", "test", "owner"}))
+        no_query(
+            request,
+            frozenset({"scope", "stage", "search", "offset", "test", "owner", "pipeline"}),
+        )
+        if pipeline is not None and not 0 < len(pipeline) <= 40:
+            raise HTTPException(422, "Choose a pipeline.", headers=PRIVATE)
         if stage is not None and stage != "open" and stage not in STAGES:
             raise HTTPException(422, "Choose a lead stage.", headers=PRIVATE)
         if not 0 <= offset <= 100_000 or (search is not None and len(search) > 80):
@@ -223,6 +230,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 offset=offset,
                 test_only=test == "only",
                 owner=owner,
+                pipeline=pipeline,
             )
 
     @router.post("/leads/delete", response_model=LeadsDeleted, response_model_by_alias=True)
@@ -351,6 +359,21 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.reassign(lead_id, command)
+
+    @router.post(
+        "/leads/{lead_id}/pipeline", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def move_pipeline(
+        lead_id: UUID, command: MovePipeline, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.move_pipeline(
+                lead_id,
+                pipeline=command.pipeline,
+                expected_revision=command.expected_revision,
+                command_id=command.command_id,
+            )
 
     @router.post("/leads/{lead_id}/simulation", response_model=SimulationPick)
     async def simulation_pick(

@@ -99,6 +99,8 @@ class LeadRow(Model):
     overdue: bool = False
     # The business's own stage (its key) the lead is in, when it has a stage list.
     step: str | None = None
+    # The organisation's pipeline the lead is in (lead_desk/journey/pipelines.py).
+    pipeline: str = "main"
     # They called and nobody picked up, and nobody has called them since
     # (Salestrail's missed-call queue): the newest such call and how many.
     missed_at: datetime | None = None
@@ -423,6 +425,8 @@ class NewLead(Command):
     note: str | None = Field(default=None, max_length=1000)
     assign: Literal["rules", "me", "person"] = "rules"
     person_id: UUID | None = None
+    # A pipeline picked by hand; None: the one that takes added leads.
+    pipeline: str | None = Field(default=None, max_length=40)
 
 
 class Disposition(Command):
@@ -490,6 +494,14 @@ class Reassign(Command):
     command_id: UUID
     expected_revision: int = Field(ge=1)
     person_id: UUID | None = None  # None: run the allocation rules again
+
+
+class MovePipeline(Command):
+    """Move a lead to another of the organisation's pipelines (owners and admins)."""
+
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+    pipeline: str = Field(min_length=1, max_length=40)
 
 
 class DeleteLeads(Command):
@@ -582,6 +594,8 @@ class ImportCommand(Command):
     mapping: dict[str, str]
     rows: tuple[dict[str, str], ...] = Field(min_length=1, max_length=2000)
     assign: Literal["rules", "me"] = "rules"
+    # A pipeline picked by hand; None: the one that takes file imports.
+    pipeline: str | None = Field(default=None, max_length=40)
 
 
 class NewSource(Command):

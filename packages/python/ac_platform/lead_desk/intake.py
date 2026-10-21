@@ -135,6 +135,7 @@ class Intake:
                     actor=self.desk.viewer.person_id,
                     test_data=self.desk.sandbox,
                     reps=reps,
+                    pipeline=command.pipeline,
                 )
             except CaptureError:
                 lead, outcome = None, "skipped"
