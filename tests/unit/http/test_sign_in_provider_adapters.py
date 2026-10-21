@@ -47,8 +47,9 @@ APPLE_TEAM_ID = "ABCDE12345"
 APPLE_KEY_ID = "KEY1234567"
 REDIRECT = "https://salesxray.example.test/v1/auth/{provider}/callback"
 NOW = 1_800_000_000
-# google-auth checks identity-token times against the real clock. Valid tokens read it when they are made
-# (a slow shard outlives a module-level stamp); TOKEN_NOW only dates the already-expired case.
+# google-auth checks identity-token times against the real clock. Valid tokens read it when
+# they are made (a slow shard outlives a module-level stamp); TOKEN_NOW only dates the
+# already-expired case.
 TOKEN_NOW = int(time.time())
 
 
