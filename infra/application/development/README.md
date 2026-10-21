@@ -505,21 +505,28 @@ Watch it with `journalctl --user -u 'acdev-dev-watchdog@*'`.
 - `acdev-xray-dev-restart.timer` (22:30 UTC, 04:00 IST) starts
   `acdev-xray-dev-restart.service`, which runs
   `acdev-dev-restart.sh <unit> <cache-dir> <cap-MiB> [<url> [<host>]]`. It notes
-  the unit's memory peak, stops it, moves its Turbopack cache
+  the unit's memory peak, pauses its watchdog
+  (`acdev-dev-watchdog@acdev-xray-dev.timer`) so a slow first compile is never
+  restarted halfway, stops the unit, moves its Turbopack cache
   (`apps/sales-xray-web/.next/dev/cache/turbopack`) aside when the cache is above
   2048 MiB, starts it, waits for the watchdog's probe page (the first compile),
-  then deletes the old cache at idle IO priority. A unit stopped on purpose stays
-  stopped; a failed one is started. The planned restart also starts the
-  watchdog's five-minute grace. The script only ever moves or deletes a directory
-  named `.../.next/dev/cache/turbopack`, never a symlink. The cache is a build
-  cache: next dev rebuilds it.
+  resumes the watchdog, then deletes the old cache at idle IO priority. A unit
+  stopped on purpose stays stopped; a failed one is started; a watchdog that was
+  off stays off. The script only ever moves or deletes a directory named
+  `.../.next/dev/cache/turbopack`, never a symlink, and nothing else under
+  `.next`. The cache is a build cache: next dev rebuilds it (orchestrator, 21 Oct:
+  compiler output with no customer data or audit history, so deleting it needs no
+  owner approval).
 
 Why: next dev 16.3.8 keeps a Turbopack file-system cache that nothing prunes.
 Between 11 and 21 Oct it grew to 9.6 GB, about 2 GB on a busy day. As it grew,
 a run's memory peak went from 1.4-1.9 GB (12-15 Oct) to 2.8-3.3 GB (16-20 Oct)
-with a JS heap under 0.6 GB (restoring and compacting the cache), and HMR went from 0.5 s (p50, 11 Oct)
-to 13-38 s (p50, 18-20 Oct). On 20 Oct the 22:30 restart read about 4.5 GB in
-ten minutes, filled the swap and hung at `MemoryHigh` until a manual restart. With
+with a JS heap under 0.6 GB, and HMR went from 0.5 s (p50, 11 Oct) to 13-38 s
+(p50, 18-20 Oct). Restoring and compacting the cache does it: on 21 Oct at 11:34
+UTC, with no page requests, one compaction (740 MB written) took the unit over
+`MemoryHigh` 462 times, 1.6 GB of it cache file pages. On 20 Oct the 22:30
+restart read about 4.5 GB in ten minutes, filled the swap and hung at
+`MemoryHigh` until a manual restart. With
 the cap the cache stays under about 4.5 GB and is reset every one or two busy
 days. Next's default `experimental.turbopackMemoryEviction: 'auto'` does not see
 the unit's 3 GB limit (the host has about 8 GB free), so it rarely evicts. If daily

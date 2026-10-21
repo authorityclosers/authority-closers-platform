@@ -1,6 +1,7 @@
-"""acdev dev server nightly restart: stop, clear the Turbopack cache above its cap, start, wait for
-the first compile, delete the old cache; a unit stopped on purpose stays stopped (21 Oct 2026).
-The Sales Xray dev server's recorded units point it at its own cache and the watchdog's probe."""
+"""acdev dev server nightly restart: pause the watchdog, stop, clear the Turbopack cache above its
+cap, start, wait for the first compile, resume the watchdog, delete the old cache; a unit stopped
+on purpose stays stopped (21 Oct 2026). The Sales Xray dev server's recorded units point it at its
+own cache and the watchdog's probe."""
 
 from __future__ import annotations
 
@@ -13,8 +14,10 @@ DEV = ROOT / "infra/application/development"
 SCRIPT = DEV / "acdev-dev-restart.sh"
 XRAY = DEV / "acdev-xray-dev"
 UNIT = "acdev-xray-dev.service"
+WATCHDOG = "acdev-dev-watchdog@acdev-xray-dev.timer"
 URL = "http://127.0.0.1:3026/login"
 HOST = "salesxray-dev.authorityclosers.com"
+CURL = f"curl -s -o /dev/null -m 60 -w %{{http_code}} -H Host: {HOST} {URL}"
 NOW = 1_792_620_000
 
 
@@ -38,7 +41,9 @@ def _run(
     cap: int,
     *,
     state: str = "active",
+    watchdog: str = "active",
     codes: tuple[str, ...] = ("000", "200"),
+    stop_ok: bool = True,
     start_ok: bool = True,
     extra: tuple[str, ...] = (URL, HOST),
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
@@ -48,13 +53,18 @@ def _run(
         tmp_path,
         "systemctl",
         f"""case "$2" in
-  is-active) printf '%s\\n' '{state}'; [[ '{state}' == active ]] ;;
+  is-active)
+    if [[ "${{!#}}" == *.timer ]]; then [[ '{watchdog}' == active ]]; exit; fi
+    printf '%s\\n' '{state}'; [[ '{state}' == active ]] ;;
   show) [[ "$4" == MemoryPeak ]] && printf '%s\\n' 3192516608 || printf '%s\\n' 536870912 ;;
   start)
+    if [[ "$3" == *.timer ]]; then printf 'start %s\\n' "$3" >> '{calls}'; exit 0; fi
     [[ -e '{cache}' ]] && seen=present || seen=absent
     printf 'start %s cache=%s\\n' "$3" "$seen" >> '{calls}'
     {"exit 0" if start_ok else "exit 1"} ;;
-  *) printf '%s %s\\n' "$2" "$3" >> '{calls}' ;;
+  stop)
+    printf 'stop %s\\n' "$3" >> '{calls}'
+    [[ "$3" == *.timer ]] || {"exit 0" if stop_ok else "exit 1"} ;;
 esac
 """,
     )
@@ -79,7 +89,6 @@ printf '%s' "$code"
             "RESTART_CURL": str(curl),
             "RESTART_SLEEP": str(sleep),
             "RESTART_NOW": str(NOW),
-            "RESTART_WATCHDOG_STATE_DIR": str(tmp_path / "watchdog"),
             "RESTART_WARMUP_TRIES": "3",
         },
         capture_output=True,
@@ -105,34 +114,47 @@ def test_a_cache_above_its_cap_is_gone_before_the_start_and_deleted_after_the_fi
     cache = _cache(tmp_path, 3)
     result, calls = _run(tmp_path, cache, 1)
     assert result.returncode == 0, result.stderr
-    assert calls[0] == f"stop {UNIT}"
-    assert calls[1] == f"start {UNIT} cache=absent"
-    # The old copy is still there while the first page compiles, and gone afterwards.
-    assert [line for line in calls if line.startswith("curl")] == [
-        f"curl -s -o /dev/null -m 60 -w %{{http_code}} -H Host: {HOST} {URL} old=yes"
-    ] * 2
+    # The watchdog is paused before the stop and resumed once the page answers; the old copy is
+    # still there while the first page compiles.
+    assert calls == [
+        f"stop {WATCHDOG}",
+        f"stop {UNIT}",
+        f"start {UNIT} cache=absent",
+        f"{CURL} old=yes",
+        "sleep 5",
+        f"{CURL} old=yes",
+        f"start {WATCHDOG}",
+    ]
     assert not cache.exists()
     assert _leftovers(cache) == []
     assert re.fullmatch(
         rf"acdev-dev-restart: {UNIT} restarted \(memory peak since its last start 3044M\); "
-        rf"cache [34]M above cap 1M, cleared; {URL} answered 200 after \d+s; memory 512M\n",
+        rf"cache [34]M above cap 1M, cleared; {URL} answered 200 after \d+s; watchdog resumed; "
+        r"memory 512M\n",
         result.stdout,
     ), result.stdout
-
-
-def test_the_planned_restart_starts_the_watchdog_grace(tmp_path: Path) -> None:
-    result, _ = _run(tmp_path, _cache(tmp_path, 1), 2048)
-    assert result.returncode == 0, result.stderr
-    assert (tmp_path / "watchdog/acdev-xray-dev/last-restart").read_text() == f"{NOW}\n"
 
 
 def test_a_cache_within_its_cap_is_kept(tmp_path: Path) -> None:
     cache = _cache(tmp_path, 1)
     result, calls = _run(tmp_path, cache, 2048, codes=("307",))
     assert result.returncode == 0, result.stderr
-    assert calls[:2] == [f"stop {UNIT}", f"start {UNIT} cache=present"]
+    assert calls == [
+        f"stop {WATCHDOG}",
+        f"stop {UNIT}",
+        f"start {UNIT} cache=present",
+        f"{CURL} old=no",
+        f"start {WATCHDOG}",
+    ]
     assert (cache / "v16.3.8-b0fad0d4/00000001.sst").stat().st_size == 1_048_576
     assert re.search(r"; cache [12]M within cap 2048M, kept; .* answered 307 after", result.stdout)
+
+
+def test_a_watchdog_that_was_off_stays_off(tmp_path: Path) -> None:
+    result, calls = _run(tmp_path, _cache(tmp_path, 1), 2048, watchdog="inactive")
+    assert result.returncode == 0, result.stderr
+    assert not [line for line in calls if WATCHDOG in line]
+    assert "watchdog" not in result.stdout
 
 
 def test_a_unit_stopped_on_purpose_stays_stopped_and_its_cache_is_still_capped(
@@ -141,7 +163,7 @@ def test_a_unit_stopped_on_purpose_stays_stopped_and_its_cache_is_still_capped(
     cache = _cache(tmp_path, 3)
     result, calls = _run(tmp_path, cache, 1, state="inactive")
     assert result.returncode == 0, result.stderr
-    assert calls == []  # no stop, no start, no probe
+    assert calls == []  # no watchdog pause, no stop, no start, no probe
     assert not cache.exists()
     assert _leftovers(cache) == []
     assert re.fullmatch(
@@ -149,13 +171,22 @@ def test_a_unit_stopped_on_purpose_stays_stopped_and_its_cache_is_still_capped(
         r"cache [34]M above cap 1M, cleared\n",
         result.stdout,
     )
-    assert not (tmp_path / "watchdog").exists()
 
 
 def test_a_failed_unit_is_started(tmp_path: Path) -> None:
     result, calls = _run(tmp_path, _cache(tmp_path, 1), 2048, state="failed")
     assert result.returncode == 0, result.stderr
-    assert calls[:2] == [f"stop {UNIT}", f"start {UNIT} cache=present"]
+    assert calls[:3] == [f"stop {WATCHDOG}", f"stop {UNIT}", f"start {UNIT} cache=present"]
+
+
+def test_a_unit_that_will_not_stop_keeps_its_cache_and_its_watchdog(tmp_path: Path) -> None:
+    cache = _cache(tmp_path, 3)
+    result, calls = _run(tmp_path, cache, 1, stop_ok=False)
+    assert result.returncode == 1
+    assert calls == [f"stop {WATCHDOG}", f"stop {UNIT}", f"start {WATCHDOG}"]
+    assert cache.exists()
+    assert _leftovers(cache) == []
+    assert "could not stop" in result.stderr
 
 
 def test_a_missing_cache_counts_as_empty(tmp_path: Path) -> None:
@@ -179,27 +210,35 @@ def test_the_wait_for_the_first_compile_gives_up_after_its_tries(tmp_path: Path)
     cache = _cache(tmp_path, 3)
     result, calls = _run(tmp_path, cache, 1, codes=("000", "502", "504", "200"))
     assert result.returncode == 0, result.stderr
-    assert [line for line in calls if line.startswith(("curl", "sleep"))] == [
-        line for _ in range(3) for line in (calls[2], "sleep 5")
-    ]
+    assert calls[3:] == [f"{CURL} old=yes", "sleep 5"] * 3 + [f"start {WATCHDOG}"]
     assert f"; {URL} answered 504 after" in result.stdout
+    assert "; watchdog resumed;" in result.stdout  # it restarts a server that never answers
     assert _leftovers(cache) == []  # deleted all the same
 
 
-def test_a_failed_start_exits_1_and_still_deletes_the_old_cache(tmp_path: Path) -> None:
+def test_a_failed_start_exits_1_resumes_the_watchdog_and_deletes_the_old_cache(
+    tmp_path: Path,
+) -> None:
     cache = _cache(tmp_path, 3)
     result, calls = _run(tmp_path, cache, 1, start_ok=False)
     assert result.returncode == 1
-    assert not [line for line in calls if line.startswith("curl")]
-    assert "cleared; start failed; memory 512M" in result.stdout
+    assert calls == [f"stop {WATCHDOG}", f"stop {UNIT}", f"start {UNIT} cache=absent"] + [
+        f"start {WATCHDOG}"
+    ]
+    assert "cleared; start failed; watchdog resumed; memory 512M" in result.stdout
     assert _leftovers(cache) == []
 
 
 def test_without_a_probe_url_it_only_restarts(tmp_path: Path) -> None:
     result, calls = _run(tmp_path, _cache(tmp_path, 1), 2048, extra=())
     assert result.returncode == 0, result.stderr
-    assert calls == [f"stop {UNIT}", f"start {UNIT} cache=present"]
-    assert re.search(r"within cap 2048M, kept; memory 512M\n$", result.stdout)
+    assert calls == [
+        f"stop {WATCHDOG}",
+        f"stop {UNIT}",
+        f"start {UNIT} cache=present",
+        f"start {WATCHDOG}",
+    ]
+    assert re.search(r"within cap 2048M, kept; watchdog resumed; memory 512M\n$", result.stdout)
 
 
 def test_only_a_turbopack_cache_directory_is_ever_moved_or_deleted(tmp_path: Path) -> None:

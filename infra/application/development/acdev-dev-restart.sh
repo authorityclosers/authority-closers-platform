@@ -9,15 +9,15 @@
 # next dev 16.3.8 keeps a Turbopack file-system cache that nothing prunes. Sales Xray's grew to 9.6 GB
 # between 11 and 21 Oct, about 2 GB on a busy day. Restoring and compacting it took the server to its
 # 3 GB MemoryHigh, where the kernel throttles instead of killing, and took HMR from 0.5 s (p50, 11 Oct)
-# to 13-38 s (18-20 Oct). This runs from the unit's nightly timer: it notes the day's memory peak, stops
-# the unit, moves the cache aside when it is above the cap, starts the unit, waits for the probe page
-# (the first compile) and then deletes the old cache. The cache is a build cache that next dev
-# rebuilds. A unit stopped on purpose (inactive) stays stopped; a failed one is started. The planned
-# restart also starts the watchdog's five-minute grace, so a slow first compile is never cut short.
-# One journal line per run.
+# to 13-38 s (18-20 Oct). This runs from the unit's nightly timer: it notes the memory peak, pauses the
+# unit's watchdog (acdev-dev-watchdog@<unit>.timer), stops the unit, moves the cache aside when it is
+# above the cap, starts the unit, waits for the probe page (the first compile), resumes the watchdog
+# and then deletes the old cache. The cache is a build cache that next dev rebuilds; nothing else is
+# ever moved or deleted. A unit stopped on purpose (inactive) stays stopped; a failed one is started.
+# A watchdog that was not running stays off. One journal line per run.
 #
 # Environment (tests): RESTART_SYSTEMCTL, RESTART_CURL, RESTART_SLEEP, RESTART_NOW (epoch seconds),
-# RESTART_WATCHDOG_STATE_DIR, RESTART_WARMUP_TRIES (default 60, 5 seconds apart).
+# RESTART_WARMUP_TRIES (default 60, 5 seconds apart).
 set -uo pipefail
 shopt -s nullglob
 
@@ -47,15 +47,28 @@ curl_bin="${RESTART_CURL:-curl}"
 sleep_bin="${RESTART_SLEEP:-sleep}"
 tries="${RESTART_WARMUP_TRIES:-60}"
 now="${RESTART_NOW:-$(date +%s)}"
-watchdog_dir="${RESTART_WATCHDOG_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/acdev-dev-watchdog}/${unit%.service}"
+watchdog="acdev-dev-watchdog@${unit%.service}.timer"
 
 mib() { if [[ "$1" =~ ^[0-9]+$ ]]; then echo "$(( $1 / 1048576 ))M"; else echo "unknown"; fi; }
+delete_old() {
+  local old=("$cache".old-*)
+  (( ${#old[@]} )) && rm -rf -- "${old[@]}"
+  return 0
+}
 
 state="$("$systemctl_bin" --user is-active "$unit" 2>/dev/null)"
 peak="$(mib "$("$systemctl_bin" --user show -p MemoryPeak --value "$unit" 2>/dev/null)")"
-if [[ "$state" != inactive ]] && ! "$systemctl_bin" --user stop "$unit"; then
-  echo "acdev-dev-restart: could not stop $unit; cache left alone" >&2
-  exit 1
+paused=""
+if [[ "$state" != inactive ]]; then
+  # A slow first compile must not look like a hung server: the watchdog waits until the page answers.
+  if "$systemctl_bin" --user is-active --quiet "$watchdog"; then
+    "$systemctl_bin" --user stop "$watchdog" && paused=yes
+    trap '[[ -n "$paused" ]] && "$systemctl_bin" --user start "$watchdog"' EXIT
+  fi
+  if ! "$systemctl_bin" --user stop "$unit"; then
+    echo "acdev-dev-restart: could not stop $unit; cache left alone" >&2
+    exit 1
+  fi
 fi
 
 size=0
@@ -71,13 +84,11 @@ if (( size > cap )); then
 fi
 
 if [[ "$state" == inactive ]]; then
-  old=("$cache".old-*)
-  (( ${#old[@]} )) && rm -rf -- "${old[@]}"
+  delete_old
   echo "acdev-dev-restart: $unit was stopped on purpose and stays stopped; $note"
   exit 0
 fi
 
-mkdir -p "$watchdog_dir" && printf '%s\n' "$now" > "$watchdog_dir/last-restart"
 status=0
 answer=""
 if ! "$systemctl_bin" --user start "$unit"; then
@@ -98,10 +109,12 @@ elif [[ -n "$url" ]]; then
   done
   answer="; $url answered $code after $(( $(date +%s) - began ))s"
 fi
+if [[ -n "$paused" ]]; then
+  "$systemctl_bin" --user start "$watchdog" && paused="" && answer="$answer; watchdog resumed"
+fi
 
 # The old cache goes only after the first compile, so the two never compete for the disk.
-old=("$cache".old-*)
-(( ${#old[@]} )) && rm -rf -- "${old[@]}"
+delete_old
 memory="$(mib "$("$systemctl_bin" --user show -p MemoryCurrent --value "$unit" 2>/dev/null)")"
 echo "acdev-dev-restart: $unit restarted (memory peak since its last start $peak); $note$answer; memory $memory"
 exit "$status"
