@@ -143,6 +143,14 @@ class LeadPage(Model):
     next_offset: int | None
 
 
+class LeadsDeleted(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    deleted: int
+    lead_ids: tuple[UUID, ...]
+    # Asked for but not in this workspace (deleted already, or never here).
+    not_found: int
+
+
 class FieldValue(Model):
     label: str
     value: str
@@ -437,6 +445,18 @@ class Reassign(Command):
     command_id: UUID
     expected_revision: int = Field(ge=1)
     person_id: UUID | None = None  # None: run the allocation rules again
+
+
+class DeleteLeads(Command):
+    """Delete these leads for good: owners and admins, after one confirm (21 Oct 2026).
+    One command id per confirm, so a retry never deletes or audits twice."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, ...] = Field(min_length=1, max_length=500)
+
+
+class DeleteLead(Command):
+    command_id: UUID
 
 
 class RepRules(Command):
