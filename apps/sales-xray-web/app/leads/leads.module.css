@@ -708,6 +708,60 @@
   gap: 10px;
 }
 
+/* Add a lead (owner, 22 Oct: low effort): name and phone first, stacked on
+   a phone; the shortcuts and the rest wait in small chips. */
+.quickFields {
+  display: grid;
+  gap: 10px;
+}
+
+@media (min-width: 600px) {
+  .quickFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.quickHelpers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.helperChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.helperChip > svg {
+  color: var(--lx-teal);
+}
+
+.helperChip[aria-expanded="true"] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+}
+
+.helperChip:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.formWide {
+  grid-column: 1 / -1;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;

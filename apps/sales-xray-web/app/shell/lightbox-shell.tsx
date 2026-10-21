@@ -36,6 +36,8 @@ import {
 } from "react";
 
 import { useBranding } from "./branding-store";
+import { AddSheet } from "./add-sheet";
+import { useAppRouter } from "./app-router";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
 import { CALLS_PATH } from "../analysis-routes";
@@ -111,6 +113,9 @@ import {
   type UpdateNotification,
 } from "./updates-client";
 import { ChatsTabIcon } from "../chats/chats-badge";
+import { AddLeadDialog } from "../leads/capture-dialogs";
+import { handOverLead } from "../leads/lead-handoff";
+import { leavingOverlay } from "../ui/back-close";
 import { LeadsTabIcon } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import styles from "./lightbox-shell.module.css";
@@ -296,6 +301,12 @@ function LightboxShellFrame({
   const [accountCardOpen, setAccountCardOpen] = useState(false);
   const [accountView, setAccountView] = useState<"main" | "news">("main");
   const closeAccountCard = useCallback(() => setAccountCardOpen(false), []);
+  // Phones: the tab bar's + opens Add (a lead or a call), and Add lead its
+  // quick form over the current screen (owner, 22 Oct). Each opening of the
+  // form is a new round, so it always starts empty.
+  const [addOpen, setAddOpen] = useState(false);
+  const [leadForm, setLeadForm] = useState({ open: false, round: 0 });
+  const router = useAppRouter();
   const accountAnchorRef = useRef<HTMLElement | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
   const updates = useShellUpdates(
@@ -1416,18 +1427,39 @@ function LightboxShellFrame({
             <span>Leads</span>
           </ScreenLink>
         )}
-        <ScreenLink
-          className={`${styles.bottomLink} ${styles.bottomNew}`}
-          href={newAnalysisHref}
-          aria-label="New analysis"
-          aria-current={phoneTab === "new" ? "page" : undefined}
-        >
-          <span className={styles.newMark} aria-hidden="true">
-            <Plus size={18} strokeWidth={2.25} />
-          </span>
-          <span className={styles.tabPill} aria-hidden="true" />
-          <span>New</span>
-        </ScreenLink>
+        {/* Owner, 22 Oct: the + asks what to add (a lead or a call) instead
+            of jumping straight to call analysis. A visitor can only analyse
+            a call, so theirs still goes straight there. */}
+        {guest ? (
+          <ScreenLink
+            className={`${styles.bottomLink} ${styles.bottomNew}`}
+            href={newAnalysisHref}
+            aria-label="New analysis"
+            aria-current={phoneTab === "new" ? "page" : undefined}
+          >
+            <span className={styles.newMark} aria-hidden="true">
+              <Plus size={18} strokeWidth={2.25} />
+            </span>
+            <span className={styles.tabPill} aria-hidden="true" />
+            <span>New</span>
+          </ScreenLink>
+        ) : (
+          <button
+            type="button"
+            className={`${styles.bottomLink} ${styles.bottomNew}`}
+            onClick={() => setAddOpen(true)}
+            aria-label="Add a lead or a call"
+            aria-haspopup="dialog"
+            aria-expanded={addOpen}
+            aria-current={phoneTab === "new" ? "page" : undefined}
+          >
+            <span className={styles.newMark} aria-hidden="true">
+              <Plus size={18} strokeWidth={2.25} />
+            </span>
+            <span className={styles.tabPill} aria-hidden="true" />
+            <span>Add</span>
+          </button>
+        )}
         {guest ? null : (
           <ScreenLink
             className={styles.bottomLink}
@@ -1544,6 +1576,36 @@ function LightboxShellFrame({
           onCreateOrganisation={
             invites.live ? () => setCreateOpen(true) : undefined
           }
+        />
+      ) : null}
+      {guest ? null : (
+        <AddSheet
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          leadsHere={inOrganisation}
+          callHref={newAnalysisHref}
+          onAddLead={() => {
+            setAddOpen(false);
+            setLeadForm((form) => ({ open: true, round: form.round + 1 }));
+          }}
+        />
+      )}
+      {/* Mounted from the first Add lead on, so it can slide away. */}
+      {leadForm.round > 0 ? (
+        <AddLeadDialog
+          key={leadForm.round}
+          open={leadForm.open}
+          canManage={orgAdmin}
+          onClose={() => setLeadForm((form) => ({ ...form, open: false }))}
+          onAdded={(leadId) => {
+            setLeadForm((form) => ({ ...form, open: false }));
+            // The new lead opens on Leads, ready to call.
+            handOverLead(leadId);
+            if (shownPath !== "/leads" && !shownPath?.startsWith("/leads/")) {
+              leavingOverlay();
+              router?.push("/leads");
+            }
+          }}
         />
       ) : null}
     </div>

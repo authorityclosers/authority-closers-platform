@@ -15,10 +15,12 @@ import {
   FileSpreadsheet,
   Keyboard,
   Megaphone,
+  Plus,
 } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { Button, Dialog, Field, Segmented } from "../ui/kit";
+import { Sheet } from "../ui/sheet";
 import {
   addLead,
   commandId,
@@ -27,6 +29,7 @@ import {
   FIELD_LABELS,
   LeadsError,
   parseContactText,
+  pickContacts,
   previewImport,
   SAMPLE_CSV,
   type ImportPreview,
@@ -150,11 +153,23 @@ export function AddLeadDialog({
     canManage ? "rules" : "me",
   );
   const [more, setMore] = useState(Boolean(initial?.email || initial?.note));
+  const [pasting, setPasting] = useState(false);
   const [paste, setPaste] = useState("");
   const [pasteNote, setPasteNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const command = useRef(commandId());
+  const nameRef = useRef<HTMLInputElement>(null);
+  const formId = useId();
+  const contacts = contactsSupported();
+
+  // Owner, 22 Oct: adding a lead must be low effort. An empty form starts in
+  // the name box with the keyboard up; a filled-in one waits to be checked.
+  useEffect(() => {
+    if (!open || initial) return;
+    const frame = window.requestAnimationFrame(() => nameRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, initial]);
 
   const set =
     (key: keyof typeof EMPTY) => (event: { target: { value: string } }) =>
@@ -175,6 +190,22 @@ export function AddLeadDialog({
     }));
     if (found.email) setMore(true);
     setPasteNote(`Filled in ${filled.map(([key]) => key).join(", ")}.`);
+  };
+
+  // One person from the phone's contacts fills the form; nothing is saved
+  // until Add lead.
+  const fromContacts = () => {
+    pickContacts()
+      .then(([person]) => {
+        if (!person) return;
+        setForm((current) => ({
+          ...current,
+          name: person.name || current.name,
+          phone: person.phone || current.phone,
+          email: person.email ?? current.email,
+        }));
+      })
+      .catch(() => undefined);
   };
 
   const save = async () => {
@@ -204,83 +235,133 @@ export function AddLeadDialog({
   };
 
   return (
-    <Dialog
+    <Sheet
       open={open}
       title="Add a lead"
       onClose={onClose}
-      actions={
+      wide="center"
+      footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={save} disabled={saving}>
+          <Button
+            variant="primary"
+            type="submit"
+            form={formId}
+            disabled={saving}
+          >
             {saving ? "Adding…" : "Add lead"}
           </Button>
         </>
       }
     >
-      <div className={styles.form}>
+      <form
+        id={formId}
+        className={styles.form}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
         {initial ? (
           <p className={styles.hint} role="status">
             {initialNote}
           </p>
         ) : null}
-        <div className={styles.pasteBox}>
-          <textarea
-            aria-label="Paste a contact or message"
-            rows={2}
-            value={paste}
-            maxLength={2000}
-            placeholder="Paste a WhatsApp message or contact card here"
-            onChange={(event) => {
-              setPaste(event.target.value);
-              setPasteNote(null);
-            }}
-            onPaste={(event) => {
-              const text = event.clipboardData.getData("text");
-              if (text) window.setTimeout(() => fillFrom(text), 0);
-            }}
-          />
-          <Button onClick={() => fillFrom(paste)} disabled={!paste.trim()}>
-            <ClipboardPaste size={14} aria-hidden="true" />
-            Fill in
-          </Button>
-          {pasteNote ? (
-            <p className={styles.hint} role="status">
-              {pasteNote}
-            </p>
-          ) : null}
-        </div>
-        <div className={styles.formGrid}>
+        <div className={styles.quickFields}>
           <Field label="Name">
             <input
+              ref={nameRef}
               value={form.name}
               maxLength={200}
               onChange={set("name")}
               autoComplete="off"
+              autoCapitalize="words"
+              enterKeyHint="next"
             />
           </Field>
           <Field label="Phone">
             <input
               value={form.phone}
               maxLength={40}
+              type="tel"
               inputMode="tel"
               placeholder="98765 43210"
               onChange={set("phone")}
               autoComplete="off"
+              enterKeyHint="done"
             />
-          </Field>
-          <Field label="Interested in">
-            <input
-              value={form.interest}
-              maxLength={200}
-              onChange={set("interest")}
-            />
-          </Field>
-          <Field label="City">
-            <input value={form.city} maxLength={120} onChange={set("city")} />
           </Field>
         </div>
+        <div className={styles.quickHelpers}>
+          {contacts ? (
+            <button
+              type="button"
+              className={styles.helperChip}
+              onClick={fromContacts}
+            >
+              <Contact size={15} aria-hidden="true" />
+              From contacts
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={styles.helperChip}
+            aria-expanded={pasting}
+            onClick={() => setPasting((value) => !value)}
+          >
+            <ClipboardPaste size={15} aria-hidden="true" />
+            Paste a message
+          </button>
+          {more ? null : (
+            <button
+              type="button"
+              className={styles.helperChip}
+              onClick={() => setMore(true)}
+            >
+              <Plus size={15} aria-hidden="true" />
+              More details
+            </button>
+          )}
+        </div>
+        {pasting ? (
+          <div className={styles.pasteBox}>
+            <textarea
+              aria-label="Paste a contact or message"
+              rows={2}
+              value={paste}
+              maxLength={2000}
+              placeholder="Paste a WhatsApp message or contact card here"
+              onChange={(event) => {
+                setPaste(event.target.value);
+                setPasteNote(null);
+              }}
+              onPaste={(event) => {
+                const text = event.clipboardData.getData("text");
+                if (text) window.setTimeout(() => fillFrom(text), 0);
+              }}
+            />
+            <Button onClick={() => fillFrom(paste)} disabled={!paste.trim()}>
+              Fill in
+            </Button>
+            {pasteNote ? (
+              <p className={styles.hint} role="status">
+                {pasteNote}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {more ? (
           <div className={styles.formGrid}>
+            <Field label="Interested in">
+              <input
+                value={form.interest}
+                maxLength={200}
+                onChange={set("interest")}
+              />
+            </Field>
+            <Field label="City">
+              <input value={form.city} maxLength={120} onChange={set("city")} />
+            </Field>
             <Field label="Email">
               <input
                 value={form.email}
@@ -320,28 +401,19 @@ export function AddLeadDialog({
                 onChange={set("note")}
               />
             </Field>
+            <div className={styles.formWide}>
+              <Segmented
+                label="Where it came from"
+                value={source}
+                onChange={setSource}
+                items={[
+                  { key: "manual", label: "Walk-in or call" },
+                  { key: "referral", label: "Referral" },
+                ]}
+              />
+            </div>
           </div>
-        ) : (
-          <button
-            type="button"
-            className={styles.linkButton}
-            onClick={() => setMore(true)}
-          >
-            More details (email, company, language, note)
-          </button>
-        )}
-        <Segmented
-          label="Where it came from"
-          value={source}
-          onChange={(value) => {
-            setSource(value);
-            if (value === "referral") setMore(true);
-          }}
-          items={[
-            { key: "manual", label: "Walk-in or call" },
-            { key: "referral", label: "Referral" },
-          ]}
-        />
+        ) : null}
         {canManage ? (
           <Segmented
             label="Who gets it"
@@ -352,20 +424,19 @@ export function AddLeadDialog({
               { key: "me", label: "Me" },
             ]}
           />
-        ) : (
-          <p className={styles.hint}>It goes on your desk.</p>
-        )}
+        ) : null}
         <p className={styles.hint}>
-          Same phone number as an existing lead? It joins that lead instead of
-          making a second one.
+          {canManage
+            ? "A number you already have joins that lead."
+            : "It goes on your desk. A number you already have joins that lead."}
         </p>
         {error ? (
           <p className={styles.error} role="alert">
             {error}
           </p>
         ) : null}
-      </div>
-    </Dialog>
+      </form>
+    </Sheet>
   );
 }
 
