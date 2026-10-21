@@ -23,6 +23,7 @@ import { OrganisationView } from "../organisation/organisation-view";
 import { Panel } from "../ui/kit";
 import { ConnectedApps } from "./connected-apps";
 import { DevelopersSection } from "./developers";
+import { SellingSettings } from "./selling";
 import type { SettingsSectionId } from "./settings-sections";
 import styles from "./sections.module.css";
 
@@ -115,6 +116,8 @@ export function SettingsSectionView({ id }: { id: SettingsSectionId }) {
   switch (id) {
     case "profile":
       return <AccountSettings only={["profile", "general"]} />;
+    case "selling":
+      return <SellingSettings />;
     case "security":
       return <AccountSettings only={["security"]} />;
     case "plan":
