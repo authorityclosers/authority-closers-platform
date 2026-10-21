@@ -1,0 +1,204 @@
+{
+  "summary": "Negotiation call from Rahul (Nirmal Techcare), with service lead Sneha joining for the SLA part, to Dr. Anjali (founder) and Prakash (admin and finance) of Arogyam's three clinics (Lakeview Road, Station Road, Gandhi Nagar) on the annual IT support proposal of ₹6.8 lakh a year plus GST. Trigger: last month the billing server went down for about two hours in the Monday OPD rush (disk full). Scope confirmed: 48 endpoints (corrected from 45 to include three lab machines), one ClinicPad server, one NAS, 12 printers, 3 CCTV recorders (cameras out of scope); freelance engineer Manoj leaves on 31 October; backups never test-restored; Station Road internet drops and a slow reception PC. SLA: 15-minute remote pickup and 4-hour onsite for critical, next business day for non-critical, helpdesk 8 am to 10 pm all week; buyers want a resident engineer five days instead of three and cover for the Sunday OPD; service credit 5% per breach, capped at 20% a month. On TechSaathi's ₹5.2 lakh quote Rahul dropped to ₹6.4 lakh at once, then asked what it included (8-hour response, Monday to Saturday 9 to 7, no resident engineer). He wrongly said hardware replacement was included, then corrected it to labour only, with parts at cost plus 10%. After counters of ₹5.5 lakh and ₹5.8 lakh against a board-approved ₹6 lakh, Rahul traded ₹6.1 lakh for a two-year term with quarterly advance, then with his director's approval ₹5.95 lakh plus GST, five-day resident engineer and the same price in year two, plus a free backup audit and restore drill. Agreed in principle: ₹1,48,750 a quarter plus GST, 15 days' credit, NDA and approved, logged remote access, start 1 November with a two-week onboarding audit, exit with 90 days' notice after three straight months of SLA breach, a free standby PC, remote cover for two home laptops, contract in the name of Arogyam Healthcare LLP, 2% TDS. Next: revised proposal tomorrow by 6 pm, Sneha's Gandhi Nagar survey Saturday 10 am, PO by 30 October, a reference from Dr. Mehra's dental chain today, Manoj handover call next week. A fourth clinic opens by Holi.",
+  "strengths": [
+    {
+      "title": "Reframed the competitor quote on their own outage",
+      "explanation": "After the first concession you asked what TechSaathi's ₹5.2 lakh actually covers, then laid out three differences against their situation: 8-hour versus 4-hour response, no Sunday while Station Road runs a Sunday OPD, and no resident engineer, ending with 'After what happened last month, is that okay?'. Prakash agreed it was not. Lead with this question next time, before any number moves.",
+      "evidence": [{"segment_id": "s71"}, {"segment_id": "s74"}, {"segment_id": "s75"}, {"segment_id": "s76"}, {"segment_id": "s77"}]
+    },
+    {
+      "title": "Later concessions were traded, not given",
+      "explanation": "On ₹5.5 lakh you explained the resident-engineer cost, then moved to ₹6.1 lakh only for a two-year term with quarterly advance. On ₹5.8 lakh you took it to your director and came back at ₹5.95 lakh with a year-two price lock, landing just under their ₹6 lakh board approval. You answered the backup worry with a free restore drill instead of more discount.",
+      "evidence": [{"segment_id": "s82"}, {"segment_id": "s84"}, {"segment_id": "s88"}, {"segment_id": "s97"}, {"segment_id": "s100"}, {"segment_id": "s102"}]
+    },
+    {
+      "title": "Found the trigger and confirmed scope precisely",
+      "explanation": "You asked what triggered the project now and learned about the two-hour billing outage, then linked it to monitoring. You corrected endpoints to 48, made clear CCTV cameras and the ClinicPad application are out of scope, and positioned 'one window' for vendor coordination, which Dr. Anjali called very important.",
+      "evidence": [{"segment_id": "s15"}, {"segment_id": "s16"}, {"segment_id": "s19"}, {"segment_id": "s23"}, {"segment_id": "s27"}, {"segment_id": "s30"}, {"segment_id": "s31"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Dropped ₹40,000 the moment the competitor number came",
+      "explanation": "When Dr. Anjali quoted TechSaathi at ₹5.2 lakh, you offered ₹6.4 lakh within one sentence, before knowing what that quote covered. She said 'You came down forty thousand in ten seconds... there's a lot more room', and the rest of the negotiation started from that belief. Ask first: 'Before we talk numbers, ma'am, what does their ₹5.2 lakh include: response time, Sunday, resident engineer?'",
+      "evidence": [{"segment_id": "s71"}, {"segment_id": "s72"}, {"segment_id": "s73"}]
+    },
+    {
+      "title": "Cut Prakash off on SLA penalties",
+      "explanation": "Prakash asked what happens contractually if you miss four hours; you cut in with a 96% track record. He said 'Rahul, let me finish. I'm not asking about track record.' For a finance manager who reads every line, answer the clause he asked about; Sneha's 5% per breach, capped at 20%, was the answer he wanted.",
+      "evidence": [{"segment_id": "s60"}, {"segment_id": "s61"}, {"segment_id": "s62"}, {"segment_id": "s64"}, {"segment_id": "s65"}]
+    },
+    {
+      "title": "Said hardware parts were included, then corrected",
+      "explanation": "Asked whether a failed disk or power supply is included, you said yes, then corrected to labour only with parts at cost plus 10%. The correction was right, and Dr. Anjali noted she would have caught it in the contract. Check scope before answering: 'Labour is included; parts are at cost plus 10%, or you buy them.'",
+      "evidence": [{"segment_id": "s78"}, {"segment_id": "s79"}, {"segment_id": "s80"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Fourth clinic by Holi only congratulated",
+      "explanation": "Dr. Anjali said to keep the price sheet handy because a fourth clinic opens by Holi near the new bus depot. You said congratulations and moved on. Offer to build it in: 'Shall I add a clause for a fourth branch at the same per-branch terms from March, so you don't need a new negotiation?'",
+      "evidence": [{"segment_id": "s164"}, {"segment_id": "s165"}]
+    },
+    {
+      "title": "Signing process not asked",
+      "explanation": "You asked for the PO date but never asked who signs. While you were off the line for your director, Dr. Anjali told Prakash that Vivek returns from a conference on the 28th and nothing is signed without his initials. Ask on every close: 'Apart from you both, does anyone else need to approve or sign?'",
+      "evidence": [{"segment_id": "s86"}, {"segment_id": "s93"}, {"segment_id": "s161"}, {"segment_id": "s162"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Four-hour onsite too long",
+      "explanation": "Sneha explained the resident engineer for immediate response; buyers asked for five days and Sunday cover. You noted the five-day cost impact for later instead of conceding on the spot. Good sequencing.",
+      "evidence": [{"segment_id": "s52"}, {"segment_id": "s53"}, {"segment_id": "s54"}, {"segment_id": "s55"}, {"segment_id": "s57"}]
+    },
+    {
+      "title": "SLA penalty",
+      "explanation": "Interrupted with track record first; resolved by Sneha's standard service credit, which Prakash accepted.",
+      "evidence": [{"segment_id": "s61"}, {"segment_id": "s62"}, {"segment_id": "s65"}, {"segment_id": "s66"}]
+    },
+    {
+      "title": "Competitor at ₹5.2 lakh",
+      "explanation": "Instant ₹40,000 drop, then a strong scope comparison. The order should have been reversed.",
+      "evidence": [{"segment_id": "s72"}, {"segment_id": "s73"}, {"segment_id": "s76"}]
+    },
+    {
+      "title": "Counters at ₹5.5 lakh and ₹5.8 lakh",
+      "explanation": "Cost explained, then each move tied to a term (two years, quarterly advance) or to director approval. Final ₹5.95 lakh sits under their ₹6 lakh approval limit.",
+      "evidence": [{"segment_id": "s81"}, {"segment_id": "s84"}, {"segment_id": "s87"}, {"segment_id": "s97"}]
+    },
+    {
+      "title": "Untested backups",
+      "explanation": "You parked Prakash's biggest worry early ('I have something for it') and used the free restore drill to close the deal in principle.",
+      "evidence": [{"segment_id": "s43"}, {"segment_id": "s44"}, {"segment_id": "s101"}, {"segment_id": "s102"}]
+    },
+    {
+      "title": "Patient data and handover risk",
+      "explanation": "NDA, remote access only with Prakash's approval and logged sessions; password reset with written approval if Manoj does not cooperate, while keeping it friendly as Dr. Anjali asked.",
+      "evidence": [{"segment_id": "s110"}, {"segment_id": "s111"}, {"segment_id": "s119"}, {"segment_id": "s121"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Deal in principle with numbers read back",
+      "explanation": "Dr. Anjali agreed in principle at ₹5.95 lakh; you read back the annual, quarterly and two-year terms at the end and Prakash confirmed the same notes.",
+      "evidence": [{"segment_id": "s103"}, {"segment_id": "s171"}, {"segment_id": "s172"}]
+    },
+    {
+      "title": "Every term and next step closed",
+      "explanation": "Invoice format, credit, start date, exclusions, exit clause, monthly review, escalation matrix, contracting entity and TDS were settled, followed by a summary: proposal tomorrow 6 pm, survey Saturday 10 am, PO by 30 October, reference today, Manoj handover next week.",
+      "evidence": [{"segment_id": "s105"}, {"segment_id": "s116"}, {"segment_id": "s125"}, {"segment_id": "s157"}, {"segment_id": "s159"}, {"segment_id": "s163"}, {"segment_id": "s167"}]
+    },
+    {
+      "title": "Free add-ons given without asking anything back",
+      "explanation": "The standby desktop for the full contract and remote cover for two home laptops were agreed instantly at no cost after price was settled. Reasonable for goodwill, but you could have linked them to the reference visit or the fourth-clinic clause.",
+      "evidence": [{"segment_id": "s145"}, {"segment_id": "s146"}, {"segment_id": "s147"}, {"segment_id": "s148"}]
+    }
+  ],
+  "verdict": "A well-closed negotiation: deal in principle at ₹5.95 lakh plus GST for two years, just under the client's ₹6 lakh approval, with traded concessions and a full set of terms. The costly moment was the instant ₹40,000 drop that told the founder there was more room. Interrupting Prakash and the parts slip were recovered. The fourth-clinic signal and the hidden signing step (Vivek's initials) were missed.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Warm, relevant small talk (s4-s10) and care at the end (s178). The honest parts correction built credibility (s79-s80). Interrupting Prakash (s61) cost some goodwill with the line-by-line reader."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Trigger, scope, branch pains and the backup risk were well uncovered (s15-s43). The approval chain beyond the board budget was never explored (s86, s93)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Budget (₹6 lakh board approval) surfaced during negotiation (s86) and was used well. Authority was assumed to be Dr. Anjali and Prakash; Vivek's sign-off was said while you were off the line (s93)."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "The two-hour billing outage and patient anger (s16) were reused to compare 8-hour versus 4-hour response (s76)."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "Each element answered a stated pain: monitoring for disk alerts (s19), guest Wi-Fi isolation (s38), resident engineer (s53), restore drill (s102), USB lock (s138)."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Competitor comparison and traded concessions were strong (s76, s84, s97). The first concession came before any question (s72), and one scope claim had to be corrected (s79)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Deal in principle, full summary and PO date (s103, s157, s163). Missed the fourth-clinic expansion (s164-s165) and did not ask who signs."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Clear summaries and number read-backs (s107, s171). One interruption (s61). Voice tone cannot be judged from text."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Strong value selling and trading after an early, untraded concession that set the founder's expectation of more room.",
+      "evidence": [{"segment_id": "s72"}, {"segment_id": "s73"}, {"segment_id": "s97"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "Agreed in principle at ₹5.95 lakh plus GST a year for two years; revised proposal tomorrow by 6 pm and PO expected by 30 October after Dr. Anjali's approval. Not yet signed.",
+      "evidence": [{"segment_id": "s103"}, {"segment_id": "s157"}, {"segment_id": "s162"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Signed PO", "Vivek's approval", "Fourth-clinic scope and timing", "Margin at ₹5.95 lakh with a five-day resident engineer"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "It turned a ₹1.6 lakh price gap into a question of whether they can survive another eight-hour outage."},
+      {"finding_index": 1, "why_it_matters": "Each move bought something (term, cash flow, approval) and the final number fitted their approval limit, so Prakash could say yes without the board."},
+      {"finding_index": 2, "why_it_matters": "Knowing the outage story and exact scope gave you the arguments you used later in the price discussion."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "You moved from ₹6.8 lakh to ₹6.4 lakh right after hearing ₹5.2 lakh; the founder read it as more room.", "evidence": [{"segment_id": "s72"}, {"segment_id": "s73"}]},
+        "why_it_matters": "An instant concession signals padding in the price and invites further counters, as followed at ₹5.5 lakh and ₹5.8 lakh.",
+        "replacement_behavior": "Acknowledge the number, ask what the competing quote includes, compare scope, and only then trade a concession for a term.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Price reachable without the first concession"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "Prakash's penalty question was interrupted with a track-record claim; he insisted on finishing.", "evidence": [{"segment_id": "s61"}, {"segment_id": "s62"}]},
+        "why_it_matters": "The finance approver needs contract terms, not reassurance; interrupting him signals you are avoiding the clause.",
+        "replacement_behavior": "Let him finish, then answer the clause directly or pass to Sneha: 'Sneha, our standard credit?'",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Prakash's view of the vendor after the call"]}
+      },
+      {
+        "finding_index": 2,
+        "what_happened": {"text": "You said hardware replacement is included, then corrected to labour only.", "evidence": [{"segment_id": "s79"}]},
+        "why_it_matters": "Scope errors in a contract negotiation lead to invoice disputes later.",
+        "replacement_behavior": "Keep the scope sheet open and answer inclusions from it.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Expected parts spend for the clinics"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 3, "why_effective": "Three concrete differences tied to their own outage and Sunday OPD made the cheaper quote look risky."},
+      {"strength_index": 1, "evidence_index": 2, "why_effective": "Pausing to get director approval made ₹5.95 lakh feel like a real final number."},
+      {"strength_index": 1, "evidence_index": 5, "why_effective": "A free restore drill closed the deal on their biggest worry without more discount."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "Dr. Anjali said a fourth clinic opens by Holi and to keep the price sheet handy.", "evidence": [{"segment_id": "s164"}]},
+        "closer_response": {"text": "You congratulated her and moved on.", "evidence": [{"segment_id": "s165"}]},
+        "follow_up": "Add an optional fourth-branch clause with per-branch terms in tomorrow's proposal.",
+        "potential_impact": "Secures the expansion without a fresh competitive negotiation."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "Dr. Anjali told Prakash nothing is signed without Vivek's initials, and he returns on the 28th.", "evidence": [{"segment_id": "s93"}]},
+        "closer_response": {"text": "You asked for the PO date without asking who signs.", "evidence": [{"segment_id": "s161"}]},
+        "follow_up": "Ask Prakash who else signs and make sure the proposal reaches them before 28 October.",
+        "potential_impact": "Protects the 30 October PO date from an unknown approver."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "Dr. Anjali said the fast ₹40,000 drop showed there was more room.", "evidence": [{"segment_id": "s73"}]}, "possible_concern": "She may test any future price, including the fourth clinic, for more discount.", "interpretation_kind": "inference"},
+      {"source": {"text": "While you were off the line she told Prakash she likes having Sneha and a proper team, because one freelancer is not working.", "evidence": [{"segment_id": "s91"}]}, "possible_concern": "Team depth may matter more to her than the last few thousand rupees; keep Sneha visible.", "interpretation_kind": "inference"},
+      {"source": {"text": "Prakash asked for the escalation matrix on page one.", "evidence": [{"segment_id": "s133"}]}, "possible_concern": "He expects to hold you to service levels and will check the contract closely.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Instant ₹40,000 concession.", "purpose": "must_watch", "evidence": [{"segment_id": "s72"}]},
+      {"text": "Competitor scope comparison.", "purpose": "repeat", "evidence": [{"segment_id": "s76"}]},
+      {"text": "Fourth clinic only congratulated.", "purpose": "watch", "evidence": [{"segment_id": "s165"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "You conceded to ₹6.4 lakh and the founder said there must be more room.", "evidence": [{"segment_id": "s72"}, {"segment_id": "s73"}]},
+      "change": {"text": "You asked what the TechSaathi quote includes.", "evidence": [{"segment_id": "s74"}]},
+      "after": {"text": "After your comparison Prakash said an 8-hour response was not okay, shifting the gap from price to value.", "evidence": [{"segment_id": "s76"}, {"segment_id": "s77"}]},
+      "possible_effect": "The question may have stopped the slide and given you grounds to trade rather than give.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "Parts inclusion was misstated and corrected immediately ('I don't want to mislead you').", "evidence": [{"segment_id": "s79"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "When a competitor number is quoted, ask what it includes and compare scope before moving price.", "target": "In the next negotiation, the first concession comes only after a scope comparison and is tied to a term."},
+    "practice": {"improvement_index": 0, "instructions": "Role-play a buyer who opens with a 25% cheaper competitor quote. Respond with two scope questions and one comparison before any number.", "success_condition": "You complete the comparison without offering any discount, and your first concession names what the buyer gives in return."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Scope comparison against the buyer's own pain and trading every concession for a term.",
+      "fix_first": "Never move price in the same breath as hearing a competitor number.",
+      "next_focus": "Confirm the full signing chain and offer a fourth-clinic clause in tomorrow's proposal.",
+      "assessment": "Strong close in principle; protect it by finding every signer before 30 October."
+    }
+  }
+}

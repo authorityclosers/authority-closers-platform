@@ -1,0 +1,198 @@
+{
+  "summary": "Follow-up call from Shweta, senior counsellor at Dhruvtara Academy (Civil Lines branch), to Mr Bhardwaj about his son Aarav's class 11 JEE admission after last Sunday's physics demo. She opened with 'only six morning seats left'; the father then said they had already taken admission at Saarthi Study Circle and paid fees the day before yesterday. His reasons: fee (₹1.44 lakh early-bird against Saarthi's ₹1.15 lakh, a ₹30,000 gap), distance (9 km against 2 km; the bus costs ₹1,200 a month, free only for scholarship students), and above all timing: the 7-10 am batch clashes with school at 7:30 and Civil Lines has no evening batch, while Saarthi has 4:30-7:30 pm. Nobody had asked school timing at the first counselling, which Shweta admitted. Aarav's friend Kunal also joined Saarthi. Shweta interrupted to defend her faculty, criticised Saarthi's faculty (the father pointed to a maths teacher who left Dhruvtara), and tried a save with the DSAT scholarship test on 1 November (up to 20% off) and three instalments; the father declined because of the ₹25,000 non-refundable registration, the mother's view and classes already started. When he asked about a foundation course for his daughter Ananya (class 8, CBSE), Shweta first steered back to Aarav, then gave the weekend foundation batch at ₹42,000 a year. Ananya would join next April; Shweta will WhatsApp the brochure and call at the end of March.",
+  "strengths": [
+    {
+      "title": "Accepted the loss gracefully and set a concrete March follow-up",
+      "explanation": "Once the father said Aarav's decision was final, you stopped pushing, sent the foundation brochure to his WhatsApp, fixed an end-of-March call about Ananya and closed with 'आरव को मेरी तरफ़ से all the best बोलिएगा'. He even apologised for not telling you earlier. This keeps the family warm for the next child.",
+      "evidence": [{"segment_id": "s45"}, {"segment_id": "s53"}, {"segment_id": "s57"}, {"segment_id": "s58"}, {"segment_id": "s59"}]
+    },
+    {
+      "title": "Asked for the real reasons and owned the timing miss",
+      "explanation": "You asked directly why they chose elsewhere and whether Dhruvtara fell short, which got you four clear reasons. When he said nobody asked school timing at the first visit, you admitted it plainly: 'ये हमसे miss हो गया... मुझे पूछना चाहिए था'. That honesty is worth keeping.",
+      "evidence": [{"segment_id": "s11"}, {"segment_id": "s12"}, {"segment_id": "s24"}, {"segment_id": "s25"}]
+    },
+    {
+      "title": "Honest about the scholarship being conditional",
+      "explanation": "When he asked if the 20% was guaranteed, you said no, it depends on marks. Not overselling the save offer kept your credibility on that point.",
+      "evidence": [{"segment_id": "s33"}, {"segment_id": "s34"}, {"segment_id": "s35"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "School timing never asked at the first counselling",
+      "explanation": "The 7-10 am batch was impossible with school at 7:30, and this became the biggest reason for the loss. At the first meeting the team went straight to fees and scholarship. In every class 11 counselling, ask before any fee talk: 'आरव का school कितने बजे लगता है और कितने बजे छूटता है? उसी हिसाब से batch देखते हैं।'",
+      "evidence": [{"segment_id": "s20"}, {"segment_id": "s21"}, {"segment_id": "s24"}, {"segment_id": "s25"}]
+    },
+    {
+      "title": "Cut in to defend faculty while he listed reasons",
+      "explanation": "He had given only the fee reason when you started 'but हमारी faculty—'; he had to say 'एक मिनट madam, पूरा सुन लीजिए'. On a lost-deal call, let the parent finish every reason, then summarise: 'तो fees, distance और timing तीन बातें थीं, सही?'",
+      "evidence": [{"segment_id": "s14"}, {"segment_id": "s15"}, {"segment_id": "s16"}]
+    },
+    {
+      "title": "Criticised the competitor's faculty",
+      "explanation": "When he mentioned Kunal joining Saarthi, you said Saarthi's faculty keeps changing and a chemistry teacher left mid-session. He replied that a maths teacher left Dhruvtara last year, and you had to drop it ('खैर, छोड़िए'). Criticising the other institute after the parent has paid there sounds like sour grapes and costs credibility. Talk only about what you offer.",
+      "evidence": [{"segment_id": "s26"}, {"segment_id": "s27"}, {"segment_id": "s28"}, {"segment_id": "s29"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Daughter's foundation enquiry: steered back to Aarav",
+      "explanation": "The father opened a new opportunity: a foundation course for Ananya. After one question about her board, you went back to re-selling Aarav ('एक बार आरव के लिए फिर से सोचिए'), and he had to repeat 'मैं बेटी का पूछ रहा हूँ'. When a lost prospect raises a new need, follow it fully: 'जी sir, अनन्या के लिए बताती हूँ. Weekend batch चलेगा या weekday?'",
+      "evidence": [{"segment_id": "s46"}, {"segment_id": "s47"}, {"segment_id": "s49"}, {"segment_id": "s50"}]
+    },
+    {
+      "title": "Demo praise not used to keep Aarav's door open properly",
+      "explanation": "The father twice said the physics demo was really good and he briefly thought of shifting. Instead of a free test push, a lighter option would have been asking whether Aarav could use Dhruvtara's test series later; you raised this only near the end.",
+      "evidence": [{"segment_id": "s8"}, {"segment_id": "s42"}, {"segment_id": "s43"}, {"segment_id": "s55"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Fee gap of ₹30,000",
+      "explanation": "You corrected the fee to the ₹1.44 lakh early-bird and accepted the gap, but went straight to faculty instead of letting him finish.",
+      "evidence": [{"segment_id": "s13"}, {"segment_id": "s14"}, {"segment_id": "s15"}]
+    },
+    {
+      "title": "Distance: wrong bus claim, then corrected",
+      "explanation": "You said the bus was free this year, then corrected yourself: free only for scholarship students, ₹1,200 a month for everyone else. He already knew the ₹1,200 figure, so the slip only hurt credibility. Check facts before using them in a save.",
+      "evidence": [{"segment_id": "s16"}, {"segment_id": "s17"}, {"segment_id": "s18"}]
+    },
+    {
+      "title": "Timing: no evening batch",
+      "explanation": "No answer possible this session; you were honest that an evening batch is only planned for next session.",
+      "evidence": [{"segment_id": "s20"}, {"segment_id": "s21"}, {"segment_id": "s22"}]
+    },
+    {
+      "title": "Sunk cost of ₹25,000",
+      "explanation": "You answered the non-refundable registration with 'बच्चे के future का सवाल है'. He pushed back that the future will be fine there too. Emotional pressure does not answer a money point.",
+      "evidence": [{"segment_id": "s36"}, {"segment_id": "s37"}, {"segment_id": "s38"}]
+    },
+    {
+      "title": "Instalments offered to a total-cost objection",
+      "explanation": "His issue was total cost, not cash flow; he said so directly. Listen to which money problem the parent has before offering a payment plan.",
+      "evidence": [{"segment_id": "s39"}, {"segment_id": "s40"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Scarcity push before listening",
+      "explanation": "You opened with 'morning batch में बस छह seats बची हैं' before asking how things stood. He was about to call you with bad news; the pressure line made the conversation harder.",
+      "evidence": [{"segment_id": "s7"}, {"segment_id": "s8"}]
+    },
+    {
+      "title": "Save attempt continued after a clear no",
+      "explanation": "After he said the mother would not agree and Aarav is settling, you asked him to check with Aarav and take the free test. He refused firmly. One save attempt is fine; stop at the first clear reason.",
+      "evidence": [{"segment_id": "s42"}, {"segment_id": "s43"}, {"segment_id": "s44"}]
+    },
+    {
+      "title": "Future opportunity secured",
+      "explanation": "Brochure on WhatsApp and an end-of-March call for Ananya, who would join in April. Also mentioned class 12 test series for Aarav.",
+      "evidence": [{"segment_id": "s52"}, {"segment_id": "s53"}, {"segment_id": "s55"}, {"segment_id": "s57"}]
+    }
+  ],
+  "verdict": "Aarav's admission was lost before this call, mainly because school timing was never checked at the first counselling, plus fee and distance. On this call, interrupting, criticising Saarthi and a wrong bus claim hurt credibility, and the daughter's enquiry was nearly brushed aside. The graceful close with a March follow-up for Ananya saved the relationship.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Warm close and acceptance (s45, s59) kept goodwill, and the admission of the miss was honest (s25). Criticising Saarthi (s27) and the wrong bus claim (s17) reduced trust."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "The original counselling skipped school timing, the decisive factor (s24). On this call, asking for reasons (s11) worked; for Ananya you asked board and school (s47) before drifting."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Money sensitivity, distance, timing and the mother's role in decisions came out only after the loss (s14, s16, s20, s42). These should be qualified at the first meeting."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "The father's needs were practical (time, travel, cost). Appeals to 'future' (s37) did not connect to them."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "Save offers (DSAT, instalments) did not address timing or distance, the real reasons (s33, s39-s40). The weekend foundation batch fitted Ananya's need (s51-s52)."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Defensive handling: interruption (s15), wrong information (s17), competitor criticism (s27), emotional pressure (s37). Honest on the scholarship being conditional (s35)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Pushed once too often after a clear no (s43) but then accepted it (s45) and set a concrete end-of-March follow-up (s57-s58)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Interrupting (s15-s16) and steering back to Aarav (s49-s50) made him repeat himself twice. Voice speed cannot be judged from text; on wording, let him finish."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "The deal was lost at the first counselling by skipping school timing; this call added defensive selling but ended well with a future opportunity.",
+      "evidence": [{"segment_id": "s24"}, {"segment_id": "s27"}, {"segment_id": "s57"}]
+    },
+    "outcome": {
+      "kind": "no_sale",
+      "text": "Aarav stays at Saarthi Study Circle. Foundation brochure for Ananya to be sent on WhatsApp; call at the end of March about her joining next April.",
+      "evidence": [{"segment_id": "s44"}, {"segment_id": "s50"}, {"segment_id": "s57"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Number of other admissions lost to batch timing", "Evening batch launch date", "Ananya's decision next year"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "A family with a younger child is a future admission; ending warmly made the father comfortable to ask about Ananya and agree to a March call."},
+      {"finding_index": 1, "why_it_matters": "Loss reasons are the branch's best feedback; the timing miss is a process fix for every counsellor."},
+      {"finding_index": 2, "why_it_matters": "Overselling a conditional discount would have added to the credibility damage."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "He said nobody asked school timing on the first day; you admitted it was missed.", "evidence": [{"segment_id": "s24"}, {"segment_id": "s25"}]},
+        "why_it_matters": "A batch the student cannot attend makes every other benefit irrelevant.",
+        "replacement_behavior": "Ask school start and end time first, then propose a batch, then fees.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Share of class 11 enquiries with timing clashes"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "You started defending faculty after his first reason; he asked you to let him finish.", "evidence": [{"segment_id": "s15"}, {"segment_id": "s16"}]},
+        "why_it_matters": "Interrupting during a loss review makes the parent defensive and you miss reasons.",
+        "replacement_behavior": "Say 'जी, बताइए, और क्या था?' until he finishes, then summarise his reasons back.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Complete loss reasons across calls"]}
+      },
+      {
+        "finding_index": 2,
+        "what_happened": {"text": "You said Saarthi's faculty keeps changing; he pointed to a Dhruvtara maths teacher who left.", "evidence": [{"segment_id": "s27"}, {"segment_id": "s28"}]},
+        "why_it_matters": "It made you look defensive and gave him a counterexample about your own institute.",
+        "replacement_behavior": "Acknowledge the friend factor and say what Dhruvtara offers: 'Kunal के साथ जाना convenient है, समझ सकती हूँ।'",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Effect on the family's view of Dhruvtara"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 4, "why_effective": "A warm wish for Aarav after losing him left the father apologetic and open to future contact."},
+      {"strength_index": 1, "evidence_index": 3, "why_effective": "A plain admission of the miss turned a complaint into trust."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "He asked whether Dhruvtara has a foundation course for Ananya in class 8.", "evidence": [{"segment_id": "s46"}]},
+        "closer_response": {"text": "You asked about her board, then tried again to re-sell Aarav.", "evidence": [{"segment_id": "s49"}]},
+        "follow_up": "In the March call, ask Ananya's school timing and goals before talking about fees.",
+        "potential_impact": "A new admission from the same family next April."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "He said the demo was really good and he briefly thought of shifting.", "evidence": [{"segment_id": "s42"}]},
+        "closer_response": {"text": "You pushed the free test and asked him to check with Aarav.", "evidence": [{"segment_id": "s43"}]},
+        "follow_up": "Offer a non-pressure option such as test series later, as you did at the end.",
+        "potential_impact": "Keeps Aarav connected without making the father defensive."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "Aarav's friend Kunal joined Saarthi and the mothers had spoken.", "evidence": [{"segment_id": "s26"}]}, "possible_concern": "Social factors and the mother's view may have weighed as much as fees.", "interpretation_kind": "inference"},
+      {"source": {"text": "He apologised for not telling you earlier.", "evidence": [{"segment_id": "s58"}]}, "possible_concern": "He may feel some obligation and remain open to Dhruvtara for his daughter.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Admission of the school-timing miss.", "purpose": "must_watch", "evidence": [{"segment_id": "s25"}]},
+      {"text": "Criticising the competitor's faculty.", "purpose": "watch", "evidence": [{"segment_id": "s27"}]},
+      {"text": "Graceful close with all the best for Aarav.", "purpose": "repeat", "evidence": [{"segment_id": "s59"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "You steered back to re-selling Aarav while he asked about Ananya.", "evidence": [{"segment_id": "s49"}]},
+      "change": {"text": "He insisted Aarav was final; you apologised and answered the foundation question.", "evidence": [{"segment_id": "s50"}, {"segment_id": "s51"}]},
+      "after": {"text": "He engaged: the weekend batch suits, and they will look next April.", "evidence": [{"segment_id": "s52"}]},
+      "possible_effect": "Answering his actual question may have reopened his interest in Dhruvtara for his daughter.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "Said the bus was free this year, then corrected: free only for scholarship students.", "evidence": [{"segment_id": "s17"}]},
+      {"text": "Made an unverified negative claim about a competitor's faculty.", "evidence": [{"segment_id": "s27"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "Ask school start and end time before proposing any batch or fee.", "target": "In every new counselling, the timing question is asked and noted before fees are mentioned."},
+    "practice": {"improvement_index": 0, "instructions": "Write a five-question counselling opener (school, timing, travel, budget, who decides) and use it in your next three counsellings.", "success_condition": "Each counselling note records school timing and the proposed batch fits it."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Asking openly for loss reasons and closing gracefully with a dated follow-up.",
+      "fix_first": "Ask school timing before fees in every counselling.",
+      "next_focus": "On loss calls, listen to all reasons without interrupting and never criticise the competitor.",
+      "assessment": "Deal lost on discovery; relationship kept for the younger child."
+    }
+  }
+}

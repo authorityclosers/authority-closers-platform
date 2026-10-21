@@ -1,0 +1,165 @@
+{
+  "call_id": "fx-08",
+  "call_type": "multi_party",
+  "language_mix": "hi-en",
+  "target_minutes": 30,
+  "seller": {
+    "company": "तंतुशिखा पैकवर्क्स",
+    "product": "पाँच परत परिवहन कार्टन",
+    "price_list": [
+      "कार्टन: अड़तीस रुपये बीस पैसे"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "तन्वी मेरकल",
+      "gender": "f",
+      "age_band": "30s",
+      "style": "commercial, impatient to quote"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "अक्षय पेरुले",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "owner, protective of cash"
+    },
+    {
+      "id": "S3",
+      "role": "manager",
+      "name": "सुचित्रा भानवेल",
+      "gender": "f",
+      "age_band": "30s",
+      "style": "purchase manager, precise"
+    },
+    {
+      "id": "S4",
+      "role": "colleague",
+      "name": "निलय करदुले",
+      "gender": "m",
+      "age_band": "30s",
+      "style": "technical adviser, cautious"
+    }
+  ],
+  "sections": [
+    {
+      "name": "introductions and actual problem",
+      "minutes": 5,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10",
+        "f11",
+        "f12",
+        "f13",
+        "f14",
+        "f15",
+        "f16",
+        "f17",
+        "f34"
+      ]
+    },
+    {
+      "name": "technical discovery and sample scope",
+      "minutes": 6,
+      "facts": [
+        "f18",
+        "f19",
+        "f20",
+        "f21",
+        "f22",
+        "f23",
+        "f24",
+        "f25"
+      ]
+    },
+    {
+      "name": "printing, handling and measurable acceptance",
+      "minutes": 6,
+      "facts": [
+        "f26",
+        "f27",
+        "f28",
+        "f29",
+        "f30",
+        "f31"
+      ]
+    },
+    {
+      "name": "commercial negotiation and unresolved clauses",
+      "minutes": 7,
+      "facts": [
+        "f32",
+        "f33",
+        "f35",
+        "f36",
+        "f37",
+        "f38",
+        "f39",
+        "f40",
+        "f41",
+        "f42",
+        "f43",
+        "f44"
+      ]
+    },
+    {
+      "name": "recap, decision gates and next steps",
+      "minutes": 6,
+      "facts": [
+        "f45",
+        "f46",
+        "f47",
+        "f48",
+        "f49",
+        "f50",
+        "f51",
+        "f52"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "price_too_early",
+      "turn_ids": [
+        "t005"
+      ],
+      "statement": "Seller quoted before confirming dimensions, current monthly demand and handling conditions."
+    },
+    {
+      "id": "k02",
+      "kind": "wrong_info_given",
+      "turn_ids": [
+        "t025"
+      ],
+      "statement": "Seller offered a zero-damage guarantee that the technical colleague immediately challenged and the seller later withdrew."
+    },
+    {
+      "id": "k03",
+      "kind": "ignored_buying_signal",
+      "turn_ids": [
+        "t056"
+      ],
+      "statement": "Seller tried to schedule results before line availability and sample arrival had been confirmed."
+    },
+    {
+      "id": "k04",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t060"
+      ],
+      "statement": "Seller clarified pilot and regular prices, excluded freight and approval-dependent credit."
+    }
+  ]
+}

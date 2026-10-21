@@ -1,0 +1,604 @@
+<meta charset="utf-8">
+<title>Sales X-Ray Analysis Cost</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+<style>
+/* Layout: one reading column (~68ch) for prose; tables and charts run wider inside their own scroll boxes.
+   A ledger feel: tabular figures wherever money appears; marigold marks rupees and targets, teal marks the
+   recommended path, red marks what fails. */
+:root {
+  --paper: #f5f6f8; --panel: #ffffff; --ink: #18202d; --muted: #5a6476; --rule: #d8dde5;
+  --rupee: #a35f00; --rupee-soft: #f6e6cc; --go: #0b6f68; --go-soft: #d4eeea;
+  --stop: #b3261e; --stop-soft: #f8dcd9; --wait: #5b5fc7; --wait-soft: #e3e4fa;
+  --bar1: #2f4a6d; --bar2: #a35f00; --bar3: #0b6f68; --bar4: #7a4f9a; --bar5: #8a8f99; --bar6: #b3261e;
+  --display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f141b; --panel: #151c26; --ink: #e6eaf0; --muted: #9ba6b6; --rule: #273141;
+    --rupee: #f0b34a; --rupee-soft: #3a2b12; --go: #46c2b5; --go-soft: #12302d; --stop: #ff7b6e; --stop-soft: #3a1714;
+    --wait: #a7aaf5; --wait-soft: #22234a;
+    --bar1: #7e9cc6; --bar2: #f0b34a; --bar3: #46c2b5; --bar4: #c19be0; --bar5: #8a93a2; --bar6: #ff7b6e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f141b; --panel: #151c26; --ink: #e6eaf0; --muted: #9ba6b6; --rule: #273141;
+  --rupee: #f0b34a; --rupee-soft: #3a2b12; --go: #46c2b5; --go-soft: #12302d; --stop: #ff7b6e; --stop-soft: #3a1714;
+  --wait: #a7aaf5; --wait-soft: #22234a;
+  --bar1: #7e9cc6; --bar2: #f0b34a; --bar3: #46c2b5; --bar4: #c19be0; --bar5: #8a93a2; --bar6: #ff7b6e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+main { max-width: 1040px; margin: 0 auto; display: grid; gap: 56px; }
+.prose { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; line-height: 1.2; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -0.01em; }
+h2 { font-size: clamp(23px, 3.2vw, 30px); }
+h3 { font-size: 19px; }
+p { margin: 0; }
+section { display: grid; gap: 18px; min-width: 0; }
+section > *, .answer > * { min-width: 0; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.num, td.n, th.n { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+td.n, th.n { text-align: right; white-space: nowrap; }
+.rupee { color: var(--rupee); font-weight: 600; }
+.lede { font-size: 19px; line-height: 1.55; max-width: 64ch; }
+header { padding-top: 48px; display: grid; gap: 20px; max-width: 1040px; margin: 0 auto 40px; }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+.figure { background: var(--panel); padding: 16px 18px; display: grid; gap: 4px; }
+.figure b { font-family: var(--mono); font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.figure span { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.figure.target b { color: var(--rupee); }
+.figure.go b { color: var(--go); }
+ul, ol { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.answer { background: var(--panel); border: 1px solid var(--rule); padding: 22px 24px; display: grid; gap: 14px; }
+.answer h3 { color: var(--go); }
+.pill { display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; vertical-align: 2px; white-space: nowrap; }
+.pill.measured { background: var(--go-soft); color: var(--go); }
+.pill.estimate { background: var(--rupee-soft); color: var(--rupee); }
+.pill.pending { background: var(--wait-soft); color: var(--wait); }
+.pill.fails { background: var(--stop-soft); color: var(--stop); }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--rule); background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; text-align: left; }
+td:first-child { min-width: 210px; }
+th { font-weight: 600; font-size: 12.5px; color: var(--muted); background: var(--paper); }
+tr:last-child td { border-bottom: 0; }
+tr.hl td { background: var(--go-soft); }
+tr.ref td { font-style: italic; color: var(--muted); }
+tr.total td { font-weight: 600; }
+td.good { color: var(--go); font-weight: 600; }
+td.bad { color: var(--stop); }
+.note { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+.dim { color: var(--muted); font-size: 12.5px; font-weight: 400; }
+.chart { background: var(--panel); border: 1px solid var(--rule); padding: 14px 10px 6px; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart text { fill: var(--ink); font-family: var(--body); font-size: 12px; }
+.chart .axis { fill: var(--muted); font-family: var(--mono); font-size: 11px; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; }
+.chart .target { stroke: var(--rupee); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); padding: 4px 6px 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+.flow { font-family: var(--mono); font-size: 13px; line-height: 1.5; white-space: pre; margin: 0; padding: 14px 16px; overflow-x: auto; max-width: 100%; }
+.callout { border-left: 3px solid var(--rupee); padding: 4px 0 4px 16px; max-width: 70ch; }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--rupee-soft); padding: 1px 4px; border-radius: 2px; }
+a { color: var(--go); }
+a:focus-visible { outline: 2px solid var(--rupee); outline-offset: 2px; }
+footer { max-width: 1040px; margin: 56px auto 0; font-size: 13px; color: var(--muted); display: grid; gap: 8px; }
+@media (max-width: 520px) { body { font-size: 15.5px; } .figure b { font-size: 22px; } th, td { padding: 7px 9px; } }
+</style>
+
+<header>
+  <div class="eyebrow">Research paper · v2.0 · 21 Oct 2026 · Authority Closers · 16 fictional calls + 7 real calls annotated by the coaching lead · reviewed by Codex and Gemini</div>
+  <h1>Sales X-Ray call analysis: from ₹1.50 to ₹0.15–0.29 a minute</h1>
+  <p class="lede">Today's pipeline transcribes with Scribe and reads the transcript six times with Gemini 3.8 Flash:
+  ₹1.19 a minute on staging receipts, ₹1.50 on seven real calls. One analysis pass on a Gemini 3.1 Flash-Lite
+  transcript does the same job far cheaper. On 16 fictional calls with known facts, GPT-6 Luna's one pass finds 20 points
+  more facts than today's six stages reading the same transcript. On seven real calls the coaching lead annotated, Gemini
+  3.8 Flash's one pass covers his notes as well as today, and with his Brain 4.0 rubric and timestamped coach notes it
+  covers more (+4 points); Luna covers about 5 points fewer, at a fifth of Gemini's price. Recommended: Flash-Lite →
+  Luna, ₹0.29 a minute at standard speed and ₹0.15 on the half-price Flex and batch tiers; for the best coaching,
+  Gemini 3.8 Flash on the same prompt, ₹0.50 (₹0.25).</p>
+  <div class="figures">
+    <div class="figure"><b>₹1.50</b><span>today on the seven real calls (₹1.19 on staging receipts, 13.8-min call; $0.015)</span></div>
+    <div class="figure go"><b>₹0.29</b><span>Flash-Lite → GPT-6 Luna, standard, measured on the real calls ($0.0029); ₹0.15 on Flex and batch</span></div>
+    <div class="figure go"><b>₹0.50</b><span>Flash-Lite → Gemini 3.8 Flash on the Brain 4.0 prompt: the best coaching, +4 points over today</span></div>
+    <div class="figure target"><b>+20 pts</b><span>facts found by Luna's one pass over today's six stages, same transcripts [+16, +24]</span></div>
+  </div>
+</header>
+
+<main>
+
+<section id="answer">
+  <div class="eyebrow">1 · The answer</div>
+  <h2>Three pipelines to choose from</h2>
+  <pre class="flow">call audio ──► Gemini 3.1 Flash-Lite hears it ──► transcript, speakers, MM:SS        (44 s median)
+           └─► measured locally, free: pauses, silence share, longest talk without a pause, talk ratio
+transcript + measurements ──► ONE analysis pass ──► facts for the CRM · 18 Brain 4.0 scores · coach notes · report</pre>
+  <div class="scroll"><table>
+    <thead><tr><th></th><th>Lean (recommended)</th><th>Best coaching</th><th>Both, in parallel</th><th>Today</th></tr></thead>
+    <tbody>
+      <tr><td>Analysis pass</td><td>GPT-6 Luna: Brain 4.0 rubric + coach notes + measured pauses</td><td>Gemini 3.8 Flash, same prompt</td><td>Luna for facts and scores ‖ Gemini for coach notes and report</td><td>Scribe, then six Gemini 3.8 Flash stages</td></tr>
+      <tr><td>Facts found, fictional calls (Flash-Lite transcripts)</td><td class="n"><span id="b4facts">91%</span><br><span class="dim">first prompt 88.9%</span></td><td class="n">≈ 71%<br><span class="dim">Gemini one pass; not run on this prompt</span></td><td class="n">90.5%</td><td class="n">68.4%</td></tr>
+      <tr><td>Unsupported facts</td><td class="n">3%</td><td class="n">≈ 5%</td><td class="n">3%</td><td class="n">4.0%</td></tr>
+      <tr><td>Coaching lead's notes covered, 7 real calls (vs today, 95% interval)</td><td class="n">40.7%<br><span class="dim">−5.2 [−10.8, +1.1]</span></td><td class="n"><b>50.0%</b><br><span class="dim">+4.0 [−1.8, +10.5]</span></td><td class="n">≈ 50.0%<br><span class="dim">parts measured separately</span></td><td class="n">46.0%</td></tr>
+      <tr><td>₹ per audio minute, standard, measured on the real calls</td><td class="n"><b>₹0.29</b></td><td class="n">₹0.50</td><td class="n">₹0.54</td><td class="n">₹1.50</td></tr>
+      <tr><td>₹ per minute on Flex / batch (half price, answers in minutes)</td><td class="n"><b>₹0.15</b></td><td class="n">₹0.25</td><td class="n">₹0.27</td><td class="n">—</td></tr>
+      <tr><td>From 1 Jan 2027 (Gemini 3.8 Flash ×2)</td><td class="n">unchanged</td><td class="n">₹0.75 / ₹0.38</td><td class="n">₹0.80 / ₹0.40</td><td class="n">higher</td></tr>
+      <tr><td>Time after upload, standard (15-min call)</td><td class="n">≈ 2.5 min</td><td class="n">≈ 2 min</td><td class="n">≈ 2.5 min</td><td class="n">≈ 4–5 min</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">₹ at ₹100/$. Transcription is ₹0.24 of every pipeline's minute on the real calls: they are dense
+  Hindi/Marathi speech (about 196 words a minute), so the transcript's output tokens dominate. Facts come from 16
+  fictional calls judged by Claude Haiku 5.5; coaching from the real calls, mean of the Haiku and GPT-6 Luna judges.
+  "Both" is inferred from its two measured parts.</p>
+  <div class="answer">
+    <h3>Why Lean, and what it gives up</h3>
+    <p>It finds the most facts (the CRM, the prospect profile and the call data all hang on them) with the fewest
+    unsupported ones, costs a fifth of today, and does not double in January. Its coaching covers about 5 points fewer of
+    the coaching lead's notes than today's, an interval that still includes zero. The coaching will change anyway: the
+    Brain 4.0 rubric and the coaching lead's annotated calls are the material to close that gap, as an evaluation set
+    first. If the best coaching matters on day one, run "Both": Luna's facts and scores with Gemini's coach notes and
+    report, ₹0.25 a minute more (₹0.12 on Flex).</p>
+  </div>
+  <div class="answer">
+    <h3>Tomorrow, on today's pipeline, with nothing new to approve: about ₹0.6 a minute</h3>
+    <p>Flex tier on every background Gemini call (same model, half price, answers in 1–15 minutes), stop the deep
+    pipeline's per-segment LLM labels (27% of today's bill, not used by the report), deduplicate re-analysis and no-op
+    the 5-minute pointer timer on unchanged reports. Scribe stays, so this cannot go below ₹0.40: Scribe alone is ₹0.37.</p>
+  </div>
+  <div class="answer">
+    <h3>What the real calls taught</h3>
+    <ul>
+      <li><b>One pass loses nothing on the same transcript.</b> Gemini's one pass equals today's six stages on the real
+      calls (−0.3 points) and on the fictional ones (6.7), at a sixth of the analysis cost. With the Brain 4.0 rubric,
+      measured pauses and timestamped coach notes it covers 4 points more than today (50.0% against 46.0%).</li>
+      <li><b>Measure delivery, don't ask a model to hear it.</b> On the call the coaching lead faulted for having no pauses,
+      the measured silence share is 6.8% against 22% on the call he praised for its pauses. Gemini Flash-Lite, listening
+      to the same audio, said the salesperson "uses pauses effectively", and feeding its impressions to Luna lowered its
+      coverage (33.7% against 37.0% without them). Pauses measured locally are accurate and free; on their own they did
+      not move Luna's coverage (36.7%), so the value is in correct evidence for Tone, Pace &amp; Pauses.</li>
+      <li><b>A bigger model is not the lever.</b> Claude Sonnet 5.5 (₹1.54 a minute) and GPT-6.1 Sol (₹0.85) on the same
+      Brain 4.0 prompt covered no more of the coaching lead's notes than Gemini 3.8 Flash. Asking for timestamped coach
+      notes (10–20 moments, strengths and changes) lifted Luna by about 4 points, as much as switching to Sonnet at 30
+      times the price.</li>
+      <li><b>Judges disagree by up to 20 points</b> and favour their own model family, so every real-call number is a mean
+      of judges from two families; a third (Claude Sonnet on the subscription, no API spend) checks the main rows.</li>
+      <li><b>The ₹0.10 path is now transcription.</b> Flex halves it to ₹0.12; a compact transcript format, or
+      self-hosted IndicConformer (≈ ₹0.02), would take Lean below ₹0.10.</li>
+    </ul>
+  </div>
+  <div class="answer">
+    <h3>Cost by call length (fits from the fictional calls)</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Projected all-in, from measured tokens</th><th class="n">4.5-min call</th><th class="n">13.8-min call</th><th class="n">60-min call</th></tr></thead>
+      <tbody id="answerCost"></tbody>
+    </table></div>
+    <p class="note">Fictional calls are sparser than real ones (transcription ₹0.14 against ₹0.24 a minute), so these
+    rows are lower bounds for real calls; they show how the fixed part of each call weighs on short calls.</p>
+  </div>
+  <div class="answer">
+    <h3>Before production</h3>
+    <p>(1) The owner's approval of the data flows: call audio to Google and transcripts to OpenAI (AC-GOV-AUD-001;
+    the seven research calls were approved on 21 Oct). (2) A week in shadow on staging beside today's pipeline. (3) The
+    18 Brain 4.0 scores stay research until the AC-SVAL review; today's official scoring is unchanged. (4) Scribe was
+    never measured in this study (no bench key), so the transcriber switch rests on the fictional and FLEURS evidence.</p>
+  </div>
+</section>
+
+<section id="today">
+  <div class="eyebrow">2 · Cost anatomy · measured on staging</div>
+  <h2>Where a call's money goes today</h2>
+  <p class="prose">Read-only SQL on dev and staging (35 staging recordings, 457 audio minutes; no production row
+  read). Every paid stage fits <i>fixed per call + per audio minute</i> with R² ≈ 0.9. Gemini 3.8 Flash $0.75 / $3.75
+  per M tokens (doubling on 1 Jan 2027), Scribe v2 $0.22 per hour; ₹100/$ as on the Admin price sheet (the live rate is
+  ₹94.9–96.5, so real rupees are 3.5–5% lower).</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Stage</th><th class="n">Input fixed</th><th class="n">Input / min</th><th class="n">Output fixed</th><th class="n">Output / min</th><th>Reads the transcript</th></tr></thead>
+    <tbody>
+      <tr><td>C4 facts (5–7 min of Devanagari per chunk)</td><td class="n">0</td><td class="n">735</td><td class="n">92</td><td class="n">60</td><td>1× + prompt per chunk</td></tr>
+      <tr><td>C5 report / coaching</td><td class="n">4,122</td><td class="n">617</td><td class="n">3,456</td><td class="n">37</td><td>1× (+1× on repair)</td></tr>
+      <tr><td>Pointer review (27 pointers)</td><td class="n">792</td><td class="n">419</td><td class="n">4,187</td><td class="n">3</td><td>1×</td></tr>
+      <tr><td>Call data fast</td><td class="n">1,263</td><td class="n">400</td><td class="n">1,761</td><td class="n">7</td><td>1×</td></tr>
+      <tr><td>Call data deep (extract + segment labels)</td><td class="n">965</td><td class="n">807</td><td class="n">2,342</td><td class="n">519</td><td>≈ 2×</td></tr>
+      <tr class="total"><td>All LLM stages</td><td class="n">7,142</td><td class="n">2,978</td><td class="n">11,838</td><td class="n">626</td><td>≈ 6× per call</td></tr>
+    </tbody>
+  </table></div>
+  <div class="chart" id="stageChart" role="img" aria-label="Cost per call by stage at 4.5, 13.8 and 60 minutes"></div>
+  <div class="callout prose"><p><b>cost(call) = ₹4.97 + ₹0.825 × minutes.</b> It reproduces the owner's 23 Sep
+  example (≈ 60 min, ₹33.66) within 5% for that day's pipeline; since the call-data engine went live on 19 Oct the same
+  call costs ₹54.5. Output tokens are 68% of the LLM bill, the transcript is read six times with nothing cached, the
+  deep pipeline's "classifier" is a Gemini prompt (27% of a 14-minute call), and Scribe alone is ₹0.367/min.</p></div>
+</section>
+
+<section id="transcription">
+  <div class="eyebrow">3 · Results · transcription</div>
+  <h2>Gemini hears Hindi and Marathi as well as the Indian specialist, at a quarter of the price</h2>
+  <h3>Real human speech (Google FLEURS, 70 sentences each)</h3>
+  <div class="chart" id="asrChart" role="img" aria-label="Transliterated character error rate on real FLEURS speech by transcriber"></div>
+  <div class="scroll"><table>
+    <thead><tr><th>Transcriber</th><th class="n">Hindi clean</th><th class="n">Marathi clean</th><th class="n">Hindi phone</th><th class="n">Marathi phone</th><th class="n">₹/min</th></tr></thead>
+    <tbody id="asrTable"></tbody>
+  </table></div>
+  <p class="note">Character error rate after mapping both sides to one Latin alphabet (tCER), so writing an English word
+  in Devanagari, or "₹2,20,000" for "दोन लाख वीस हजार", is not an error. "Phone" is the same audio band-limited to
+  300–3,400 Hz, noised at 12 dB and μ-law coded at 8 kHz. Gemini 3.8 Flash stopped mid-answer on these Wikipedia
+  sentences (Google's recitation filter), not on the calls.</p>
+  <h3>Fictional phone calls: do names, amounts and dates survive?</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Transcriber</th><th class="n">Critical facts kept</th><th class="n">Garbled</th><th class="n">Marathi–English kept</th><th class="n">tCER</th><th class="n">Speaker accuracy</th><th class="n">₹/min</th></tr></thead>
+    <tbody id="retainTable"></tbody>
+  </table></div>
+  <p class="note">535 critical facts across 16 calls, judged by Claude Haiku 5.5 in any script or number format. Speaker
+  accuracy by time overlap with the true turns. Scribe v2, today's transcriber, is missing: no ElevenLabs bench key, and
+  the production key was not used without approval. Synthetic voices are cleaner than real calls, so use these as a
+  ranking; the FLEURS table above is real speech.</p>
+</section>
+
+<section id="analysis">
+  <div class="eyebrow">4 · Results · analysis</div>
+  <h2>One pass beats six</h2>
+  <h3>On the true transcript (isolates the analysis model)</h3>
+  <div class="chart" id="scatter" role="img" aria-label="Fact recall against analysis cost per minute for each model"></div>
+  <div class="scroll"><table>
+    <thead><tr><th>Analysis</th><th class="n">Fact recall</th><th class="n">2nd judge</th><th class="n">Critical</th><th class="n">Needles</th><th class="n">Traps</th><th class="n">Unsupported</th><th class="n">Coaching truths</th><th class="n">False claims / call</th><th class="n">₹/min</th></tr></thead>
+    <tbody id="oracleTable"></tbody>
+  </table></div>
+  <p class="note">Fact recall: share of 26–60 ground-truth facts per call stated correctly. Needles: facts said once,
+  deep in 15–48-minute calls, half in words that don't match the question. Traps: self-corrections, number forms,
+  competitor prices, third-party names, retractions. Coaching truths: the call author's planted strengths and mistakes
+  that the report identifies. Judges: Claude Haiku 5.5 on every arm, Gemini 3.8 Flash as second judge.</p>
+  <p class="prose"><b>Consistency.</b> Run twice on the same calls, the one-pass Gemini 3.8 Flash gave the same
+  verdict on <b id="consG">91%</b> of the 27 pointers (GPT-6 Luna <span id="consL">84%</span>). Today's separate pointer
+  review agreed with itself on about 70% of verdicts in the 17 Oct replay on real calls.</p>
+  <h3>End to end: audio → transcript → analysis</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Transcriber → analysis</th><th class="n">Fact recall</th><th class="n">Critical</th><th class="n">Needles</th><th class="n">Traps</th><th class="n">Unsupported</th><th class="n">Coaching truths</th><th class="n">₹/min analysis</th></tr></thead>
+    <tbody id="e2eTable"></tbody>
+  </table></div>
+  <p class="note">Two reference rows: today's pipeline on the same Flash-Lite transcripts (the fair comparison) and on
+  the perfect script. Rising "unsupported" rates are misheard words turned into facts; today's pipeline shows the same
+  rise on the same transcripts. On real audio today it reads Scribe's transcripts, whose errors were not measured.</p>
+  <h3>How sure: paired bootstrap against today's pipeline</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Arm minus today (perfect transcript)</th><th class="n">Fact recall</th><th class="n">Critical</th><th class="n">Needles</th><th class="n">Traps</th><th class="n">Unsupported</th><th class="n">Coaching</th></tr></thead>
+    <tbody id="bootTable"></tbody>
+  </table></div>
+  <p class="note">Percentage points, 95% interval from 20,000 resamples of the 16 calls (calls, not facts, are the unit,
+  because facts within a call are not independent). Green: better than today with the interval clear of zero; red:
+  worse. For "unsupported", higher is worse.</p>
+  <h3>Same input: everything on the same Gemini Flash-Lite transcripts</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Arm minus today's pipeline, both on Flash-Lite transcripts</th><th class="n">Fact recall</th><th class="n">Critical</th><th class="n">Needles</th><th class="n">Traps</th><th class="n">Unsupported</th><th class="n">Coaching</th></tr></thead>
+    <tbody id="bootSameTable"></tbody>
+  </table></div>
+  <p class="note" id="sameNote">The fair comparison of pipeline shapes: today's six stages and the one pass read the
+  same imperfect transcript, so transcription errors hit both equally.</p>
+</section>
+
+<section id="realcalls">
+  <div class="eyebrow">5 · Results · real calls, scored against the coaching lead</div>
+  <h2>Seven real calls, judged against the coaching lead's own notes</h2>
+  <div class="prose">
+  <p>The coaching lead listened to seven real sales calls (9–24 minutes, Hindi, Marathi and English; 108 minutes in all)
+  and wrote 81 timestamped notes on six of them: what the salesperson did well, what to improve, and what the buyer
+  signalled. Those notes are the gold standard here. Every pipeline read the same Gemini 3.1 Flash-Lite transcripts.
+  Judges from different model families (Claude Haiku 5.5 and GPT-6 Luna on every pipeline; Gemini 3.8 Flash on most;
+  Claude Sonnet through the Claude subscription, at no API cost, on the main ones) marked each note as covered, partly
+  covered or missed by the pipeline's coaching output, and listed claims the transcript contradicts. The owner approved
+  processing these seven calls for this research on 21 Oct.</p>
+  <p><b>Brain 4.0 one pass</b> is the new shape from round 4: one model call scores the coaching lead's 18-dimension
+  rubric (compacted from the 25,000-line "Accuracy Brain 4.0" document to about 3,000 words, cacheable), with
+  timestamped evidence and a plain-English coaching report, and still extracts the CRM facts.</p>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>Pipeline (all on Flash-Lite transcripts)</th><th class="n">Notes covered (Haiku + Luna)</th><th class="n">Haiku</th><th class="n">Luna</th><th class="n">Gemini</th><th class="n">Sonnet (subscription)</th><th class="n">Strengths</th><th class="n">Improvements</th><th class="n">False claims / call</th><th class="n">₹/min analysis</th></tr></thead>
+    <tbody id="realTable"></tbody>
+  </table></div>
+  <p class="note" id="realNote">Coverage counts a note as 1 when covered and 0.5 when partly covered. The main column,
+  strengths, improvements and false claims are means of the Haiku and Luna judges, the two families every pipeline has.
+  Judges favour their own family: Gemini scores Gemini pipelines highest and Luna scores Luna's. Claude Sonnet, judging
+  on the subscription, ranks the main pipelines the same way as the mean: Gemini with Brain 4.0 and coach notes first
+  (50.0%), today 39.5%, Lean 37.0%. ₹/min is the analysis only, measured on these calls at standard prices;
+  transcription adds ₹0.24.</p>
+  <h3>How sure: paired bootstrap against today's pipeline (6 annotated calls, Haiku + Luna judges)</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Pipeline</th><th class="n">Notes covered</th><th class="n">Today</th><th class="n">Difference, 95% interval</th></tr></thead>
+    <tbody id="realBoot"></tbody>
+  </table></div>
+  <p class="note">Calls are resampled 20,000 times. With six calls and 81 notes, only differences of about 6 points or
+  more are clear of noise; three pipelines are clearly below today, none is clearly above.</p>
+</section>
+
+<section id="cost">
+  <div class="eyebrow">6 · Results · cost</div>
+  <h2>Measured rupees per audio minute, by call length</h2>
+  <div class="chart" id="costChart" role="img" aria-label="Measured cost per audio minute for each pipeline at a 13.8-minute call"></div>
+  <div class="scroll"><table>
+    <thead><tr><th>Pipeline</th><th class="n">4.5 min</th><th class="n">13.8 min</th><th class="n">60 min</th></tr></thead>
+    <tbody id="fitTable"></tbody>
+  </table></div>
+  <p class="note">Each stage fitted as fixed per call + per minute from the request ledger (last request per call and
+  stage). Flex is Gemini's half-price tier (same model, answers in 1–15 minutes, best effort; one request field,
+  confirmed in the API). Dashed lines: ₹0.40 and ₹0.10.</p>
+</section>
+
+<section id="market">
+  <div class="eyebrow">7 · Market · read live 20 Oct 2026</div>
+  <h2>Prices behind the numbers</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Text model</th><th>$ per M in / out</th><th>Flex / batch</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Gemini 3.8 Flash (today)</td><td class="num">0.75 / 3.75</td><td class="num">0.375 / 1.875</td><td>→ 1.50 / 7.50 on 1 Jan 2027; audio in at the text price</td></tr>
+      <tr><td>Gemini 3.1 Flash-Lite</td><td class="num">0.25 / 1.50</td><td class="num">0.125 / 0.75</td><td>audio in $0.50/M (32 tokens/s)</td></tr>
+      <tr><td>Gemini 2.5 Flash-Lite</td><td class="num">0.10 / 0.40</td><td class="num">0.05 / 0.20</td><td><span class="pill fails">closed to new projects</span></td></tr>
+      <tr><td>GPT-6 Luna</td><td class="num">0.10 / 0.50</td><td class="num">0.05 / 0.25</td><td>coded for C5 in the product</td></tr>
+      <tr><td>Claude Haiku 5.5</td><td class="num">0.10 / 0.50</td><td class="num">0.05 / 0.25</td><td></td></tr>
+      <tr><td>DeepSeek V4.1 Flash / GLM-5.3 Flash / MiMo V2.6 Flash</td><td class="num">0.14–0.15 / 0.28–0.60</td><td>—</td><td>reputable hosts; thinking must be capped</td></tr>
+    </tbody>
+  </table></div>
+  <p class="prose">Transcription per audio minute: Scribe v2 ₹0.367, Sarvam ₹0.49–0.59, Deepgram Nova-3 ₹0.52,
+  AssemblyAI ₹0.28–0.38, Groq Whisper turbo ₹0.067, Gemini 3.1 Flash-Lite ₹0.143 measured (₹0.072 Flex). Gemini 3.8
+  Flash takes audio directly: 1,920 tokens per minute, up to 9.5 hours per prompt.</p>
+</section>
+
+<section id="method">
+  <div class="eyebrow">8 · Method</div>
+  <h2>How the benchmark was built</h2>
+  <div class="prose"><ul>
+    <li><b>Calls:</b> 16 fictional calls, 2–48 minutes (264 audio minutes), all eight call types, Indian English,
+      Hinglish, Marathi–English and Hindi; written by three model families (Codex, Gemini, Claude) so no tested family
+      grades only its own writing. 26–60 facts per call with verbatim evidence, needles at 10/50/90% depth, traps,
+      2–6 planted coaching truths, and a reference report in the product's v4 schema. A checker rejects phone numbers,
+      emails, IDs and real brand names.</li>
+    <li><b>Audio:</b> Kokoro voices on GitHub's free runners (Marathi with Marathi phonemes); clean and phone versions;
+      true turn timings for speaker scoring. Real-speech check: FLEURS Hindi and Marathi.</li>
+    <li><b>Today's pipeline</b> was not re-implemented: the harness imports the product's own prompt builders read-only
+      and sends exactly those requests (C4, C5, pointer review, call-data fast, deep extract, deep labels).</li>
+    <li><b>Spend:</b> $12.5 of the $20 OpenRouter credit; Deepgram, AssemblyAI, Sarvam and Groq on free credit or free
+      tier; GitHub runners free. No real customer or staff audio left the providers already in use.</li>
+    <li><b>Hybrid (shape d):</b> a small embedding classifier trained on 1,253 labelled segments agreed with the LLM's
+      segment labels only 33–61% of the time (near the majority-class baseline), so per-segment labels can't move to a
+      local model on this data; measured audio features stay local as they are today.</li>
+  </ul></div>
+</section>
+
+<section id="review">
+  <div class="eyebrow">9 · Independent review</div>
+  <h2>What Codex and Gemini said about these conclusions</h2>
+  <div class="prose" id="reviewBox"><p><span class="pill pending">in progress</span> Codex (GPT-6.1 Sol) and Gemini
+  3.8 Flash (agy) are reviewing the paper, scores, ledger and harness independently.</p></div>
+</section>
+
+<section id="limits">
+  <div class="eyebrow">10 · Limits</div>
+  <h2>What this round cannot show</h2>
+  <div class="prose"><ul>
+    <li><b>Scribe was not measured</b> (no bench key; the production key was not used without approval), so the
+      end-to-end comparison is against today's pipeline on a perfect transcript, which flatters today.</li>
+    <li><b>Synthetic calls are cleaner than real ones</b>, Marathi voices carry a Hindi accent, and FLEURS is read
+      speech. A real-call check on staging staff calls needs the owner's approval.</li>
+    <li><b>Flex was not called</b>: its prices are half of the measured standard prices; latency, fallbacks and
+      availability are unmeasured. The 2.5-minute call stays at ₹0.50/min even on Flex.</li>
+    <li><b>Scoring favours the new format</b>: the one-pass arms write facts in the benchmark's own types, today's facts
+      are mined from its fact stages only, and judges drop roles and anchors. Some rows are judged by the same model
+      family that wrote them.</li>
+    <li><b>16 calls, 24 needles</b>: needle and trap results are inconclusive; the speaker metric is a rough
+      time-overlap mapping, not DER.</li>
+    <li><b>Costs</b> keep the last successful request per call and stage (research reruns excluded, production retries
+      would be billed).</li>
+  </ul></div>
+</section>
+
+</main>
+
+<footer>
+  <p>Work folder on ac: <code>/home/acdev/research/analysis-cost-20261020/</code> (calls, harness, request ledger,
+  scores, reviews). Paper sources: <code>docs/research/2026-10-20-analysis-cost/</code>. Every API request is in
+  <code>results/ledger.jsonl</code> with tokens, audio seconds and cost, never content.</p>
+  <p>Prepared by the analysis-cost research session for Suyash Kulkarni. ₹ at ₹100/$ unless stated.</p>
+</footer>
+
+<script>
+(function () {
+  const D = %%DATA%%;
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const pct = (x, d = 0) => (x == null ? "—" : (100 * x).toFixed(d) + "%");
+  const inr = (x, d = 3) => (x == null || isNaN(x) ? "—" : "₹" + Number(x).toFixed(d));
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (n, a, t) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (t != null) e.textContent = t; return e; };
+  const lb = D.leaderboard || [];
+  const find = (arm, judge) => lb.find(r => r.arm === arm && r.judge === judge);
+  const H = "anthropic_claude-haiku-5.5", G = "google_gemini-3.8-flash";
+
+  // ---- answer cost rows and fit table
+  const P = (D.fits && D.fits.pipelines) || {};
+  const rowFit = (name, label, cls) => { const v = P[name]; if (!v) return ""; return `<tr${cls ? ` class="${cls}"` : ""}><td>${label}</td><td class="n">${inr(v["4.5"], 2)}</td><td class="n">${inr(v["13.8"], 2)}</td><td class="n">${inr(v["60.0"], 2)}</td></tr>`; };
+  document.getElementById("answerCost").innerHTML =
+    rowFit("Today: Scribe + today's 6 stages on 3.8 Flash", "Today (staging receipts: ₹1.93 / ₹1.19 / ₹0.91)", "ref") +
+    rowFit("Lean: 3.1 Flash-Lite + GPT-6 Luna Brain 4.0, standard", "Lean, standard", "hl") +
+    rowFit("Lean: 3.1 Flash-Lite (Flex) + GPT-6 Luna Brain 4.0 (batch)", "Lean, Flex and batch", "hl") +
+    rowFit("3.1 Flash-Lite transcript + one pass 3.8 Flash (v2), standard", "Gemini 3.8 Flash one pass, standard") +
+    rowFit("3.1 Flash-Lite transcript + one pass 3.8 Flash (v2), Flex", "Gemini 3.8 Flash one pass, Flex");
+  { const b4 = (D.leaderboard || []).find(r => r.arm && r.arm.startsWith("text/brain4/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite") && r.judge && r.judge.includes("haiku"));
+    const el = document.getElementById("b4facts"); if (b4 && el) el.textContent = pct(b4.recall, 1); }
+  document.getElementById("fitTable").innerHTML = Object.keys(P).map(n => {
+    const v = P[n]; if (v["13.8"] == null || isNaN(v["13.8"])) return "";
+    const cls = n.startsWith("Today") ? "ref" : n.startsWith("Lean") ? "hl" : "";
+    return `<tr${cls ? ` class="${cls}"` : ""}><td>${n}</td><td class="n">${inr(v["4.5"], 2)}</td><td class="n">${inr(v["13.8"], 2)}</td><td class="n">${inr(v["60.0"], 2)}</td></tr>`;
+  }).join("");
+
+  // ---- oracle table (true transcript)
+  const oracle = [
+    ["text/today/google_gemini-3.8-flash/oracle/run1", "Today: six passes, Gemini 3.8 Flash", "ref"],
+    ["text/onepass2/google_gemini-3.8-flash/oracle/run1", "One pass, Gemini 3.8 Flash, exhaustive prompt", "hl"],
+    ["text/onepass/google_gemini-3.8-flash/oracle/run1", "One pass, Gemini 3.8 Flash, first prompt", ""],
+    ["text/onepass/openai_gpt-6-luna/oracle/run1", "One pass, GPT-6 Luna", ""],
+    ["text/onepass2/openai_gpt-6-luna/oracle/run1", "One pass, GPT-6 Luna, exhaustive prompt", ""],
+    ["text/onepass/anthropic_claude-haiku-5.5/oracle/run1", "One pass, Claude Haiku 5.5", ""],
+    ["text/onepass/deepseek_deepseek-v4.1-flash/oracle/run1", "One pass, DeepSeek V4.1 Flash", ""],
+    ["text/onepass/z-ai_glm-5.3-flash/oracle/run1", "One pass, GLM-5.3 Flash", ""],
+    ["text/onepass/xiaomi_mimo-v2.6-flash/oracle/run1", "One pass, MiMo V2.6 Flash", ""],
+    ["text/onepass/openai_gpt-oss-120b/oracle/run1", "One pass, gpt-oss-120b", ""],
+    ["text/onepass/qwen_qwen3.8-flash/oracle/run1", "One pass, Qwen 3.8 Flash", ""],
+    ["text/onepass/google_gemini-3.5-flash-lite/oracle/run1", "One pass, Gemini 3.5 Flash-Lite", ""],
+    ["text/onepass2/google_gemini-3.1-flash-lite/oracle/run1", "One pass, Gemini 3.1 Flash-Lite, exhaustive prompt", ""],
+  ];
+  const qcell = (v, ref, hi = true) => { if (v == null) return `<td class="n">—</td>`; let c = ""; if (ref != null) c = (hi ? v >= ref + 0.03 : v <= ref - 0.03) ? "good" : (hi ? v <= ref - 0.05 : v >= ref + 0.05) ? "bad" : ""; return `<td class="n ${c}">${pct(v)}</td>`; };
+  const base = find(oracle[0][0], H) || {};
+  document.getElementById("oracleTable").innerHTML = oracle.map(([arm, label, cls]) => {
+    const r = find(arm, H); if (!r) return ""; const g = find(arm, G);
+    const isRef = cls === "ref";
+    return `<tr${cls ? ` class="${cls}"` : ""}><td>${label}</td>${qcell(r.recall, isRef ? null : base.recall)}<td class="n">${g ? pct(g.recall) : "—"}</td>${qcell(r.critical_recall, isRef ? null : base.critical_recall)}${qcell(r.needle_recall, isRef ? null : base.needle_recall)}${qcell(r.trap_accuracy, isRef ? null : base.trap_accuracy)}<td class="n">${pct(r.hallucination, 1)}</td>${qcell(r.truth_coverage, isRef ? null : base.truth_coverage)}<td class="n">${r.false_claims_per_call == null ? "—" : r.false_claims_per_call.toFixed(2)}</td><td class="n">${inr(r.analysis_inr_per_min)}</td></tr>`;
+  }).join("");
+
+  // ---- end to end
+  const e2e = [
+    ["text/onepass2/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1", "Gemini 3.1 Flash-Lite → Gemini 3.8 Flash, exhaustive", "hl"],
+    ["text/onepass2/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.8-flash_phone_8k/run1", "Gemini 3.8 Flash → Gemini 3.8 Flash, exhaustive", ""],
+    ["text/onepass2/google_gemini-3.8-flash/asr_sarvam_saaras-v4_phone_8k/run1", "Sarvam → Gemini 3.8 Flash, exhaustive", ""],
+    ["text/onepass2/google_gemini-3.8-flash/asr_deepgram_nova-3_phone_8k/run1", "Deepgram → Gemini 3.8 Flash, exhaustive", ""],
+    ["text/onepass2/google_gemini-3.8-flash/asr_groq_whisper-large-v3-turbo_phone_8k/run1", "Groq Whisper turbo → Gemini 3.8 Flash, exhaustive", ""],
+    ["text/onepass/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1", "Gemini 3.1 Flash-Lite → GPT-6 Luna", ""],
+    ["text/onepass3/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1", "Gemini 3.1 Flash-Lite → GPT-6 Luna, coaching prompt (round 2)", ""],
+    ["text/onepass2/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1", "Gemini 3.1 Flash-Lite → GPT-6 Luna, exhaustive", ""],
+    ["text/onepass2/anthropic_claude-haiku-5.5/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1", "Gemini 3.1 Flash-Lite → Haiku 5.5, exhaustive", ""],
+    ["audio1/google_gemini-3.1-flash-lite/phone_8k/run1", "Audio → Gemini 3.1 Flash-Lite in one call", ""],
+    ["text/today/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1", "Reference: today's pipeline on the same Flash-Lite transcripts", "ref"],
+    ["text/today/google_gemini-3.8-flash/oracle/run1", "Reference: today's pipeline on the perfect script", "ref"],
+  ];
+  document.getElementById("e2eTable").innerHTML = e2e.map(([arm, label, cls]) => {
+    const r = find(arm, H); if (!r) return "";
+    return `<tr${cls ? ` class="${cls}"` : ""}><td>${label}</td><td class="n">${pct(r.recall)}</td><td class="n">${pct(r.critical_recall)}</td><td class="n">${pct(r.needle_recall)}</td><td class="n">${pct(r.trap_accuracy)}</td><td class="n">${pct(r.hallucination, 1)}</td><td class="n">${pct(r.truth_coverage)}</td><td class="n">${inr(r.analysis_inr_per_min)}</td></tr>`;
+  }).join("");
+  const hero = find(e2e[0][0], H), aR = document.getElementById("aRecall"); if (hero && aR) aR.textContent = pct(hero.recall);
+
+  // ---- ASR tables
+  const ASR = D.asr || [];
+  const price = {"sarvam_saaras-v4": "0.59", "deepgram_nova-3": "0.52", "assemblyai_universal-2": "0.28", "assemblyai_universal-3-5-pro": "0.38",
+                 "groq_whisper-large-v3": "0.185", "groq_whisper-large-v3-turbo": "0.067", "openrouter_google_gemini-3.1-flash-lite": "0.143",
+                 "openrouter_google_gemini-3.8-flash": "0.228", "openrouter_google_gemini-3.5-flash-lite": "0.142"};
+  const nice = (a) => a.replace("openrouter_google_", "").replace("_", " ").replace("gemini-", "Gemini ").replace("flash-lite", "Flash-Lite").replace("-flash", " Flash");
+  const real = {};
+  ASR.forEach(r => (r.per_call || []).forEach(p => { if (p.call && p.call.startsWith("rs-")) (real[r.arm] ||= {})[p.call.slice(10) + "_" + r.variant] = p.tcer; }));
+  document.getElementById("asrTable").innerHTML = Object.entries(real).sort((a, b) => (a[1].hi_phone_8k ?? 9) - (b[1].hi_phone_8k ?? 9)).map(([arm, v]) => `<tr${arm.includes("3.1-flash-lite") ? ' class="hl"' : ""}><td>${nice(arm)}</td><td class="n">${pct(v.hi_clean_16k, 1)}</td><td class="n">${pct(v.mr_clean_16k, 1)}</td><td class="n">${pct(v.hi_phone_8k, 1)}</td><td class="n">${pct(v.mr_phone_8k, 1)}</td><td class="n">${price[arm] ? "₹" + price[arm] : "—"}</td></tr>`).join("");
+  const syn = {};
+  ASR.filter(r => r.variant === "phone_8k").forEach(r => { const pc = (r.per_call || []).filter(p => p.call && p.call.startsWith("fx-") && p.tcer != null); if (!pc.length) return; const m = pc.reduce((a, p) => a + p.min, 0); const sp = pc.filter(p => p.spk_acc != null); syn[r.arm] = {tcer: pc.reduce((a, p) => a + p.tcer * p.min, 0) / m, spk: sp.reduce((a, p) => a + p.spk_acc * p.min, 0) / sp.reduce((a, p) => a + p.min, 0)}; });
+  document.getElementById("retainTable").innerHTML = (D.retain || []).filter(r => r.variant === "phone_8k").sort((a, b) => b.retained - a.retained).map(r => `<tr${r.arm.includes("3.1-flash-lite") ? ' class="hl"' : ""}><td>${nice(r.arm)}</td><td class="n">${pct(r.retained, 1)}</td><td class="n">${pct(r.garbled, 1)}</td><td class="n">${pct(r.by_lang && r.by_lang["mr-en"], 1)}</td><td class="n">${syn[r.arm] ? pct(syn[r.arm].tcer, 1) : "—"}</td><td class="n">${syn[r.arm] ? pct(syn[r.arm].spk) : "—"}</td><td class="n">${price[r.arm] ? "₹" + price[r.arm] : "—"}</td></tr>`).join("");
+
+  // ---- charts
+  const st = {"C4": [0, 735, 92, 60], "C5": [4122, 617, 3456, 37], "Pointer review": [792, 419, 4187, 3], "Fast": [1263, 400, 1761, 7], "Deep": [965, 807, 2342, 519]};
+  function stageChart() {
+    const host = document.getElementById("stageChart"); host.innerHTML = "";
+    const lens = [4.5, 13.8, 60], colors = ["--bar1", "--bar5", "--bar2", "--bar4", "--bar3", "--bar6"], names = ["Scribe", "C4", "C5", "Pointer review", "Fast", "Deep"];
+    const rows = lens.map(m => { const v = [0.367 * m]; for (const k of Object.keys(st)) { const [a, b, c, d] = st[k]; v.push(((a + b * m) * 0.75 + (c + d * m) * 3.75) / 1e6 * 100); } return v; });
+    const W = 760, Hh = 150, L = 92, R = 150, max = Math.max(...rows.map(r => r.reduce((x, y) => x + y)));
+    const svg = el("svg", {viewBox: `0 0 ${W} ${Hh}`}); const sx = (x) => L + (W - L - R) * x / max;
+    [0, 10, 20, 30, 40, 50].forEach(t => { if (t <= max) { svg.appendChild(el("line", {x1: sx(t), x2: sx(t), y1: 6, y2: Hh - 22, class: "grid"})); svg.appendChild(el("text", {x: sx(t), y: Hh - 6, "text-anchor": "middle", class: "axis"}, "₹" + t)); } });
+    rows.forEach((r, i) => { const y = 10 + i * 40; let x = 0; svg.appendChild(el("text", {x: L - 8, y: y + 17, "text-anchor": "end"}, lens[i] + " min")); r.forEach((v, j) => { svg.appendChild(el("rect", {x: sx(x), y, width: Math.max(0.5, sx(x + v) - sx(x)), height: 24, fill: css(colors[j])})); x += v; }); const tot = r.reduce((a, b) => a + b); svg.appendChild(el("text", {x: sx(tot) + 6, y: y + 17, class: "axis"}, "₹" + tot.toFixed(1) + " · ₹" + (tot / lens[i]).toFixed(2) + "/min")); });
+    host.appendChild(svg); const lg = document.createElement("div"); lg.className = "legend";
+    names.forEach((n, j) => { const s = document.createElement("span"); s.innerHTML = `<i style="background:${css(colors[j])}"></i>${n}`; lg.appendChild(s); }); host.appendChild(lg);
+  }
+  function asrChart() {
+    const host = document.getElementById("asrChart"); host.innerHTML = "";
+    const arms = Object.keys(real).filter(a => Object.values(real[a]).some(v => v != null)); const cols = ["--bar3", "--bar2", "--bar1", "--bar4", "--bar5", "--bar6", "--bar1", "--bar2"];
+    const cats = [["hi", "clean_16k", "Hindi clean"], ["mr", "clean_16k", "Marathi clean"], ["hi", "phone_8k", "Hindi phone"], ["mr", "phone_8k", "Marathi phone"]];
+    const W = 760, Hh = 240, L = 46, B = 40, gw = (W - L - 10) / cats.length, bw = Math.min(22, (gw - 16) / arms.length);
+    const svg = el("svg", {viewBox: `0 0 ${W} ${Hh}`}); const sy = (v) => Hh - B - (Hh - B - 12) * Math.min(v, 1);
+    [0, 0.25, 0.5, 0.75, 1].forEach(t => { svg.appendChild(el("line", {x1: L, x2: W - 10, y1: sy(t), y2: sy(t), class: "grid"})); svg.appendChild(el("text", {x: L - 6, y: sy(t) + 4, "text-anchor": "end", class: "axis"}, (t * 100) + "%")); });
+    cats.forEach((c, i) => { const x0 = L + i * gw + (gw - bw * arms.length) / 2; arms.forEach((a, j) => { const v = real[a][c[0] + "_" + c[1]]; if (v == null) return; svg.appendChild(el("rect", {x: x0 + j * bw, y: sy(v), width: bw - 3, height: sy(0) - sy(v), fill: css(cols[j % cols.length])})); }); svg.appendChild(el("text", {x: L + i * gw + gw / 2, y: Hh - B + 18, "text-anchor": "middle"}, c[2])); });
+    host.appendChild(svg); const lg = document.createElement("div"); lg.className = "legend";
+    arms.forEach((a, j) => { const s = document.createElement("span"); s.innerHTML = `<i style="background:${css(cols[j % cols.length])}"></i>${nice(a)}`; lg.appendChild(s); }); host.appendChild(lg);
+  }
+  function scatter() {
+    const host = document.getElementById("scatter"); host.innerHTML = "";
+    const pts = oracle.map(([arm, label, cls]) => { const r = find(arm, H); return r && r.analysis_inr_per_min != null ? {x: r.analysis_inr_per_min, y: r.recall, label: label.replace("One pass, ", "").replace(", exhaustive prompt", " (v2)").replace(", first prompt", " (v1)").replace("Today: six passes, Gemini 3.8 Flash", "Today (6 passes)"), cls} : null; }).filter(Boolean);
+    const W = 760, Hh = 340, L = 50, R = 20, T = 28, B = 40; const lx = (v) => Math.log10(Math.max(v, 0.008));
+    const x0 = lx(0.008), x1 = lx(1.0); const sx = (v) => L + (W - L - R) * (lx(v) - x0) / (x1 - x0); const sy = (v) => T + (Hh - T - B) * (1 - v);
+    const svg = el("svg", {viewBox: `0 0 ${W} ${Hh}`});
+    [0.01, 0.03, 0.1, 0.3, 1].forEach(t => { svg.appendChild(el("line", {x1: sx(t), x2: sx(t), y1: T, y2: Hh - B, class: "grid"})); svg.appendChild(el("text", {x: sx(t), y: Hh - B + 16, "text-anchor": "middle", class: "axis"}, "₹" + t)); });
+    [0, 0.25, 0.5, 0.75, 1].forEach(t => { svg.appendChild(el("line", {x1: L, x2: W - R, y1: sy(t), y2: sy(t), class: "grid"})); svg.appendChild(el("text", {x: L - 6, y: sy(t) + 4, "text-anchor": "end", class: "axis"}, (t * 100) + "%")); });
+    svg.appendChild(el("text", {x: (W + L) / 2, y: Hh - 4, "text-anchor": "middle", class: "axis"}, "analysis ₹ per audio minute (log scale)"));
+    svg.appendChild(el("text", {x: L, y: 14, class: "axis"}, "fact recall"));
+    pts.forEach(p => { const c = p.cls === "ref" ? css("--bar6") : p.cls === "hl" ? css("--bar3") : css("--bar1"); svg.appendChild(el("circle", {cx: sx(p.x), cy: sy(p.y), r: 5.5, fill: c})); const right = sx(p.x) < W - 200; svg.appendChild(el("text", {x: sx(p.x) + (right ? 9 : -9), y: sy(p.y) + 4, "text-anchor": right ? "start" : "end", style: "font-size:11.5px"}, p.label)); });
+    host.appendChild(svg);
+  }
+  function costChart() {
+    const host = document.getElementById("costChart"); host.innerHTML = "";
+    const rows = Object.entries(P).filter(([n, v]) => v["13.8"] != null && !isNaN(v["13.8"])).map(([n, v]) => ({n, v: v["13.8"]})).sort((a, b) => b.v - a.v);
+    const W = 760, rowH = 22, L = 360, R = 60, Hh = rows.length * rowH + 30, max = 1.1;
+    const svg = el("svg", {viewBox: `0 0 ${W} ${Hh}`}); const sx = (x) => L + (W - L - R) * Math.min(x, max) / max;
+    [0, 0.25, 0.5, 0.75, 1].forEach(t => { svg.appendChild(el("line", {x1: sx(t), x2: sx(t), y1: 4, y2: Hh - 22, class: "grid"})); svg.appendChild(el("text", {x: sx(t), y: Hh - 6, "text-anchor": "middle", class: "axis"}, "₹" + t.toFixed(2))); });
+    rows.forEach((r, i) => { const y = 6 + i * rowH; const c = r.v <= 0.10 ? "--bar3" : r.v <= 0.40 ? "--bar2" : "--bar5"; svg.appendChild(el("text", {x: L - 8, y: y + 13, "text-anchor": "end", style: "font-size:11.5px"}, r.n.length > 60 ? r.n.slice(0, 59) + "…" : r.n)); svg.appendChild(el("rect", {x: sx(0), y: y + 3, width: Math.max(1, sx(r.v) - sx(0)), height: 14, fill: css(c)})); svg.appendChild(el("text", {x: sx(r.v) + 5, y: y + 14, class: "axis"}, "₹" + r.v.toFixed(3))); });
+    [0.10, 0.40].forEach(t => svg.appendChild(el("line", {x1: sx(t), x2: sx(t), y1: 2, y2: Hh - 22, class: "target"})));
+    host.appendChild(svg);
+  }
+  // ---- bootstrap
+  const bootLabel = {
+    "text/onepass2/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1": "Flash-Lite transcript → 3.8 Flash one pass",
+    "text/onepass2/google_gemini-3.8-flash/oracle/run1": "3.8 Flash one pass, perfect transcript",
+    "text/onepass/openai_gpt-6-luna/oracle/run1": "GPT-6 Luna, perfect transcript",
+    "text/onepass/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1": "Flash-Lite transcript → GPT-6 Luna",
+    "text/onepass2/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1": "Flash-Lite transcript → GPT-6 Luna, exhaustive",
+    "text/onepass/anthropic_claude-haiku-5.5/oracle/run1": "Claude Haiku 5.5, perfect transcript",
+    "text/onepass2/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.8-flash_phone_8k/run1": "3.8 Flash transcript → 3.8 Flash one pass",
+    "text/onepass3/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1": "Flash-Lite transcript → GPT-6 Luna, coaching prompt (round 2)"};
+  const bcell = (x, worseIfUp) => { if (!x) return `<td class="n">—</td>`; const sig = x.lo > 0 || x.hi < 0; const good = worseIfUp ? x.hi < 0 : x.lo > 0; const bad = worseIfUp ? x.lo > 0 : x.hi < 0; const f = (v) => (v >= 0 ? "+" : "−") + Math.abs(100 * v).toFixed(1); return `<td class="n ${good ? "good" : bad ? "bad" : ""}">${f(x.diff)} <span style="opacity:.7">[${f(x.lo)}, ${f(x.hi)}]</span></td>`; };
+  document.getElementById("bootTable").innerHTML = (D.bootstrap || []).map(r => `<tr><td>${bootLabel[r.arm] || r.arm}</td>${bcell(r.metrics.recall)}${bcell(r.metrics.critical)}${bcell(r.metrics.needles)}${bcell(r.metrics.traps)}${bcell(r.metrics.unsupported, true)}${bcell(r.metrics.coaching)}</tr>`).join("");
+  const sameLabel = (a) => a.includes("onepass3/openai_gpt-6-luna") ? "GPT-6 Luna, coaching prompt (round 2)" : a.includes("onepass2/google_gemini-3.8-flash") ? "Gemini 3.8 Flash one pass" : a.includes("onepass2/openai_gpt-6-luna") ? "GPT-6 Luna, exhaustive prompt" : a.includes("onepass/openai_gpt-6-luna") ? "GPT-6 Luna one pass" : a.includes("haiku") ? "Claude Haiku 5.5, exhaustive prompt" : a;
+  const same = D.bootstrap_same || [];
+  document.getElementById("bootSameTable").innerHTML = same.length ? same.map(r => `<tr><td>${sameLabel(r.arm)}</td>${bcell(r.metrics.recall)}${bcell(r.metrics.critical)}${bcell(r.metrics.needles)}${bcell(r.metrics.traps)}${bcell(r.metrics.unsupported, true)}${bcell(r.metrics.coaching)}</tr>`).join("") : `<tr><td colspan="7"><span class="pill pending">running</span> today's pipeline on the Flash-Lite transcripts</td></tr>`;
+  // ---- real calls (coaching lead's notes)
+  const RCL = {"today:google/gemini-3.8-flash": "Today's six stages, Gemini 3.8 Flash",
+    "onepass2:google/gemini-3.8-flash": "One pass, Gemini 3.8 Flash (exhaustive prompt)",
+    "onepass:openai/gpt-6-luna": "One pass, GPT-6 Luna (first prompt)",
+    "onepass3:openai/gpt-6-luna": "One pass, GPT-6 Luna (coaching prompt)",
+    "brain4:openai/gpt-6-luna": "Brain 4.0 one pass, GPT-6 Luna",
+    "brain4:openai/gpt-6-luna-pro": "Brain 4.0 one pass, GPT-6 Luna Pro",
+    "brain4:google/gemini-3.8-flash": "Brain 4.0 one pass, Gemini 3.8 Flash",
+    "brain4:anthropic/claude-sonnet-5.5": "Brain 4.0 one pass, Claude Sonnet 5.5",
+    "brain4:openai/gpt-6.1-sol": "Brain 4.0 one pass, GPT-6.1 Sol",
+    "brain4d:openai/gpt-6-luna": "Brain 4.0, GPT-6 Luna + delivery heard by Flash-Lite",
+    "brain4m:openai/gpt-6-luna": "Brain 4.0, GPT-6 Luna + measured pauses",
+    "brain4n:openai/gpt-6-luna": "Lean: Brain 4.0, GPT-6 Luna + measured pauses + coach notes",
+    "brain4n:google/gemini-3.8-flash": "Brain 4.0, Gemini 3.8 Flash + measured pauses + coach notes"};
+  const byArm = {};
+  (D.realcalls || []).filter(r => r.calls >= 6).forEach(r => { (byArm[r.arm] = byArm[r.arm] || {})[r.judge.split("/")[1].split("-").slice(0, 2).join("-")] = r; });
+  const jk = {h: "claude-haiku", g: "gemini-3.8", l: "gpt-6"};  // "sonnet" = Claude Sonnet on the subscription
+  const mean = (xs) => { const v = xs.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const realRows = Object.keys(RCL).filter(a => byArm[a]).map(a => {
+    const j = byArm[a], rs = Object.values(j);
+    const two = [j[jk.h], j[jk.l]].filter(Boolean);
+    return {a, cov: mean(two.map(r => r.coverage)), h: j[jk.h]?.coverage, g: j[jk.g]?.coverage, l: j[jk.l]?.coverage,
+      sub: j["sonnet"]?.coverage, s: mean(two.map(r => r.by_kind?.strength)), i: mean(two.map(r => r.by_kind?.improvement)),
+      f: mean(two.map(r => r.false_claims_per_call)), inr: rs[0].analysis_inr_per_min};
+  });
+  const bestCov = Math.max(...realRows.map(r => r.cov || 0));
+  document.getElementById("realTable").innerHTML = realRows.length ? realRows.map(r => `<tr${r.a.startsWith("today") ? ' class="ref"' : r.cov === bestCov ? ' class="hl"' : ""}><td>${RCL[r.a]}</td><td class="n"><b>${pct(r.cov)}</b></td><td class="n">${pct(r.h)}</td><td class="n">${pct(r.l)}</td><td class="n">${pct(r.g)}</td><td class="n">${pct(r.sub)}</td><td class="n">${pct(r.s)}</td><td class="n">${pct(r.i)}</td><td class="n">${r.f == null ? "—" : r.f.toFixed(1)}</td><td class="n">${r.inr == null ? "—" : r.inr.toFixed(3)}</td></tr>`).join("") : `<tr><td colspan="10"><span class="pill pending">running</span> real-call judging</td></tr>`;
+  document.getElementById("realBoot").innerHTML = (D.realboot || []).filter(r => RCL[r.arm]).sort((a, b) => b.diff - a.diff).map(r => {
+    const f = (v) => (v >= 0 ? "+" : "−") + Math.abs(100 * v).toFixed(1); const cls = r.hi < 0 ? "bad" : r.lo > 0 ? "good" : "";
+    return `<tr><td>${RCL[r.arm]}</td><td class="n">${pct(r.arm_cov, 1)}</td><td class="n">${pct(r.today_cov, 1)}</td><td class="n ${cls}">${f(r.diff)} <span style="opacity:.7">[${f(r.lo)}, ${f(r.hi)}]</span></td></tr>`;
+  }).join("");
+  // ---- consistency
+  (D.consistency || []).forEach(c => {
+    if (c.arm.includes("onepass2/google_gemini-3.8-flash")) document.getElementById("consG").textContent = pct(c.pointer_agreement);
+    if (c.arm.includes("onepass/openai_gpt-6-luna")) document.getElementById("consL").textContent = pct(c.pointer_agreement);
+  });
+  // ---- review
+  if (D.review && D.review.html) document.getElementById("reviewBox").innerHTML = D.review.html;
+  function draw() { stageChart(); asrChart(); scatter(); costChart(); }
+  draw();
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+  new MutationObserver(draw).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
+})();
+</script>

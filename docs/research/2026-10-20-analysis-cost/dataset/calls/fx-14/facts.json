@@ -1,0 +1,514 @@
+[
+  {
+    "id": "f01",
+    "type": "person_name",
+    "slot": "seller.name",
+    "value": "अमेय सोरवळ",
+    "normalized": "Amey Sorval",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "अमेय सोरवळ",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f02",
+    "type": "company",
+    "slot": "seller.company",
+    "value": "आकारपर्ण गृहरेषा",
+    "normalized": "Akarparna Gruharekha",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "आकारपर्ण गृहरेषा",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f03",
+    "type": "person_name",
+    "slot": "prospect.name",
+    "value": "प्राजक्ता केरदुळे",
+    "normalized": "Prajakta Kerdule",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "प्राजक्ता केरदुळे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.017,
+    "trap": null
+  },
+  {
+    "id": "f04",
+    "type": "quantity",
+    "slot": "home.bedrooms",
+    "value": "तीन",
+    "normalized": "3 bedrooms",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "3 bedroom",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f05",
+    "type": "price",
+    "slot": "seller.quote",
+    "value": "साडेसोळा लाख",
+    "normalized": "1650000 INR incl tax",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "साडेसोळा लाख होतं",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.051,
+    "trap": "alt_number_form"
+  },
+  {
+    "id": "f06",
+    "type": "budget",
+    "slot": "prospect.budget",
+    "value": "बारा लाख",
+    "normalized": "1200000 INR",
+    "turn_ids": [
+      "t004"
+    ],
+    "evidence": "budget बारा लाख होता",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.051,
+    "trap": null
+  },
+  {
+    "id": "f07",
+    "type": "requirement",
+    "slot": "scope.dining",
+    "value": "वगळणे",
+    "normalized": "omit dining storage",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "dining storage नको",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.085,
+    "trap": null
+  },
+  {
+    "id": "f08",
+    "type": "location",
+    "slot": "home.project",
+    "value": "पर्णकुंज निवास",
+    "normalized": "Parnakunj Nivas",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "पर्णकुंज निवास, चौथा मजला",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.119,
+    "trap": null
+  },
+  {
+    "id": "f09",
+    "type": "location",
+    "slot": "home.floor",
+    "value": "चौथा",
+    "normalized": "4",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "चौथा मजला. तिसऱ्यावर माझ्या बहिणीचं घर",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.119,
+    "trap": "self_correction"
+  },
+  {
+    "id": "f10",
+    "type": "competitor",
+    "slot": "winner.company",
+    "value": "नक्षरेषा हस्तकाम",
+    "normalized": "Naksharekha Hastakam",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "नक्षरेषा हस्तकाम",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.153,
+    "trap": null
+  },
+  {
+    "id": "f11",
+    "type": "person_name",
+    "slot": "winner.owner",
+    "value": "केदार वेरखेडे",
+    "normalized": "Kedar Verkhede",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "केदार वेरखेडे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.153,
+    "trap": null
+  },
+  {
+    "id": "f12",
+    "type": "competitor_price",
+    "slot": "winner.quote",
+    "value": "अकरा लाख ऐंशी हजार",
+    "normalized": "1180000 INR incl tax",
+    "turn_ids": [
+      "t012"
+    ],
+    "evidence": "अकरा लाख ऐंशी हजार रुपये, कर धरून",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.186,
+    "trap": "competitor_price"
+  },
+  {
+    "id": "f13",
+    "type": "quantity",
+    "slot": "winner.wardrobes",
+    "value": "दोन",
+    "normalized": "2",
+    "turn_ids": [
+      "t014"
+    ],
+    "evidence": "दोन wardrobes आता",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.22,
+    "trap": null
+  },
+  {
+    "id": "f14",
+    "type": "payment_terms",
+    "slot": "winner.advance_percent",
+    "value": "वीस टक्के",
+    "normalized": "20 percent",
+    "turn_ids": [
+      "t018"
+    ],
+    "evidence": "वीस टक्के advance दिलाय",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.288,
+    "trap": null
+  },
+  {
+    "id": "f15",
+    "type": "payment_terms",
+    "slot": "winner.advance_paid",
+    "value": "दोन लाख छत्तीस हजार",
+    "normalized": "236000 INR",
+    "turn_ids": [
+      "t018"
+    ],
+    "evidence": "दोन लाख छत्तीस हजार रुपये गेले",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.288,
+    "trap": null
+  },
+  {
+    "id": "f16",
+    "type": "date",
+    "slot": "winner.start",
+    "value": "पाच नोव्हेंबर",
+    "normalized": "2026-11-05",
+    "turn_ids": [
+      "t020"
+    ],
+    "evidence": "पाच नोव्हेंबरपासून",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.322,
+    "trap": null
+  },
+  {
+    "id": "f17",
+    "type": "time",
+    "slot": "society.work_hours",
+    "value": "दहा ते सहा",
+    "normalized": "10:00-18:00",
+    "turn_ids": [
+      "t020"
+    ],
+    "evidence": "सकाळी दहा ते संध्याकाळी सहा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.322,
+    "trap": null
+  },
+  {
+    "id": "f18",
+    "type": "requirement",
+    "slot": "society.sunday",
+    "value": "आवाजाचे काम बंद",
+    "normalized": "no noisy Sunday work",
+    "turn_ids": [
+      "t020"
+    ],
+    "evidence": "रविवारी noisy काम बंद",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.322,
+    "trap": null
+  },
+  {
+    "id": "f19",
+    "type": "duration",
+    "slot": "winner.completion",
+    "value": "सहा आठवडे",
+    "normalized": "6 weeks from materials",
+    "turn_ids": [
+      "t022"
+    ],
+    "evidence": "सहा आठवडे लिहिलेत, material मिळाल्यावर",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.356,
+    "trap": null
+  },
+  {
+    "id": "f20",
+    "type": "duration",
+    "slot": "seller.completion",
+    "value": "आठ आठवडे",
+    "normalized": "8 weeks",
+    "turn_ids": [
+      "t021"
+    ],
+    "evidence": "आठ आठवडे सांगितले होते",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.339,
+    "trap": null
+  },
+  {
+    "id": "f21",
+    "type": "contact_preference",
+    "slot": "winner.no_contact",
+    "value": "contractor ला फोन नको",
+    "normalized": "do not contact contractor",
+    "turn_ids": [
+      "t028"
+    ],
+    "evidence": "contractor ला फोन करू नका",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.458,
+    "trap": null
+  },
+  {
+    "id": "f22",
+    "type": "price",
+    "slot": "design.deposit",
+    "value": "दहा हजार",
+    "normalized": "10000 INR",
+    "turn_ids": [
+      "t030"
+    ],
+    "evidence": "दहा हजार design deposit",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.492,
+    "trap": null
+  },
+  {
+    "id": "f23",
+    "type": "payment_terms",
+    "slot": "design.refund",
+    "value": "परत मिळत नाही",
+    "normalized": "nonrefundable",
+    "turn_ids": [
+      "t031"
+    ],
+    "evidence": "तो deposit परत मिळत नाही",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.508,
+    "trap": null
+  },
+  {
+    "id": "f24",
+    "type": "quantity",
+    "slot": "design.layouts",
+    "value": "दोन",
+    "normalized": "2 layouts",
+    "turn_ids": [
+      "t031"
+    ],
+    "evidence": "दोन layout पर्याय",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.508,
+    "trap": null
+  },
+  {
+    "id": "f25",
+    "type": "commitment",
+    "slot": "seller.documents",
+    "value": "आज सहापर्यंत files",
+    "normalized": "2026-10-20 18:00",
+    "turn_ids": [
+      "t033"
+    ],
+    "evidence": "आज संध्याकाळी सहापर्यंत measurement sheet आणि दोन्ही layouts पाठवतो",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.542,
+    "trap": null
+  },
+  {
+    "id": "f26",
+    "type": "contact_preference",
+    "slot": "marketing.consent",
+    "value": "नाही",
+    "normalized": "no publishing permission",
+    "turn_ids": [
+      "t034"
+    ],
+    "evidence": "plan तुमच्या social page वर टाकू नका",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.559,
+    "trap": null
+  },
+  {
+    "id": "f27",
+    "type": "duration",
+    "slot": "winner.workmanship",
+    "value": "दोन वर्ष",
+    "normalized": "2 years",
+    "turn_ids": [
+      "t036"
+    ],
+    "evidence": "दोन वर्षं workmanship",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.593,
+    "trap": null
+  },
+  {
+    "id": "f28",
+    "type": "duration",
+    "slot": "seller.workmanship",
+    "value": "तीन वर्ष",
+    "normalized": "3 years",
+    "turn_ids": [
+      "t037"
+    ],
+    "evidence": "workmanship तीन वर्षं होती",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.61,
+    "trap": null
+  },
+  {
+    "id": "f29",
+    "type": "contact_preference",
+    "slot": "sales.stop",
+    "value": "पुढचे calls थांबवणे",
+    "normalized": "stop sales calls",
+    "turn_ids": [
+      "t041"
+    ],
+    "evidence": "पुढचे sales calls थांबवतो",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.678,
+    "trap": null
+  },
+  {
+    "id": "f30",
+    "type": "person_name",
+    "slot": "invoice.holder",
+    "value": "निखिल केरदुळे",
+    "normalized": "Nikhil Kerdule",
+    "turn_ids": [
+      "t052"
+    ],
+    "evidence": "निखिल केरदुळे",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.864,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f31",
+    "type": "objection",
+    "slot": "deal.status",
+    "value": "बंद",
+    "normalized": "lost deal; buyer committed elsewhere",
+    "turn_ids": [
+      "t056"
+    ],
+    "evidence": "हा deal बंद समजते",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.932,
+    "trap": null
+  },
+  {
+    "id": "f32",
+    "type": "next_step",
+    "slot": "prospect.acknowledge",
+    "value": "files मिळाल्यावर message",
+    "normalized": "acknowledge files",
+    "turn_ids": [
+      "t060"
+    ],
+    "evidence": "मिळाल्यावर एकदा कळवते",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 1.0,
+    "trap": null
+  }
+]

@@ -1,0 +1,594 @@
+[
+  {
+    "id": "f01",
+    "type": "person_name",
+    "slot": "seller.name",
+    "value": "अंकिता माथुर",
+    "normalized": "Ankita Mathur",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "अंकिता माथुर बात कर रही हूँ",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f02",
+    "type": "company",
+    "slot": "seller.company",
+    "value": "सफ़रनामा हॉलिडेज",
+    "normalized": "Safarnama Holidays",
+    "turn_ids": [
+      "t001"
+    ],
+    "evidence": "सफ़रनामा हॉलिडेज से",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.0,
+    "trap": null
+  },
+  {
+    "id": "f03",
+    "type": "person_name",
+    "slot": "prospect.name",
+    "value": "विवेक सचदेवा",
+    "normalized": "Vivek Sachdeva",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "विवेक सचदेवा बोल रहा हूँ",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.021,
+    "trap": null
+  },
+  {
+    "id": "f04",
+    "type": "person_name",
+    "slot": "referrer.friend",
+    "value": "आलोक सिंघल",
+    "normalized": "Alok Singhal",
+    "turn_ids": [
+      "t002"
+    ],
+    "evidence": "आलोक सिंघल ने आपकी agency recommend की थी",
+    "said_by": "S2",
+    "critical": false,
+    "needle": false,
+    "depth": 0.021,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f05",
+    "type": "quantity",
+    "slot": "travelers.count",
+    "value": "पाँच",
+    "normalized": "5",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "हम कुल पाँच लोग हैं",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.106,
+    "trap": null
+  },
+  {
+    "id": "f06",
+    "type": "person_name",
+    "slot": "traveler.wife",
+    "value": "मीनू सचदेवा",
+    "normalized": "Meenu Sachdeva",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "मेरी wife मीनू सचदेवा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.106,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f07",
+    "type": "person_name",
+    "slot": "traveler.mother",
+    "value": "सरोज सचदेवा",
+    "normalized": "Saroj Sachdeva",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "मेरी माताजी सरोज सचदेवा",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.106,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f08",
+    "type": "personal_detail",
+    "slot": "traveler.mother_age",
+    "value": "अड़सठ साल",
+    "normalized": "68 years",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "जिनकी उम्र अड़सठ साल है",
+    "said_by": "S2",
+    "critical": false,
+    "needle": false,
+    "depth": 0.106,
+    "trap": null
+  },
+  {
+    "id": "f09",
+    "type": "person_name",
+    "slot": "traveler.son",
+    "value": "आर्यन",
+    "normalized": "Aryan Sachdeva",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "बेटा आर्यन बारह साल का है",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.106,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f10",
+    "type": "person_name",
+    "slot": "traveler.daughter",
+    "value": "रिया",
+    "normalized": "Riya Sachdeva",
+    "turn_ids": [
+      "t006"
+    ],
+    "evidence": "बेटी रिया सात साल की है",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.106,
+    "trap": "third_party_name"
+  },
+  {
+    "id": "f11",
+    "type": "date",
+    "slot": "travel.departure",
+    "value": "चौबीस दिसंबर",
+    "normalized": "2026-12-24",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "चौबीस दिसंबर की रात को निकलना final है",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.149,
+    "trap": "self_correction"
+  },
+  {
+    "id": "f12",
+    "type": "date",
+    "slot": "travel.return",
+    "value": "उनतीस दिसंबर",
+    "normalized": "2026-12-29",
+    "turn_ids": [
+      "t008"
+    ],
+    "evidence": "उनतीस दिसंबर को वापस दिल्ली आना है",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.149,
+    "trap": null
+  },
+  {
+    "id": "f13",
+    "type": "duration",
+    "slot": "trip.duration",
+    "value": "पाँच रात और छह दिन",
+    "normalized": "5N/6D",
+    "turn_ids": [
+      "t009"
+    ],
+    "evidence": "पाँच रात और छह दिन का tour बनता है",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.17,
+    "trap": null
+  },
+  {
+    "id": "f14",
+    "type": "location",
+    "slot": "trip.departure_city",
+    "value": "नई दिल्ली",
+    "normalized": "New Delhi IGI Airport",
+    "turn_ids": [
+      "t010"
+    ],
+    "evidence": "नई दिल्ली IGI airport से ही चाहिए",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.191,
+    "trap": null
+  },
+  {
+    "id": "f15",
+    "type": "location",
+    "slot": "destination.city1",
+    "value": "Hanoi",
+    "normalized": "Hanoi",
+    "turn_ids": [
+      "t011"
+    ],
+    "evidence": "दिल्ली से Hanoi के लिए सीधी direct flight",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.213,
+    "trap": null
+  },
+  {
+    "id": "f16",
+    "type": "duration",
+    "slot": "flight.duration",
+    "value": "साढ़े चार घंटे",
+    "normalized": "4.5 hours",
+    "turn_ids": [
+      "t011"
+    ],
+    "evidence": "लगभग साढ़े चार घंटे की flight duration है",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.213,
+    "trap": null
+  },
+  {
+    "id": "f17",
+    "type": "product",
+    "slot": "tour.attraction_cruise",
+    "value": "Halong Bay",
+    "normalized": "Halong Bay cruise",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "Halong Bay transfer और luxury cruise boarding",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.255,
+    "trap": null
+  },
+  {
+    "id": "f18",
+    "type": "product",
+    "slot": "tour.attraction_hills",
+    "value": "Ba Na Hills",
+    "normalized": "Ba Na Hills Golden Bridge",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "Ba Na Hills और Golden Bridge",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.255,
+    "trap": null
+  },
+  {
+    "id": "f19",
+    "type": "location",
+    "slot": "destination.city2",
+    "value": "Da Nang",
+    "normalized": "Da Nang",
+    "turn_ids": [
+      "t013"
+    ],
+    "evidence": "Da Nang के लिए internal evening flight",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.255,
+    "trap": null
+  },
+  {
+    "id": "f20",
+    "type": "requirement",
+    "slot": "hotel.rooms",
+    "value": "दो interconnecting rooms",
+    "normalized": "2 interconnecting 4-star rooms",
+    "turn_ids": [
+      "t015"
+    ],
+    "evidence": "दो interconnecting rooms देंगे",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.298,
+    "trap": null
+  },
+  {
+    "id": "f21",
+    "type": "requirement",
+    "slot": "diet.mother",
+    "value": "शुद्ध शाकाहारी",
+    "normalized": "pure vegetarian",
+    "turn_ids": [
+      "t016"
+    ],
+    "evidence": "सरोज सचदेवा सिर्फ शुद्ध शाकाहारी खाना खाती हैं",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.319,
+    "trap": null
+  },
+  {
+    "id": "f22",
+    "type": "requirement",
+    "slot": "traveler.mobility",
+    "value": "wheelchair assistance",
+    "normalized": "wheelchair assistance at airports",
+    "turn_ids": [
+      "t018"
+    ],
+    "evidence": "wheelchair assistance मिल जाएगा क्या",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.362,
+    "trap": null
+  },
+  {
+    "id": "f23",
+    "type": "quantity",
+    "slot": "vehicle.capacity",
+    "value": "sixteen seater",
+    "normalized": "16-seater AC private van",
+    "turn_ids": [
+      "t021"
+    ],
+    "evidence": "sixteen seater AC private van",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.426,
+    "trap": null
+  },
+  {
+    "id": "f24",
+    "type": "price",
+    "slot": "package.rate_adult",
+    "value": "अड़सठ हजार रुपये",
+    "normalized": "68000 INR per adult",
+    "turn_ids": [
+      "t023"
+    ],
+    "evidence": "प्रति adult अड़सठ हजार रुपये है",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.468,
+    "trap": "alt_number_form"
+  },
+  {
+    "id": "f25",
+    "type": "price",
+    "slot": "package.rate_child",
+    "value": "बावन हजार रुपये",
+    "normalized": "52000 INR per child",
+    "turn_ids": [
+      "t023"
+    ],
+    "evidence": "प्रति child बावन हजार रुपये है",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.468,
+    "trap": "alt_number_form"
+  },
+  {
+    "id": "f26",
+    "type": "price",
+    "slot": "package.base_total",
+    "value": "तीन लाख आठ हजार रुपये",
+    "normalized": "308000 INR base total",
+    "turn_ids": [
+      "t023"
+    ],
+    "evidence": "base land package कुल तीन लाख आठ हजार रुपये बनता है",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.468,
+    "trap": null
+  },
+  {
+    "id": "f27",
+    "type": "competitor",
+    "slot": "competitor.name",
+    "value": "ट्रैवल सूत्र",
+    "normalized": "Travel Sutra",
+    "turn_ids": [
+      "t026"
+    ],
+    "evidence": "दूसरी agency 'ट्रैवल सूत्र' ने",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.532,
+    "trap": null
+  },
+  {
+    "id": "f28",
+    "type": "competitor_price",
+    "slot": "competitor.quote",
+    "value": "तीन लाख दस हजार",
+    "normalized": "310000 INR",
+    "turn_ids": [
+      "t026"
+    ],
+    "evidence": "तीन लाख दस हजार का quote दिया था",
+    "said_by": "S2",
+    "critical": true,
+    "needle": false,
+    "depth": 0.532,
+    "trap": "competitor_price"
+  },
+  {
+    "id": "f29",
+    "type": "price",
+    "slot": "package.visa_insurance",
+    "value": "सात हजार पांच सौ",
+    "normalized": "7500 INR per person",
+    "turn_ids": [
+      "t027"
+    ],
+    "evidence": "सात हजार पांच सौ प्रति व्यक्ति अलग से",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.553,
+    "trap": null
+  },
+  {
+    "id": "f30",
+    "type": "quantity",
+    "slot": "insurance.coverage_limit",
+    "value": "पचास हजार US dollars",
+    "normalized": "50000 USD overseas medical cover",
+    "turn_ids": [
+      "t029"
+    ],
+    "evidence": "पचास हजार US dollars तक का overseas medical expense",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.596,
+    "trap": null
+  },
+  {
+    "id": "f31",
+    "type": "quantity",
+    "slot": "baggage.checkin_limit",
+    "value": "बीस किलो",
+    "normalized": "20 kg check-in baggage",
+    "turn_ids": [
+      "t031"
+    ],
+    "evidence": "प्रति व्यक्ति बीस किलो check-in baggage",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.638,
+    "trap": null
+  },
+  {
+    "id": "f32",
+    "type": "duration",
+    "slot": "visa.processing",
+    "value": "तीन working days",
+    "normalized": "3 working days",
+    "turn_ids": [
+      "t033"
+    ],
+    "evidence": "तीन working days में e-visa approve होकर",
+    "said_by": "S1",
+    "critical": false,
+    "needle": false,
+    "depth": 0.681,
+    "trap": null
+  },
+  {
+    "id": "f33",
+    "type": "requirement",
+    "slot": "passport.validity",
+    "value": "छह महीने",
+    "normalized": "6 months minimum",
+    "turn_ids": [
+      "t035"
+    ],
+    "evidence": "कम से कम छह महीने की validity होनी चाहिए",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.723,
+    "trap": null
+  },
+  {
+    "id": "f34",
+    "type": "price",
+    "slot": "booking.advance_token",
+    "value": "पचास हजार रुपये",
+    "normalized": "50000 INR",
+    "turn_ids": [
+      "t037"
+    ],
+    "evidence": "token advance पचास हजार रुपये देना होता है",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.766,
+    "trap": null
+  },
+  {
+    "id": "f35",
+    "type": "date",
+    "slot": "balance.due_date",
+    "value": "नौ दिसंबर",
+    "normalized": "2026-12-09",
+    "turn_ids": [
+      "t037"
+    ],
+    "evidence": "नौ दिसंबर तक clear करना होता है",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.766,
+    "trap": null
+  },
+  {
+    "id": "f36",
+    "type": "time",
+    "slot": "itinerary.send_deadline",
+    "value": "शाम छह बजे तक",
+    "normalized": "18:00",
+    "turn_ids": [
+      "t045"
+    ],
+    "evidence": "आज शाम छह बजे तक आपके WhatsApp number पर",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.936,
+    "trap": null
+  },
+  {
+    "id": "f37",
+    "type": "next_step",
+    "slot": "seller.followup",
+    "value": "कल सुबह ग्यारह बजे",
+    "normalized": "2026-10-21 11:00",
+    "turn_ids": [
+      "t045"
+    ],
+    "evidence": "कल सुबह ग्यारह बजे follow-up call कर सकती हूँ",
+    "said_by": "S1",
+    "critical": true,
+    "needle": false,
+    "depth": 0.936,
+    "trap": null
+  }
+]

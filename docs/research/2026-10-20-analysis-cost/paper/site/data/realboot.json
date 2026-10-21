@@ -1,0 +1,110 @@
+[
+ {
+  "arm": "onepass2:google/gemini-3.8-flash",
+  "calls": 6,
+  "arm_cov": 0.4569,
+  "today_cov": 0.4599,
+  "diff": -0.003,
+  "lo": -0.0711,
+  "hi": 0.0812
+ },
+ {
+  "arm": "onepass:openai/gpt-6-luna",
+  "calls": 6,
+  "arm_cov": 0.3981,
+  "today_cov": 0.4599,
+  "diff": -0.0618,
+  "lo": -0.109,
+  "hi": 0.0001
+ },
+ {
+  "arm": "onepass3:openai/gpt-6-luna",
+  "calls": 6,
+  "arm_cov": 0.3641,
+  "today_cov": 0.4599,
+  "diff": -0.0958,
+  "lo": -0.137,
+  "hi": -0.0514
+ },
+ {
+  "arm": "brain4:openai/gpt-6-luna",
+  "calls": 6,
+  "arm_cov": 0.3704,
+  "today_cov": 0.4599,
+  "diff": -0.0895,
+  "lo": -0.1594,
+  "hi": 0.0001
+ },
+ {
+  "arm": "brain4:openai/gpt-6-luna-pro",
+  "calls": 6,
+  "arm_cov": 0.3549,
+  "today_cov": 0.4599,
+  "diff": -0.105,
+  "lo": -0.1607,
+  "hi": -0.0317
+ },
+ {
+  "arm": "brain4:google/gemini-3.8-flash",
+  "calls": 6,
+  "arm_cov": 0.432,
+  "today_cov": 0.4599,
+  "diff": -0.0279,
+  "lo": -0.1196,
+  "hi": 0.0955
+ },
+ {
+  "arm": "brain4:anthropic/claude-sonnet-5.5",
+  "calls": 6,
+  "arm_cov": 0.4106,
+  "today_cov": 0.4599,
+  "diff": -0.0493,
+  "lo": -0.1099,
+  "hi": 0.0215
+ },
+ {
+  "arm": "brain4:openai/gpt-6.1-sol",
+  "calls": 6,
+  "arm_cov": 0.3921,
+  "today_cov": 0.4599,
+  "diff": -0.0678,
+  "lo": -0.1424,
+  "hi": 0.0099
+ },
+ {
+  "arm": "brain4d:openai/gpt-6-luna",
+  "calls": 6,
+  "arm_cov": 0.3365,
+  "today_cov": 0.4599,
+  "diff": -0.1234,
+  "lo": -0.1853,
+  "hi": -0.055
+ },
+ {
+  "arm": "brain4m:openai/gpt-6-luna",
+  "calls": 6,
+  "arm_cov": 0.3673,
+  "today_cov": 0.4599,
+  "diff": -0.0926,
+  "lo": -0.2109,
+  "hi": 0.0285
+ },
+ {
+  "arm": "brain4n:openai/gpt-6-luna",
+  "calls": 6,
+  "arm_cov": 0.4074,
+  "today_cov": 0.4599,
+  "diff": -0.0525,
+  "lo": -0.1076,
+  "hi": 0.0114
+ },
+ {
+  "arm": "brain4n:google/gemini-3.8-flash",
+  "calls": 6,
+  "arm_cov": 0.4999,
+  "today_cov": 0.4599,
+  "diff": 0.04,
+  "lo": -0.0177,
+  "hi": 0.1049
+ }
+]

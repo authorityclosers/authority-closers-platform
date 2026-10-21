@@ -1,0 +1,118 @@
+{
+  "call_id": "fx-05",
+  "call_type": "negotiation_close",
+  "language_mix": "mr-en",
+  "target_minutes": 25,
+  "seller": {
+    "company": "महालक्ष्मी इन्फ्राव्हेंचर्स",
+    "product": "२ बीएचके प्रीमियम अपार्टमेंट (८५० चौ. फूट कार्पेट)",
+    "price_list": [
+      "२ बीएचके मूलभूत किंमत: अठ्ठेचाळीस लाख पन्नास हजार रुपये",
+      "कव्हर कार पार्किंग आणि क्लबहाऊस: तीन लाख पन्नास हजार रुपये",
+      "स्टँप ड्युटी व नोंदणी शुल्क: तीन लाख चाळीस हजार रुपये",
+      "एकूण सर्वसमावेशक किंमत: सत्तावन्न लाख पन्नास हजार रुपये"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "समीर देसाई",
+      "gender": "m",
+      "age_band": "30s",
+      "style": "persuasive, energetic senior sales manager, focused on closing the booking"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "राजेश महाजन",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "experienced mechanical engineer, budget-conscious, tough negotiator"
+    },
+    {
+      "id": "S3",
+      "role": "manager",
+      "name": "प्रमोद शिर्के",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "authoritative sales director, practical decision-maker on discounts and payment terms"
+    }
+  ],
+  "sections": [
+    {
+      "name": "Site visit recall, unit selection & initial gap",
+      "minutes": 8.0,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10",
+        "f11",
+        "f12",
+        "f13",
+        "f14",
+        "f15",
+        "f16",
+        "f17",
+        "f18"
+      ]
+    },
+    {
+      "name": "Three-way commercial negotiation, discounts & inclusions",
+      "minutes": 10.0,
+      "facts": [
+        "f19",
+        "f20",
+        "f21",
+        "f22",
+        "f23",
+        "f24",
+        "f25",
+        "f26",
+        "f27",
+        "f28",
+        "f29",
+        "f30"
+      ]
+    },
+    {
+      "name": "Legal compliance, payment milestones, possession & closing",
+      "minutes": 7.0,
+      "facts": [
+        "f31",
+        "f32",
+        "f33",
+        "f34",
+        "f35",
+        "f36",
+        "f37",
+        "f38"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t029"
+      ],
+      "statement": "Salesperson effectively defended against the cheaper competitor quote by highlighting the 70 sq ft larger carpet area and committed possession date."
+    },
+    {
+      "id": "k02",
+      "kind": "price_too_early",
+      "turn_ids": [
+        "t036"
+      ],
+      "statement": "Sales director conceded the floor rise charge immediately without first securing a firm commitment on token payment timeline."
+    }
+  ]
+}

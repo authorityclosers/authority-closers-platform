@@ -1,0 +1,171 @@
+{
+  "summary": "Short cold call from Kavya Morvel (Dhoopkiran Chhat Urja) to Naren Palkhe, owner of Tarupankh Kirana in Kachnar Chowk Bazaar, about Ujaas Roof Solar. Kavya named the 3 kW package at ₹1.85 lakh in her first pitch line, before knowing anything about the roof or budget; Naren pushed back that the roof belongs to his brother. She recovered well: bill (₹6,000 now, ₹8,000 in summer), two freezers running all day, shop hours 9 am to 9 pm, roof about 400 sq ft with afternoon shade from the water tank, connection in Naren's name. Budget is capped at ₹1.5 lakh, no EMI, and Naren does not want a subsidy-reduced price. When he asked about keeping the freezers running, Kavya clearly said the standard system gives no backup during power cuts and backup costs extra. Outcome: no site visit booked; Naren will ask his brother Bhuvan Palkhe (the roof decision-maker) and Kavya will call back on Saturday 24 October at 11 am, with a short message on the same channel in between.",
+  "strengths": [
+    {
+      "title": "Honest answer on outage backup for the freezers",
+      "explanation": "When Naren said the freezers must not stop, you told him plainly that the standard system gives no backup during power cuts and that a separate backup is not included in the price. He responded 'अच्छा ये साफ बताया'. Keep doing this: state the limitation, then say what would solve it and that it costs extra.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s13"}, {"segment_id": "s14"}]
+    },
+    {
+      "title": "Recovered from the price-first opening with real discovery",
+      "explanation": "After Naren said you should first ask whether there is space, you accepted it ('पहले वो समझना चाहिए था') and moved straight to bill, usage hours, shade and connection name. You also refused to promise savings before seeing the meter and roof. Keep the quick admission and switch to questions.",
+      "evidence": [{"segment_id": "s5"}, {"segment_id": "s6"}, {"segment_id": "s7"}, {"segment_id": "s8"}]
+    },
+    {
+      "title": "Transparent on subsidy and budget gap, clear callback read-back",
+      "explanation": "You confirmed the ₹1.85 lakh was without any subsidy deduction, named the gap against his ₹1.5 lakh budget, and closed with an exact read-back: Saturday 24 October, 11 am, no site visit booked yet. This matches what a wary shop owner asked for.",
+      "evidence": [{"segment_id": "s10"}, {"segment_id": "s11"}, {"segment_id": "s15"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Price quoted before any discovery",
+      "explanation": "Your first pitch line named the 3 kW package at ₹1.85 lakh before you knew who owns the roof, the bill or the budget. Naren immediately pushed back ('पहले पूछिए जगह है भी कि नहीं'). On a busy owner's call, ask two fit questions first, for example: 'Sir, छत आपकी अपनी है, और महीने का bill लगभग कितना आता है?' and only then talk about package and price.",
+      "evidence": [{"segment_id": "s2"}, {"segment_id": "s3"}, {"segment_id": "s4"}]
+    },
+    {
+      "title": "Decision-maker left to the prospect",
+      "explanation": "Naren said twice that his brother Bhuvan Palkhe decides on the roof. You suggested Bhuvan join the survey, but at the close you left the conversation with Bhuvan entirely to Naren. Ask whether Bhuvan can be on the Saturday call, or give Naren the two points to share with him (no-cost survey, backup is separate).",
+      "evidence": [{"segment_id": "s8"}, {"segment_id": "s9"}, {"segment_id": "s14"}, {"segment_id": "s15"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Freezer risk not explored",
+      "explanation": "Naren said keeping the freezers running matters more to him than the system size. You explained the limitation but did not ask how often and how long power cuts happen or what stock he loses. One question such as 'हफ्ते में कितनी बार बिजली जाती है, और कितनी देर?' would size the backup need and the value of solving it.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s13"}]
+    },
+    {
+      "title": "Budget gap not tested",
+      "explanation": "Naren capped the budget at ₹1.5 lakh, with no EMI. You mentioned a smaller option but did not check whether ₹1.5 lakh is firm or what a smaller system would need to achieve for him. Ask: 'डेढ़ लाख fixed है, या bill कितना कम हो तो थोड़ा ऊपर सोचेंगे?'",
+      "evidence": [{"segment_id": "s10"}, {"segment_id": "s11"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Loan-call suspicion answered directly",
+      "explanation": "Naren opened by asking whether this was a loan-selling call. You said no and named the product. Fine for a quick reassurance, but you went straight to the price instead of earning a minute with a question about his bill.",
+      "evidence": [{"segment_id": "s2"}, {"segment_id": "s3"}]
+    },
+    {
+      "title": "Budget and no-EMI handled honestly, not resolved",
+      "explanation": "On 'डेढ़ लाख से ऊपर नहीं' and no EMI, you did not push finance and you named the gap. That builds trust; the open point is whether a smaller system fits his need, which needs the survey.",
+      "evidence": [{"segment_id": "s10"}, {"segment_id": "s11"}]
+    },
+    {
+      "title": "Outage backup concern handled with a clear limitation",
+      "explanation": "You told him the standard system will not keep the freezers on during a cut and that backup is extra. This is the right handling; next time add the next step, for example including a backup option in the follow-up message, which you did promise at the end.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s13"}, {"segment_id": "s17"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Callback agreed on the prospect's terms",
+      "explanation": "Naren declined to buy now and asked for a Saturday 11 am call instead of Friday. You read back the date and time, confirmed no site visit was booked, and agreed to a short message on the same channel with no link. Good respect for his request not to be called daily.",
+      "evidence": [{"segment_id": "s14"}, {"segment_id": "s15"}, {"segment_id": "s16"}, {"segment_id": "s18"}]
+    },
+    {
+      "title": "No commitment tied to the brother",
+      "explanation": "The only commitment from Naren is to ask his brother. Set a clearer goal for Saturday, for example 'शनिवार को भुवन जी हाँ कहें तो survey का दिन तय कर लें?'",
+      "evidence": [{"segment_id": "s14"}, {"segment_id": "s15"}]
+    }
+  ],
+  "verdict": "Honest, well-recovered cold call that earned a Saturday callback but no survey. The price-first opening cost early goodwill; the deal now depends on Bhuvan Palkhe's roof permission and the gap between the ₹1.5 lakh budget and the ₹1.85 lakh starting price.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Trust came from honesty rather than small talk: no savings promise before the meter check (s7), price stated without subsidy (s11), backup limitation stated plainly (s13). Naren acknowledged the clarity (s14). Keep it; add one line acknowledging that he is busy before pitching."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "After the restart at s5 you covered bill, hours, freezers, shade and connection name (s5-s8). Missing: power-cut frequency and the cost of freezer stoppage (s12)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Budget (₹1.5 lakh, no EMI) and authority (brother Bhuvan owns the roof decision) were identified (s8, s10), but only after the price was named at s3. Qualify roof ownership and budget before quoting."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "The real pain is freezer continuity, which Naren raised himself (s12). It was not developed into a cost of power cuts, so the value of the system stays at bill savings, which you rightly did not promise (s7)."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "The opening pitch was a generic 3 kW package with price (s3). Later you tied options to his situation: a smaller system after the survey (s11) and a clear note that backup is separate (s13)."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Loan suspicion, budget cap and freezer backup were each answered directly and without overclaiming (s3, s11, s13). Budget firmness was not tested."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Clear callback for Saturday 24 October at 11 am with read-back (s15). The brother's decision was left to Naren without a plan to involve Bhuvan (s14-s15)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Wording was short and plain, and you repeated the key point when the line broke (s12-s13). The text cannot show voice tone; on wording alone, keep sentences this short with busy shop owners."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "A price-first opening put a busy, wary owner on guard; honest discovery afterwards rebuilt enough trust for a callback, but the roof decision sits with his brother and the budget is below the starting price.",
+      "evidence": [{"segment_id": "s3"}, {"segment_id": "s8"}, {"segment_id": "s10"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "No purchase and no site visit booked. Naren will ask his brother; Kavya will call back on Saturday 24 October at 11 am and send a short message on the same channel.",
+      "evidence": [{"segment_id": "s14"}, {"segment_id": "s15"}, {"segment_id": "s16"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Brother's decision on roof use", "Survey result on shade and usable area", "Price of a smaller system and of backup"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "For a kirana owner, stopped freezers mean spoiled stock. Saying the limitation upfront prevents a complaint after installation and made Naren trust the rest of what you said."},
+      {"finding_index": 1, "why_it_matters": "Admitting the wrong order and switching to questions turned a defensive prospect into one who volunteered bill, hours, roof size and shade in one answer."},
+      {"finding_index": 2, "why_it_matters": "Naren specifically asked not to be shown a subsidy-reduced price and not to be chased; matching both keeps the Saturday call alive."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "The 3 kW package and ₹1.85 lakh were named in the first pitch line, and Naren replied that you should first ask whether there is space.", "evidence": [{"segment_id": "s3"}, {"segment_id": "s4"}]},
+        "why_it_matters": "A price before fit makes a busy owner judge the offer on cost alone, and here the roof was not even his to give.",
+        "replacement_behavior": "Open with permission and two fit questions: 'Sir, दो सवाल: छत आपकी अपनी है, और bill लगभग कितना आता है?' Give a price range only after both answers.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Comparable calls with discovery before price"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "Naren said Bhuvan Palkhe decides on the roof and he cannot say yes alone; the close only says Naren will speak to his brother.", "evidence": [{"segment_id": "s8"}, {"segment_id": "s15"}]},
+        "why_it_matters": "Without Bhuvan, Saturday's call may end with the same answer: 'भाई से पूछना है'.",
+        "replacement_behavior": "Ask: 'शनिवार को भुवन जी भी दो मिनट जुड़ सकते हैं? नहीं तो मैं आपको दो points message कर दूँ जो आप उन्हें बता सकें।'",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Bhuvan Palkhe's availability and view"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 1, "why_effective": "One clear sentence on what the system will not do, followed by what is needed and that it costs extra. It answered his biggest worry without overselling."},
+      {"strength_index": 1, "evidence_index": 0, "why_effective": "A quick, non-defensive admission plus two specific questions immediately changed the flow of the call."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "Naren said the freezers must not stop and that this matters most to him.", "evidence": [{"segment_id": "s12"}]},
+        "closer_response": {"text": "You explained that backup is separate and not in the price, without asking about power-cut frequency or losses.", "evidence": [{"segment_id": "s13"}]},
+        "follow_up": "On Saturday ask how often power goes and for how long, and what stock is at risk; then size backup separately.",
+        "potential_impact": "Turns a cost objection into a need that justifies the backup add-on."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "Budget capped at ₹1.5 lakh, no EMI because of existing shop credit.", "evidence": [{"segment_id": "s10"}]},
+        "closer_response": {"text": "You named the gap and mentioned a smaller option after the survey.", "evidence": [{"segment_id": "s11"}]},
+        "follow_up": "Check whether ₹1.5 lakh is a hard limit and what result would make him stretch.",
+        "potential_impact": "Tells you whether to prepare a 2 kW option or a 3 kW option for the survey."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "Naren asked if this was a loan-selling call.", "evidence": [{"segment_id": "s2"}]}, "possible_concern": "He may be tired of finance sales calls and could close the call if he senses an EMI pitch.", "interpretation_kind": "inference"},
+      {"source": {"text": "He asked not to be quoted a subsidy-reduced price.", "evidence": [{"segment_id": "s10"}]}, "possible_concern": "He may have seen low prices that later increased and wants the real number upfront.", "interpretation_kind": "inference"},
+      {"source": {"text": "He asked not to be phoned every day.", "evidence": [{"segment_id": "s18"}]}, "possible_concern": "Any extra call before Saturday may reduce his willingness to continue.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Price named before any discovery.", "purpose": "must_watch", "evidence": [{"segment_id": "s3"}]},
+      {"text": "Clear statement that the standard system gives no outage backup.", "purpose": "repeat", "evidence": [{"segment_id": "s13"}]},
+      {"text": "Callback read-back with date, time and no site visit booked.", "purpose": "watch", "evidence": [{"segment_id": "s15"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "You opened with package and price; Naren pushed back that the roof is his brother's.", "evidence": [{"segment_id": "s3"}, {"segment_id": "s4"}]},
+      "change": {"text": "You admitted you should have asked first and asked about bill and usage hours.", "evidence": [{"segment_id": "s5"}]},
+      "after": {"text": "Naren shared bill, freezers, shop hours, roof size, shade and authority.", "evidence": [{"segment_id": "s6"}, {"segment_id": "s8"}]},
+      "possible_effect": "The admission and questions may have lowered his guard enough to share details he had not volunteered before.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "Price stated without subsidy deduction and eligibility left for a separate check; no savings promised before the survey.", "evidence": [{"segment_id": "s7"}, {"segment_id": "s11"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "Ask roof ownership and monthly bill before naming any package or price.", "target": "On your next three cold calls, no price is mentioned before both answers are on record."},
+    "practice": {"improvement_index": 0, "instructions": "Write a three-line opener: permission ask, roof-ownership question, bill question. Say it aloud five times, then role-play with a colleague who interrupts with 'price बताइए'.", "success_condition": "In the role-play you answer the price question with a range only after getting roof and bill answers."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Plain statements of limits: no savings promise before the survey, no subsidy in the price, no outage backup in the standard system.",
+      "fix_first": "Do discovery before price on every cold call.",
+      "next_focus": "On Saturday, involve Bhuvan Palkhe and test whether ₹1.5 lakh is firm before proposing a survey date.",
+      "assessment": "Good honesty and recovery; the call is alive but the authority and budget questions remain open."
+    }
+  }
+}

@@ -1,0 +1,205 @@
+{
+  "summary": "Admission counselling call by Meghna Sarpotdar of Dnyandeep Gurukul International School with Sanjay and Anjali Bhagwat about Class 1 CBSE admission for 2027-28 for their daughter Tanvi, now in Senior KG at Kids Paradise Preschool, Baner (date of birth 12 April 2021, corrected from 12 March). The parents are comparing three or four schools in Baner and Balewadi. Meghna answered questions on NEP-based experiential learning, a STEM lab and hands-on maths kits, a Lego robotics club (Tanvi loves building with blocks), three languages, a library of 5,000+ picture books with daily reading time, maximum 30 per section with a 15:1 ratio, light homework, screen time capped at 20 minutes a day, no formal exams till Class 5, a five-acre Balewadi campus with 45 minutes of daily PE, timings 8 am to 2 pm with after-school care till 5:30, 240+ CCTV cameras, a two-bed infirmary with a tie-up with Sanjeevani Multispeciality Hospital, and a pure vegetarian in-house kitchen. On Tanvi's peanut allergy she said only sunflower oil is used, peanuts are excluded, and an alert goes to the class teacher and canteen supervisor. Accounts officer Mandar Kanetkar gave fees: tuition ₹1,20,000 a year in four ₹30,000 quarterly instalments or 5% off for full payment, refundable caution deposit ₹25,000, bus ₹28,000 a year within 5 km (they live about 4 km away, speed limited to 40 km/h), uniform about ₹8,000, books about ₹5,000, full refund less ₹2,000 if cancelled before 31 May, letter within 48 hours of document verification, and a document deadline stated as 10 November 2025. Meghna said the sibling discount does not apply. Sanjay travels to Germany for 15 days next month and wants documents done first. Next: family campus visit with Tanvi on Saturday 24 October at 11 am, including meeting principal Dr. Suhasini Joshi; prospectus, fee PDF and visit pass on WhatsApp.",
+  "strengths": [
+    {
+      "title": "Answered the peanut allergy concern with a clear process",
+      "explanation": "When Anjali asked about Tanvi's peanut allergy, you said the kitchen uses only sunflower oil, peanuts are excluded, and an allergy entry on the form triggers an alert note to the class teacher and canteen supervisor. Sanjay said it removed a big worry. Keep describing the process; avoid stronger promises than the process supports.",
+      "evidence": [{"segment_id": "s49"}, {"segment_id": "s50"}, {"segment_id": "s51"}]
+    },
+    {
+      "title": "Tailored answers to Tanvi and to the parents' fears",
+      "explanation": "You linked Tanvi's love of building with blocks to the Lego robotics club, answered Anjali's fear of maths anxiety with hands-on kits, and her worry about attention in a bigger school with the 15:1 ratio. Specific answers to their child are what parents remember when comparing schools.",
+      "evidence": [{"segment_id": "s9"}, {"segment_id": "s10"}, {"segment_id": "s11"}, {"segment_id": "s12"}, {"segment_id": "s17"}, {"segment_id": "s18"}]
+    },
+    {
+      "title": "Polite sibling-policy answer and a smooth fee handover",
+      "explanation": "You brought Mandar in for fees so every number came from accounts, and when Sanjay asked for a discount you explained calmly that the sibling discount applies only when a second child is admitted. The parents stayed engaged and moved on to practical questions.",
+      "evidence": [{"segment_id": "s64"}, {"segment_id": "s67"}, {"segment_id": "s69"}, {"segment_id": "s76"}, {"segment_id": "s77"}, {"segment_id": "s78"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Parents drove the whole call; very few questions from you",
+      "explanation": "After one question about Tanvi's routine, the call became a long series of parent questions and long answers. You never asked what they value most, how they are comparing schools or what worries them. Ask early: 'तुम्ही तीन-चार शाळा पाहताय; निवडताना तुमच्यासाठी सर्वात महत्त्वाच्या तीन गोष्टी कोणत्या?' and then focus your answers on those.",
+      "evidence": [{"segment_id": "s3"}, {"segment_id": "s4"}, {"segment_id": "s7"}, {"segment_id": "s63"}]
+    },
+    {
+      "title": "Discount question only half answered",
+      "explanation": "Sanjay asked about sibling or corporate discount. You answered only the sibling part and said Tanvi is an only child, which the call itself does not establish. The corporate part was not answered, and you did not remind them of the 5% full-payment discount Mandar had just mentioned. Answer every part: 'Sibling discount दुसऱ्या पाल्यासाठी असतो; corporate साठी मी तपासून सांगते; पूर्ण फी एकदम भरल्यास 5% सवलत आहे.'",
+      "evidence": [{"segment_id": "s69"}, {"segment_id": "s76"}, {"segment_id": "s77"}]
+    },
+    {
+      "title": "Document deadline given with a past year",
+      "explanation": "The deadline for first-round document verification was stated as 10 November 2025, which does not fit an admission for 2027-28 and has already passed. Confirm the correct date and put it in the fee PDF so the parents do not miss it or lose trust.",
+      "evidence": [{"segment_id": "s84"}, {"segment_id": "s85"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Other schools under comparison not explored",
+      "explanation": "Anjali said they are collecting information on three or four schools in Baner and Balewadi. You welcomed them but did not ask which schools or what they liked elsewhere, so you could not position your strengths against their shortlist.",
+      "evidence": [{"segment_id": "s3"}, {"segment_id": "s4"}]
+    },
+    {
+      "title": "Father's Germany trip not used to plan document completion",
+      "explanation": "Sanjay said he wants all documents done before his 15-day Germany trip next month. You offered the campus visit, which was good, but did not suggest bringing original documents to Saturday's visit or explain how to complete verification before he leaves.",
+      "evidence": [{"segment_id": "s83"}, {"segment_id": "s92"}, {"segment_id": "s93"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Maths anxiety",
+      "explanation": "Answered with concrete materials and play-based methods.",
+      "evidence": [{"segment_id": "s9"}, {"segment_id": "s10"}]
+    },
+    {
+      "title": "Personal attention in a bigger school",
+      "explanation": "Maximum 30 per section with a co-teacher, giving 15:1, matching the preschool ratio they were used to.",
+      "evidence": [{"segment_id": "s17"}, {"segment_id": "s18"}, {"segment_id": "s19"}]
+    },
+    {
+      "title": "Screen time and exam pressure",
+      "explanation": "20-minute daily screen cap and descriptive assessment instead of marks till Class 5; both matched the parents' stated views.",
+      "evidence": [{"segment_id": "s21"}, {"segment_id": "s22"}, {"segment_id": "s23"}, {"segment_id": "s24"}]
+    },
+    {
+      "title": "Safety and medical emergencies",
+      "explanation": "CCTV, separate primary floor, attendants, RFID check-in, infirmary, hospital tie-up and a parent call within five minutes.",
+      "evidence": [{"segment_id": "s39"}, {"segment_id": "s40"}, {"segment_id": "s42"}, {"segment_id": "s44"}]
+    },
+    {
+      "title": "Peanut allergy",
+      "explanation": "Sunflower oil only, no peanuts, and alerts to teacher and canteen supervisor.",
+      "evidence": [{"segment_id": "s49"}, {"segment_id": "s50"}]
+    },
+    {
+      "title": "Fees, instalments and refund on transfer",
+      "explanation": "Mandar gave quarterly dates, the full-payment discount, payment modes and a clear refund rule before 31 May.",
+      "evidence": [{"segment_id": "s68"}, {"segment_id": "s69"}, {"segment_id": "s80"}, {"segment_id": "s81"}]
+    },
+    {
+      "title": "Discount request",
+      "explanation": "Sibling policy explained politely; corporate discount not addressed.",
+      "evidence": [{"segment_id": "s76"}, {"segment_id": "s77"}]
+    },
+    {
+      "title": "Entrance test pressure",
+      "explanation": "No test or formal interview, only a ten-minute informal play interaction. Anjali was relieved.",
+      "evidence": [{"segment_id": "s86"}, {"segment_id": "s87"}, {"segment_id": "s88"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Family campus visit booked",
+      "explanation": "Saturday 24 October at 11 am, with a full tour and a meeting with Dr. Suhasini Joshi; Anjali will bring Tanvi. Prospectus, fee breakup PDF and visit pass to be sent on WhatsApp.",
+      "evidence": [{"segment_id": "s93"}, {"segment_id": "s94"}, {"segment_id": "s95"}]
+    },
+    {
+      "title": "No plan to secure the seat",
+      "explanation": "The call ended without discussing when they would decide, how the first instalment and documents fit before Sanjay's trip, or what would make them choose this school over the others.",
+      "evidence": [{"segment_id": "s92"}, {"segment_id": "s96"}]
+    }
+  ],
+  "verdict": "A warm, informative counselling call that answered every parent concern, especially the peanut allergy, and secured a family campus visit on Saturday. It was reactive: the parents asked and the school answered, with almost no discovery of their criteria or the schools they are comparing. The discount answer and the document deadline year need tightening before the visit.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Warm welcome and acknowledgement of worries (s4, s18), plus interest in Tanvi's hobby (s12), kept both parents engaged and appreciative (s61)."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Only one discovery question (s4). Tanvi's interests, allergy and the father's travel came from the parents themselves (s11, s49, s92). Their criteria and shortlist were not explored (s3)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Age eligibility was checked (s6) and distance fits the first bus slab (s72-s73). Decision timeline and other schools were not asked."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "Parents' fears (maths anxiety, screen time, exam pressure, allergy) were answered one by one (s10, s22, s24, s50) but not drawn out or prioritised."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "Answers were specific and often tailored to Tanvi (s12, s18). Some answers were long monologues on features nobody asked to prioritise (s14, s30, s40)."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Allergy, safety, refund and entrance-test worries were answered clearly (s50, s40, s81, s87). The discount question was half answered (s77) and the deadline year needs checking (s85)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Campus visit booked with the principal (s93-s94). No discussion of decision timing or seat confirmation before the father's trip (s92)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Polite, articulate Marathi with technical terms explained (s24). Answers were long; shorter answers with a check-in question would invite more from the parents. Tone of voice cannot be judged from text."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Excellent information delivery and reassurance, but little discovery of how the family will choose between schools.",
+      "evidence": [{"segment_id": "s3"}, {"segment_id": "s4"}, {"segment_id": "s50"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "Family campus visit with Tanvi on Saturday 24 October at 11 am, including the principal; documents to follow. No admission commitment yet.",
+      "evidence": [{"segment_id": "s93"}, {"segment_id": "s94"}, {"segment_id": "s96"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Schools on the family's shortlist", "Correct document deadline", "Family's decision timeline"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "A child's allergy can rule a school out; a clear kitchen and alert process removed that risk for this family."},
+      {"finding_index": 1, "why_it_matters": "Parents compare schools on how their own child will fit; the robotics club link made the school feel made for Tanvi."},
+      {"finding_index": 2, "why_it_matters": "A calm no on discount, with fees from the accounts officer, kept trust in the numbers."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "After one question about Tanvi, the parents asked everything and you answered.", "evidence": [{"segment_id": "s4"}, {"segment_id": "s7"}]},
+        "why_it_matters": "Without knowing their top criteria and shortlist, you cannot show why this school is the better choice.",
+        "replacement_behavior": "Ask their top three criteria and which schools they are comparing in the first five minutes, then tie answers back to them.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Family's school shortlist"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "Only the sibling discount was addressed; corporate discount and the 5% full-payment option were not mentioned.", "evidence": [{"segment_id": "s76"}, {"segment_id": "s77"}]},
+        "why_it_matters": "Unanswered money questions resurface during the decision, often as a reason to choose another school.",
+        "replacement_behavior": "Answer each part of a discount question and point to any available saving.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Corporate discount policy"]}
+      },
+      {
+        "finding_index": 2,
+        "what_happened": {"text": "The deadline was stated as 10 November 2025.", "evidence": [{"segment_id": "s85"}]},
+        "why_it_matters": "A wrong or confusing deadline can cost the family the first round or make them doubt other details.",
+        "replacement_behavior": "Confirm the date with accounts and state it in writing in the fee PDF.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Correct first-round deadline"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 1, "why_effective": "Oil, exclusion and an alert to two named roles answered the allergy fear with a process the parents could trust."},
+      {"strength_index": 1, "evidence_index": 3, "why_effective": "Linking Tanvi's block-building to the robotics club made the school personal."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "Anjali said they were gathering information on three or four schools.", "evidence": [{"segment_id": "s3"}]},
+        "closer_response": {"text": "You welcomed them and asked about Tanvi's routine.", "evidence": [{"segment_id": "s4"}]},
+        "follow_up": "At the campus visit, ask which other schools they are considering and what they liked there.",
+        "potential_impact": "Lets you show the campus features that matter against their shortlist."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "Sanjay wants all documents completed before his Germany trip next month.", "evidence": [{"segment_id": "s92"}]},
+        "closer_response": {"text": "You offered the Saturday campus visit.", "evidence": [{"segment_id": "s93"}]},
+        "follow_up": "Ask them to bring the listed documents on Saturday so verification can start that day.",
+        "potential_impact": "Turns the visit into the admission step he already wants to complete."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "Sanjay said the allergy answer removed a big worry.", "evidence": [{"segment_id": "s51"}]}, "possible_concern": "Food safety may be a deciding factor; showing the kitchen on Saturday could matter.", "interpretation_kind": "inference"},
+      {"source": {"text": "Sanjay wants documents finished before his trip.", "evidence": [{"segment_id": "s92"}]}, "possible_concern": "The family may decide soon, possibly right after the visit.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Peanut allergy answer.", "purpose": "repeat", "evidence": [{"segment_id": "s50"}]},
+      {"text": "Discount question answered only in part.", "purpose": "watch", "evidence": [{"segment_id": "s77"}]},
+      {"text": "Document deadline stated with a past year.", "purpose": "must_watch", "evidence": [{"segment_id": "s85"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "Anjali raised Tanvi's peanut allergy and asked about the cooking oil.", "evidence": [{"segment_id": "s49"}]},
+      "change": {"text": "You described sunflower oil only, no peanuts, and alerts to the teacher and canteen supervisor.", "evidence": [{"segment_id": "s50"}]},
+      "after": {"text": "Sanjay said a big worry was removed and moved on to arts and music.", "evidence": [{"segment_id": "s51"}]},
+      "possible_effect": "Resolving the allergy concern may have cleared a potential deal-breaker.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [],
+    "next_call_focus": {"improvement_index": 0, "behavior": "Ask the family's top criteria and shortlist early, then tie each answer to them.", "target": "At Saturday's visit, learn the other schools and the family's top three criteria within the first ten minutes."},
+    "practice": {"improvement_index": 0, "instructions": "Write three discovery questions for admission calls (criteria, shortlist, decision timing) and use them before answering feature questions on your next three counselling calls.", "success_condition": "Each call note records the family's criteria, shortlist and decision timing."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Specific, child-focused reassurance, especially on health and safety.",
+      "fix_first": "Discover the family's criteria and shortlist before giving long answers.",
+      "next_focus": "Confirm the document deadline, answer the corporate discount question and plan documents before the father's trip.",
+      "assessment": "Strong impression and a booked visit; the decision path is still unknown."
+    }
+  }
+}

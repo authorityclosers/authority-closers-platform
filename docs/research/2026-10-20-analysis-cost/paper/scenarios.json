@@ -1,0 +1,272 @@
+[
+ {
+  "scenario": "a. today (Scribe + 3.8 Flash, all stages)",
+  "inr_per_min@4.5": 1.93,
+  "usd_per_min@4.5": 0.0193,
+  "inr_per_min@13.8": 1.185,
+  "usd_per_min@13.8": 0.01185,
+  "inr_per_min@60.0": 0.908,
+  "usd_per_min@60.0": 0.00908
+ },
+ {
+  "scenario": "a. today without call-data fast+deep",
+  "inr_per_min@4.5": 1.263,
+  "usd_per_min@4.5": 0.01263,
+  "inr_per_min@13.8": 0.774,
+  "usd_per_min@13.8": 0.00774,
+  "inr_per_min@60.0": 0.591,
+  "usd_per_min@60.0": 0.00591
+ },
+ {
+  "scenario": "a. today, all stages on 3.8 Flash batch",
+  "inr_per_min@4.5": 1.148,
+  "usd_per_min@4.5": 0.01148,
+  "inr_per_min@13.8": 0.776,
+  "usd_per_min@13.8": 0.00776,
+  "inr_per_min@60.0": 0.637,
+  "usd_per_min@60.0": 0.00637
+ },
+ {
+  "scenario": "a. today, all stages on 2.5 Flash-Lite",
+  "inr_per_min@4.5": 0.543,
+  "usd_per_min@4.5": 0.00543,
+  "inr_per_min@13.8": 0.461,
+  "usd_per_min@13.8": 0.00461,
+  "inr_per_min@60.0": 0.431,
+  "usd_per_min@60.0": 0.00431
+ },
+ {
+  "scenario": "a. today on Flex",
+  "inr_per_min@4.5": 1.148,
+  "usd_per_min@4.5": 0.01148,
+  "inr_per_min@13.8": 0.776,
+  "usd_per_min@13.8": 0.00776,
+  "inr_per_min@60.0": 0.637,
+  "usd_per_min@60.0": 0.00637
+ },
+ {
+  "scenario": "a. today on Flex, deep labels off, transcript-first prompts (cache)",
+  "inr_per_min@4.5": 0.944,
+  "usd_per_min@4.5": 0.00944,
+  "inr_per_min@13.8": 0.609,
+  "usd_per_min@13.8": 0.00609,
+  "inr_per_min@60.0": 0.485,
+  "usd_per_min@60.0": 0.00485
+ },
+ {
+  "scenario": "b. Scribe + one pass 3.8 Flash",
+  "inr_per_min@4.5": 0.865,
+  "usd_per_min@4.5": 0.00865,
+  "inr_per_min@13.8": 0.579,
+  "usd_per_min@13.8": 0.00579,
+  "inr_per_min@60.0": 0.472,
+  "usd_per_min@60.0": 0.00472
+ },
+ {
+  "scenario": "b. Scribe + one pass 3.8 Flash Flex",
+  "inr_per_min@4.5": 0.616,
+  "usd_per_min@4.5": 0.00616,
+  "inr_per_min@13.8": 0.473,
+  "usd_per_min@13.8": 0.00473,
+  "inr_per_min@60.0": 0.419,
+  "usd_per_min@60.0": 0.00419
+ },
+ {
+  "scenario": "b. Scribe + one pass 3.1 Flash-Lite Flex",
+  "inr_per_min@4.5": 0.463,
+  "usd_per_min@4.5": 0.00463,
+  "inr_per_min@13.8": 0.407,
+  "usd_per_min@13.8": 0.00407,
+  "inr_per_min@60.0": 0.386,
+  "usd_per_min@60.0": 0.00386
+ },
+ {
+  "scenario": "b. Scribe + one pass 2.5 Flash-Lite",
+  "inr_per_min@4.5": 0.423,
+  "usd_per_min@4.5": 0.00423,
+  "inr_per_min@13.8": 0.391,
+  "usd_per_min@13.8": 0.00391,
+  "inr_per_min@60.0": 0.379,
+  "usd_per_min@60.0": 0.00379
+ },
+ {
+  "scenario": "b. Scribe + one pass 3.1 Flash-Lite",
+  "inr_per_min@4.5": 0.559,
+  "usd_per_min@4.5": 0.00559,
+  "inr_per_min@13.8": 0.448,
+  "usd_per_min@13.8": 0.00448,
+  "inr_per_min@60.0": 0.406,
+  "usd_per_min@60.0": 0.00406
+ },
+ {
+  "scenario": "b. Scribe + two cached passes 3.8 Flash",
+  "inr_per_min@4.5": 0.925,
+  "usd_per_min@4.5": 0.00925,
+  "inr_per_min@13.8": 0.609,
+  "usd_per_min@13.8": 0.00609,
+  "inr_per_min@60.0": 0.491,
+  "usd_per_min@60.0": 0.00491
+ },
+ {
+  "scenario": "c. audio one call 3.8 Flash",
+  "inr_per_min@4.5": 0.82,
+  "usd_per_min@4.5": 0.0082,
+  "inr_per_min@13.8": 0.534,
+  "usd_per_min@13.8": 0.00534,
+  "inr_per_min@60.0": 0.427,
+  "usd_per_min@60.0": 0.00427
+ },
+ {
+  "scenario": "c. audio one call 3.1 Flash-Lite",
+  "inr_per_min@4.5": 0.362,
+  "usd_per_min@4.5": 0.00362,
+  "inr_per_min@13.8": 0.25,
+  "usd_per_min@13.8": 0.0025,
+  "inr_per_min@60.0": 0.209,
+  "usd_per_min@60.0": 0.00209
+ },
+ {
+  "scenario": "c. audio one call 2.5 Flash-Lite",
+  "inr_per_min@4.5": 0.132,
+  "usd_per_min@4.5": 0.00132,
+  "inr_per_min@13.8": 0.1,
+  "usd_per_min@13.8": 0.001,
+  "inr_per_min@60.0": 0.088,
+  "usd_per_min@60.0": 0.00088
+ },
+ {
+  "scenario": "c. audio one call 2.5 Flash-Lite batch",
+  "inr_per_min@4.5": 0.066,
+  "usd_per_min@4.5": 0.00066,
+  "inr_per_min@13.8": 0.05,
+  "usd_per_min@13.8": 0.0005,
+  "inr_per_min@60.0": 0.044,
+  "usd_per_min@60.0": 0.00044
+ },
+ {
+  "scenario": "c'. 3.1 FL Flex audio->transcript + one pass 3.8 Flash Flex",
+  "inr_per_min@4.5": 0.342,
+  "usd_per_min@4.5": 0.00342,
+  "inr_per_min@13.8": 0.197,
+  "usd_per_min@13.8": 0.00197,
+  "inr_per_min@60.0": 0.143,
+  "usd_per_min@60.0": 0.00143
+ },
+ {
+  "scenario": "c'. 3.1 FL Flex audio->transcript + one pass 3.1 FL Flex",
+  "inr_per_min@4.5": 0.189,
+  "usd_per_min@4.5": 0.00189,
+  "inr_per_min@13.8": 0.131,
+  "usd_per_min@13.8": 0.00131,
+  "inr_per_min@60.0": 0.11,
+  "usd_per_min@60.0": 0.0011
+ },
+ {
+  "scenario": "c. audio one call 3.1 Flash-Lite Flex",
+  "inr_per_min@4.5": 0.181,
+  "usd_per_min@4.5": 0.00181,
+  "inr_per_min@13.8": 0.125,
+  "usd_per_min@13.8": 0.00125,
+  "inr_per_min@60.0": 0.104,
+  "usd_per_min@60.0": 0.00104
+ },
+ {
+  "scenario": "c. audio one call 3.8 Flash Flex",
+  "inr_per_min@4.5": 0.41,
+  "usd_per_min@4.5": 0.0041,
+  "inr_per_min@13.8": 0.267,
+  "usd_per_min@13.8": 0.00267,
+  "inr_per_min@60.0": 0.214,
+  "usd_per_min@60.0": 0.00214
+ },
+ {
+  "scenario": "c'. 2.5 FL audio->transcript + one pass 2.5 FL",
+  "inr_per_min@4.5": 0.138,
+  "usd_per_min@4.5": 0.00138,
+  "inr_per_min@13.8": 0.105,
+  "usd_per_min@13.8": 0.00105,
+  "inr_per_min@60.0": 0.092,
+  "usd_per_min@60.0": 0.00092
+ },
+ {
+  "scenario": "c'. 2.5 FL audio->transcript + one pass 3.8 Flash",
+  "inr_per_min@4.5": 0.58,
+  "usd_per_min@4.5": 0.0058,
+  "inr_per_min@13.8": 0.293,
+  "usd_per_min@13.8": 0.00293,
+  "inr_per_min@60.0": 0.186,
+  "usd_per_min@60.0": 0.00186
+ },
+ {
+  "scenario": "d. Scribe + hybrid 3.8 Flash",
+  "inr_per_min@4.5": 0.688,
+  "usd_per_min@4.5": 0.00688,
+  "inr_per_min@13.8": 0.508,
+  "usd_per_min@13.8": 0.00508,
+  "inr_per_min@60.0": 0.441,
+  "usd_per_min@60.0": 0.00441
+ },
+ {
+  "scenario": "d. Scribe + hybrid 2.5 Flash-Lite",
+  "inr_per_min@4.5": 0.403,
+  "usd_per_min@4.5": 0.00403,
+  "inr_per_min@13.8": 0.383,
+  "usd_per_min@13.8": 0.00383,
+  "inr_per_min@60.0": 0.376,
+  "usd_per_min@60.0": 0.00376
+ },
+ {
+  "scenario": "d. 2.5 FL audio->transcript + hybrid 2.5 FL",
+  "inr_per_min@4.5": 0.118,
+  "usd_per_min@4.5": 0.00118,
+  "inr_per_min@13.8": 0.097,
+  "usd_per_min@13.8": 0.00097,
+  "inr_per_min@60.0": 0.089,
+  "usd_per_min@60.0": 0.00089
+ },
+ {
+  "scenario": "new provider*: Groq turbo + one pass DeepSeek V4.1 Flash",
+  "inr_per_min@4.5": 0.131,
+  "usd_per_min@4.5": 0.00131,
+  "inr_per_min@13.8": 0.095,
+  "usd_per_min@13.8": 0.00095,
+  "inr_per_min@60.0": 0.081,
+  "usd_per_min@60.0": 0.00081
+ },
+ {
+  "scenario": "new provider*: Groq turbo + one pass Haiku 5.5",
+  "inr_per_min@4.5": 0.133,
+  "usd_per_min@4.5": 0.00133,
+  "inr_per_min@13.8": 0.095,
+  "usd_per_min@13.8": 0.00095,
+  "inr_per_min@60.0": 0.081,
+  "usd_per_min@60.0": 0.00081
+ },
+ {
+  "scenario": "new provider*: Groq turbo + hybrid GLM-5.3 Flash",
+  "inr_per_min@4.5": 0.116,
+  "usd_per_min@4.5": 0.00116,
+  "inr_per_min@13.8": 0.089,
+  "usd_per_min@13.8": 0.00089,
+  "inr_per_min@60.0": 0.079,
+  "usd_per_min@60.0": 0.00079
+ },
+ {
+  "scenario": "new provider*: AssemblyAI U2 + one pass Haiku 5.5",
+  "inr_per_min@4.5": 0.35,
+  "usd_per_min@4.5": 0.0035,
+  "inr_per_min@13.8": 0.312,
+  "usd_per_min@13.8": 0.00312,
+  "inr_per_min@60.0": 0.297,
+  "usd_per_min@60.0": 0.00297
+ },
+ {
+  "scenario": "new provider*: Scribe + today's stages on DeepSeek V4.1 Flash",
+  "inr_per_min@4.5": 0.567,
+  "usd_per_min@4.5": 0.00567,
+  "inr_per_min@13.8": 0.478,
+  "usd_per_min@13.8": 0.00478,
+  "inr_per_min@60.0": 0.445,
+  "usd_per_min@60.0": 0.00445
+ }
+]

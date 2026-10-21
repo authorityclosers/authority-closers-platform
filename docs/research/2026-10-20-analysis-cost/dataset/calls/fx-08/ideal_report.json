@@ -1,0 +1,213 @@
+{
+  "summary": "Joint call between Tanvi Merkal (Tantushikha Packworks) with her technical colleague Nilay Kardule, and Rasparna Bhojan Samagri's owner Akshay Perule and purchase manager Suchitra Bhanvel, about five-ply shipping cartons. Tanvi opened with ₹38.20 per carton based on 10,000 a month; Suchitra stopped her for dimensions and corrected volume to 7,500 regular (10,000 was a peak month). Pain: 240 cartons crushed last month, refused by dealers, with return freight and repacking costs. Specs agreed: inside 420 x 310 x 280 mm, 12 kg gross with 24 pouches of 0.5 kg, flap gap at most 3 mm on machine taping, five-layer regular stacking, seven days' storage, longest route three days, secondary packaging only. Current supplier Kagadvel Packline charges ₹32.50. Tanvi offered a written zero-damage guarantee; Nilay stopped it and she withdrew it at the end. Plan: 20 free plain samples (drawing tomorrow noon, dispatch target Friday 23 October, receipt target Monday 26 October, transport dependent), then printed proof, then a paid pilot of 1,000 cartons at ₹40 (plus ₹6,000 one-time plate charge = ₹46,000 before tax and freight; pilot freight about ₹3,000, not a ceiling). Claims: 5 working days to notify, initial review within 2 working days; line-stoppage liability left for legal review. Payment is unresolved: Tanvi's standard is 50% advance, she offered 40% subject to approval; Akshay's ceiling is 30% with balance seven days after receipt. Rate validity and escalation formula, tolerance (±2% requested) and repeated-failure trigger (two consecutive lots proposed) remain open. Tanvi tried to fix a trial result date before the line slot and sample arrival were known and was corrected. Next: finance position and drawing tomorrow noon, Suchitra's checklist tomorrow morning, recap this evening, status call Tuesday 27 October at 3 pm. No order or payment approved.",
+  "strengths": [
+    {
+      "title": "Clear pilot and regular pricing with exclusions stated",
+      "explanation": "When Akshay asked what a small lot would cost, you separated the pilot rate (₹40 for 1,000) from the regular rate (₹38.20 at 7,500 a month), said tax and transport are extra, confirmed the ₹6,000 one-time plate charge, free samples and first sample freight, gave a ₹3,000 freight estimate that is not a ceiling, and said 30-day credit is possible only after finance assessment, not approved. Suchitra could read back ₹46,000 before tax and freight with no surprises.",
+      "evidence": [{"segment_id": "s59"}, {"segment_id": "s60"}, {"segment_id": "s61"}, {"segment_id": "s62"}, {"segment_id": "s64"}, {"segment_id": "s68"}]
+    },
+    {
+      "title": "Recovered from the early price and proposed a stepwise plan",
+      "explanation": "After the pushback you said 'मैं price पर जल्दी आ गई, पहले माप और use समझें' and asked for inside dimensions. You then proposed 20 plain samples (ten on the line, ten in storage) before a small paid pilot instead of a monthly order, and checked Akshay agreed to the step-by-step approach.",
+      "evidence": [{"segment_id": "s11"}, {"segment_id": "s12"}, {"segment_id": "s17"}, {"segment_id": "s18"}]
+    },
+    {
+      "title": "Kept unagreed terms marked as pending",
+      "explanation": "On claims windows, plate storage, advance, tolerance, rate validity and repeated failure you recorded each as a request or proposal subject to approval, said volume is potential not guaranteed, excluded the restricted customer shipment, and offered Akshay the option to stop before samples if the advance is not approved. This matches a buyer who said 'promise कम और जिम्मेदारी साफ'.",
+      "evidence": [{"segment_id": "s30"}, {"segment_id": "s70"}, {"segment_id": "s74"}, {"segment_id": "s83"}, {"segment_id": "s88"}, {"segment_id": "s92"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Quoted the rate before dimensions, demand and handling",
+      "explanation": "Your first commercial line was ₹38.20 per carton, based on 10,000 a month, before confirming size, the real 7,500 regular volume or how the cartons are handled. Suchitra said 'rate से पहले dimensions', and Akshay said at the end that the early price made it feel like 'वही sales call'. On a specification call, start with: 'Inside dimensions, monthly regular volume और handling पहले confirm कर लें, फिर rate बताती हूँ।'",
+      "evidence": [{"segment_id": "s5"}, {"segment_id": "s6"}, {"segment_id": "s100"}]
+    },
+    {
+      "title": "Offered a zero-damage guarantee",
+      "explanation": "You proposed writing that the strength is guaranteed and there will be no damage, to give Akshay confidence. Nilay immediately stopped it because transit handling is outside your control, and you withdrew it in the recap. Commit only to what you control: 'Agreed test pass और manufacturing defect पर defined remedy लिखेंगे।'",
+      "evidence": [{"segment_id": "s25"}, {"segment_id": "s26"}, {"segment_id": "s27"}, {"segment_id": "s99"}]
+    },
+    {
+      "title": "Tried to fix a result date before dependencies were confirmed",
+      "explanation": "You proposed writing a Wednesday trial target and discussing the monthly order that day, although sample arrival was only a target and Suchitra had just said the line slot was not fixed. She said 'आपने फिर जल्दी की'. Ask instead: 'Line slot कब तक confirm होगा? उसके बाद ही result date लिखूँगी।'",
+      "evidence": [{"segment_id": "s55"}, {"segment_id": "s56"}, {"segment_id": "s57"}, {"segment_id": "s58"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Damage cost never connected to the ₹5.70 price gap",
+      "explanation": "Akshay described 240 crushed cartons, dealer refusals, return freight and repacking. Suchitra then shared Kagadvel's ₹32.50 rate against your ₹38.20. You never asked what last month's damage cost them, which is the number that justifies a higher carton price. Ask: 'पिछले महीने के 240 cartons में return freight और repacking मिलाकर कितना लगा?'",
+      "evidence": [{"segment_id": "s7"}, {"segment_id": "s19"}, {"segment_id": "s20"}]
+    },
+    {
+      "title": "Backup-supplier position not explored",
+      "explanation": "Akshay said you would start as a backup and gain share, and later that the old supplier may improve its paper. You accepted it but did not ask what results would move share to you, which would make the trial criteria a path to volume.",
+      "evidence": [{"segment_id": "s18"}, {"segment_id": "s82"}, {"segment_id": "s83"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Price before specification",
+      "explanation": "Suchitra rejected the rate until dimensions were confirmed and corrected the volume basis. You accepted and switched to discovery.",
+      "evidence": [{"segment_id": "s6"}, {"segment_id": "s11"}]
+    },
+    {
+      "title": "Competitor rate of ₹32.50",
+      "explanation": "Nilay rightly said layer count alone does not decide strength and kept the talk on finished-carton performance. The commercial side did not link the gap to damage cost.",
+      "evidence": [{"segment_id": "s19"}, {"segment_id": "s20"}]
+    },
+    {
+      "title": "Damage responsibility and claims",
+      "explanation": "After the zero-damage slip, the team moved to joint investigation: 5 working days to notify latent defects, initial review within 2 working days, replacement or credit by written mutual agreement. Line-stoppage loss was correctly left open for legal review.",
+      "evidence": [{"segment_id": "s28"}, {"segment_id": "s29"}, {"segment_id": "s30"}, {"segment_id": "s31"}]
+    },
+    {
+      "title": "Plate charges and ownership",
+      "explanation": "₹6,000 once, corrections for your errors at your cost, written approval before any new charge, plate as customer-paid asset with 12 months' storage proposed and notice before disposal.",
+      "evidence": [{"segment_id": "s43"}, {"segment_id": "s44"}, {"segment_id": "s47"}]
+    },
+    {
+      "title": "Freight surprise",
+      "explanation": "Approximate ₹3,000, not a ceiling, with written transporter quote and approval before dispatch, or buyer pickup.",
+      "evidence": [{"segment_id": "s63"}, {"segment_id": "s64"}]
+    },
+    {
+      "title": "Advance and credit",
+      "explanation": "You held the standard and explained why (custom print cannot be resold), offered 40% subject to approval, and did not claim approval. Akshay's 30% ceiling remains the gap.",
+      "evidence": [{"segment_id": "s67"}, {"segment_id": "s68"}, {"segment_id": "s70"}, {"segment_id": "s71"}]
+    },
+    {
+      "title": "Rate validity and escalation",
+      "explanation": "Akshay wants three months stable. You tied a longer lock to a confirmed lifting schedule and offered first-month firm plus documented paper-cost review. Escalation formula left open, as Suchitra asked.",
+      "evidence": [{"segment_id": "s75"}, {"segment_id": "s76"}, {"segment_id": "s77"}]
+    },
+    {
+      "title": "Quantity tolerance",
+      "explanation": "The ±2% request and exact pilot quantity were recorded as requests, final after signatures.",
+      "evidence": [{"segment_id": "s72"}, {"segment_id": "s73"}, {"segment_id": "s74"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Dated next steps with owners",
+      "explanation": "Drawing and finance position tomorrow noon, Suchitra's checklist tomorrow morning, recap this evening, sample receipt target Monday 26 October (transport dependent), status call Tuesday 27 October at 3 pm, printed pilot lead time 10 working days after artwork and advance approval.",
+      "evidence": [{"segment_id": "s92"}, {"segment_id": "s93"}, {"segment_id": "s95"}, {"segment_id": "s99"}]
+    },
+    {
+      "title": "Commitment level stated honestly",
+      "explanation": "You said you will not ask for a monthly order today. Akshay confirmed nobody has approved payment and his yes is only to see the quote. No pilot is approved; it depends on sample results and the advance terms.",
+      "evidence": [{"segment_id": "s58"}, {"segment_id": "s59"}, {"segment_id": "s96"}]
+    },
+    {
+      "title": "Exit option offered on advance terms",
+      "explanation": "Akshay asked to be told before samples if 30% is not possible. You promised the finance answer by tomorrow noon and the option to stop before samples are made.",
+      "evidence": [{"segment_id": "s91"}, {"segment_id": "s92"}]
+    }
+  ],
+  "verdict": "A detailed, well-recorded multi-party call that ended with a credible sample-to-pilot path and clear owners. Tanvi's commercial impatience showed three times: price before specification, a zero-damage promise, and a premature result date. Her technical colleague and the buyers corrected each one, and she accepted it. The deal now depends on samples passing and on closing the 30% versus 40% advance gap.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Trust grew as promises were narrowed: Akshay said 'अब बात काम की हुई' (s100). The zero-damage offer (s25) and the early price (s5) briefly made it feel like a routine sales pitch."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Very thorough technical discovery, mostly led by Nilay and Suchitra: dimensions, load, flap gap, stacking, storage, routes (s8-s14, s22-s24, s34). Commercial discovery on damage cost was missing (s7)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Roles are clear: Akshay decides commercially, Suchitra controls specification, receipt and dispatch release (s2, s10). Volume is potential, not guaranteed (s82). Budget for the price gap was not tested."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "The pain (240 crushed cartons, dealer refusals, line stoppage) was stated by the buyers (s7, s15) but not quantified in rupees by the seller."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "The stepwise sample, proof and pilot plan fits a cautious buyer (s17, s49). Performance claims were kept to test results rather than layer count (s20, s22)."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Commercial objections on freight, plate, advance, validity and tolerance were handled without overcommitting (s44, s64, s70, s76). The zero-damage guarantee was a wrong offer, corrected by Nilay (s26) and withdrawn (s99)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Clear dated next steps and a status call (s93). One premature attempt to fix results and a monthly-order discussion (s56) was corrected (s57-s58)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Recaps and read-backs were precise (s35, s85, s99), and Nilay paused to let Suchitra finish after a cross-talk moment (s53-s54). Tone of voice cannot be judged from text."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Strong process and recording, weakened by commercial impatience; the value case against a cheaper incumbent was never built in rupees.",
+      "evidence": [{"segment_id": "s5"}, {"segment_id": "s19"}, {"segment_id": "s56"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "No order or payment approved. Drawing and finance position tomorrow noon, sample receipt target 26 October, status call Tuesday 27 October at 3 pm.",
+      "evidence": [{"segment_id": "s93"}, {"segment_id": "s96"}, {"segment_id": "s99"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Cost of last month's 240 damaged cartons", "Sample and trial results", "Finance decision on advance terms", "Share the buyer will move from the current supplier"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "Akshay feared hidden freight and minimum billing; clear exclusions let him compare total cost honestly with the incumbent."},
+      {"finding_index": 1, "why_it_matters": "A small, staged commitment matched an owner protective of cash and a buyer who wants proof before volume."},
+      {"finding_index": 2, "why_it_matters": "Suchitra will not accept assumed approvals; marking pending items keeps the recap usable as a contract base."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "You quoted ₹38.20 on a 10,000 volume basis before dimensions; the buyer stopped you.", "evidence": [{"segment_id": "s5"}, {"segment_id": "s6"}]},
+        "why_it_matters": "It anchored the call on rate against a ₹32.50 incumbent and made the owner see a routine sales call.",
+        "replacement_behavior": "Confirm specification, regular volume and handling first, then give an indicative rate tied to that basis.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Final quoted rate after sample approval"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "You offered to write a no-damage guarantee; Nilay stopped it.", "evidence": [{"segment_id": "s25"}, {"segment_id": "s26"}]},
+        "why_it_matters": "Transit damage is outside your control; a written guarantee would create unlimited liability and later disputes.",
+        "replacement_behavior": "Offer test-pass criteria and a defined remedy for manufacturing defects only.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Agreed defect remedy terms"]}
+      },
+      {
+        "finding_index": 2,
+        "what_happened": {"text": "You proposed a Wednesday result and monthly-order talk before line slot and sample arrival were confirmed.", "evidence": [{"segment_id": "s56"}, {"segment_id": "s57"}]},
+        "why_it_matters": "Rushing dates makes a precise purchase manager doubt your planning.",
+        "replacement_behavior": "List dependencies first and set dates only after each is confirmed.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Line slot date"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 1, "evidence_index": 0, "why_effective": "A quick admission that price came too early turned the call back to discovery."},
+      {"strength_index": 0, "evidence_index": 1, "why_effective": "Pilot and regular prices stated together with tax and transport exclusions removed the risk of a hidden-cost dispute."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "Akshay said 240 cartons were crushed last month, with return freight and repacking costs.", "evidence": [{"segment_id": "s7"}]},
+        "closer_response": {"text": "The damage cost was not quantified; the competitor rate came up without a value answer.", "evidence": [{"segment_id": "s19"}]},
+        "follow_up": "Ask Suchitra for last month's damage cost before the 27 October call and add it to the commercial sheet.",
+        "potential_impact": "Turns a ₹5.70 per carton gap into a comparison with real loss."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "Akshay said you would start as a backup and the incumbent may also improve.", "evidence": [{"segment_id": "s18"}, {"segment_id": "s82"}]},
+        "closer_response": {"text": "You confirmed volume is potential and no exclusivity is assumed.", "evidence": [{"segment_id": "s83"}]},
+        "follow_up": "Ask what trial results would move a fixed share to you.",
+        "potential_impact": "Links passing the trial to a defined volume."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "Akshay said the early price made it feel like the same old sales call.", "evidence": [{"segment_id": "s100"}]}, "possible_concern": "He may judge future proposals on whether they lead with his problem or with price.", "interpretation_kind": "inference"},
+      {"source": {"text": "Akshay set a 30% advance ceiling and asked to be told before samples if it is not possible.", "evidence": [{"segment_id": "s91"}]}, "possible_concern": "Payment terms could end the deal before quality is tested.", "interpretation_kind": "inference"},
+      {"source": {"text": "His biggest fear was a good trial followed by lighter paper in regular lots.", "evidence": [{"segment_id": "s79"}]}, "possible_concern": "Lot traceability may matter more to him than a small price cut.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Rate quoted before specification.", "purpose": "must_watch", "evidence": [{"segment_id": "s5"}]},
+      {"text": "Zero-damage guarantee offered.", "purpose": "must_watch", "evidence": [{"segment_id": "s25"}]},
+      {"text": "Pilot versus regular pricing with exclusions.", "purpose": "repeat", "evidence": [{"segment_id": "s60"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "You quoted ₹38.20; Suchitra demanded dimensions first and corrected the volume.", "evidence": [{"segment_id": "s5"}, {"segment_id": "s6"}]},
+      "change": {"text": "You admitted coming to price too early and asked for their inside requirements.", "evidence": [{"segment_id": "s11"}]},
+      "after": {"text": "Suchitra gave exact inside dimensions and the call moved into detailed specification.", "evidence": [{"segment_id": "s12"}]},
+      "possible_effect": "The admission may have reset the buyers' view of the call from a price pitch to a joint specification exercise.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "A zero-damage guarantee was offered without control over transit, then withdrawn after the technical colleague objected.", "evidence": [{"segment_id": "s25"}, {"segment_id": "s99"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "On specification-led calls, confirm dimensions, regular volume and handling before giving any rate.", "target": "On the 27 October call and the next new account, no rate is mentioned before those three are written down."},
+    "practice": {"improvement_index": 0, "instructions": "Prepare a three-question opener for packaging buyers (inside dimensions, regular monthly volume, handling and stacking) and role-play it with Nilay playing a buyer who asks for the rate first.", "success_condition": "You defer the rate politely and give it only after all three answers, tied to that basis."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Clear pricing with exclusions and honest marking of pending terms.",
+      "fix_first": "No rate before specification and volume.",
+      "next_focus": "Quantify the damage cost and resolve the advance gap before samples are made.",
+      "assessment": "Credible staged opportunity built mostly on the team's discipline; the seller's pace needs control."
+    }
+  }
+}

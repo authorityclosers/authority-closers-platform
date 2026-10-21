@@ -1,0 +1,89 @@
+{
+  "call_id": "fx-01",
+  "call_type": "cold_call",
+  "language_mix": "hi-en",
+  "target_minutes": 3,
+  "seller": {
+    "company": "धूपकिरण छत ऊर्जा",
+    "product": "उजास रूफ सोलर",
+    "price_list": [
+      "तीन किलोवाट: एक लाख पचासी हजार रुपये"
+    ]
+  },
+  "speakers": [
+    {
+      "id": "S1",
+      "role": "salesperson",
+      "name": "काव्या मोरवेल",
+      "gender": "f",
+      "age_band": "20s",
+      "style": "friendly, slightly rushed"
+    },
+    {
+      "id": "S2",
+      "role": "prospect",
+      "name": "नरेन पालखे",
+      "gender": "m",
+      "age_band": "40s",
+      "style": "busy shop owner, skeptical"
+    }
+  ],
+  "sections": [
+    {
+      "name": "opening and discovery",
+      "minutes": 1.2,
+      "facts": [
+        "f01",
+        "f02",
+        "f03",
+        "f04",
+        "f05",
+        "f06",
+        "f07",
+        "f08",
+        "f09",
+        "f10",
+        "f11",
+        "f12",
+        "f13",
+        "f14",
+        "f15"
+      ]
+    },
+    {
+      "name": "qualification and callback",
+      "minutes": 1.8,
+      "facts": [
+        "f16",
+        "f17",
+        "f18",
+        "f19",
+        "f20",
+        "f21",
+        "f22",
+        "f23",
+        "f24",
+        "f25",
+        "f26"
+      ]
+    }
+  ],
+  "coaching_truths": [
+    {
+      "id": "k01",
+      "kind": "price_too_early",
+      "turn_ids": [
+        "t003"
+      ],
+      "statement": "Seller quoted a system before discovering roof ownership or budget."
+    },
+    {
+      "id": "k02",
+      "kind": "good_objection_handling",
+      "turn_ids": [
+        "t013"
+      ],
+      "statement": "Seller clearly explained the outage limitation when the buyer asked about freezer continuity."
+    }
+  ]
+}

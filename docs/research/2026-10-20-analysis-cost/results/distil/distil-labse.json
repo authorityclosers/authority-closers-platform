@@ -1,0 +1,36 @@
+{
+ "segments": 1253,
+ "calls": 16,
+ "encoder": "sentence-transformers/LaBSE",
+ "embed_ms_per_segment": 82.1,
+ "labels": {
+  "act": {
+   "classes": 8,
+   "agreement": 0.417,
+   "majority_class": "statement",
+   "majority_baseline": 0.521,
+   "n": 1253
+  },
+  "sentiment": {
+   "classes": 3,
+   "agreement": 0.611,
+   "majority_class": "neutral",
+   "majority_baseline": 0.55,
+   "n": 1253
+  },
+  "intent": {
+   "classes": 16,
+   "agreement": 0.334,
+   "majority_class": "discovery",
+   "majority_baseline": 0.208,
+   "n": 1253
+  },
+  "tone": {
+   "classes": 8,
+   "agreement": 0.392,
+   "majority_class": "confident",
+   "majority_baseline": 0.242,
+   "n": 1253
+  }
+ }
+}

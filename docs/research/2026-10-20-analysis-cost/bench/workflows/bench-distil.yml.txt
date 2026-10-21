@@ -1,0 +1,29 @@
+# Analysis-cost research (20 Oct 2026): shape (d) feasibility — distil the deep pipeline's LLM segment labels (on
+# fictional calls) into a CPU classifier. Runs only for pushes to bench-distil/** refs. No secrets.
+name: bench-distil
+
+on:
+  push:
+    branches:
+      - "bench-distil/**"
+
+permissions:
+  contents: read
+
+jobs:
+  distil:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q --extra-index-url https://download.pytorch.org/whl/cpu torch==2.5.1 sentence-transformers==3.3.1 scikit-learn==1.5.2 numpy==1.26.4
+      - run: python bench/distil.py --labels bench/labels.jsonl --model intfloat/multilingual-e5-small --out distil-e5-small.json
+      - run: python bench/distil.py --labels bench/labels.jsonl --model sentence-transformers/LaBSE --out distil-labse.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distil-results
+          path: distil-*.json
+          retention-days: 30

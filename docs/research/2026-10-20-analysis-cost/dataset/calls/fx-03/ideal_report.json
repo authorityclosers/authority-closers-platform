@@ -1,0 +1,215 @@
+{
+  "summary": "Demo by Nikhil (Brickline Labs) of Brickline CRM to Anchorpoint Realty: owner Farhan, on the road with about 20 minutes, and operations head Meenal. Farhan demanded the price first and Nikhil quoted Starter ₹799 and Growth ₹1,199 per user per month before any discovery. Discovery then gave a strong picture: 22 users (14 field agents, 3 telecallers, back office, owner, plus two joiners on Monday), about 1,200 leads a month from three portals, website, walk-ins and references, all handled through a spreadsheet and a WhatsApp group; 8-10 bookings a month at about ₹1 lakh commission; duplicate calling, 60 leads with no call-back last month, and no visibility on site visits. The demo covered portal integration, phone-number duplicate merge, number masking and export control, follow-up escalation, site-visit scheduler, mobile app and inventory. Nikhil cut Meenal off on data migration, briefly claimed Marathi support before correcting to English and Hindi only (Marathi planned Q1), and moved to reports when Meenal said the team could be live before the January launches. On the PropDesk comparison (₹650 per user, trialled in June and dropped) he asked why they dropped it, offered a weekly adoption report, and tied ₹26,400 a month to the 60 missed leads. He confirmed 10% for annual upfront (about ₹2.85 lakh a year) and will take 15% and an onboarding waiver to his manager. Partner Vikram Saxena signs anything above ₹2 lakh and is travelling till the 28th. Next steps: sample sheet of about 500 leads tomorrow, 14-day sandbox, telecaller session Thursday 4 pm, proposal by Wednesday evening, decision by month end.",
+  "strengths": [
+    {
+      "title": "Turned the PropDesk price comparison into a value conversation",
+      "explanation": "Instead of defending ₹1,199 against PropDesk's ₹650, you asked why they dropped it, learned agents stopped using it in two weeks, answered the adoption fear with two training sessions and a Monday adoption report, then tied ₹26,400 a month to their own 60 missed leads and ₹1 lakh commission per booking. Farhan accepted it ('not wrong'). Repeat this sequence: ask why, use their numbers, then price.",
+      "evidence": [{"segment_id": "s59"}, {"segment_id": "s60"}, {"segment_id": "s61"}, {"segment_id": "s64"}, {"segment_id": "s65"}, {"segment_id": "s66"}]
+    },
+    {
+      "title": "Discovery and demo tied to their real pains",
+      "explanation": "Once you got to questions you collected team size, lead volume, process, bookings, commission and the three pains. You then showed duplicate merge for the 'two agents call the same client' problem, masking for data theft, and the visit scheduler for Farhan's Monday meeting question. Farhan responded 'That alone will save a lot of fights' and 'Masking is good. That I want.'",
+      "evidence": [{"segment_id": "s18"}, {"segment_id": "s26"}, {"segment_id": "s27"}, {"segment_id": "s36"}, {"segment_id": "s37"}, {"segment_id": "s40"}, {"segment_id": "s41"}, {"segment_id": "s48"}]
+    },
+    {
+      "title": "Clear, owned next steps with a summary",
+      "explanation": "You offered to join a call with Vikram Saxena, agreed the trial on their own data, booked the telecaller session and closed with a full read-back: sample data tomorrow, sandbox, Thursday 4 pm session, proposal by Wednesday evening, decision by month end.",
+      "evidence": [{"segment_id": "s72"}, {"segment_id": "s75"}, {"segment_id": "s77"}, {"segment_id": "s82"}, {"segment_id": "s84"}]
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Price quoted before team size, volume or pain",
+      "explanation": "When Farhan asked for price first, you gave both per-user prices immediately, before knowing they have 22 users, 1,200 leads and 60 missed follow-ups. The price landed with nothing attached and he just said 'Hmm. Okay.' Respect the request but buy two questions: 'Sir, it's per user, ₹799 to ₹1,199 a month. Two quick questions so I can tell you which one and the real total: how many users, and roughly how many leads a month?'",
+      "evidence": [{"segment_id": "s11"}, {"segment_id": "s12"}, {"segment_id": "s13"}]
+    },
+    {
+      "title": "Talked over Meenal on data migration",
+      "explanation": "Meenal asked about bringing in 8,000 old contacts; you cut in with 'Yes yes, migration we do' and jumped to your favourite feature. She had to stop you to ask again who cleans the junk data. Let the person who will run the system finish, answer fully, then check: 'Does that cover your old data, Meenal?'",
+      "evidence": [{"segment_id": "s43"}, {"segment_id": "s44"}, {"segment_id": "s45"}, {"segment_id": "s46"}]
+    },
+    {
+      "title": "Wrong product claim on Marathi, corrected",
+      "explanation": "Asked if the app is in Marathi, you first said yes, then corrected: English and Hindi today, Marathi planned for Q1. The correction was right and honest, but the first answer was a guess. On capability questions, pause and answer only what is live: 'Today English and Hindi; Marathi is on the roadmap, not live.'",
+      "evidence": [{"segment_id": "s51"}, {"segment_id": "s52"}, {"segment_id": "s53"}]
+    }
+  ],
+  "missed_opportunities": [
+    {
+      "title": "Go-live buying signal ignored",
+      "explanation": "Meenal said 'If this works, we can have the whole team on it before the January launches. That's our busiest season.' You said 'Great' and moved to a report. That was the moment to lock a go-live date and plan back from it, for example: 'When do launches start? Then migration and training should finish by mid-December; shall we plan that?'",
+      "evidence": [{"segment_id": "s55"}, {"segment_id": "s56"}, {"segment_id": "s57"}]
+    },
+    {
+      "title": "Did not find out what Vikram Saxena needs to approve",
+      "explanation": "Farhan said anything above ₹2 lakh needs Vikram's sign-off and he handles money. Your offer to join a call was good; when Farhan wanted to speak to him first, you could have asked what Vikram will look at (ROI, contract term, payment terms) so the Wednesday proposal is built for him.",
+      "evidence": [{"segment_id": "s71"}, {"segment_id": "s72"}, {"segment_id": "s73"}]
+    },
+    {
+      "title": "Owner's mobile-first need not explored further",
+      "explanation": "Farhan said he is mostly on the road and liked the visit tracking. You described the app but did not show his own owner view on the phone, which is what he would use daily.",
+      "evidence": [{"segment_id": "s48"}, {"segment_id": "s49"}, {"segment_id": "s50"}]
+    }
+  ],
+  "objection_analysis": [
+    {
+      "title": "Price-first demand",
+      "explanation": "Farhan's past demo ended with a 'crazy' price. Giving the price was fair, but without context; see improvement on price timing.",
+      "evidence": [{"segment_id": "s11"}, {"segment_id": "s12"}]
+    },
+    {
+      "title": "Competitor price (PropDesk ₹650 per user)",
+      "explanation": "Handled well with a diagnostic question and their own numbers. Avoided discounting reflexively at this stage.",
+      "evidence": [{"segment_id": "s59"}, {"segment_id": "s60"}, {"segment_id": "s66"}]
+    },
+    {
+      "title": "Adoption worry",
+      "explanation": "'Three months later the agents stop using it' was answered with training sessions and a weekly adoption report so problems show in week one. Farhan found the report useful.",
+      "evidence": [{"segment_id": "s63"}, {"segment_id": "s64"}, {"segment_id": "s65"}]
+    },
+    {
+      "title": "Discount request: 10% given, onboarding waiver volunteered",
+      "explanation": "10% for annual upfront was within your discretion and tied to payment terms, and you held 15% for your manager. But you volunteered checking an onboarding-fee waiver before he asked. Trade concessions for commitments, for example 15% only with a signed order by month end.",
+      "evidence": [{"segment_id": "s67"}, {"segment_id": "s68"}, {"segment_id": "s69"}, {"segment_id": "s70"}]
+    },
+    {
+      "title": "Data theft by departing agents",
+      "explanation": "His biggest fear was answered precisely: own-leads visibility, export disabled for agents, masking, export rights only for Farhan and Meenal.",
+      "evidence": [{"segment_id": "s39"}, {"segment_id": "s40"}, {"segment_id": "s41"}]
+    },
+    {
+      "title": "Sunday support",
+      "explanation": "WhatsApp support 9 to 9, seven days, and you as account manager for 90 days. Farhan found it reassuring.",
+      "evidence": [{"segment_id": "s79"}, {"segment_id": "s80"}, {"segment_id": "s81"}]
+    }
+  ],
+  "closing_analysis": [
+    {
+      "title": "Trial and session booked on their data",
+      "explanation": "Meenal asked for a trial with their own data; you agreed a 14-day sandbox with about 500 sample leads she will send tomorrow, plus a Thursday 4 pm telecaller session on video.",
+      "evidence": [{"segment_id": "s74"}, {"segment_id": "s75"}, {"segment_id": "s76"}, {"segment_id": "s77"}, {"segment_id": "s78"}]
+    },
+    {
+      "title": "Decision path known, but signer not engaged",
+      "explanation": "Farhan wants to close by month end and start in November if Vikram agrees. Vikram is travelling till the 28th and has not been engaged directly; the proposal by Wednesday evening goes to Farhan and Meenal only.",
+      "evidence": [{"segment_id": "s71"}, {"segment_id": "s73"}, {"segment_id": "s82"}, {"segment_id": "s83"}]
+    },
+    {
+      "title": "Strong summary close",
+      "explanation": "Your final read-back covered every commitment and owner. Keep this habit on every multi-party call.",
+      "evidence": [{"segment_id": "s84"}, {"segment_id": "s85"}]
+    }
+  ],
+  "verdict": "Good demo with strong discovery, a well-handled competitor objection and clear next steps. What held it back was rushing: price before context, cutting off the operations head, a guessed product answer, and missing the January go-live signal that should have anchored the timeline. The deal now depends on the trial and on Vikram Saxena's sign-off.",
+  "review_status": "draft_not_dipak_adjudicated",
+  "dimensions": [
+    {"dimension_id": "human_connection_trust", "status": "observed", "observation": "Light small talk while waiting (s3-s9), honest correction on Marathi (s52), and a personal support commitment (s80). Cutting Meenal off (s44) works against trust with the day-to-day user."},
+    {"dimension_id": "discovery_deep_understanding", "status": "observed", "observation": "Thorough once started: users, sources, volume, process, bookings, commission and three clear pains (s14-s27). It came after the price (s12)."},
+    {"dimension_id": "qualification", "status": "observed", "observation": "Size (22 users), volume, competitor history, authority (Vikram Saxena above ₹2 lakh) and timeline (month end, November start) were all surfaced (s17, s59, s71, s83). Vikram's criteria were not explored."},
+    {"dimension_id": "problem_impact_desire", "status": "observed", "observation": "Impact was quantified with their numbers: 60 missed leads against ₹1 lakh per booking (s26, s22, s66). Good; bring it in earlier, before price."},
+    {"dimension_id": "solution_relevance_presentation", "status": "observed", "observation": "Most features shown answered a stated pain (s36, s40, s48), but you twice drifted to favourite features (site visit scheduler at s44, conversion report at s56) when buyers wanted something else."},
+    {"dimension_id": "certainty_objection_intelligence", "status": "observed", "observation": "Competitor price, adoption, data theft and support were handled well (s60-s66, s40, s80). Discount handling gave a waiver hint without a trade (s68)."},
+    {"dimension_id": "closing_decision_management", "status": "observed", "observation": "Strong next-step summary (s84) and an offer to involve the signer (s72). Missed the chance to lock a go-live date when Meenal raised January (s55-s56)."},
+    {"dimension_id": "communication_tonality", "status": "observed", "observation": "Energetic and clear, but rushed: interruptions and feature jumps (s44, s56) and a guessed answer (s52). Text cannot show voice tone; on words alone, slow down and let buyers finish."}
+  ],
+  "overview": {
+    "version": "dipak-14-point-v1",
+    "diagnosis": {
+      "text": "Value was built well but in the wrong order and at the seller's pace; the strongest buying moment from the operations head went unused.",
+      "evidence": [{"segment_id": "s12"}, {"segment_id": "s44"}, {"segment_id": "s56"}]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "text": "No order yet. Sample data tomorrow, 14-day sandbox, telecaller session Thursday 4 pm, proposal by Wednesday evening; decision by month end subject to Vikram Saxena's sign-off.",
+      "evidence": [{"segment_id": "s83"}, {"segment_id": "s84"}, {"segment_id": "s85"}]
+    },
+    "business_impact": {
+      "status": "insufficient_data",
+      "missing_inputs": ["Vikram Saxena's decision", "Trial adoption results", "Manager decision on 15% and onboarding waiver"]
+    },
+    "strength_details": [
+      {"finding_index": 0, "why_it_matters": "Price comparisons are won by changing the frame from per-user cost to cost of missed bookings; their own 60 missed leads made it credible."},
+      {"finding_index": 1, "why_it_matters": "Each feature answered a pain they had just said aloud, so the demo felt like their office, not a product tour."},
+      {"finding_index": 2, "why_it_matters": "With an owner who leaves mid-call, a spoken summary makes everyone's commitments explicit."}
+    ],
+    "improvement_details": [
+      {
+        "finding_index": 0,
+        "what_happened": {"text": "Both per-user prices were given before any discovery; Farhan's response was flat.", "evidence": [{"segment_id": "s12"}, {"segment_id": "s13"}]},
+        "why_it_matters": "A per-user price without context invites comparison with cheaper tools, which is exactly what happened later with PropDesk.",
+        "replacement_behavior": "Give a range, then ask two sizing questions before recommending a plan and total.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Comparison with calls where price followed discovery"]}
+      },
+      {
+        "finding_index": 1,
+        "what_happened": {"text": "You interrupted Meenal's migration question to show the scheduler; she had to ask again.", "evidence": [{"segment_id": "s44"}, {"segment_id": "s45"}]},
+        "why_it_matters": "Meenal runs the system daily and will drive adoption; making her repeat herself signals her concerns come second.",
+        "replacement_behavior": "Wait for the full question, answer it, and confirm: 'Does that solve the old-data part for you?' before moving on.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Meenal's assessment after the trial"]}
+      },
+      {
+        "finding_index": 2,
+        "what_happened": {"text": "You said Marathi was supported, then corrected to English and Hindi with Marathi planned for Q1.", "evidence": [{"segment_id": "s52"}]},
+        "why_it_matters": "A wrong capability claim, even corrected, makes buyers double-check everything else you said.",
+        "replacement_behavior": "Answer capability questions only from what is live today, and mention roadmap items as roadmap.",
+        "business_impact": {"status": "insufficient_data", "missing_inputs": ["Telecallers' language needs in the trial"]}
+      }
+    ],
+    "golden_moments": [
+      {"strength_index": 0, "evidence_index": 1, "why_effective": "'Why didn't you continue with them?' uncovered the adoption failure, which became the real objection to solve."},
+      {"strength_index": 0, "evidence_index": 5, "why_effective": "One booking from the 60 missed leads covering the year made the price feel small in their own terms."}
+    ],
+    "missed_details": [
+      {
+        "finding_index": 0,
+        "prospect_signal": {"text": "Meenal said the whole team could be on it before the January launches, their busiest season.", "evidence": [{"segment_id": "s55"}]},
+        "closer_response": {"text": "You moved to the source-wise conversion report.", "evidence": [{"segment_id": "s56"}]},
+        "follow_up": "In the proposal, include a dated go-live plan working back from the January launches and confirm it with Meenal.",
+        "potential_impact": "A shared go-live date gives Vikram and Farhan a reason to decide by month end."
+      },
+      {
+        "finding_index": 1,
+        "prospect_signal": {"text": "Vikram Saxena signs off anything above ₹2 lakh and is travelling till the 28th.", "evidence": [{"segment_id": "s71"}, {"segment_id": "s73"}]},
+        "closer_response": {"text": "You offered to join a call; Farhan wanted to speak to him first.", "evidence": [{"segment_id": "s72"}]},
+        "follow_up": "Ask Farhan what Vikram will check and add a one-page ROI summary to the proposal.",
+        "potential_impact": "Reduces the risk that the deal stalls with the signer."
+      },
+      {
+        "finding_index": 2,
+        "prospect_signal": {"text": "Farhan asked to see it on the phone because he is mostly on the road.", "evidence": [{"segment_id": "s49"}]},
+        "closer_response": {"text": "You described the mobile app and call recording.", "evidence": [{"segment_id": "s50"}]},
+        "follow_up": "Show Farhan the owner dashboard on mobile during the sandbox.",
+        "potential_impact": "Makes the owner a daily user and champion."
+      }
+    ],
+    "prospect_interpretations": [
+      {"source": {"text": "Farhan said a past one-hour demo ended with a crazy price.", "evidence": [{"segment_id": "s11"}]}, "possible_concern": "He may be wary of hidden or inflated costs and will watch the final total closely.", "interpretation_kind": "inference"},
+      {"source": {"text": "Farhan called the ROI line 'the standard line' but 'not wrong'.", "evidence": [{"segment_id": "s67"}]}, "possible_concern": "He may need proof from the trial rather than arguments.", "interpretation_kind": "inference"},
+      {"source": {"text": "Meenal asked to try it with their own data, not demo leads.", "evidence": [{"segment_id": "s74"}]}, "possible_concern": "She may doubt that the clean demo reflects their messy data.", "interpretation_kind": "inference"}
+    ],
+    "rewatch": [
+      {"text": "Interrupting Meenal on data migration.", "purpose": "must_watch", "evidence": [{"segment_id": "s44"}]},
+      {"text": "January go-live signal followed by a report demo.", "purpose": "watch", "evidence": [{"segment_id": "s56"}]},
+      {"text": "Value framing against the competitor price.", "purpose": "repeat", "evidence": [{"segment_id": "s66"}]}
+    ],
+    "conversation_change": {
+      "before": {"text": "Farhan compared the Growth price with PropDesk at ₹650 per user.", "evidence": [{"segment_id": "s59"}]},
+      "change": {"text": "You asked why they did not continue with PropDesk.", "evidence": [{"segment_id": "s60"}]},
+      "after": {"text": "Farhan explained agents stopped using it and there was no portal integration, shifting the discussion to adoption.", "evidence": [{"segment_id": "s61"}, {"segment_id": "s63"}]},
+      "possible_effect": "The question may have moved the conversation from price to the real risk, which you could then answer.",
+      "interpretation_kind": "inference"
+    },
+    "ethics_notes": [
+      {"text": "Inaccurate Marathi support claim corrected within the same answer, with roadmap stated as roadmap.", "evidence": [{"segment_id": "s52"}]}
+    ],
+    "next_call_focus": {"improvement_index": 0, "behavior": "When asked for price first, give a range and ask user count and lead volume before naming a plan and total.", "target": "On the next demo, the first exact total is given only after at least two sizing answers."},
+    "practice": {"improvement_index": 0, "instructions": "Role-play an owner who opens with 'first tell me the price'. Answer in two sentences with a range, then ask two sizing questions.", "success_condition": "You complete the range and both questions without giving a plan recommendation or total first."},
+    "progress": null,
+    "final_assessment": {
+      "repeat": "Diagnostic questions on competitor objections and value framing with the buyer's own numbers.",
+      "fix_first": "Price only after sizing questions.",
+      "next_focus": "Let Meenal finish, answer only live capabilities, and anchor a January go-live plan in the proposal.",
+      "assessment": "Promising deal with clear next steps; slowing down would have made it stronger."
+    }
+  }
+}

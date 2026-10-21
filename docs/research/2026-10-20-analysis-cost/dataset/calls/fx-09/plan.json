@@ -1,0 +1,129 @@
+{
+ "call_id": "fx-09",
+ "call_type": "demo",
+ "language_mix": "mr-en",
+ "target_minutes": 17,
+ "seller": {
+  "company": "पंचगंगा डेअरी सोल्युशन्स",
+  "product": "शीतधारा दोन हजार लिटर बल्क मिल्क चिलर (बीएमसी)",
+  "price_list": [
+   "२,००० लिटर बल्क मिल्क चिलर (डीएक्स टँक + स्क्रोल कॉम्प्रेसर): आठ लाख पंच्याऐंशी हजार रुपये",
+   "ऑटोमॅटिक सीआयपी क्लिनिंग सिस्टिम: पासष्ट हजार रुपये",
+   "डीझेल जनरेटर बॅकअप सेट (१५ केव्हीए): दोन लाख चाळीस हजार रुपये",
+   "एकूण टर्नकी प्रकल्प किंमत: अकरा लाख नव्वद हजार रुपये"
+  ]
+ },
+ "speakers": [
+  {
+   "id": "S1",
+   "role": "salesperson",
+   "name": "आनंद केळकर",
+   "gender": "m",
+   "age_band": "30s",
+   "style": "experienced technical sales engineer, authoritative on dairy refrigeration standards and CIP protocols"
+  },
+  {
+   "id": "S2",
+   "role": "prospect",
+   "name": "तानाजीराव मोरे",
+   "gender": "m",
+   "age_band": "50s",
+   "style": "pragmatic dairy cooperative chairman, protective of farmer funds, focused on reliability"
+  },
+  {
+   "id": "S3",
+   "role": "manager",
+   "name": "विठ्ठल खोत",
+   "gender": "m",
+   "age_band": "40s",
+   "style": "detail-oriented cooperative secretary, precise on daily milk testing, chilling logs and generator power"
+  }
+ ],
+ "sections": [
+  {
+   "name": "Society profile, collection volume & existing chilling challenges",
+   "minutes": 10.0,
+   "facts": [
+    "f01",
+    "f02",
+    "f03",
+    "f04",
+    "f05",
+    "f06",
+    "f07",
+    "f08",
+    "f09",
+    "f10",
+    "f11",
+    "f12",
+    "f13",
+    "f14",
+    "f15",
+    "f16",
+    "f17",
+    "f18",
+    "f19",
+    "f20",
+    "f21",
+    "f22",
+    "f23",
+    "f24"
+   ]
+  },
+  {
+   "name": "Technical demonstration of tank, refrigeration & CIP system",
+   "minutes": 16.0,
+   "facts": [
+    "f25",
+    "f26",
+    "f27",
+    "f28",
+    "f29",
+    "f30",
+    "f31"
+   ]
+  },
+  {
+   "name": "Power requirements, generator, subsidy & commercial quote",
+   "minutes": 14.0,
+   "facts": [
+    "f32",
+    "f33",
+    "f34",
+    "f35",
+    "f36",
+    "f37",
+    "f38",
+    "f39",
+    "f40",
+    "f41",
+    "f42",
+    "f43",
+    "f44",
+    "f45",
+    "f46",
+    "f47",
+    "f48"
+   ]
+  }
+ ],
+ "coaching_truths": [
+  {
+   "id": "k01",
+   "kind": "good_objection_handling",
+   "turn_ids": [
+    "t071"
+   ],
+   "statement": "Salesperson effectively countered the competitor's cheaper price by explaining the corrosion risks of SS 202 steel against milk lactic acid."
+  },
+  {
+   "id": "k02",
+   "kind": "wrong_info_given",
+   "turn_ids": [
+    "t051"
+   ],
+   "statement": "Salesperson appropriately corrected the buyer's assumption about using the BMC as an ice maker to protect evaporator dimple jacket integrity."
+  }
+ ],
+ "note": "written to ~17 min of speech instead of the assigned 40; target set to the real length"
+}
