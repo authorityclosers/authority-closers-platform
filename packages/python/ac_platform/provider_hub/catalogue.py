@@ -36,6 +36,8 @@ class Provider:
     compatible: bool = False
     # Extra words people may search by.
     aliases: tuple[str, ...] = ()
+    # How the provider treats the data Sales X-Ray sends, where an approval states it.
+    data_terms: str = ""
 
 
 PROVIDERS: tuple[Provider, ...] = (
@@ -69,6 +71,14 @@ PROVIDERS: tuple[Provider, ...] = (
         prefixes=("openai/",),
         compatible=True,
         aliases=("gpt", "chatgpt"),
+        # Owner approval, 21 Oct 2026: an AI processor for real call analysis.
+        data_terms=(
+            "Approved for real call analysis (transcripts only). API data is not used to"
+            " train OpenAI's models. Sales X-Ray sends store: false, so answers are not kept"
+            " as application state. OpenAI keeps API data in its abuse-monitoring logs for up"
+            " to 30 days (longer only where the law requires), and none there once it grants"
+            " zero data retention."
+        ),
     ),
     Provider(
         "anthropic",

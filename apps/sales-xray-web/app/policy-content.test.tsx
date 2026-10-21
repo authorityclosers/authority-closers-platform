@@ -119,7 +119,23 @@ it("names Google (Gemini) for AI-drafted replies, and what is never sent", () =>
   expect(markup).toContain(
     "does not send Google the answers given in Facebook or Instagram lead forms",
   );
-  expect(markup).toContain('dateTime="2026-10-20"');
+  expect(markup).toContain('dateTime="2026-10-21"');
+});
+
+it("names the AI providers for call analysis, OpenAI with its training and retention terms", () => {
+  const markup = renderToStaticMarkup(<PolicyPage slug="privacy" />);
+  expect(markup).toContain("AI service providers for call analysis");
+  expect(markup).toContain("ElevenLabs (its Scribe speech-to-text API)");
+  expect(markup).toContain("Google (the Gemini API, provided by Google LLC)");
+  expect(markup).toContain(
+    "OpenAI (the OpenAI API, provided by OpenAI, L.L.C., USA)",
+  );
+  expect(markup).toContain("not used to train OpenAI&#x27;s models");
+  expect(markup).toContain("for up to 30 days");
+  expect(markup).toContain("zero data retention");
+  expect(markup).toContain(
+    "the upload terms for that call name which of these providers will process it",
+  );
 });
 
 for (const slug of policyRoutes) {
