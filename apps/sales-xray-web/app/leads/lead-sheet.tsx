@@ -20,6 +20,7 @@ import {
   PhoneOff,
   Radio,
   Shuffle,
+  Trash2,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -99,6 +100,8 @@ import {
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
 import { Sheet as KitSheet } from "../ui/sheet";
+import { DeleteLeadsSheet, type Doomed } from "./delete-leads";
+import deleteStyles from "./delete-leads.module.css";
 import styles from "./leads.module.css";
 
 // Sources whose leads arrive with a form's own answers worth showing.
@@ -2040,6 +2043,12 @@ export function LeadSheet({
   const [heard, setHeard] = useState<NativeCall | null>(null);
   const logged = useRef("");
   const [answered, setAnswered] = useState(0);
+  // Owners and admins: Delete lead, confirmed in its own sheet (21 Oct 2026).
+  const [removing, setRemoving] = useState<{
+    round: number;
+    open: boolean;
+    lead: Doomed;
+  } | null>(null);
   const phoneCall = heard?.leadId === leadId ? heard : null;
   // The phone's call pre-fills the answer until that answer is saved.
   const asked =
@@ -2098,43 +2107,85 @@ export function LeadSheet({
   });
 
   return (
-    <Sheet
-      open={leadId !== null}
-      label={detail?.lead.name ?? "Lead"}
-      onClose={onClose}
-    >
-      {error ? (
-        <Empty icon={PhoneOff} title="This lead didn't open" text={error} />
-      ) : detail ? (
-        <LeadCard
-          detail={detail}
-          me={me}
-          onChanged={update}
-          phoneCall={phoneCall}
-          intent={intent}
-          afterCall={backFrom === leadId || asked ? { step: "outcome" } : null}
-          outcome={
-            <CallOutcome
-              key={`${formKey}-${asked?.startedMs ?? 0}`}
+    <>
+      <Sheet
+        open={leadId !== null}
+        label={detail?.lead.name ?? "Lead"}
+        onClose={onClose}
+      >
+        {error ? (
+          <Empty icon={PhoneOff} title="This lead didn't open" text={error} />
+        ) : detail ? (
+          <>
+            <LeadCard
               detail={detail}
-              submitLabel="Save"
-              heard={asked}
-              attention={backFrom === leadId}
-              beforeSave={() => logWaitingCall(detail)}
-              onSaved={(next) => {
-                setBackFrom(null);
-                if (asked) setAnswered(asked.startedMs);
-                update(next);
-              }}
+              me={me}
+              onChanged={update}
+              phoneCall={phoneCall}
+              intent={intent}
+              afterCall={
+                backFrom === leadId || asked ? { step: "outcome" } : null
+              }
+              outcome={
+                <CallOutcome
+                  key={`${formKey}-${asked?.startedMs ?? 0}`}
+                  detail={detail}
+                  submitLabel="Save"
+                  heard={asked}
+                  attention={backFrom === leadId}
+                  beforeSave={() => logWaitingCall(detail)}
+                  onSaved={(next) => {
+                    setBackFrom(null);
+                    if (asked) setAnswered(asked.startedMs);
+                    update(next);
+                  }}
+                />
+              }
             />
+            {detail.can_assign ? (
+              <div className={deleteStyles.leadFoot}>
+                <button
+                  type="button"
+                  className={deleteStyles.deleteLead}
+                  onClick={() =>
+                    setRemoving((current) => ({
+                      round: (current?.round ?? 0) + 1,
+                      open: true,
+                      lead: {
+                        lead_id: detail.lead.lead_id,
+                        name: detail.lead.name,
+                      },
+                    }))
+                  }
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                  Delete lead
+                </button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div className={styles.sheetLoading} aria-busy="true">
+            Opening the lead…
+          </div>
+        )}
+      </Sheet>
+      {removing ? (
+        <DeleteLeadsSheet
+          key={removing.round}
+          open={removing.open && removing.lead.lead_id === leadId}
+          leads={[removing.lead]}
+          onClose={() =>
+            setRemoving((current) => current && { ...current, open: false })
           }
+          onDeleted={() => {
+            setRemoving((current) => current && { ...current, open: false });
+            onClose();
+            onChanged();
+          }}
         />
-      ) : (
-        <div className={styles.sheetLoading} aria-busy="true">
-          Opening the lead…
-        </div>
-      )}
-    </Sheet>
+      ) : null}
+    </>
   );
 }
 

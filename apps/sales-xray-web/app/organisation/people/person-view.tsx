@@ -48,6 +48,7 @@ import {
   type PersonAction,
 } from "./person-panels";
 import styles from "./person.module.css";
+import { SellerSections } from "./seller-profile";
 import { ActivitySkeleton, PersonSkeleton } from "./person-skeleton";
 
 /** Reports read for outcomes and skills: this person's newest ready calls. */
@@ -289,12 +290,22 @@ function PersonPage({
           Only owners and admins see a teammate&apos;s calls and reports.
         </p>
       ) : activity.status === "ready" && personId ? (
-        <PersonActivityView
-          summary={activity.value}
+        <SellerSections
           personId={personId}
           isYou={isYou}
+          canManage={canManage}
           firstName={
             (member ? memberName(member) : "This person").split(/\s+/)[0]
+          }
+          overview={
+            <PersonActivityView
+              summary={activity.value}
+              personId={personId}
+              isYou={isYou}
+              firstName={
+                (member ? memberName(member) : "This person").split(/\s+/)[0]
+              }
+            />
           }
         />
       ) : activity.status === "loading" ? (

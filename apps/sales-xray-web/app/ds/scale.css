@@ -1,0 +1,112 @@
+/*
+ * AC design system, tier 0 scales for Sales X-Ray: Pulse's scale.css (pulse dev/live 9b3d539e) declared on the
+ * Pulse scope, where ui/pulse-tokens.css gives the --theme-* roles Sales X-Ray's own colours. A custom property
+ * resolves where it is declared, so these live on the scope too, never on :root (which has no --theme-*).
+ * Category hues and shadows use Sales X-Ray's tokens (no raw colours in app CSS).
+ */
+:where([data-pulse-scope], .pulse-scope) {
+  /* Type: one scale on Sales X-Ray's UI face. */
+  --ds-font: var(--lx-font-ui);
+  --ds-text-xs: 11.5px;
+  --ds-text-sm: 12.5px;
+  --ds-text-md: 13.5px;
+  --ds-text-lg: 15px;
+  --ds-text-xl: 18px;
+  --ds-text-2xl: 22px;
+  --ds-text-3xl: 26px;
+  --ds-text-display: 34px;
+  --ds-weight-regular: 450;
+  --ds-weight-medium: 550;
+  --ds-weight-strong: 650;
+  --ds-weight-heavy: 700;
+  --ds-tracking-tight: -0.02em;
+
+  /* Space: a 4 px grid. */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 20px;
+  --ds-space-6: 24px;
+  --ds-space-8: 32px;
+
+  /* Radius, scaled by roundness. */
+  --ds-roundness: 1;
+  --ds-radius-sm: calc(8px * var(--ds-roundness));
+  --ds-radius-md: calc(12px * var(--ds-roundness));
+  --ds-radius-lg: calc(16px * var(--ds-roundness));
+  --ds-radius-xl: calc(20px * var(--ds-roundness));
+  --ds-radius-pill: 999px;
+
+  /* Density: control heights. */
+  --ds-density: 1;
+  --ds-control-sm: calc(30px * var(--ds-density));
+  --ds-control-md: calc(36px * var(--ds-density));
+  --ds-control-lg: calc(44px * var(--ds-density));
+
+  /* Lines and elevation. */
+  --ds-line: color-mix(in srgb, var(--theme-border) 75%, transparent);
+  --ds-ring: inset 0 0 0 1px var(--ds-line);
+  --ds-elev-1:
+    var(--ds-ring),
+    0 1px 2px color-mix(in oklab, var(--lx-film) 3%, transparent);
+  --ds-elev-2:
+    var(--ds-ring),
+    0 10px 24px color-mix(in oklab, var(--lx-film) 6%, transparent);
+  --ds-elev-3:
+    var(--ds-ring),
+    0 18px 44px color-mix(in oklab, var(--lx-film) 12%, transparent);
+
+  /* Tints. */
+  --ds-tint: 13%;
+  --ds-hover: color-mix(in srgb, var(--theme-text) 6%, transparent);
+  --ds-press: color-mix(in srgb, var(--theme-text) 10%, transparent);
+
+  /* Motion. */
+  --ds-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-fast: 140ms;
+  --ds-base: 220ms;
+
+  /* Category hues: the same names as Pulse, Sales X-Ray's colours. */
+  --ds-hue-indigo: var(--theme-action);
+  --ds-hue-green: var(--lx-success);
+  --ds-hue-sky: var(--lx-info);
+  --ds-hue-amber: var(--lx-warning);
+  --ds-hue-pink: var(--lx-missed);
+  --ds-hue-teal: var(--lx-teal-2);
+  --ds-hue-orange: var(--lx-focus);
+  --ds-hue-slate: var(--lx-muted);
+
+  font-family: var(--ds-font);
+}
+
+:root[data-theme="dark"] :where([data-pulse-scope], .pulse-scope) {
+  --ds-elev-1: var(--ds-ring);
+  --ds-elev-2:
+    var(--ds-ring),
+    0 12px 28px color-mix(in oklab, var(--lx-film) 35%, transparent);
+  --ds-elev-3:
+    var(--ds-ring),
+    0 20px 48px color-mix(in oklab, var(--lx-film) 50%, transparent);
+  --ds-tint: 20%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) :where([data-pulse-scope], .pulse-scope) {
+    --ds-elev-1: var(--ds-ring);
+    --ds-elev-2:
+      var(--ds-ring),
+      0 12px 28px color-mix(in oklab, var(--lx-film) 35%, transparent);
+    --ds-elev-3:
+      var(--ds-ring),
+      0 20px 48px color-mix(in oklab, var(--lx-film) 50%, transparent);
+    --ds-tint: 20%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where([data-pulse-scope], .pulse-scope) {
+    --ds-fast: 0ms;
+    --ds-base: 0ms;
+  }
+}

@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 from uuid import UUID
@@ -20,6 +21,7 @@ from uuid import UUID
 import anyio
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, ValidationError
+from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.requests import ClientDisconnect
@@ -27,6 +29,8 @@ from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit.service import AuditRepository
+from ac_platform.call_ai import policy as call_ai_policy
+from ac_platform.call_ai import store as call_ai_store
 from ac_platform.conversation_intelligence.acquisition_activity import (
     account_activity,
     organisation_acquisition_activity,
@@ -67,6 +71,7 @@ from ac_platform.conversation_intelligence.guest_ownership import (
 )
 from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
+from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_plan import (
     ConversationProcessingPlans,
@@ -1058,6 +1063,92 @@ def install_submission_http(
             key=key,
             token=owner.token,
             actor=owner.actor,
+        )
+
+    @router.post("/submissions/{submission_id}/full-report", status_code=201)
+    async def prepare_full_report(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+        owner: _Owner = dependency,
+    ) -> dict[str, Any]:
+        """Get full report (owner, 21 Oct 2026): one call its seller's AI level stopped
+        (Off, Data only) gets the full analysis. Organisation owners and admins only.
+        The upgrade is recorded and audited, then a fresh plan is prepared exactly as a
+        retry is, for the person to accept; it reuses the call's saved transcript."""
+        guard(request, response, write=True)
+        await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
+        database = owner.ownership.database
+        if owner.actor is None or not await owner.ownership.organisation_call_reader(owner.actor):
+            raise fail(403, "Only the organisation's owners and admins can get a full report.")
+        if runtime.authority is None:
+            raise fail(409, "Provider analysis is not enabled for this upload yet.")
+        scope = await owner.ownership.require_submission_owner(
+            submission_id, **owner.arguments, allow_organisation_start=True
+        )
+        latest = await database.scalar(
+            select(ConversationProcessingPlan)
+            .where(
+                ConversationProcessingPlan.recording_id == scope.recording_id,
+                ConversationProcessingPlan.tenant_id == scope.tenant_id,
+                ConversationProcessingPlan.processing_lease_id == scope.processing_lease_id,
+                ConversationProcessingPlan.erased_at.is_(None),
+            )
+            .order_by(
+                ConversationProcessingPlan.created_at.desc(), ConversationProcessingPlan.id.desc()
+            )
+            .limit(1)
+        )
+        call = await call_ai_store.level_for_call(database, scope.tenant_id, scope.recording_id)
+        stopped = (
+            latest is not None
+            and latest.state == "held"
+            and latest.progress.get("failure_code") in call_ai_policy.FAILURE_CODES
+        )
+        if stopped and call.source != "upgrade":
+            now = datetime.now(UTC)
+            await call_ai_store.record_upgrade(
+                database,
+                tenant_id=scope.tenant_id,
+                recording_id=scope.recording_id,
+                call=call,
+                actor_person_id=owner.actor.person_id,
+                now=now,
+            )
+            await AuditRepository(database).append(
+                tenant_id=scope.tenant_id,
+                actor_person_id=owner.actor.person_id,
+                session_id=owner.actor.session_id,
+                action="sales_xray.call_ai.full_report",
+                resource_type="conversation_submission",
+                resource_id=submission_id,
+                payload={
+                    "recording_id": str(scope.recording_id),
+                    "call_owner_person_id": None if call.person_id is None else str(call.person_id),
+                    "level": call.level,
+                    "stopped_before": latest.progress.get("current_stage")
+                    if latest is not None
+                    else None,
+                },
+                now=now,
+            )
+        elif not stopped and not (
+            # The same request again after the plan was prepared: the retry's own
+            # receipt answers it, and refuses anything else.
+            call.source == "upgrade" and latest is not None and latest.state == "quoted"
+        ):
+            raise fail(409, "This call isn't waiting for a full report.")
+        from ac_platform.conversation_intelligence.acquisition_retry import prepare_analysis_retry
+
+        return await prepare_analysis_retry(
+            owner.ownership,
+            runtime,
+            submission_id,
+            key=key,
+            token=owner.token,
+            actor=owner.actor,
+            allow_organisation_start=True,
         )
 
     @router.post("/submissions/{submission_id}/plan/quote", status_code=201)

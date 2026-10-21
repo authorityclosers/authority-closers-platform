@@ -518,6 +518,15 @@ def run_pass(
                 # it; every cap below still applies.
                 skipped = spend_guard.skipped_tenants(connection, environment)
                 calls = [call for call in calls if call.tenant_id not in skipped]
+                # AI on calls (owner, 21 Oct 2026): a call whose seller's level stops at
+                # its transcript (Off, Data only) is never read again for a review.
+                from ac_platform.call_ai import store as call_ai
+
+                calls = [
+                    call
+                    for call in calls
+                    if call_ai.runs_beyond_transcript(connection, call.tenant_id, call.recording_id)
+                ]
             refusal = spend_guard.check(
                 connection, FEATURE, environment=environment, trigger=trigger
             )

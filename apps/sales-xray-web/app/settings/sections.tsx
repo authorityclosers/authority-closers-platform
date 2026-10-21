@@ -17,6 +17,7 @@ import {
 
 import { AccountSettings } from "../account-settings";
 import { ANDROID_APK_URL } from "../apps/release";
+import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
 import { AlertsCard } from "../leads/alerts-card";
 import { OrganisationView } from "../organisation/organisation-view";
 import { Panel } from "../ui/kit";
@@ -124,6 +125,8 @@ export function SettingsSectionView({ id }: { id: SettingsSectionId }) {
       return <OrganisationView embedded sections={["company"]} />;
     case "team":
       return <OrganisationView embedded sections={["members"]} />;
+    case "call-ai":
+      return <CallAiSettingsSection />;
     case "apps":
       return <ConnectedApps />;
     case "ai-replies":

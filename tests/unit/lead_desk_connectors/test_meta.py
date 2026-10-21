@@ -175,6 +175,45 @@ def test_lead_record_keeps_every_answer_and_metas_ids() -> None:
     assert record["lead_source"] == "Meta · Rao Solar"
 
 
+# What Meta's Lead Ads Testing Tool sends (seen on dev, 16 Oct 2026): made-up answers, an
+# organic lead with no platform and no ad.
+TESTING_TOOL_LEAD = {
+    "id": "L2",
+    "created_time": "2026-10-16T13:05:59+0000",
+    "field_data": [
+        {"name": "email", "values": ["test@meta.com"]},
+        {"name": "full_name", "values": ["<test lead: dummy data for full_name>"]},
+        {"name": "phone_number", "values": ["<test lead: dummy data for phone_number>"]},
+    ],
+    "form_id": "F1",
+    "is_organic": True,
+}
+
+
+def test_leads_metas_testing_tools_make_are_test_leads() -> None:
+    assert meta.is_test_lead(TESTING_TOOL_LEAD) is True
+    one = {"field_data": [{"name": "city", "values": [" <Test Lead: dummy data for city>"]}]}
+    assert meta.is_test_lead(one) is True
+    assert meta.is_test_lead(LEAD) is False
+
+
+@pytest.mark.parametrize(
+    "lead",
+    [
+        {},
+        {"field_data": None},
+        {"field_data": "<test lead: dummy data for full_name>"},
+        {"field_data": ["<test lead: dummy data for full_name>"]},
+        {"field_data": [{"name": "full_name", "values": "<test lead: dummy data"}]},
+        {"field_data": [{"name": "full_name", "values": [None, 7]}]},
+        {"field_data": [{"name": "note", "values": ["I saw <test lead: in your ad"]}]},
+        {"field_data": [{"name": "email", "values": ["test@meta.com"]}], "is_organic": True},
+    ],
+)
+def test_a_lead_without_metas_dummy_answers_is_not_a_test_lead(lead: dict) -> None:
+    assert meta.is_test_lead(lead) is False
+
+
 def _graph(handler) -> meta.Graph:
     return meta.Graph(cfg(), client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
 

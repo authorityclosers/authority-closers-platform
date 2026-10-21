@@ -22,6 +22,7 @@ from ac_platform.billing import credit_models as billing_credit_models
 from ac_platform.billing import invoice_models as billing_invoice_models
 from ac_platform.billing import models as billing_models
 from ac_platform.billing import order_models as billing_order_models
+from ac_platform.call_ai import models as call_ai_models
 from ac_platform.call_data import models as call_data_models
 from ac_platform.catalog import models as catalog_models
 from ac_platform.certificates import models as certificate_models
@@ -113,6 +114,7 @@ MODEL_MODULES = (
     ai_spend_models,
     one_pass_models,
     brain4_models,
+    call_ai_models,
     fx_models,
     usage_people_models,
     integration_models,

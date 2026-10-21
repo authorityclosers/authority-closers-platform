@@ -38,6 +38,8 @@ from ac_platform.lead_desk.contracts import (
     CallPrivacy,
     CallRecord,
     CallReport,
+    DeleteLead,
+    DeleteLeads,
     Desk,
     DeviceCommand,
     DeviceView,
@@ -49,6 +51,7 @@ from ac_platform.lead_desk.contracts import (
     LeadDetail,
     LeadEdit,
     LeadPage,
+    LeadsDeleted,
     Me,
     MessageSent,
     NewLead,
@@ -164,6 +167,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                         tenant_id=tenant_id,
                         role=row[0],
                         name=person_name(row[1]),
+                        session_id=actor.session_id,
                     ),
                     # Sandbox organisations practise with sample recordings. Everyone
                     # else calls from their own phone: the desk opens the dialer and
@@ -202,14 +206,32 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         stage: str | None = None,
         search: str | None = None,
         offset: int = 0,
+        test: Literal["only"] | None = None,
+        owner: UUID | None = None,
     ) -> LeadPage:
-        no_query(request, frozenset({"scope", "stage", "search", "offset"}))
+        no_query(request, frozenset({"scope", "stage", "search", "offset", "test", "owner"}))
         if stage is not None and stage != "open" and stage not in STAGES:
             raise HTTPException(422, "Choose a lead stage.", headers=PRIVATE)
         if not 0 <= offset <= 100_000 or (search is not None and len(search) > 80):
             raise HTTPException(422, "Search with fewer words.", headers=PRIVATE)
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.leads(scope=scope, stage=stage, search=search, offset=offset)
+            return await lead_desk.leads(
+                scope=scope,
+                stage=stage,
+                search=search,
+                offset=offset,
+                test_only=test == "only",
+                owner=owner,
+            )
+
+    @router.post("/leads/delete", response_model=LeadsDeleted, response_model_by_alias=True)
+    async def delete_leads(
+        command: DeleteLeads, request: Request, response: Response
+    ) -> LeadsDeleted:
+        """Owners and admins delete chosen leads for good, after a confirm (audited)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.delete_leads(command)
 
     @router.post("/leads", response_model=LeadDetail, response_model_by_alias=True, status_code=201)
     async def add_lead(command: NewLead, request: Request, response: Response) -> LeadDetail:
@@ -222,6 +244,18 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.detail(lead_id)
+
+    @router.post(
+        "/leads/{lead_id}/delete", response_model=LeadsDeleted, response_model_by_alias=True
+    )
+    async def delete_lead(
+        lead_id: UUID, command: DeleteLead, request: Request, response: Response
+    ) -> LeadsDeleted:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.delete_leads(
+                DeleteLeads(command_id=command.command_id, lead_ids=(lead_id,)), one=True
+            )
 
     @router.post(
         "/leads/{lead_id}/dispose", response_model=LeadDetail, response_model_by_alias=True

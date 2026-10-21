@@ -14,6 +14,7 @@ export function callTone(submission: LibrarySubmission): CallTone {
     return "active";
   if (["held", "uncertain", "failed", "blocked"].includes(submission.state))
     return "attention";
+  // AI on calls: Data only and Off are the seller's level, never a problem.
   return "idle";
 }
 
@@ -32,6 +33,11 @@ const STATE_COPY: Record<string, string> = {
   failed: "Needs attention",
   blocked: "Needs attention",
   cancelled: "Cancelled",
+  // AI on calls (owner, 21 Oct 2026): the seller's level stopped the call.
+  data_only: "Data only · no report",
+  ai_off: "Saved · AI off",
+  // Under a minute or no conversation (owner, 21 Oct 2026).
+  short_call: "Short call · transcript and lead details",
 };
 
 export function submissionState(submission: LibrarySubmission) {

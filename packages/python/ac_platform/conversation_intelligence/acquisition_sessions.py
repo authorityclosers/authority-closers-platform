@@ -369,8 +369,13 @@ class AcquisitionSessions:
         key: str,
         token: str | None = None,
         actor: ActorContext | None = None,
+        allow_organisation_start: bool = False,
     ) -> UUID:
-        """Owner-authenticated capacity reservation; never provider permission."""
+        """Owner-authenticated capacity reservation; never provider permission.
+
+        ``allow_organisation_start`` is only for "Get full report" on a call its
+        seller's AI level stopped (owner, 21 Oct 2026): an organisation owner or admin
+        reserves the call's own minutes, checked against the call owner's account."""
         from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
 
         if re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", key) is None:
@@ -393,6 +398,18 @@ class AcquisitionSessions:
         if not permitted and usage.visitor_id is not None and person_id is not None:
             claim = await self.database.get(ConversationVisitorClaim, usage.visitor_id)
             permitted = claim is not None and claim.person_id == person_id
+        if not permitted and allow_organisation_start and actor is not None:
+            from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+
+            owner_person = usage.person_id
+            if usage.visitor_id is not None:
+                claim = await self.database.get(ConversationVisitorClaim, usage.visitor_id)
+                owner_person = None if claim is None else claim.person_id
+            if owner_person is not None and await GuestOwnership(self).organisation_call_reader(
+                actor
+            ):
+                # The call's own account pays for its report, as at its upload.
+                permitted, visitor_id, person_id = True, None, owner_person
         if not permitted:
             raise ConversationDenied("This upload is unavailable.")
         projected = await self._project(visitor_id, person_id, now, mirror=True)

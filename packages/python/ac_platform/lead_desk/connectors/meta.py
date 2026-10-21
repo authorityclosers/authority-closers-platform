@@ -14,6 +14,7 @@ How it works:
 4. For every new lead Meta posts a signed webhook (``X-Hub-Signature-256``, keyed by
    the app secret). The CRM fetches that lead with the Page token and files it through
    ``LeadDesk.ingest``; ``leadgen_id`` is the reference, so a lead is never added twice.
+   A lead Meta's testing tools made is filed as test data (``is_test_lead``).
 
 Nothing here runs until the app's settings exist; ``config()`` then returns None and
 the Sources tab says it is waiting for AC's Meta app.
@@ -314,6 +315,28 @@ def lead_record(lead: Mapping[str, Any], *, page_name: str) -> dict[str, Any]:
         record["meta"] = details
     record["lead_source"] = f"Meta · {page_name}"[:120]
     return record
+
+
+# Meta's Lead Ads Testing Tool, and a form's test lead made through the Graph API, fill
+# the answers they make up with "<test lead: dummy data for full_name>" and the like
+# (the email comes as test@meta.com). Meta's lead has no test flag of its own: such a
+# lead reads as organic, with no platform and no ad, like a real organic lead.
+TEST_LEAD_ANSWER: Final[str] = "<test lead:"
+
+
+def is_test_lead(lead: Mapping[str, Any]) -> bool:
+    """Whether Meta's testing tools made this lead: any answer is Meta's dummy data."""
+    answers = lead.get("field_data")
+    if not isinstance(answers, list):
+        return False
+    for answer in answers[:100]:
+        values = answer.get("values") if isinstance(answer, Mapping) else None
+        if isinstance(values, list) and any(
+            isinstance(value, str) and value.strip().casefold().startswith(TEST_LEAD_ANSWER)
+            for value in values
+        ):
+            return True
+    return False
 
 
 # ----- Graph API -----------------------------------------------------------------------

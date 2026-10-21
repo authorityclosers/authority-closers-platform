@@ -1,0 +1,101 @@
+/* A salesperson's profile on the AC design system (../../ds). Tokens only. */
+
+.scope {
+  display: grid;
+  gap: var(--ds-space-4);
+  min-width: 0;
+}
+
+.today {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4) 18px;
+  border-radius: var(--ds-radius-xl);
+  background: var(--theme-surface);
+  box-shadow: var(--ds-elev-1);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+
+.panel {
+  display: grid;
+  gap: var(--ds-space-4);
+  min-width: 0;
+}
+
+.settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  align-items: start;
+  gap: var(--ds-space-4);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--ds-space-3);
+}
+
+.field {
+  display: grid;
+  gap: var(--ds-space-1);
+  color: var(--theme-text-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+}
+
+.field input {
+  height: var(--ds-control-md);
+  padding: 0 var(--ds-space-3);
+  border: 0;
+  border-radius: var(--ds-radius-md);
+  background: var(--theme-surface);
+  box-shadow: var(--ds-ring);
+  color: var(--theme-text);
+  font: inherit;
+  font-size: var(--ds-text-md);
+}
+
+.field input:focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 1px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-control-md);
+  color: var(--theme-text);
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-weight-medium);
+}
+
+.toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--theme-action);
+}
+
+.quiet,
+.more {
+  margin: 0;
+  color: var(--theme-text-muted);
+  font-size: var(--ds-text-sm);
+}
+
+.loading {
+  min-height: 160px;
+  border-radius: var(--ds-radius-xl);
+  background: var(--theme-surface-subtle);
+}
+
+@media (max-width: 759.98px) {
+  .today {
+    padding: var(--ds-space-3) var(--ds-space-4);
+  }
+}

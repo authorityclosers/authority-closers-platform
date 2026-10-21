@@ -75,11 +75,13 @@ class Desk:
     known: set[str] = field(default_factory=set)
     now: datetime = datetime(2027, 1, 15, 10, 0, tzinfo=UTC)
     filed: list[str] = field(default_factory=list)
+    test_data: dict[str, bool] = field(default_factory=dict)
 
     async def ingest(self, record: Any, **kwargs: Any) -> tuple[None, str]:
         ref = kwargs["source_ref"]
         assert kwargs["source"] == "meta" and kwargs["actor"] is None
         self.filed.append(ref)
+        self.test_data[ref] = kwargs["test_data"]
         if ref in self.known:
             return None, "known"
         self.known.add(ref)
@@ -125,6 +127,21 @@ def test_one_step_reads_every_form_page_by_page_and_finishes() -> None:
     )
     assert src.received == 6 and src.last_received_at == desk.now
     assert not meta_backfill.running(src.config)
+
+
+def test_leads_metas_testing_tool_made_are_filed_as_test_data() -> None:
+    made_up = {
+        "id": "f1-9",
+        "form_id": "f1",
+        "field_data": [
+            {"name": "email", "values": ["test@meta.com"]},
+            {"name": "full_name", "values": ["<test lead: dummy data for full_name>"]},
+        ],
+    }
+    desk = Desk()
+    graph = Graph(pages={"f1": [[lead("f1", 1), made_up]], "f2": [[lead("f2", 1)]]})
+    asyncio.run(meta_backfill.step(desk, source(), graph, cfg(), now=NOW))
+    assert desk.test_data == {"f1-1": False, "f1-9": True, "f2-1": False}
 
 
 def test_a_step_stops_at_its_budget_and_the_next_one_carries_on() -> None:

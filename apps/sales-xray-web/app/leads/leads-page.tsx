@@ -14,7 +14,16 @@
  * opens its lead through /leads#lead=<id> (ids only, after "#").
  */
 
-import { Building2, PhoneCall, Plus } from "lucide-react";
+import {
+  Building2,
+  Inbox,
+  ListChecks,
+  PhoneCall,
+  Plug,
+  Plus,
+  Route,
+  UsersRound,
+} from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
@@ -362,18 +371,57 @@ export function LeadsRoute() {
     },
   ];
 
+  // Five tabs at most, each with an icon (the AC design system's rule, as in Pulse).
   const tabs = [
-    { key: "desk", label: "My desk", count: desk.counts.open },
-    { key: "all", label: "All leads" },
+    {
+      key: "desk",
+      label: (
+        <>
+          <Inbox size={15} aria-hidden="true" />
+          My desk
+        </>
+      ),
+      count: desk.counts.open,
+    },
+    {
+      key: "all",
+      label: (
+        <>
+          <ListChecks size={15} aria-hidden="true" />
+          All leads
+        </>
+      ),
+    },
     ...(can
       ? [
           {
             key: "team",
-            label: "Team",
+            label: (
+              <>
+                <UsersRound size={15} aria-hidden="true" />
+                Team
+              </>
+            ),
             count: desk.counts.unassigned || undefined,
           },
-          { key: "sources", label: "Lead sources" },
-          { key: "stages", label: "Lead stages" },
+          {
+            key: "sources",
+            label: (
+              <>
+                <Plug size={15} aria-hidden="true" />
+                Lead sources
+              </>
+            ),
+          },
+          {
+            key: "stages",
+            label: (
+              <>
+                <Route size={15} aria-hidden="true" />
+                Lead stages
+              </>
+            ),
+          },
         ]
       : []),
   ];
@@ -478,6 +526,7 @@ export function LeadsRoute() {
               onOpen={(leadId) => open(leadId)}
               version={version}
               actions={rowActions}
+              onChanged={refresh}
             />
           ) : tab === "team" ? (
             <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
