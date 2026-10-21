@@ -1,0 +1,19 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "ad8075058e2edd6b468d2c61fb68ae026d097a5a",
+  "full": false,
+  "checks": [
+    "e2e"
+  ],
+  "changed_files": [
+    "packages/python/ac_platform/admin_settings/registry.py",
+    "packages/python/ac_platform/call_data/runner.py",
+    "packages/python/ac_platform/call_data/settings.py",
+    "tests/unit/call_data/test_call_data_fast_calls.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
