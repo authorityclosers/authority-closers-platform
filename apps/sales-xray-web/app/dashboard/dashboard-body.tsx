@@ -348,7 +348,9 @@ export function DashboardBody({
             aria-labelledby="panel-recent-calls"
           >
             <div className={styles.sectionHead}>
-              <h2 id="panel-recent-calls">Recent calls</h2>
+              <h2 id="panel-recent-calls">
+                {sales ? "Calls analysed" : "Recent calls"}
+              </h2>
               {recent && recent.length > 0 ? (
                 <Link className={styles.textLink} href="/analysis/calls">
                   View all calls

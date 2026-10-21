@@ -5,7 +5,8 @@
  * (wb-ci --visual). Lead Desk reads are answered here; nothing leaves the
  * browser. Names arrive in lower case on purpose: the page shows them with
  * capitals. `?tab=all&stage=…|team|sources|stages` opens that view, as on
- * /leads; `&tap=menu` then opens the ⋯ menu by itself.
+ * /leads; `&tap=menu` then opens the ⋯ menu by itself, and with
+ * `?tab=stages&tap=change` the kinds of business.
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -197,7 +198,69 @@ function answers(now: number, path: string): unknown {
       waiting_first_call: 1,
       first_call_minutes: 6,
     };
-  if (path === "/v1/lead-desk/journey/templates") return [];
+  if (path === "/v1/lead-desk/journey/templates")
+    return (
+      [
+        [
+          "real_estate",
+          "Real estate",
+          "Flats, plots, villas",
+          "building",
+          [
+            ["New enquiry", "new"],
+            ["Couldn't reach", "not_connected"],
+            ["Contacted", "follow_up"],
+            ["Site visit booked", "interested"],
+            ["Site visit done", "interested"],
+            ["Negotiation", "interested"],
+            ["Booked", "won"],
+            ["Lost", "lost"],
+          ],
+        ],
+        [
+          "education",
+          "Education",
+          "Courses, coaching, admissions",
+          "cap",
+          [
+            ["New enquiry", "new"],
+            ["Couldn't reach", "not_connected"],
+            ["Counselled", "follow_up"],
+            ["Demo class booked", "interested"],
+            ["Demo attended", "interested"],
+            ["Application started", "interested"],
+            ["Enrolled", "won"],
+            ["Lost", "lost"],
+          ],
+        ],
+        [
+          "b2b_services",
+          "B2B services",
+          "Agencies, consultants, IT services",
+          "briefcase",
+          [
+            ["New lead", "new"],
+            ["Couldn't reach", "not_connected"],
+            ["Discovery call", "follow_up"],
+            ["Qualified", "interested"],
+            ["Meeting booked", "interested"],
+            ["Proposal sent", "interested"],
+            ["Won", "won"],
+            ["Lost", "lost"],
+          ],
+        ],
+      ] as const
+    ).map(([id, name, blurb, icon, stages]) => ({
+      id,
+      name,
+      blurb,
+      icon,
+      stages: stages.map(([label, kind]) => ({
+        label,
+        kind,
+        milestone: "other",
+      })),
+    }));
   if (path === "/v1/lead-desk/journey/suggestions") return [];
   if (path === "/v1/lead-desk/journey/ads")
     return {
@@ -236,16 +299,21 @@ function install() {
 /** `&tap=menu`: the ⋯ menu opens by itself once the page has drawn. */
 function useTap() {
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("tap") !== "menu")
-      return;
+    const tap = new URLSearchParams(window.location.search).get("tap");
+    if (tap !== "menu" && tap !== "change") return;
     const timer = window.setTimeout(
       () =>
-        document
-          .querySelector<HTMLButtonElement>(
-            'button[aria-label="Leads settings"]',
-          )
-          ?.click(),
-      600,
+        (tap === "menu"
+          ? document.querySelector<HTMLButtonElement>(
+              'button[aria-label="Leads settings"]',
+            )
+          : Array.from(
+              document.querySelectorAll<HTMLButtonElement>(
+                'section[aria-label="Your kind of business"] button',
+              ),
+            ).find((button) => button.textContent === "Change")
+        )?.click(),
+      900,
     );
     return () => window.clearTimeout(timer);
   }, []);
