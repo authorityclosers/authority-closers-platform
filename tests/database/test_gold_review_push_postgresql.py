@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.conversation_intelligence.application import ConversationDenied
+from ac_platform.conversation_intelligence.gold_checkpoint import EVERY_CALL
 from ac_platform.conversation_intelligence.gold_review_job import assign_saved_reviews
 from ac_platform.conversation_intelligence.gold_review_models import GoldAssignment
 from ac_platform.conversation_intelligence.gold_reviews import GoldReviews
@@ -157,7 +158,12 @@ def test_a_revoked_reviewer_gets_no_alert(push_case) -> None:
     async def exercise():
         async with case.sessions() as db, db.begin():
             await GoldReviews(_service(db, case)).designate(case.admin_actor, email, True)
-            assert await assign_saved_reviews(db, case.operations_tenant_id, now) == 1
+            assert (
+                await assign_saved_reviews(
+                    db, case.operations_tenant_id, now, checkpoint=EVERY_CALL
+                )
+                == 1
+            )
             db.add(_device(case, other, "other-reviewer-phone"))
         async with case.sessions() as db, db.begin():
             await GoldReviews(_service(db, case)).designate(case.admin_actor, email, False)

@@ -32,6 +32,10 @@ class GoldAssignment(Base):
     __tablename__ = "conversation_gold_assignments"
     __table_args__ = (
         UniqueConstraint("recording_id", "reviewer_id", name="uq_gold_assignment_call_reviewer"),
+        CheckConstraint("mode IS NULL OR mode IN ('lines', 'brain4_blind')", name="gold_mode"),
+        CheckConstraint(
+            "checkpoint IS NULL OR length(checkpoint) BETWEEN 1 AND 64", name="gold_checkpoint"
+        ),
     )
 
     assignment_id: Mapped[UUID] = mapped_column(
@@ -41,6 +45,11 @@ class GoldAssignment(Base):
     reviewer_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("persons.id"))
     review_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("conversation_pointer_reviews.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # 0118 (21 Oct): 'lines' (or null, before 0118) judges the AI's 29 lines; 'brain4_blind'
+    # rates the 18 Brain 4.0 dimensions before Brain 4.0's are shown. The checkpoint that
+    # chose the call.
+    mode: Mapped[str | None] = mapped_column(String(16), nullable=True, default="lines")
+    checkpoint: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class GoldRow(Base):

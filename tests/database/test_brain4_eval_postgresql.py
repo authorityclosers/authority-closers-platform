@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from ac_platform.conversation_intelligence import brain4
 from ac_platform.conversation_intelligence.checkpoints import content_hash
+from ac_platform.conversation_intelligence.gold_checkpoint import EVERY_CALL
 from ac_platform.conversation_intelligence.gold_review_contracts import GoldSave
 from ac_platform.conversation_intelligence.gold_review_job import assign_saved_reviews
 from ac_platform.conversation_intelligence.gold_review_models import GoldAssignment
@@ -91,7 +92,9 @@ async def prepare(case: ReviewCase):
             "reviewer-" + case.reviewer_actor.person_id.hex + "@example.test",
             True,
         )
-        await assign_saved_reviews(db, case.operations_tenant_id, case.prepared.state.now)
+        await assign_saved_reviews(
+            db, case.operations_tenant_id, case.prepared.state.now, checkpoint=EVERY_CALL
+        )
         assignment = await db.scalar(
             select(GoldAssignment).where(GoldAssignment.review_id == review.id)
         )
