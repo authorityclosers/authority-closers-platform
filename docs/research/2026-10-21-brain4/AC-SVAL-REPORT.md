@@ -1,10 +1,13 @@
 # AC-SVAL report: Accuracy Brain 4.0 against the coaching lead's gold set (interim, 21 Oct 2026)
 
-**Status: interim.** The gold set lives only on production. Reading it (labels only) and running Brain 4.0 on
-those calls both wait for the owner's approval, so this report has no production agreement figures yet. What
-it does have: the method, what the gold set can and cannot decide, Brain 4.0's behaviour on the 16 fictional
-calls, and the exact steps that fill in the numbers once approved. Gates are from AC-SVAL-01 §12; its
-thresholds are "engineering starting points", reported with intervals and counts.
+**Status: interim, and the gold set is empty.** The owner approved a labels-only read of production on
+21 Oct 2026. It ran at 09:07–09:12Z (log: shared notes, `brain4-prod-query-log-20261021.md`) and found **no
+gold judgement on any environment**: production has 61 calls assigned to the coaching lead (18–19 Oct) and 0
+saved answers ever (`conversation_gold_rows`, erased rows included), 0 Review 2.0 verdicts and 2 old-style
+review labels; staging and dev have none either. So there is nothing to measure Brain 4.0 or today's pointer
+review against yet. This report has the method, what a gold set like this can and cannot decide, Brain 4.0's
+behaviour on the 16 fictional calls, and how the numbers fill in once answers are saved. Gates are from
+AC-SVAL-01 §12; its thresholds are "engineering starting points", reported with intervals and counts.
 
 ## 1. Recommendation (per dimension)
 
@@ -100,12 +103,13 @@ The product's Brain 4.0 part, exactly as the shadow read sends it, answered by G
 4. **Frozen set:** those calls frozen as the evaluation set; prompt changes measured on them before release
    (AC-SVAL-01 §13.1 shadow mode).
 
-## 7. Filling in the production numbers (once approved)
+## 7. Filling in the production numbers
 
-- **Route A (in place, preferred):** release v0.75 (migration 0117); the owner raises AI spend →
-  `brain4_shadow` above ₹0 on production; the pointer review job reads Brain 4.0 on every gold call (one per idle
-  pass); Admin → Gold set → Brain 4.0 evaluation shows the figures. Nothing leaves production. At about ₹2 per
-  14-minute call (standard), 50 gold calls cost about ₹100.
-- **Route B (labels-only read now):** a read-only query on `conversation_gold_rows` (verdict, score, status,
-  reasons, skip, the AI's status and score; never the note) gives today's review's acceptance per pointer
-  immediately, without Brain 4.0.
+- **Answers first.** The coaching lead's corrections must be saved in `/review` (or, if he has been writing
+  them elsewhere, for example on the Pulse review tasks, entered there); nothing else counts as gold.
+- **Brain 4.0 reads, in place (approved, up to ₹300):** v0.75 (migration 0117) carries the shadow reads; Align 3
+  sets `brain4_shadow` to ₹300 on production with `scripts/data-changes/ai-spend-cap.py` and the owner's words.
+  The pointer review job then reads Brain 4.0 on each of the 61 assigned calls (one per idle pass, about ₹2 a
+  read, about ₹120 in all). Nothing leaves production.
+- **The figures** appear on Admin → Gold set → Brain 4.0 evaluation as answers are saved: acceptance of today's
+  review per pointer, and Brain 4.0 against the endorsed band per dimension, with intervals and counts.
