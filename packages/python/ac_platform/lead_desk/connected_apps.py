@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Final, Literal
 from uuid import UUID, uuid4
 
@@ -185,6 +185,16 @@ class Webhook(_View):
     last_delivery_at: datetime | None = None
 
 
+class Review(_View):
+    """Where the platform's own review of Sales Xray stands, and what works meanwhile
+    (owner, 22 Oct 2026: show Meta App Review honestly)."""
+
+    state: Literal["pending", "approved"]
+    since: date
+    works_now: str
+    after: str | None = None
+
+
 class AppHealth(_View):
     app: App
     name: str
@@ -201,6 +211,7 @@ class AppHealth(_View):
     next_pull_at: datetime | None = None
     webhook: Webhook | None = None
     tests: list[TestOffer] = []
+    review: Review | None = None
 
 
 class Health(_View):
@@ -327,6 +338,34 @@ def _source_problem(source: LeadSource) -> Problem | None:
     return Problem(at=_epoch(error.get("at")), words=str(error["text"])[:300])
 
 
+# Meta App Review for the lead ads app (submission 29297824896491997, sent 19 Oct 2026
+# with the owner's approval). Until Meta approves it, only people with a role on the
+# app (its admins, developers and testers) can connect their Pages. When Meta approves
+# it, set ("approved", <the day>).
+META_REVIEW: Final[tuple[Literal["pending", "approved"], date]] = ("pending", date(2026, 10, 19))
+
+
+def meta_review() -> Review:
+    """What the lead ads card says about Meta's review of Sales Xray, in plain words."""
+    state, since = META_REVIEW
+    if state == "approved":
+        return Review(
+            state=state,
+            since=since,
+            works_now="Meta approved Sales Xray. Any business can connect its own Pages here.",
+        )
+    return Review(
+        state=state,
+        since=since,
+        works_now=(
+            "Meta is still reviewing Sales Xray. Until it approves, only Pages run by people"
+            " added to our Meta app as testers can connect. Ask us to add you; it takes a"
+            " minute."
+        ),
+        after="Once Meta approves it, any business can connect its own Pages here.",
+    )
+
+
 async def _meta_leads(db: AsyncSession, tenant_id: UUID) -> AppHealth:
     configured = meta.config() is not None
     sources = await _sources(db, tenant_id, "meta")
@@ -376,6 +415,7 @@ async def _meta_leads(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         tests=[TestOffer(kind="test_lead", label="Send a test lead", needs=["pageId", "formId"])]
         if active
         else [],
+        review=meta_review() if configured else None,
     )
 
 
