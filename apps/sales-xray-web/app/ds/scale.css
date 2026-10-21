@@ -2,7 +2,7 @@
  * AC design system, tier 0 scales for Sales X-Ray: Pulse's scale.css (pulse dev/live 9b3d539e) declared on the
  * Pulse scope, where ui/pulse-tokens.css gives the --theme-* roles Sales X-Ray's own colours. A custom property
  * resolves where it is declared, so these live on the scope too, never on :root (which has no --theme-*).
- * Category hues use Sales X-Ray's tokens (no raw colours in app CSS).
+ * Category hues and shadows use Sales X-Ray's tokens (no raw colours in app CSS).
  */
 :where([data-pulse-scope], .pulse-scope) {
   /* Type: one scale on Sales X-Ray's UI face. */
@@ -47,9 +47,15 @@
   /* Lines and elevation. */
   --ds-line: color-mix(in srgb, var(--theme-border) 75%, transparent);
   --ds-ring: inset 0 0 0 1px var(--ds-line);
-  --ds-elev-1: var(--ds-ring), 0 1px 2px rgb(0 0 0 / 0.03);
-  --ds-elev-2: var(--ds-ring), 0 10px 24px rgb(0 0 0 / 0.06);
-  --ds-elev-3: var(--ds-ring), 0 18px 44px rgb(0 0 0 / 0.12);
+  --ds-elev-1:
+    var(--ds-ring),
+    0 1px 2px color-mix(in oklab, var(--lx-film) 3%, transparent);
+  --ds-elev-2:
+    var(--ds-ring),
+    0 10px 24px color-mix(in oklab, var(--lx-film) 6%, transparent);
+  --ds-elev-3:
+    var(--ds-ring),
+    0 18px 44px color-mix(in oklab, var(--lx-film) 12%, transparent);
 
   /* Tints. */
   --ds-tint: 13%;
@@ -76,16 +82,24 @@
 
 :root[data-theme="dark"] :where([data-pulse-scope], .pulse-scope) {
   --ds-elev-1: var(--ds-ring);
-  --ds-elev-2: var(--ds-ring), 0 12px 28px rgb(0 0 0 / 0.35);
-  --ds-elev-3: var(--ds-ring), 0 20px 48px rgb(0 0 0 / 0.5);
+  --ds-elev-2:
+    var(--ds-ring),
+    0 12px 28px color-mix(in oklab, var(--lx-film) 35%, transparent);
+  --ds-elev-3:
+    var(--ds-ring),
+    0 20px 48px color-mix(in oklab, var(--lx-film) 50%, transparent);
   --ds-tint: 20%;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) :where([data-pulse-scope], .pulse-scope) {
     --ds-elev-1: var(--ds-ring);
-    --ds-elev-2: var(--ds-ring), 0 12px 28px rgb(0 0 0 / 0.35);
-    --ds-elev-3: var(--ds-ring), 0 20px 48px rgb(0 0 0 / 0.5);
+    --ds-elev-2:
+      var(--ds-ring),
+      0 12px 28px color-mix(in oklab, var(--lx-film) 35%, transparent);
+    --ds-elev-3:
+      var(--ds-ring),
+      0 20px 48px color-mix(in oklab, var(--lx-film) 50%, transparent);
     --ds-tint: 20%;
   }
 }
