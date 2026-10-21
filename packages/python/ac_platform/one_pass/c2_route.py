@@ -13,6 +13,12 @@ approval bundle, so:
   more finite profile (``gemini-flash-lite-c2``) for that configuration: C2 on Flash-Lite,
   C4 and C5 copied from the classic templates with the new digest.
 
+With ``one_pass`` (owner, 21 Oct 2026: "build B ... one-pass in the sealed plan"), the
+facts route is also the one-pass C4 request (``one_pass.stage``: one read of the whole call
+gives the C4 fact packet, the call data and the pointer review; today's C5 reads the packet).
+Its profile's C4 template is one request at the one-pass output bound, and the Gemini
+3.8 Flash entry's per-request ceiling covers the whole call's input.
+
 Admin activates either configuration; activating the classic one is the one-click
 fallback. Pure: no I/O. ``scripts/ops/one_pass_c2_seal.py`` runs it on the host's files.
 """
@@ -36,6 +42,7 @@ from ac_platform.conversation_intelligence.provider_registry import (
     RegistryConfig,
     RouteConfig,
 )
+from ac_platform.one_pass import markers
 
 PROFILE_ID: Final = "gemini-flash-lite-c2"
 # Flash-Lite C2 and Gemini 3.8 Flash C4/C5 on Flex (gemini_tiers), a second finite profile.
@@ -48,6 +55,15 @@ ENDPOINT: Final = gemini_audio.URL.format(model=MODEL)
 # other: about USD 0.38 (docs/ops/pricing-evidence/gemini-3.1-flash-lite-audio-20261021.md).
 MAX_COST_PAISE: Final = 4_000
 MAX_SOURCE_DURATION_MS: Final = 7_200_000
+# One pass inside the plan: Flash-Lite C2 and the one-pass C4 request, standard or Flex.
+ONE_PASS_PROFILE_ID: Final = "gemini-one-pass"  # noqa: S105 - a profile id
+ONE_PASS_FLEX_PROFILE_ID: Final = "gemini-one-pass-flex"  # noqa: S105 - a profile id
+# The one request's output bound on Gemini (call data, notes and the review measured at
+# 6.5-9.1k tokens with thinking LOW, 21 Oct 2026).
+ONE_PASS_COMPLETION_TOKENS: Final = 16_000
+# Per request on Gemini 3.8 Flash at standard rates: a two-hour call's transcript, the
+# instructions and schema (about 300k input tokens) and the full output: about USD 0.30.
+ONE_PASS_MAX_COST_PAISE: Final = 3_000
 
 
 class SealError(ValueError):
@@ -85,11 +101,13 @@ def _entry(gemini: ProviderConfig, model: str, max_cost_paise: int | None) -> Pr
     )
 
 
-def derive_configuration(config: RegistryConfig, *, flex: bool = False) -> RegistryConfig:
+def derive_configuration(
+    config: RegistryConfig, *, flex: bool = False, one_pass: bool = False
+) -> RegistryConfig:
     """Today's (Scribe) configuration with the asr route on Gemini 3.1 Flash-Lite; with
     ``flex``, Flash-Lite and the Gemini 3.8 Flash C4/C5 routes on their Flex routes
     (gemini_tiers), each keeping its standard per-request ceiling (a fallback is billed at
-    standard)."""
+    standard); with ``one_pass``, the facts route is the one-pass C4 request."""
     asr = next((route for route in config.routes if route.task == "asr"), None)
     if asr is None:
         raise SealError("configuration_has_no_asr_route")
@@ -128,10 +146,39 @@ def derive_configuration(config: RegistryConfig, *, flex: bool = False) -> Regis
         else item
         for item in config.routes
     )
-    revision = f"{config.revision}-gemini-c2{'-flex' if flex else ''}"[:128]
+    if one_pass:
+        providers, routes = _one_pass(providers, routes, flex=flex)
+    suffix = ("-one-pass" if one_pass else "") + ("-flex" if flex else "")
+    revision = f"{config.revision}-gemini-c2{suffix}"[:128]
     return RegistryConfig(
         revision=revision, policy=config.policy, providers=providers, routes=routes
     )
+
+
+def _one_pass(
+    providers: tuple[ProviderConfig, ...], routes: tuple[RouteConfig, ...], *, flex: bool
+) -> tuple[tuple[ProviderConfig, ...], tuple[RouteConfig, ...]]:
+    """The facts route as the one-pass request, and its Gemini entry's ceiling raised to
+    cover the whole call (C5 on the same model shares the entry, so its ceiling too)."""
+    model = gemini_tiers.flex(TEXT_MODEL) if flex else TEXT_MODEL
+    facts = next((route for route in routes if route.task == "facts"), None)
+    if facts is None or (facts.provider_id, facts.model_id) != (PROVIDER, model):
+        raise SealError("facts_route_is_not_gemini_flash")
+    if (facts.provider_id, facts.model_id) not in markers.ROUTES:
+        raise SealError("facts_route_is_not_one_pass_capable")
+    providers = tuple(
+        replace(item, max_cost_paise=max(item.max_cost_paise or 0, ONE_PASS_MAX_COST_PAISE))
+        if (item.provider_id, item.model_id) == (PROVIDER, model)
+        else item
+        for item in providers
+    )
+    routes = tuple(
+        replace(route, recipe_revision=markers.RECIPE, prompt_revision=markers.PROMPT_REVISION)
+        if route.task == "facts"
+        else route
+        for route in routes
+    )
+    return providers, routes
 
 
 def _profile(
@@ -140,6 +187,7 @@ def _profile(
     new: RegistryConfig,
     *,
     flex: bool = False,
+    one_pass: bool = False,
 ) -> AcquisitionProviderProfile:
     stage_set = next(
         (
@@ -193,12 +241,37 @@ def _profile(
                 pricing_ref=flex_snapshot.pricing_ref,
                 price_evidence_sha256=flex_snapshot.evidence_sha256,
             )
+        if one_pass and (stage.provider_id, stage.model_id) == (PROVIDER, TEXT_MODEL):
+            # The shared Gemini entry's ceiling (validate_route matches it per stage).
+            model = update.get("model_id", TEXT_MODEL)
+            update["max_cost_paise"] = next(
+                item.max_cost_paise
+                for item in new.providers
+                if (item.provider_id, item.model_id) == (PROVIDER, model)
+            )
+            if stage.stage == "C4":
+                update.update(
+                    recipe_revision=markers.RECIPE,
+                    max_requests=1,
+                    max_completion_tokens=ONE_PASS_COMPLETION_TOKENS,
+                    max_input_bytes=max(stage.max_input_bytes, markers.MAX_INPUT_BYTES),
+                    max_source_duration_ms=min(
+                        stage.max_source_duration_ms, MAX_SOURCE_DURATION_MS
+                    ),
+                )
         return type(stage).model_validate(stage.model_copy(update=update).model_dump())
 
+    if one_pass and (c4.provider_id, c4.model_id) != (PROVIDER, TEXT_MODEL):
+        raise SealError("policy_c4_is_not_gemini_flash")
     stages = (type(c2).model_validate(transcription.model_dump()), text(c4), text(c5))
-    return AcquisitionProviderProfile(
-        profile_id=FLEX_PROFILE_ID if flex else PROFILE_ID, stages=stages
+    profile_id = (
+        (ONE_PASS_FLEX_PROFILE_ID if flex else ONE_PASS_PROFILE_ID)
+        if one_pass
+        else FLEX_PROFILE_ID
+        if flex
+        else PROFILE_ID
     )
+    return AcquisitionProviderProfile(profile_id=profile_id, stages=stages)
 
 
 def _with_profile(
@@ -207,8 +280,9 @@ def _with_profile(
     new: RegistryConfig,
     *,
     flex: bool = False,
+    one_pass: bool = False,
 ) -> AcquisitionProviderPolicy:
-    profile = _profile(policy, classic_sha256, new, flex=flex)
+    profile = _profile(policy, classic_sha256, new, flex=flex, one_pass=one_pass)
     kept = tuple(item for item in policy.profiles if item.profile_id != profile.profile_id)
     updated = policy.model_copy(update={"profiles": (*kept, profile)})
     # Strict models: revalidate through JSON, as the host loads the file.
@@ -221,20 +295,21 @@ def seal(
     new: RegistryConfig,
     *,
     flex: bool = False,
+    one_pass: bool = False,
 ) -> HostedApprovalBundle:
-    """The bundle with every classic route kept and the Flash-Lite profile added to each
-    acquisition policy. Revalidated as a whole, exactly as the host loads it."""
+    """The bundle with every classic route kept and the Flash-Lite (or one-pass) profile
+    added to each acquisition policy. Revalidated as a whole, exactly as the host loads it."""
     if bundle.acquisition_policy is None and not bundle.organisation_acquisition_policies:
         raise SealError("bundle_has_no_acquisition_policy")
     update: dict[str, Any] = {
         "organisation_acquisition_policies": tuple(
-            _with_profile(item, classic.digest, new, flex=flex)
+            _with_profile(item, classic.digest, new, flex=flex, one_pass=one_pass)
             for item in bundle.organisation_acquisition_policies
         )
     }
     if bundle.acquisition_policy is not None:
         update["acquisition_policy"] = _with_profile(
-            bundle.acquisition_policy, classic.digest, new, flex=flex
+            bundle.acquisition_policy, classic.digest, new, flex=flex, one_pass=one_pass
         )
     sealed = load_hosted_approval_bundle(bundle.model_copy(update=update).to_json())
     for before, after in zip(

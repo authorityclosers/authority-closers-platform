@@ -23,6 +23,8 @@ from ac_platform.conversation_intelligence.coaching_schema import (
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 from ac_platform.conversation_intelligence.gemini_tiers import FLEX_SUFFIX, base_model
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
+from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
+from ac_platform.one_pass.markers import is_one_pass
 
 # Gemini 3.8 Flash on Flex is its own approved route (gemini_tiers): same prompt.
 GEMINI_TASK_MODELS = frozenset(
@@ -41,10 +43,14 @@ _DIPAK_MARKER = "AC_TASK_ADAPTER: gemini-json-v7\nMODEL: "
 _DIPAK_DEPTH_MARKER = "REPORT_STRUCTURE: dipak-six-pillars-v8."
 _DEPTH_MARKER = "COACHING_DEPTH: evidence-meaning-action-v5."
 _PRACTICAL_DEPTH_MARKER = "COACHING_DEPTH: practical-whole-call-v6."
+# The one-pass C4 request (one_pass.stage): its own strict schema, the whole transcript.
+_ONE_PASS_MARKER = "AC_TASK_ADAPTER: gemini-json-v9\nMODEL: "  # noqa: S105 - a prompt marker
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 GEMINI_FLASH_COACHING_TOTAL_LIMIT = 48_000
 GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT = 96_000
 GEMINI_FLASH_STRUCTURED_COACHING_TOTAL_LIMIT = 256_000
+# One input byte per token (conservative), schema and output included.
+GEMINI_FLASH_ONE_PASS_TOTAL_LIMIT = 1_000_000
 
 
 class GeminiTaskError(ValueError):
@@ -58,8 +64,15 @@ def _config(
     task: str = "facts",
     structured_coaching: bool = False,
     structured_schema_version: int = 3,
+    one_pass: bool = False,
 ) -> dict[str, Any]:
-    ceiling = completion_ceiling("gemini", model, "C5" if task == "coaching" else "C4")
+    # Chunked fact prompts keep their 4,000 bound; only the one-pass request is larger.
+    ceiling = completion_ceiling(
+        "gemini",
+        model,
+        "C5" if task == "coaching" else "C4",
+        recipe=ONE_PASS_RECIPE if one_pass else None,
+    )
     if type(maximum) is not int or not 256 <= maximum <= ceiling:
         raise GeminiTaskError("invalid_max_completion_tokens")
     # A total output cap also bounds thinking. LOW leaves room for the report;
@@ -89,6 +102,12 @@ def _config(
                 }[structured_schema_version]
             )
         )
+    if one_pass:
+        if task != "facts" or structured_coaching or base_model(model) != "gemini-3.8-flash":
+            raise GeminiTaskError("task_prompt_invalid")
+        from ac_platform.one_pass import stage
+
+        config["responseJsonSchema"] = stage.schema()
     return config
 
 
@@ -100,6 +119,7 @@ def _require_prompt_budget(
     task: str,
     maximum: int,
     response_schema: Mapping[str, Any] | None = None,
+    one_pass: bool = False,
 ) -> None:
     if task not in {"facts", "coaching"}:
         raise GeminiTaskError("task_prompt_invalid")
@@ -108,7 +128,11 @@ def _require_prompt_budget(
         # Structured generation instructions consume input too. Preserve the
         # existing approval envelope instead of silently adding free context.
         input_bytes += len(canonical(dict(response_schema)))
-    if base_model(model) == "gemini-3.8-flash" and task == "coaching":
+    if one_pass:
+        # The whole call in one request: one input byte per token, conservatively.
+        used = input_bytes + maximum + 128
+        limit = GEMINI_FLASH_ONE_PASS_TOTAL_LIMIT
+    elif base_model(model) == "gemini-3.8-flash" and task == "coaching":
         # One input byte per token is a conservative allowance, not an actual
         # provider token count. This bounds the full report input without using
         # Groq's historical TPM limit or increasing the approved output cap.
@@ -155,10 +179,12 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
         and task == "coaching"
         and OVERVIEW_MARKER in messages[0]["content"]
     )
+    one_pass = task == "facts" and is_one_pass(messages[0]["content"])
     config = _config(
         prompt["max_completion_tokens"],
         model=model,
         task=task,
+        one_pass=one_pass,
         structured_coaching=structured_coaching,
         structured_schema_version=(
             8
@@ -189,6 +215,8 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
             else _STRUCTURED_MARKER
         )
         if structured_coaching
+        else _ONE_PASS_MARKER
+        if one_pass
         else _MARKER
     )
     # The provider's own model id: a Flex route sends the very same prompt.
@@ -201,6 +229,7 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
         task=task,
         maximum=config["maxOutputTokens"],
         response_schema=config.get("responseJsonSchema"),
+        one_pass=one_pass,
     )
     return {
         "systemInstruction": {"parts": [{"text": system}]},
@@ -232,6 +261,13 @@ def gemini_prompt_view(
             if not isinstance(value, str) or not value.strip():
                 raise ValueError
             texts.append(value)
+        one_pass = texts[0].startswith(_ONE_PASS_MARKER)
+        if one_pass and (
+            task != "facts"
+            or base_model(model) != "gemini-3.8-flash"
+            or not is_one_pass(texts[0][len(_ONE_PASS_MARKER + base_model(model) + "\n") :])
+        ):
+            raise ValueError
         legacy_structured = texts[0].startswith(_STRUCTURED_MARKER_V2)
         evidence_structured = texts[0].startswith(_EVIDENCE_MARKER)
         practical_structured = texts[0].startswith(_PRACTICAL_MARKER)
@@ -301,13 +337,21 @@ def gemini_prompt_view(
             and not practical_structured
         ):
             raise ValueError
-        prefix = (marker if structured_coaching else _MARKER) + base_model(model) + "\n"
+        prefix = (
+            (marker if structured_coaching else _ONE_PASS_MARKER if one_pass else _MARKER)
+            + base_model(model)
+            + "\n"
+        )
         if not texts[0].startswith(prefix):
+            raise ValueError
+        if not one_pass and is_one_pass(texts[0][len(prefix) :]):
+            # The one-pass prompt only ever goes with its own schema and adapter.
             raise ValueError
         config = _config(
             maximum,
             model=model,
             task=task,
+            one_pass=one_pass,
             structured_coaching=structured_coaching,
             structured_schema_version=(
                 8
@@ -336,6 +380,7 @@ def gemini_prompt_view(
         task=task,
         maximum=maximum,
         response_schema=config.get("responseJsonSchema"),
+        one_pass=one_pass,
     )
     return {
         "model": model,
@@ -392,6 +437,53 @@ def require_long_coaching_cost_approval(
         or estimate > cost_paise
     ):
         raise GeminiTaskError("long_coaching_cost_approval_required")
+
+
+def is_one_pass_body(body: Mapping[str, Any]) -> bool:
+    """Whether a native body is the one-pass C4 request's own adapter."""
+    try:
+        system = body["systemInstruction"]["parts"][0]["text"]
+    except (KeyError, IndexError, TypeError):
+        return False
+    return isinstance(system, str) and system.startswith(_ONE_PASS_MARKER)
+
+
+def require_one_pass_cost_approval(
+    body: Mapping[str, Any],
+    *,
+    model: str,
+    maximum: int,
+    cost_basis: str,
+    cost_paise: int,
+    pricing_ref: str,
+    price_evidence_sha256: str,
+) -> None:
+    """Admit a one-pass C4 request only inside its exact paid cap: the whole transcript
+    as input (one UTF-8 byte a token, schema and wrapper included) and the full output
+    cap, priced at standard (a Flex request that falls back is billed at standard)."""
+    gemini_prompt_view(body, model=model, maximum=maximum, task="facts")
+    config = body["generationConfig"]
+    system = body["systemInstruction"]["parts"][0]["text"]
+    if not system.startswith(_ONE_PASS_MARKER):
+        return
+    user = body["contents"][0]["parts"][0]["text"]
+    input_units = (
+        len((system + user).encode("utf-8")) + len(canonical(config["responseJsonSchema"])) + 128
+    )
+    snapshot = PRICING_SNAPSHOTS[("gemini", model)]
+    estimate = estimate_provider_usage(
+        "gemini",
+        base_model(model),
+        {"promptTokenCount": input_units, "candidatesTokenCount": maximum},
+    )["paise"]
+    if (
+        cost_basis != "paid_pricing_evidence"
+        or pricing_ref != snapshot.pricing_ref
+        or price_evidence_sha256 != snapshot.evidence_sha256
+        or type(estimate) is not int
+        or estimate > cost_paise
+    ):
+        raise GeminiTaskError("one_pass_cost_approval_required")
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

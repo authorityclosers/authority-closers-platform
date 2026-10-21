@@ -127,6 +127,39 @@ model, same prompt, same answer contract, the request only adds `service_tier: f
   → ≈ ₹0.33/min on Flex. Measured on 16 real calls on development: no Flex request fell
   back; transcription 54 s median, analysis requests 33–131 s.
 
+## Slice B1: one pass inside the sealed plan (off until Root seals and the owner switches)
+
+Owner, 21 Oct 2026: "build B together with the Luna route (one-pass in the sealed plan,
+beta-labelled calibrated scores, call data written in production)". Today C4 reads the
+transcript in fact chunks and the pointer review reads it again. With one pass, **C4 is
+one request over the whole call** (`one_pass/stage.py`). It answers the call data, notes
+and the pointer review together, and its C4 fact packet passes C4's own parser. Today's
+C5 then reads that packet as before.
+
+- **How a configuration says so.** Its facts route's recipe is `one-pass-facts-v1` (prompt
+  revision `one-pass-v1`). A plan made under it asks one C4 request at the one-pass bound
+  (16,000 output tokens on Gemini) and today's C5. Everything else is unchanged: C2, C5,
+  receipts, budget and the 24-hour plan.
+- **Bounds.** The activation contract's per-stage output bound is now 20,000 (it was
+  8,000); only the one-pass C4 route uses more than 4,000 (`completion_limits`). The
+  request is today's C4 envelope (one chunk covering every segment, plus the call's
+  date), so every envelope, coverage and receipt check applies. The broker admits it only
+  inside its paid cap: the whole input at one byte per token plus the full output, at
+  standard rates (`require_one_pass_cost_approval`). The Gemini 3.8 Flash entry's
+  per-request ceiling is ₹30 in this configuration, enough for a two-hour call; C5 on the
+  same entry shares it.
+- **Approval.** Two more profiles: `gemini-one-pass` and `gemini-one-pass-flex`
+  (Flash-Lite C2, the one-pass C4 and today's C5, standard or Flex), built with
+  `python scripts/ops/one_pass_c2_seal.py --one-pass [--flex] ...`. The inputs are the
+  same as before, using the configuration from Admin → One pass → Transcription →
+  "One pass" → Prepare. Every classic route and earlier profile stays.
+- **Switch.** It is the owner's action, as before: typed confirm, reason and fresh sign-in.
+  The audit records `one_pass: true`. Going back (to plain Flash-Lite, or to Scribe) is
+  one click.
+- **What waits for later slices.** Slice B2 writes the call data and pointer review from
+  this read (today the C4 packet is all that is used, and the pointer review timer still
+  runs). Slice B3 adds calibrated "beta" pointer scores, and slice L adds the Luna route.
+
 ## A good first production analysis (after the C2 switch)
 
 Read-only checks, on the first real call after the switch:
