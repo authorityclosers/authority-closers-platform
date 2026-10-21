@@ -514,9 +514,11 @@ Watch it with `journalctl --user -u 'acdev-dev-watchdog@*'`.
   stopped on purpose stays stopped; a failed one is started; a watchdog that was
   off stays off. The script only ever moves or deletes a directory named
   `.../.next/dev/cache/turbopack`, never a symlink, and nothing else under
-  `.next`. The cache is a build cache: next dev rebuilds it (orchestrator, 21 Oct:
-  compiler output with no customer data or audit history, so deleting it needs no
-  owner approval).
+  `.next`. The cache is a build cache that next dev rebuilds. Deleting it needs no
+  owner approval: decision of the xray-dev-watchdog orchestrator session, 21 Oct,
+  under the owner's 18 Oct order that only permanent deletion of customer data
+  waits on him (compiler output, no customer data, no audit history). The first
+  reset ran on 21 Oct at 12:06 UTC: 9,822 MiB cleared, `/login` 200 after 23 s.
 
 Why: next dev 16.3.8 keeps a Turbopack file-system cache that nothing prunes.
 Between 11 and 21 Oct it grew to 9.6 GB, about 2 GB on a busy day. As it grew,
