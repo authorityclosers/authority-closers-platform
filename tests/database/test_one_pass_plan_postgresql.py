@@ -1,11 +1,14 @@
 """One pass inside the sealed plan, on PostgreSQL: a configuration whose facts route is the
 one-pass C4 request runs C2, ONE C4 request over the whole call and today's C5, through
-the real broker router (prompt view and paid cap), with intercepted synthetic answers."""
+the real broker router (prompt view and paid cap), with intercepted synthetic answers;
+then the call's pointer review and deep call data are published from that same read
+(one_pass.plan_publish), with no provider call."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+from argparse import Namespace
 from dataclasses import replace
 from typing import Any
 from uuid import UUID
@@ -13,6 +16,8 @@ from uuid import UUID
 import pytest
 from sqlalchemy import select
 
+from ac_platform.call_data.models import CallDataRun
+from ac_platform.conversation_intelligence import pointer_review_cli
 from ac_platform.conversation_intelligence.activation_contract import (
     StageApproval,
     load_hosted_approval_bundle,
@@ -25,6 +30,10 @@ from ac_platform.conversation_intelligence.inference_worker import ConversationI
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationInferenceTask,
+    ConversationReportDraft,
+)
+from ac_platform.conversation_intelligence.pointer_review_models import (
+    ConversationPointerReview,
 )
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.provider_registry import (
@@ -33,7 +42,7 @@ from ac_platform.conversation_intelligence.provider_registry import (
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.report_store import ConversationReports
-from ac_platform.one_pass import markers
+from ac_platform.one_pass import markers, plan_publish
 from tests.database.test_conversation_authority_postgresql import _setup
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_processing_plan_postgresql import (
@@ -43,6 +52,7 @@ from tests.database.test_conversation_processing_plan_postgresql import (
 )
 from tests.database.test_conversation_reporting_pipeline_postgresql import ReportingBroker
 from tests.database.test_conversation_worker_postgresql import _postgres_harness
+from tests.unit.one_pass.test_one_pass import _review
 
 MODEL = "gemini-3.8-flash"
 COST = 3_000
@@ -66,11 +76,37 @@ class OnePassBroker(ReportingBroker):
                 self.calls += 1
                 self.payloads.append(payload)
                 user = json.loads(body["contents"][0]["parts"][0]["text"])
-                first = user["segments"][0]["id"]
+                segment = user["segments"][0]
+                first = segment["id"]
+                # The fixture review, citing this call's own first segment.
+                review = json.loads(
+                    json.dumps(_review())
+                    .replace('"s1"', f'"{first}"')
+                    .replace('"s3"', f'"{first}"')
+                )
+                review["prospect_profile"] = {
+                    **{
+                        key: {"value": None, "evidence": []}
+                        for key in plan_publish_profile_fields()
+                    },
+                    "follow_up": {"when": None, "about": None, "evidence": []},
+                    **review.pop("prospect"),
+                }
                 answer = {
-                    "call_data": {"speakers": [], "facts": []},
+                    "call_data": {
+                        "speakers": [{"speaker_id": segment["speaker_id"], "role": "prospect"}],
+                        "facts": [
+                            {
+                                "type": "company.name",
+                                "value": {"text": "Synthetic Buyers"},
+                                "confidence": 0.9,
+                                "basis": "observed",
+                                "segments": [first],
+                            }
+                        ],
+                    },
                     "notes": [{"fact": "The speaker greeted the buyer.", "segments": [first]}],
-                    "review": {},
+                    "review": review,
                 }
                 envelope = {
                     "candidates": [
@@ -92,6 +128,12 @@ class OnePassBroker(ReportingBroker):
                     input_sha256=reservation.quote.input_sha256,
                 )
         return await super().execute(reservation, payload)
+
+
+def plan_publish_profile_fields() -> tuple[str, ...]:
+    from ac_platform.one_pass.analysis import PROFILE_FROM
+
+    return tuple(PROFILE_FROM)
 
 
 async def _one_pass(setup: Any) -> Any:
@@ -189,14 +231,97 @@ def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
                 assert checkpoint.manifest["revision"] == markers.RECIPE
                 packet = checkpoint.payload
                 assert (packet["chunk_index"], packet["chunk_count"]) == (1, 1)
-                assert [item["statement"] for item in packet["observations"]] == [
-                    "The speaker greeted the buyer."
-                ]
+                statements = [item["statement"] for item in packet["observations"]]
+                assert "The speaker greeted the buyer." in statements
+                assert any(statement.endswith("Synthetic Buyers") for statement in statements)
                 coaching = next(task for task in tasks if task.stage == "C5")
                 report = await ConversationReports(ConversationApplication(db)).get(
                     setup.actor, coaching.run_id
                 )
                 assert report["report"]["source_sha256"] == setup.prepared.state.source_sha256
+                draft = await db.scalar(
+                    select(ConversationReportDraft).where(
+                        ConversationReportDraft.run_id == coaching.run_id
+                    )
+                )
+                assert draft is not None
+                row = {
+                    "draft_id": draft.id,
+                    "tenant_id": draft.tenant_id,
+                    "recording_id": draft.recording_id,
+                    "run_id": draft.run_id,
+                    "source_sha256": draft.source_sha256,
+                    "transcript_revision": draft.payload["transcript_revision"],
+                }
+                segments = list(draft.transcript["normalized"]["segments"])
+            # The review and call data, published from the plan's own C4 read.
+            async with setup.sessions() as db, db.begin():
+                planned = await db.run_sync(
+                    lambda sync: plan_publish.one_pass_plans(
+                        sync.connection(), [row["recording_id"]]
+                    )
+                )
+                assert planned == {row["recording_id"]}
+                read = await db.run_sync(lambda sync: plan_publish.c4_read(sync.connection(), row))
+                assert read is not None and read.run_id == c4.run_id
+                found = plan_publish.answer(setup.prepared.storage.root, read)
+                assert found is not None and set(found) == {"call_data", "notes", "review"}
+
+            def never(_body: Any) -> Any:
+                raise AssertionError("a one-pass report needs no provider call")
+
+            # The pointer review's own background job publishes it.
+            line = await pointer_review_cli._review_one(
+                setup.sessions,
+                {**row, "submission_id": None},
+                Namespace(
+                    apply=True,
+                    storage_root=setup.prepared.storage.root,
+                    force=False,
+                    daily_cap=10,
+                    flex=False,
+                ),
+                mode="automatic",
+                created_by=pointer_review_cli.AUTOMATIC,
+                call_provider=never,
+            )
+            assert line["review"] == "published" and "attempt" not in line
+            assert isinstance(line["call_data"], dict)
+            async with setup.sessions() as db, db.begin():
+                review = await db.scalar(
+                    select(ConversationPointerReview).where(
+                        ConversationPointerReview.run_id == coaching.run_id
+                    )
+                )
+                assert review is not None and review.created_by == plan_publish.PUBLISHER
+                assert review.prompt_sha256 == read.input_sha256
+                deep = (
+                    await db.scalars(
+                        select(CallDataRun).where(
+                            CallDataRun.recording_id == row["recording_id"],
+                            CallDataRun.pipeline == "deep",
+                        )
+                    )
+                ).all()
+                # Append-only: the start, then its succeeded outcome.
+                assert sorted((run.state, run.created_by) for run in deep) == [
+                    ("running", plan_publish.PUBLISHER),
+                    ("succeeded", plan_publish.PUBLISHER),
+                ]
+                # Published once: a second pass saves nothing more.
+                again = await db.run_sync(
+                    lambda sync: plan_publish.publish(
+                        sync.connection(),
+                        report=row,
+                        read=read,
+                        answer=found,
+                        segments=segments,
+                        withheld=set(),
+                        storage_root=setup.prepared.storage.root,
+                        now=setup.prepared.state.now,
+                    )
+                )
+                assert (again["review"], again["call_data"]) == ("already_saved", "already_saved")
         finally:
             await setup.engine.dispose()
 

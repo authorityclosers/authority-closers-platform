@@ -156,9 +156,34 @@ C5 then reads that packet as before.
 - **Switch.** It is the owner's action, as before: typed confirm, reason and fresh sign-in.
   The audit records `one_pass: true`. Going back (to plain Flash-Lite, or to Scribe) is
   one click.
-- **What waits for later slices.** Slice B2 writes the call data and pointer review from
-  this read (today the C4 packet is all that is used, and the pointer review timer still
-  runs). Slice B3 adds calibrated "beta" pointer scores, and slice L adds the Luna route.
+- **What waits for later slices.** Slice B3 adds calibrated "beta" pointer scores, and
+  slice L adds the Luna route.
+
+## Slice B2: the review, call data and lead fills from that same read (every environment)
+
+Owner, 21 Oct 2026: "call data written in production". The pointer review's background job
+(`ac-pointer-review@<env>`, which already runs in production inside the worker container)
+publishes a one-pass plan's results once its report is saved. It does not read the
+transcript again (`one_pass/plan_publish.py`):
+
+- It finds the plan's one-pass C4 task behind the report (report run → C5 → complete facts
+  → the single one-pass chunk) and reads that task's saved provider response from storage,
+  checked against its receipt's digest.
+- **Pointer review:** the answer's review part, parsed against the report's own transcript
+  and withheld segments, is saved through the review's own admission
+  (`created_by automatic:one-pass-plan`, prompt digest = the C4 input's). No Gemini call,
+  no tokens or rupees: the read was paid once, as C4.
+- **Call data and lead fills:** the call data part is saved as the call's deep call data
+  run through the deep pipeline's own merge: call objects, prospect facts and the lead's
+  auto-filled fields, with the deep pipeline's audio measurements. **This now happens in
+  production too**, for one-pass plans only.
+- **Fallback:** a review part that does not parse goes to today's pointer review (one
+  Gemini read), so nothing is lost. Where the call data engine runs (development and
+  staging), its deep read skips calls whose newest plan is one pass.
+- **Check after the switch:** for the first one-pass call, the report shows its 27
+  pointers within the timer's next run. Admin → AI spend shows no `pointer_review` spend
+  for that call. The call's lead shows the filled fields, and `call_data_runs` has one
+  `deep` run by `automatic:one-pass-plan`.
 
 ## A good first production analysis (after the C2 switch)
 
