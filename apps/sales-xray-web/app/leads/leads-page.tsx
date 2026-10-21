@@ -478,6 +478,7 @@ export function LeadsRoute() {
               onOpen={(leadId) => open(leadId)}
               version={version}
               actions={rowActions}
+              onChanged={refresh}
             />
           ) : tab === "team" ? (
             <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
