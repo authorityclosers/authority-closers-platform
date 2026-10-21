@@ -82,6 +82,9 @@ function CheckpointPanel({ point }: { point: Checkpoint }) {
             <th scope="col" data-num="">
               Rated
             </th>
+            <th scope="col" data-num="">
+              Same on re-read
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -97,6 +100,7 @@ function CheckpointPanel({ point }: { point: Checkpoint }) {
               <td data-num="">
                 {scorer.overall.rated}/{scorer.overall.labels}
               </td>
+              <td data-num="">{percent(scorer.repeat_same)}</td>
             </tr>
           ))}
         </tbody>

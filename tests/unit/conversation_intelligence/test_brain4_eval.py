@@ -176,7 +176,8 @@ def test_the_gold_v1_checkpoint_is_counts_only_and_in_the_evaluation() -> None:
     assert gold["calls"] == 6 and gold["labels"]["total"] == 43
     for scorer in gold["scorers"]:
         overall = scorer["overall"]
-        assert 0 <= overall["agree"] <= overall["rated"] <= overall["labels"] == 43
+        assert 0 <= overall["agree"] <= overall["rated"] <= overall["labels"]
+        assert overall["labels"] % 43 == 0  # one set of labels per read of each call
         assert set(scorer["dimensions"]) <= set(brain4.DIMENSION_IDS)
     # Counts and agreement only: no call id, quote or note.
     text = json.dumps(gold)

@@ -86,6 +86,8 @@ const checkpoint = z.object({
     .array(
       z.object({
         scorer: z.string(),
+        repeat_same: rate,
+        reads_per_call: z.number().catch(1).default(1),
         overall: checkpointRate,
         by_label: z.record(z.string(), checkpointRate).catch({}).default({}),
         dimensions: z.record(z.string(), checkpointRate).catch({}).default({}),
