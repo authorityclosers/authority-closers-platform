@@ -430,8 +430,12 @@ def run_pass(
         )
         test_sources = engine.test_source_shas(connection) if calls else set()
         if calls and guard:
-            skipped = spend_guard.skipped_tenants(connection, environment)
-            calls = [call for call in calls if call.tenant_id not in skipped]
+            if trigger == "auto":
+                # Sandbox and load-test workspaces are never read by the automatic runner.
+                # An operator naming one call (an owner-approved sandbox trial) may read
+                # it; every cap below still applies.
+                skipped = spend_guard.skipped_tenants(connection, environment)
+                calls = [call for call in calls if call.tenant_id not in skipped]
             refusal = spend_guard.check(
                 connection, FEATURE, environment=environment, trigger=trigger
             )

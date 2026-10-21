@@ -288,3 +288,58 @@ def test_history_requires_forward_recovery(postgres_harness: Engine) -> None:
         pytest.raises(RuntimeError, match="forward recovery"),
     ):
         module.downgrade()
+
+
+def test_an_operator_may_read_a_sandbox_call_the_automatic_runner_never_does(
+    postgres_harness: Engine,
+) -> None:
+    from ac_platform.conversation_intelligence.synthetic_import_models import (
+        ConversationSandboxOrganisation,
+    )
+    from ac_platform.tenancy.models import Organisation
+
+    seeded = _call(postgres_harness, lead_name=None)
+    _settings(postgres_harness)
+    tenant, now = seeded["owner"].tenant_id, datetime.now(UTC)
+    with postgres_harness.begin() as connection:
+        if (
+            connection.scalar(
+                select(Organisation.tenant_id).where(Organisation.tenant_id == tenant)
+            )
+            is None
+        ):
+            connection.execute(
+                insert(Organisation).values(
+                    tenant_id=tenant,
+                    creation_command_id=uuid4(),
+                    domain_verification_token="fictional-" + "x" * 44,
+                )
+            )
+        connection.execute(
+            insert(ConversationSandboxOrganisation).values(
+                tenant_id=tenant,
+                approved_by_person_id=seeded["owner"].person_id,
+                approval_reference="fictional-sandbox",
+                created_at=now,
+            )
+        )
+    model = FakeGemini()
+    sessions = sessionmaker(postgres_harness, expire_on_commit=False)
+    automatic = Namespace(
+        recording=None,
+        recent_hours=48,
+        limit=5,
+        not_before=now - timedelta(hours=1),
+        force=False,
+        apply=True,
+    )
+    lines = run_pass(
+        sessions,
+        automatic,
+        model,
+        created_by="test:one-pass",
+        environment="development",
+        audio_reader=lambda _call, _root: (b"ID3fictional", "audio/mpeg"),
+    )
+    assert not any("outcome" in line for line in lines) and model.calls == []
+    assert _pass(postgres_harness, seeded, model)[0]["outcome"] == "succeeded"
