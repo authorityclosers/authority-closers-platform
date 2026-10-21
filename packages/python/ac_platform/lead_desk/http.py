@@ -57,6 +57,7 @@ from ac_platform.lead_desk.contracts import (
     NewLead,
     NewSource,
     NoteCommand,
+    Performance,
     PhoneBook,
     PhoneCall,
     PhoneHealth,
@@ -485,6 +486,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
             raise HTTPException(422, "Pick a start and an end date.", headers=PRIVATE) from None
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.call_report(start, end)
+
+    @router.get("/reports/performance", response_model=Performance, response_model_by_alias=True)
+    async def performance(request: Request, response: Response, days: int = 7) -> Performance:
+        """How sales went over today, 7 or 30 days (owners and admins; Home)."""
+        no_query(request, frozenset({"days"}))
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.performance(days)
 
     @router.get("/me", response_model=Me, response_model_by_alias=True)
     async def me(request: Request, response: Response) -> Me:

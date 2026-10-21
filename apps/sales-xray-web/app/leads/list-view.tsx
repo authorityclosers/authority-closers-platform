@@ -1,63 +1,68 @@
 "use client";
 
-import { ListChecks, Search, Users } from "lucide-react";
-import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+/**
+ * Leads in one stage (owner, 22 Oct 2026: stage tabs instead of the
+ * Everyone / Mine / No owner bar). The page owns the stage, whose leads and
+ * the search; this draws the list for them, says how many, offers Select to
+ * owners and admins, and hands the stage counts up for the tabs.
+ */
+
+import { ListChecks, SearchX, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { notify } from "../notice-center";
-import { Button, Empty, Panel, Segmented, Skeleton } from "../ui/kit";
+import { Button, Skeleton } from "../ui/kit";
 import {
   DeleteLeadsSheet,
   SelectBar,
   SelectLine,
   type Doomed,
 } from "./delete-leads";
-import { LeadLine, type RowActions } from "./desk-view";
+import { InlineEmpty, LeadLine, type RowActions } from "./desk-view";
 import {
   DELETE_LIMIT,
   LeadsError,
   readLeads,
-  STAGE_FILTERS,
   type LeadPage,
   type LeadRow,
   type LeadsDeleted,
 } from "./leads-client";
-import selectStyles from "./delete-leads.module.css";
 import styles from "./leads.module.css";
 
-type Scope = "mine" | "team" | "unassigned";
+export type Scope = "mine" | "team" | "unassigned";
 
-// Owners and admins: test and sample leads in every stage, easy to clear.
-const TEST = "test";
+/** Test and sample leads in every stage, easy to clear (owners and admins). */
+export const TEST = "test";
 const NONE: ReadonlyMap<string, string> = new Map();
 
 export function ListView({
   canManage,
+  stage,
+  stageLabel,
+  scope,
+  query,
   onOpen,
   version,
   actions,
   onChanged,
+  onCounts,
 }: {
   canManage: boolean;
+  /** "open", a stage kind, or "test". */
+  stage: string;
+  /** The tab's own words, for the count and the empty list. */
+  stageLabel: string;
+  scope: Scope;
+  /** Search words, already settled (the page waits for typing to stop). */
+  query: string;
   onOpen: (leadId: string) => void;
   version: number;
   actions?: RowActions;
   /** Leads were deleted: the desk's counts read again. */
   onChanged?: () => void;
+  /** Every stage's count for this scope and search, for the tabs. */
+  onCounts?: (counts: Record<string, number>) => void;
 }) {
-  const params = useSearchParams();
-  const initialStage = params.get("stage");
-  const filters = canManage
-    ? [...STAGE_FILTERS, { key: TEST, label: "Test data" }]
-    : STAGE_FILTERS;
-  const [scope, setScope] = useState<Scope>(canManage ? "team" : "mine");
-  const [stage, setStage] = useState<string>(
-    filters.some((item) => item.key === initialStage)
-      ? (initialStage as string)
-      : "open",
-  );
-  const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
   const [loaded, setLoaded] = useState<{
     key: string;
     question: string;
@@ -90,17 +95,17 @@ export function ListView({
   const rows = loaded?.question === question ? loaded.rows : [];
   const error = failed?.key === key ? failed.message : null;
   const chosen = picked?.question === question ? picked.leads : NONE;
+  // The page's latest counts setter, without reading the list again for it.
+  const counts = useRef(onCounts);
+  useEffect(() => {
+    counts.current = onCounts;
+  });
   const ask = {
     scope,
     stage: stage === TEST ? null : stage,
     search: query,
     test: stage === TEST,
   };
-
-  useEffect(() => {
-    const timer = setTimeout(() => setQuery(search), 300);
-    return () => clearTimeout(timer);
-  }, [search]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,9 +118,11 @@ export function ListView({
       },
       controller.signal,
     )
-      .then((next) =>
-        setLoaded({ key, question, page: next, rows: next.leads }),
-      )
+      .then((next) => {
+        setLoaded({ key, question, page: next, rows: next.leads });
+        if (next.stage_counts && stage !== TEST)
+          counts.current?.(next.stage_counts);
+      })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setFailed({
@@ -227,53 +234,17 @@ export function ListView({
 
   return (
     <>
-      <Panel
-        title="All leads"
-        sub={page ? `${page.total}` : undefined}
-        tools={
-          <label className={styles.search}>
-            <Search size={14} aria-hidden="true" />
-            <input
-              type="search"
-              value={search}
-              placeholder="Name, company, city or phone"
-              aria-label="Search leads"
-              maxLength={80}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
-        }
-      >
-        <div className={styles.filters}>
-          {canManage ? (
-            <Segmented<Scope>
-              label="Whose leads"
-              value={scope}
-              onChange={setScope}
-              items={[
-                { key: "team", label: "Everyone" },
-                { key: "mine", label: "Mine" },
-                { key: "unassigned", label: "No owner" },
-              ]}
-            />
-          ) : null}
-          <div className={styles.chips} role="group" aria-label="Stage">
-            {filters.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={styles.chip}
-                aria-pressed={stage === item.key}
-                onClick={() => setStage(item.key)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          {canManage ? (
-            <Button
-              variant={selecting ? "primary" : "secondary"}
-              className={selectStyles.selectToggle}
+      <section className={styles.listPanel} aria-label={stageLabel}>
+        <div className={styles.listHead}>
+          <span className={styles.listTotal} aria-live="polite">
+            {page
+              ? `${page.total} ${page.total === 1 ? "lead" : "leads"}`
+              : null}
+          </span>
+          {canManage && rows.length ? (
+            <button
+              type="button"
+              className={styles.statusChip}
               aria-pressed={selecting}
               onClick={() => {
                 setPicked(null);
@@ -288,7 +259,7 @@ export function ListView({
                   Select
                 </>
               )}
-            </Button>
+            </button>
           ) : null}
         </div>
         {error ? (
@@ -306,21 +277,21 @@ export function ListView({
             ))}
           </div>
         ) : rows.length === 0 ? (
-          <Empty
-            icon={Users}
+          <InlineEmpty
+            icon={query ? SearchX : Users}
             title={
               query
                 ? "No leads match"
                 : stage === TEST
                   ? "No test leads"
-                  : "No leads here"
+                  : `No leads in ${stageLabel}`
             }
             text={
               query
-                ? "Try another name, city or the last digits of a phone number."
+                ? "Try another name, city or the last digits of a number."
                 : stage === TEST
                   ? "Test and sample leads show here, ready to clear."
-                  : "Leads in this stage show here."
+                  : "A lead moves here from its own page, after a call."
             }
           />
         ) : (
@@ -354,7 +325,7 @@ export function ListView({
             ) : null}
           </>
         )}
-      </Panel>
+      </section>
       {selecting && page && rows.length ? (
         <SelectBar
           count={chosen.size}
