@@ -24,11 +24,11 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * Admin → One-pass trial (owner, 21 Oct 2026): this environment's analysis
- * pipeline (today's, or both side by side with the Google-only one pass), and
- * what the comparison shows so far: cost per audio minute, quality and time,
- * for real calls and for the fictional benchmark set apart. Production stays
- * on today's pipeline; switching it is the owner's decision.
+ * Admin → One pass (owner, 21 Oct 2026): this environment's analysis pipeline
+ * (today's; one pass for people, the owner's typed-confirm action; or both side
+ * by side on development), and what the comparison shows so far: cost per
+ * audio minute, quality and time, for real calls and for the fictional
+ * benchmark set apart. Back to today's pipeline is one click.
  */
 export default async function OnePassPage() {
   const [settings, compared] = await Promise.all([
@@ -38,9 +38,9 @@ export default async function OnePassPage() {
   return (
     <Page wide>
       <PageHeader
-        title="One-pass trial"
+        title="One pass"
         context={[
-          "Gemini 3.1 Flash-Lite transcription and one Gemini 3.8 Flash pass, beside today's pipeline. People keep seeing today's results. List-price estimates for Admin only.",
+          "One pass: each call's deep call data and pointer review come from one strict Gemini 3.8 Flash read of the saved transcript (the owner's action). Both: the Google-only pipeline beside today's, compared (development). List-price estimates for Admin only.",
         ]}
         actions={
           <Link
@@ -59,7 +59,7 @@ export default async function OnePassPage() {
             settings.data.revision
               ? `revision ${settings.data.revision}`
               : "default"
-          } · its spend cap is in AI spend (One-pass trial)`}
+          } · its spend cap is in AI spend (One pass)`}
         >
           <PipelineSwitch settings={settings.data} />
         </Panel>
@@ -83,7 +83,7 @@ export default async function OnePassPage() {
               <Empty
                 icon={FlaskConical}
                 title="Nothing compared yet"
-                text="Set the pipeline to Both and raise the One-pass trial cap in AI spend; new calls are then read both ways."
+                text="On development, set the pipeline to Both and raise the One pass cap in AI spend; new calls are then read both ways."
               />
             )}
           </Panel>

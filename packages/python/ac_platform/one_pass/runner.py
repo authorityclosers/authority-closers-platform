@@ -1,7 +1,11 @@
-"""The one-pass runner: beside today's pipeline, the same call read the Google-only way.
+"""The one-pass runner: the Google-only read, beside today's pipeline or in its place.
 
-When this environment's analysis pipeline is ``both`` (Admin → Providers), every new
-call that today's pipeline transcribed is also read by the one-pass pipeline:
+When this environment's analysis pipeline is ``one_pass`` (owner action in Admin), each
+new call's deep call data and pointer review come from one strict Gemini 3.8 Flash read
+of today's saved transcript, saved into today's stores (``publish.py``).
+
+When it is ``both`` (development only), every new call that today's pipeline
+transcribed is also read by the one-pass pipeline:
 
 1. its stored audio, as mono 32 kbps MP3, is transcribed by Gemini 3.1 Flash-Lite into
    the C2 transcript contract (standard or Flex, as set);
@@ -41,6 +45,7 @@ import sys
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Final
 from uuid import UUID
@@ -218,45 +223,108 @@ def read_call(
         outcome.audio_ms = int(transcript["duration_ms"])
     usage["transcription"]["segments"] = len(transcript["segments"])
     usage["transcription"]["dropped"] = dropped
-    tier = settings["analysis_tier"]
-    request = analysis.request(transcript, call_date=call_date)
-    try:
-        answered = transport.generate(model=choices.ANALYSIS_MODEL, request=request, tier=tier)
-    except OnePassFailure as failure:
-        if failure.usage is not None:
-            outcome.analysis_tier = tier
-            outcome.analysis_input_tokens = failure.usage.prompt
-            outcome.analysis_output_tokens = failure.usage.billed_output
-            outcome.analysis_cost_inr = pricing.cost_inr(
-                choices.ANALYSIS_MODEL, failure.usage, tier=tier
-            )
-        raise
-    paid_tier = "standard" if answered.tier_used != "flex" else "flex"
-    outcome.analysis_tier = answered.tier_used
-    outcome.analysis_input_tokens = answered.usage.prompt
-    outcome.analysis_output_tokens = answered.usage.billed_output
-    outcome.analysis_cached_tokens = answered.usage.cached
-    outcome.analysis_cost_inr = pricing.cost_inr(
-        choices.ANALYSIS_MODEL, answered.usage, tier=paid_tier
+    answers = analyse(
+        transport,
+        analysis.requests(transcript, call_date=call_date),
+        tier=settings["analysis_tier"],
+        outcome=outcome,
+        usage=usage,
     )
-    outcome.analysis_ms = answered.ms
-    usage["analysis"] = {
-        **answered.usage.as_dict(),
-        "tier": answered.tier_used,
-        "attempts": answered.attempts,
-        "schema_mode": answered.schema_mode,
-        "transport": transport.name,
-        "prompt_sha256": analysis.prompt_sha256(choices.ANALYSIS_MODEL, request),
-        "standard_inr": float(
-            pricing.cost_inr(choices.ANALYSIS_MODEL, answered.usage, tier="standard")
-        ),
-        "flex_inr": float(pricing.cost_inr(choices.ANALYSIS_MODEL, answered.usage, tier="flex")),
-    }
-    outputs, checks = analysis.map_outputs(answered.data, transcript)
+    outputs, checks = analysis.map_outputs(analysis.merge(answers), transcript)
     outcome.outputs = outputs
     outcome.checks = checks
     outcome.duration_ms = round((clock() - started) * 1000)
     outcome.state, outcome.reason = "succeeded", None
+
+
+def analyse(
+    transport: Any,
+    requests: dict[str, Any],
+    *,
+    tier: str,
+    outcome: Any,
+    usage: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """The analysis requests at once, each with its strict schema; their answers by name.
+
+    ``outcome`` gets the sums (tokens, list-price rupees; time is the slower request) and
+    ``usage["analysis"]`` each request's own numbers, also when one fails: an answer cut
+    short or unreadable was still billed. Raises the first ``OnePassFailure`` after both
+    have ended."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ac_platform.one_pass import analysis, pricing
+    from ac_platform.one_pass import settings as choices
+    from ac_platform.one_pass.gemini import OnePassFailure
+
+    model = choices.ANALYSIS_MODEL
+    with ThreadPoolExecutor(max_workers=len(requests), thread_name_prefix="one-pass") as pool:
+        futures = {
+            name: pool.submit(transport.generate, model=model, request=request, tier=tier)
+            for name, request in requests.items()
+        }
+        results: dict[str, Any] = {}
+        for name, future in futures.items():
+            try:
+                results[name] = future.result()
+            except OnePassFailure as error:
+                results[name] = error
+    parts: dict[str, Any] = {}
+    total = pricing.Usage()
+    cost = Decimal(0)
+    billed = False
+    longest = 0
+    tiers: set[str] = set()
+    failure: OnePassFailure | None = None
+    for name, result in results.items():
+        if isinstance(result, OnePassFailure):
+            failure = failure or result
+            parts[name] = {"failed": result.outcome}
+            if result.usage is not None:
+                billed = True
+                total += result.usage
+                cost += pricing.cost_inr(model, result.usage, tier=tier)
+                parts[name].update(result.usage.as_dict())
+            continue
+        paid_tier = "standard" if result.tier_used != "flex" else "flex"
+        billed = True
+        total += result.usage
+        cost += pricing.cost_inr(model, result.usage, tier=paid_tier)
+        longest = max(longest, result.ms)
+        tiers.add(result.tier_used)
+        parts[name] = {
+            **result.usage.as_dict(),
+            "tier": result.tier_used,
+            "attempts": result.attempts,
+            "ms": result.ms,
+            "schema_mode": result.schema_mode,
+            "prompt_sha256": analysis.prompt_sha256(model, requests[name]),
+        }
+    if billed:
+        outcome.analysis_tier = (
+            next(iter(tiers)) if len(tiers) == 1 else "+".join(sorted(tiers)) or tier
+        )
+        outcome.analysis_input_tokens = total.prompt
+        outcome.analysis_output_tokens = total.billed_output
+        outcome.analysis_cached_tokens = total.cached
+        outcome.analysis_cost_inr = cost
+    outcome.analysis_ms = longest or None
+    usage["analysis"] = {
+        **total.as_dict(),
+        "tier": outcome.analysis_tier,
+        "requests": parts,
+        "schema_mode": (
+            "strict"
+            if all(part.get("schema_mode") == "strict" for part in parts.values())
+            else "prompt"
+        ),
+        "transport": transport.name,
+        "standard_inr": float(pricing.cost_inr(model, total, tier="standard")),
+        "flex_inr": float(pricing.cost_inr(model, total, tier="flex")),
+    }
+    if failure is not None:
+        raise failure
+    return {name: result.data for name, result in results.items()}
 
 
 def process_call(
@@ -416,10 +484,24 @@ def run_pass(
         else (arguments.recent_hours)
     )
     with sessions() as session:
+        settings, _ = choices.read(session.connection(), environment)
+    if settings["mode"] == "classic":
+        return [{"stopped": "pipeline_classic"}]
+    if settings["mode"] == "one_pass":
+        from ac_platform.one_pass import publish
+
+        return publish.run_pass(
+            sessions,
+            arguments,
+            transport,
+            settings=settings,
+            created_by=created_by,
+            environment=environment,
+            storage_root=storage_root,
+            guard=guard,
+        )
+    with sessions() as session:
         connection = session.connection()
-        settings, _ = choices.read(connection, environment)
-        if settings["mode"] == "classic":
-            return [{"stopped": "pipeline_classic"}]
         calls = store.candidates(
             connection,
             not_before=arguments.not_before,

@@ -19,11 +19,14 @@ describe("one-pass trial data", () => {
     const settings = normalizePipeline(fixturePipeline);
     expect(settings.mode).toBe("both");
     expect(settings.revision).toBe(2);
-    expect(settings.modes.map((m) => [m.value, Boolean(m.whyNot)])).toEqual([
-      ["classic", false],
-      ["both", false],
-      ["one_pass", true],
+    expect(
+      settings.modes.map((m) => [m.value, Boolean(m.whyNot), m.needsOwner]),
+    ).toEqual([
+      ["classic", false, false],
+      ["both", false, false],
+      ["one_pass", false, true],
     ]);
+    expect(settings.confirm).toBe("one_pass");
     expect(settings.models.analysis).toBe("gemini-3.8-flash");
     expect(settings.recent[0]).toMatchObject({
       subject: "fx-01",

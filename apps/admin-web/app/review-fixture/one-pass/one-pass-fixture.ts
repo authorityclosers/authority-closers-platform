@@ -230,11 +230,13 @@ export const fixturePipeline = {
     },
     {
       value: "one_pass",
-      label: "One pass (people see it)",
-      why_not:
-        "Showing one-pass results to people comes after the side-by-side comparison.",
+      label:
+        "One pass: people see it (deep call data and pointer review in one read)",
+      why_not: null,
+      needs_owner: true,
     },
   ],
+  confirm: "one_pass",
   tiers: [
     { value: "standard", label: "Standard (answer in seconds)" },
     { value: "flex", label: "Flex (half price, may wait minutes)" },

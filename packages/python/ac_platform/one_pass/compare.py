@@ -220,7 +220,7 @@ def side_from_row(row: Any) -> dict[str, Any]:
             ),
             _stage(
                 "analysis",
-                "One pass (Gemini 3.8 Flash)",
+                "Analysis (Gemini 3.8 Flash, both requests at once)",
                 inr=row.analysis_cost_inr,
                 tokens_in=row.analysis_input_tokens,
                 tokens_out=row.analysis_output_tokens,
@@ -523,7 +523,7 @@ def compare(classic: dict[str, Any] | None, one: dict[str, Any] | None) -> dict[
 _LATEST = """
 SELECT DISTINCT ON (coalesce(recording_id::text, bench_call), pipeline) *
 FROM one_pass_runs
-WHERE state <> 'running' {where}
+WHERE state <> 'running' AND mode IS DISTINCT FROM 'one_pass' {where}
 ORDER BY coalesce(recording_id::text, bench_call), pipeline,
          (state = 'succeeded') DESC, created_at DESC
 """

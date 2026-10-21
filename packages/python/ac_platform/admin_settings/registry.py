@@ -152,8 +152,9 @@ def _lead_desk_ai(key: str, label: str, kind: Kind, **bounds: Any) -> Setting:
 
 
 def _pipeline(key: str, label: str, kind: Kind, **bounds: Any) -> Setting:
-    """Which analysis pipeline this environment runs: today's, or both side by side with
-    the Google-only one-pass pipeline (owner, 21 Oct 2026). Development only for now."""
+    """Which analysis pipeline this environment runs: today's, both side by side
+    (development), or one pass (the owner's typed confirm on its page; owner, 21 Oct
+    2026). The registry's write carries no confirm, so one_pass is refused here."""
     return Setting(
         id=f"analysis_pipeline.{key}",
         area="analysis-pipeline",
@@ -321,8 +322,9 @@ SETTINGS: tuple[Setting, ...] = (
         "mode",
         "Analysis pipeline",
         "enum",
-        help="Both runs the Google-only one-pass pipeline beside today's on each new call; "
-        "people keep seeing today's. Its spend cap is in AI spend (One-pass trial).",
+        help="Both (development) runs the Google-only one-pass pipeline beside today's; "
+        "people keep seeing today's. One pass (people see it) is the owner's action on the "
+        "One-pass page: type one_pass, give the reason. Its spend cap is in AI spend.",
         options_from=("/modes", "value", "label"),
     ),
     _pipeline(

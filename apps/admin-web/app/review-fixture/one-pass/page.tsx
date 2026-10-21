@@ -29,10 +29,7 @@ export default function OnePassFixturePage() {
   const list = normalizeCompareList(fixtureList);
   return (
     <Page wide>
-      <PageHeader
-        title="One-pass trial"
-        context={["Fixture: fictional data"]}
-      />
+      <PageHeader title="One pass" context={["Fixture: fictional data"]} />
       <Panel title="Analysis pipeline" sub="development · revision 2">
         <PipelineSwitch settings={settings} />
       </Panel>

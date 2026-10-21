@@ -1,11 +1,13 @@
 "use client";
 
 /**
- * This environment's analysis pipeline (owner, 21 Oct 2026): today's, or both
- * side by side with the Google-only one-pass pipeline, and the one pass's
- * Flex/standard tiers. One save is one audited revision; the API refuses a
- * stale revision and any choice this environment may not make (one pass for
- * people waits for the comparison; staging and production stay on today's).
+ * This environment's analysis pipeline (owner, 21 Oct 2026): today's, both
+ * side by side (development), or one pass for people. One save is one audited
+ * revision; the API refuses a stale revision and any choice this environment
+ * may not make. One pass for people is the owner's action: type the confirm
+ * word and give the reason in the owner's words (a control account signed in
+ * within ten minutes; the one-pass spend cap must be above zero). Going back
+ * to today's pipeline is one click.
  */
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -23,6 +25,7 @@ export function PipelineSwitch({ settings }: { settings: PipelineSettings }) {
   );
   const [analysisTier, setAnalysisTier] = useState(settings.analysisTier);
   const [reason, setReason] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
   const changed =
@@ -30,23 +33,20 @@ export function PipelineSwitch({ settings }: { settings: PipelineSettings }) {
     transcriptionTier !== settings.transcriptionTier ||
     analysisTier !== settings.analysisTier;
   const needsReason = mode !== settings.mode;
+  const ownerAction = Boolean(
+    settings.modes.find((choice) => choice.value === mode)?.needsOwner,
+  );
+  const ownerReady =
+    !ownerAction ||
+    (confirm.trim() === settings.confirm && reason.trim().length >= 10);
 
-  async function save() {
+  async function put(body: Record<string, unknown>, done: string) {
     setBusy(true);
     setSaid(null);
     const result = await send(
       "PUT",
       "/v1/admin/analysis-pipeline/settings",
-      {
-        expected_revision: settings.revision,
-        config: {
-          ...settings.config,
-          mode,
-          transcription_tier: transcriptionTier,
-          analysis_tier: analysisTier,
-        },
-        reason: reason.trim() || null,
-      },
+      { expected_revision: settings.revision, ...body },
       null,
     );
     setBusy(false);
@@ -54,9 +54,36 @@ export function PipelineSwitch({ settings }: { settings: PipelineSettings }) {
       setSaid({ ok: false, text: result.message });
       return;
     }
-    setSaid({ ok: true, text: "Saved. New calls follow it on the next pass." });
+    setSaid({ ok: true, text: done });
     setReason("");
+    setConfirm("");
     router.refresh();
+  }
+
+  function save() {
+    void put(
+      {
+        config: {
+          ...settings.config,
+          mode,
+          transcription_tier: transcriptionTier,
+          analysis_tier: analysisTier,
+        },
+        reason: reason.trim() || null,
+        ...(ownerAction ? { confirm: confirm.trim() } : {}),
+      },
+      "Saved. New calls follow it on the next pass.",
+    );
+  }
+
+  function backToClassic() {
+    void put(
+      {
+        config: { ...settings.config, mode: "classic" },
+        reason: "Back to today's pipeline",
+      },
+      "Back on today's pipeline. New calls follow it at once.",
+    );
   }
 
   return (
@@ -64,7 +91,7 @@ export function PipelineSwitch({ settings }: { settings: PipelineSettings }) {
       className={styles.switch}
       onSubmit={(event) => {
         event.preventDefault();
-        void save();
+        save();
       }}
     >
       <fieldset className={styles.modes}>
@@ -83,6 +110,11 @@ export function PipelineSwitch({ settings }: { settings: PipelineSettings }) {
               {choice.label}
               {choice.whyNot ? (
                 <small className={styles.note}>{choice.whyNot}</small>
+              ) : choice.needsOwner ? (
+                <small className={styles.note}>
+                  The owner&apos;s decision: type {settings.confirm} and give
+                  the reason.
+                </small>
               ) : null}
             </span>
           </label>
@@ -118,15 +150,34 @@ export function PipelineSwitch({ settings }: { settings: PipelineSettings }) {
           </select>
         </label>
       </div>
-      {needsReason ? (
+      {needsReason || ownerAction ? (
         <label className={styles.reason}>
-          Reason (kept with the change)
+          {ownerAction
+            ? "Reason, in the owner's words (kept with the change)"
+            : "Reason (kept with the change)"}
           <input
             value={reason}
             maxLength={200}
             required
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Owner asked for the side-by-side comparison"
+            placeholder={
+              ownerAction
+                ? "Owner, 21 Oct: So at least get this on prod now"
+                : "Owner asked for the side-by-side comparison"
+            }
+          />
+        </label>
+      ) : null}
+      {ownerAction ? (
+        <label className={styles.reason}>
+          Type {settings.confirm} to confirm
+          <input
+            value={confirm}
+            maxLength={32}
+            required
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => setConfirm(event.target.value)}
           />
         </label>
       ) : null}
@@ -135,10 +186,22 @@ export function PipelineSwitch({ settings }: { settings: PipelineSettings }) {
           type="submit"
           className={kitStyles.button}
           data-variant="primary"
-          disabled={!changed || busy || (needsReason && !reason.trim())}
+          disabled={
+            !changed || busy || (needsReason && !reason.trim()) || !ownerReady
+          }
         >
           {busy ? "Saving…" : "Save"}
         </button>
+        {settings.mode !== "classic" ? (
+          <button
+            type="button"
+            className={kitStyles.button}
+            disabled={busy}
+            onClick={backToClassic}
+          >
+            Back to today&apos;s pipeline
+          </button>
+        ) : null}
         {said ? (
           <small
             className={said.ok ? styles.note : kitStyles.fieldError}

@@ -1,11 +1,13 @@
 [Unit]
-Description=Sales Xray one-pass trial beside today's pipeline (%i)
+Description=Sales Xray one-pass runner: one read for deep call data and pointer review (%i)
 Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/docs/architecture/ONE_PASS_ANALYSIS.md
 After=network-online.target docker.service
 
 [Service]
 Type=exec
 ExecStart=/usr/local/sbin/ac-one-pass %i
+# The runner lives inside the worker on staging and production; stop it there too.
+ExecStop=/usr/local/sbin/ac-one-pass stop %i
 Restart=always
 RestartSec=30s
 # Pick up each new release: restart at least every 30 minutes (the runner holds no state).

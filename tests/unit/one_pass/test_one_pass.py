@@ -258,31 +258,84 @@ def test_transcript_drops_unreadable_rows_and_refuses_an_empty_answer() -> None:
 # ----- one answer onto the six contracts -------------------------------------------------
 
 
-def test_one_prompt_carries_each_stages_own_instructions_and_the_combined_schema() -> None:
-    system = analysis.system_prompt()
-    assert system.startswith("ONE_PASS: " + analysis.PROMPT_REVISION)
-    assert COACHING_PROMPT_V5_MARKER in system  # the C5 stage's own prompt
-    assert pointer_review.PROMPT_REVISION in system  # the pointer review's own
-    assert "Value shapes by kind:" in system  # the call data extraction's own
-    assert "prospect_profile" not in system  # its facts come from call_data here
-    schema = analysis.response_schema()
-    assert schema["required"] == ["call_data", "notes", "review", "report"]
-    assert "prospect" in schema["properties"]["review"]["properties"]
-    assert "prospect_profile" not in schema["properties"]["review"]["properties"]
-    assert "dimension" in schema["$defs"]
-    types = schema["properties"]["call_data"]["properties"]["facts"]["items"]["properties"]
+def test_two_strict_requests_carry_each_stages_own_instructions_and_schema() -> None:
+    requests = analysis.requests(_transcript(), call_date="Tuesday 20 October 2026")
+    assert set(requests) == {"facts", "report"}
+    facts, report = requests["facts"], requests["report"]
+    assert facts.system.startswith("ONE_PASS: " + analysis.PROMPT_REVISION)
+    assert pointer_review.PROMPT_REVISION in facts.system  # the pointer review's own
+    assert "Value shapes by kind:" in facts.system  # the call data extraction's own
+    assert "prospect_profile" not in facts.system  # its facts come from call_data here
+    assert COACHING_PROMPT_V5_MARKER in report.system  # the C5 stage's own prompt
+    assert COACHING_PROMPT_V5_MARKER not in facts.system
+    assert facts.schema is not None and report.schema is not None
+    assert facts.schema["required"] == ["call_data", "notes", "review"]
+    assert "prospect" in facts.schema["properties"]["review"]["properties"]
+    assert "prospect_profile" not in facts.schema["properties"]["review"]["properties"]
+    assert report.schema["required"] == ["report"] and "dimension" in report.schema["$defs"]
+    types = facts.schema["properties"]["call_data"]["properties"]["facts"]["items"]["properties"]
     assert set(types["type"]["enum"]) == {t.key for t in taxonomy.DEEP_EXTRACT_TYPES}
-    request = analysis.request(_transcript(), call_date="Tuesday 20 October 2026")
-    assert request.user.startswith("Call date: Tuesday 20 October 2026.")
-    assert "[s2] speaker_1 00:04: Haan ji" in request.user
+    # Both read the same transcript rows, sent at once.
+    assert facts.user == report.user
+    assert facts.user.startswith("Call date: Tuesday 20 October 2026.")
+    assert "[s2] speaker_1 00:04: Haan ji" in facts.user
+    # The trial may send a refused schema as text; publishing never does.
+    assert facts.schema_fallback and report.schema_fallback
     # The instructions are the same for every call: a shared prefix the cache can reuse.
-    other = analysis.request(_transcript(), call_date="Monday 1 January 2027")
-    assert other.system == request.system
+    other = analysis.requests(_transcript(), call_date="Monday 1 January 2027")
+    assert other["facts"].system == facts.system and other["report"].system == report.system
+
+
+def test_publishing_asks_one_strict_request_with_the_reviews_own_profile() -> None:
+    requests = analysis.requests(_transcript(), call_date="Tuesday 20 October 2026", publish=True)
+    assert set(requests) == {"facts"}
+    facts = requests["facts"]
+    assert not facts.schema_fallback
+    assert facts.system.count(pointer_review.PROMPT_REVISION) == 1
+    assert "And return prospect_profile" in facts.system  # the review's own, in full
+    assert "PART notes" not in facts.system
+    assert facts.schema is not None
+    assert facts.schema["required"] == ["call_data", "review"]
+    assert facts.schema["properties"]["review"] == pointer_review.response_schema()
+
+
+def test_a_publishing_answer_gives_the_deep_drafts_and_the_reviews_raw_part() -> None:
+    transcript = _transcript()
+    answer = _answer()
+    review = answer["review"]
+    review.pop("prospect")
+    review["prospect_profile"] = {
+        "name": {"value": "Amit Sharma", "evidence": ["s2"]},
+        "insights": [{"kind": "team", "text": "A team of eight.", "evidence": ["s3"]}],
+    }
+    published = analysis.map_publish(
+        {"call_data": answer["call_data"], "review": review}, transcript
+    )
+    assert published.checks == {
+        "call_objects": "ok",
+        "prospect_facts": "ok",
+        "pointer_review": "ok",
+    }
+    assert {d.type_key for d in published.drafts} == {
+        "person.name",
+        "company.name",
+        "commitment.follow_up",
+    }
+    assert published.roles == {"speaker_0": "salesperson", "speaker_1": "prospect"}
+    raw = published.outputs["review_raw"]
+    assert raw["prospect_profile"]["name"]["value"] == "Amit Sharma"
+    # Parsed again against the saved report's transcript when it is published.
+    again = pointer_review.parse_review(raw, transcript["segments"])
+    assert len(again["pointers"]) == 27
+    broken = analysis.map_publish({"call_data": {}, "review": {"pointers": []}}, transcript)
+    assert broken.checks["call_objects"] == "none_valid" and not broken.drafts
+    assert broken.checks["pointer_review"] != "ok" and "review_raw" not in broken.outputs
 
 
 def test_every_contract_validates_from_one_answer() -> None:
     transcript = _transcript()
     outputs, checks = analysis.map_outputs(_answer(), transcript)
+    assert "review_raw" not in outputs  # only a publishing read keeps it
     assert checks == {
         "c2": "ok",
         "call_objects": "ok",
@@ -363,7 +416,7 @@ def test_usage_and_list_price_rupees() -> None:
 # ----- the switch ------------------------------------------------------------------------
 
 
-def test_mode_is_classic_by_default_and_both_only_on_development() -> None:
+def test_mode_is_classic_by_default_both_on_development_one_pass_where_call_data_runs() -> None:
     assert settings.validate("development", {}) == settings.defaults()
     assert settings.defaults()["mode"] == "classic"
     assert settings.validate("development-live", {"mode": "both"})["mode"] == "both"
@@ -371,8 +424,16 @@ def test_mode_is_classic_by_default_and_both_only_on_development() -> None:
         with pytest.raises(settings.SettingsError, match="mode_not_here"):
             settings.validate(environment, {"mode": "both"})
         assert settings.validate(environment, {"mode": "classic"})["mode"] == "classic"
+        # Standard only there for now (owner, 21 Oct 2026); Flex after a latency check.
+        with pytest.raises(settings.SettingsError, match="analysis_tier_standard_only"):
+            settings.validate(environment, {"analysis_tier": "flex"})
+    assert settings.validate("staging", {"mode": "one_pass"})["mode"] == "one_pass"
+    # Production runs no call data engine: its one-pass saving is the transcription route.
     with pytest.raises(settings.SettingsError, match="mode_not_here"):
-        settings.validate("development", {"mode": "one_pass"})
+        settings.validate("production", {"mode": "one_pass"})
+    assert settings.validate("development", {"analysis_tier": "flex"})["analysis_tier"] == "flex"
+    assert settings.needs_owner("one_pass")
+    assert not settings.needs_owner("classic") and not settings.needs_owner("both")
     for bad in (
         {"mode": "fast"},
         {"surprise": 1},
@@ -383,9 +444,14 @@ def test_mode_is_classic_by_default_and_both_only_on_development() -> None:
     ):
         with pytest.raises(settings.SettingsError):
             settings.validate("development", bad)
-    view = settings.public("production", settings.defaults(), None)
-    reasons = {m["value"]: m["why_not"] for m in view["modes"]}
-    assert reasons["classic"] is None and reasons["both"] and reasons["one_pass"]
+    view = settings.public("staging", settings.defaults(), None)
+    modes = {m["value"]: m for m in view["modes"]}
+    assert modes["classic"]["why_not"] is None and modes["both"]["why_not"]
+    assert modes["one_pass"]["why_not"] is None and modes["one_pass"]["needs_owner"]
+    assert view["confirm"] == "one_pass"
+    production = settings.public("production", settings.defaults(), None)
+    reasons = {m["value"]: m["why_not"] for m in production["modes"]}
+    assert "Flash-Lite" in reasons["one_pass"] and reasons["classic"] is None
 
 
 @pytest.mark.parametrize("item", [s for s in SETTINGS if s.area == "analysis-pipeline"])
@@ -403,7 +469,12 @@ def test_registry_changes_pass_the_switchs_own_validation(item) -> None:
         return
     assert item.options_from is not None
     menu = pointer(answer, item.options_from[0])
-    values = [entry[item.options_from[1]] for entry in menu if not entry.get("why_not")]
+    # one_pass is the owner's action on its own page (typed confirm), never a menu pick.
+    values = [
+        entry[item.options_from[1]]
+        for entry in menu
+        if not entry.get("why_not") and not entry.get("needs_owner")
+    ]
     assert values
     reason = "Owner asked for the comparison" if item.write.needs_reason else None
     for value in values:
@@ -412,7 +483,7 @@ def test_registry_changes_pass_the_switchs_own_validation(item) -> None:
         assert settings.validate("development", body["config"])[key] == value
 
 
-def test_ai_spend_knows_the_trial_and_starts_its_cap_at_zero() -> None:
+def test_ai_spend_knows_one_pass_and_starts_its_cap_at_zero() -> None:
     assert "one_pass" in policy.BACKGROUND and "one_pass" in policy.CAPPED_HERE
     for environment in policy.ENVIRONMENTS:
         assert policy.defaults(environment)["feature_caps_inr"]["one_pass"] == 0
@@ -484,6 +555,21 @@ def test_a_refused_schema_goes_as_text_and_audio_goes_inline() -> None:
     parts = seen[-1]["contents"][0]["parts"]
     assert parts[0]["inline_data"]["mime_type"] == "audio/mpeg" and parts[1] == {"text": "U"}
     assert "JSON schema" in seen[-1]["systemInstruction"]["parts"][0]["text"]
+
+
+def test_publishing_never_sends_a_refused_schema_as_text() -> None:
+    seen: list[dict[str, Any]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(400, json={"error": {"status": "INVALID_ARGUMENT"}})
+
+    client = httpx.Client(transport=httpx.MockTransport(handle))
+    with pytest.raises(OnePassFailure, match="schema_refused"):
+        GoogleGemini("key", client=client, sleep=lambda _: None).generate(
+            model="gemini-3.8-flash", request=_request(schema_fallback=False), tier="standard"
+        )
+    assert len(seen) == 1 and "responseJsonSchema" in seen[0]["generationConfig"]
 
 
 def test_answers_cut_short_or_unreadable_fail_with_fixed_codes() -> None:

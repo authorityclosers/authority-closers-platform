@@ -55,6 +55,9 @@ class Request:
     audio: bytes | None = field(default=None, repr=False)
     audio_mime: str | None = None
     audio_seconds: float | None = None
+    # A refused schema may go once as text (the trial). Publishing never does: a strict
+    # schema or nothing, and today's pipeline takes the call.
+    schema_fallback: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,6 +260,8 @@ class GoogleGemini:
             response = self._post(model, body, current)
             status = response.status_code
             used = current
+            if status == 400 and request.schema is not None and not request.schema_fallback:
+                raise OnePassFailure("schema_refused")
             if status == 400 and schema_mode == "strict" and request.schema is not None:
                 # A refused request with a structured-output schema is most often the
                 # schema itself (too complex, or a keyword the route can't take; Google

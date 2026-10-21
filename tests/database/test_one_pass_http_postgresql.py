@@ -15,8 +15,10 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import insert, select, text
 
+from ac_platform.ai_spend import policy
+from ac_platform.ai_spend.models import AiSpendSettings
 from ac_platform.audit.models import AuditEvent
 from ac_platform.http.routes import RouteContext
 from ac_platform.one_pass import admin_http, store
@@ -25,6 +27,7 @@ from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
 
 WRITE = {"Origin": ORIGIN, "Content-Type": "application/json"}
+OWNER_WORDS = "Owner, 21 Oct 2026: So at least get this on prod now!!!"
 ADMIN = "/v1/admin/analysis-pipeline"
 MODELS = {"transcription": "gemini-3.1-flash-lite", "analysis": "gemini-3.8-flash"}
 
@@ -107,6 +110,30 @@ def _bench(connection: Any) -> None:
     )
 
 
+def _spend(connection: Any, *, cap: int) -> None:
+    config = policy.with_cap(policy.defaults("development"), "one_pass", cap)
+    config["background_enabled"] = True
+    revision = connection.scalar(text("SELECT coalesce(max(revision), 0) FROM ai_spend_settings"))
+    connection.execute(
+        insert(AiSpendSettings).values(
+            id=uuid4(),
+            revision=int(revision) + 1,
+            config=policy.validate("development", config),
+            reason="test",
+            created_by_person_id=None,
+            created_at=datetime.now(UTC),
+        )
+    )
+
+
+async def _stale(database: Any, session_id: Any, now: Any) -> bool:
+    return False
+
+
+async def _fresh(database: Any, session_id: Any, now: Any) -> bool:
+    return True
+
+
 def test_admin_switches_the_pipeline_and_reads_the_comparison(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -129,9 +156,10 @@ def test_admin_switches_the_pipeline_and_reads_the_comparison(
                 view = (await http.get(ADMIN)).json()
                 assert view["environment"] == "development"
                 assert view["revision"] is None and view["config"]["mode"] == "classic"
-                reasons = {m["value"]: m["why_not"] for m in view["modes"]}
-                assert reasons["classic"] is None and reasons["both"] is None
-                assert reasons["one_pass"]
+                modes = {m["value"]: m for m in view["modes"]}
+                assert modes["classic"]["why_not"] is None and modes["both"]["why_not"] is None
+                assert modes["one_pass"]["why_not"] is None and modes["one_pass"]["needs_owner"]
+                assert view["confirm"] == "one_pass"
                 assert (await http.get(ADMIN, params={"x": "1"})).status_code == 422
 
                 saved = await http.put(
@@ -153,13 +181,47 @@ def test_admin_switches_the_pipeline_and_reads_the_comparison(
                     headers=WRITE,
                 )
                 assert stale.status_code == 409
-                refused = await http.put(
+                # Showing people one-pass results is the owner's action.
+                monkeypatch.setattr(admin_http, "session_is_fresh", _fresh)
+                owner = {
+                    "expected_revision": 1,
+                    "config": {"mode": "one_pass"},
+                    "reason": OWNER_WORDS,
+                    "confirm": "one_pass",
+                }
+                for change, status, words in (
+                    ({"confirm": None}, 422, "Type one_pass"),
+                    ({"confirm": "yes"}, 422, "Type one_pass"),
+                    ({"reason": "ok"}, 422, "owner's words"),
+                    ({}, 422, "in AI spend first"),
+                ):
+                    refused = await http.put(
+                        f"{ADMIN}/settings", json={**owner, **change}, headers=WRITE
+                    )
+                    assert refused.status_code == status, refused.text
+                    assert words in refused.json()["detail"]
+                async with setup.sessions() as db, db.begin():
+                    await db.run_sync(lambda sync: _spend(sync.connection(), cap=300))
+                monkeypatch.setattr(admin_http, "session_is_fresh", _stale)
+                stale = await http.put(f"{ADMIN}/settings", json=owner, headers=WRITE)
+                assert stale.status_code == 403 and "Sign in again" in stale.json()["detail"]
+                monkeypatch.setattr(admin_http, "session_is_fresh", _fresh)
+                switched = await http.put(f"{ADMIN}/settings", json=owner, headers=WRITE)
+                assert switched.status_code == 200, switched.text
+                assert switched.json()["config"]["mode"] == "one_pass"
+                # Back to today's pipeline: one click, no confirm.
+                back = await http.put(
                     f"{ADMIN}/settings",
-                    json={"expected_revision": 1, "config": {"mode": "one_pass"}},
+                    json={"expected_revision": 2, "config": {"mode": "classic"}},
                     headers=WRITE,
                 )
-                assert refused.status_code == 422
-                assert "comparison" in refused.json()["detail"]
+                assert back.status_code == 200 and back.json()["config"]["mode"] == "classic"
+                both = await http.put(
+                    f"{ADMIN}/settings",
+                    json={"expected_revision": 3, "config": {"mode": "both"}},
+                    headers=WRITE,
+                )
+                assert both.status_code == 200
 
                 empty = (await http.get(f"{ADMIN}/compare")).json()
                 assert empty["schema"] == "one-pass-compare/1" and empty["items"] == []
@@ -181,7 +243,7 @@ def test_admin_switches_the_pipeline_and_reads_the_comparison(
                 assert (await http.get(f"{ADMIN}/compare/fx-99")).status_code == 404
                 assert (await http.get(f"{ADMIN}/compare/{uuid4()}")).status_code == 404
                 assert (await http.get(f"{ADMIN}/compare/nonsense")).status_code == 404
-                recent = (await http.get(ADMIN)).json()["recent"]
+                recent = (await http.get(ADMIN)).json()["recent"]  # numbers only
                 assert recent[0]["subject"] == "fx-01" and recent[0]["contracts_ok"] == 6
             async with setup.sessions() as db:
                 audited = (
@@ -191,9 +253,19 @@ def test_admin_switches_the_pipeline_and_reads_the_comparison(
                         )
                     )
                 ).all()
-            assert [action for action, _ in audited] == ["analysis_pipeline.settings_saved"]
+            assert [action for action, _ in audited] == [
+                "analysis_pipeline.settings_saved",
+                "analysis_pipeline.one_pass_switched_on",
+                "analysis_pipeline.settings_saved",
+                "analysis_pipeline.settings_saved",
+            ]
             assert audited[0][1]["old"]["mode"] == "classic"
             assert audited[0][1]["new"]["mode"] == "both"
+            switched_on = audited[1][1]
+            assert switched_on["new"]["mode"] == "one_pass" and switched_on["confirm"] == "one_pass"
+            assert switched_on["reason"] == OWNER_WORDS
+            assert switched_on["environment"] == "development"
+            assert audited[2][1]["new"]["mode"] == "classic"
         finally:
             await setup.engine.dispose()
 

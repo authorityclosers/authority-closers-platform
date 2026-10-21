@@ -272,6 +272,28 @@ def _withheld(connection: Any, recording_id: UUID, revision: str) -> set[str]:
     return {str(row["segment_id"]) for row in rows if row["action"] == "mark"}
 
 
+def _one_pass_waiting(connection: Any, environment: str, reports: list[dict[str, Any]]) -> set[Any]:
+    """Recordings whose review one pass is about to publish (one_pass.publish)."""
+    from ac_platform.one_pass import publish
+
+    handoff = publish.handoff(connection, environment)
+    if handoff is None:
+        return set()
+    now = datetime.now(UTC)
+    return {
+        report["recording_id"]
+        for report in reports
+        if report["transcript_revision"]
+        and handoff.waits(
+            connection,
+            report["recording_id"],
+            str(report["transcript_revision"]),
+            kind="review",
+            now=now,
+        )
+    }
+
+
 class _ProviderFailure(RuntimeError):
     def __init__(self, outcome: str, usage: dict[str, Any] | None = None) -> None:
         super().__init__(outcome)
@@ -521,6 +543,18 @@ async def _inner_async(
                 if sandbox:
                     reports = [r for r in reports if r["tenant_id"] not in skipped_tenants]
                     print(json.dumps({"sandbox_reports_skipped": len(sandbox)}))
+                if automatic and reports and spend_environment is not None:
+                    # When the environment publishes one-pass results, a report is left
+                    # to one pass only while it works on that call (Handoff).
+                    async with sessions() as session:
+                        waiting = await session.run_sync(
+                            lambda sync: _one_pass_waiting(
+                                sync.connection(), spend_environment, reports
+                            )
+                        )
+                    if waiting:
+                        reports = [r for r in reports if r["recording_id"] not in waiting]
+                        print(json.dumps({"left_to_one_pass": len(waiting)}))
                 dispatched = 0
                 for report in reports:
                     if dispatched >= arguments.limit:

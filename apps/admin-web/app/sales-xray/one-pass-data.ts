@@ -8,7 +8,13 @@
  */
 import { read } from "../lib/read";
 
-export type Choice = { value: string; label: string; whyNot: string | null };
+export type Choice = {
+  value: string;
+  label: string;
+  whyNot: string | null;
+  /** The owner's action: type the confirm word and give the reason. */
+  needsOwner: boolean;
+};
 
 export type PipelineSettings = {
   environment: string;
@@ -20,6 +26,8 @@ export type PipelineSettings = {
   config: Record<string, unknown>;
   modes: Choice[];
   tiers: Choice[];
+  /** What the owner types to show people one-pass results. */
+  confirm: string;
   models: { transcription: string; analysis: string };
   history: {
     revision: number;
@@ -47,6 +55,7 @@ const choices = (raw: unknown): Choice[] =>
       value: read.string(row.value),
       label: read.string(row.label, read.string(row.value)),
       whyNot: read.optionalString(row.why_not),
+      needsOwner: row.needs_owner === true,
     };
   });
 
@@ -64,6 +73,7 @@ export function normalizePipeline(raw: unknown): PipelineSettings {
     config,
     modes: choices(body.modes),
     tiers: choices(body.tiers),
+    confirm: read.string(body.confirm, "one_pass"),
     models: {
       transcription: read.string(models.transcription),
       analysis: read.string(models.analysis),

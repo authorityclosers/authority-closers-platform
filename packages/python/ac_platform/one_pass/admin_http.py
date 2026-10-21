@@ -2,7 +2,9 @@
 (Admin host, operations control accounts only).
 
 - GET /v1/admin/analysis-pipeline                    the switch, its history, recent runs
-- PUT /v1/admin/analysis-pipeline/settings           classic | both (one_pass not yet)
+- PUT /v1/admin/analysis-pipeline/settings           classic | both (development) |
+                                                      one_pass (the owner's action: typed
+                                                      confirm, reason, fresh sign-in)
 - GET /v1/admin/analysis-pipeline/compare            every compared call and the summary
                                                       (numbers only)
 - GET /v1/admin/analysis-pipeline/compare/{subject}  one call side by side (a recording id
@@ -10,6 +12,11 @@
                                                       one_pass.admin_view for a real call
 
 Settings are append-only revisions, every save audited with old, new and the reason.
+Switching to ``one_pass`` (people see one-pass results) is the owner's action (owner, 21
+Oct 2026: "So at least get this on prod now!!!"): a control account signed in within the
+last ten minutes types ``one_pass`` and gives the reason in the owner's words, and the
+environment's one-pass spend cap must be above ₹0; it is audited as
+``analysis_pipeline.one_pass_switched_on``. Back to ``classic`` is one click, at once.
 Rupees are list-price estimates for Admin only, never shown to a person.
 """
 
@@ -24,6 +31,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Respons
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
+from ac_platform.ai_spend.policy import environment_name
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -36,6 +44,7 @@ from ac_platform.http.auth import (
     require_safe_origin,
 )
 from ac_platform.http.routes import RouteContext
+from ac_platform.identity.sign_in_methods import session_is_fresh
 from ac_platform.kernel.errors import DomainError
 from ac_platform.one_pass import compare
 from ac_platform.one_pass import settings as choices
@@ -49,6 +58,22 @@ class SettingsCommand(BaseModel):
     expected_revision: int | None
     config: dict[str, Any]
     reason: str | None = Field(default=None, max_length=200)
+    confirm: str | None = Field(default=None, max_length=32)
+
+
+MIN_OWNER_REASON = 10
+
+
+def _spend_ready(connection: Any, environment: str) -> str | None:
+    """Why the AI spend guard would stop every one-pass read here, or None."""
+    from ac_platform.ai_spend import guard as spend_guard
+
+    config, _ = spend_guard.read_settings(connection, environment)
+    if not config["background_enabled"]:
+        return "Background AI is off here: switch it on in AI spend first."
+    if int(config["feature_caps_inr"].get("one_pass", 0)) <= 0:
+        return "The one-pass cap is Rs 0 here: raise it in AI spend first."
+    return None
 
 
 def _recent(connection: Any) -> list[dict[str, Any]]:
@@ -141,12 +166,27 @@ def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None
         except DomainError:
             raise HTTPException(403, "Use this Admin page to continue.") from None
         actor = await admit(request, response, auth)
+        mode = str(command.config.get("mode") or "")
+        reason = (command.reason or "").strip()
+        owner_action = False
+        if choices.needs_owner(mode):
+            owner_action = True
+            if command.confirm != choices.CONFIRM:
+                raise HTTPException(422, f"Type {choices.CONFIRM} to confirm.")
+            if len(reason) < MIN_OWNER_REASON:
+                raise HTTPException(422, "Give the reason, in the owner's words.")
+            if not await session_is_fresh(auth.database, actor.session_id, datetime.now(UTC)):
+                raise HTTPException(403, "Sign in again (within ten minutes) to switch this.")
 
         def write(session: Any) -> tuple[dict[str, Any], dict[str, Any], int]:
             connection = session.connection()
             before, current = choices.read(connection, environment)
             if current != command.expected_revision:
                 raise HTTPException(409, "Someone changed these settings. Refresh and try again.")
+            if owner_action and before["mode"] != mode:
+                blocked = _spend_ready(connection, environment)
+                if blocked is not None:
+                    raise HTTPException(422, blocked)
             revision = choices.save(
                 connection,
                 environment,
@@ -164,15 +204,32 @@ def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None
             message = (
                 choices.why_not(environment, str(command.config.get("mode")))
                 if error.code == "mode_not_here"
+                else "Staging and production run the standard tier for now (Flex after a"
+                " latency check)."
+                if error.code.endswith("_standard_only")
                 else None
             )
             raise HTTPException(422, message or f"Check the settings ({error.code}).") from None
+        switched_on = after["mode"] == "one_pass" and before["mode"] != "one_pass"
+        payload: dict[str, Any] = {
+            "revision": revision,
+            "old": before,
+            "new": after,
+            "reason": command.reason,
+        }
+        if switched_on:
+            payload["confirm"] = command.confirm
+            payload["environment"] = environment_name(environment)
         await AuditRepository(auth.database).append_for_actor(
             actor,
-            action="analysis_pipeline.settings_saved",
+            action=(
+                "analysis_pipeline.one_pass_switched_on"
+                if switched_on
+                else "analysis_pipeline.settings_saved"
+            ),
             resource_type="analysis_pipeline_settings",
             resource_id=str(revision),
-            payload={"revision": revision, "old": before, "new": after, "reason": command.reason},
+            payload=payload,
         )
         return await view(auth)
 

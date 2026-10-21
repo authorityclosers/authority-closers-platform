@@ -41,7 +41,7 @@ FEATURES: Final[dict[str, str]] = {
     "call_data_deep": "Call data: deep pipeline",
     "lead_desk_ai": "AI replies to leads",
     "partner_quote_facts": "Partner quote facts",
-    "one_pass": "One-pass trial (Google, beside today's pipeline)",
+    "one_pass": "One pass (Google): deep call data and pointer review in one read",
 }
 # Customer call analysis has its own budget (Execution & budget); never capped here.
 ANALYSIS: Final[frozenset[str]] = frozenset({"call_transcription", "call_facts", "call_report"})

@@ -124,7 +124,12 @@ def test_both_reads_the_call_beside_todays_pipeline_and_counts_its_spend(
     lines = _pass(postgres_harness, seeded, model)
     assert lines and lines[0]["outcome"] == "succeeded", lines
     assert lines[0]["contracts_ok"] == 6
-    assert [m for m, _ in model.calls] == [choices.TRANSCRIPTION_MODEL, choices.ANALYSIS_MODEL]
+    # The transcript, then the facts and report requests at once.
+    assert [m for m, _ in model.calls] == [
+        choices.TRANSCRIPTION_MODEL,
+        choices.ANALYSIS_MODEL,
+        choices.ANALYSIS_MODEL,
+    ]
     with postgres_harness.connect() as connection:
         runs = connection.execute(
             select(OnePassRun.__table__)
@@ -136,7 +141,8 @@ def test_both_reads_the_call_beside_todays_pipeline_and_counts_its_spend(
         assert done.source == "call" and done.mode == "both" and done.trigger == "operator"
         assert done.transcription_cost_inr > 0 and done.analysis_cost_inr > 0
         assert done.cost_inr == done.transcription_cost_inr + done.analysis_cost_inr
-        assert done.analysis_cached_tokens == 4_000
+        assert done.analysis_cached_tokens == 8_000  # both requests
+        assert set(done.usage["analysis"]["requests"]) == {"facts", "report"}
         assert done.transcript["segments"][1]["text"] == SEGMENTS[1]["text"]
         assert set(done.outputs) >= {"c4", "c5", "pointer_review", "call_objects", "prospect_facts"}
         # Spend: one ledger line per stage, under the trial's own feature and cap.

@@ -1,46 +1,122 @@
 #!/bin/bash
-# Sales Xray one-pass trial (owner, 21 Oct 2026): when Admin -> Providers sets this
-# environment's analysis pipeline to "both", every NEW call that today's pipeline
-# transcribed is also read the Google-only way (Gemini 3.1 Flash-Lite transcription,
-# one Gemini 3.8 Flash pass), side by side; people keep seeing today's results.
+# Sales Xray one-pass runner (owner, 21 Oct 2026). It does what Admin -> One-pass sets
+# for this environment's analysis pipeline:
+#   classic   nothing (it idles);
+#   one_pass  each NEW call's deep call data and pointer review come from one strict
+#             Gemini 3.8 Flash read of today's saved transcript, saved into today's
+#             stores; today's deep pipeline and pointer review take any call it does
+#             not finish (the owner's action: "So at least get this on prod now!!!");
+#   both      development only: the Google-only read beside today's, compared.
 # Long-running (systemd restarts it); one runner per database (advisory lock).
 #
-# Development only: staging and production stay on today's pipeline until the owner
-# decides, so this wrapper refuses them. Never backfills: the first start records a
-# moment once (/var/lib/ac-one-pass/<env>.since) and only transcripts saved after it
-# (and in the last two hours) are read. Spend: Admin -> AI spend -> One-pass trial cap
-# (Rs 0 until raised; raising it is the approval). Docs:
-# docs/architecture/ONE_PASS_ANALYSIS.md
+# Never backfills: the first start records a moment once
+# (/var/lib/ac-one-pass/<env>.since) and only transcripts saved after it (and in the
+# last two hours) are read. Spend: Admin -> AI spend -> One pass cap (Rs 0 until
+# raised; raising it is the approval). Docs: docs/architecture/ONE_PASS_ANALYSIS.md
 #
-#   ac-one-pass development-live
+#   ac-one-pass development-live | staging | production
+#   ac-one-pass stop staging | production   (systemd ExecStop)
+#
+# On staging and production the runner lives inside the worker container (as the call
+# data engine does), and stopping `docker exec` leaves it running there, holding the
+# lock. So every start first stops a looping runner left in the container, and
+# ExecStop stops it too.
 set -euo pipefail
 
 module=ac_platform.one_pass.runner
 state=${ONE_PASS_STATE:-/var/lib/ac-one-pass}
 
-env_name=${1:?usage: ac-one-pass development-live}
-if [[ $env_name != development-live ]]; then
-  echo "the one-pass trial runs on development only" >&2
-  exit 2
+# stop_container_runner <container>: SIGTERM the looping runner (and its infisical
+# parent) inside the worker and wait until none is left.
+stop_container_runner() {
+  docker exec -i "$1" python - <<'PY'
+import os
+import signal
+import time
+
+
+def runners():
+    found = []
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            parts = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+        except OSError:
+            continue
+        if b"ac_platform.one_pass.runner" in parts and b"--loop" in parts:
+            found.append(int(pid))
+    return found
+
+
+before = runners()
+for pid in before:
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+for _ in range(60):
+    if not runners():
+        break
+    time.sleep(1)
+left = runners()
+if before or left:
+    print(f'{{"runner_left_in_container": {len(before)}, "still_running": {len(left)}}}')
+raise SystemExit(1 if left else 0)
+PY
+}
+
+if [[ ${1:-} == stop ]]; then
+  case "${2:-}" in
+    staging | production) stop_container_runner "ac-application-$2-sales-xray-worker-1" || true ;;
+  esac
+  exit 0
 fi
+
+env_name=${1:?usage: ac-one-pass development-live|staging|production}
+case "$env_name" in
+  development-live | staging | production) ;;
+  *)
+    echo "unknown environment: $env_name" >&2
+    exit 2
+    ;;
+esac
 install -d -m 700 "$state"
 
 since_file=$state/$env_name.since
 [ -s "$since_file" ] || date -u +%Y-%m-%dT%H:%M:%S+00:00 > "$since_file"
 since=$(cat "$since_file")
+common=(--not-before "$since" --recent-hours 2 --loop --apply)
 
-slot=$(cat /var/lib/ac-dev-live-backend/active-slot)
-python=/srv/authority-closers/development/live-backend/$slot/.venv/bin/python
-cd /tmp
-if ! env -i PATH=/usr/bin:/bin "$python" -c "import $module" 2>/dev/null; then
-  echo "one-pass runner is not in this release yet"
-  sleep 300
-  exit 0
-fi
-exec env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 PYTHONUNBUFFERED=1 \
-  "$python" -m "$module" \
-  --service-config /etc/authority-closers/development/service-live.json \
-  --database-url-file /etc/authority-closers/development/database-url-live \
-  --token-file /etc/authority-closers/development/identities/gemini/token \
-  --infisical /usr/local/bin/infisical \
-  --not-before "$since" --recent-hours 2 --loop --apply
+case "$env_name" in
+  development-live)
+    slot=$(cat /var/lib/ac-dev-live-backend/active-slot)
+    python=/srv/authority-closers/development/live-backend/$slot/.venv/bin/python
+    cd /tmp
+    if ! env -i PATH=/usr/bin:/bin "$python" -c "import $module" 2>/dev/null; then
+      echo "one-pass runner is not in this release yet"
+      sleep 300
+      exit 0
+    fi
+    exec env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8 PYTHONUNBUFFERED=1 \
+      "$python" -m "$module" \
+      --service-config /etc/authority-closers/development/service-live.json \
+      --database-url-file /etc/authority-closers/development/database-url-live \
+      --token-file /etc/authority-closers/development/identities/gemini/token \
+      --infisical /usr/local/bin/infisical \
+      "${common[@]}"
+    ;;
+  staging | production)
+    container=ac-application-$env_name-sales-xray-worker-1
+    if ! docker exec "$container" python -c "import $module" 2>/dev/null; then
+      echo "one-pass runner is not in this release yet"
+      sleep 300
+      exit 0
+    fi
+    stop_container_runner "$container"
+    exec docker exec "$container" python -m "$module" \
+      --service-config /run/ac-sales-xray/service.json \
+      --database-url-file /run/ac-sales-xray/database-url \
+      "${common[@]}"
+    ;;
+esac
