@@ -46,12 +46,62 @@ def test_scores_move_by_each_pointers_measured_lean_and_the_overall_follows() ->
         "label": "beta",
         "basis": "one_pass_c4",
     }
-    # Statuses and the input are untouched; a calibrated review is never shifted twice.
+    # Scored statuses follow the calibrated score; the input is untouched; a calibrated
+    # review is never shifted twice.
     assert [p["status"] for p in calibrated["pointers"]] == [
-        p["status"] for p in review["pointers"]
+        "good",  # 83
+        "needs_improvement",  # 49, was average
+        "not_observed",
+        "needs_improvement",  # 0
+    ]
+    assert [p["status"] for p in review["pointers"]] == [
+        "good",
+        "average",
+        "not_observed",
+        "good",
     ]
     assert review["pointers"][0]["score"] == 90 and "calibration" not in review
     assert calibration.calibrate(calibrated) == calibrated
+
+
+def test_a_scored_status_follows_its_calibrated_score_and_an_unscored_one_stays() -> None:
+    review = _review()
+    review["pointers"] = [
+        {"id": "next_steps", "status": "excellent", "score": 96},  # 89: good
+        {"id": "decision_process", "status": "good", "score": 72},  # 65: average
+        {"id": "business_impact", "status": "average", "score": 55},  # 48: needs_improvement
+        {"id": "stakeholders", "status": "good", "score": 80},  # 78: still good
+        {"id": "tone_energy", "status": "not_observed", "score": None},
+        {"id": "handling_competition", "status": "not_applicable", "score": None},
+        {"id": "handling_silence", "status": "insufficient_evidence", "score": None},
+    ]
+    calibrated = calibration.calibrate(review)
+    statuses = {p["id"]: (p["status"], p["score"]) for p in calibrated["pointers"]}
+    assert statuses == {
+        "next_steps": ("good", 89),
+        "decision_process": ("average", 65),
+        "business_impact": ("needs_improvement", 48),
+        "stakeholders": ("good", 78),
+        "tone_energy": ("not_observed", None),
+        "handling_competition": ("not_applicable", None),
+        "handling_silence": ("insufficient_evidence", None),
+    }
+    # No row contradicts its score, as parse_review promises.
+    for pointer in calibrated["pointers"]:
+        if pointer["score"] is not None:
+            assert pointer["status"] == pointer_review.band(pointer["score"])
+    # The Report's rating comes from the status, so it matches the calibrated score.
+    structure: dict = {
+        "overview": {},
+        "pointers": [{"id": p["id"]} for p in review["pointers"]],
+    }
+    for pointer in review["pointers"]:
+        pointer.update(what_happened=None, why_it_matters=None, evidence=[], how_to_improve=[])
+    merged = pointer_review.merge_into_structure(structure, calibration.calibrate(review))
+    ratings = {p["id"]: (p["rating"], p["score"]) for p in merged["pointers"]}
+    assert ratings["decision_process"] == ("Average", 65)
+    assert ratings["next_steps"] == ("Good", 89)
+    assert ratings["tone_energy"] == (None, None)
 
 
 def test_every_pointer_has_its_fitted_lean() -> None:

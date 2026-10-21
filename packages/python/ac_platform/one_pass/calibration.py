@@ -11,9 +11,11 @@ the per-call disagreement stays (overall mean absolute difference 5.7 -> 5.5, pe
 7.3 -> 7.1). It removes the bias, not the noise between two AI reads, so the scores are
 shown as a beta: an AI draft, never an official score (AC-SVAL gates).
 
-Pointer statuses, evidence and words are unchanged; only scores move, and the overall is
-the mean of the calibrated scores, as the review computes it. Versioned: the saved review
-names its calibration, so a later version never rewrites an earlier one.
+Evidence and words are unchanged. Scores move, and each scored pointer's status is banded
+again from its calibrated score (the review's own rule: a row never contradicts its
+score); not_observed, not_applicable and insufficient_evidence stay as they are. The
+overall is the mean of the calibrated scores, as the review computes it. Versioned: the
+saved review names its calibration, so a later version never rewrites an earlier one.
 """
 
 from __future__ import annotations
@@ -60,7 +62,7 @@ OFFSETS: Final[dict[str, float]] = {
 def calibrate(review: Mapping[str, Any]) -> dict[str, Any]:
     """A parsed pointer review (``pointer_review.parse_review``) with calibrated scores and
     its calibration named; a review already calibrated is returned as it is."""
-    from ac_platform.conversation_intelligence.pointer_review import BAND_LABEL, band
+    from ac_platform.conversation_intelligence.pointer_review import BAND_LABEL, SCORED, band
 
     result = copy.deepcopy(dict(review))
     if isinstance(result.get("calibration"), Mapping):
@@ -73,6 +75,9 @@ def calibrate(review: Mapping[str, Any]) -> dict[str, Any]:
         offset = OFFSETS.get(str(pointer.get("id")), GLOBAL_OFFSET)
         pointer["score"] = max(0, min(100, round(score - offset)))
         scores.append(pointer["score"])
+        if pointer.get("status") in SCORED:
+            # The Report rates a row by its status (merge_into_structure): band it again.
+            pointer["status"] = band(pointer["score"])
     overall = dict(result.get("overall") or {})
     if overall.get("score") is not None:
         value = round(sum(scores) / len(scores)) if scores else None
