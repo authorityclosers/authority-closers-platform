@@ -100,6 +100,33 @@ one (`one_pass/c2_route.py`, the exact rule; `scripts/ops/one_pass_c2_seal.py`, 
    plans already running keep their frozen route.
 4. *Fallback, one click:* **Back to Scribe** activates the classic revision again.
 
+## Slice 3 (v0.73): Gemini Flex as its own approved routes
+
+The ₹0.28/min the owner saw is mostly Flex: the same models at half price, best effort.
+A Flex route is a model id with the `:flex` suffix (`gemini-3.1-flash-lite:flex` for C2,
+`gemini-3.8-flash:flex` for C4 and C5; `conversation_intelligence/gemini_tiers.py`): same
+model, same prompt, same answer contract, the request only adds `service_tier: flex`.
+
+- **Fallback.** A Flex request waits at most five minutes; a busy (429/5xx), lost or
+  too-slow answer goes once more on standard, billed at standard. Receipts record
+  `serviceTierFlex` and `flexFellBack`. The broker's limit for one provider call is now
+  540 s (was 180 s; other routes still end at 180 s in the transport) and the worker's
+  600 s.
+- **Approval.** A second profile, `gemini-flash-lite-c2-flex`, for the Flex configuration
+  (C2, C4 and C5 on Flex) beside `gemini-flash-lite-c2` and every classic route:
+  `python scripts/ops/one_pass_c2_seal.py --flex ...` (same inputs, the Flex configuration
+  from Admin → Prepare → Flex). Each Flex route keeps its standard per-request ceiling
+  (a fallback is billed at standard). Pricing evidence
+  `docs/ops/pricing-evidence/gemini-flex-20261021.md` (half of every rate).
+- **Switch.** Admin → One pass → Transcription: "Gemini Flex" → Prepare → (Root seals) →
+  Switch, the owner's typed confirm and reason (audited, `flex: true`). From Flex back to
+  standard, or back to Scribe, is one click.
+- **Pointer review.** The background review follows the same switch: when the active
+  configuration runs on Flex, it asks for Flex (same five-minute window and fallback).
+- **Cost** (14-minute call, list price, today's production stages): ≈ ₹0.64/min standard
+  → ≈ ₹0.33/min on Flex. Measured on 16 real calls on development: no Flex request fell
+  back; transcription 54 s median, analysis requests 33–131 s.
+
 ## A good first production analysis (after the C2 switch)
 
 Read-only checks, on the first real call after the switch:

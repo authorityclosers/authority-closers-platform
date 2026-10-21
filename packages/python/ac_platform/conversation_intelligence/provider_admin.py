@@ -40,9 +40,10 @@ from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership
 
-# Switching C2 transcription to Gemini audio is the owner's action (owner, 21 Oct 2026:
-# "So at least get this on prod now!!!"): typed confirm, the reason in the owner's words,
-# a sign-in within ten minutes; it is audited. Switching back stays one click.
+# Switching C2 transcription to Gemini audio, or any route to Gemini Flex, is the owner's
+# action (owner, 21 Oct 2026: "So at least get this on prod now!!!"): typed confirm, the
+# reason in the owner's words, a sign-in within ten minutes; it is audited. Switching back
+# stays one click.
 OWNER_CONFIRM_WORD = "one_pass"
 MIN_OWNER_REASON = 10
 GEMINI_TRANSCRIPTION_ON = "conversation.providers.gemini_transcription_on"
@@ -399,6 +400,17 @@ class ConversationProviderAdmin:
         route = next((item for item in config.routes if item.task == "asr"), None)
         return None if route is None else route.provider_id
 
+    @staticmethod
+    def _uses_flex(row: ConversationProviderConfiguration | None) -> bool:
+        """Whether any route of this configuration runs on Gemini Flex (gemini_tiers)."""
+        if row is None:
+            return False
+        try:
+            config = parse_registry_config(row.configuration)
+        except (ProviderRegistryError, TypeError, ValueError):
+            return False
+        return any(route.model_id.endswith(":flex") for route in config.routes)
+
     async def _owner_gate(
         self,
         actor: ActorContext,
@@ -412,7 +424,9 @@ class ConversationProviderAdmin:
         from ac_platform.identity.sign_in_methods import session_is_fresh
 
         assert actor.tenant_id is not None
-        if self._transcription_provider(target) != "gemini":
+        to_gemini = self._transcription_provider(target) == "gemini"
+        to_flex = self._uses_flex(target)
+        if not to_gemini and not to_flex:
             return False
         active = await self._active(actor.tenant_id)
         current = (
@@ -420,7 +434,9 @@ class ConversationProviderAdmin:
             if active is None
             else await self.database.get(ConversationProviderConfiguration, active.configuration_id)
         )
-        if self._transcription_provider(current) == "gemini":
+        if (not to_gemini or self._transcription_provider(current) == "gemini") and (
+            not to_flex or self._uses_flex(current)
+        ):
             return False
         if confirm != OWNER_CONFIRM_WORD:
             raise ConversationDenied(
@@ -535,6 +551,7 @@ class ConversationProviderAdmin:
                 payload={
                     **payload,
                     "transcription": "gemini",
+                    "flex": self._uses_flex(target),
                     "confirm": confirm,
                     "reason": (reason or "").strip()[:200],
                     "environment": bundle.environment,

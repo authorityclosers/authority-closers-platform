@@ -20,9 +20,10 @@ fallback. Pure: no I/O. ``scripts/ops/one_pass_c2_seal.py`` runs it on the host'
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 from typing import Any, Final
 
-from ac_platform.conversation_intelligence import gemini_audio
+from ac_platform.conversation_intelligence import gemini_audio, gemini_tiers
 from ac_platform.conversation_intelligence.activation_contract import (
     AcquisitionProviderPolicy,
     AcquisitionProviderProfile,
@@ -37,6 +38,9 @@ from ac_platform.conversation_intelligence.provider_registry import (
 )
 
 PROFILE_ID: Final = "gemini-flash-lite-c2"
+# Flash-Lite C2 and Gemini 3.8 Flash C4/C5 on Flex (gemini_tiers), a second finite profile.
+FLEX_PROFILE_ID: Final = "gemini-flash-lite-c2-flex"
+TEXT_MODEL: Final = "gemini-3.8-flash"
 PROVIDER: Final = "gemini"
 MODEL: Final = gemini_audio.MODEL
 ENDPOINT: Final = gemini_audio.URL.format(model=MODEL)
@@ -62,51 +66,80 @@ def _gemini_entry(config: RegistryConfig) -> ProviderConfig:
     return entries[0]
 
 
-def derive_configuration(config: RegistryConfig) -> RegistryConfig:
-    """Today's configuration with the asr route on Gemini 3.1 Flash-Lite."""
+def _entry(gemini: ProviderConfig, model: str, max_cost_paise: int | None) -> ProviderConfig:
+    endpoint = gemini_audio.URL.format(model=gemini_tiers.base_model(model))
+    return ProviderConfig(
+        provider_id=PROVIDER,
+        model_id=model,
+        endpoint=endpoint,
+        endpoint_sha256=hashlib.sha256(endpoint.encode()).hexdigest(),
+        credential_ref=gemini.credential_ref,
+        provider_terms_ref=gemini.provider_terms_ref,
+        privacy_ref=gemini.privacy_ref,
+        pricing_ref=PRICING_SNAPSHOTS[(PROVIDER, model)].pricing_ref,
+        free_allowance_ref=None,
+        permission_ref=gemini.permission_ref,
+        endpoint_approval_ref=gemini.endpoint_approval_ref,
+        local_endpoint_approval_ref=gemini.local_endpoint_approval_ref,
+        max_cost_paise=max_cost_paise,
+    )
+
+
+def derive_configuration(config: RegistryConfig, *, flex: bool = False) -> RegistryConfig:
+    """Today's (Scribe) configuration with the asr route on Gemini 3.1 Flash-Lite; with
+    ``flex``, Flash-Lite and the Gemini 3.8 Flash C4/C5 routes on their Flex routes
+    (gemini_tiers), each keeping its standard per-request ceiling (a fallback is billed at
+    standard)."""
     asr = next((route for route in config.routes if route.task == "asr"), None)
     if asr is None:
         raise SealError("configuration_has_no_asr_route")
     if asr.provider_id == PROVIDER:
         raise SealError("configuration_already_transcribes_on_gemini")
     gemini = _gemini_entry(config)
-    entry = ProviderConfig(
-        provider_id=PROVIDER,
-        model_id=MODEL,
-        endpoint=ENDPOINT,
-        endpoint_sha256=hashlib.sha256(ENDPOINT.encode()).hexdigest(),
-        credential_ref=gemini.credential_ref,
-        provider_terms_ref=gemini.provider_terms_ref,
-        privacy_ref=gemini.privacy_ref,
-        pricing_ref=PRICING_SNAPSHOTS[(PROVIDER, MODEL)].pricing_ref,
-        free_allowance_ref=None,
-        permission_ref=gemini.permission_ref,
-        endpoint_approval_ref=gemini.endpoint_approval_ref,
-        local_endpoint_approval_ref=gemini.local_endpoint_approval_ref,
-        max_cost_paise=MAX_COST_PAISE,
-    )
+    transcription_model = gemini_tiers.flex(MODEL) if flex else MODEL
+    entries = [_entry(gemini, transcription_model, MAX_COST_PAISE)]
+    text_models: dict[str, str] = {}
+    if flex:
+        for item in config.providers:
+            if (item.provider_id, item.model_id) == (PROVIDER, TEXT_MODEL):
+                text_models[TEXT_MODEL] = gemini_tiers.flex(TEXT_MODEL)
+                entries.append(_entry(item, gemini_tiers.flex(TEXT_MODEL), item.max_cost_paise))
+    added = {entry.model_id for entry in entries}
     providers = tuple(
-        item for item in config.providers if (item.provider_id, item.model_id) != (PROVIDER, MODEL)
-    ) + (entry,)
+        item
+        for item in config.providers
+        if not (item.provider_id == PROVIDER and item.model_id in added)
+    ) + tuple(entries)
     route = RouteConfig(
         task="asr",
         provider_id=PROVIDER,
-        model_id=MODEL,
+        model_id=transcription_model,
         recipe_revision=gemini_audio.RECIPE,
         profile_revision=asr.profile_revision,
         prompt_revision=gemini_audio.PROMPT_REVISION,
         required_input_stage=asr.required_input_stage,
         reuses_checkpoint_stage=asr.reuses_checkpoint_stage,
     )
-    routes = tuple(route if item.task == "asr" else item for item in config.routes)
-    revision = f"{config.revision}-gemini-c2"[:128]
+    routes = tuple(
+        route
+        if item.task == "asr"
+        else replace(item, model_id=text_models[item.model_id])
+        if item.provider_id == PROVIDER and item.model_id in text_models
+        else item
+        for item in config.routes
+    )
+    revision = f"{config.revision}-gemini-c2{'-flex' if flex else ''}"[:128]
     return RegistryConfig(
         revision=revision, policy=config.policy, providers=providers, routes=routes
     )
 
 
 def _profile(
-    policy: AcquisitionProviderPolicy, classic_sha256: str, new: RegistryConfig
+    policy: AcquisitionProviderPolicy,
+    classic_sha256: str,
+    new: RegistryConfig,
+    *,
+    flex: bool = False,
 ) -> AcquisitionProviderProfile:
     stage_set = next(
         (
@@ -119,18 +152,21 @@ def _profile(
     if stage_set is None:
         raise SealError("policy_does_not_approve_the_classic_configuration")
     c2, c4, c5 = stage_set
+    transcription_model = gemini_tiers.flex(MODEL) if flex else MODEL
     entry = next(
-        item for item in new.providers if (item.provider_id, item.model_id) == (PROVIDER, MODEL)
+        item
+        for item in new.providers
+        if (item.provider_id, item.model_id) == (PROVIDER, transcription_model)
     )
     gemini = c4 if c4.provider_id == PROVIDER else c5
     if gemini.provider_id != PROVIDER:
         raise SealError("policy_has_no_gemini_text_stage")
-    snapshot = PRICING_SNAPSHOTS[(PROVIDER, MODEL)]
+    snapshot = PRICING_SNAPSHOTS[(PROVIDER, transcription_model)]
     transcription = c2.model_copy(
         update={
             "configuration_sha256": new.digest,
             "provider_id": PROVIDER,
-            "model_id": MODEL,
+            "model_id": transcription_model,
             "recipe_revision": gemini_audio.RECIPE,
             "permission_ref": entry.permission_ref,
             "pricing_ref": snapshot.pricing_ref,
@@ -147,25 +183,44 @@ def _profile(
             "max_completion_tokens": 0,
         }
     )
-    stages = (
-        type(c2).model_validate(transcription.model_dump()),
-        c4.model_copy(update={"configuration_sha256": new.digest}),
-        c5.model_copy(update={"configuration_sha256": new.digest}),
+
+    def text(stage: Any) -> Any:
+        update: dict[str, Any] = {"configuration_sha256": new.digest}
+        if flex and (stage.provider_id, stage.model_id) == (PROVIDER, TEXT_MODEL):
+            flex_snapshot = PRICING_SNAPSHOTS[(PROVIDER, gemini_tiers.flex(TEXT_MODEL))]
+            update.update(
+                model_id=gemini_tiers.flex(TEXT_MODEL),
+                pricing_ref=flex_snapshot.pricing_ref,
+                price_evidence_sha256=flex_snapshot.evidence_sha256,
+            )
+        return type(stage).model_validate(stage.model_copy(update=update).model_dump())
+
+    stages = (type(c2).model_validate(transcription.model_dump()), text(c4), text(c5))
+    return AcquisitionProviderProfile(
+        profile_id=FLEX_PROFILE_ID if flex else PROFILE_ID, stages=stages
     )
-    return AcquisitionProviderProfile(profile_id=PROFILE_ID, stages=stages)
 
 
 def _with_profile(
-    policy: AcquisitionProviderPolicy, classic_sha256: str, new: RegistryConfig
+    policy: AcquisitionProviderPolicy,
+    classic_sha256: str,
+    new: RegistryConfig,
+    *,
+    flex: bool = False,
 ) -> AcquisitionProviderPolicy:
-    kept = tuple(item for item in policy.profiles if item.profile_id != PROFILE_ID)
-    updated = policy.model_copy(update={"profiles": (*kept, _profile(policy, classic_sha256, new))})
+    profile = _profile(policy, classic_sha256, new, flex=flex)
+    kept = tuple(item for item in policy.profiles if item.profile_id != profile.profile_id)
+    updated = policy.model_copy(update={"profiles": (*kept, profile)})
     # Strict models: revalidate through JSON, as the host loads the file.
     return AcquisitionProviderPolicy.model_validate_json(updated.model_dump_json(by_alias=True))
 
 
 def seal(
-    bundle: HostedApprovalBundle, classic: RegistryConfig, new: RegistryConfig
+    bundle: HostedApprovalBundle,
+    classic: RegistryConfig,
+    new: RegistryConfig,
+    *,
+    flex: bool = False,
 ) -> HostedApprovalBundle:
     """The bundle with every classic route kept and the Flash-Lite profile added to each
     acquisition policy. Revalidated as a whole, exactly as the host loads it."""
@@ -173,12 +228,14 @@ def seal(
         raise SealError("bundle_has_no_acquisition_policy")
     update: dict[str, Any] = {
         "organisation_acquisition_policies": tuple(
-            _with_profile(item, classic.digest, new)
+            _with_profile(item, classic.digest, new, flex=flex)
             for item in bundle.organisation_acquisition_policies
         )
     }
     if bundle.acquisition_policy is not None:
-        update["acquisition_policy"] = _with_profile(bundle.acquisition_policy, classic.digest, new)
+        update["acquisition_policy"] = _with_profile(
+            bundle.acquisition_policy, classic.digest, new, flex=flex
+        )
     sealed = load_hosted_approval_bundle(bundle.model_copy(update=update).to_json())
     for before, after in zip(
         (

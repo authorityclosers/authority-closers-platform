@@ -38,7 +38,8 @@ if TYPE_CHECKING:
     from ac_platform.conversation_intelligence.providers import ProviderResult
 
 MODEL: Final = "gemini-3.1-flash-lite"
-MODELS: Final = frozenset({MODEL})
+# The same model on Flex is its own approved route (gemini_tiers).
+MODELS: Final = frozenset({MODEL, MODEL + ":flex"})
 OPERATION: Final = "transcribe_gemini_audio"
 RECIPE: Final = "gemini-3.1-flash-lite-audio-v1"
 PROMPT_REVISION: Final = "gemini-audio-transcript/1"

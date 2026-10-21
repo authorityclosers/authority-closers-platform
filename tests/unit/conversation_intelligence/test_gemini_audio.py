@@ -14,6 +14,7 @@ import pytest
 from ac_platform.conversation_intelligence import gemini_audio
 from ac_platform.conversation_intelligence.admin_pricing import PRICING_SNAPSHOTS
 from ac_platform.conversation_intelligence.alignment import _KNOWN_TRANSCRIPT_TIMEBASES
+from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.inference import transcription_recipe_for_route
 from ac_platform.conversation_intelligence.inference_tasks import (
     prepare_scribe_input,
@@ -364,3 +365,78 @@ def test_a_failed_part_fails_the_whole_transcription(monkeypatch) -> None:
         gemini_audio.gemini_audio_transcript(
             result, duration_ms=20 * 60_000, source_sha256=result.input_sha256
         )
+
+
+def test_a_flex_route_asks_flex_and_falls_back_once_to_standard(monkeypatch) -> None:
+    """Flex is a request option on the base model: busy answers go once more on standard,
+    and the receipt says so (gemini_tiers)."""
+    from ac_platform.conversation_intelligence import gemini_tiers
+
+    monkeypatch.setattr(gemini_audio, "speech_mp3", lambda audio: SPEECH)
+    tiers: list[str | None] = []
+
+    def handler(request):
+        assert request.url == gemini_audio.URL.format(model=MODEL)  # the base model's URL
+        tier = json.loads(request.read()).get("service_tier")
+        tiers.append(tier)
+        if tier == "flex":
+            return httpx.Response(503, json={"error": {"status": "UNAVAILABLE"}})
+        return httpx.Response(200, json=_response())
+
+    g = grant(AUDIO, provider="gemini", model=MODEL + ":flex", operation=gemini_audio.OPERATION)
+    result = client(handler).transcribe(g, AUDIO)
+    assert tiers == ["flex", None]
+    assert result.model == MODEL + ":flex"
+    assert result.usage[gemini_tiers.FLEX_USAGE] == 1
+    assert result.usage[gemini_tiers.FALLBACK_USAGE] == 1
+    transcript = gemini_audio.gemini_audio_transcript(
+        result, duration_ms=60_000, source_sha256=g.quote.source.source_sha256
+    )
+    assert transcript["segments"]
+
+    # A Flex answer is kept as it is; a refused request is not retried on standard.
+    def flex_ok(request):
+        return httpx.Response(200, json=_response())
+
+    ok = client(flex_ok).transcribe(g, AUDIO)
+    assert ok.usage[gemini_tiers.FLEX_USAGE] == 1 and gemini_tiers.FALLBACK_USAGE not in ok.usage
+    seen: list[str | None] = []
+
+    def refused(request):
+        seen.append(json.loads(request.read()).get("service_tier"))
+        return httpx.Response(400, json={"error": {"status": "INVALID_ARGUMENT"}})
+
+    with pytest.raises(ProviderError, match="provider_http_400"):
+        client(refused).transcribe(g, AUDIO)
+    assert seen == ["flex"]
+
+
+def test_the_flex_text_route_sends_the_same_prompt_to_the_base_model() -> None:
+    from ac_platform.conversation_intelligence import gemini_tiers
+    from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
+    from ac_platform.conversation_intelligence.qualitative_pack import (
+        supports_coaching_v6_route,
+    )
+
+    flex = gemini_tiers.flex("gemini-3.8-flash")
+    assert completion_ceiling("gemini", flex, "C5") == completion_ceiling(
+        "gemini", "gemini-3.8-flash", "C5"
+    )
+    assert supports_coaching_v6_route("gemini", flex)
+    body = {
+        "systemInstruction": {"parts": [{"text": "S"}]},
+        "contents": [{"role": "user", "parts": [{"text": "U"}]}],
+        "generationConfig": {"maxOutputTokens": 100},
+    }
+    sent: list[dict] = []
+
+    def handler(request):
+        assert "gemini-3.8-flash:generateContent" in str(request.url)
+        sent.append(json.loads(request.read()))
+        return httpx.Response(200, json=_response({"ok": True}))
+
+    g = grant(canonical(body), provider="gemini", model=flex)
+    result = client(handler).generate(g, body)
+    assert sent[0]["service_tier"] == "flex"
+    assert {k: v for k, v in sent[0].items() if k != "service_tier"} == body
+    assert result.usage[gemini_tiers.FLEX_USAGE] == 1

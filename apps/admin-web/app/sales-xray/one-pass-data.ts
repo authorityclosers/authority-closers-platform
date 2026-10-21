@@ -109,6 +109,14 @@ export function normalizePipeline(raw: unknown): PipelineSettings {
  * (GET /v1/admin/analysis-pipeline/transcription): saved as a provider
  * revision? sealed into the approval bundle (an activation option)?
  */
+export type GeminiTier = {
+  model: string;
+  profileId: string;
+  configurationSha256: string | null;
+  savedRevision: number | null;
+  approved: boolean;
+};
+
 export type Transcription = {
   latestRevision: number;
   sealedBundle: string | null;
@@ -117,23 +125,32 @@ export type Transcription = {
     configurationSha256: string;
     provider: string | null;
     model: string | null;
+    /** Any route of the active configuration runs on Gemini Flex. */
+    flex: boolean;
   } | null;
-  gemini: {
-    model: string;
-    profileId: string;
-    configurationSha256: string | null;
-    savedRevision: number | null;
-    approved: boolean;
-  };
+  /** C2 on Gemini 3.1 Flash-Lite, standard tier. */
+  gemini: GeminiTier;
+  /** C2, C4 and C5 on Gemini Flex (half price, standard fallback after 5 min). */
+  geminiFlex: GeminiTier;
   classicRevision: number | null;
   confirm: string;
+};
+
+const geminiTier = (raw: unknown, model: string): GeminiTier => {
+  const tier = read.object(raw);
+  return {
+    model: read.string(tier.model, model),
+    profileId: read.string(tier.profile_id),
+    configurationSha256: read.optionalString(tier.configuration_sha256),
+    savedRevision: read.optionalNumber(tier.saved_revision),
+    approved: read.boolean(tier.approved),
+  };
 };
 
 export function normalizeTranscription(raw: unknown): Transcription {
   const body = read.object(raw);
   const active = body.active ? read.object(body.active) : null;
   const route = active ? read.object(active.transcription) : {};
-  const gemini = read.object(body.gemini);
   return {
     latestRevision: read.number(body.latest_revision, 0),
     sealedBundle: read.optionalString(body.sealed_bundle),
@@ -143,15 +160,11 @@ export function normalizeTranscription(raw: unknown): Transcription {
           configurationSha256: read.string(active.configuration_sha256),
           provider: read.optionalString(route.provider),
           model: read.optionalString(route.model),
+          flex: read.boolean(active.flex),
         }
       : null,
-    gemini: {
-      model: read.string(gemini.model, "gemini-3.1-flash-lite"),
-      profileId: read.string(gemini.profile_id),
-      configurationSha256: read.optionalString(gemini.configuration_sha256),
-      savedRevision: read.optionalNumber(gemini.saved_revision),
-      approved: read.boolean(gemini.approved),
-    },
+    gemini: geminiTier(body.gemini, "gemini-3.1-flash-lite"),
+    geminiFlex: geminiTier(body.gemini_flex, "gemini-3.1-flash-lite:flex"),
     classicRevision: read.optionalNumber(body.classic_revision),
     confirm: read.string(body.confirm, "one_pass"),
   };

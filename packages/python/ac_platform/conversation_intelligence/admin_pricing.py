@@ -167,6 +167,32 @@ PRICING_SNAPSHOTS: dict[tuple[str, str], PricingSnapshot] = {
         source_date="2026-10-21",
         usd_per_minute=Decimal("0.0030"),
     ),
+    # Flex routes (gemini_tiers): half of every rate, best effort; a request that falls
+    # back to standard is billed at standard, so approvals keep the standard ceilings.
+    # Evidence: docs/ops/pricing-evidence/gemini-flex-20261021.md (its sha256 here).
+    ("gemini", "gemini-3.1-flash-lite:flex"): PricingSnapshot(
+        provider_id="gemini",
+        model_id="gemini-3.1-flash-lite:flex",
+        pricing_ref="ref:pricing/gemini-31-flash-lite-audio-flex-20261021",
+        evidence_sha256="3f1d30f7c4b87215e53aa77b775824b26138c8857fb9d1c15d26d873ea1962af",
+        source_url="https://ai.google.dev/gemini-api/docs/flex",
+        rate_basis="per_minute",
+        evidence_release_sha=None,
+        source_date="2026-10-21",
+        usd_per_minute=Decimal("0.0015"),
+    ),
+    ("gemini", "gemini-3.8-flash:flex"): PricingSnapshot(
+        provider_id="gemini",
+        model_id="gemini-3.8-flash:flex",
+        pricing_ref="ref:pricing/gemini-38-flash-flex-20261021",
+        evidence_sha256="3f1d30f7c4b87215e53aa77b775824b26138c8857fb9d1c15d26d873ea1962af",
+        source_url="https://ai.google.dev/gemini-api/docs/flex",
+        rate_basis="per_million_tokens",
+        evidence_release_sha=None,
+        source_date="2026-10-21",
+        input_usd_per_million_tokens=Decimal("0.375"),
+        output_usd_per_million_tokens=Decimal("1.875"),
+    ),
     ("gemini", "gemini-3.8-flash"): PricingSnapshot(
         provider_id="gemini",
         model_id="gemini-3.8-flash",
