@@ -116,7 +116,9 @@ CATALOGUE = OpenRouterCatalogue()
 def _sheet_rows(registry_id: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for (provider, model), snapshot in PRICING_SNAPSHOTS.items():
-        if provider != registry_id:
+        # A Gemini Flex route is a tier of a model already listed, chosen on the One pass
+        # page (conversation_intelligence.gemini_tiers), not a model of its own here.
+        if provider != registry_id or model.endswith(":flex"):
             continue
         per_hour = snapshot.usd_per_hour
         if per_hour is None and snapshot.usd_per_minute is not None:

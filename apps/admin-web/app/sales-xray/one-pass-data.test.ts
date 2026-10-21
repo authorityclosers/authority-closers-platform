@@ -51,11 +51,27 @@ describe("one-pass trial data", () => {
         saved_revision: 7,
         approved: true,
       },
+      gemini_flex: {
+        model: "gemini-3.1-flash-lite:flex",
+        profile_id: "gemini-flash-lite-c2-flex",
+        configuration_sha256: "c".repeat(64),
+        saved_revision: null,
+        approved: false,
+      },
       classic_revision: 6,
       confirm: "one_pass",
     });
-    expect(view.active).toMatchObject({ revision: 6, provider: "elevenlabs" });
+    expect(view.active).toMatchObject({
+      revision: 6,
+      provider: "elevenlabs",
+      flex: false,
+    });
     expect(view.gemini).toMatchObject({ savedRevision: 7, approved: true });
+    expect(view.geminiFlex).toMatchObject({
+      profileId: "gemini-flash-lite-c2-flex",
+      savedRevision: null,
+      approved: false,
+    });
     expect(view.classicRevision).toBe(6);
     const empty = normalizeTranscription(null);
     expect(empty.active).toBeNull();

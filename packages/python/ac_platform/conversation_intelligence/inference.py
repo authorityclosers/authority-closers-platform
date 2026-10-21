@@ -77,6 +77,7 @@ TRANSCRIPT_RECIPE_BY_ROUTE = {
     ("elevenlabs", "scribe_v2"): TRANSCRIPT_RECIPE,
     ("deepgram", "nova-3"): DEEPGRAM_TRANSCRIPT_RECIPE,
     ("gemini", gemini_audio.MODEL): GEMINI_AUDIO_TRANSCRIPT_RECIPE,
+    ("gemini", gemini_audio.MODEL + ":flex"): GEMINI_AUDIO_TRANSCRIPT_RECIPE,
 }
 TRANSCRIPT_RECIPES = frozenset(TRANSCRIPT_RECIPE_BY_ROUTE.values())
 

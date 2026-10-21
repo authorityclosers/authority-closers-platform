@@ -47,7 +47,10 @@ CHILD_IDENTITY_MODULE = "ac_platform.conversation_intelligence.child_identity"
 CHILD_TOKEN_FILE_ENV = "AC_SALES_XRAY_INFISICAL_TOKEN_FILE"  # noqa: S105 - name only
 INFISICAL_API_URL = "https://app.infisical.com"
 MAX_HEADER_BYTES = 64 * 1024
-MAX_TIMEOUT_SECONDS = 180.0
+# A Flex route (gemini_tiers) may wait up to five minutes and then answer on standard,
+# so one provider call may take up to nine minutes; other routes still end at 180 s
+# inside the transport (providers.MAX_STREAM_SECONDS).
+MAX_TIMEOUT_SECONDS = 540.0
 MAX_FRAME_BYTES = 4 + MAX_HEADER_BYTES + MAX_AUDIO_BYTES
 MAX_OUTPUT_FRAME_BYTES = 4 + MAX_HEADER_BYTES + MAX_JSON_BYTES
 _FRAME_LENGTH = struct.Struct(">I")
@@ -155,7 +158,7 @@ class InferenceBrokerError(ValueError):
 class BrokerLimits:
     """Hard limits applied by the parent transport and never relaxed by a job."""
 
-    timeout_seconds: float = 180.0
+    timeout_seconds: float = MAX_TIMEOUT_SECONDS
     max_input_bytes: int = MAX_AUDIO_BYTES
     max_raw_response_bytes: int = MAX_JSON_BYTES
 

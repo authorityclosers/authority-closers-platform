@@ -1,6 +1,7 @@
 """Seal Gemini 3.1 Flash-Lite as an approved C2 route, keeping every classic route.
 
-Root runs this on the host with the environment's two current files (owner, 21 Oct 2026:
+Root runs this on the host with the environment's two current files (``--flex`` for the
+Flex configuration, a second profile beside the standard one) (owner, 21 Oct 2026:
 "So at least get this on prod now!!!"; docs/ops/ONE-PASS-PRODUCTION.md):
 
     python scripts/ops/one_pass_c2_seal.py \\
@@ -39,18 +40,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--classic", type=Path, required=True)
     parser.add_argument("--configuration", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--flex",
+        action="store_true",
+        help="seal the Flex configuration (C2, C4 and C5 on Gemini Flex) instead",
+    )
     arguments = parser.parse_args(argv)
     bundle = load_hosted_approval_bundle(arguments.bundle.read_bytes())
     classic = parse_registry_config(json.loads(arguments.classic.read_text()))
     saved = parse_registry_config(json.loads(arguments.configuration.read_text()))
-    derived = c2_route.derive_configuration(classic)
+    derived = c2_route.derive_configuration(classic, flex=arguments.flex)
     if saved.digest != derived.digest:
         print(
             json.dumps({"refused": "configuration_is_not_the_derived_one", "saved": saved.digest}),
             file=sys.stderr,
         )
         return 2
-    sealed = c2_route.seal(bundle, classic, derived)
+    sealed = c2_route.seal(bundle, classic, derived, flex=arguments.flex)
     arguments.out.mkdir(parents=True, exist_ok=True, mode=0o700)
     (arguments.out / "hosted-approval.json").write_bytes(sealed.to_json())
     (arguments.out / "hosted-approval.sha256").write_text(sealed.digest + "\n")
@@ -66,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
                 "bundle_after": sealed.digest,
                 "classic_configuration": classic.digest,
                 "gemini_c2_configuration": derived.digest,
-                "profile": c2_route.PROFILE_ID,
+                "profile": c2_route.FLEX_PROFILE_ID if arguments.flex else c2_route.PROFILE_ID,
                 "policies": [str(item.tenant_id) for item in policies],
                 "classic_stages_unchanged": True,
             },

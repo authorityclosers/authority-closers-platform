@@ -300,31 +300,69 @@ class _ProviderFailure(RuntimeError):
         self.outcome, self.usage = outcome, usage
 
 
-def _call_gemini(body: dict[str, Any]) -> dict[str, Any]:
+def _call_gemini(body: dict[str, Any], *, flex: bool = False) -> dict[str, Any]:
+    """One review request. On Flex (when the active provider configuration runs on Gemini
+    Flex, gemini_tiers) it asks for Flex for up to five minutes, then once on standard."""
     import httpx
 
+    from ac_platform.conversation_intelligence import gemini_tiers
     from ac_platform.conversation_intelligence.pointer_review import MODEL_ID
 
     key = os.environ.get("GEMINI_API_KEY", "")
     if not key:
         raise SystemExit("pointer_review_credential_missing")
-    try:
-        response = httpx.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_ID}:generateContent",
-            headers={"x-goog-api-key": key, "content-type": "application/json"},
-            json=body,
-            timeout=httpx.Timeout(240.0, connect=20.0),
-        )
-    except httpx.TimeoutException:
-        raise _ProviderFailure("timeout") from None
-    except httpx.HTTPError:
-        raise _ProviderFailure("transport_error") from None
+
+    def post(payload: dict[str, Any], seconds: float) -> Any:
+        try:
+            return httpx.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_ID}:generateContent",
+                headers={"x-goog-api-key": key, "content-type": "application/json"},
+                json=payload,
+                timeout=httpx.Timeout(seconds, connect=20.0),
+            )
+        except httpx.TimeoutException:
+            raise _ProviderFailure("timeout") from None
+        except httpx.HTTPError:
+            raise _ProviderFailure("transport_error") from None
+
+    response = None
+    if flex:
+        try:
+            response = post(
+                {**body, "service_tier": "flex"}, float(gemini_tiers.FLEX_WINDOW_SECONDS)
+            )
+        except _ProviderFailure:
+            response = None
+        if response is not None and response.status_code in gemini_tiers.FLEX_RETRY_STATUSES:
+            response = None
+    if response is None:
+        response = post(body, 240.0)
     if response.status_code != 200:
         raise _ProviderFailure(f"provider_http_{response.status_code}")
     try:
         return dict(response.json())
     except ValueError:
         raise _ProviderFailure("unreadable_response") from None
+
+
+def _active_flex(connection: Any) -> bool:
+    """Whether the newest provider activation runs any route on Gemini Flex."""
+    from sqlalchemy import text
+
+    configuration = connection.execute(
+        text(
+            """
+            SELECT c.configuration FROM conversation_provider_activations a
+            JOIN conversation_provider_configurations c ON c.id = a.configuration_id
+            ORDER BY a.created_at DESC LIMIT 1
+            """
+        )
+    ).scalar()
+    routes = configuration.get("routes") if isinstance(configuration, dict) else None
+    return any(
+        isinstance(route, dict) and str(route.get("model_id") or "").endswith(":flex")
+        for route in routes or []
+    )
 
 
 def _est_paise(usage: dict[str, Any]) -> int:
@@ -410,7 +448,12 @@ async def _review_one(
     review: dict[str, Any] | None = None
     outcome = "runner_error"
     try:
-        response = (call_provider or _call_gemini)(gemini_body(system, user))
+        body = gemini_body(system, user)
+        response = (
+            call_provider(body)
+            if call_provider is not None
+            else _call_gemini(body, flex=bool(getattr(arguments, "flex", False)))
+        )
         usage = dict(response.get("usageMetadata") or {})
         try:
             review = parse_review(decode_gemini(response), segments)
@@ -524,6 +567,11 @@ async def _inner_async(
                         )
                     test_sources = await session.run_sync(
                         lambda sync: _test_source_shas(sync.connection())
+                    )
+                    # The owner's Flex switch (the active provider configuration) covers
+                    # this background review too.
+                    arguments.flex = await session.run_sync(
+                        lambda sync: _active_flex(sync.connection())
                     )
                     skipped_tenants = (
                         await session.run_sync(

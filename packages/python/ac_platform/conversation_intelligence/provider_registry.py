@@ -401,7 +401,7 @@ def _model(
 
 
 DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
-    revision="provider-catalog-20261021-gemini-audio-c2-v1",
+    revision="provider-catalog-20261021-gemini-flex-v1",
     providers=(
         ProviderCatalogEntry(
             "local",
@@ -446,6 +446,19 @@ DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
                     "gemini-3.1-flash-lite",
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
                     ("asr", "implemented"),
+                ),
+                # Flex (gemini_tiers): the same models at half price, best effort, with
+                # a standard fallback after five minutes.
+                _model(
+                    "gemini-3.1-flash-lite:flex",
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+                    ("asr", "implemented"),
+                ),
+                _model(
+                    "gemini-3.8-flash:flex",
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+                    ("facts", "implemented"),
+                    ("coaching", "implemented"),
                 ),
             ),
             (
