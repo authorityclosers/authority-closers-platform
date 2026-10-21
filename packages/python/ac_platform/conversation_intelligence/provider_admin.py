@@ -40,6 +40,13 @@ from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership
 
+# Switching C2 transcription to Gemini audio is the owner's action (owner, 21 Oct 2026:
+# "So at least get this on prod now!!!"): typed confirm, the reason in the owner's words,
+# a sign-in within ten minutes; it is audited. Switching back stays one click.
+OWNER_CONFIRM_WORD = "one_pass"
+MIN_OWNER_REASON = 10
+GEMINI_TRANSCRIPTION_ON = "conversation.providers.gemini_transcription_on"
+
 CONTROL_ACCOUNT = "admin@authorityclosers.com"
 # Explicitly named by the AC owner for staging and production administration.
 # An email match never substitutes for verified identity or scoped admin access.
@@ -381,6 +388,52 @@ class ConversationProviderAdmin:
         )
         return self._view(row)
 
+    @staticmethod
+    def _transcription_provider(row: ConversationProviderConfiguration | None) -> str | None:
+        if row is None:
+            return None
+        try:
+            config = parse_registry_config(row.configuration)
+        except (ProviderRegistryError, TypeError, ValueError):
+            return None
+        route = next((item for item in config.routes if item.task == "asr"), None)
+        return None if route is None else route.provider_id
+
+    async def _owner_gate(
+        self,
+        actor: ActorContext,
+        target: ConversationProviderConfiguration,
+        *,
+        confirm: str | None,
+        reason: str | None,
+    ) -> bool:
+        """True when this activation switches transcription to Gemini audio, after the
+        owner's checks; False for every other activation (no checks added)."""
+        from ac_platform.identity.sign_in_methods import session_is_fresh
+
+        assert actor.tenant_id is not None
+        if self._transcription_provider(target) != "gemini":
+            return False
+        active = await self._active(actor.tenant_id)
+        current = (
+            None
+            if active is None
+            else await self.database.get(ConversationProviderConfiguration, active.configuration_id)
+        )
+        if self._transcription_provider(current) == "gemini":
+            return False
+        if confirm != OWNER_CONFIRM_WORD:
+            raise ConversationDenied(
+                f"Type {OWNER_CONFIRM_WORD} to switch transcription to Gemini 3.1 Flash-Lite."
+            )
+        if len((reason or "").strip()) < MIN_OWNER_REASON:
+            raise ConversationDenied("Give the reason, in the owner's words.")
+        if not await session_is_fresh(
+            self.database, actor.session_id, utc(self.application.clock())
+        ):
+            raise ConversationDenied("Sign in again (within ten minutes) to switch transcription.")
+        return True
+
     async def activate(
         self,
         actor: ActorContext,
@@ -389,6 +442,8 @@ class ConversationProviderAdmin:
         expected_revision: int,
         key: str,
         bundle: HostedApprovalBundle,
+        confirm: str | None = None,
+        reason: str | None = None,
     ) -> dict[str, Any]:
         await self.admit(actor)
         if actor.tenant_id != bundle.provider_control_tenant_id:
@@ -424,6 +479,7 @@ class ConversationProviderAdmin:
             None if budget_row is None else BudgetAccount.from_dict(budget_row.snapshot).cap_paise
         )
         self._approved_configuration(target, bundle, budget_limit_paise=effective_budget_cap)
+        owner_action = await self._owner_gate(actor, target, confirm=confirm, reason=reason)
         payload = {
             "target_revision": target.revision,
             "configuration_sha256": target.configuration_sha256,
@@ -468,4 +524,20 @@ class ConversationProviderAdmin:
             now,
             resource_type="conversation_provider_activation",
         )
+        if owner_action:
+            from ac_platform.audit.service import AuditRepository
+
+            await AuditRepository(self.database).append_for_actor(
+                actor,
+                action=GEMINI_TRANSCRIPTION_ON,
+                resource_type="conversation_provider_activation",
+                resource_id=str(row.id),
+                payload={
+                    **payload,
+                    "transcription": "gemini",
+                    "confirm": confirm,
+                    "reason": (reason or "").strip()[:200],
+                    "environment": bundle.environment,
+                },
+            )
         return (await self.current(actor, bundle=bundle)) or {}

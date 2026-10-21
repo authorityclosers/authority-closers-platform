@@ -63,6 +63,9 @@ class ProviderActivationIntent(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     expected_revision: int = Field(ge=0, lt=2_147_483_647)
     target_revision: int = Field(ge=1, lt=2_147_483_647)
+    # Only for the owner's switch of transcription to Gemini audio (typed confirm, reason).
+    confirm: str | None = Field(default=None, max_length=32)
+    reason: str | None = Field(default=None, max_length=200)
 
 
 class AnalysisSettingsIntent(BaseModel):
@@ -337,6 +340,8 @@ def install_conversation_admin_http(
                 expected_revision=intent.expected_revision,
                 key=key,
                 bundle=bundle,
+                confirm=intent.confirm,
+                reason=intent.reason,
             )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None

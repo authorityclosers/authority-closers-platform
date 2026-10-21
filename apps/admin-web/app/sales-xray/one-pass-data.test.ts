@@ -10,6 +10,7 @@ import {
   normalizeCompareList,
   normalizeCompared,
   normalizePipeline,
+  normalizeTranscription,
   share,
   took,
 } from "./one-pass-data";
@@ -32,6 +33,35 @@ describe("one-pass trial data", () => {
       subject: "fx-01",
       contractsOk: 6,
     });
+  });
+
+  it("reads the transcription route and the Gemini configuration's state", () => {
+    const view = normalizeTranscription({
+      latest_revision: 7,
+      sealed_bundle: "f".repeat(64),
+      active: {
+        revision: 6,
+        configuration_sha256: "a".repeat(64),
+        transcription: { provider: "elevenlabs", model: "scribe_v2" },
+      },
+      gemini: {
+        model: "gemini-3.1-flash-lite",
+        profile_id: "gemini-flash-lite-c2",
+        configuration_sha256: "b".repeat(64),
+        saved_revision: 7,
+        approved: true,
+      },
+      classic_revision: 6,
+      confirm: "one_pass",
+    });
+    expect(view.active).toMatchObject({ revision: 6, provider: "elevenlabs" });
+    expect(view.gemini).toMatchObject({ savedRevision: 7, approved: true });
+    expect(view.classicRevision).toBe(6);
+    const empty = normalizeTranscription(null);
+    expect(empty.active).toBeNull();
+    expect(empty.gemini.savedRevision).toBeNull();
+    expect(empty.gemini.approved).toBe(false);
+    expect(empty.confirm).toBe("one_pass");
   });
 
   it("never crashes on an empty or odd answer", () => {

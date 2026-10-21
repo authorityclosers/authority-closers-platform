@@ -270,3 +270,108 @@ def test_admin_switches_the_pipeline_and_reads_the_comparison(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_admin_prepares_the_gemini_transcription_configuration(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prepare saves today's configuration with only C2 on Gemini 3.1 Flash-Lite as a new
+    revision; nothing is active or sealed by it (no approval bundle here)."""
+    from ac_platform.conversation_intelligence import provider_admin
+    from ac_platform.conversation_intelligence.models import (
+        ConversationProviderActivation,
+        ConversationProviderConfiguration,
+    )
+    from ac_platform.one_pass import c2_route
+    from tests.database.test_conversation_authority_postgresql import _registry_config
+
+    async def admitted(self: Any, actor: Any, **_: Any) -> None:
+        return None
+
+    monkeypatch.setattr(admin_http, "ConversationProviderAdmin", _Admitted)
+    monkeypatch.setattr(provider_admin.ConversationProviderAdmin, "admit", admitted)
+    monkeypatch.setattr(admin_http, "require_admin_surface", lambda request, settings: None)
+    classic = _registry_config(
+        "classic-v1", funded=True, text_provider="gemini", text_cost_paise=40
+    )
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            state = setup.state
+            staff = RouteContext(
+                setup.settings.model_copy(update={"operations_tenant_id": state.tenant_id}),
+                setup.require_actor,
+                setup.sessions,
+            )
+            admin_http.install_one_pass_admin_http(setup.app, staff)
+            path = f"{ADMIN}/transcription"
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as http:
+                http.cookies.set(setup.settings.session_cookie_name, setup.token)
+                empty = (await http.get(path)).json()
+                assert empty["active"] is None and empty["gemini"]["saved_revision"] is None
+                assert empty["confirm"] == "one_pass"
+                nothing = await http.post(f"{path}/prepare", headers=WRITE)
+                assert nothing.status_code == 409
+                async with setup.sessions() as db, db.begin():
+                    row = ConversationProviderConfiguration(
+                        id=uuid4(),
+                        tenant_id=state.tenant_id,
+                        person_id=state.person_id,
+                        session_id=state.session_id,
+                        revision=1,
+                        configuration_sha256=classic.digest,
+                        configuration=classic.as_dict(),
+                        created_at=datetime.now(UTC),
+                    )
+                    db.add(row)
+                    await db.flush()
+                    db.add(
+                        ConversationProviderActivation(
+                            id=uuid4(),
+                            tenant_id=state.tenant_id,
+                            person_id=state.person_id,
+                            session_id=state.session_id,
+                            configuration_id=row.id,
+                            configuration_revision=1,
+                            configuration_sha256=classic.digest,
+                            sequence=1,
+                            created_at=datetime.now(UTC),
+                        )
+                    )
+                view = (await http.get(path)).json()
+                derived = c2_route.derive_configuration(classic)
+                assert view["active"]["transcription"] == {
+                    "provider": "elevenlabs",
+                    "model": "scribe_v2",
+                }
+                assert view["gemini"]["configuration_sha256"] == derived.digest
+                assert view["gemini"]["saved_revision"] is None
+                prepared = await http.post(f"{path}/prepare", headers=WRITE)
+                assert prepared.status_code == 200, prepared.text
+                body = prepared.json()
+                assert body["gemini"]["saved_revision"] == 2
+                assert body["gemini"]["approved"] is False  # Root has not sealed it
+                assert body["active"]["revision"] == 1  # nothing switched
+                again = await http.post(f"{path}/prepare", headers=WRITE)
+                assert again.json()["gemini"]["saved_revision"] == 2
+            async with setup.sessions() as db:
+                saved = await db.scalar(
+                    select(ConversationProviderConfiguration.configuration_sha256).where(
+                        ConversationProviderConfiguration.revision == 2
+                    )
+                )
+                audited = (
+                    await db.execute(
+                        select(AuditEvent.action).where(
+                            AuditEvent.action == "analysis_pipeline.gemini_transcription_prepared"
+                        )
+                    )
+                ).all()
+            assert saved == derived.digest and len(audited) == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

@@ -7,9 +7,11 @@ import {
   inr,
   normalizeCompareList,
   normalizePipeline,
+  normalizeTranscription,
   took,
 } from "@/app/sales-xray/one-pass-data";
 import { PipelineSwitch } from "@/app/sales-xray/one-pass-switch";
+import { TranscriptionSwitch } from "@/app/sales-xray/one-pass-transcription";
 import {
   Badge,
   Empty,
@@ -31,9 +33,13 @@ export const dynamic = "force-dynamic";
  * benchmark set apart. Back to today's pipeline is one click.
  */
 export default async function OnePassPage() {
-  const [settings, compared] = await Promise.all([
+  const [settings, compared, transcription] = await Promise.all([
     adminRead("/v1/admin/analysis-pipeline", normalizePipeline),
     adminRead("/v1/admin/analysis-pipeline/compare", normalizeCompareList),
+    adminRead(
+      "/v1/admin/analysis-pipeline/transcription",
+      normalizeTranscription,
+    ),
   ]);
   return (
     <Page wide>
@@ -52,6 +58,16 @@ export default async function OnePassPage() {
           </Link>
         }
       />
+      {transcription.ok ? (
+        <Panel
+          title="Transcription (C2)"
+          sub="Production's one-pass saving: Gemini 3.1 Flash-Lite instead of Scribe, sealed, then the owner's switch"
+        >
+          <TranscriptionSwitch view={transcription.data} />
+        </Panel>
+      ) : (
+        <Unavailable title="Transcription (C2)" reason={transcription.error} />
+      )}
       {settings.ok ? (
         <Panel
           title="Analysis pipeline"

@@ -10,6 +10,15 @@
 - GET /v1/admin/analysis-pipeline/compare/{subject}  one call side by side (a recording id
                                                       or a benchmark call id); audited as
                                                       one_pass.admin_view for a real call
+- GET /v1/admin/analysis-pipeline/transcription      the C2 route in use, and the Gemini 3.1
+                                                      Flash-Lite configuration: saved? sealed?
+- POST /v1/admin/analysis-pipeline/transcription/prepare
+                                                      save that configuration as a provider
+                                                      revision (its digest is what Root seals)
+
+The switch itself is ``POST /v1/admin/conversation/providers/activate`` with the owner's
+typed confirm and reason (``ConversationProviderAdmin._owner_gate``); back to Scribe is the
+same call for the classic revision, one click.
 
 Settings are append-only revisions, every save audited with old, new and the reason.
 Switching to ``one_pass`` (people see one-pass results) is the owner's action (owner, 21
@@ -29,15 +38,25 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from ac_platform.ai_spend.policy import environment_name
 from ac_platform.audit.service import AuditRepository
+from ac_platform.conversation_intelligence import provider_admin
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
 )
-from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
+from ac_platform.conversation_intelligence.hosted_runtime import load_pinned_approval
+from ac_platform.conversation_intelligence.models import ConversationProviderConfiguration
+from ac_platform.conversation_intelligence.provider_admin import (
+    OWNER_CONFIRM_WORD,
+    ConversationProviderAdmin,
+)
+from ac_platform.conversation_intelligence.provider_registry import (
+    ProviderRegistryError,
+    parse_registry_config,
+)
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     require_admin_surface,
@@ -46,7 +65,7 @@ from ac_platform.http.auth import (
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.sign_in_methods import session_is_fresh
 from ac_platform.kernel.errors import DomainError
-from ac_platform.one_pass import compare
+from ac_platform.one_pass import c2_route, compare
 from ac_platform.one_pass import settings as choices
 
 PRIVATE = {"Cache-Control": "private, no-store"}
@@ -107,6 +126,89 @@ def _recent(connection: Any) -> list[dict[str, Any]]:
         }
         for row in rows
     ]
+
+
+def _transcription(row: Any) -> dict[str, Any] | None:
+    try:
+        config = parse_registry_config(row.configuration)
+    except (ProviderRegistryError, TypeError, ValueError):
+        return None
+    route = next((item for item in config.routes if item.task == "asr"), None)
+    return None if route is None else {"provider": route.provider_id, "model": route.model_id}
+
+
+async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str, Any]:
+    """The C2 route in use and the Flash-Lite configuration's state (ids and digests)."""
+    service = provider_admin.ConversationProviderAdmin(ConversationApplication(auth.database))
+    bundle = None
+    if settings.sales_xray_enabled and settings.sales_xray_approval_path:
+        try:
+            bundle = load_pinned_approval(settings)
+        except ValueError:
+            bundle = None
+    current = await service.current(actor, bundle=bundle) or {}
+    activation = current.get("activation") or {}
+    rows = {
+        row.revision: row
+        for row in (
+            await auth.database.scalars(
+                select(ConversationProviderConfiguration)
+                .where(ConversationProviderConfiguration.tenant_id == actor.tenant_id)
+                .order_by(ConversationProviderConfiguration.revision.desc())
+                .limit(64)
+            )
+        ).all()
+    }
+    active = rows.get(activation.get("revision"))
+    in_use = None if active is None else _transcription(active)
+    derived = None
+    if active is not None and in_use is not None and in_use["provider"] != "gemini":
+        try:
+            derived = c2_route.derive_configuration(parse_registry_config(active.configuration))
+        except (c2_route.SealError, ProviderRegistryError, TypeError, ValueError):
+            derived = None
+    options = {item["revision"]: item for item in current.get("activation_options") or []}
+    gemini_revision = next(
+        (
+            revision
+            for revision, row in sorted(rows.items(), reverse=True)
+            if (_transcription(row) or {}).get("provider") == "gemini"
+            and (derived is None or row.configuration_sha256 == derived.digest)
+        ),
+        None,
+    )
+    classic_revision = next(
+        (
+            revision
+            for revision, row in sorted(rows.items(), reverse=True)
+            if revision in options and (_transcription(row) or {}).get("provider") != "gemini"
+        ),
+        None,
+    )
+    return {
+        "latest_revision": max(rows) if rows else 0,
+        "sealed_bundle": None if bundle is None else bundle.digest,
+        "active": None
+        if active is None
+        else {
+            "revision": active.revision,
+            "configuration_sha256": active.configuration_sha256,
+            "transcription": in_use,
+        },
+        "gemini": {
+            "model": c2_route.MODEL,
+            "profile_id": c2_route.PROFILE_ID,
+            "configuration_sha256": derived.digest
+            if derived is not None
+            else None
+            if gemini_revision is None
+            else rows[gemini_revision].configuration_sha256,
+            "saved_revision": gemini_revision,
+            "approved": gemini_revision is not None and gemini_revision in options,
+        },
+        "classic_revision": classic_revision,
+        "confirm": OWNER_CONFIRM_WORD,
+    }
 
 
 def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -287,5 +389,60 @@ def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None
                 )
         result["environment"] = environment
         return result
+
+    @router.get("/v1/admin/analysis-pipeline/transcription")
+    async def transcription(
+        request: Request, response: Response, auth: AuthenticatedTransaction = dependency
+    ) -> dict[str, Any]:
+        actor = await admit(request, response, auth)
+        try:
+            return await _transcription_view(auth, actor, settings)
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.post("/v1/admin/analysis-pipeline/transcription/prepare")
+    async def prepare_transcription(
+        request: Request, response: Response, auth: AuthenticatedTransaction = dependency
+    ) -> dict[str, Any]:
+        """Save the active configuration with C2 on Gemini 3.1 Flash-Lite as a new provider
+        revision (nothing changes until Root seals it and the owner switches)."""
+        try:
+            require_safe_origin(request, settings)
+        except DomainError:
+            raise HTTPException(403, "Use this Admin page to continue.") from None
+        actor = await admit(request, response, auth)
+        view = await _transcription_view(auth, actor, settings)
+        if view["gemini"]["saved_revision"] is not None:
+            return view
+        active = view["active"]
+        if active is None or view["gemini"]["configuration_sha256"] is None:
+            raise HTTPException(409, "There is no active Scribe configuration to start from.")
+        row = await auth.database.scalar(
+            select(ConversationProviderConfiguration).where(
+                ConversationProviderConfiguration.tenant_id == actor.tenant_id,
+                ConversationProviderConfiguration.revision == active["revision"],
+            )
+        )
+        if row is None:
+            raise HTTPException(409, "There is no active Scribe configuration to start from.")
+        derived = c2_route.derive_configuration(parse_registry_config(row.configuration))
+        service = provider_admin.ConversationProviderAdmin(ConversationApplication(auth.database))
+        try:
+            await service.save(
+                actor,
+                derived.as_dict(),
+                expected_revision=view["latest_revision"],
+                key=f"one-pass-c2:{derived.digest}",
+            )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+        await AuditRepository(auth.database).append_for_actor(
+            actor,
+            action="analysis_pipeline.gemini_transcription_prepared",
+            resource_type="conversation_provider_configuration",
+            resource_id=derived.digest,
+            payload={"from_revision": active["revision"], "configuration_sha256": derived.digest},
+        )
+        return await _transcription_view(auth, actor, settings)
 
     application.include_router(router)

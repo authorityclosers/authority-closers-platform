@@ -17,6 +17,7 @@ from typing import Any, cast
 
 import httpx
 
+from ac_platform.conversation_intelligence import gemini_audio
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.entitlements import Reservation
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES as MAX_AUDIO_BYTES
@@ -131,6 +132,7 @@ class BoundedProviders:
         params: dict[str, str] | None = None,
         binary_audio: bool = False,
         audio_content_type: str = "application/octet-stream",
+        deadline_seconds: int = MAX_STREAM_SECONDS,
     ) -> ProviderResult:
         fields = {
             "model_id": "scribe_v2",
@@ -138,11 +140,11 @@ class BoundedProviders:
             "diarize": "true",
             "tag_audio_events": "false",
         }
-        deadline = self._monotonic() + MAX_STREAM_SECONDS
+        deadline = self._monotonic() + deadline_seconds
         try:
             with (
                 httpx.Client(
-                    timeout=httpx.Timeout(180, connect=15, write=60, pool=5),
+                    timeout=httpx.Timeout(deadline_seconds, connect=15, write=60, pool=5),
                     follow_redirects=False,
                     trust_env=False,
                     transport=self._transport,
@@ -364,6 +366,9 @@ class BoundedProviders:
                 audio=audio,
                 input_sha256=reservation.quote.input_sha256,
             )
+        if provider == "gemini" and model in gemini_audio.MODELS:
+            self._admit(reservation, provider, gemini_audio.OPERATION, audio)
+            return self._gemini_audio(reservation, model, audio)
         if provider == "deepgram" and model == "nova-3":
             self._admit(reservation, provider, "transcribe_deepgram_nova3", audio)
             return self._post(
@@ -390,6 +395,101 @@ class BoundedProviders:
                 input_sha256=reservation.quote.input_sha256,
             )
         raise ProviderError("provider_model_not_supported")
+
+    def _gemini_audio(self, reservation: Reservation, model: str, audio: bytes) -> ProviderResult:
+        """C2 on Gemini audio: the admitted source as speech MP3, inline when it fits, else
+        through the Files API (removed again at once); one generateContent request."""
+        try:
+            speech = gemini_audio.speech_mp3(audio)
+        except gemini_audio.GeminiAudioError as error:
+            raise ProviderError(str(error)) from None
+        key = self._credentials.get("gemini", "")
+        uploaded: str | None = None
+        try:
+            if len(speech) <= gemini_audio.INLINE_AUDIO_BYTES:
+                part = gemini_audio.audio_part(speech)
+            else:
+                uri, uploaded = self._gemini_upload(key, speech)
+                part = gemini_audio.audio_part(speech, file_uri=uri)
+            return self._post(
+                "gemini",
+                model,
+                gemini_audio.URL.format(model=model),
+                reservation=reservation,
+                headers={"x-goog-api-key": key},
+                json_body=gemini_audio.request_body(part),
+                input_sha256=reservation.quote.input_sha256,
+                deadline_seconds=gemini_audio.DEADLINE_SECONDS,
+            )
+        finally:
+            if uploaded is not None:
+                self._gemini_delete(key, uploaded)
+
+    def _gemini_client(self) -> httpx.Client:
+        return httpx.Client(
+            timeout=httpx.Timeout(300, connect=15, write=300, pool=5),
+            follow_redirects=False,
+            trust_env=False,
+            transport=self._transport,
+        )
+
+    def _gemini_upload(self, key: str, speech: bytes) -> tuple[str, str]:
+        """The Files API's resumable upload; (uri, name). Content-free failures."""
+        try:
+            with self._gemini_client() as client:
+                start = client.post(
+                    gemini_audio.UPLOAD_URL,
+                    headers={
+                        "x-goog-api-key": key,
+                        "X-Goog-Upload-Protocol": "resumable",
+                        "X-Goog-Upload-Command": "start",
+                        "X-Goog-Upload-Header-Content-Length": str(len(speech)),
+                        "X-Goog-Upload-Header-Content-Type": "audio/mpeg",
+                    },
+                    json={"file": {"display_name": "call-audio"}},
+                )
+                target = start.headers.get("x-goog-upload-url") or ""
+                if start.status_code != 200 or not target.startswith(gemini_audio.UPLOAD_URL):
+                    raise ProviderError("gemini_audio_upload_failed")
+                done = client.post(
+                    target,
+                    headers={
+                        "X-Goog-Upload-Offset": "0",
+                        "X-Goog-Upload-Command": "upload, finalize",
+                    },
+                    content=speech,
+                )
+                if done.status_code != 200:
+                    raise ProviderError("gemini_audio_upload_failed")
+                info = done.json().get("file") or {}
+                for _ in range(60):
+                    if info.get("state") in (None, "ACTIVE"):
+                        break
+                    if info.get("state") == "FAILED":
+                        raise ProviderError("gemini_audio_upload_failed")
+                    time.sleep(2)
+                    info = client.get(
+                        gemini_audio.FILES_URL + str(info["name"]),
+                        headers={"x-goog-api-key": key},
+                    ).json()
+                else:
+                    raise ProviderError("gemini_audio_upload_failed")
+                uri, name = str(info["uri"]), str(info["name"])
+        except ProviderError:
+            raise
+        except Exception:
+            raise ProviderError("gemini_audio_upload_failed") from None
+        if not uri.startswith(gemini_audio.FILES_URL) or not name.startswith("files/"):
+            raise ProviderError("gemini_audio_upload_failed")
+        return uri, name
+
+    def _gemini_delete(self, key: str, name: str) -> None:
+        """Best effort: the uploaded audio is removed at once (Google also expires it)."""
+        try:
+            with self._gemini_client() as client:
+                client.delete(gemini_audio.FILES_URL + name, headers={"x-goog-api-key": key})
+        except Exception:  # noqa: BLE001 - deletion is best effort; Google expires it in 48 h
+            return
 
     def generate(self, reservation: Reservation, body: dict[str, Any]) -> ProviderResult:
         encoded = canonical(body)

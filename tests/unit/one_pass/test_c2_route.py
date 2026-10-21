@@ -1,0 +1,162 @@
+"""Gemini 3.1 Flash-Lite as the sealed C2 route: the derived configuration, the bundle
+that keeps every classic route, and the owner's gate on the switch. Fictional ids only."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+
+from ac_platform.conversation_intelligence import gemini_audio
+from ac_platform.conversation_intelligence.activation_contract import load_hosted_approval_bundle
+from ac_platform.conversation_intelligence.application import ConversationDenied
+from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
+from ac_platform.identity import sign_in_methods
+from ac_platform.one_pass import c2_route
+from tests.unit.conversation_intelligence.test_provider_activation import (
+    _approved_bundle,
+    _registry_config,
+    _row,
+)
+
+
+def _classic() -> tuple[object, object]:
+    config = _registry_config(
+        "approved-gemini-base-v1", funded=True, text_provider="gemini", text_cost_paise=40
+    )
+    bundle = _approved_bundle(config, funded=True, text_provider="gemini", text_cost_paise=40)
+    # Room for one more paid route in the project cap (as production's cap has).
+    return config, bundle.model_copy(update={"budget_cap_paise": 1_000_000})
+
+
+def test_the_derived_configuration_changes_only_the_transcription_route() -> None:
+    classic, _ = _classic()
+    new = c2_route.derive_configuration(classic)
+    routes = {route.task: route for route in new.routes}
+    assert (routes["asr"].provider_id, routes["asr"].model_id) == ("gemini", gemini_audio.MODEL)
+    assert routes["asr"].recipe_revision == gemini_audio.RECIPE
+    old = {route.task: route for route in classic.routes}
+    assert routes["facts"] == old["facts"] and routes["coaching"] == old["coaching"]
+    entry = next(item for item in new.providers if item.model_id == gemini_audio.MODEL)
+    gemini = next(item for item in classic.providers if item.provider_id == "gemini")
+    assert entry.credential_ref == gemini.credential_ref
+    assert entry.privacy_ref == gemini.privacy_ref and entry.permission_ref == gemini.permission_ref
+    assert entry.max_cost_paise == c2_route.MAX_COST_PAISE
+    assert new.policy == classic.policy and new.digest != classic.digest
+    with pytest.raises(c2_route.SealError, match="already_transcribes_on_gemini"):
+        c2_route.derive_configuration(new)
+
+
+def test_the_sealed_bundle_keeps_every_classic_route_and_approves_the_new_one() -> None:
+    classic, bundle = _classic()
+    new = c2_route.derive_configuration(classic)
+    sealed = c2_route.seal(bundle, classic, new)
+    policy, before = sealed.acquisition_policy, bundle.acquisition_policy
+    assert policy is not None and before is not None
+    assert policy.stages == before.stages  # every classic route kept
+    assert [profile.profile_id for profile in policy.profiles] == [c2_route.PROFILE_ID]
+    # Both configurations activate; only their C2 routes differ.
+    old = ConversationProviderAdmin._approved_configuration(_row(classic), sealed)
+    now = ConversationProviderAdmin._approved_configuration(_row(new), sealed)
+    assert [(d.provider_id, d.model_id) for d in old][0] == ("elevenlabs", "scribe_v2")
+    assert [(d.provider_id, d.model_id, d.max_cost_paise) for d in now][0] == (
+        "gemini",
+        gemini_audio.MODEL,
+        c2_route.MAX_COST_PAISE,
+    )
+    assert [(d.provider_id, d.model_id) for d in now][1:] == [
+        (d.provider_id, d.model_id) for d in old
+    ][1:]
+    # The file Root installs reads back as the same bundle; sealing again changes nothing.
+    assert load_hosted_approval_bundle(sealed.to_json()).digest == sealed.digest
+    assert c2_route.seal(sealed, classic, new).digest == sealed.digest
+    # A bundle that does not approve the classic configuration is refused.
+    other = _registry_config("other-v1", funded=True, text_provider="gemini", text_cost_paise=40)
+    with pytest.raises(c2_route.SealError, match="does_not_approve_the_classic"):
+        c2_route.seal(bundle, other, c2_route.derive_configuration(other))
+
+
+class _Database:
+    def __init__(self, current: object) -> None:
+        self.current = current
+
+    async def get(self, _model: object, _key: object) -> object:
+        return self.current
+
+
+def _admin(current_config: object | None) -> ConversationProviderAdmin:
+    admin = ConversationProviderAdmin.__new__(ConversationProviderAdmin)
+    admin.application = SimpleNamespace(clock=lambda: datetime.now(UTC))  # type: ignore[assignment]
+    admin.database = _Database(None if current_config is None else _row(current_config))  # type: ignore[assignment]
+
+    async def active(_tenant: object) -> object:
+        return None if current_config is None else SimpleNamespace(configuration_id=uuid4())
+
+    admin._active = active  # type: ignore[method-assign]
+    return admin
+
+
+@pytest.mark.asyncio
+async def test_switching_transcription_to_gemini_is_the_owners_action(monkeypatch) -> None:
+    classic, _ = _classic()
+    new = c2_route.derive_configuration(classic)
+    actor = SimpleNamespace(tenant_id=uuid4(), person_id=uuid4(), session_id=uuid4())
+    fresh = {"value": True}
+
+    async def is_fresh(_database: object, _session: object, _now: object) -> bool:
+        return fresh["value"]
+
+    monkeypatch.setattr(sign_in_methods, "session_is_fresh", is_fresh)
+    admin = _admin(classic)
+    reason = "Owner, 21 Oct: So at least get this on prod now"
+    for confirm, said, words in (
+        (None, reason, "Type one_pass"),
+        ("yes", reason, "Type one_pass"),
+        ("one_pass", "ok", "owner's words"),
+    ):
+        with pytest.raises(ConversationDenied, match=words):
+            await admin._owner_gate(actor, _row(new), confirm=confirm, reason=said)
+    fresh["value"] = False
+    with pytest.raises(ConversationDenied, match="Sign in again"):
+        await admin._owner_gate(actor, _row(new), confirm="one_pass", reason=reason)
+    fresh["value"] = True
+    assert await admin._owner_gate(actor, _row(new), confirm="one_pass", reason=reason)
+    # Back to Scribe, or any other change, needs nothing more: the one-click fallback.
+    assert not await _admin(new)._owner_gate(actor, _row(classic), confirm=None, reason=None)
+    assert not await _admin(new)._owner_gate(actor, _row(new), confirm=None, reason=None)
+
+
+def test_the_host_script_seals_only_the_derived_configuration(tmp_path, capsys) -> None:
+    import json
+
+    from scripts.ops import one_pass_c2_seal
+
+    classic, bundle = _classic()
+    derived = c2_route.derive_configuration(classic)
+    (tmp_path / "bundle.json").write_bytes(bundle.to_json())
+    (tmp_path / "classic.json").write_text(json.dumps(classic.as_dict()))
+    (tmp_path / "gemini.json").write_text(json.dumps(derived.as_dict()))
+    out = tmp_path / "out"
+    arguments = [
+        "--bundle",
+        str(tmp_path / "bundle.json"),
+        "--classic",
+        str(tmp_path / "classic.json"),
+        "--configuration",
+        str(tmp_path / "gemini.json"),
+        "--out",
+        str(out),
+    ]
+    assert one_pass_c2_seal.main(arguments) == 0
+    summary = json.loads(capsys.readouterr().out)
+    sealed = load_hosted_approval_bundle((out / "hosted-approval.json").read_bytes())
+    assert (out / "hosted-approval.sha256").read_text().strip() == sealed.digest
+    assert summary["bundle_after"] == sealed.digest != summary["bundle_before"]
+    assert summary["gemini_c2_configuration"] == derived.digest
+    # A configuration other than the derived one is never sealed.
+    other = classic.as_dict()
+    other["revision"] = "slipped-in"
+    (tmp_path / "gemini.json").write_text(json.dumps(other))
+    assert one_pass_c2_seal.main(arguments) == 2

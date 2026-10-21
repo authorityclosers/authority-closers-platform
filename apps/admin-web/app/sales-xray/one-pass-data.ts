@@ -104,6 +104,59 @@ export function normalizePipeline(raw: unknown): PipelineSettings {
   };
 }
 
+/**
+ * The C2 route in use and the Gemini 3.1 Flash-Lite configuration
+ * (GET /v1/admin/analysis-pipeline/transcription): saved as a provider
+ * revision? sealed into the approval bundle (an activation option)?
+ */
+export type Transcription = {
+  latestRevision: number;
+  sealedBundle: string | null;
+  active: {
+    revision: number;
+    configurationSha256: string;
+    provider: string | null;
+    model: string | null;
+  } | null;
+  gemini: {
+    model: string;
+    profileId: string;
+    configurationSha256: string | null;
+    savedRevision: number | null;
+    approved: boolean;
+  };
+  classicRevision: number | null;
+  confirm: string;
+};
+
+export function normalizeTranscription(raw: unknown): Transcription {
+  const body = read.object(raw);
+  const active = body.active ? read.object(body.active) : null;
+  const route = active ? read.object(active.transcription) : {};
+  const gemini = read.object(body.gemini);
+  return {
+    latestRevision: read.number(body.latest_revision, 0),
+    sealedBundle: read.optionalString(body.sealed_bundle),
+    active: active
+      ? {
+          revision: read.number(active.revision),
+          configurationSha256: read.string(active.configuration_sha256),
+          provider: read.optionalString(route.provider),
+          model: read.optionalString(route.model),
+        }
+      : null,
+    gemini: {
+      model: read.string(gemini.model, "gemini-3.1-flash-lite"),
+      profileId: read.string(gemini.profile_id),
+      configurationSha256: read.optionalString(gemini.configuration_sha256),
+      savedRevision: read.optionalNumber(gemini.saved_revision),
+      approved: read.boolean(gemini.approved),
+    },
+    classicRevision: read.optionalNumber(body.classic_revision),
+    confirm: read.string(body.confirm, "one_pass"),
+  };
+}
+
 export type SideSummary = {
   costInr: number | null;
   perMinuteInr: number | null;
