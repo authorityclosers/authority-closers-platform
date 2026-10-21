@@ -289,6 +289,15 @@ SETTINGS: tuple[Setting, ...] = (
             ),
         )
     ),
+    _call_data(
+        "fast",
+        "calls",
+        "Fast pipeline: calls it reads",
+        "enum",
+        help="This environment's default reads every call except one whose one-pass report "
+        "fills its lead details in production, and every call elsewhere.",
+        options_from=("/fast_calls", "value", "label"),
+    ),
     _lead_desk_ai(
         "enabled",
         "AI replies to lead messages",
