@@ -13,6 +13,16 @@ Cheapest first:
 An organisation has a default (full until an owner or admin changes it) and each
 person may have their own level, which beats the default. "Get full report" upgrades
 one call. Release checks (canary calls) always run in full.
+
+Short calls (owner, 21 Oct 2026: "calls under 1 minute (and no-conversation calls) get
+only the transcript and lead details, with Get full report on tap"): in an
+organisation, a call whose level would run in full keeps its transcript and the call
+data engine's lead details, and stops before facts and coaching, when its transcript
+is under a minute, or shows no conversation (under 20 seconds, or under 8 seconds of
+talk from the quieter of its two main speakers). A call over a minute whose transcript
+has one speaker label counts as a conversation: speaker separation can miss the split
+(2 of 45 real dev transcripts on 21 Oct, the same 8-minute call twice), and a real
+conversation must never lose its report to that. Get full report runs it in full.
 """
 
 from __future__ import annotations
@@ -33,7 +43,20 @@ NAMES: Final[dict[str, str]] = {
 }
 # The processing plan's hold codes: why a call stopped before a paid stage.
 SKIP_CODES: Final[dict[str, str]] = {"off": "ai_off", "data_only": "ai_data_only"}
-FAILURE_CODES: Final[frozenset[str]] = frozenset(SKIP_CODES.values())
+# Why a call stopped: its level, or the short-call rule (owner, 21 Oct 2026).
+REASONS: Final[tuple[str, ...]] = ("level", "short_call", "no_conversation")
+SHORT_CODES: Final[dict[str, str]] = {
+    "short_call": "ai_short_call",
+    "no_conversation": "ai_no_conversation",
+}
+FAILURE_CODES: Final[frozenset[str]] = frozenset((*SKIP_CODES.values(), *SHORT_CODES.values()))
+# The short-call rule's limits, on the call's own transcript.
+SHORT_CALL_MS: Final = 60_000
+NO_CONVERSATION_MS: Final = 20_000
+TWO_SIDED_TALK_MS: Final = 8_000
+# Environments whose full-pipeline proofs use seconds-long fixture audio: the rule is
+# off there (its own tests turn it on).
+SHORT_RULE_OFF: frozenset[str] = frozenset({"test"})
 # The first stage each level leaves out (Off: transcription; Data only: facts).
 FIRST_SKIPPED: Final[dict[str, str]] = {"off": "C2", "data_only": "C4"}
 # A settings document stays small: one line per person.
@@ -100,3 +123,42 @@ def resolve(config: Mapping[str, Any], person_id: UUID | None) -> tuple[str, str
     if person_id is not None and str(person_id) in people:
         return str(people[str(person_id)]), "person"
     return str(config.get("default", DEFAULT_LEVEL)), "organisation"
+
+
+def short_rule_applies(environment: object) -> bool:
+    """On in every named environment but those in ``SHORT_RULE_OFF`` (tests)."""
+    return isinstance(environment, str) and environment not in SHORT_RULE_OFF
+
+
+def short_call_reason(transcript: Mapping[str, Any]) -> str | None:
+    """``no_conversation``, ``short_call`` or None for one saved C2 transcript.
+
+    Length is the transcript's ``duration_ms`` (else its last segment's end). Two-sided
+    talk is the speaking time of the quieter of the two speakers who talk most, so a call
+    where the other side barely speaks is no conversation. One speaker label over a
+    minute is left alone (it may be a missed speaker split, not a monologue)."""
+    segments = [item for item in transcript.get("segments") or [] if isinstance(item, Mapping)]
+    talk: dict[str, int] = {}
+    last_end = 0
+    for item in segments:
+        try:
+            start, end = int(item.get("start_ms") or 0), int(item.get("end_ms") or 0)
+        except (TypeError, ValueError):
+            continue
+        if end <= start:
+            continue
+        speaker = str(item.get("speaker_id") or item.get("speaker") or "")
+        talk[speaker] = talk.get(speaker, 0) + (end - start)
+        last_end = max(last_end, end)
+    try:
+        duration = int(transcript.get("duration_ms") or 0) or last_end
+    except (TypeError, ValueError):
+        duration = last_end
+    spoken = sorted(talk.values(), reverse=True)
+    if duration < NO_CONVERSATION_MS:
+        return "no_conversation"
+    if duration < SHORT_CALL_MS:
+        return "short_call"
+    if len(spoken) > 1 and spoken[1] < TWO_SIDED_TALK_MS:
+        return "no_conversation"
+    return None

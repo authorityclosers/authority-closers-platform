@@ -146,6 +146,7 @@ const stopped = (
   retry_available: false,
   ai_skip: {
     level,
+    reason: "level",
     stopped_before: level === "off" ? "C2" : "C4",
     can_upgrade: canUpgrade,
   },
@@ -189,4 +190,31 @@ it("tells a seller an owner or admin can get the full report", async () => {
     "An owner or admin can get the full report",
   );
   expect(host.querySelector("button")).toBeNull();
+});
+
+it("says a short call keeps its transcript and lead details, with Get full report", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async () => new Response(JSON.stringify(plan))),
+  );
+  await act(async () =>
+    status({
+      ...stopped(true, "data_only"),
+      failure_code: "ai_short_call",
+      ai_skip: {
+        level: "full",
+        reason: "short_call",
+        stopped_before: "C4",
+        can_upgrade: true,
+      },
+    }),
+  );
+  expect(host.textContent).toContain("Short call: transcript and lead details");
+  expect(host.textContent).toContain("Calls under a minute");
+  expect(host.textContent).not.toContain("Data only");
+  expect(
+    [...host.querySelectorAll("button")].some(
+      (item) => item.textContent === "Get full report",
+    ),
+  ).toBe(true);
 });
