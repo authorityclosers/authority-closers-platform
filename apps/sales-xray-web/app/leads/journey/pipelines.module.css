@@ -84,6 +84,19 @@
   cursor: pointer;
 }
 
+/* Phones: the pipelines' names keep the room; + alone makes one. */
+@media (max-width: 520px) {
+  .addLabel {
+    display: none;
+  }
+
+  .add {
+    width: 36px;
+    justify-content: center;
+    padding: 0;
+  }
+}
+
 .card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

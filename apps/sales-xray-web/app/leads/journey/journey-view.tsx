@@ -317,6 +317,7 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
       <BusinessCard
         profile={profile ?? null}
         loading={templates === null}
+        custom={view.version > 0 && !view.industry}
         onChange={() => setChoosing(true)}
       />
       <StagesExplainer />
@@ -360,10 +361,13 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
 function BusinessCard({
   profile,
   loading,
+  custom = false,
   onChange,
 }: {
   profile: TemplateView | null;
   loading: boolean;
+  /** Stages set by hand, from no kind of business. */
+  custom?: boolean;
   onChange: () => void;
 }) {
   const Icon = (profile && ICONS[profile.icon]) || Sparkles;
@@ -377,12 +381,20 @@ function BusinessCard({
         {loading ? (
           <Skeleton width="50%" height={16} />
         ) : (
-          <strong>{profile ? profile.name : "Not chosen yet"}</strong>
+          <strong>
+            {profile
+              ? profile.name
+              : custom
+                ? "Your own stages"
+                : "Not chosen yet"}
+          </strong>
         )}
         <span>
           {profile
             ? `Gives ${profile.stages.length} stages that fit it. Change it any time; your leads stay where they are.`
-            : "Pick the closest one to get stages that fit how you sell."}
+            : custom
+              ? "Set to fit how you sell. Change starts again from a kind of business; your leads stay where they are."
+              : "Pick the closest one to get stages that fit how you sell."}
         </span>
       </span>
       <Button onClick={onChange}>Change</Button>

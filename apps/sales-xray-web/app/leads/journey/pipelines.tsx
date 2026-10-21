@@ -84,9 +84,14 @@ export function PipelineBar({
         ))}
       </div>
       {canEdit ? (
-        <button type="button" className={styles.add} onClick={onNew}>
+        <button
+          type="button"
+          className={styles.add}
+          aria-label="New pipeline"
+          onClick={onNew}
+        >
           <Plus size={15} aria-hidden="true" />
-          New pipeline
+          <span className={styles.addLabel}>New pipeline</span>
         </button>
       ) : null}
     </div>
