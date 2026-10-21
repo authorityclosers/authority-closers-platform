@@ -141,6 +141,11 @@ export type LightboxShellProps = {
     | "review";
   compactBusy?: boolean;
   mobileFit?: boolean;
+  /**
+   * Phones: the page takes the whole screen, without the top bar or the tab
+   * bar (an open chat; owner, 22 Oct 2026). Its own header leads back.
+   */
+  immersive?: boolean;
   welcome?: boolean;
   heroStage?: "welcome" | "ready" | "processing" | "attention";
   /**
@@ -239,6 +244,7 @@ function LightboxShellFrame({
   active = "analyse",
   compactBusy = false,
   mobileFit = false,
+  immersive = false,
   welcome = false,
   heroStage,
   pageName,
@@ -887,6 +893,7 @@ function LightboxShellFrame({
       data-sidebar-collapsed={collapsed}
       data-compact-busy={compactBusy}
       data-mobile-fit={mobileFit}
+      data-immersive={immersive || undefined}
       data-welcome={Boolean(visibleHero)}
       data-hero-stage={visibleHero}
     >

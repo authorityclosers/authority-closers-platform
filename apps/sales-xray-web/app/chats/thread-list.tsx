@@ -2,20 +2,29 @@
 
 /**
  * The Chats list: one row per conversation, waiting ones first. Each row has
- * the channel on the avatar, the name, the newest line, its time, an unread
- * dot, how long they have waited for an answer and, for managers, the seller.
+ * the lead's name with capitals, the newest line, its time, how many of their
+ * messages are unread, the app it is on (its mark and name), how long they
+ * have waited for an answer and, for managers, the seller (owner, 22 Oct
+ * 2026: "hard to tell which chat is which").
  */
 
-import { Hourglass, Inbox, Search, UserRound } from "lucide-react";
+import {
+  ChevronDown,
+  Hourglass,
+  Inbox,
+  Search,
+  UserRound,
+  X,
+} from "lucide-react";
+import { useState } from "react";
 
-import { ChatAvatar } from "./channel-mark";
+import { ChannelMark, ChatAvatar } from "./channel-mark";
 import {
   CHANNEL_LABEL,
   CHANNELS,
   filterThreads,
   isUnread,
   listTime,
-  placeLine,
   previewLine,
   waitedFor,
   waitTone,
@@ -30,9 +39,9 @@ import styles from "./chats.module.css";
 import { Ticks } from "./ticks";
 
 const SCOPES: { key: Scope; label: string }[] = [
+  { key: "all", label: "Everyone" },
   { key: "mine", label: "Mine" },
   { key: "unassigned", label: "Unassigned" },
-  { key: "all", label: "All" },
 ];
 
 // The list's skeleton lives in the light chats-skeleton.tsx (root loading).
@@ -47,42 +56,74 @@ export function ThreadFilters({
 }: {
   filter: ChatFilter;
   onChange: (next: ChatFilter) => void;
-  /** Managers with owners known: Mine, Unassigned, All. */
+  /** Managers with owners known: All, Mine, Unassigned. */
   showScopes: boolean;
   counts: { waiting: number };
-  /** The channels this organisation's chats use (a filter chip each). */
+  /** The channels this organisation's chats use (a choice each). */
   channels: ChatChannel[];
 }) {
+  // Owner, 22 Oct 2026: one row of small controls, then the chats.
+  const [searching, setSearching] = useState(false);
   const shown = CHANNELS.filter((channel) => channels.includes(channel));
+  if (searching || filter.search)
+    return (
+      <div className={styles.filters}>
+        <label className={styles.search}>
+          <Search size={14} aria-hidden="true" />
+          <input
+            type="search"
+            value={filter.search}
+            placeholder="Search names"
+            aria-label="Search chats by name"
+            autoFocus={!filter.search}
+            onChange={(event) =>
+              onChange({ ...filter, search: event.target.value })
+            }
+          />
+          <button
+            type="button"
+            className={styles.searchClose}
+            aria-label="Close search"
+            onClick={() => {
+              onChange({ ...filter, search: "" });
+              setSearching(false);
+            }}
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
+        </label>
+      </div>
+    );
   return (
     <div className={styles.filters}>
-      <label className={styles.search}>
-        <Search size={14} aria-hidden="true" />
-        <input
-          type="search"
-          value={filter.search}
-          placeholder="Search names"
+      <div className={styles.filterRow} role="group" aria-label="Show">
+        <button
+          type="button"
+          className={styles.iconChip}
           aria-label="Search chats by name"
-          onChange={(event) =>
-            onChange({ ...filter, search: event.target.value })
-          }
-        />
-      </label>
-      {showScopes ? (
-        <div className={styles.scopes} role="group" aria-label="Whose chats">
-          {SCOPES.map((scope) => (
-            <button
-              key={scope.key}
-              type="button"
-              aria-pressed={filter.scope === scope.key}
-              onClick={() => onChange({ ...filter, scope: scope.key })}
+          onClick={() => setSearching(true)}
+        >
+          <Search size={16} aria-hidden="true" />
+        </button>
+        {showScopes ? (
+          <label className={styles.pickChip}>
+            <UserRound size={13} aria-hidden="true" />
+            <select
+              aria-label="Whose chats"
+              value={filter.scope}
+              onChange={(event) =>
+                onChange({ ...filter, scope: event.target.value as Scope })
+              }
             >
-              {scope.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <div className={styles.chips} role="group" aria-label="Show">
+              {SCOPES.map((scope) => (
+                <option key={scope.key} value={scope.key}>
+                  {scope.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} aria-hidden="true" />
+          </label>
+        ) : null}
         <button
           type="button"
           className={styles.chip}
@@ -94,20 +135,31 @@ export function ThreadFilters({
           <Hourglass size={12} aria-hidden="true" />
           Waiting{counts.waiting ? ` ${counts.waiting}` : ""}
         </button>
-        {shown.length > 1
-          ? (["all", ...shown] as const).map((channel) => (
-              <button
-                key={channel}
-                type="button"
-                className={styles.chip}
-                data-channel={channel}
-                aria-pressed={filter.channel === channel}
-                onClick={() => onChange({ ...filter, channel })}
-              >
-                {channel === "all" ? "All" : CHANNEL_LABEL[channel]}
-              </button>
-            ))
-          : null}
+        {shown.length > 1 ? (
+          <label className={styles.pickChip}>
+            {filter.channel === "all" ? null : (
+              <ChannelMark channel={filter.channel} size={14} />
+            )}
+            <select
+              aria-label="Channel"
+              value={filter.channel}
+              onChange={(event) =>
+                onChange({
+                  ...filter,
+                  channel: event.target.value as ChatChannel | "all",
+                })
+              }
+            >
+              <option value="all">All channels</option>
+              {shown.map((channel) => (
+                <option key={channel} value={channel}>
+                  {CHANNEL_LABEL[channel]}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} aria-hidden="true" />
+          </label>
+        ) : null}
       </div>
     </div>
   );
@@ -132,6 +184,9 @@ function ThreadRow({
 }) {
   const since = thread.waiting ? (thread.waitingSince ?? thread.lastAt) : null;
   const gone = !thread.leadId;
+  // Their messages since this person last read the chat, when the server
+  // counts them; a dot when only this phone knows it is unread.
+  const count = unread && thread.unread ? thread.unread : 0;
   return (
     <li>
       <button
@@ -154,15 +209,22 @@ function ThreadRow({
               <Ticks status={thread.lastStatus ?? "sent"} size={14} />
             ) : null}
             <span>{previewLine(thread)}</span>
-            {unread ? (
+            {count ? (
+              <span className={styles.unreadCount}>
+                {count > 99 ? "99+" : count}
+                <span className={styles.srOnly}> unread</span>
+              </span>
+            ) : unread ? (
               <span className={styles.unreadDot}>
                 <span className={styles.srOnly}>Unread</span>
               </span>
             ) : null}
           </span>
           <span className={styles.rowMeta}>
-            <span className={styles.rowPlace}>
-              {gone ? "Lead removed" : placeLine(thread)}
+            {/* Owner, 22 Oct: which app each chat is on, in words. */}
+            <span className={styles.channelTag} data-channel={thread.channel}>
+              <ChannelMark channel={thread.channel} size={13} />
+              {gone ? "Lead removed" : CHANNEL_LABEL[thread.channel]}
             </span>
             {showOwner ? (
               <span
