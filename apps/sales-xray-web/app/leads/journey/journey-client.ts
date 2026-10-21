@@ -35,7 +35,31 @@ export type JourneyView = {
   canEdit: boolean;
   kinds: Record<string, string>;
   meanings: Record<string, string>;
+  /** The pipeline these stages belong to ("main" until there are more). */
+  pipeline?: string;
 };
+
+/** One of the organisation's pipelines (owner, 22 Oct 2026). */
+export type PipelineView = {
+  key: string;
+  name: string;
+  position: number;
+  /** The first pipeline: it takes every lead the others don't. */
+  main: boolean;
+  /** The lead sources whose new leads come here (the main one lists none). */
+  sources: string[];
+  industry: string | null;
+  leads: number;
+};
+
+export type PipelinesView = {
+  pipelines: PipelineView[];
+  /** Every lead source a pipeline can take, in the page's words. */
+  sources: Record<string, string>;
+  canEdit: boolean;
+};
+
+export const MAIN_PIPELINE = "main";
 
 export type TemplateView = {
   id: string;
@@ -175,13 +199,46 @@ export async function call<T>(
   return (await response.json()) as T;
 }
 
-export const readJourney = () => call<JourneyView>("/journey");
+/** `?pipeline=` for every pipeline but the main one, whose address stays as it was. */
+export const inPipeline = (pipeline?: string) =>
+  pipeline && pipeline !== MAIN_PIPELINE
+    ? `?pipeline=${encodeURIComponent(pipeline)}`
+    : "";
+
+export const readJourney = (pipeline?: string) =>
+  call<JourneyView>(`/journey${inPipeline(pipeline)}`);
 export const readTemplates = () => call<TemplateView[]>("/journey/templates");
 export const readAds = () => call<AdsView>("/journey/ads");
-export const readSuggestions = () => call<Suggestion[]>("/journey/suggestions");
+export const readSuggestions = (pipeline?: string) =>
+  call<Suggestion[]>(`/journey/suggestions${inPipeline(pipeline)}`);
 
-export const saveJourney = (expectedVersion: number, drafts: Draft[]) =>
-  call<JourneyView>("/journey", {
+export const readPipelines = () => call<PipelinesView>("/pipelines");
+
+export const createPipeline = (pipeline: {
+  name: string;
+  template: string;
+  sources: string[];
+}) =>
+  call<PipelinesView>("/pipelines", {
+    method: "POST",
+    body: JSON.stringify(pipeline),
+  });
+
+export const changePipeline = (
+  key: string,
+  change: { name?: string; sources?: string[] },
+) =>
+  call<PipelinesView>(`/pipelines/${encodeURIComponent(key)}`, {
+    method: "PATCH",
+    body: JSON.stringify(change),
+  });
+
+export const saveJourney = (
+  expectedVersion: number,
+  drafts: Draft[],
+  pipeline?: string,
+) =>
+  call<JourneyView>(`/journey${inPipeline(pipeline)}`, {
     method: "PUT",
     body: JSON.stringify({
       expectedVersion,
@@ -197,8 +254,12 @@ export const saveJourney = (expectedVersion: number, drafts: Draft[]) =>
     }),
   });
 
-export const applyTemplate = (expectedVersion: number, template: string) =>
-  call<JourneyView>("/journey/template", {
+export const applyTemplate = (
+  expectedVersion: number,
+  template: string,
+  pipeline?: string,
+) =>
+  call<JourneyView>(`/journey/template${inPipeline(pipeline)}`, {
     method: "POST",
     body: JSON.stringify({ expectedVersion, template }),
   });

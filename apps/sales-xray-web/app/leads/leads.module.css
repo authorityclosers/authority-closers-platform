@@ -2498,6 +2498,30 @@ a.repName {
   overflow-wrap: anywhere;
 }
 
+/* The lead's pipeline and a move to another (22 Oct 2026). */
+.pipelineMark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lx-focus-soft);
+  color: var(--lx-focus-ink);
+}
+
+.pipelineMove select {
+  min-height: 36px;
+  max-width: 160px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
 /* Reassign: the people to choose from, one tap each (owner, 18 Oct). */
 .reassignList {
   display: grid;

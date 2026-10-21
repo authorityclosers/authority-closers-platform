@@ -6,7 +6,9 @@
  * browser. Names arrive in lower case on purpose: the page shows them with
  * capitals. `?tab=all&stage=…|team|sources|stages` opens that view, as on
  * /leads; `&tap=menu` then opens the ⋯ menu by itself, and with
- * `?tab=stages&tap=change` the kinds of business.
+ * `?tab=stages&tap=change` the kinds of business. `&pipelines=2` gives the
+ * organisation two pipelines (enquiries and partner outreach; `&pipeline=`
+ * picks one), and `?tab=stages&pipelines=2&tap=new` opens New pipeline.
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -54,6 +56,22 @@ const LEADS: [string, string | null, string | null, Stage, string, string][] = [
   ["amit fictional", "Nagpur", "Shop", "lost", "Lost", "closed"],
 ];
 
+/** `&pipelines=2`: two pipelines, half the leads in each. */
+const twoPipelines = () =>
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("pipelines") === "2";
+
+const PARTNER_STAGES = [
+  ["New", "new"],
+  ["Couldn't reach", "not_connected"],
+  ["Gatekeeper", "follow_up"],
+  ["Spoke to owner", "follow_up"],
+  ["Interested", "interested"],
+  ["Meeting booked", "interested"],
+  ["Partner signed", "won"],
+  ["Not a fit", "lost"],
+] as const;
+
 function rows(now: number) {
   return LEADS.map(([name, city, interest, stage, label, why], index) => ({
     lead_id: `00000000-0000-4000-8000-0000000003${String(index).padStart(2, "0")}`,
@@ -80,6 +98,7 @@ function rows(now: number) {
     last_result_label: null,
     test_data: false,
     overdue: index === 1,
+    pipeline: index % 2 ? "main" : "partner_outreach",
   }));
 }
 
@@ -123,16 +142,74 @@ function answers(now: number, path: string): unknown {
   if (path.startsWith("/v1/lead-desk/leads?")) {
     const params = new URLSearchParams(path.split("?")[1]);
     const stage = params.get("stage");
-    const leads = all.filter((row) =>
+    const pipeline = params.get("pipeline");
+    const inPipeline = all.filter(
+      (row) => !pipeline || row.pipeline === pipeline,
+    );
+    const leads = inPipeline.filter((row) =>
       !stage || stage === "open"
         ? row.stage !== "won" && row.stage !== "lost"
         : row.stage === stage,
     );
     const stage_counts: Record<string, number> = {};
-    for (const row of all)
+    for (const row of inPipeline)
       stage_counts[row.stage] = (stage_counts[row.stage] ?? 0) + 1;
     return { leads, total: leads.length, next_offset: null, stage_counts };
   }
+  if (path === "/v1/lead-desk/pipelines" && twoPipelines())
+    return {
+      pipelines: [
+        {
+          key: "main",
+          name: "Enquiries",
+          position: 0,
+          main: true,
+          sources: [],
+          industry: "real_estate",
+          leads: 4,
+        },
+        {
+          key: "partner_outreach",
+          name: "Partner outreach",
+          position: 1,
+          main: false,
+          sources: ["csv"],
+          industry: null,
+          leads: 4,
+        },
+      ],
+      sources: {
+        meta: "Facebook and Instagram lead ads",
+        webhook: "Website forms and other apps",
+        sheet: "Google Sheets",
+        csv: "File imports",
+        manual: "Added by hand",
+        referral: "Referrals",
+      },
+      canEdit: true,
+    };
+  if (path === "/v1/lead-desk/journey?pipeline=partner_outreach")
+    return {
+      version: 3,
+      industry: null,
+      savedAt: null,
+      savedBy: null,
+      canEdit: true,
+      kinds: {},
+      meanings: {},
+      pipeline: "partner_outreach",
+      stages: PARTNER_STAGES.map(([label, kind], index) => ({
+        key: `partner_${index}`,
+        label,
+        kind,
+        kindWords: "",
+        milestone: "",
+        meaning: "",
+        archived: false,
+        origin: "",
+        leads: 1,
+      })),
+    };
   if (path === "/v1/lead-desk/journey")
     return {
       version: 2,
@@ -300,18 +377,22 @@ function install() {
 function useTap() {
   useEffect(() => {
     const tap = new URLSearchParams(window.location.search).get("tap");
-    if (tap !== "menu" && tap !== "change") return;
+    if (tap !== "menu" && tap !== "change" && tap !== "new") return;
     const timer = window.setTimeout(
       () =>
         (tap === "menu"
           ? document.querySelector<HTMLButtonElement>(
               'button[aria-label="Leads settings"]',
             )
-          : Array.from(
-              document.querySelectorAll<HTMLButtonElement>(
-                'section[aria-label="Your kind of business"] button',
-              ),
-            ).find((button) => button.textContent === "Change")
+          : tap === "new"
+            ? Array.from(
+                document.querySelectorAll<HTMLButtonElement>("button"),
+              ).find((button) => button.textContent?.trim() === "New pipeline")
+            : Array.from(
+                document.querySelectorAll<HTMLButtonElement>(
+                  'section[aria-label="Your kind of business"] button',
+                ),
+              ).find((button) => button.textContent === "Change")
         )?.click(),
       900,
     );

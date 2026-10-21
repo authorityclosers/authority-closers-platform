@@ -21,6 +21,7 @@ import {
   Radio,
   Shuffle,
   Trash2,
+  Workflow,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -47,6 +48,7 @@ import {
   LeadsError,
   localInputValue,
   logPhoneCall,
+  movePipeline,
   setCallPrivacy,
   minutesLabel,
   nextCallTime,
@@ -70,6 +72,7 @@ import { WhatsAppThread } from "./whatsapp-thread";
 import { sourceText, whyLine } from "./desk-view";
 import { firstCallWords, ownerNote } from "./owner-words";
 import { phoneCallText } from "./phone-call-text";
+import { several, usePipelines } from "./use-pipelines";
 import {
   MessageSetup,
   MessageSheet,
@@ -2120,6 +2123,10 @@ export function LeadCard({
         ) : null}
       </section>
 
+      {detail.can_assign ? (
+        <PipelinePanel detail={detail} onChanged={onChanged} />
+      ) : null}
+
       <LastCallBrief detail={detail} onChanged={onChanged} />
 
       <WhatsAppThread leadId={lead.lead_id} canSend={detail.can_edit} />
@@ -2139,6 +2146,79 @@ export function LeadCard({
 /* ---------- Lead sheet ---------- */
 
 export type LeadIntent = "call" | "message";
+
+/**
+ * Which pipeline the lead is in, and a move to another (owners and admins, when the
+ * organisation runs several; owner, 22 Oct 2026). It keeps its owner and follow-ups
+ * and lands in the new pipeline's stage for where it is.
+ */
+function PipelinePanel({
+  detail,
+  onChanged,
+}: {
+  detail: LeadDetail;
+  onChanged: (next: LeadDetail) => void;
+}) {
+  const pipes = usePipelines();
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  if (!several(pipes)) return null;
+  const lead = detail.lead;
+  const here = lead.pipeline ?? "main";
+  const name =
+    pipes.pipelines.find((item) => item.key === here)?.name ?? "Leads";
+  return (
+    <section className={styles.panel} aria-label="Pipeline">
+      <div className={styles.ownerRow}>
+        <span className={styles.pipelineMark} aria-hidden="true">
+          <Workflow size={16} />
+        </span>
+        <span>
+          <small>Pipeline</small>
+          <strong>{name}</strong>
+        </span>
+        <label className={styles.pipelineMove}>
+          <span className={styles.srOnly}>Move to pipeline</span>
+          <select
+            value=""
+            disabled={busy}
+            onChange={async (event) => {
+              const key = event.target.value;
+              if (!key) return;
+              setBusy(true);
+              setProblem(null);
+              try {
+                onChanged(await movePipeline(lead, key));
+              } catch (reason) {
+                setProblem(
+                  reason instanceof LeadsError
+                    ? reason.message
+                    : "Not moved. Try again.",
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <option value="">{busy ? "Moving…" : "Move to…"}</option>
+            {pipes.pipelines
+              .filter((item) => item.key !== here)
+              .map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.name}
+                </option>
+              ))}
+          </select>
+        </label>
+      </div>
+      {problem ? (
+        <p className={styles.error} role="alert">
+          {problem}
+        </p>
+      ) : null}
+    </section>
+  );
+}
 
 export function LeadSheet({
   leadId,

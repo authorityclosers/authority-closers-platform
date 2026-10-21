@@ -235,7 +235,7 @@ function useTap() {
             ?.click(),
       );
     const timers = steps.map((step, index) =>
-      window.setTimeout(step, 900 + index * 500),
+      window.setTimeout(step, 500 + index * 200),
     );
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, []);
