@@ -837,6 +837,39 @@
   text-decoration: underline;
 }
 
+/* The seller's name opens their profile; the rules sit one tap beside it. */
+.repCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+a.repName {
+  text-decoration: none;
+}
+
+.repRules {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--lx-radius-sm);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.repRules:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.repRules:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
 .padded {
   padding: 12px 14px;
 }

@@ -827,11 +827,17 @@ class LeadDesk:
         offset: int,
         limit: int = PAGE_SIZE,
         test_only: bool = False,
+        owner: UUID | None = None,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins see the whole team's leads.")
         where: list[Any] = [self._visible()]
+        if owner is not None:
+            # One seller's leads, for their profile (owner, 21 Oct 2026): the team list only.
+            if scope != "team":
+                raise DeskError(422, "Choose the team's leads to see one seller's.")
+            where.append(Lead.owner_person_id == owner)
         if test_only:
             # Test and sample leads (sandbox seed, practice workspaces, Meta's testing
             # tool): easy to find and clear.

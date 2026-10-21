@@ -447,6 +447,7 @@ export function readLeads(
     search,
     offset = 0,
     test = false,
+    owner,
   }: {
     scope: "mine" | "team" | "unassigned";
     stage?: string | null;
@@ -454,10 +455,13 @@ export function readLeads(
     offset?: number;
     /** Test and sample leads only, in every stage. */
     test?: boolean;
+    /** One seller's leads (team scope, owners and admins): their profile. */
+    owner?: string;
   },
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ scope });
+  if (owner) params.set("owner", owner);
   if (stage) params.set("stage", stage);
   if (search?.trim()) params.set("search", search.trim().slice(0, 80));
   if (offset) params.set("offset", String(offset));

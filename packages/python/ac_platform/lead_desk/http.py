@@ -207,15 +207,21 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         search: str | None = None,
         offset: int = 0,
         test: Literal["only"] | None = None,
+        owner: UUID | None = None,
     ) -> LeadPage:
-        no_query(request, frozenset({"scope", "stage", "search", "offset", "test"}))
+        no_query(request, frozenset({"scope", "stage", "search", "offset", "test", "owner"}))
         if stage is not None and stage != "open" and stage not in STAGES:
             raise HTTPException(422, "Choose a lead stage.", headers=PRIVATE)
         if not 0 <= offset <= 100_000 or (search is not None and len(search) > 80):
             raise HTTPException(422, "Search with fewer words.", headers=PRIVATE)
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.leads(
-                scope=scope, stage=stage, search=search, offset=offset, test_only=test == "only"
+                scope=scope,
+                stage=stage,
+                search=search,
+                offset=offset,
+                test_only=test == "only",
+                owner=owner,
             )
 
     @router.post("/leads/delete", response_model=LeadsDeleted, response_model_by_alias=True)

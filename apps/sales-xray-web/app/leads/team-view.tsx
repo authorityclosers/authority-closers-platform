@@ -6,7 +6,8 @@
  * seller's load and today's calls, and switch on auto-reassign.
  */
 
-import { RefreshCw, Users } from "lucide-react";
+import { RefreshCw, SlidersHorizontal, Users } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import {
@@ -547,26 +548,38 @@ export function TeamView({
                 <th data-num>Calls today</th>
                 <th data-num>Connected</th>
                 <th data-num>First call</th>
-                <th>Rules (click a name to change)</th>
+                <th>Rules</th>
               </tr>
             </thead>
             <tbody>
               {team.reps.map((rep) => (
                 <tr key={rep.person_id}>
                   <th scope="row">
-                    <button
-                      type="button"
-                      className={styles.repName}
-                      onClick={() => {
-                        setEditRound((value) => value + 1);
-                        setEditing(rep);
-                      }}
-                      aria-label={`Edit ${rep.name}'s lead rules`}
-                    >
-                      <Avatar name={rep.name} size={24} />
-                      {rep.name}
-                      {rep.role !== "member" ? <Badge>{rep.role}</Badge> : null}
-                    </button>
+                    <span className={styles.repCell}>
+                      {/* The name opens the seller's profile (owner, 21 Oct 2026). */}
+                      <Link
+                        className={styles.repName}
+                        href={`/organisation/people/${encodeURIComponent(rep.person_id)}`}
+                      >
+                        <Avatar name={rep.name} size={24} />
+                        {rep.name}
+                        {rep.role !== "member" ? (
+                          <Badge>{rep.role}</Badge>
+                        ) : null}
+                      </Link>
+                      <button
+                        type="button"
+                        className={styles.repRules}
+                        onClick={() => {
+                          setEditRound((value) => value + 1);
+                          setEditing(rep);
+                        }}
+                        aria-label={`Edit ${rep.name}'s lead rules`}
+                        title="Lead rules"
+                      >
+                        <SlidersHorizontal size={14} aria-hidden="true" />
+                      </button>
+                    </span>
                   </th>
                   <td>
                     {rep.available ? (
