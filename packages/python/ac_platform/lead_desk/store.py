@@ -846,10 +846,6 @@ class LeadDesk:
             where.append(Lead.owner_person_id == self.viewer.person_id)
         elif scope == "unassigned":
             where.append(Lead.owner_person_id.is_(None))
-        if stage == "open":
-            where.append(Lead.stage.in_(OPEN_STAGES))
-        elif stage is not None:
-            where.append(Lead.stage == stage)
         if search:
             needle = f"%{search.strip()[:80]}%"
             digits = "".join(ch for ch in search if ch.isdigit())
@@ -857,6 +853,20 @@ class LeadDesk:
             if len(digits) >= 4:
                 terms.append(Lead.phone.like(f"%{digits}%"))
             where.append(or_(*terms))
+        # Every stage's count for the same people and search, before the stage
+        # filter: the stage tabs' numbers (owner, 22 Oct 2026).
+        stage_counts = {
+            str(key): int(count)
+            for key, count in (
+                await self.db.execute(
+                    select(Lead.stage, func.count()).where(*where).group_by(Lead.stage)
+                )
+            ).all()
+        }
+        if stage == "open":
+            where.append(Lead.stage.in_(OPEN_STAGES))
+        elif stage is not None:
+            where.append(Lead.stage == stage)
         total = int(await self.db.scalar(select(func.count()).where(*where)) or 0)
         order = (
             (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at)
@@ -873,6 +883,7 @@ class LeadDesk:
             leads=rows,
             total=total,
             next_offset=offset + limit if offset + limit < total else None,
+            stage_counts=stage_counts,
         )
 
     async def detail(self, lead_id: UUID) -> LeadDetail:

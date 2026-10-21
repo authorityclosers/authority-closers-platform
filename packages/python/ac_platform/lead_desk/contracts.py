@@ -141,6 +141,9 @@ class LeadPage(Model):
     leads: tuple[LeadRow, ...]
     total: int
     next_offset: int | None
+    # Leads per stage for the same people, search and test filter, every stage
+    # at once: the Leads page's stage tabs show real counts (owner, 22 Oct 2026).
+    stage_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class LeadsDeleted(Model):

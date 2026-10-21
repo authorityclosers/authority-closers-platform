@@ -345,6 +345,12 @@ def test_website_form_and_file_capture(postgres_harness: Any, tmp_path: Path) ->
                 page = (await client.get(f"{BASE}/leads?scope=team&stage=open")).json()
                 assert page["total"] == 3
                 assert {row["source"] for row in page["leads"]} == {"webhook", "csv"}
+                # The stage tabs' counts: every stage, whatever stage is asked for.
+                assert page["stage_counts"] == {"new": 3}
+                won = (await client.get(f"{BASE}/leads?scope=team&stage=won")).json()
+                assert won["total"] == 0 and won["stage_counts"] == {"new": 3}
+                none = (await client.get(f"{BASE}/leads?scope=team&search=zzzz")).json()
+                assert none["stage_counts"] == {}
         finally:
             await setup.engine.dispose()
 
