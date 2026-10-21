@@ -384,6 +384,16 @@ class GoldReviews:
         )
         return row_view(row)
 
+    async def evaluation(self, actor: ActorContext) -> dict[str, Any]:
+        """Brain 4.0 and today's pointer review against the gold set (brain4_eval).
+
+        Counts, labels and scores only: never a reviewer's note or the call's words.
+        """
+        now = await self.reviews._admin(actor)
+        from .brain4_eval import evaluate, load
+
+        return evaluate(await load(self.database), now=now)
+
     async def rows(self, actor: ActorContext) -> dict[str, Any]:
         now = await self.reviews._admin(actor)
         rows = (

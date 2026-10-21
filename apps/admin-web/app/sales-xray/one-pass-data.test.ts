@@ -43,6 +43,7 @@ describe("one-pass trial data", () => {
         revision: 6,
         configuration_sha256: "a".repeat(64),
         transcription: { provider: "elevenlabs", model: "scribe_v2" },
+        one_pass: false,
       },
       gemini: {
         model: "gemini-3.1-flash-lite",
@@ -56,6 +57,13 @@ describe("one-pass trial data", () => {
         profile_id: "gemini-flash-lite-c2-flex",
         configuration_sha256: "c".repeat(64),
         saved_revision: null,
+        approved: false,
+      },
+      one_pass: {
+        model: "gemini-3.1-flash-lite",
+        profile_id: "gemini-one-pass",
+        configuration_sha256: "d".repeat(64),
+        saved_revision: 8,
         approved: false,
       },
       classic_revision: 6,
@@ -72,6 +80,13 @@ describe("one-pass trial data", () => {
       savedRevision: null,
       approved: false,
     });
+    expect(view.onePass).toMatchObject({
+      profileId: "gemini-one-pass",
+      savedRevision: 8,
+      approved: false,
+    });
+    expect(view.onePassFlex.savedRevision).toBeNull();
+    expect(view.active?.onePass).toBe(false);
     expect(view.classicRevision).toBe(6);
     const empty = normalizeTranscription(null);
     expect(empty.active).toBeNull();

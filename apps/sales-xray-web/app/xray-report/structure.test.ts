@@ -167,6 +167,59 @@ it("keeps an analysis score as an AI draft and drops evidence that is not in the
   });
   expect(first.evidence).toHaveLength(1);
   expect(first.evidence[0].who).toBe("you");
+  expect(view.beta).toBeNull();
+});
+
+it("marks a calibrated one-pass score as a beta, with its version", () => {
+  const overview = {
+    ...structure().overview,
+    score: 74,
+    score_label: "Good",
+    score_line: "Handled well.",
+  };
+  const beta = readStructure(
+    {
+      ...structure(),
+      overview: {
+        ...overview,
+        score_calibration: {
+          version: "one-pass-pointer-calibration/1",
+          label: "beta",
+        },
+      },
+    },
+    transcript,
+    null,
+    null,
+  )!;
+  expect(beta.beta).toEqual({ version: "one-pass-pointer-calibration/1" });
+  // Only a "beta" label, and only with a score.
+  const other = readStructure(
+    {
+      ...structure(),
+      overview: {
+        ...overview,
+        score_calibration: { version: "x", label: "final" },
+      },
+    },
+    transcript,
+    null,
+    null,
+  )!;
+  expect(other.beta).toBeNull();
+  const unscored = readStructure(
+    {
+      ...structure(),
+      overview: {
+        ...structure().overview,
+        score_calibration: { version: "x", label: "beta" },
+      },
+    },
+    transcript,
+    null,
+    null,
+  )!;
+  expect(unscored.beta).toBeNull();
 });
 
 it("ignores anything that is not the known structure version", () => {

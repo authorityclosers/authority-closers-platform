@@ -66,6 +66,9 @@ from ac_platform.conversation_intelligence.reports import (
     merge_fact_packets,
 )
 from ac_platform.conversation_intelligence.speaker_roles import validate_speaker_roles
+from ac_platform.one_pass.markers import PROMPT_REVISION as ONE_PASS_PROMPT_REVISION
+from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
+from ac_platform.one_pass.markers import call_date as one_pass_call_date
 from ac_platform.outbox.models import Job
 
 if TYPE_CHECKING:
@@ -73,6 +76,9 @@ if TYPE_CHECKING:
 
 ALIGNMENT_RECIPE = "source-clock-support-v1"
 FACT_RECIPE = "source-fact-chunk-v1"
+# C4 as one request over the whole call (one_pass.stage), chosen by its route's recipe.
+ONE_PASS_FACT_RECIPE = ONE_PASS_RECIPE
+FACT_RECIPES = frozenset({FACT_RECIPE, ONE_PASS_FACT_RECIPE})
 COACHING_RECIPE = "qualitative-coaching-v1"
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,8 +129,8 @@ class StageRequest(BaseModel):
     )
     model: str = Field(default=GROQ_MODEL, min_length=1, max_length=128)
     max_input_chars: int = Field(default=16_000, strict=True, ge=512, le=32_000)
-    max_completion_tokens: int = Field(default=1_400, strict=True, ge=256, le=8_000)
-    fact_prompt_revision: Literal["facts-v1", "facts-v2"] = Field(
+    max_completion_tokens: int = Field(default=1_400, strict=True, ge=256, le=20_000)
+    fact_prompt_revision: Literal["facts-v1", "facts-v2", "one-pass-v1"] = Field(
         default=FACT_PROMPT_LEGACY,
         exclude_if=lambda value: value == FACT_PROMPT_LEGACY,
     )
@@ -176,7 +182,14 @@ class StageRequest(BaseModel):
             self.stage != "C5" or self.provider != "openai"
         ):
             raise ValueError("Acquisition benchmark authority is C5-only.")
-        if self.max_completion_tokens > completion_ceiling(self.provider, self.model, self.stage):
+        if self.max_completion_tokens > completion_ceiling(
+            self.provider,
+            self.model,
+            self.stage,
+            recipe=ONE_PASS_RECIPE
+            if self.fact_prompt_revision == ONE_PASS_PROMPT_REVISION
+            else None,
+        ):
             raise ValueError("Stage output exceeds the provider route limit.")
         if self.stage == "C4" and (self.fact_checkpoint_ids or self.profile is not None):
             raise ValueError("Facts cannot take coaching configuration.")
@@ -552,6 +565,7 @@ class ReportingPipeline:
         await self.save(recording, alignment, aligned)
         parents: tuple[Checkpoint, ...] = (transcript_checkpoint, alignment)
         if request.stage == "C4":
+            one_pass = request.fact_prompt_revision == ONE_PASS_PROMPT_REVISION
             inputs = prepare_fact_inputs(
                 transcript,
                 provider=request.provider,
@@ -559,6 +573,8 @@ class ReportingPipeline:
                 max_input_chars=request.max_input_chars,
                 max_completion_tokens=request.max_completion_tokens,
                 prompt_revision=request.fact_prompt_revision,
+                # The one-pass request resolves relative days ("next Friday") to it.
+                call_date=one_pass_call_date(recording.created_at) if one_pass else None,
             )
             if len(inputs) > 64 or request.chunk_index > len(inputs):
                 raise ConversationConflict("The selected fact chunk is unavailable.")
@@ -566,7 +582,7 @@ class ReportingPipeline:
             template = build_checkpoint(
                 binding,
                 "C4",
-                FACT_RECIPE,
+                ONE_PASS_FACT_RECIPE if one_pass else FACT_RECIPE,
                 {
                     "input_sha256": prepared.input_sha256,
                     "chunk_index": prepared.chunk_index,
@@ -610,7 +626,7 @@ class ReportingPipeline:
         packets: list[tuple[FactPacket, Checkpoint, UUID]] = []
         for identifier in request.fact_checkpoint_ids:
             row, checkpoint = await self.checkpoint(recording, identifier, "C4")
-            if checkpoint.revision != FACT_RECIPE or checkpoint.parents != (
+            if checkpoint.revision not in FACT_RECIPES or checkpoint.parents != (
                 ("C2", transcript_checkpoint.manifest_sha256),
                 ("C3", alignment.manifest_sha256),
             ):

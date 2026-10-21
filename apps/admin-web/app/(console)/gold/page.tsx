@@ -53,7 +53,12 @@ export default async function GoldPage() {
       <PageHeader
         title="Gold set"
         context={["What the right report would say, and how the AI compares"]}
-        actions={<Badge tone="warn">Internal · not an official score</Badge>}
+        actions={
+          <>
+            <Link href="/gold/brain4">Brain 4.0 evaluation</Link>
+            <Badge tone="warn">Internal · not an official score</Badge>
+          </>
+        }
       />
       {await GoldReviewRows()}
       {!result.ok ? (

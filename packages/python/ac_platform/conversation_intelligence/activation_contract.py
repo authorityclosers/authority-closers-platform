@@ -219,7 +219,7 @@ class StageApproval(_StrictFrozenModel):
     max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
     max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
     max_input_bytes: StrictInt = Field(ge=1, le=134_217_728)
-    max_completion_tokens: StrictInt = Field(ge=0, le=8_000)
+    max_completion_tokens: StrictInt = Field(ge=0, le=20_000)
     profile_sha256: str | None = Field(default=None, pattern=_DIGEST)
 
     _permission_ref = field_validator(
@@ -248,6 +248,7 @@ class StageApproval(_StrictFrozenModel):
             self.max_completion_tokens,
             self.zero_cost_basis,
             self.max_cost_paise,
+            recipe=self.recipe_revision,
         )
         if self.zero_cost_basis == "paid_pricing_evidence":
             if self.max_cost_paise <= 0:
@@ -393,7 +394,7 @@ class AcquisitionStagePolicy(_StrictFrozenModel):
     max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
     max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
     max_input_bytes: StrictInt = Field(ge=1, le=134_217_728)
-    max_completion_tokens: StrictInt = Field(ge=0, le=8_000)
+    max_completion_tokens: StrictInt = Field(ge=0, le=20_000)
     profile_sha256: str | None = Field(default=None, pattern=_DIGEST)
 
     _permission_ref = field_validator(
@@ -424,6 +425,7 @@ class AcquisitionStagePolicy(_StrictFrozenModel):
             self.max_completion_tokens,
             self.zero_cost_basis,
             self.max_cost_paise,
+            recipe=self.recipe_revision,
         )
         if self.zero_cost_basis == "paid_pricing_evidence":
             if self.max_cost_paise <= 0 or self.free_allowance_ref is not None:

@@ -19,7 +19,12 @@ TEMPLATE_SHA256 = "4fad19ce3234848c9f992190f9f498184bb8be6996664a9e7cb6dc133aa3a
 
 
 def stage_completion_limit(
-    stage: str, approved_maximum: int, *, provider: str = "", model: str = ""
+    stage: str,
+    approved_maximum: int,
+    *,
+    provider: str = "",
+    model: str = "",
+    recipe: str | None = None,
 ) -> int:
     """Intersect approval with the route's existing request allocation.
 
@@ -30,7 +35,7 @@ def stage_completion_limit(
     """
     if stage not in {"C4", "C5"} or type(approved_maximum) is not int:
         raise ValueError("report_stage_limit_invalid")
-    if not 256 <= approved_maximum <= completion_ceiling(provider, model, stage):
+    if not 256 <= approved_maximum <= completion_ceiling(provider, model, stage, recipe=recipe):
         raise ValueError("report_stage_limit_invalid")
     if provider in {"", "groq"}:
         return min(3_200 if stage == "C5" else 1_400, approved_maximum)

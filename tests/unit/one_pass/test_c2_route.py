@@ -205,3 +205,72 @@ async def test_switching_to_flex_is_the_owners_action_and_back_is_one_click(monk
     )
     assert not await _admin(flex)._owner_gate(actor, _row(standard), confirm=None, reason=None)
     assert not await _admin(flex)._owner_gate(actor, _row(classic), confirm=None, reason=None)
+
+
+def test_the_one_pass_configuration_and_profile() -> None:
+    from ac_platform.one_pass import markers
+
+    classic, bundle = _classic()
+    for flex in (False, True):
+        one_pass = c2_route.derive_configuration(classic, flex=flex, one_pass=True)
+        text_model = "gemini-3.8-flash" + (":flex" if flex else "")
+        routes = {route.task: route for route in one_pass.routes}
+        assert routes["asr"].model_id == gemini_audio.MODEL + (":flex" if flex else "")
+        assert (routes["facts"].model_id, routes["facts"].recipe_revision) == (
+            text_model,
+            markers.RECIPE,
+        )
+        assert routes["facts"].prompt_revision == markers.PROMPT_REVISION
+        old = {route.task: route for route in classic.routes}
+        assert routes["coaching"].recipe_revision == old["coaching"].recipe_revision
+        entry = next(item for item in one_pass.providers if item.model_id == text_model)
+        assert entry.max_cost_paise == c2_route.ONE_PASS_MAX_COST_PAISE
+        sealed = c2_route.seal(bundle, classic, one_pass, flex=flex, one_pass=True)
+        policy, before = sealed.acquisition_policy, bundle.acquisition_policy
+        assert policy is not None and before is not None
+        assert policy.stages == before.stages  # every classic route kept
+        (profile,) = policy.profiles
+        assert profile.profile_id == (
+            c2_route.ONE_PASS_FLEX_PROFILE_ID if flex else c2_route.ONE_PASS_PROFILE_ID
+        )
+        _, c4, c5 = profile.stages
+        assert (c4.recipe_revision, c4.max_requests, c4.max_completion_tokens) == (
+            markers.RECIPE,
+            1,
+            c2_route.ONE_PASS_COMPLETION_TOKENS,
+        )
+        assert c4.max_input_bytes >= markers.MAX_INPUT_BYTES
+        assert c4.max_cost_paise == c5.max_cost_paise == c2_route.ONE_PASS_MAX_COST_PAISE
+        assert c5.recipe_revision == before.stages[2].recipe_revision
+        dispatches = ConversationProviderAdmin._approved_configuration(_row(one_pass), sealed)
+        assert [(d.model_id, d.recipe_revision) for d in dispatches][1] == (
+            text_model,
+            markers.RECIPE,
+        )
+        # The classic configuration stays activatable: one click back.
+        assert ConversationProviderAdmin._approved_configuration(_row(classic), sealed)
+    # Today's profiles are unchanged by the one-pass option.
+    standard = c2_route.derive_configuration(classic)
+    assert standard.digest == c2_route.derive_configuration(classic, one_pass=False).digest
+
+
+@pytest.mark.asyncio
+async def test_switching_to_one_pass_is_the_owners_action_and_back_is_one_click(
+    monkeypatch,
+) -> None:
+    classic, _ = _classic()
+    standard = c2_route.derive_configuration(classic)
+    one_pass = c2_route.derive_configuration(classic, one_pass=True)
+    actor = SimpleNamespace(tenant_id=uuid4(), person_id=uuid4(), session_id=uuid4())
+
+    async def is_fresh(_database: object, _session: object, _now: object) -> bool:
+        return True
+
+    monkeypatch.setattr(sign_in_methods, "session_is_fresh", is_fresh)
+    with pytest.raises(ConversationDenied, match="Type one_pass"):
+        await _admin(standard)._owner_gate(actor, _row(one_pass), confirm=None, reason=None)
+    assert await _admin(standard)._owner_gate(
+        actor, _row(one_pass), confirm="one_pass", reason="Owner, 21 Oct: build B now"
+    )
+    assert not await _admin(one_pass)._owner_gate(actor, _row(standard), confirm=None, reason=None)
+    assert not await _admin(one_pass)._owner_gate(actor, _row(classic), confirm=None, reason=None)

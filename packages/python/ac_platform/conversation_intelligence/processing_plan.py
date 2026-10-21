@@ -77,6 +77,7 @@ from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
     FACT_RECIPE,
+    ONE_PASS_FACT_RECIPE,
     ReportingPipeline,
     StagePlan,
     StageRequest,
@@ -112,6 +113,8 @@ from ac_platform.conversation_intelligence.worker_account_gate import (
 )
 from ac_platform.identity.models import Person
 from ac_platform.identity.sales_xray_profile import _resolved_name
+from ac_platform.one_pass.markers import PROMPT_REVISION as ONE_PASS_PROMPT_REVISION
+from ac_platform.one_pass.markers import ROUTES as ONE_PASS_ROUTES
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import RecoveryStateRepository
 
@@ -285,7 +288,7 @@ class PlanManifest(BaseModel):
     stages: tuple[StageApproval, StageApproval, StageApproval]
     profile: dict[str, Any] = Field(repr=False)
     max_input_chars: Literal[16000] = 16000
-    fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
+    fact_prompt_revision: Literal["facts-v1", "facts-v2", "one-pass-v1"] = FACT_PROMPT_LEGACY
     coaching_prompt_revision: Literal[
         "coaching-v1",
         "coaching-v2",
@@ -337,7 +340,11 @@ class PlanManifest(BaseModel):
             (c2.provider_id, c2.model_id) not in TRANSCRIPT_RECIPE_BY_ROUTE
             or c2.recipe_revision != TRANSCRIPT_RECIPE_BY_ROUTE[(c2.provider_id, c2.model_id)]
             or c2.recipe_revision not in TRANSCRIPT_RECIPES
-            or c4.recipe_revision != FACT_RECIPE
+            # C4 is today's fact chunks, or one request over the whole call (its route's
+            # recipe, sealed by Root): each with its own prompt revision.
+            or (c4.recipe_revision, self.fact_prompt_revision == ONE_PASS_PROMPT_REVISION)
+            not in {(FACT_RECIPE, False), (ONE_PASS_FACT_RECIPE, True)}
+            or (c4.recipe_revision == ONE_PASS_FACT_RECIPE and c4.max_requests != 1)
             or c5.recipe_revision != COACHING_RECIPE
             or c4.max_completion_tokens < 256
             or c5.max_completion_tokens < 256
@@ -619,6 +626,7 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
             approval.max_completion_tokens,
             provider=approval.provider_id,
             model=approval.model_id,
+            recipe=approval.recipe_revision,
         )
         or (plan.checkpoint.stage == "C4" and plan.request.chunk_index > approval.max_requests)
         or (
@@ -933,8 +941,14 @@ class ConversationProcessingPlans:
                 "This call needs an approved transcription, facts and coaching route."
             )
         profile = load_report_profile()
+        # A one-pass configuration's facts route says so by its recipe (one_pass.stage).
+        one_pass = approvals["C4"].recipe_revision == ONE_PASS_FACT_RECIPE
+        if one_pass and (
+            (approvals["C4"].provider_id, approvals["C4"].model_id) not in ONE_PASS_ROUTES
+        ):
+            raise ConversationDenied("The approved route is not implemented for this plan.")
         for stage, task, recipe in (
-            ("C4", "facts", FACT_RECIPE),
+            ("C4", "facts", ONE_PASS_FACT_RECIPE if one_pass else FACT_RECIPE),
             ("C5", "coaching", COACHING_RECIPE),
         ):
             item = approvals[stage]
@@ -994,7 +1008,11 @@ class ConversationProcessingPlans:
             else None
         )
         c4, c5 = approvals["C4"], approvals["C5"]
-        if settings_row is not None:
+        if one_pass:
+            # One request over the whole call, at its sealed output bound (the analysis
+            # settings' chunk caps are for fact chunks).
+            c4 = c4.model_copy(update={"max_requests": 1})
+        elif settings_row is not None:
             c4 = c4.model_copy(
                 update={
                     "max_requests": min(c4.max_requests, analysis_settings.c4_max_requests),
@@ -1003,6 +1021,7 @@ class ConversationProcessingPlans:
                     ),
                 }
             )
+        if settings_row is not None:
             c5 = c5.model_copy(
                 update={
                     "max_completion_tokens": min(
@@ -1060,7 +1079,7 @@ class ConversationProcessingPlans:
                 duration_ms=source.duration_ms,
                 stages=(c2, c4, c5),
                 profile=profile,
-                fact_prompt_revision=FACT_PROMPT_COMPACT,
+                fact_prompt_revision=ONE_PASS_PROMPT_REVISION if one_pass else FACT_PROMPT_COMPACT,
                 coaching_prompt_revision=coaching_prompt_revision,
                 report_language=(
                     selected_language
@@ -1453,7 +1472,11 @@ class ConversationProcessingPlans:
                 fact_prompt_revision=value.fact_prompt_revision,
                 max_input_chars=value.max_input_chars,
                 max_completion_tokens=stage_completion_limit(
-                    "C4", c4.max_completion_tokens, provider=c4.provider_id, model=c4.model_id
+                    "C4",
+                    c4.max_completion_tokens,
+                    provider=c4.provider_id,
+                    model=c4.model_id,
+                    recipe=c4.recipe_revision,
                 ),
             )
             recording = await self.app._recording(actor, row.recording_id)

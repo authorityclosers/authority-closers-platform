@@ -379,6 +379,53 @@ def _est_paise(usage: dict[str, Any]) -> int:
     )
 
 
+async def _publish_one_pass(
+    sessions: Any,
+    report: dict[str, Any],
+    arguments: argparse.Namespace,
+    storage_root: Path,
+    *,
+    saved: list[dict[str, Any]],
+    withheld: set[str],
+) -> dict[str, Any] | None:
+    """A report whose plan ran C4 as the one-pass request: its review and deep call data
+    come from that read (one_pass.plan_publish), with no provider call. None when the
+    report's C4 was today's fact chunks or its answer can't be read."""
+    from sqlalchemy import text
+
+    from ac_platform.one_pass import plan_publish
+
+    async with sessions() as session:
+        read = await session.run_sync(lambda sync: plan_publish.c4_read(sync.connection(), report))
+    if read is None:
+        return None
+    found = plan_publish.answer(storage_root, read)
+    if found is None:
+        return {"one_pass": str(read.run_id), "review": "unusable:answer_unreadable"}
+    if not arguments.apply:
+        return {"one_pass": str(read.run_id), "dry_run": True}
+    segments = [segment for segment in saved if str(segment.get("id")) not in withheld]
+    async with sessions() as session, session.begin():
+        # The pointer review's own per-call lock: one saver at a time.
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"ac.pointer_review:{report['recording_id']}"},
+        )
+        return dict(
+            await session.run_sync(
+                lambda sync: plan_publish.publish(
+                    sync.connection(),
+                    report=report,
+                    read=read,
+                    answer=found,
+                    segments=segments,
+                    withheld=withheld,
+                    storage_root=storage_root,
+                )
+            )
+        )
+
+
 async def _review_one(
     sessions: Any,
     report: dict[str, Any],
@@ -412,6 +459,16 @@ async def _review_one(
         )
     segments = [segment for segment in saved if str(segment.get("id")) not in withheld]
     line["segments"] = len(segments)
+    storage_root = getattr(arguments, "storage_root", None)
+    if storage_root is not None:
+        published = await _publish_one_pass(
+            sessions, report, arguments, storage_root, saved=saved, withheld=withheld
+        )
+        if published is not None:
+            line.update(published)
+            # Only a review part that can't be used is left to today's review below.
+            if not str(published.get("review", "")).startswith("unusable"):
+                return line
     try:
         system, user = build_prompt(segments, {})
     except PointerReviewError as error:
@@ -648,12 +705,15 @@ def _inner(arguments: argparse.Namespace) -> int:
     from ac_platform.ai_spend import guard as spend_guard
     from ac_platform.ai_spend.policy import SettingsError
 
+    service = json.loads(arguments.service_config.read_text())
     try:
-        spend_environment = spend_guard.service_environment(
-            json.loads(arguments.service_config.read_text())
-        )
+        spend_environment = spend_guard.service_environment(service)
     except SettingsError:
         raise SystemExit("pointer_review_environment_missing") from None
+    # Where the worker keeps provider responses: a one-pass plan's review is published
+    # from its C4 answer there (one_pass.plan_publish).
+    root = service.get("sales_xray_storage_root") if isinstance(service, dict) else None
+    arguments.storage_root = Path(root) if isinstance(root, str) and root else None
     return asyncio.run(_inner_async(arguments, spend_environment=spend_environment))
 
 

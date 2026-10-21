@@ -127,11 +127,17 @@ export type Transcription = {
     model: string | null;
     /** Any route of the active configuration runs on Gemini Flex. */
     flex: boolean;
+    /** The active configuration's C4 is the one-pass request. */
+    onePass: boolean;
   } | null;
   /** C2 on Gemini 3.1 Flash-Lite, standard tier. */
   gemini: GeminiTier;
   /** C2, C4 and C5 on Gemini Flex (half price, standard fallback after 5 min). */
   geminiFlex: GeminiTier;
+  /** Flash-Lite C2 and C4 as one request (call data, notes and the pointer review). */
+  onePass: GeminiTier;
+  /** The one-pass configuration on Gemini Flex. */
+  onePassFlex: GeminiTier;
   classicRevision: number | null;
   confirm: string;
 };
@@ -161,10 +167,13 @@ export function normalizeTranscription(raw: unknown): Transcription {
           provider: read.optionalString(route.provider),
           model: read.optionalString(route.model),
           flex: read.boolean(active.flex),
+          onePass: read.boolean(active.one_pass),
         }
       : null,
     gemini: geminiTier(body.gemini, "gemini-3.1-flash-lite"),
     geminiFlex: geminiTier(body.gemini_flex, "gemini-3.1-flash-lite:flex"),
+    onePass: geminiTier(body.one_pass, "gemini-3.1-flash-lite"),
+    onePassFlex: geminiTier(body.one_pass_flex, "gemini-3.1-flash-lite:flex"),
     classicRevision: read.optionalNumber(body.classic_revision),
     confirm: read.string(body.confirm, "one_pass"),
   };

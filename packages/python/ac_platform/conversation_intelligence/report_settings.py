@@ -46,6 +46,9 @@ INDUSTRY_PROFILES: dict[str, str] = {
 Complexity = Literal["simple", "standard", "expert"]
 ReportStyle = Literal["guided", "compact", "scorecard"]
 CoachingTone = Literal["supportive", "direct"]
+# Classic: the 27 pointers' AI scores. Brain 4.0 beta: the coaching lead's 18 dimensions
+# too, when the call's review has them (brain4.py), labelled beta (AC-SVAL gates).
+Scoring = Literal["classic", "brain4_beta"]
 
 # The Report's 27 pointers in the order the app shows them (xray-report/model.ts).
 POINTER_IDS: tuple[str, ...] = (
@@ -102,6 +105,7 @@ class ReportSurface(_Strict):
     pointers: tuple[str, ...] = POINTER_IDS
     max_pointers: int = Field(default=27, ge=3, le=27)
     show_scores: bool = True
+    scoring: Scoring = "classic"
     show_evidence: bool = True
     show_how_to_improve: bool = True
 
@@ -282,6 +286,16 @@ PARAMETERS: tuple[Parameter, ...] = (
         signals=READ,
     ),
     Parameter("report.show_scores", "report", "Scores", "AI scores out of 100.", "toggle"),
+    Parameter(
+        "report.scoring",
+        "report",
+        "Scoring rubric",
+        "Classic: the 27 pointers. Brain 4.0 beta: also the coaching lead's 18 skills, rated"
+        " 1-5 and labelled beta, on calls whose review has them.",
+        "choice",
+        choices=(("classic", "Classic"), ("brain4_beta", "Brain 4.0 beta")),
+        signals=("sx.pillar_read", "gold.agreement"),
+    ),
     Parameter(
         "report.show_evidence",
         "report",

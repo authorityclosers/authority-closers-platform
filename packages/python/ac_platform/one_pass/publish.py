@@ -375,9 +375,10 @@ def _save_deep(
     one_pass_run: UUID,
     trigger: str,
     now: datetime,
+    created_by: str = AUTOMATIC,
 ) -> dict[str, Any]:
     """The call's deep call data run and objects, through the deep pipeline's own merge.
-    No tokens or rupees here: the read is counted once, in one_pass_runs."""
+    No tokens or rupees here: the read is counted once (one_pass_runs, or the plan's C4)."""
     from ac_platform.call_data import deep, engine
     from ac_platform.one_pass import settings as choices
 
@@ -396,7 +397,7 @@ def _save_deep(
         model=choices.ANALYSIS_MODEL,
         trigger="auto" if trigger == "auto" else "operator",
         prompt_sha256=None,
-        created_by=AUTOMATIC,
+        created_by=created_by,
         now=now,
         version=deep.DEEP_VERSION,
     )
@@ -420,7 +421,7 @@ def _save_deep(
             "audio": audio,
             "one_pass_run": str(one_pass_run),
         },
-        created_by=AUTOMATIC,
+        created_by=created_by,
         now=now,
         version=deep.DEEP_VERSION,
     )

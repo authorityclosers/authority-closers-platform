@@ -127,6 +127,84 @@ model, same prompt, same answer contract, the request only adds `service_tier: f
   → ≈ ₹0.33/min on Flex. Measured on 16 real calls on development: no Flex request fell
   back; transcription 54 s median, analysis requests 33–131 s.
 
+## Slice B1: one pass inside the sealed plan (off until Root seals and the owner switches)
+
+Owner, 21 Oct 2026: "build B together with the Luna route (one-pass in the sealed plan,
+beta-labelled calibrated scores, call data written in production)". Today C4 reads the
+transcript in fact chunks and the pointer review reads it again. With one pass, **C4 is
+one request over the whole call** (`one_pass/stage.py`). It answers the call data, notes
+and the pointer review together, and its C4 fact packet passes C4's own parser. Today's
+C5 then reads that packet as before.
+
+- **How a configuration says so.** Its facts route's recipe is `one-pass-facts-v1` (prompt
+  revision `one-pass-v1`). A plan made under it asks one C4 request at the one-pass bound
+  (16,000 output tokens on Gemini) and today's C5. Everything else is unchanged: C2, C5,
+  receipts, budget and the 24-hour plan.
+- **Bounds.** The activation contract's per-stage output bound is now 20,000 (it was
+  8,000); only the one-pass C4 route uses more than 4,000 (`completion_limits`). The
+  request is today's C4 envelope (one chunk covering every segment, plus the call's
+  date), so every envelope, coverage and receipt check applies. The broker admits it only
+  inside its paid cap: the whole input at one byte per token plus the full output, at
+  standard rates (`require_one_pass_cost_approval`). The Gemini 3.8 Flash entry's
+  per-request ceiling is ₹30 in this configuration, enough for a two-hour call; C5 on the
+  same entry shares it.
+- **Approval.** Two more profiles: `gemini-one-pass` and `gemini-one-pass-flex`
+  (Flash-Lite C2, the one-pass C4 and today's C5, standard or Flex), built with
+  `python scripts/ops/one_pass_c2_seal.py --one-pass [--flex] ...`. The inputs are the
+  same as before, using the configuration from Admin → One pass → Transcription →
+  "One pass" → Prepare. Every classic route and earlier profile stays.
+- **Switch.** It is the owner's action, as before: typed confirm, reason and fresh sign-in.
+  The audit records `one_pass: true`. Going back (to plain Flash-Lite, or to Scribe) is
+  one click.
+- **What waits for later slices.** Slice B3 adds calibrated "beta" pointer scores, and
+  slice L adds the Luna route.
+
+## Slice B2: the review, call data and lead fills from that same read (every environment)
+
+Owner, 21 Oct 2026: "call data written in production". The pointer review's background job
+(`ac-pointer-review@<env>`, which already runs in production inside the worker container)
+publishes a one-pass plan's results once its report is saved. It does not read the
+transcript again (`one_pass/plan_publish.py`):
+
+- It finds the plan's one-pass C4 task behind the report (report run → C5 → complete facts
+  → the single one-pass chunk) and reads that task's saved provider response from storage,
+  checked against its receipt's digest.
+- **Pointer review:** the answer's review part, parsed against the report's own transcript
+  and withheld segments, is saved through the review's own admission
+  (`created_by automatic:one-pass-plan`, prompt digest = the C4 input's). No Gemini call,
+  no tokens or rupees: the read was paid once, as C4.
+- **Call data and lead fills:** the call data part is saved as the call's deep call data
+  run through the deep pipeline's own merge: call objects, prospect facts and the lead's
+  auto-filled fields, with the deep pipeline's audio measurements. **This now happens in
+  production too**, for one-pass plans only.
+- **Fallback:** a review part that does not parse goes to today's pointer review (one
+  Gemini read), so nothing is lost. Where the call data engine runs (development and
+  staging), its deep read skips calls whose newest plan is one pass.
+- **Check after the switch:** for the first one-pass call, the report shows its 27
+  pointers within the timer's next run. Admin → AI spend shows no `pointer_review` spend
+  for that call. The call's lead shows the filled fields, and `call_data_runs` has one
+  `deep` run by `automatic:one-pass-plan`.
+
+## Slice B3: calibrated pointer scores, shown as a beta
+
+Owner, 21 Oct 2026: "beta-labelled calibrated scores". The trial compared 16 real calls
+(395 pointers scored by both). One pass scored each pointer **4.6 points higher** than
+today's pointer review (sd 8.8), and the overall score 4.3 higher. A published one-pass
+review is therefore calibrated before it is saved (`one_pass/calibration.py`, version
+`one-pass-pointer-calibration/1`). Each pointer's score drops by that pointer's measured
+lean, shrunk toward the 4.64 mean with a prior of 8 pairs. The overall is the mean of the
+calibrated scores, as the review computes it. Statuses, evidence and words are unchanged.
+
+- **What it fixes, checked leave-one-call-out on the same calls:** the overall lean goes
+  from +4.3 to −0.5. The per-call disagreement stays: the overall mean absolute difference
+  goes from 5.7 to 5.5, and per pointer from 7.3 to 7.1. Calibration removes the bias, not
+  the noise between two AI reads.
+- **What people see:** the Report's overall score keeps its "AI draft · not reviewed by
+  Dipak" badge and adds a **Beta** chip, whose tooltip names the calibration version. It
+  is never an official score (AC-SVAL gates).
+- **Versioned:** the saved review carries `calibration: {version, label: "beta"}`. A later
+  calibration is a new version and never rewrites a saved review.
+
 ## A good first production analysis (after the C2 switch)
 
 Read-only checks, on the first real call after the switch:
