@@ -433,10 +433,13 @@ class ConversationProviderAdmin:
         *,
         confirm: str | None,
         reason: str | None,
+        owner_approval: Mapping[str, str] | None = None,
     ) -> bool:
         """True when this activation switches transcription to Gemini audio, any route
         to Flex or the facts to the one-pass request, after the owner's checks; False for
-        every other activation (no checks added)."""
+        every other activation (no checks added). ``owner_approval`` is an owner-approved
+        data change's recorded approval (scripts/data-changes): it stands in for the fresh
+        sign-in, never for the confirm word or the reason; no HTTP route passes it."""
         from ac_platform.identity.sign_in_methods import session_is_fresh
 
         assert actor.tenant_id is not None
@@ -463,6 +466,15 @@ class ConversationProviderAdmin:
             )
         if len((reason or "").strip()) < MIN_OWNER_REASON:
             raise ConversationDenied("Give the reason, in the owner's words.")
+        if owner_approval is not None:
+            if not all(
+                str(owner_approval.get(field) or "").strip()
+                for field in ("approver", "issue", "data_change")
+            ):
+                raise ConversationDenied(
+                    "An owner-approved data change names its approver, issue and script."
+                )
+            return True
         if not await session_is_fresh(
             self.database, actor.session_id, utc(self.application.clock())
         ):
@@ -479,6 +491,7 @@ class ConversationProviderAdmin:
         bundle: HostedApprovalBundle,
         confirm: str | None = None,
         reason: str | None = None,
+        owner_approval: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
         await self.admit(actor)
         if actor.tenant_id != bundle.provider_control_tenant_id:
@@ -514,7 +527,9 @@ class ConversationProviderAdmin:
             None if budget_row is None else BudgetAccount.from_dict(budget_row.snapshot).cap_paise
         )
         self._approved_configuration(target, bundle, budget_limit_paise=effective_budget_cap)
-        owner_action = await self._owner_gate(actor, target, confirm=confirm, reason=reason)
+        owner_action = await self._owner_gate(
+            actor, target, confirm=confirm, reason=reason, owner_approval=owner_approval
+        )
         payload = {
             "target_revision": target.revision,
             "configuration_sha256": target.configuration_sha256,
@@ -575,6 +590,11 @@ class ConversationProviderAdmin:
                     "confirm": confirm,
                     "reason": (reason or "").strip()[:200],
                     "environment": bundle.environment,
+                    **(
+                        {"approval": {key: str(value) for key, value in owner_approval.items()}}
+                        if owner_approval is not None
+                        else {}
+                    ),
                 },
             )
         return (await self.current(actor, bundle=bundle)) or {}
