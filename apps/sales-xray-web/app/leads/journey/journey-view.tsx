@@ -327,12 +327,14 @@ function TemplatePicker({
                       <Icon size={18} strokeWidth={1.9} />
                     </span>
                     <span className={styles.templateText}>
-                      <strong>{item.name}</strong>
+                      <strong>
+                        {item.name}
+                        {item.id === current && !first ? (
+                          <span className={styles.templateNow}>Now</span>
+                        ) : null}
+                      </strong>
                       <small>{item.blurb}</small>
                     </span>
-                    {item.id === current && !first ? (
-                      <span className={styles.templateNow}>Now</span>
-                    ) : null}
                     {on ? (
                       <span className={styles.templateCheck} aria-hidden="true">
                         <Check size={13} strokeWidth={2.6} />
@@ -354,12 +356,12 @@ function TemplatePicker({
               </li>
             ))}
       </ul>
-      {!first && leads ? (
-        <p className={styles.pickerNote}>
-          {`Your ${leads} ${leads === 1 ? "lead stays" : "leads stay"} where ${leads === 1 ? "it is" : "they are"}. Your old stages are kept, hidden, so nothing is lost; leads move to the new stages as your team calls them.`}
-        </p>
-      ) : null}
       <div className={styles.pickerFoot}>
+        {!first && leads ? (
+          <p className={styles.pickerNote}>
+            {`Your ${leads} ${leads === 1 ? "lead stays" : "leads stay"} put; old stages are kept, so nothing is lost.`}
+          </p>
+        ) : null}
         <ol className={styles.preview} aria-label="Stages you get">
           {chosen ? (
             chosen.stages.map((stage, index) => (

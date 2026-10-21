@@ -1498,8 +1498,9 @@ button.templateCard:focus-visible {
 }
 
 .templateNow {
-  align-self: start;
+  margin-left: 8px;
   padding: 1px 8px;
+  vertical-align: 1px;
   border-radius: var(--sx-radius-pill);
   background: var(--sx-fill-strong);
   color: var(--sx-ink-2);
@@ -1508,10 +1509,13 @@ button.templateCard:focus-visible {
 }
 
 .pickerNote {
+  flex-basis: 100%;
   margin: 0;
-  padding: 10px 12px;
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-fill-soft);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
+}
+
+/* The note about the leads takes its own line above the preview. */
+.pickerFoot {
+  flex-wrap: wrap;
 }
