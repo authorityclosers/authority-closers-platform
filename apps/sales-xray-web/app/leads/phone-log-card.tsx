@@ -42,7 +42,13 @@ export function phoneLogLine(status: CallLogStatus, now = new Date()): string {
   return [sim, checked].filter(Boolean).join(" · ");
 }
 
-export function PhoneLogCard() {
+/**
+ * `as`: "chip" draws only the small Logging calls chip once it is on (Leads'
+ * toolbar, owner 22 Oct); "offer" only the card that offers it while off.
+ */
+export function PhoneLogCard({
+  as = "both",
+}: { as?: "both" | "chip" | "offer" } = {}) {
   const [status, setStatus] = useState<CallLogStatus | null>(null);
   const [hidden, setHidden] = useState(false);
   const [sim, setSim] = useState("");
@@ -75,6 +81,8 @@ export function PhoneLogCard() {
   }, []);
 
   if (!status || (!status.on && hidden)) return null;
+  if ((as === "chip" && !status.on) || (as === "offer" && status.on))
+    return null;
 
   const turn = async (on: boolean) => {
     setBusy(true);
@@ -96,6 +104,24 @@ export function PhoneLogCard() {
       );
     else if (on) buzz("done");
   };
+
+  if (status.on && as === "chip")
+    return (
+      <button
+        type="button"
+        role="switch"
+        aria-checked
+        aria-label="Logging work calls"
+        className={styles.statusChip}
+        data-on=""
+        disabled={busy}
+        title={`Logging work calls: ${phoneLogLine(status)}. Tap to stop.`}
+        onClick={() => void turn(false)}
+      >
+        <History size={14} aria-hidden="true" />
+        Logging calls
+      </button>
+    );
 
   if (status.on)
     return (

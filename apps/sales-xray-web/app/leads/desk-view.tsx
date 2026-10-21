@@ -1,36 +1,23 @@
 "use client";
 
 /**
- * My desk: one big "who to call now" card, the counts, the due-now list
- * (overdue first, then call now, then later today), what's coming up and my
- * day. Plain words only; nothing internal on screen (owner, 16 Oct).
+ * To call (the desk): the due-now list (overdue first, then call now, then
+ * later today), what's coming up and my day. Plain words only; nothing
+ * internal on screen (owner, 16 Oct).
  *
- * Phones (UX study, 17 Oct): Start calling is the first thing on screen, the
- * counts are one compact strip, rows swipe right to call and left to message,
- * a long hold opens quick actions, and the other tabs sit at the bottom.
+ * Owner, 22 Oct 2026: no big green card, no wide switches, no big "All
+ * clear" panel and no list of links at the bottom. The page's stage tabs
+ * carry the counts, Start calling sits in the bar above the tab bar, an
+ * empty list is one line with one action, and Leads' settings live in its
+ * ⋯ menu. Rows still swipe right to call and left to WhatsApp (now with the
+ * apps' own marks), and a long hold opens quick actions.
  */
 
-import {
-  ChevronRight,
-  Inbox,
-  MessageCircle,
-  Phone,
-  PhoneCall,
-  Plus,
-} from "lucide-react";
-import Link from "next/link";
-import type { ReactNode } from "react";
+import { Hand, Inbox, Phone, X, type LucideIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
-import {
-  Avatar,
-  Badge,
-  Button,
-  Empty,
-  Kpi,
-  Panel,
-  Tiles,
-  type Tone,
-} from "../ui/kit";
+import { ChannelMark } from "../chats/channel-mark";
+import { Avatar, Badge, Button, Kpi, Panel, Tiles, type Tone } from "../ui/kit";
 import { useRowGestures } from "./gestures";
 import {
   ago,
@@ -133,14 +120,19 @@ export function LeadLine({
       {...bind}
     >
       {reachable && actions ? (
+        // Owner, 22 Oct: the swipes show what they do, with the apps' marks.
         <span className={styles.swipeBack} aria-hidden="true">
           <span data-side="right">
-            <Phone size={18} />
+            <span className={styles.swipeIcon}>
+              <Phone size={18} />
+            </span>
             Call
           </span>
           <span data-side="left">
             WhatsApp
-            <MessageCircle size={18} />
+            <span className={styles.swipeIcon}>
+              <ChannelMark channel="whatsapp" size={22} />
+            </span>
           </span>
         </span>
       ) : null}
@@ -181,116 +173,74 @@ export function LeadLine({
               {showOwner ? (row.owner_name ?? "No owner yet") : sourceText(row)}
             </span>
           </span>
-          <ChevronRight
-            size={16}
-            className={styles.leadChevron}
-            aria-hidden="true"
-          />
         </button>
       </div>
     </li>
   );
 }
 
-function NextUp({
-  desk,
-  onStart,
-  onAdd,
+/** An empty list in one line: what goes here, and at most one way to start. */
+export function InlineEmpty({
+  icon: Icon,
+  title,
+  text,
+  action,
 }: {
-  desk: Desk;
-  onStart: () => void;
-  onAdd: () => void;
+  icon: LucideIcon;
+  title: string;
+  text: string;
+  action?: ReactNode;
 }) {
-  const next = desk.queue[0];
-  const toCall = dueNow(desk);
-  if (!next)
-    return (
-      <section className={styles.hero} aria-label="Next call">
-        <div className={styles.heroText}>
-          <span className={styles.heroEyebrow}>All clear</span>
-          <h2 className={styles.heroTitle}>Nobody to call right now</h2>
-          <p className={styles.heroSub}>
-            New leads land here the moment they come in. Add one yourself any
-            time.
-          </p>
-        </div>
-        <Button onClick={onAdd}>
-          <Plus size={16} aria-hidden="true" />
-          Add a lead
-        </Button>
-      </section>
-    );
   return (
-    <section className={styles.hero} aria-label="Next call">
-      <div className={styles.heroText}>
-        <span className={styles.heroEyebrow}>
-          {toCall
-            ? `${toCall} lead${toCall === 1 ? "" : "s"} to call now`
-            : "Next on your list"}
-        </span>
-        <h2 className={styles.heroTitle}>{next.name}</h2>
-        <p className={styles.heroSub}>{whyLine(next)}</p>
-      </div>
-      <button type="button" className={styles.heroButton} onClick={onStart}>
-        <PhoneCall size={20} aria-hidden="true" />
-        Start calling
-      </button>
-    </section>
+    <div className={styles.inlineEmpty} role="status">
+      <span className={styles.inlineEmptyIcon} aria-hidden="true">
+        <Icon size={18} />
+      </span>
+      <span className={styles.inlineEmptyWords}>
+        <strong>{title}</strong>
+        <small>{text}</small>
+      </span>
+      {action}
+    </div>
   );
 }
 
-/** Phones: the counts as one row of small tappable numbers. */
-function CountStrip({ desk }: { desk: Desk }) {
-  const { counts } = desk;
-  const items: { label: string; value: number; href: string; tone?: Tone }[] = [
-    ...(counts.overdue
-      ? [
-          {
-            label: "Late",
-            value: counts.overdue,
-            href: "/leads?tab=all&stage=open",
-            tone: "bad" as Tone,
-          },
-        ]
-      : []),
-    {
-      label: "New",
-      value: counts.new,
-      href: "/leads?tab=all&stage=new",
-      tone: "accent",
-    },
-    {
-      label: "Due",
-      value: counts.follow_up_due,
-      href: "/leads?tab=all&stage=follow_up",
-      tone: "warn",
-    },
-    {
-      label: "Retry",
-      value: counts.not_connected,
-      href: "/leads?tab=all&stage=not_connected",
-    },
-    {
-      label: "Later",
-      value: counts.later_today,
-      href: "/leads?tab=all&stage=open",
-    },
-  ];
+const HINT_KEY = "sx-leads-swipe-hint";
+
+/** Once, above the list: what a swipe does (owner, 22 Oct: "need icons"). */
+function SwipeHint() {
+  const [shown, setShown] = useState(() => {
+    try {
+      return localStorage.getItem(HINT_KEY) !== "seen";
+    } catch {
+      return true;
+    }
+  });
+  if (!shown) return null;
   return (
-    <nav className={styles.countStrip} aria-label="My leads">
-      {items.map((item) => (
-        <Link
-          key={item.label}
-          href={item.href}
-          className={styles.countItem}
-          data-tone={item.tone}
-          prefetch={false}
-        >
-          <strong>{item.value}</strong>
-          <span>{item.label}</span>
-        </Link>
-      ))}
-    </nav>
+    <p className={styles.swipeHint}>
+      <Hand size={15} aria-hidden="true" />
+      <span>
+        Swipe a lead right to <Phone size={13} aria-label="call" /> call, left
+        to <ChannelMark channel="whatsapp" size={14} labelled /> WhatsApp. Hold
+        it for more.
+      </span>
+      <button
+        type="button"
+        className={styles.swipeHintClose}
+        aria-label="Got it"
+        onClick={() => {
+          try {
+            localStorage.setItem(HINT_KEY, "seen");
+          } catch {
+            // Storage blocked: hidden for this visit only.
+          }
+          setShown(false);
+        }}
+      >
+        <X size={14} aria-hidden="true" />
+      </button>
+    </p>
   );
 }
 
@@ -333,41 +283,27 @@ function Sections({
   );
 }
 
-export type DeskLink = {
-  key: string;
-  label: string;
-  note?: string;
-  href?: string;
-  onClick?: () => void;
-};
-
 export function DeskView({
   desk,
   onOpen,
-  onStart,
   onAdd,
   actions,
   afterHero,
-  links,
 }: {
   desk: Desk;
   onOpen: (leadId: string) => void;
-  onStart: () => void;
+  /** The empty list's one action: add a lead. */
   onAdd: () => void;
   actions: RowActions;
-  /** Shown right under the next-call card (the app banner, the alerts card). */
+  /** One-time offers above the list (the app banner, alerts, call logging). */
   afterHero?: ReactNode;
-  /** Phones: the other tabs and tools, listed at the bottom of the desk. */
-  links: DeskLink[];
 }) {
   const { counts, numbers } = desk;
   const upcoming = desk.upcoming ?? [];
   const callBack = desk.call_back ?? [];
+  const next = upcoming[0];
   return (
     <>
-      <NextUp desk={desk} onStart={onStart} onAdd={onAdd} />
-      {/* Owner, 19 Oct: where the leads stand comes first, the switches after. */}
-      <CountStrip desk={desk} />
       <div className={styles.compactStack}>{afterHero}</div>
       <div className={styles.wideOnly}>
         <Tiles label="My leads">
@@ -415,42 +351,37 @@ export function DeskView({
               </ul>
             </Panel>
           ) : null}
-          <Panel
-            title="Today"
-            sub={desk.queue.length ? `${desk.queue.length}` : undefined}
-            tools={
-              <span className={styles.panelBadges}>
-                {counts.overdue ? (
+          {desk.queue.length ? (
+            <Panel
+              title="Today"
+              sub={`${desk.queue.length}`}
+              tools={
+                counts.overdue ? (
                   <Badge tone="bad">{`${counts.overdue} late`}</Badge>
-                ) : null}
-                <button
-                  type="button"
-                  className={styles.addSmall}
-                  onClick={onAdd}
-                  aria-label="Add leads"
-                >
-                  <Plus size={16} aria-hidden="true" />
-                  <span>Add</span>
-                </button>
-              </span>
-            }
-          >
-            {desk.queue.length ? (
+                ) : undefined
+              }
+            >
+              <SwipeHint />
               <Sections desk={desk} onOpen={onOpen} actions={actions} />
-            ) : (
-              <div className={styles.emptyQueue}>
-                <Empty
-                  icon={Inbox}
-                  title={counts.open ? "All caught up" : "No leads yet"}
-                  text={
-                    counts.open
-                      ? "Your follow-ups are later. New leads appear here first."
-                      : "New leads appear here first."
-                  }
-                />
-              </div>
-            )}
-          </Panel>
+            </Panel>
+          ) : (
+            <InlineEmpty
+              icon={Inbox}
+              title={counts.open ? "All caught up" : "No leads yet"}
+              text={
+                next?.next_action_at
+                  ? `Next call ${when(next.next_action_at)}: ${next.name}.`
+                  : counts.open
+                    ? "Your follow-ups are later. New leads land here first."
+                    : "New leads land here the moment they come in."
+              }
+              action={
+                <Button onClick={onAdd} className={styles.inlineEmptyAction}>
+                  Add lead
+                </Button>
+              }
+            />
+          )}
           {upcoming.length ? (
             <Panel title="Coming up" sub={`${upcoming.length}`}>
               <ul className={styles.leadList} aria-label="Coming up">
@@ -494,47 +425,8 @@ export function DeskView({
               </div>
             </dl>
           </Panel>
-          {desk.me.can_manage && counts.unassigned ? (
-            <Panel
-              title="Team"
-              action={{ href: "/leads?tab=team", label: "Open" }}
-            >
-              <p className={styles.sideNote}>
-                {`${counts.unassigned} lead${counts.unassigned === 1 ? " needs" : "s need"} an owner.`}
-              </p>
-            </Panel>
-          ) : null}
         </aside>
       </div>
-      {links.length ? (
-        <nav className={styles.deskLinks} aria-label="More in Leads">
-          {links.map((link) =>
-            link.href ? (
-              <Link
-                key={link.key}
-                href={link.href}
-                className={styles.deskLink}
-                prefetch={false}
-              >
-                <span>{link.label}</span>
-                {link.note ? <small>{link.note}</small> : null}
-                <ChevronRight size={16} aria-hidden="true" />
-              </Link>
-            ) : (
-              <button
-                key={link.key}
-                type="button"
-                className={styles.deskLink}
-                onClick={link.onClick}
-              >
-                <span>{link.label}</span>
-                {link.note ? <small>{link.note}</small> : null}
-                <ChevronRight size={16} aria-hidden="true" />
-              </button>
-            ),
-          )}
-        </nav>
-      ) : null}
     </>
   );
 }

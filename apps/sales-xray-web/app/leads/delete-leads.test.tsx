@@ -153,7 +153,7 @@ it("speaks of one lead by name", () => {
   ).toBe("This lead was already deleted.");
 });
 
-it("lets an owner pick leads in All leads and delete them", async () => {
+it("lets an owner pick test leads and delete them", async () => {
   const page = {
     schema: "lead-desk/1",
     leads: [row(0), row(5, { test_data: true }), row(6, { test_data: true })],
@@ -171,13 +171,16 @@ it("lets an owner pick leads in All leads and delete them", async () => {
     root.render(
       <ListView
         canManage
+        stage="test"
+        stageLabel="Test leads"
+        scope="team"
+        query=""
         onOpen={() => undefined}
         version={0}
         onChanged={onChanged}
       />,
     ),
   );
-  await act(async () => button("Test data")!.click());
   const listUrl = String(fetchMock.mock.calls.at(-1)?.[0]);
   expect(listUrl).toContain("test=only");
   expect(listUrl).not.toContain("stage=");
@@ -204,10 +207,10 @@ it("lets an owner pick leads in All leads and delete them", async () => {
   const list = host.querySelector('ul[aria-label="Leads"]')?.textContent;
   expect(list).toContain(NAMES[0]);
   expect(list).not.toContain("Test Lead One");
-  expect(host.textContent).toContain("All leads1");
+  expect(host.textContent).toContain("1 lead");
 });
 
-it("offers no Select and no Test data to a seller", async () => {
+it("offers no Select to a seller", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn<typeof fetch>(async () =>
@@ -221,9 +224,17 @@ it("offers no Select and no Test data to a seller", async () => {
   );
   await act(async () =>
     root.render(
-      <ListView canManage={false} onOpen={() => undefined} version={0} />,
+      <ListView
+        canManage={false}
+        stage="open"
+        stageLabel="Open"
+        scope="mine"
+        query=""
+        onOpen={() => undefined}
+        version={0}
+      />,
     ),
   );
+  expect(host.textContent).toContain("1 lead");
   expect(button("Select")).toBeUndefined();
-  expect(button("Test data")).toBeUndefined();
 });

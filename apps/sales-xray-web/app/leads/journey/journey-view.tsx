@@ -75,6 +75,7 @@ import {
   type TemplateView,
 } from "./journey-client";
 import styles from "./journey.module.css";
+import { StagesExplainer } from "./stages-explainer";
 
 const ICONS: Record<string, LucideIcon> = {
   spark: Sparkles,
@@ -156,6 +157,7 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
   if (!canManage)
     return (
       <div className={styles.root}>
+        <StagesExplainer />
         <p className={styles.readOnly}>
           Owners and admins set lead stages. These are the ones your team uses.
         </p>
@@ -195,6 +197,7 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
   const profile = templates?.find((item) => item.id === view.industry);
   return (
     <div className={styles.root}>
+      <StagesExplainer />
       <div className={styles.phoneOnly}>
         <Segmented<Pane>
           label="Show"

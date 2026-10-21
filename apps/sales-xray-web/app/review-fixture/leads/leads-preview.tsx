@@ -4,10 +4,11 @@
  * The real Leads page with a fictional organisation, for screenshots on GitHub
  * (wb-ci --visual). Lead Desk reads are answered here; nothing leaves the
  * browser. Names arrive in lower case on purpose: the page shows them with
- * capitals. `?tab=all|team|sources|stages` opens that tab, as on /leads.
+ * capitals. `?tab=all&stage=…|team|sources|stages` opens that view, as on
+ * /leads; `&tap=menu` then opens the ⋯ menu by itself.
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { LeadsRoute } from "../../leads/leads-page";
 import { WorkspaceAccessContext } from "../../workspace-access";
@@ -126,8 +127,41 @@ function answers(now: number, path: string): unknown {
         ? row.stage !== "won" && row.stage !== "lost"
         : row.stage === stage,
     );
-    return { leads, total: leads.length, next_offset: null };
+    const stage_counts: Record<string, number> = {};
+    for (const row of all)
+      stage_counts[row.stage] = (stage_counts[row.stage] ?? 0) + 1;
+    return { leads, total: leads.length, next_offset: null, stage_counts };
   }
+  if (path === "/v1/lead-desk/journey")
+    return {
+      version: 2,
+      industry: "real_estate",
+      savedAt: null,
+      savedBy: null,
+      canEdit: true,
+      kinds: {},
+      meanings: {},
+      stages: (
+        [
+          ["Enquiry", "new"],
+          ["Not reachable", "not_connected"],
+          ["Call back", "follow_up"],
+          ["Site visit booked", "interested"],
+          ["Booked", "won"],
+          ["Not interested", "lost"],
+        ] as const
+      ).map(([label, kind], index) => ({
+        key: `step_${index}`,
+        label,
+        kind,
+        kindWords: "",
+        milestone: "",
+        meaning: "",
+        archived: false,
+        origin: "",
+        leads: 1,
+      })),
+    };
   if (path === "/v1/lead-desk/team")
     return {
       reps: [
@@ -163,6 +197,16 @@ function answers(now: number, path: string): unknown {
       waiting_first_call: 1,
       first_call_minutes: 6,
     };
+  if (path === "/v1/lead-desk/journey/templates") return [];
+  if (path === "/v1/lead-desk/journey/suggestions") return [];
+  if (path === "/v1/lead-desk/journey/ads")
+    return {
+      version: 1,
+      providers: [],
+      recent: [],
+      settling: 0,
+      sendsAt: null,
+    };
   if (path === "/v1/lead-desk/sources")
     return { sources: [], meta: "not_configured" };
   return null;
@@ -189,8 +233,27 @@ function install() {
   return true;
 }
 
+/** `&tap=menu`: the ⋯ menu opens by itself once the page has drawn. */
+function useTap() {
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tap") !== "menu")
+      return;
+    const timer = window.setTimeout(
+      () =>
+        document
+          .querySelector<HTMLButtonElement>(
+            'button[aria-label="Leads settings"]',
+          )
+          ?.click(),
+      600,
+    );
+    return () => window.clearTimeout(timer);
+  }, []);
+}
+
 export function LeadsPreview() {
   useState(install);
+  useTap();
   return (
     <WorkspaceAccessContext.Provider
       value={{
