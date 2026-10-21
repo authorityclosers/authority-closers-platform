@@ -16,6 +16,8 @@ and model:
 - the one-pass trial: ``one_pass_runs`` on real calls (its own rupee estimate), one line
   per stage (Flash-Lite transcription, the 3.8 Flash pass); a start without an outcome
   counts ₹2. Fictional benchmark runs are the research's money and are not here.
+- Brain 4.0 shadow reads: ``conversation_brain4_reviews`` (tokens); a start without an
+  outcome counts ₹2.
 
 Rupees are list-price estimates from the Admin price sheet (``admin_pricing``), never a
 charge. Nothing here reads a transcript, prompt, answer, message or name.
@@ -135,6 +137,13 @@ SPEND_SQL = text(
       FROM one_pass_runs o
       WHERE o.created_at >= :since AND o.source = 'call' AND o.state = 'running'
         AND NOT EXISTS (SELECT 1 FROM one_pass_runs d WHERE d.supersedes_id = o.id)
+      UNION ALL
+      SELECT 'brain4_shadow', CASE WHEN b.trigger = 'operator' THEN 'operator' ELSE 'auto' END,
+             b.created_at, 'gemini', b.model_id,
+             coalesce(b.input_tokens, 0), coalesce(b.output_tokens, 0), 0,
+             CASE WHEN b.state = 'running' THEN {OPEN_ATTEMPT_INR} ELSE NULL::numeric END
+      FROM conversation_brain4_reviews b
+      WHERE b.created_at >= :since
     )
     SELECT feature, trigger, (at AT TIME ZONE 'Asia/Kolkata')::date AS day, provider, model,
            count(*) AS requests, sum(input_tokens) AS input_tokens,

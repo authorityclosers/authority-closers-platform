@@ -691,12 +691,34 @@ async def _inner_async(
                     )
                     if line.get("skipped") == "daily_cap":
                         break
+                if automatic and arguments.apply and spend_environment is not None:
+                    await _brain4_shadow(
+                        sessions,
+                        spend_environment,
+                        call_provider=call_provider,
+                        flex=bool(getattr(arguments, "flex", False)),
+                        test_sources=test_sources,
+                        skipped_tenants=skipped_tenants,
+                    )
             finally:
                 if arguments.apply:
                     await admission.release_run_lock(lock)
     finally:
         await engine.dispose()
     return 1 if failures else 0
+
+
+async def _brain4_shadow(sessions: Any, environment: str, **options: Any) -> None:
+    """Brain 4.0's shadow reads (brain4_shadow): a beta beside this job, behind its own
+    spend guard feature (₹0 until raised). Its failures never fail the pointer review."""
+    from ac_platform.conversation_intelligence import brain4_shadow
+
+    try:
+        lines = await brain4_shadow.run(sessions, environment=environment, **options)
+    except Exception as error:  # noqa: BLE001 - a beta must not stop the review job
+        lines = [{"brain4_shadow": "error", "type": type(error).__name__}]
+    for line in lines:
+        print(json.dumps(line))
 
 
 def _inner(arguments: argparse.Namespace) -> int:

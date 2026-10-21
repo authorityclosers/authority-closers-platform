@@ -100,6 +100,13 @@ async def enrich_report_structure(
     plan = await withheld_plan_for(
         database, recording_id=recording_id, served_revisions=(revision,)
     )
+    if "brain4" not in review:
+        # Brain 4.0 (beta): a shadow read of this exact report, when one was saved.
+        from ac_platform.conversation_intelligence.brain4_shadow import latest as brain4_latest
+
+        shadow = await brain4_latest(database, envelope)
+        if shadow is not None:
+            review = {**review, "brain4": shadow}
     merged = merge_into_structure(structure, review)
     result["report"]["content"]["structure"] = project_structure(merged, plan)
     return result

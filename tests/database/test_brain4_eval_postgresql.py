@@ -190,3 +190,55 @@ def test_gold_evaluation_route_is_admin_only(brain4_case) -> None:
             assert NOTE not in answer.text
 
     run(exercise())
+
+
+def test_gold_calls_get_a_shadow_read_that_the_evaluation_counts(brain4_case) -> None:
+    from datetime import UTC, datetime
+
+    from ac_platform.conversation_intelligence import brain4_eval, brain4_shadow
+    from ac_platform.conversation_intelligence.brain4_models import ConversationBrain4Review
+
+    case, _, review = brain4_case
+
+    async def exercise():
+        now = datetime.now(UTC)
+        async with case.sessions() as db:
+            pointer = await db.get(ConversationPointerReview, review)
+            found = await db.run_sync(
+                lambda sync: brain4_shadow.gold_reports(sync.connection(), now, 10)
+            )
+        assert [item["draft_id"] for item in found] == [pointer.report_draft_id]
+        block = brain4_block(3)
+        async with case.sessions() as db, db.begin():
+            db.add(
+                ConversationBrain4Review(
+                    id=uuid4(),
+                    tenant_id=pointer.tenant_id,
+                    recording_id=pointer.recording_id,
+                    run_id=pointer.run_id,
+                    report_draft_id=pointer.report_draft_id,
+                    source_sha256=pointer.source_sha256,
+                    transcript_revision=pointer.transcript_revision,
+                    version=brain4.VERSION,
+                    rubric_sha256=brain4.RUBRIC_SHA256,
+                    model_id="fictional-offline",
+                    prompt_sha256="d" * 64,
+                    state="saved",
+                    payload=block,
+                    payload_sha256=brain4.payload_sha256(block),
+                    trigger="auto",
+                    created_by="fictional-test",
+                    created_at=now,
+                    finished_at=now,
+                )
+            )
+        async with case.sessions() as db:
+            data = await brain4_eval.load(db)
+            again = await db.run_sync(
+                lambda sync: brain4_shadow.gold_reports(sync.connection(), now, 10)
+            )
+        # The review's own block first, then the shadow read: two runs of one call.
+        assert [run["dimensions"][-1]["rating"] for run in data.brain4[str(review)]] == [2, 3]
+        assert again == []
+
+    run(exercise())

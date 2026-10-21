@@ -926,6 +926,10 @@ async def erase_pointer_reviews_for_recording(
     )
 
     await erase_review_verdicts_for_recording(database, recording_id, now)
+    # Brain 4.0's shadow reads quote this call too: emptied in the same transaction.
+    from ac_platform.conversation_intelligence.brain4_shadow import erase_for_recording
+
+    await erase_for_recording(database, recording_id, now)
     return len(rows)
 
 
