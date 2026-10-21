@@ -56,6 +56,7 @@ import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { DeskView, dueNow, type DeskLink, type RowActions } from "./desk-view";
 import { usePullToRefresh } from "./gestures";
 import { LeadActions } from "./lead-actions";
+import { LEAD_ADDED_EVENT, takeHandedLead } from "./lead-handoff";
 import { CallingLoop, LeadSheet, type LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import {
@@ -166,6 +167,20 @@ export function LeadsRoute() {
   };
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
+  // A lead added from the + sheet opens here, ready to call (owner, 22 Oct).
+  useEffect(() => {
+    const show = (leadId: string | null) => {
+      if (!leadId) return;
+      setHolding(null);
+      setIntent(null);
+      setOpenLead(leadId);
+      refresh();
+    };
+    show(takeHandedLead());
+    const onAdded = () => show(takeHandedLead());
+    window.addEventListener(LEAD_ADDED_EVENT, onAdded);
+    return () => window.removeEventListener(LEAD_ADDED_EVENT, onAdded);
+  }, [refresh]);
   const closeShared = () => setSharedDone(true);
   // Pull to refresh waits for the desk to come back before the spinner goes.
   const reload = useCallback(

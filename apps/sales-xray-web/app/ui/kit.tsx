@@ -32,6 +32,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { useBackClose } from "./back-close";
 import styles from "./kit.module.css";
 
 export { styles as kitStyles };
@@ -835,6 +836,8 @@ export function Dialog({
   // dragged out of the box does not.
   const pressedOutside = useRef(false);
   const titleId = useId();
+  // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
+  useBackClose(open, onClose);
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;

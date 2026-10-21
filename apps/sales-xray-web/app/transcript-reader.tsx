@@ -35,6 +35,7 @@ import {
 } from "./speaker-profiles";
 import { useSourceWaveform } from "./source-waveform";
 import styles from "./transcript-reader.module.css";
+import { useBackClose } from "./ui/back-close";
 
 const TRANSCRIPT_KINDS = [
   "brand",
@@ -192,6 +193,8 @@ export function TranscriptReader({
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+  // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
+  useBackClose(isOpen, onClose);
 
   const { profiles } = useSpeakerProfiles(callId);
   const accountName = getShellState().profileName;

@@ -33,6 +33,7 @@ import { openSettings, opensInPlace } from "./settings-open";
 import { useWorkspaceAccess } from "./workspace-access";
 import { AccountAvatarImage } from "./speaker-avatar";
 import styles from "./profile-menu.module.css";
+import { useBackClose } from "./ui/back-close";
 
 const SIGN_OUT_UPLOAD_WARNING =
   "The upload is still in progress or unconfirmed. Signing out will stop it and clear this tab’s recovery state. If the server already received it, you can find it in Calls. Continue?";
@@ -105,6 +106,8 @@ export function ProfileMenu({
   pending?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
+  useBackClose(open, () => setOpen(false));
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
   const profile = useShellProfile(authenticated);

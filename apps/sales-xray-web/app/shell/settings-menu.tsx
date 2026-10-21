@@ -67,6 +67,7 @@ import { Sheet, SHEET_PHONE_QUERY } from "../ui/sheet";
 import { useShellUpdates } from "./updates-store";
 import { WorkspacePicker, type PickerWorkspace } from "./workspace-picker";
 import styles from "./settings-menu.module.css";
+import { useBackClose } from "../ui/back-close";
 
 type View = "main" | "news";
 
@@ -209,6 +210,8 @@ export function SettingsMenu({
     if (open) setView(initialView);
   }
   const phone = useSyncExternalStore(subscribePhone, isPhone, () => false);
+  // Phones: the sheet closes on Back by itself; computers: the card does.
+  useBackClose(open && !phone, onClose);
   const [place, setPlace] = useState<{ left: number; bottom: number } | null>(
     null,
   );

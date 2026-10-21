@@ -8,6 +8,8 @@
  * API field never breaks the page.
  */
 
+import { displayName } from "../display-name";
+
 const API = "/v1/sales-xray/call-ai";
 
 export type CallAiLevel = "off" | "data_only" | "auto" | "full";
@@ -109,7 +111,10 @@ export function parseCallAi(value: unknown): CallAiSettings {
       )
       .map((person) => ({
         person_id: person.person_id as string,
-        name: typeof person.name === "string" ? person.name : "A seller",
+        name:
+          typeof person.name === "string"
+            ? displayName(person.name)
+            : "A seller",
         level: person.level as CallAiLevel,
       })),
     you: {

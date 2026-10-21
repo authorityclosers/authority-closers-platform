@@ -2,6 +2,7 @@
 import { acquisition, AcquisitionError } from "../acquisition-client";
 import { earlyFetch } from "../early-reads";
 import type { ActivityDay } from "../dashboard/dashboard-data";
+import { displayName, displayNameOf } from "../display-name";
 
 export type OrgRole = "owner" | "admin" | "member";
 
@@ -238,7 +239,7 @@ export function parseMembers(value: unknown): OrgMember[] {
     identities.add(key);
     return {
       ...identity,
-      name: item.name as string | null,
+      name: displayNameOf(item.name as string | null),
       email: item.email as string | null,
       role: item.role,
       joinedAt: item.joined_at as string | null,
@@ -375,7 +376,7 @@ export function parseActivity(value: unknown): OrgActivity {
       const item = obj(raw);
       return {
         personId: text(item.person_id) ?? "",
-        name: text(item.name) ?? "",
+        name: displayName(text(item.name) ?? ""),
         ...counts(item),
       };
     }),
@@ -403,7 +404,7 @@ function parseCalls(value: unknown): OrgActivity["calls"] {
     return {
       id: callId,
       ownerPersonId: text(item.owner_person_id) ?? "",
-      ownerName: text(item.owner_name),
+      ownerName: displayNameOf(text(item.owner_name)),
       label: text(item.label),
       createdAt: text(item.created_at) ?? "",
       durationSeconds: num(item.duration_seconds),
@@ -536,7 +537,7 @@ export function parseReceiptActivity(value: unknown): ReceiptActivity {
     seen.add(person.person_id);
     return {
       personId: person.person_id,
-      name: person.name,
+      name: displayName(person.name),
       analysed: whole(person.analysed_last_30_days),
       analysedSeconds: whole(person.analysed_seconds_last_30_days),
       previous: whole(person.analysed_previous_30_days),

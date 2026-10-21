@@ -6,6 +6,10 @@
 .root {
   container-type: inline-size;
   display: grid;
+  /* One column exactly as wide as the page: a wide child (the tab strip, a
+     search box) scrolls or shrinks inside it instead of pushing the page
+     sideways (owner, 22 Oct: All leads ran off the right edge). */
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: var(--sx-gap);
   box-sizing: border-box;
@@ -262,7 +266,8 @@
 }
 
 .search input {
-  width: min(240px, 46vw);
+  width: min(240px, 40cqi);
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--sx-ink);
@@ -706,6 +711,65 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+/* Add a lead (owner, 22 Oct: low effort): name and phone first, stacked on
+   a phone; the shortcuts and the rest wait in small chips. */
+.quickFields {
+  display: grid;
+  gap: 10px;
+}
+
+@media (min-width: 600px) {
+  .quickFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.quickHelpers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.helperChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.helperChip > svg {
+  color: var(--lx-teal);
+}
+
+.helperChip[aria-expanded="true"] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+}
+
+.helperChip:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.formWide {
+  grid-column: 1 / -1;
+}
+
+.whoGets {
+  display: grid;
+  gap: 6px;
 }
 
 .row {
