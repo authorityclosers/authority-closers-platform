@@ -23,7 +23,9 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership
 
 from .application import ConversationDenied, utc
+from .gold_review_contracts import MOMENT_PREFIX, target_kind
 from .gold_review_models import GoldAssignment, GoldReviewer, GoldRow
+from .gold_reviews import DIMENSION_TARGETS, line_count
 from .models import (
     ConversationRecording,
     ConversationReviewAssignment,
@@ -119,14 +121,20 @@ async def _assignments(database: Any, person_id: UUID, now: datetime) -> list[di
             for assignment_id, count in (
                 await database.execute(
                     select(GoldRow.assignment_id, func.count(func.distinct(GoldRow.target)))
-                    .where(GoldRow.assignment_id.in_(ids), GoldRow.erased_at.is_(None))
+                    .where(
+                        GoldRow.assignment_id.in_(ids),
+                        GoldRow.erased_at.is_(None),
+                        # Moments are optional; a call is done when its lines are.
+                        GoldRow.target.not_like(f"{MOMENT_PREFIX}%"),
+                    )
                     .group_by(GoldRow.assignment_id)
                 )
             ).all()
         }
     items = []
     for gold, assignment, recording in rows:
-        done = min(handled.get(gold.assignment_id, 0), LINES)
+        total = line_count(gold.mode)
+        done = min(handled.get(gold.assignment_id, 0), total)
         items.append(
             {
                 "assignment_id": str(gold.assignment_id),
@@ -134,9 +142,10 @@ async def _assignments(database: Any, person_id: UUID, now: datetime) -> list[di
                 "assigned_at": utc(gold.created_at).isoformat(),
                 "recorded_at": utc(recording.created_at).isoformat(),
                 "expires_at": utc(assignment.expires_at).isoformat(),
+                "mode": gold.mode,
                 "handled": done,
-                "total": LINES,
-                "state": "done" if done >= LINES else "in_progress" if done else "new",
+                "total": total,
+                "state": "done" if done >= total else "in_progress" if done else "new",
             }
         )
     return items
@@ -175,7 +184,7 @@ async def queue(database: Any, person_id: UUID, now: datetime) -> dict[str, Any]
     return {
         "items": ordered[:200],
         "calls_left": sum(1 for i in items if i["state"] != "done"),
-        "lines_left": sum(LINES - i["handled"] for i in items if i["state"] != "done"),
+        "lines_left": sum(i["total"] - i["handled"] for i in items if i["state"] != "done"),
     }
 
 
@@ -241,7 +250,13 @@ async def metrics(
     today = _day(now)
 
     def judged(row: GoldRow) -> bool:
-        return not (row.payload or {}).get("skip")
+        return not (row.payload or {}).get("skip") and target_kind(row.target) != "moment"
+
+    def finished(targets: set[str]) -> bool:
+        lines = {t for t in targets if target_kind(t) == "line"}
+        return len(lines) >= LINES or len(targets & set(DIMENSION_TARGETS)) >= len(
+            DIMENSION_TARGETS
+        )
 
     def summary(selected: list[GoldRow]) -> dict[str, Any]:
         verdicts = Counter((r.payload or {}).get("verdict") for r in selected if judged(r))
@@ -255,9 +270,14 @@ async def metrics(
             calls[r.assignment_id].add(r.target)
         return {
             "labels": sum(1 for r in selected if judged(r)),
-            "skipped": sum(1 for r in selected if not judged(r)),
+            "skipped": sum(
+                1
+                for r in selected
+                if (r.payload or {}).get("skip") and target_kind(r.target) != "moment"
+            ),
+            "moments": sum(1 for r in selected if target_kind(r.target) == "moment"),
             "today": sum(1 for r in selected if _day(r.created_at) == today),
-            "calls_done": sum(1 for targets in calls.values() if len(targets) >= LINES),
+            "calls_done": sum(1 for targets in calls.values() if finished(targets)),
             "calls_started": len(calls),
             "median_seconds": _median(seconds),
             "agreement": _rate(verdicts["agree"], verdicts["partly"], verdicts["disagree"]),
@@ -270,7 +290,7 @@ async def metrics(
         me = summary(mine)
         waiting = [i for i in await _assignments(database, person_id, now) if i["state"] != "done"]
         me["calls_left"] = len(waiting)
-        me["lines_left"] = sum(LINES - i["handled"] for i in waiting)
+        me["lines_left"] = sum(i["total"] - i["handled"] for i in waiting)
         days = Counter(_day(r.created_at) for r in mine)
         me["daily"] = [
             {

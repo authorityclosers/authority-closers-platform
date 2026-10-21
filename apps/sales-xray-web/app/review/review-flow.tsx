@@ -12,6 +12,7 @@ import { ArrowLeft, ChevronLeft, Pause, Play } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { notify } from "../notice-center";
+import { BlindFlow } from "./blind-flow";
 import {
   REASONS,
   REASON_WORDS,
@@ -62,9 +63,9 @@ function draftFrom(row: SavedRow | undefined): Draft {
   const value = row?.value;
   if (!value || value.skip) return EMPTY;
   return {
-    verdict: value.verdict,
+    verdict: value.verdict ?? null,
     status: value.status ?? null,
-    score: value.score,
+    score: value.score ?? null,
     reasons: value.reasons ?? [],
     note: value.opinion ?? "",
   };
@@ -284,6 +285,7 @@ export function ReviewFlow({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (
+        workspace?.mode === "brain4_blind" ||
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement ||
         event.metaKey ||
@@ -325,6 +327,15 @@ export function ReviewFlow({
       </div>
     );
   if (!workspace) return <ReviewFlowSkeleton />;
+  if (workspace.mode === "brain4_blind")
+    return (
+      <BlindFlow
+        assignmentId={assignmentId}
+        workspace={workspace}
+        onFinished={onFinished}
+        onReload={load}
+      />
+    );
 
   const total = lines.length;
   const name = callName(

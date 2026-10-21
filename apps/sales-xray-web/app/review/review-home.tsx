@@ -251,6 +251,9 @@ export function ReviewRoute() {
                           <span className={styles.muted}>
                             {" "}
                             · {item.handled}/{item.total}
+                            {item.mode === "brain4_blind"
+                              ? " · Blind rating"
+                              : ""}
                           </span>
                         </span>
                         <span

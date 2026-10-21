@@ -100,6 +100,129 @@ const checkpoint = z.object({
 
 export type Checkpoint = z.infer<typeof checkpoint>;
 
+const count = z.number().catch(0).default(0);
+const readiness = z
+  .object({
+    state: z.string().catch("needs_data").default("needs_data"),
+    needs: z.array(z.string()).catch([]).default([]),
+  })
+  .catch({ state: "needs_data", needs: [] });
+
+/** Brain 4.0's rating against a blind rating, on the 1-5 scale. */
+const ratingAgreement = z.object({
+  lines: count,
+  calls: count,
+  rated: count,
+  exact: rate,
+  exact_ci: interval,
+  within_one: rate,
+  within_one_ci: interval,
+  kappa: rate,
+  kappa_ci: interval,
+  band_error: rate,
+  lean: rate,
+  judgeable_agree: rate,
+});
+
+/** Blind ratings (AC-SVAL-01 section 8.1), two raters (Gate 0) and moments. */
+const blindSchema = z.object({
+  ratings: count,
+  calls: count,
+  calls_with_brain4: count,
+  reviewers: count,
+  dimensions: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string().catch("").default(""),
+        category: z.string().catch("").default(""),
+        ratings: count,
+        brain4: ratingAgreement.catch(ratingAgreement.parse({})),
+        readiness,
+        undecidable: z.string().nullable().catch(null).default(null),
+        drop,
+      }),
+    )
+    .catch([])
+    .default([]),
+  between_raters: z
+    .object({
+      calls: count,
+      pairs: count,
+      rated: count,
+      exact: rate,
+      kappa: rate,
+      gate0: z.boolean().catch(false).default(false),
+    })
+    .catch({
+      calls: 0,
+      pairs: 0,
+      rated: 0,
+      exact: null,
+      kappa: null,
+      gate0: false,
+    }),
+  moments: z
+    .object({
+      moments: count,
+      criticisms: count,
+      praise: count,
+      written_blind: count,
+      marked: count,
+      caught: z.record(z.string(), z.number()).catch({}).default({}),
+      caught_rate: rate,
+      caught_ci: interval,
+      by_dimension: z
+        .array(
+          z.object({
+            id: z.string(),
+            criticisms: count,
+            marked: count,
+            caught_rate: rate,
+          }),
+        )
+        .catch([])
+        .default([]),
+    })
+    .catch({
+      moments: 0,
+      criticisms: 0,
+      praise: 0,
+      written_blind: 0,
+      marked: 0,
+      caught: {},
+      caught_rate: null,
+      caught_ci: null,
+      by_dimension: [],
+    }),
+});
+
+const progressCount = z
+  .object({ want: count, have: count })
+  .catch({ want: 0, have: 0 });
+
+/** The gold checkpoint's chosen sample so far (gold_checkpoint.py). */
+const sampleSchema = z.object({
+  name: z.string().catch("").default(""),
+  mode: z.string().catch("").default(""),
+  since: z.string().catch("").default(""),
+  minutes: z
+    .tuple([z.number(), z.number()])
+    .nullable()
+    .catch(null)
+    .default(null),
+  workspaces: z.string().catch("").default(""),
+  daily: count,
+  total: count,
+  chosen: count,
+  salespeople: count,
+  at_least: z.record(z.string(), progressCount).catch({}).default({}),
+  mix: z.record(z.string(), progressCount).catch({}).default({}),
+});
+
+export type Blind = z.infer<typeof blindSchema>;
+export type Sample = z.infer<typeof sampleSchema>;
+
 export const brain4Evaluation = z.object({
   version: z.string().catch("").default(""),
   generated_at: z.string().catch("").default(""),
@@ -135,17 +258,15 @@ export const brain4Evaluation = z.object({
         pointers: z.array(z.string()).catch([]).default([]),
         brain4: agreement,
         classic: agreement,
-        readiness: z
-          .object({
-            state: z.string().catch("needs_data").default("needs_data"),
-            needs: z.array(z.string()).catch([]).default([]),
-          })
-          .catch({ state: "needs_data", needs: [] }),
+        readiness,
+        undecidable: z.string().nullable().catch(null).default(null),
         drop,
       }),
     )
     .catch([])
     .default([]),
+  blind: blindSchema.catch(blindSchema.parse({})),
+  sample: sampleSchema.nullable().catch(null).default(null),
   stability: z
     .record(z.string(), z.object({ calls: z.number(), same: z.number() }))
     .catch({})
@@ -213,6 +334,19 @@ export const READINESS: Record<
   needs_data: { label: "Needs gold data", tone: "neutral" },
   beta: { label: "Beta", tone: "warn" },
   gate3_candidate: { label: "Gate 3 candidate", tone: "info" },
+  undecidable: { label: "Undecidable for now", tone: "neutral" },
+};
+
+/** What the checkpoint's counts are called on the page. */
+export const SAMPLE_WORDS: Record<string, string> = {
+  price: "reach price or closing",
+  objection: "raise an objection",
+  decision: "talk decisions or next steps",
+  first_call: "first calls",
+  follow_up: "follow-ups",
+  won: "won",
+  lost: "lost",
+  pending: "pending",
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {

@@ -241,3 +241,16 @@ def test_organisations_choose_classic_or_brain4_beta_in_report_settings() -> Non
     older = VERSION_1.document()
     del older["report"]["scoring"]
     assert settings_from_document(older).report.scoring == "classic"
+
+
+def test_guide_gives_each_dimension_in_the_rubrics_own_words() -> None:
+    items = brain4.guide()
+    assert [item["id"] for item in items] == list(brain4.DIMENSION_IDS)
+    text = brain4.rubric()
+    for item in items:
+        assert item["label"] == brain4.LABELS[item["id"]]
+        assert item["about"] and item["about"] in text
+        assert item["scale"].startswith("5 ") and item["scale"] in text
+        assert not item["about"].startswith(item["label"])
+    assert items[6]["about"].startswith("Ethics Gate")
+    assert items[11]["category_label"] == "How Well You Understand the Buyer"
