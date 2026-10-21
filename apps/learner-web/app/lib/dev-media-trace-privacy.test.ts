@@ -95,7 +95,7 @@ function runInstalledTraceProbe(suppress: boolean) {
 
 describe("installed Next pre-bootstrap development trace privacy", () => {
   it("pins the reviewed runtime and proves the cutoff exceeds every valid span", () => {
-    expect(require("next/package.json").version).toBe("16.3.6");
+    expect(require("next/package.json").version).toBe("16.3.8");
     const parsed = Number.parseInt(threshold, 10);
     const cutoffMicroseconds = parsed * 1000;
     expect(Number.isSafeInteger(parsed)).toBe(true);

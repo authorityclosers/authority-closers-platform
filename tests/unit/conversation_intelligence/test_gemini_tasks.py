@@ -18,6 +18,7 @@ from ac_platform.conversation_intelligence.gemini_tasks import (
     gemini_prompt_view,
     prepare_gemini_body,
 )
+from ac_platform.conversation_intelligence.gemini_tiers import base_model
 from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
     prepare_coaching_input,
@@ -423,10 +424,12 @@ def test_unimplemented_models_cannot_use_the_adapter_by_catalog_assumption() -> 
 @pytest.mark.parametrize("model", sorted(GEMINI_TASK_MODELS))
 @pytest.mark.parametrize("task", ["facts", "coaching"])
 def test_catalog_resolves_only_the_approved_implemented_task(model: str, task: Any) -> None:
+    # A Flex route (gemini_tiers) calls its base model's own endpoint.
+    api_model = base_model(model)
     provider = _provider(
         provider_id="gemini",
         model_id=model,
-        endpoint=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        endpoint=f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent",
     )
     config = _config(
         task=task, provider=provider, route=_route(task, provider_id="gemini", model_id=model)

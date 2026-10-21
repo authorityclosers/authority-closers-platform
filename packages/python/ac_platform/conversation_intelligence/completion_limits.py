@@ -2,6 +2,9 @@
 
 
 def completion_ceiling(provider: str, model: str, stage: str) -> int:
+    # A Flex route (gemini_tiers) has its model's own bounds.
+    if provider == "gemini" and model.endswith(":flex"):
+        model = model[: -len(":flex")]
     if (provider, model, stage) == ("gemini", "gemini-3.8-flash", "C5"):
         return 8_000
     if (provider, model, stage) in {

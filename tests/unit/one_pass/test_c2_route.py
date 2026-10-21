@@ -160,3 +160,48 @@ def test_the_host_script_seals_only_the_derived_configuration(tmp_path, capsys) 
     other["revision"] = "slipped-in"
     (tmp_path / "gemini.json").write_text(json.dumps(other))
     assert one_pass_c2_seal.main(arguments) == 2
+
+
+def test_the_flex_configuration_and_profile_keep_standard_ceilings() -> None:
+    classic, bundle = _classic()
+    flex = c2_route.derive_configuration(classic, flex=True)
+    routes = {route.task: route for route in flex.routes}
+    assert routes["asr"].model_id == gemini_audio.MODEL + ":flex"
+    assert routes["facts"].model_id == routes["coaching"].model_id == "gemini-3.8-flash:flex"
+    standard = c2_route.derive_configuration(classic)
+    sealed = c2_route.seal(c2_route.seal(bundle, classic, standard), classic, flex, flex=True)
+    policy = sealed.acquisition_policy
+    assert policy is not None and policy.stages == bundle.acquisition_policy.stages
+    assert [p.profile_id for p in policy.profiles] == [
+        c2_route.PROFILE_ID,
+        c2_route.FLEX_PROFILE_ID,
+    ]
+    dispatches = ConversationProviderAdmin._approved_configuration(_row(flex), sealed)
+    old = ConversationProviderAdmin._approved_configuration(_row(classic), sealed)
+    assert [(d.model_id, d.max_cost_paise) for d in dispatches] == [
+        (gemini_audio.MODEL + ":flex", c2_route.MAX_COST_PAISE),
+        ("gemini-3.8-flash:flex", old[1].max_cost_paise),
+        ("gemini-3.8-flash:flex", old[2].max_cost_paise),
+    ]
+    # Both Gemini configurations and the classic one stay activatable.
+    assert ConversationProviderAdmin._approved_configuration(_row(standard), sealed)
+
+
+@pytest.mark.asyncio
+async def test_switching_to_flex_is_the_owners_action_and_back_is_one_click(monkeypatch) -> None:
+    classic, _ = _classic()
+    standard = c2_route.derive_configuration(classic)
+    flex = c2_route.derive_configuration(classic, flex=True)
+    actor = SimpleNamespace(tenant_id=uuid4(), person_id=uuid4(), session_id=uuid4())
+
+    async def is_fresh(_database: object, _session: object, _now: object) -> bool:
+        return True
+
+    monkeypatch.setattr(sign_in_methods, "session_is_fresh", is_fresh)
+    with pytest.raises(ConversationDenied, match="Type one_pass"):
+        await _admin(standard)._owner_gate(actor, _row(flex), confirm=None, reason=None)
+    assert await _admin(standard)._owner_gate(
+        actor, _row(flex), confirm="one_pass", reason="Owner: Flex after the latency check"
+    )
+    assert not await _admin(flex)._owner_gate(actor, _row(standard), confirm=None, reason=None)
+    assert not await _admin(flex)._owner_gate(actor, _row(classic), confirm=None, reason=None)

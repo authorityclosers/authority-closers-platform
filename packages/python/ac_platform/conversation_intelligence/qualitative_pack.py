@@ -35,6 +35,10 @@ _COACHING_V6_C5_ROUTES = frozenset(
 def supports_coaching_v6_route(provider: str, model: str) -> bool:
     """Return whether the current offline adapters fit v6's bounded request size."""
 
+    from ac_platform.conversation_intelligence.gemini_tiers import base_model
+
+    if provider == "gemini":
+        model = base_model(model)
     return (provider, model) in _COACHING_V6_C5_ROUTES
 
 

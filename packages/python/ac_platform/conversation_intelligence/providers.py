@@ -13,12 +13,12 @@ import re
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 import httpx
 
-from ac_platform.conversation_intelligence import gemini_audio
+from ac_platform.conversation_intelligence import gemini_audio, gemini_tiers
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.entitlements import Reservation
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES as MAX_AUDIO_BYTES
@@ -457,19 +457,73 @@ class BoundedProviders:
             else:
                 uri, uploaded = self._gemini_upload(key, speech)
                 part = gemini_audio.audio_part(speech, file_uri=uri)
-            return self._post(
-                "gemini",
+            return self._gemini_post(
+                reservation,
                 model,
-                gemini_audio.URL.format(model=model),
-                reservation=reservation,
-                headers={"x-goog-api-key": key},
-                json_body=gemini_audio.request_body(part),
-                input_sha256=reservation.quote.input_sha256,
+                gemini_audio.URL.format(model=gemini_tiers.base_model(model)),
+                {"x-goog-api-key": key},
+                gemini_audio.request_body(
+                    part, fmt=gemini_audio.format_of(reservation.quote.recipe_revision)
+                ),
                 deadline_seconds=gemini_audio.DEADLINE_SECONDS,
             )
         finally:
             if uploaded is not None:
                 self._gemini_delete(key, uploaded)
+
+    def _gemini_post(
+        self,
+        reservation: Reservation,
+        model: str,
+        url: str,
+        headers: dict[str, str],
+        body: dict[str, Any],
+        *,
+        deadline_seconds: int,
+    ) -> ProviderResult:
+        """A Gemini request; on a Flex route (gemini_tiers) it asks for Flex first and,
+        after a busy, lost or too-slow answer, once more on standard. The receipt says
+        Flex was asked and whether it fell back (billed at standard)."""
+        if not gemini_tiers.is_flex(model):
+            return self._post(
+                "gemini",
+                model,
+                url,
+                reservation=reservation,
+                headers=headers,
+                json_body=body,
+                input_sha256=reservation.quote.input_sha256,
+                deadline_seconds=deadline_seconds,
+            )
+        try:
+            result = self._post(
+                "gemini",
+                model,
+                url,
+                reservation=reservation,
+                headers=headers,
+                json_body={**body, "service_tier": "flex"},
+                input_sha256=reservation.quote.input_sha256,
+                deadline_seconds=gemini_tiers.FLEX_WINDOW_SECONDS,
+            )
+            return replace(result, usage={**result.usage, gemini_tiers.FLEX_USAGE: 1})
+        except ProviderError as error:
+            if not _flex_retryable(str(error)):
+                raise
+        result = self._post(
+            "gemini",
+            model,
+            url,
+            reservation=reservation,
+            headers=headers,
+            json_body=body,
+            input_sha256=reservation.quote.input_sha256,
+            deadline_seconds=min(deadline_seconds, MAX_STREAM_SECONDS),
+        )
+        return replace(
+            result,
+            usage={**result.usage, gemini_tiers.FLEX_USAGE: 1, gemini_tiers.FALLBACK_USAGE: 1},
+        )
 
     def _gemini_client(self) -> httpx.Client:
         return httpx.Client(
@@ -545,17 +599,22 @@ class BoundedProviders:
         if len(encoded) > 512 * 1024:
             raise ProviderError("provider_prompt_too_large")
         provider, model = reservation.quote.provider_id, reservation.quote.provider_model
-        if provider == "gemini" and model in {
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
-            "gemini-3.8-flash",
-            "gemini-3.1-pro-preview",
-        }:
+        if provider == "gemini" and (
+            model
+            in {
+                "gemini-2.5-flash",
+                "gemini-2.5-pro",
+                "gemini-3.8-flash",
+                "gemini-3.1-pro-preview",
+            }
+            or model == gemini_tiers.flex("gemini-3.8-flash")
+        ):
             config = body.get("generationConfig", {})
             maximum = config.get("maxOutputTokens") if isinstance(config, dict) else None
             if type(maximum) is not int or not 1 <= maximum <= 8192:
                 raise ProviderError("provider_output_budget_required")
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            api_model = gemini_tiers.base_model(model)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent"
             headers = {"x-goog-api-key": self._credentials.get("gemini", "")}
         elif provider == "groq" and model in {"openai/gpt-oss-120b", "llama-3.3-70b-versatile"}:
             maximum = body.get("max_completion_tokens")
@@ -576,6 +635,10 @@ class BoundedProviders:
         else:
             raise ProviderError("provider_model_not_supported")
         self._admit(reservation, provider, "extract_context_evidence", encoded)
+        if provider == "gemini":
+            return self._gemini_post(
+                reservation, model, url, headers, body, deadline_seconds=MAX_STREAM_SECONDS
+            )
         return self._post(
             provider,
             model,
@@ -585,6 +648,18 @@ class BoundedProviders:
             json_body=body,
             input_sha256=reservation.quote.input_sha256,
         )
+
+
+def _flex_retryable(code: str) -> bool:
+    """A Flex answer worth one more try on standard: busy, lost or too slow."""
+    if code in {"provider_execution_deadline", "provider_transport_or_response_failed"}:
+        return True
+    prefix = "provider_http_"
+    return (
+        code.startswith(prefix)
+        and code[len(prefix) :].isdigit()
+        and int(code[len(prefix) :]) in gemini_tiers.FLEX_RETRY_STATUSES
+    )
 
 
 def _openai_usage(value: object) -> dict[str, int]:

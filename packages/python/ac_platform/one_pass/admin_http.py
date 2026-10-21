@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
@@ -70,6 +70,11 @@ from ac_platform.one_pass import settings as choices
 
 PRIVATE = {"Cache-Control": "private, no-store"}
 _BENCH_CALL = re.compile(r"^[a-z]{2}-[0-9]{2}$")
+
+
+class PrepareCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tier: Literal["standard", "flex"] = "standard"
 
 
 class SettingsCommand(BaseModel):
@@ -137,8 +142,17 @@ def _transcription(row: Any) -> dict[str, Any] | None:
     return None if route is None else {"provider": route.provider_id, "model": route.model_id}
 
 
+def _uses_flex(row: Any) -> bool:
+    try:
+        config = parse_registry_config(row.configuration)
+    except (ProviderRegistryError, TypeError, ValueError):
+        return False
+    return any(route.model_id.endswith(":flex") for route in config.routes)
+
+
 async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str, Any]:
-    """The C2 route in use and the Flash-Lite configuration's state (ids and digests)."""
+    """The C2 route in use and the two Gemini configurations' state (standard and Flex):
+    derived from today's Scribe configuration, saved? sealed? Ids and digests only."""
     service = provider_admin.ConversationProviderAdmin(ConversationApplication(auth.database))
     bundle = None
     if settings.sales_xray_enabled and settings.sales_xray_approval_path:
@@ -159,32 +173,48 @@ async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str,
             )
         ).all()
     }
+    options = {item["revision"]: item for item in current.get("activation_options") or []}
     active = rows.get(activation.get("revision"))
     in_use = None if active is None else _transcription(active)
-    derived = None
-    if active is not None and in_use is not None and in_use["provider"] != "gemini":
-        try:
-            derived = c2_route.derive_configuration(parse_registry_config(active.configuration))
-        except (c2_route.SealError, ProviderRegistryError, TypeError, ValueError):
-            derived = None
-    options = {item["revision"]: item for item in current.get("activation_options") or []}
-    gemini_revision = next(
-        (
-            revision
-            for revision, row in sorted(rows.items(), reverse=True)
-            if (_transcription(row) or {}).get("provider") == "gemini"
-            and (derived is None or row.configuration_sha256 == derived.digest)
-        ),
-        None,
+    # The classic configuration both Gemini ones derive from: the active one while it is
+    # on Scribe, else the newest saved configuration that is.
+    classic = (
+        active
+        if active is not None and in_use is not None and in_use["provider"] != "gemini"
+        else next(
+            (
+                row
+                for _, row in sorted(rows.items(), reverse=True)
+                if (_transcription(row) or {}).get("provider") not in (None, "gemini")
+            ),
+            None,
+        )
     )
-    classic_revision = next(
-        (
-            revision
-            for revision, row in sorted(rows.items(), reverse=True)
-            if revision in options and (_transcription(row) or {}).get("provider") != "gemini"
-        ),
-        None,
-    )
+    tiers: dict[str, Any] = {}
+    for tier, flex in (("gemini", False), ("gemini_flex", True)):
+        derived = None
+        if classic is not None:
+            try:
+                derived = c2_route.derive_configuration(
+                    parse_registry_config(classic.configuration), flex=flex
+                )
+            except (c2_route.SealError, ProviderRegistryError, TypeError, ValueError):
+                derived = None
+        saved = next(
+            (
+                revision
+                for revision, row in sorted(rows.items(), reverse=True)
+                if derived is not None and row.configuration_sha256 == derived.digest
+            ),
+            None,
+        )
+        tiers[tier] = {
+            "model": c2_route.MODEL + (":flex" if flex else ""),
+            "profile_id": c2_route.FLEX_PROFILE_ID if flex else c2_route.PROFILE_ID,
+            "configuration_sha256": None if derived is None else derived.digest,
+            "saved_revision": saved,
+            "approved": saved is not None and saved in options,
+        }
     return {
         "latest_revision": max(rows) if rows else 0,
         "sealed_bundle": None if bundle is None else bundle.digest,
@@ -194,19 +224,12 @@ async def _transcription_view(auth: Any, actor: Any, settings: Any) -> dict[str,
             "revision": active.revision,
             "configuration_sha256": active.configuration_sha256,
             "transcription": in_use,
+            "flex": _uses_flex(active),
         },
-        "gemini": {
-            "model": c2_route.MODEL,
-            "profile_id": c2_route.PROFILE_ID,
-            "configuration_sha256": derived.digest
-            if derived is not None
-            else None
-            if gemini_revision is None
-            else rows[gemini_revision].configuration_sha256,
-            "saved_revision": gemini_revision,
-            "approved": gemini_revision is not None and gemini_revision in options,
-        },
-        "classic_revision": classic_revision,
+        **tiers,
+        "classic_revision": None
+        if classic is None or classic.revision not in options
+        else classic.revision,
         "confirm": OWNER_CONFIRM_WORD,
     }
 
@@ -402,30 +425,47 @@ def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None
 
     @router.post("/v1/admin/analysis-pipeline/transcription/prepare")
     async def prepare_transcription(
-        request: Request, response: Response, auth: AuthenticatedTransaction = dependency
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+        command: PrepareCommand | None = None,
     ) -> dict[str, Any]:
-        """Save the active configuration with C2 on Gemini 3.1 Flash-Lite as a new provider
-        revision (nothing changes until Root seals it and the owner switches)."""
+        """Save today's Scribe configuration with C2 on Gemini 3.1 Flash-Lite (or, for
+        ``flex``, C2, C4 and C5 on Gemini Flex) as a new provider revision. Nothing changes
+        until Root seals it and the owner switches."""
         try:
             require_safe_origin(request, settings)
         except DomainError:
             raise HTTPException(403, "Use this Admin page to continue.") from None
         actor = await admit(request, response, auth)
+        tier_name = "standard" if command is None else command.tier
+        flex = tier_name == "flex"
         view = await _transcription_view(auth, actor, settings)
-        if view["gemini"]["saved_revision"] is not None:
+        tier = view["gemini_flex" if flex else "gemini"]
+        if tier["saved_revision"] is not None:
             return view
-        active = view["active"]
-        if active is None or view["gemini"]["configuration_sha256"] is None:
-            raise HTTPException(409, "There is no active Scribe configuration to start from.")
-        row = await auth.database.scalar(
-            select(ConversationProviderConfiguration).where(
-                ConversationProviderConfiguration.tenant_id == actor.tenant_id,
-                ConversationProviderConfiguration.revision == active["revision"],
-            )
+        if tier["configuration_sha256"] is None:
+            raise HTTPException(409, "There is no Scribe configuration to start from.")
+        classic = next(
+            (
+                row
+                for row in (
+                    await auth.database.scalars(
+                        select(ConversationProviderConfiguration)
+                        .where(ConversationProviderConfiguration.tenant_id == actor.tenant_id)
+                        .order_by(ConversationProviderConfiguration.revision.desc())
+                        .limit(64)
+                    )
+                ).all()
+                if (_transcription(row) or {}).get("provider") not in (None, "gemini")
+            ),
+            None,
         )
-        if row is None:
-            raise HTTPException(409, "There is no active Scribe configuration to start from.")
-        derived = c2_route.derive_configuration(parse_registry_config(row.configuration))
+        if classic is None:
+            raise HTTPException(409, "There is no Scribe configuration to start from.")
+        derived = c2_route.derive_configuration(
+            parse_registry_config(classic.configuration), flex=flex
+        )
         service = provider_admin.ConversationProviderAdmin(ConversationApplication(auth.database))
         try:
             await service.save(
@@ -441,7 +481,11 @@ def install_one_pass_admin_http(application: FastAPI, ctx: RouteContext) -> None
             action="analysis_pipeline.gemini_transcription_prepared",
             resource_type="conversation_provider_configuration",
             resource_id=derived.digest,
-            payload={"from_revision": active["revision"], "configuration_sha256": derived.digest},
+            payload={
+                "from_revision": classic.revision,
+                "configuration_sha256": derived.digest,
+                "tier": tier_name,
+            },
         )
         return await _transcription_view(auth, actor, settings)
 

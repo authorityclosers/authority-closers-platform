@@ -21,9 +21,13 @@ from ac_platform.conversation_intelligence.coaching_schema import (
     coaching_response_json_schema,
 )
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
+from ac_platform.conversation_intelligence.gemini_tiers import FLEX_SUFFIX, base_model
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 
-GEMINI_TASK_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-pro-preview"})
+# Gemini 3.8 Flash on Flex is its own approved route (gemini_tiers): same prompt.
+GEMINI_TASK_MODELS = frozenset(
+    {"gemini-3.8-flash", "gemini-3.1-pro-preview", "gemini-3.8-flash" + FLEX_SUFFIX}
+)
 _MARKER = "AC_TASK_ADAPTER: gemini-json-v1\nMODEL: "
 _STRUCTURED_MARKER_V2 = "AC_TASK_ADAPTER: gemini-json-v2\nMODEL: "
 _STRUCTURED_MARKER = "AC_TASK_ADAPTER: gemini-json-v3\nMODEL: "
@@ -104,7 +108,7 @@ def _require_prompt_budget(
         # Structured generation instructions consume input too. Preserve the
         # existing approval envelope instead of silently adding free context.
         input_bytes += len(canonical(dict(response_schema)))
-    if model == "gemini-3.8-flash" and task == "coaching":
+    if base_model(model) == "gemini-3.8-flash" and task == "coaching":
         # One input byte per token is a conservative allowance, not an actual
         # provider token count. This bounds the full report input without using
         # Groq's historical TPM limit or increasing the approved output cap.
@@ -147,7 +151,7 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
     # The larger Flash input envelope has reviewed schema headroom. Preserve
     # the existing smaller Pro route until its own allowance is reviewed.
     structured_coaching = (
-        model == "gemini-3.8-flash"
+        base_model(model) == "gemini-3.8-flash"
         and task == "coaching"
         and OVERVIEW_MARKER in messages[0]["content"]
     )
@@ -187,7 +191,8 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
         if structured_coaching
         else _MARKER
     )
-    system = marker + model + "\n" + messages[0]["content"]
+    # The provider's own model id: a Flex route sends the very same prompt.
+    system = marker + base_model(model) + "\n" + messages[0]["content"]
     user = messages[1]["content"]
     _require_prompt_budget(
         system,
@@ -243,7 +248,9 @@ def gemini_prompt_view(
             or texts[0].startswith(_STRUCTURED_MARKER)
         )
         if structured_coaching and (
-            model != "gemini-3.8-flash" or task != "coaching" or OVERVIEW_MARKER not in texts[0]
+            base_model(model) != "gemini-3.8-flash"
+            or task != "coaching"
+            or OVERVIEW_MARKER not in texts[0]
         ):
             raise ValueError
         marker = _STRUCTURED_MARKER_V2 if legacy_structured else _STRUCTURED_MARKER
@@ -286,7 +293,7 @@ def gemini_prompt_view(
         ):
             raise ValueError
         if (
-            model == "gemini-3.8-flash"
+            base_model(model) == "gemini-3.8-flash"
             and task == "coaching"
             and OVERVIEW_MARKER in texts[0]
             and (has_v5_depth or has_v6_depth)
@@ -294,7 +301,7 @@ def gemini_prompt_view(
             and not practical_structured
         ):
             raise ValueError
-        prefix = (marker if structured_coaching else _MARKER) + model + "\n"
+        prefix = (marker if structured_coaching else _MARKER) + base_model(model) + "\n"
         if not texts[0].startswith(prefix):
             raise ValueError
         config = _config(
@@ -357,7 +364,7 @@ def require_long_coaching_cost_approval(
     provider's total output cap already includes thinking. Old bounded inputs
     retain their prior approval rules and saved request bytes.
     """
-    if model != "gemini-3.8-flash":
+    if base_model(model) != "gemini-3.8-flash":
         return
     gemini_prompt_view(body, model=model, maximum=maximum, task="coaching")
     config = body["generationConfig"]
@@ -371,9 +378,10 @@ def require_long_coaching_cost_approval(
     if input_units + maximum <= GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT:
         return
     snapshot = PRICING_SNAPSHOTS[("gemini", model)]
+    # At standard rates: a Flex request that falls back is billed at standard.
     estimate = estimate_provider_usage(
         "gemini",
-        model,
+        base_model(model),
         {"promptTokenCount": input_units, "candidatesTokenCount": maximum},
     )["paise"]
     if (

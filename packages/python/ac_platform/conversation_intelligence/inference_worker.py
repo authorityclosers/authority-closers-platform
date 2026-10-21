@@ -97,7 +97,8 @@ if TYPE_CHECKING:
     from ac_platform.conversation_intelligence.authority import ConversationAuthority
 
 _LEASE = timedelta(minutes=15)
-_EFFECT_SECONDS = 240
+# The broker's own limit (a Flex call with its standard fallback) plus a margin.
+_EFFECT_SECONDS = 600
 _VALIDATION_LABELS = {
     "C2": "transcript_schema_and_source_binding",
     "C4": "facts_schema_and_source_binding",
@@ -119,6 +120,9 @@ _RECEIPT_USAGE_KEYS = frozenset(
         "cached_tokens",
         "cache_write_tokens",
         "reasoning_tokens",
+        # Gemini Flex routes (gemini_tiers): Flex asked, and it fell back to standard.
+        "serviceTierFlex",
+        "flexFellBack",
     }
 )
 

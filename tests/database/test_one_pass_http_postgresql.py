@@ -357,6 +357,16 @@ def test_admin_prepares_the_gemini_transcription_configuration(
                 assert body["active"]["revision"] == 1  # nothing switched
                 again = await http.post(f"{path}/prepare", headers=WRITE)
                 assert again.json()["gemini"]["saved_revision"] == 2
+                # Flex: C2, C4 and C5 on their Flex routes, a third revision.
+                flex = await http.post(f"{path}/prepare", json={"tier": "flex"}, headers=WRITE)
+                assert flex.status_code == 200, flex.text
+                tiers = flex.json()
+                assert tiers["gemini_flex"]["saved_revision"] == 3
+                assert tiers["gemini_flex"]["configuration_sha256"] == (
+                    c2_route.derive_configuration(classic, flex=True).digest
+                )
+                assert tiers["gemini"]["saved_revision"] == 2
+                assert tiers["active"]["revision"] == 1 and tiers["active"]["flex"] is False
             async with setup.sessions() as db:
                 saved = await db.scalar(
                     select(ConversationProviderConfiguration.configuration_sha256).where(
@@ -370,7 +380,7 @@ def test_admin_prepares_the_gemini_transcription_configuration(
                         )
                     )
                 ).all()
-            assert saved == derived.digest and len(audited) == 1
+            assert saved == derived.digest and len(audited) == 2
         finally:
             await setup.engine.dispose()
 

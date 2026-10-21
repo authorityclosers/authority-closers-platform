@@ -106,6 +106,7 @@ _ASR_ROUTES = {
     ("elevenlabs", "scribe_v2"): _SCRIBE_OPERATION,
     ("deepgram", "nova-3"): _DEEPGRAM_OPERATION,
     ("gemini", gemini_audio.MODEL): gemini_audio.OPERATION,
+    ("gemini", gemini_audio.MODEL + ":flex"): gemini_audio.OPERATION,
 }
 _MAX_METADATA_BYTES = 4_096
 _MAX_TEXT_PAYLOAD_BYTES = 512 * 1024
