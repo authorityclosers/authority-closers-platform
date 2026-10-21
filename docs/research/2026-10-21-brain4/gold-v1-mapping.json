@@ -50,7 +50,7 @@
       "d09": [["D16", "negative"]],
       "d10": [["D05", "positive"]],
       "d11": [["D05", "negative"]],
-      "d12": [["D05", "negative"]]
+      "d12": [["D05", "mixed"]]
     },
     "rc-04": {
       "d01": [["D03", "positive"]],
@@ -59,14 +59,14 @@
       "d04": [["D05", "negative"]],
       "d05": [["D05", "negative"]],
       "d06": [["D02", "positive"]],
-      "d07": [["D04", "negative"]],
+      "d07": [["D04", "mixed"]],
       "d08": [["D05", "positive"]],
       "d09": [["D03", "negative"]],
       "d10": [["D14", "positive"]],
       "d11": [["D16", "mixed"]],
       "d12": [
-        ["D03", "negative"],
-        ["D14", "negative"]
+        ["D14", "positive"],
+        ["D03", "negative"]
       ],
       "d13": [["D07", "positive"]],
       "d14": [["D03", "negative"]],
@@ -114,5 +114,6 @@
       "d08": [["D15", "positive"]],
       "d09": [["D07", "positive"]]
     }
-  }
+  },
+  "verified": "Checked note by note against the coaching lead's original doc (dipak/'1. Language simplicity.txt', 21 Oct 2026): the condensed notes keep his meaning and his strength/improvement wording; three notes that praise and criticise in one breath are recorded as such (rc-03 d12, rc-04 d07, rc-04 d12). No call-dimension label changed."
 }
