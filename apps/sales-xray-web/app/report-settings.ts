@@ -173,6 +173,8 @@ export type ReportLook = {
   /** The most pointers listed before "Show all"; null: no limit. */
   maxPointers: number | null;
   scores: boolean;
+  /** Classic: the 27 pointers. Brain 4.0 beta: also its 18 skills, when saved. */
+  scoring: "classic" | "brain4_beta";
   /** Quotes and moments under a pointer (never at the simple detail). */
   evidence: boolean;
   /** How to improve and its training video (never at the simple detail). */
@@ -204,6 +206,7 @@ export const VERSION_1_LOOK: ReportLook = {
   pointers: null,
   maxPointers: null,
   scores: true,
+  scoring: "classic",
   evidence: true,
   tips: true,
   prospect: { detail: "standard", sections: ALL_SECTIONS, inferred: true },
@@ -253,6 +256,7 @@ export function reportLook(settings: AppReportSettings): ReportLook {
     pointers: ids && ids.length ? ids : null,
     maxPointers: maxPointers !== null && maxPointers < 27 ? maxPointers : null,
     scores: on(report.show_scores),
+    scoring: choice(report.scoring, ["classic", "brain4_beta"], "classic"),
     evidence: on(report.show_evidence) && detail !== "simple",
     tips: on(report.show_how_to_improve) && detail !== "simple",
     prospect: {

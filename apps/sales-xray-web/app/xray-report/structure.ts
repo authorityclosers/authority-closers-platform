@@ -1,5 +1,6 @@
 import type { ReportEvidence, Transcript } from "../report-contract";
 import type { Line } from "../report-story-model";
+import { readBrain4, type Brain4View } from "./brain4";
 import {
   POINTERS,
   clock,
@@ -170,6 +171,8 @@ export type StructureView = {
   aiDraft: boolean;
   /** A calibrated one-pass score (shown as a beta), with its calibration version. */
   beta: { version: string } | null;
+  /** Brain 4.0's 18 skills when the review has them (a beta). */
+  brain4: Brain4View | null;
   /** Why no score yet, when the server says (owner, 18 Oct). */
   scoring: Scoring;
   roles: StructureRoles;
@@ -307,6 +310,9 @@ export function readStructure(
     outcome: outcomeDetails(structure.call_outcome_details),
     aiDraft,
     beta,
+    brain4: readBrain4(structure.brain4, (value) =>
+      evidenceList(value, transcript),
+    ),
     scoring: aiDraft ? null : scoringFrom(structure.pointer_review),
     roles: apiRoles,
   };

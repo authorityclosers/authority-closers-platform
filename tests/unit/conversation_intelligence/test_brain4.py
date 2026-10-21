@@ -208,3 +208,36 @@ def test_calibration_is_display_only_and_named() -> None:
     }
     assert brain4.payload_sha256(review) == saved
     assert by_id(brain4.calibrate(review))["D04"]["shown_rating"] == 4
+
+
+def test_the_report_structure_carries_brain4_as_a_beta() -> None:
+    from ac_platform.conversation_intelligence.pointer_review import merge_into_structure
+
+    block = brain4.parse(answer(D04={"rating": 4}), SEGMENTS)
+    merged = merge_into_structure({"overview": {}, "pointers": []}, {"brain4": block})
+    shown = merged["brain4"]
+    assert shown["status"] == "beta"
+    assert shown["calibration"]["revision"] == "brain4-calibration/0"
+    assert by_id(shown)["D04"]["shown_rating"] == 4
+    assert shown["rollup"]["method"] == brain4.DEFAULT_ROLLUP
+    assert "brain4" not in merge_into_structure({"overview": {}, "pointers": []}, {})
+
+
+def test_organisations_choose_classic_or_brain4_beta_in_report_settings() -> None:
+    from ac_platform.conversation_intelligence.report_settings import (
+        PARAMETERS,
+        VERSION_1,
+        ReportSettings,
+        settings_from_document,
+    )
+
+    assert VERSION_1.report.scoring == "classic"
+    parameter = next(p for p in PARAMETERS if p.key == "report.scoring")
+    assert {value for value, _ in parameter.choices} == {"classic", "brain4_beta"}
+    assert parameter.applies == "display"
+    chosen = ReportSettings.model_validate({"report": {"scoring": "brain4_beta"}}, strict=False)
+    assert settings_from_document(chosen.document()).report.scoring == "brain4_beta"
+    # A version saved before the setting existed reads as classic.
+    older = VERSION_1.document()
+    del older["report"]["scoring"]
+    assert settings_from_document(older).report.scoring == "classic"
