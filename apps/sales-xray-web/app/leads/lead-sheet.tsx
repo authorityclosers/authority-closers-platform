@@ -362,6 +362,20 @@ export function CallOutcome({
     talk === "missed"
       ? reason !== null && (retry === null || at !== null)
       : talk === "talked" && stage !== null && (!needsTime || at !== null);
+  // Owner, 22 Oct 2026: Save looked dead after "We talked" until a next step
+  // was picked, and nothing said so. It now says what is missing, and a tap
+  // on it scrolls there.
+  const missing = valid
+    ? null
+    : talk === "missed"
+      ? reason === null
+        ? "Pick what happened to save"
+        : "Pick when to try again to save"
+      : stage === null
+        ? "Pick what happens next to save"
+        : "Pick when to call next to save";
+  const [nudged, setNudged] = useState(false);
+  const stepRef = useRef<HTMLDivElement>(null);
   const autoRetry =
     reason === null
       ? null
@@ -453,7 +467,7 @@ export function CallOutcome({
       </div>
 
       {talk === "missed" ? (
-        <div className={styles.outcomeStep}>
+        <div ref={stepRef} className={styles.outcomeStep}>
           <span className={styles.stepLabel}>What happened?</span>
           <div
             className={styles.reasonGrid}
@@ -499,7 +513,7 @@ export function CallOutcome({
       ) : null}
 
       {talk === "talked" ? (
-        <div className={styles.outcomeStep}>
+        <div ref={stepRef} className={styles.outcomeStep}>
           <span className={styles.stepLabel}>What happens next?</span>
           {suggested ? (
             <SuggestionHint
@@ -589,6 +603,15 @@ export function CallOutcome({
           {error}
         </p>
       ) : null}
+      {talk !== null && missing ? (
+        <p
+          className={styles.saveHint}
+          data-nudged={nudged || undefined}
+          role="status"
+        >
+          {missing}
+        </p>
+      ) : null}
       {talk !== null ? (
         <div className={styles.saveRow}>
           {openMessage && detail.phone ? (
@@ -606,8 +629,19 @@ export function CallOutcome({
           <button
             type="button"
             className={styles.saveButton}
-            onClick={submit}
-            disabled={!valid || saving}
+            data-incomplete={!valid || undefined}
+            onClick={() => {
+              if (valid) {
+                void submit();
+                return;
+              }
+              setNudged(true);
+              stepRef.current?.scrollIntoView?.({
+                block: "center",
+                behavior: "smooth",
+              });
+            }}
+            disabled={saving}
           >
             {saving ? "Saving…" : submitLabel}
           </button>
