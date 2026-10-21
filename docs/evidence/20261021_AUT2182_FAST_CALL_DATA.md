@@ -35,3 +35,37 @@ boundary, stability and natural-call counts/cost are recorded on the issue recei
 as they complete. No runtime activation is claimed by this source-only receipt.
 Rollback: `systemctl disable --now ac-call-data@production`. Preserve all run,
 settings and audit history.
+
+## Production apply — 21 October, 14:38Z
+
+Committed operator source: `418fd2e7`; script SHA256
+`db4ae3a8652dad51e94ec2dc141688e897563703131fbfa5a630731e14f7bcea`.
+Snapshot `20261021T143150Z-before-AUT-2182-fast-only` completed with verified
+Drive copy, schema 0118, 15,213,126 bytes and 2,072 restore TOC entries. Dump SHA256:
+`b3f8986c2035ae6c1d45c235731cbaec039046e84d0afc1aa87535ffc7160cfe`.
+
+Settings apply exited 0, revision 1. Independent Admin route read-back confirms
+fast ON/150, deep OFF and streaming OFF. Exactly one `call_data.settings_saved`
+and one `call_data.production_fast_order` audit event exist. The route's current
+control-account admission remains enforced.
+
+Existing installed launcher/unit bytes matched v0.76 and were reused, preserving
+completed prior work. Systemd was reloaded and the production unit enabled once.
+First-start boundary: `2026-10-21T14:38:40+00:00`. Initial service read-back:
+enabled, active/running, zero restarts, ExecMainStatus 0. The activation command's
+immediate copy of the marker raced systemd startup and returned exit 1 after
+successful enablement; subsequent read-back found the marker and recovered only
+the receipt capture. Settings apply and service enablement were not replayed.
+Production hold manifest matched before/after.
+
+At 14:39:08Z, content-free Admin API verification reports zero starts/outcomes,
+zero deep rows, zero backfills and zero automatic runs with pre-marker transcripts.
+Admin AI spend includes the fast pipeline with cap 150/enabled, spend 0, and deep
+cap 300/disabled, spend 0. No first successful fast run exists yet. No authenticated
+browser UI or ten-minute stability result is claimed at this point.
+
+Secure host receipt custody:
+`/var/lib/ac-release/operator-evidence/AUT-2182/fb9c252e-78d8-4e1e-8021-fceef969e165/`.
+Root retains responsibility for the ten-minute and next-natural-call verification
+on AUT-2182. Close only the superseded call-data runner portion of AUT-2129 after
+acceptance; preserve its unrelated backup dependencies and history.
