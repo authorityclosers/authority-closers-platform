@@ -514,11 +514,13 @@ def fit_calibration(dataset: Dataset, *, revision: str, min_pairs: int = 8) -> b
 async def load(database: Any) -> Dataset:
     """The current gold lines and the Brain 4.0 runs of the calls they judge.
 
-    A Brain 4.0 run is a ``brain4`` block saved inside a pointer review of the same call,
-    run, source and transcript revision as the review the line judged.
+    A Brain 4.0 run is a ``brain4`` block saved inside a pointer review, or a saved shadow
+    read (``brain4_shadow``), of the same call, run, source and transcript revision as the
+    review the line judged.
     """
     from sqlalchemy import select
 
+    from ac_platform.conversation_intelligence.brain4_models import ConversationBrain4Review
     from ac_platform.conversation_intelligence.gold_review_models import GoldRow
     from ac_platform.conversation_intelligence.pointer_review_models import (
         ConversationPointerReview,
@@ -581,6 +583,24 @@ async def load(database: Any) -> Dataset:
     for row in reviews:
         if isinstance(row.payload, dict) and isinstance(row.payload.get("brain4"), dict):
             blocks[key(row)].append(row.payload["brain4"])
+    shadows = (
+        (
+            await database.scalars(
+                select(ConversationBrain4Review)
+                .where(
+                    ConversationBrain4Review.recording_id.in_(recordings),
+                    ConversationBrain4Review.state == "saved",
+                    ConversationBrain4Review.erased_at.is_(None),
+                )
+                .order_by(ConversationBrain4Review.created_at, ConversationBrain4Review.id)
+            )
+        ).all()
+        if recordings
+        else []
+    )
+    for shadow in shadows:
+        if isinstance(shadow.payload, dict):
+            blocks[key(shadow)].append(shadow.payload)
     judged = {line.review_id for line in lines}
     runs = {
         str(row.id): blocks[key(row)]

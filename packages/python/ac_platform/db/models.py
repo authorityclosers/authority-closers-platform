@@ -29,6 +29,7 @@ from ac_platform.coaching import models as coaching_models
 from ac_platform.community import models as community_models
 from ac_platform.conversation_intelligence import (
     acquisition_models,
+    brain4_models,
     budget_settings_models,
     bulk_import_models,
     call_metrics_models,
@@ -111,6 +112,7 @@ MODEL_MODULES = (
     call_data_models,
     ai_spend_models,
     one_pass_models,
+    brain4_models,
     fx_models,
     usage_people_models,
     integration_models,
