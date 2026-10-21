@@ -292,9 +292,9 @@ def test_the_trial_asks_compact_json_and_lean_text() -> None:
     compact = "Write the JSON compact, on one line"
     assert compact in facts.system and compact in report.system
     # Shorter pointer text; no tip for an excellent pointer; the topic is the label.
-    assert "one short sentence, at most 20 words, on what you did" in facts.system
+    assert "one short sentence, at most 12 words, on what you did" in facts.system
     assert "one or two sentences on what you did" not in facts.system
-    assert "[]\n  when excellent or not judged, 1 when good" in facts.system
+    assert "([] when excellent, when not judged" in facts.system
     assert "training_topic" not in facts.system
     assert facts.schema is not None
     entry = facts.schema["properties"]["review"]["properties"]["pointers"]["items"]

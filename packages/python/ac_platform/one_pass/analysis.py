@@ -124,25 +124,25 @@ team size, industry, biggest problem, wants, blockers and follow-up come from ca
 # The trial's lean review: the pointer review's own instructions with shorter text, and
 # no training topic (each pointer's own label is its lesson title, ``_review``). The
 # Report shows what happened, why it matters and the tips; "Nothing to change here" when
-# an excellent pointer has no tip.
+# an excellent pointer has no tip. Without limits this text was already about 15 words a
+# field (21 Oct 2026), so the limits sit below that.
 _LEAN_REVIEW: Final[tuple[tuple[str, str], ...]] = (
     (
         "- what_happened: one or two sentences on what you did in this call. For a\n"
         "  pointer that is not judged, one short sentence on why.\n",
-        "- what_happened: one short sentence, at most 20 words, on what you did in this\n"
+        "- what_happened: one short sentence, at most 12 words, on what you did in this\n"
         "  call. For a pointer that is not judged, a few words on why.\n",
     ),
     (
         "- why_it_matters: one sentence on why this matters for the sale (null when not judged).\n",
-        "- why_it_matters: one short sentence, at most 15 words, on why this matters for\n"
+        "- why_it_matters: one short sentence, at most 10 words, on why this matters for\n"
         "  the sale (null when not judged).\n",
     ),
     (
         "- how_to_improve: up to 2 short, specific actions for the next call ([] when\n"
         "  not judged or when nothing should change).\n",
-        "- how_to_improve: specific actions for the next call, at most 12 words each: []\n"
-        "  when excellent or not judged, 1 when good, up to 2 when average or\n"
-        "  needs_improvement.\n",
+        "- how_to_improve: up to 2 short, specific actions for the next call, at most 10\n"
+        "  words each ([] when excellent, when not judged or when nothing should change).\n",
     ),
     ("- training_topic: a short lesson title for this skill (null when not judged).\n", ""),
     (
@@ -155,9 +155,9 @@ _LEAN_REVIEW: Final[tuple[tuple[str, str], ...]] = (
 # The trial's report: the C5 depth in fewer words (coaching-v5 sets no lower bound).
 _REPORT_LENGTH: Final = """
 LENGTH (one pass): keep the depth asked above in few words. Each dimension observation at
-most 60 words; each finding explanation at most 50 words; summary at most 60 words and
-verdict at most 40; every other overview text at most 25 words (replacement_behavior at
-most 35, final_assessment.assessment at most 2 sentences).
+most 30 words; each finding explanation at most 30 words; summary at most 40 words and
+verdict at most 25; every other overview text at most 15 words (replacement_behavior at
+most 25, final_assessment.assessment at most 2 short sentences).
 """
 
 
