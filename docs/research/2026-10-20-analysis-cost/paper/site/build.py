@@ -27,7 +27,7 @@ fits.pop("fits", None)
 review = load("review.json", {})
 data = {"asr": asr, "retain": retain, "leaderboard": lb, "fits": fits, "review": review,
         "consistency": load("consistency.json", []), "bootstrap": load("bootstrap.json", []),
-        "bootstrap_same": load("bootstrap_same_input.json", []), "realcalls": load("realcalls.json", []), "realboot": load("realboot.json", [])}
+        "bootstrap_same": load("bootstrap_same_input.json", []), "realcalls": load("realcalls.json", []), "realboot": load("realboot.json", []), "round8": load("round8.json", []), "judgenoise": load("judge_noise.json", [])}
 page = (here / "index.html").read_text(encoding="utf-8").replace("%%DATA%%", json.dumps(data, ensure_ascii=False))
 out = here / "build" / "sales-xray-analysis-cost.html"
 out.parent.mkdir(exist_ok=True)

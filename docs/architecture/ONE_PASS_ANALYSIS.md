@@ -95,7 +95,7 @@ with background AI on. It is audited as `analysis_pipeline.one_pass_switched_on`
 
 **Production** runs no call data engine (only C2 Scribe, C4, C5 and the pointer review),
 so this read would replace only the pointer review there. Production's one-pass saving
-is its transcription: Gemini 3.1 Flash-Lite as the sealed C2 route (≈ ₹0.78 → ≈ ₹0.55 a
+is its transcription: Gemini 3.1 Flash-Lite as the sealed C2 route (≈ ₹0.78 → ≈ ₹0.64 a
 minute for a 14-minute call at list price), chosen through Providers and the hosted
 approval bundle; see `docs/ops/ONE-PASS-PRODUCTION.md`.
 

@@ -16,8 +16,10 @@ FX = 100.0
 def arm_of(r: dict) -> str | None:
     tag = r.get("tag", "")
     parts = tag.split(":")
-    if parts[0] in ("today", "onepass", "onepass2", "onepass3", "brain4", "audio1"):
+    if parts[0] in ("today", "onepass", "onepass2", "onepass3", "brain4", "audio1") or parts[0].startswith(("fullf_", "fullr_")):
         return f"{r['model']}|{':'.join(parts[:3])}"
+    if parts[0] == "devlive" and len(parts) >= 3:  # the one-pass build's own bench run (Gemini, full formats)
+        return f"{r['model']}|devlive:{parts[2]}"
     if parts[0] in ("asr", "stt"):
         return f"{r['model']}|asr"
     return None
@@ -78,6 +80,8 @@ def main() -> int:
     b4luna = f"openai/gpt-6-luna|brain4:{asr31}:r1"                  # round 4: Brain 4.0 rubric prompt
     today = "google/gemini-3.8-flash|today:oracle:r1"
     pr = ("__pr__", 1.0)
+    ff = lambda v, m="openai/gpt-6-luna": f"{m}|fullf_{v}:{asr31}:r1"  # round 8 facts / report requests
+    fr = lambda v, m="openai/gpt-6-luna": f"{m}|fullr_{v}:{asr31}:r1"
     pipelines = {
         "Today: Scribe + today's 6 stages on 3.8 Flash": [scribe, (today, 1.0)],
         "Scribe + one pass 3.8 Flash (v2 prompt)": [scribe, (op2, 1.0)],
@@ -93,6 +97,16 @@ def main() -> int:
         "3.1 Flash-Lite transcript (Flex) + GPT-6 Luna, coaching prompt (v3)": [(t31, 0.5), (luna3, 1.0)],
         "Lean: 3.1 Flash-Lite + GPT-6 Luna Brain 4.0, standard": [(t31, 1.0), (b4luna, 1.0)],
         "Lean: 3.1 Flash-Lite (Flex) + GPT-6 Luna Brain 4.0 (batch)": [(t31, 0.5), (b4luna, 0.5)],
+        # round 8: the product's full formats (facts request: call data, notes, pointer review; report request: C5)
+        "Full formats: 3.1 Flash-Lite + GPT-6 Luna, standard": [(t31, 1.0), (ff("base"), 1.0), (fr("base"), 1.0)],
+        "Full formats: 3.1 Flash-Lite (Flex) + GPT-6 Luna (Flex, measured)": [(t31, 0.5), (ff("flex"), 1.0), (fr("flex"), 1.0)],
+        "Full formats: Luna, report-depth prompt, standard": [(t31, 1.0), (ff("base"), 1.0), (fr("strong"), 1.0)],
+        "Full formats: Luna, report-depth prompt, reasoning high, standard": [(t31, 1.0), (ff("base"), 1.0), (fr("stronghigh"), 1.0)],
+        "Full formats: hybrid, Luna facts + Gemini 3.8 Flash report, standard": [(t31, 1.0), (ff("base"), 1.0),
+                                                                                (fr("hybrid", "google/gemini-3.8-flash"), 1.0)],
+        "Full formats: hybrid, all on Flex": [(t31, 0.5), (ff("flex"), 1.0), (fr("hybrid", "google/gemini-3.8-flash"), 0.5)],
+        "Full formats: Gemini 3.8 Flash one pass (one-pass build), standard": [(t31, 1.0), ("google/gemini-3.8-flash|devlive:analysis", 1.0)],
+        "Full formats: Gemini 3.8 Flash one pass (one-pass build), Flex": [(t31, 0.5), ("google/gemini-3.8-flash|devlive:analysis", 0.5)],
     }
     out = {"fits": fits, "pipelines": {}}
     print()

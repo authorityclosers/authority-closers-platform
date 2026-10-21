@@ -1,5 +1,8 @@
 # Pricing evidence: Gemini 3.1 Flash-Lite as C2 transcription (audio in, text out)
 
+Superseded by `gemini-3.1-flash-lite-audio-20261021.md`: real calls write two to three
+times the output estimated here.
+
 - Source: https://ai.google.dev/gemini-api/docs/pricing, paid tier, read 20 Oct 2026 by
   the analysis-cost research (`docs/research/2026-10-20-analysis-cost/`).
 - Model: `gemini-3.1-flash-lite`, standard tier.

@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import time
@@ -100,6 +101,17 @@ def make_send(model: str, call_id: str, tag_prefix: str):
         from today import to_messages
 
         msgs, schema, max_out = to_messages(body)
+        if model.startswith("claude-sub/"):  # judging on the Claude subscription (owner, 21 Oct), no API spend
+            import subprocess
+
+            prompt = "\n\n".join(m["content"] if isinstance(m["content"], str) else json.dumps(m["content"])
+                                 for m in msgs)
+            if schema:
+                prompt += ("\n\nAnswer with ONE JSON object only (no prose, no code fence) matching this JSON schema:\n"
+                           + json.dumps(schema))
+            p = subprocess.run(["/home/acdev/.local/bin/claude", "-p", "--model", model.split("/", 1)[1]],
+                               input=prompt, capture_output=True, text=True, timeout=900, cwd="/tmp")
+            return strip_fences(p.stdout), {"in": 0, "out": 0, "status": p.returncode}
         cfg = body.get("generationConfig", {})
         text, usage, _ = pv.openrouter_chat(model, msgs, tag=f"{tag_prefix}:{tag}", call_id=call_id, schema=schema,
                                             max_tokens=max_out, temperature=cfg.get("temperature"),
@@ -289,9 +301,9 @@ def system_facts(result: dict) -> list[str]:
 
 def cmd_judge(a) -> None:
     rdir = Path(a.result)
-    for path in sorted(rdir.glob("fx-*.json")):
+    for path in sorted(rdir.glob("fx-*.json"), reverse=os.environ.get("JUDGE_REVERSE") == "1"):
         cid = path.stem
-        out = rdir / "judge" / a.judge.replace("/", "_") / f"{cid}.json"
+        out = rdir / "judge" / (a.judge.replace("/", "_") + os.environ.get("JUDGE_SUFFIX", "")) / f"{cid}.json"
         if out.exists() and not a.force:
             continue
         result = json.loads(path.read_text(encoding="utf-8"))
@@ -347,9 +359,9 @@ def system_coaching(result: dict) -> dict:
 
 def cmd_rjudge(a) -> None:
     rdir = Path(a.result)
-    for path in sorted(rdir.glob("fx-*.json")):
+    for path in sorted(rdir.glob("fx-*.json"), reverse=os.environ.get("JUDGE_REVERSE") == "1"):
         cid = path.stem
-        out = rdir / "rjudge" / a.judge.replace("/", "_") / f"{cid}.json"
+        out = rdir / "rjudge" / (a.judge.replace("/", "_") + os.environ.get("JUDGE_SUFFIX", "")) / f"{cid}.json"
         if out.exists() and not a.force:
             continue
         result = json.loads(path.read_text(encoding="utf-8"))
@@ -392,7 +404,7 @@ def cmd_retain(a) -> None:
     schema = {"type": "object", "properties": {"facts": {"type": "array", "items": {"type": "object", "properties": {
         "id": {"type": "string"}, "verdict": {"type": "string", "enum": ["present", "garbled", "missing"]}},
         "required": ["id", "verdict"]}}}, "required": ["facts"]}
-    for path in sorted(rdir.glob("fx-*.json")):
+    for path in sorted(rdir.glob("fx-*.json"), reverse=os.environ.get("JUDGE_REVERSE") == "1"):
         cid = path.stem
         out = rdir / "retain" / a.judge.replace("/", "_") / f"{cid}.json"
         if out.exists() and not a.force:

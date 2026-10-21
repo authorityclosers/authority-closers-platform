@@ -223,9 +223,9 @@ def test_the_route_is_one_c2_recipe_priced_and_catalogued() -> None:
     assert output.data()["timebase_id"] == gemini_audio.TIMEBASE
     assert gemini_audio.TIMEBASE in _KNOWN_TRANSCRIPT_TIMEBASES
     snapshot = PRICING_SNAPSHOTS[("gemini", MODEL)]
-    evidence = ROOT / "docs/ops/pricing-evidence/gemini-3.1-flash-lite-audio-20261020.md"
+    evidence = ROOT / "docs/ops/pricing-evidence/gemini-3.1-flash-lite-audio-20261021.md"
     assert hashlib.sha256(evidence.read_bytes()).hexdigest() == snapshot.evidence_sha256
-    assert snapshot.rate_basis == "per_minute" and str(snapshot.usd_per_minute) == "0.0020"
+    assert snapshot.rate_basis == "per_minute" and str(snapshot.usd_per_minute) == "0.0030"
     gemini = next(p for p in DEFAULT_PROVIDER_CATALOG.providers if p.provider_id == "gemini")
     model = next(m for m in gemini.models if m.model_id == MODEL)
     assert model.support_for("asr") == "implemented"
@@ -251,5 +251,116 @@ def test_speech_mp3_is_mono_speech_mp3(tmp_path) -> None:
     )
     mp3 = gemini_audio.speech_mp3(wav.read_bytes())
     assert mp3[:3] == b"ID3" or mp3[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xe3")
+    part = gemini_audio.cut(mp3, 500, 1_000)
+    assert part and len(part) < len(mp3)
     with pytest.raises(gemini_audio.GeminiAudioError, match="transcode_failed"):
         gemini_audio.speech_mp3(b"not audio at all")
+
+
+def test_long_calls_are_planned_as_overlapping_parts() -> None:
+    minute = 60_000
+    assert gemini_audio.plan_parts(15 * minute) == [(0, 15 * minute)]
+    assert gemini_audio.plan_parts(25 * minute) == [
+        (0, 10 * minute + 30_000),
+        (10 * minute, 10 * minute + 30_000),
+        (20 * minute, 5 * minute),
+    ]
+    # A tail shorter than the overlap was already heard by the last part.
+    assert [offset for offset, _ in gemini_audio.plan_parts(20 * minute + 20_000)] == [
+        0,
+        10 * minute,
+    ]
+    assert len(gemini_audio.plan_parts(120 * minute)) == 12
+    with pytest.raises(gemini_audio.GeminiAudioError, match="too_long"):
+        gemini_audio.plan_parts(150 * minute)
+    assert gemini_audio.speech_ms(b"x" * 8_000) == 2_000
+
+
+def _turns(*rows):
+    return {"segments": [{"speaker": s, "start": a, "end": b, "text": t} for s, a, b, t in rows]}
+
+
+FIRST = _turns(
+    ("A", "00:00", "05:00", "Namaste, main Rohan bol raha hoon."),
+    ("B", "05:00", "10:02", "Haan ji, boliye, main Amit."),
+    ("A", "10:05", "10:20", "Aapki team kitne logon ki hai abhi?"),
+)
+# The second part's model happened to call the prospect A and the salesperson B.
+SECOND = _turns(
+    ("B", "00:05", "00:20", "Aapki team kitne logon ki hai abhi?"),
+    ("A", "00:21", "00:40", "Aath log hain aur revenue chaar lakh."),
+    ("B", "01:00", "01:30", "Theek hai, Friday ko baat karte hain."),
+)
+
+
+def test_parts_join_on_the_calls_clock_with_one_speaker_per_voice() -> None:
+    rows = gemini_audio.stitched_rows([(0, FIRST), (600_000, SECOND)])
+    segments, _ = gemini_audio.normalized_segments(duration_ms=700_000, rows=rows)
+    assert [(s["speaker_id"], s["start_ms"], s["text"][:12]) for s in segments] == [
+        ("speaker_0", 0, "Namaste, mai"),
+        ("speaker_1", 300_000, "Haan ji, bol"),
+        # The overlap turn heard by both parts is kept once (the second part's copy).
+        ("speaker_0", 605_000, "Aapki team k"),
+        ("speaker_1", 621_000, "Aath log hai"),
+        ("speaker_0", 660_000, "Theek hai, F"),
+    ]
+
+
+def test_long_audio_goes_as_parts_at_once_and_one_receipt(monkeypatch) -> None:
+    minute_bytes = 60 * gemini_audio.BYTES_PER_SECOND
+    monkeypatch.setattr(gemini_audio, "speech_mp3", lambda audio: b"x" * (11 * minute_bytes * 2))
+    monkeypatch.setattr(
+        gemini_audio, "cut", lambda speech, offset, length: f"part-{offset}".encode()
+    )
+    answers = {
+        b"part-0": FIRST,
+        b"part-600000": SECOND,
+        b"part-1200000": _turns(
+            ("A", "00:10", "00:30", "Theek hai, Friday ko baat karte hain."),
+            ("B", "00:40", "00:50", "Dhanyavaad, milte hain."),
+        ),
+    }
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.read())
+        piece = base64.b64decode(body["contents"][0]["parts"][0]["inline_data"]["data"])
+        seen.append(piece)
+        return httpx.Response(200, json=_response(answers[piece]))
+
+    g = _grant()
+    result = client(handler).transcribe(g, AUDIO)
+    assert sorted(seen) == sorted(answers)  # 22 minutes: three parts
+    assert result.data["schema"] == gemini_audio.PARTS_SCHEMA
+    assert [part["offset_ms"] for part in result.data["parts"]] == [0, 600_000, 1_200_000]
+    assert result.response_sha256 == hashlib.sha256(result.raw_json).hexdigest()
+    assert result.usage["promptTokenCount"] == 3 * 640
+    transcript = gemini_audio.gemini_audio_transcript(
+        result, duration_ms=22 * 60_000, source_sha256=g.quote.source.source_sha256
+    )
+    assert transcript["revision"] == result.response_sha256
+    speakers = [s["speaker_id"] for s in transcript["segments"]]
+    assert speakers[0] == "speaker_0" and set(speakers) == {"speaker_0", "speaker_1"}
+    assert transcript["segments"][-1]["start_ms"] == 1_200_000 + 40_000
+
+
+def test_a_failed_part_fails_the_whole_transcription(monkeypatch) -> None:
+    monkeypatch.setattr(
+        gemini_audio, "speech_mp3", lambda audio: b"x" * (20 * 60 * gemini_audio.BYTES_PER_SECOND)
+    )
+    monkeypatch.setattr(
+        gemini_audio, "cut", lambda speech, offset, length: f"part-{offset}".encode()
+    )
+
+    def handler(request):
+        body = json.loads(request.read())
+        piece = base64.b64decode(body["contents"][0]["parts"][0]["inline_data"]["data"])
+        if piece == b"part-600000":
+            return httpx.Response(200, json=_response(finish="MAX_TOKENS"))
+        return httpx.Response(200, json=_response())
+
+    result = client(handler).transcribe(_grant(), AUDIO)
+    with pytest.raises(ProviderError, match="gemini_audio_answer_too_long"):
+        gemini_audio.gemini_audio_transcript(
+            result, duration_ms=20 * 60_000, source_sha256=result.input_sha256
+        )

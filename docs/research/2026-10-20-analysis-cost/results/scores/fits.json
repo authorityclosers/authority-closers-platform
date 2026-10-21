@@ -222,11 +222,65 @@
    "inr_per_min": 0.0122,
    "mean_inr_per_min": 0.033
   },
+  "google/gemini-3.1-flash-lite|devlive:transcription": {
+   "calls": 16,
+   "fixed_inr": 0.2096,
+   "inr_per_min": 0.1268,
+   "mean_inr_per_min": 0.1395
+  },
+  "google/gemini-3.8-flash|devlive:analysis": {
+   "calls": 16,
+   "fixed_inr": 5.3367,
+   "inr_per_min": 0.0373,
+   "mean_inr_per_min": 0.3604
+  },
   "openai/gpt-6-luna|brain4:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
    "calls": 16,
    "fixed_inr": 0.5001,
    "inr_per_min": 0.0138,
    "mean_inr_per_min": 0.0441
+  },
+  "openai/gpt-6-luna|fullf_base:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.5,
+   "inr_per_min": 0.0083,
+   "mean_inr_per_min": 0.0386
+  },
+  "openai/gpt-6-luna|fullr_base:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.3752,
+   "inr_per_min": 0.0025,
+   "mean_inr_per_min": 0.0252
+  },
+  "openai/gpt-6-luna|fullr_flex:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.1623,
+   "inr_per_min": 0.002,
+   "mean_inr_per_min": 0.0118
+  },
+  "openai/gpt-6-luna|fullf_flex:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.2465,
+   "inr_per_min": 0.0046,
+   "mean_inr_per_min": 0.0195
+  },
+  "openai/gpt-6-luna|fullr_strong:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.3347,
+   "inr_per_min": 0.0055,
+   "mean_inr_per_min": 0.0257
+  },
+  "google/gemini-3.8-flash|fullr_hybrid:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 1.2558,
+   "inr_per_min": 0.0292,
+   "mean_inr_per_min": 0.1052
+  },
+  "openai/gpt-6-luna|fullr_stronghigh:asr_openrouter_google_gemini-3.1-flash-lite_phone_8k:r1": {
+   "calls": 16,
+   "fixed_inr": 0.6852,
+   "inr_per_min": 0.0041,
+   "mean_inr_per_min": 0.0456
   },
   "__scribe__": {
    "fixed_inr": 0.0,
@@ -311,6 +365,46 @@
    "4.5": 0.141,
    "13.8": 0.097,
    "60.0": 0.081
+  },
+  "Full formats: 3.1 Flash-Lite + GPT-6 Luna, standard": {
+   "4.5": 0.363,
+   "13.8": 0.218,
+   "60.0": 0.164
+  },
+  "Full formats: 3.1 Flash-Lite (Flex) + GPT-6 Luna (Flex, measured)": {
+   "4.5": 0.176,
+   "13.8": 0.108,
+   "60.0": 0.083
+  },
+  "Full formats: Luna, report-depth prompt, standard": {
+   "4.5": 0.357,
+   "13.8": 0.218,
+   "60.0": 0.167
+  },
+  "Full formats: Luna, report-depth prompt, reasoning high, standard": {
+   "4.5": 0.433,
+   "13.8": 0.242,
+   "60.0": 0.171
+  },
+  "Full formats: hybrid, Luna facts + Gemini 3.8 Flash report, standard": {
+   "4.5": 0.585,
+   "13.8": 0.309,
+   "60.0": 0.206
+  },
+  "Full formats: hybrid, all on Flex": {
+   "4.5": 0.292,
+   "13.8": 0.155,
+   "60.0": 0.103
+  },
+  "Full formats: Gemini 3.8 Flash one pass (one-pass build), standard": {
+   "4.5": 1.381,
+   "13.8": 0.568,
+   "60.0": 0.265
+  },
+  "Full formats: Gemini 3.8 Flash one pass (one-pass build), Flex": {
+   "4.5": 0.69,
+   "13.8": 0.284,
+   "60.0": 0.133
   }
  }
 }

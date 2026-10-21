@@ -229,3 +229,57 @@ def elevenlabs_transcribe(path: Path, call_id: str) -> dict:
             else:
                 segs.append({"speaker": spk, "start_ms": st, "end_ms": en, "text": tx})
     return {"status": status, "segments": segs, "latency_s": dt, "language": resp.get("language_code")}
+
+
+# ------------------------------------------------------------------ OpenAI direct (bench project, fictional data only)
+OPENAI_BUDGET_USD = float(os.environ.get("BENCH_OPENAI_BUDGET", "4.5"))  # the bench project's hard limit is $5
+OPENAI_PRICES = {"gpt-6-luna": (0.10, 0.50, 0.01)}  # USD per million: input, output, cached input (standard tier)
+
+
+def openai_chat(model: str, messages: list[dict], *, tag: str, call_id: str, schema: dict | None = None,
+                max_tokens: int = 32000, reasoning_effort: str | None = None,
+                service_tier: str | None = None) -> tuple[str | None, dict, float]:
+    """Chat completions on OpenAI's API with store=false; Flex tier on request (half price, slower)."""
+    if spent("openai") >= OPENAI_BUDGET_USD:
+        raise BudgetExceeded(f"OpenAI budget ${OPENAI_BUDGET_USD} reached")
+    body: dict[str, Any] = {"model": model, "messages": messages, "max_completion_tokens": max_tokens,
+                            "store": False}
+    if reasoning_effort:
+        body["reasoning_effort"] = reasoning_effort
+    if service_tier:
+        body["service_tier"] = service_tier
+    schema_mode = "none"
+    if schema is not None:
+        body["response_format"] = {"type": "json_schema", "json_schema": {"name": "answer", "strict": False,
+                                                                           "schema": schema}}
+        schema_mode = "schema"
+    hdrs = {"Authorization": f"Bearer {key('OPENAI_API_KEY')}"}
+    status, resp, dt = http_json("https://api.openai.com/v1/chat/completions", body, hdrs, timeout=1800)
+    if status == 400 and schema is not None:  # schema refused as a constraint: send it as text, JSON mode
+        body["response_format"] = {"type": "json_object"}
+        body["messages"] = [dict(messages[0], content=messages[0]["content"]
+                                 + "\n\nReturn ONE JSON object matching this JSON schema:\n" + json.dumps(schema))] + messages[1:]
+        schema_mode = "prompt"
+        status, resp, dt = http_json("https://api.openai.com/v1/chat/completions", body, hdrs, timeout=1800)
+    u = resp.get("usage", {}) if isinstance(resp, dict) else {}
+    tin, tout = int(u.get("prompt_tokens", 0)), int(u.get("completion_tokens", 0))
+    cached = int((u.get("prompt_tokens_details") or {}).get("cached_tokens", 0) or 0)
+    p_in, p_out, p_cache = OPENAI_PRICES.get(model, (0.0, 0.0, 0.0))
+    tier = (resp.get("service_tier") if isinstance(resp, dict) else None) or service_tier or "default"
+    factor = 0.5 if tier == "flex" else 1.0
+    usd = ((tin - cached) * p_in + cached * p_cache + tout * p_out) / 1e6 * factor
+    text, finish = None, None
+    try:
+        ch = resp["choices"][0]
+        finish = ch.get("finish_reason")
+        text = ch["message"].get("content")
+    except (KeyError, IndexError, TypeError):
+        pass
+    usage = {"in": tin, "out": tout, "cached": cached,
+             "reasoning": (u.get("completion_tokens_details") or {}).get("reasoning_tokens", 0)}
+    ledger_append({"provider": "openai", "model": f"openai/{model}", "host": "openai", "tier": tier, "tag": tag,
+                   "call": call_id, "status": status, "finish": finish, "schema_mode": schema_mode, **usage,
+                   "list_usd": round(usd, 6), "billed_usd": round(usd, 6), "latency_s": round(dt, 2),
+                   "error": None if status == 200 else str(resp)[:300]})
+    return text, {**usage, "list_usd": usd, "status": status, "finish": finish, "tier": tier,
+                  "schema_mode": schema_mode}, dt
