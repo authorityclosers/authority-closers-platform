@@ -109,16 +109,31 @@ export function ProcessingStatusCopy({
   quiet?: boolean;
 }) {
   if (progress?.run_state === "failed" && progress.ai_skip) {
-    // AI on calls (owner, 21 Oct 2026): the seller's level, not a failure.
-    const off = progress.ai_skip.level === "off";
+    // AI on calls (owner, 21 Oct 2026): the seller's level or a short call, not a failure.
+    const { reason } = progress.ai_skip;
+    const off = reason === "level" && progress.ai_skip.level === "off";
+    const short = reason !== "level";
     return (
-      <div className={styles.copy} data-ai-skip={progress.ai_skip.level ?? ""}>
+      <div
+        className={styles.copy}
+        data-ai-skip={short ? reason : (progress.ai_skip.level ?? "")}
+      >
         {quiet ? null : <p className={styles.kicker}>SAVED CALL</p>}
-        <h3>{off ? "AI is off for these calls" : "Data only: no report"}</h3>
+        <h3>
+          {short
+            ? "Short call: transcript and lead details"
+            : off
+              ? "AI is off for these calls"
+              : "Data only: no report"}
+        </h3>
         <p>
-          {off
-            ? "This call is saved and logged on its lead. No AI has read it."
-            : "The transcript and lead facts are saved for the CRM. Coaching and the report are off for this seller’s calls."}
+          {reason === "short_call"
+            ? "Calls under a minute keep their transcript and lead details. Get the full report if this one matters."
+            : reason === "no_conversation"
+              ? "This call had almost no conversation, so it keeps its transcript and lead details."
+              : off
+                ? "This call is saved and logged on its lead. No AI has read it."
+                : "The transcript and lead facts are saved for the CRM. Coaching and the report are off for this seller’s calls."}
         </p>
         {progress.ai_skip.can_upgrade && progress.recording_id ? (
           <AnalysisRetryAction

@@ -63,3 +63,46 @@ def test_a_saved_document_that_no_longer_validates_runs_calls_as_before() -> Non
     row = type("Row", (), {"revision": 7, "config": {"default": "retired-level"}})()
     assert store._settings(row) == store.Settings(7, policy.defaults())
     assert store._settings(None) == store.Settings(None, policy.defaults())
+
+
+def _transcript(duration_ms: int, *turns: tuple[str, int, int]) -> dict:
+    return {
+        "duration_ms": duration_ms,
+        "segments": [
+            {"speaker_id": who, "start_ms": start, "end_ms": end, "text": "words"}
+            for who, start, end in turns
+        ],
+    }
+
+
+def test_short_calls_and_calls_without_a_conversation() -> None:
+    # Owner, 21 Oct 2026: under a minute, or no conversation, keeps transcript + lead details.
+    two_people = (("speaker_0", 0, 15_000), ("speaker_1", 15_000, 30_000))
+    assert policy.short_call_reason(_transcript(45_000, *two_people)) == "short_call"
+    assert policy.short_call_reason(_transcript(15_000, ("speaker_0", 0, 15_000))) == (
+        "no_conversation"
+    )
+    # Five minutes of one person (a voicemail, a ring-out message) is no conversation.
+    assert policy.short_call_reason(_transcript(300_000, ("speaker_0", 0, 300_000))) == (
+        "no_conversation"
+    )
+    # Two minutes where the other side says 5 seconds is no conversation either.
+    lopsided = (("speaker_0", 0, 115_000), ("speaker_1", 115_000, 120_000))
+    assert policy.short_call_reason(_transcript(120_000, *lopsided)) == "no_conversation"
+    talking = (("speaker_0", 0, 50_000), ("speaker_1", 50_000, 90_000))
+    assert policy.short_call_reason(_transcript(90_000, *talking)) is None
+    # Without a duration, the last segment's end is the length.
+    assert (
+        policy.short_call_reason(
+            {"segments": [dict(s) for s in _transcript(0, *two_people)["segments"]]}
+        )
+        == "short_call"
+    )
+    assert {"ai_short_call", "ai_no_conversation"}.issubset(policy.FAILURE_CODES)
+
+
+def test_the_short_call_rule_is_off_only_where_tests_use_fixture_audio() -> None:
+    assert policy.short_rule_applies("production")
+    assert policy.short_rule_applies("development")
+    assert not policy.short_rule_applies("test")
+    assert not policy.short_rule_applies(None)

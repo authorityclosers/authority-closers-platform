@@ -3,7 +3,8 @@
 - ``call_ai_settings``: one organisation's levels, a new revision per save (newest
   wins); every save is also audited with old and new.
 - ``call_ai_decisions``: what the level did to one call. 'skipped' names the plan and
-  the first stage it left out (one row per plan); 'upgraded' is a person's "Get full
+  the first stage it left out (one row per plan) and why (``reason``: the seller's level,
+  or the short-call rule; migration 20261021_0120); 'upgraded' is a person's "Get full
   report" for that call. Ids and levels only: no call content, so erasure has nothing
   to empty here.
 """
@@ -70,6 +71,10 @@ class CallAiDecision(Base):
             "decision <> 'upgraded' OR actor_person_id IS NOT NULL",
             name="call_ai_decision_actor",
         ),
+        CheckConstraint(
+            "reason IS NULL OR reason IN ('level', 'short_call', 'no_conversation')",
+            name="call_ai_decision_reason",
+        ),
         Index("ix_call_ai_decision_call", "recording_id", "created_at"),
     )
 
@@ -85,3 +90,5 @@ class CallAiDecision(Base):
     settings_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     actor_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Why a call stopped (null on upgrades and on rows written before migration 0120).
+    reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
