@@ -196,6 +196,8 @@ export type LeadPage = {
   leads: LeadRow[];
   total: number;
   next_offset: number | null;
+  /** Every stage's count for the same people and search (the stage tabs). */
+  stage_counts?: Record<string, number>;
 };
 
 export type RepView = {

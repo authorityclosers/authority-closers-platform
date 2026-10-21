@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Leads → All leads → Select → Delete, with fictional leads, for screenshots
+ * Leads → Test leads → Select → Delete, with fictional leads, for screenshots
  * on GitHub (wb-ci --visual). The list's own API calls are answered here and
  * nothing leaves the browser; the page taps through the steps by itself.
  *
- * `?view=select` (default): Test data, Select, seven leads ticked.
+ * `?view=select` (default): Test leads, Select, seven leads ticked.
  * `?view=confirm`: the same, then Delete: the confirm sheet.
  * `?view=one`: the confirm for one lead, as a lead's own Delete opens it.
  */
@@ -100,7 +100,6 @@ function drive(confirm: boolean) {
   };
   let ticked = 0;
   const steps: (() => boolean)[] = [
-    () => tap("Test data"),
     () => tap("Select"),
     () => {
       const boxes =
@@ -136,7 +135,15 @@ export function LeadDeletePreview() {
   return (
     <div className={styles.root}>
       <Suspense>
-        <ListView canManage onOpen={() => undefined} version={0} />
+        <ListView
+          canManage
+          stage="test"
+          stageLabel="Test leads"
+          scope="team"
+          query=""
+          onOpen={() => undefined}
+          version={0}
+        />
       </Suspense>
       {view === "one" ? (
         <DeleteLeadsSheet

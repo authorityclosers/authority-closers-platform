@@ -4,27 +4,34 @@
  * Sales Xray CRM at /leads (code name Lead Desk; owner order 16 Oct 2026).
  *
  * A seller's desk copied from NeoDove's telecalling app: Start calling serves
- * one lead at a time, and every call ends on "Was the call connected?". Owners
- * and admins also get All leads, Team (allocation rules) and Sources.
+ * one lead at a time, and every call ends on "Was the call connected?".
  *
- * Phones (UX study, 17 Oct): Start calling comes first (no subtitle, buttons
- * or tab row on the desk), pull down to refresh, swipe a row to call or
- * message, hold it for more. The desk refreshes itself whenever the app or tab
- * comes back to the front and every minute while it is open. A phone alert
- * opens its lead through /leads#lead=<id> (ids only, after "#").
+ * Owner, 22 Oct 2026 ("pathetic", "a design flaw"): one page, one strip of
+ * stage tabs. To call is the desk; Open, New, Not contacted, Follow up,
+ * Interested, Won and Lost come from the organisation's own stages, with
+ * real counts, and switch in place (the address follows without a page
+ * move). Owners and admins pick whose leads in one small chip. The switches
+ * are small chips, an empty list is one line, Start calling sits in a bar
+ * above the tab bar on phones, and Team, Lead sources, Lead stages, Import
+ * and Test leads live in the ⋯ menu. Adding one lead is the tab bar's +.
+ *
+ * The desk refreshes itself whenever the app or tab comes back to the front
+ * and every minute while it is open. A phone alert opens its lead through
+ * /leads#lead=<id> (ids only, after "#"); pull down to refresh.
  */
 
 import {
+  ArrowLeft,
   Building2,
-  Inbox,
-  ListChecks,
+  ChevronDown,
+  Ellipsis,
   PhoneCall,
-  Plug,
   Plus,
-  Route,
+  Search,
   UsersRound,
+  X,
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -37,7 +44,8 @@ import { AcquisitionShell } from "../acquisition-shell";
 import { DeskChats } from "../chats/desk-chats";
 import { LeadsChatsSwitch } from "../chats/leads-chats-switch";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
-import { Badge, Button, Empty, PageHeader, QueryTabs } from "../ui/kit";
+import { leavingOverlay } from "../ui/back-close";
+import { Badge, Button, Empty, PageHeader } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { requestWorkspace } from "../call-ownership";
 import {
@@ -53,18 +61,21 @@ import { PhoneSetupBar } from "./phone-setup";
 import { UnknownCallsCard } from "./unknown-calls-card";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
-import { DeskView, dueNow, type DeskLink, type RowActions } from "./desk-view";
+import { DeskView, dueNow, type RowActions } from "./desk-view";
 import { usePullToRefresh } from "./gestures";
+import { readJourney, type JourneyView } from "./journey/journey-client";
 import { LeadActions } from "./lead-actions";
 import { LEAD_ADDED_EVENT, takeHandedLead } from "./lead-handoff";
 import { CallingLoop, LeadSheet, type LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
+import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 import {
   LEADS_PATH,
   LeadsError,
   linkedLead,
   pickContacts,
   readDesk,
+  readLeads,
   sharedLead,
   type Desk,
   type LeadRow,
@@ -74,13 +85,20 @@ import { MessageSetup } from "./message-sheet";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
 import { JourneyTab } from "./journey/journey-view";
-import { ListView } from "./list-view";
+import { ListView, TEST, type Scope } from "./list-view";
+import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
 import styles from "./leads.module.css";
 
-type Tab = "desk" | "all" | "team" | "sources" | "stages";
+type Manage = "team" | "sources" | "stages";
+
+const MANAGE_TITLE: Record<Manage, string> = {
+  team: "Team",
+  sources: "Lead sources",
+  stages: "Lead stages",
+};
 
 // The desk reads itself again when the app comes back, and every minute.
 const REFRESH_EVERY_MS = 60 * 1000;
@@ -99,13 +117,22 @@ const onHashChange = (change: () => void) => {
   return () => window.removeEventListener("hashchange", listener);
 };
 
+/** The address of a view: the desk, a stage, or a settings page. */
+function viewHref(view: string): string {
+  if (view === "desk") return LEADS_PATH;
+  if (view === "team" || view === "sources" || view === "stages")
+    return `${LEADS_PATH}?tab=${view}`;
+  return `${LEADS_PATH}?tab=all&stage=${encodeURIComponent(view)}`;
+}
+
 export { LeadsSkeleton };
 
 export function LeadsRoute() {
   const access = useWorkspaceAccess();
-  const router = useRouter();
   const params = useSearchParams();
   const requested = params.get("tab");
+  const requestedStage = params.get("stage");
+  const addressKey = params.toString();
   // A lead handed over by the Chrome extension opens Add lead, filled in. It
   // travels after "#", so the lead's details never reach a server or its logs.
   const hash = useSyncExternalStore(onHashChange, readHash, () => "");
@@ -139,6 +166,26 @@ export function LeadsRoute() {
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // A settings page opened from the menu is a step of its own: Leads goes back.
+  const pushedSettings = useRef(false);
+  // The view picked here, until the address catches up (the router follows
+  // history.replaceState; without one, as in a static preview, this holds it).
+  const [picked, setPicked] = useState<{ view: string; at: string } | null>(
+    null,
+  );
+  const [scopeChoice, setScopeChoice] = useState<Scope | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [counts, setCounts] = useState<{
+    key: string;
+    value: Record<string, number>;
+  } | null>(null);
+  const [journey, setJourney] = useState<{
+    key: string;
+    view: JourneyView;
+  } | null>(null);
   // The account menu's "Phone app" row lands here (only while the download
   // is on); the Leads header no longer carries it (owner, 18 Oct).
   const [apps, setApps] = useState<boolean>(
@@ -148,7 +195,7 @@ export function LeadsRoute() {
   // A work call's number the seller chose to save as a lead (from the phone).
   const [unknownLead, setUnknownLead] = useState<string | null>(null);
   const [contacts, setContacts] = useState(false);
-  const [picked, setPicked] = useState<PickedContact[]>([]);
+  const [picks, setPicks] = useState<PickedContact[]>([]);
   // Each opening mounts a fresh dialog, so nothing is reset in an effect.
   const [rounds, setRounds] = useState({
     calling: 0,
@@ -193,6 +240,12 @@ export function LeadsRoute() {
   );
   const { area, spinner } = usePullToRefresh(reload);
 
+  // Search waits until typing stops.
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     if (!authenticated) return;
     const controller = new AbortController();
@@ -224,6 +277,20 @@ export function LeadsRoute() {
     return () => controller.abort();
   }, [authenticated, contextKey, version]);
 
+  // The business's own stages name the tabs; without them the six kinds do.
+  useEffect(() => {
+    if (!authenticated) return;
+    let live = true;
+    readJourney()
+      .then((view) => {
+        if (live) setJourney({ key: contextKey, view });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [authenticated, contextKey]);
+
   // Back in the app or the tab, an alert while open, or a minute gone: read again.
   useEffect(() => {
     if (!authenticated) return;
@@ -248,6 +315,58 @@ export function LeadsRoute() {
     };
   }, [authenticated, refresh]);
 
+  const current = deskKey === contextKey;
+  const can = current && desk ? desk.me.can_manage : false;
+  const scope: Scope = scopeChoice ?? (can ? "team" : "mine");
+  const countsKey = JSON.stringify([contextKey, scope, query, version]);
+
+  // From the address: the desk, a stage, or one of the settings pages.
+  const stageKeys = new Set<string>([
+    "open",
+    ...KIND_ORDER,
+    ...(can ? [TEST] : []),
+  ]);
+  const fromAddress: string =
+    requested === "stages" ||
+    (can && (requested === "team" || requested === "sources"))
+      ? requested
+      : requested === "all"
+        ? requestedStage && stageKeys.has(requestedStage)
+          ? requestedStage
+          : "open"
+        : "desk";
+  const view = picked && picked.at === addressKey ? picked.view : fromAddress;
+  const manage: Manage | null =
+    view === "team" || view === "sources" || view === "stages" ? view : null;
+  const stageView = !manage && view !== "desk";
+
+  // The desk needs the stage counts too: one list read gives every stage's.
+  const haveCounts = counts?.key === countsKey;
+  useEffect(() => {
+    if (!authenticated || !current || stageView || haveCounts || manage) return;
+    const controller = new AbortController();
+    readLeads({ scope, stage: "open", search: query }, controller.signal)
+      .then((page) => {
+        if (page.stage_counts)
+          setCounts({ key: countsKey, value: page.stage_counts });
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [
+    authenticated,
+    current,
+    stageView,
+    haveCounts,
+    manage,
+    scope,
+    query,
+    countsKey,
+  ]);
+  const onCounts = useCallback(
+    (value: Record<string, number>) => setCounts({ key: countsKey, value }),
+    [countsKey],
+  );
+
   if (!authenticated) {
     const loading =
       !access || access.authenticated === null || access.status === "loading";
@@ -268,15 +387,6 @@ export function LeadsRoute() {
       </AcquisitionShell>
     );
   }
-
-  const current = deskKey === contextKey;
-  const can = current && desk ? desk.me.can_manage : false;
-  const tab: Tab =
-    requested === "all" ||
-    requested === "stages" ||
-    (can && (requested === "team" || requested === "sources"))
-      ? (requested as Tab)
-      : "desk";
 
   const organisation = access?.workspaces?.find(
     (workspace) =>
@@ -347,13 +457,38 @@ export function LeadsRoute() {
     access?.workspaces?.find(
       (workspace) => workspace.tenant_id === access.context?.tenantId,
     )?.name ?? "";
-  const links: DeskLink[] = [
-    {
-      key: "all",
-      label: "All leads",
-      note: "Search and filters",
-      href: `${LEADS_PATH}?tab=all`,
-    },
+  const toCall = dueNow(desk);
+
+  // Tabs and filters change the address in place, so Back never steps
+  // through them; a settings page is a step of its own, so Back returns.
+  const go = (next: string) => {
+    const href = viewHref(next);
+    setPicked({ view: next, at: addressKey });
+    if (next === "team" || next === "sources" || next === "stages") {
+      pushedSettings.current = true;
+      window.history.pushState(null, "", href);
+    } else window.history.replaceState(null, "", href);
+  };
+  const leaveSettings = () => {
+    setPicked({ view: "desk", at: addressKey });
+    if (pushedSettings.current) {
+      pushedSettings.current = false;
+      window.history.back();
+    } else window.history.replaceState(null, "", LEADS_PATH);
+  };
+  const tabs = [
+    { key: "desk", label: "To call", count: toCall },
+    ...stageTabs(
+      journey?.key === contextKey ? journey.view : null,
+      haveCounts ? counts.value : null,
+    ),
+    ...(view === TEST ? [{ key: TEST, label: "Test leads" }] : []),
+  ];
+  const stageLabel =
+    tabs.find((tab) => tab.key === view)?.label ??
+    (view === "open" ? "Open" : "this stage");
+
+  const menuItems: LeadsMenuItem[] = [
     ...(can
       ? [
           {
@@ -362,80 +497,57 @@ export function LeadsRoute() {
             note: desk.counts.unassigned
               ? `${desk.counts.unassigned} need an owner`
               : "Who gets which leads",
-            href: `${LEADS_PATH}?tab=team`,
+            onPick: () => {
+              setSettingsOpen(false);
+              leavingOverlay();
+              go("team");
+            },
           },
           {
             key: "sources",
             label: "Lead sources",
-            note: "Meta, forms, sheets",
-            href: `${LEADS_PATH}?tab=sources`,
-          },
-          {
-            key: "stages",
-            label: "Lead stages",
-            note: "Your steps from enquiry to sale",
-            href: `${LEADS_PATH}?tab=stages`,
+            note: "Facebook, Instagram, forms and sheets",
+            onPick: () => {
+              setSettingsOpen(false);
+              leavingOverlay();
+              go("sources");
+            },
           },
         ]
       : []),
     {
-      key: "add",
-      label: "Add leads",
-      note: "Type, paste, contacts or a file",
-      onClick: () => begin("menu", setMenu),
-    },
-  ];
-
-  // Five tabs at most, each with an icon (the AC design system's rule, as in Pulse).
-  const tabs = [
-    {
-      key: "desk",
-      label: (
-        <>
-          <Inbox size={15} aria-hidden="true" />
-          My desk
-        </>
-      ),
-      count: desk.counts.open,
+      key: "stages",
+      label: "Lead stages",
+      note: can
+        ? "Your steps from enquiry to sale, and what your ads learn"
+        : "Your team's steps from enquiry to sale",
+      onPick: () => {
+        setSettingsOpen(false);
+        leavingOverlay();
+        go("stages");
+      },
     },
     {
-      key: "all",
-      label: (
-        <>
-          <ListChecks size={15} aria-hidden="true" />
-          All leads
-        </>
-      ),
+      key: "import",
+      label: "Import leads",
+      note: can
+        ? "From your phone's contacts, a file or your ads"
+        : "From your phone's contacts",
+      onPick: () => {
+        setSettingsOpen(false);
+        begin("menu", setMenu);
+      },
     },
     ...(can
       ? [
           {
-            key: "team",
-            label: (
-              <>
-                <UsersRound size={15} aria-hidden="true" />
-                Team
-              </>
-            ),
-            count: desk.counts.unassigned || undefined,
-          },
-          {
-            key: "sources",
-            label: (
-              <>
-                <Plug size={15} aria-hidden="true" />
-                Lead sources
-              </>
-            ),
-          },
-          {
-            key: "stages",
-            label: (
-              <>
-                <Route size={15} aria-hidden="true" />
-                Lead stages
-              </>
-            ),
+            key: "test",
+            label: "Test leads",
+            note: "Sample and test leads, ready to clear",
+            onPick: () => {
+              setSettingsOpen(false);
+              go(TEST);
+            },
           },
         ]
       : []),
@@ -446,7 +558,12 @@ export function LeadsRoute() {
       <MessageSetup.Provider
         value={{ templates: desk.templates ?? [], myName: desk.me.name, org }}
       >
-        <div ref={area} className={styles.root} data-tab={tab}>
+        <div
+          ref={area}
+          className={styles.root}
+          data-tab={manage ?? (stageView ? "all" : "desk")}
+          data-call-bar={view === "desk" && desk.counts.open ? "" : undefined}
+        >
           <div
             ref={spinner}
             className={styles.pullSpinner}
@@ -457,7 +574,7 @@ export function LeadsRoute() {
           <PhoneSetupBar />
           <div className={styles.wideOnly}>
             <PageHeader
-              title="Leads"
+              title={manage ? MANAGE_TITLE[manage] : "Leads"}
               titleInBar
               context={[
                 desk.me.can_manage
@@ -471,36 +588,112 @@ export function LeadsRoute() {
               ]}
               actions={
                 <>
-                  <TakingSwitch
-                    key={`taking-${desk.me.taking_leads !== false}`}
-                    initial={desk.me.taking_leads !== false}
-                    place="header"
-                    onChanged={refresh}
-                  />
                   <Button onClick={() => begin("menu", setMenu)}>
                     <Plus size={14} aria-hidden="true" />
                     Add leads
                   </Button>
-                  {tab !== "desk" ? (
-                    <Button
-                      variant="primary"
-                      onClick={() => begin("calling", setCalling)}
-                      disabled={desk.counts.open === 0}
-                    >
-                      <PhoneCall size={14} aria-hidden="true" />
-                      Start calling
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="primary"
+                    onClick={() => begin("calling", setCalling)}
+                    disabled={desk.counts.open === 0}
+                  >
+                    <PhoneCall size={14} aria-hidden="true" />
+                    Start calling
+                  </Button>
                 </>
               }
             />
           </div>
-          {tab === "desk" ? null : (
-            <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
+          {manage ? (
+            <div className={styles.toolbar}>
+              <button
+                type="button"
+                className={styles.backChip}
+                onClick={leaveSettings}
+              >
+                <ArrowLeft size={16} aria-hidden="true" />
+                Leads
+              </button>
+              <h2 className={styles.toolbarTitle}>{MANAGE_TITLE[manage]}</h2>
+            </div>
+          ) : (
+            <>
+              <div className={styles.toolbar}>
+                {can && stageView && view !== TEST ? (
+                  <label className={styles.ownerPicker}>
+                    <UsersRound size={14} aria-hidden="true" />
+                    <select
+                      aria-label="Whose leads"
+                      value={scope}
+                      onChange={(event) =>
+                        setScopeChoice(event.target.value as Scope)
+                      }
+                    >
+                      <option value="team">Everyone</option>
+                      <option value="mine">Mine</option>
+                      <option value="unassigned">No owner</option>
+                    </select>
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </label>
+                ) : null}
+                <TakingSwitch
+                  key={`taking-${desk.me.taking_leads !== false}`}
+                  initial={desk.me.taking_leads !== false}
+                  place="chip"
+                  pausedUntil={desk.me.paused_until ?? null}
+                  onChanged={refresh}
+                />
+                <PhoneLogCard as="chip" />
+                <span className={styles.toolbarSpacer} />
+                {stageView ? (
+                  <button
+                    type="button"
+                    className={styles.toolButton}
+                    aria-label="Search leads"
+                    aria-pressed={searching || !!search}
+                    onClick={() => setSearching((value) => !value)}
+                  >
+                    <Search size={18} aria-hidden="true" />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className={styles.toolButton}
+                  aria-label="Leads settings"
+                  aria-haspopup="dialog"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <Ellipsis size={18} aria-hidden="true" />
+                </button>
+              </div>
+              <StageTabs tabs={tabs} current={view} onChange={go} />
+              {stageView && (searching || search) ? (
+                <label className={styles.searchRow}>
+                  <Search size={16} aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={search}
+                    placeholder="Name, company, city or phone"
+                    aria-label="Search leads"
+                    maxLength={80}
+                    autoFocus={!search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className={styles.searchClear}
+                    aria-label="Close search"
+                    onClick={() => {
+                      setSearch("");
+                      setSearching(false);
+                    }}
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                </label>
+              ) : null}
+            </>
           )}
-          <div className={tab === "desk" ? styles.wideOnly : undefined}>
-            <QueryTabs base={LEADS_PATH} items={tabs} current={tab} />
-          </div>
           {error ? (
             <div className={styles.notice} role="status">
               {error.message}
@@ -509,52 +702,70 @@ export function LeadsRoute() {
               </Button>
             </div>
           ) : null}
-          {tab === "desk" ? (
+          {manage === "team" ? (
+            <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
+          ) : manage === "stages" ? (
+            <JourneyTab canManage={can} />
+          ) : manage === "sources" ? (
+            <SourcesView
+              sandbox={desk.sandbox}
+              onChanged={refresh}
+              onImport={() => begin("importing", setImporting)}
+            />
+          ) : stageView ? (
+            <ListView
+              canManage={can}
+              stage={view}
+              stageLabel={stageLabel}
+              scope={view === TEST ? "team" : scope}
+              query={query}
+              onOpen={(leadId) => open(leadId)}
+              version={version}
+              actions={rowActions}
+              onChanged={refresh}
+              onCounts={onCounts}
+            />
+          ) : (
             <DeskView
               desk={desk}
               onOpen={(leadId) => open(leadId)}
-              onStart={() => begin("calling", setCalling)}
-              onAdd={() => begin("menu", setMenu)}
+              onAdd={() => begin("adding", setAdding)}
               actions={rowActions}
-              links={links}
               afterHero={
                 <>
-                  <TakingSwitch
-                    key={`taking-${desk.me.taking_leads !== false}`}
-                    initial={desk.me.taking_leads !== false}
-                    place="row"
-                    pausedUntil={desk.me.paused_until ?? null}
-                    onChanged={refresh}
-                  />
                   <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
                   <AlertsCard />
-                  <PhoneLogCard />
+                  <PhoneLogCard as="offer" />
                   <UnknownCallsCard onSave={setUnknownLead} />
                   {/* Owner, 20 Oct: chats live in Chats; the desk links there. */}
                   <DeskChats />
                 </>
               }
             />
-          ) : tab === "all" ? (
-            <ListView
-              canManage={can}
-              onOpen={(leadId) => open(leadId)}
-              version={version}
-              actions={rowActions}
-              onChanged={refresh}
-            />
-          ) : tab === "team" ? (
-            <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
-          ) : tab === "stages" ? (
-            <JourneyTab canManage={can} />
-          ) : (
-            <SourcesView
-              sandbox={desk.sandbox}
-              onChanged={refresh}
-              onImport={() => begin("importing", setImporting)}
-            />
           )}
+          {/* Phones: the one primary action, in the thumb's reach above the
+              tab bar (owner, 22 Oct: no big green card). */}
+          {view === "desk" && desk.counts.open ? (
+            <div className={styles.callBar}>
+              <button
+                type="button"
+                className={styles.callBarButton}
+                onClick={() => begin("calling", setCalling)}
+              >
+                <PhoneCall size={18} aria-hidden="true" />
+                Start calling
+                {toCall ? (
+                  <span className={styles.callBarCount}>{`${toCall} due`}</span>
+                ) : null}
+              </button>
+            </div>
+          ) : null}
         </div>
+        <LeadsMenu
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          items={menuItems}
+        />
         <LeadSheet
           leadId={shownLead}
           me={desk.me}
@@ -643,13 +854,15 @@ export function LeadsRoute() {
             setMenu(false);
             if (way === "type") begin("adding", setAdding);
             else if (way === "file") begin("importing", setImporting);
-            else if (way === "sources")
-              router.push(`${LEADS_PATH}?tab=sources`);
-            else
+            else if (way === "sources") {
+              leavingOverlay();
+              if (view === "sources") return;
+              go("sources");
+            } else
               pickContacts()
                 .then((people) => {
                   if (!people.length) return;
-                  setPicked(people);
+                  setPicks(people);
                   begin("contacts", setContacts);
                 })
                 .catch(() => undefined);
@@ -658,7 +871,7 @@ export function LeadsRoute() {
         <ContactsDialog
           key={`contacts-${rounds.contacts}`}
           open={contacts}
-          picked={picked}
+          picked={picks}
           canManage={can}
           onClose={() => setContacts(false)}
           onDone={refresh}

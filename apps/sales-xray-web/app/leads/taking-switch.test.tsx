@@ -73,3 +73,28 @@ it("puts the switch back when saving fails", async () => {
   expect(toggle().getAttribute("aria-checked")).toBe("true");
   expect(host.querySelector('[role="alert"]')?.textContent).toBe("Try again.");
 });
+
+// Owner, 22 Oct 2026: wide switch rows "waste space once ticked".
+it("is a small chip on Leads that flips in one tap", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(
+      async () =>
+        new Response(
+          JSON.stringify({
+            person_id: "p",
+            name: "Asha",
+            role: "member",
+            can_manage: false,
+            taking_leads: false,
+          }),
+        ),
+    ),
+  );
+  await act(async () => root.render(<TakingSwitch initial place="chip" />));
+  expect(toggle().getAttribute("aria-checked")).toBe("true");
+  expect(toggle().textContent).toBe("Taking leads");
+  await act(async () => toggle().click());
+  expect(toggle().getAttribute("aria-checked")).toBe("false");
+  expect(toggle().textContent).toBe("Not taking leads");
+});

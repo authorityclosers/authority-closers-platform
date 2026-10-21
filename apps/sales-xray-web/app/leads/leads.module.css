@@ -4154,3 +4154,536 @@ a.repName {
   border-radius: var(--lx-radius-lg);
   box-shadow: var(--lx-shadow-1);
 }
+
+/* ---------- Leads, 22 Oct 2026 (owner: "pathetic", "a design flaw") ----------
+   One toolbar of small chips, one strip of stage tabs, lists without boxes in
+   boxes, empty lists in one line, Start calling above the tab bar on phones. */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.toolbarSpacer {
+  flex: 1 1 0;
+}
+
+.toolbarTitle {
+  margin: 0;
+  font: var(--sx-text-panel);
+  color: var(--sx-ink);
+}
+
+/* A small chip: an icon and one or two words; switches show a dot. */
+.statusChip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--sx-dur-base) var(--sx-spring),
+    background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.statusChip:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.statusChip > svg {
+  color: var(--lx-teal);
+}
+
+.statusChip[data-on] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+}
+
+.statusChip[data-tone="warn"] {
+  border-color: var(--lx-focus-edge);
+  background: var(--lx-warning-soft);
+  color: var(--lx-focus-ink);
+}
+
+.statusChip[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+}
+
+.statusChip:focus-visible,
+.toolButton:focus-visible,
+.backChip:focus-visible,
+.stageTab:focus-visible,
+.menuRow:focus-visible,
+.callBarButton:focus-visible,
+.searchClear:focus-visible,
+.swipeHintClose:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sx-muted);
+}
+
+.statusChip[data-on] .statusDot {
+  background: var(--lx-teal);
+  box-shadow: 0 0 0 3px var(--lx-teal-soft);
+}
+
+.statusChip[data-tone="warn"] .statusDot {
+  background: var(--lx-warning);
+}
+
+.toolButton {
+  display: inline-grid;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: 50%;
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.toolButton[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+}
+
+.backChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Whose leads (owners and admins): the phone's own picker, in a chip. */
+.ownerPicker {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.ownerPicker > svg {
+  color: var(--sx-muted);
+  pointer-events: none;
+}
+
+.ownerPicker select {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ownerPicker select:focus-visible {
+  outline: none;
+}
+
+.ownerPicker:focus-within {
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* Stage tabs: one strip; on a phone it scrolls inside itself. */
+.stageTabs {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 2px 2px 4px;
+  margin: 0 -2px;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 16px;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    var(--lx-film) calc(100% - 24px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    var(--lx-film) calc(100% - 24px),
+    transparent
+  );
+}
+
+.stageTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.stageTab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stageTab:last-child {
+  margin-right: 24px;
+}
+
+.stageTab[aria-selected="true"] {
+  border-color: transparent;
+  background: var(--sx-ink);
+  color: var(--sx-paper);
+  font-weight: 700;
+}
+
+.stageCount {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-strong);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  text-align: center;
+}
+
+.stageTab[aria-selected="true"] .stageCount {
+  background: color-mix(in oklab, var(--sx-paper) 22%, transparent);
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 6px 0 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+}
+
+.searchRow input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.searchClear {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+/* A stage's leads: one panel, the count above the rows. */
+.listPanel {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.listHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.listTotal {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* An empty list in one line, with at most one action. */
+.inlineEmpty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.listPanel .inlineEmpty {
+  border: 0;
+  border-radius: 0;
+}
+
+.inlineEmptyIcon {
+  display: inline-grid;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--sx-radius-sm);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.inlineEmptyWords {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.inlineEmptyWords strong {
+  font-size: var(--sx-text-md);
+}
+
+.inlineEmptyWords small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.inlineEmptyAction {
+  flex: none;
+}
+
+/* Swipes show what they do: an icon on the action's colour. */
+.swipeIcon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--lx-on-teal) 22%, transparent);
+}
+
+.swipeHint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 8px 6px 8px 12px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
+.swipeHint > svg {
+  flex: none;
+  color: var(--lx-teal);
+}
+
+.swipeHint > span {
+  flex: 1 1 auto;
+}
+
+.swipeHint > span svg,
+.swipeHint > span > span {
+  vertical-align: -2px;
+}
+
+.swipeHintClose {
+  display: inline-grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+/* Leads settings (the ⋯ menu). */
+.menuList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menuRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuRow > svg {
+  color: var(--sx-muted);
+}
+
+.menuIcon {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: var(--sx-radius-sm);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.menuWords {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.menuWords strong {
+  font-size: var(--sx-text-md);
+}
+
+.menuWords small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* Phones: Start calling, the page's one primary action, above the tab bar. */
+.callBar {
+  position: fixed;
+  z-index: 29;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(var(--lx-bottom-nav-h) + 8px + env(safe-area-inset-bottom, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.callBarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+  min-height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  box-shadow: var(--sx-shadow-float);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.callBarButton:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.callBarCount {
+  padding: 2px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--lx-on-teal) 20%, transparent);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 899px) {
+  .root[data-call-bar] {
+    padding-bottom: 88px;
+  }
+}
+
+@media (min-width: 900px) {
+  .callBar,
+  .swipeHint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statusChip,
+  .callBarButton {
+    transition: none;
+  }
+  .statusChip:active,
+  .callBarButton:active {
+    transform: none;
+  }
+}
