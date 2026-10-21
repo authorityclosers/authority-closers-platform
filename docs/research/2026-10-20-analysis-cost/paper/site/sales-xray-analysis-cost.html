@@ -99,7 +99,7 @@ footer { max-width: 1040px; margin: 56px auto 0; font-size: 13px; color: var(--m
 </style>
 
 <header>
-  <div class="eyebrow">Research paper · v2.1 · 21 Oct 2026 · Authority Closers · 16 fictional calls + 7 real calls annotated by the coaching lead · reviewed by Codex and Gemini</div>
+  <div class="eyebrow">Research paper · v2.3 · 21 Oct 2026 · Authority Closers · 16 fictional calls + 7 real calls annotated by the coaching lead · reviewed by Codex and Gemini</div>
   <h1>Sales X-Ray call analysis: from ₹1.50 to ₹0.15–0.29 a minute</h1>
   <p class="lede">Today's pipeline transcribes with Scribe and reads the transcript six times with Gemini 3.8 Flash:
   ₹1.19 a minute on staging receipts, ₹1.50 on seven real calls. One analysis pass on a Gemini 3.1 Flash-Lite
@@ -361,6 +361,22 @@ transcript + measurements ──► ONE analysis pass ──► facts for the CR
   facts and 2–7 on coaching; averaged, Luna trends +9 on facts and −3 on coaching, the hybrid +3 on coaching, and no
   difference is significant on 16 calls. The defensible claim: at least as good as today, at a fifth of the cost or
   less. Smaller differences need more calls, not more judgements.</p>
+  <h3>A compact transcript format halves transcription output</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Flash-Lite transcript format (6 dense fictional calls)</th><th class="n">Output tokens</th><th class="n">Character error</th><th class="n">Speaker accuracy</th><th class="n">Critical facts kept</th></tr></thead>
+    <tbody>
+      <tr class="ref"><td>Today: JSON segments (speaker, start, end, text)</td><td class="n">36,370</td><td class="n">13.2%</td><td class="n">91.1%</td><td class="n">94.8%</td></tr>
+      <tr><td><code>A 754 words</code> (start second)</td><td class="n">16,458 (−55%)</td><td class="n">16.5%</td><td class="n bad">64.8%</td><td class="n">92.6%</td></tr>
+      <tr class="hl"><td><code>[MM:SS] S1: words</code></td><td class="n"><b>18,747 (−48%)</b></td><td class="n">13.0%</td><td class="n">86.8%</td><td class="n">92.5%</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The words take the same characters in any format; JSON spends about 39 output tokens a segment on keys,
+  labels and two timestamps. Bare <code>A 754</code> lines broke three ways: Flash-Lite wrote 7:29 as "729", stopped
+  switching speakers after a few lines, and looped once. <code>[MM:SS] S1:</code> lines with "change the label every
+  time the voice changes" and "never repeat a line" fixed all three. Romanising Hindi/Marathi saved nothing. Effect:
+  transcription on Flex falls from ₹0.072 to about ₹0.055 a minute on the fictional calls and the full Lean pipeline
+  to about ₹0.09; on dense real calls, projected, transcription from ₹0.12 to about ₹0.08 on Flex and Lean from about
+  ₹0.15 to about ₹0.12. Gemini Flex answered all 30 requests at once. Measured on the staging project's key, $0.112.</p>
 </section>
 
 <section id="cost">

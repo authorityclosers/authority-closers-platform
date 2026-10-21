@@ -98,31 +98,55 @@ the three runs, 20,000 resamples.
 - **Significance:** no difference is significant on 16 calls. The defensible claim is "at least as good as today,
   at a fifth of the cost or less". Telling smaller differences apart needs more calls, not more judgements.
 
-## 11.6 A compact transcript for real calls (projection; measurement waits for a Gemini key)
+## 11.6 A compact transcript format (measured 21 Oct, 6 fictional calls)
 
-On the seven real calls, Gemini 3.1 Flash-Lite writes about 1,120 output tokens per audio minute (no thinking
-tokens) against 420 on the fictional calls, and output is about 80% of the transcription cost (₹0.24 a minute
-standard).
+**Why:** on the seven real calls Gemini 3.1 Flash-Lite writes about 1,120 output tokens per audio minute (no thinking
+tokens), and output is about 80% of the transcription cost (₹0.24 a minute standard). Today's JSON costs about
+39 output tokens per segment in keys, labels and two timestamps; the words themselves take the same characters in
+any format.
 
-Per minute of the stored real transcripts:
+**How it was measured:**
+- Six of the densest fictional calls: fx-03, 06, 07, 09, 11, 13; 64.6 minutes; English, Hinglish and Devanagari.
+- Gemini 3.1 Flash-Lite called directly on the staging project's key (orchestrator-approved, $0.30 cap), on the
+  Gemini Flex tier.
+- Compared with today's JSON transcripts of the same calls (same model and audio).
+- Retention judged by Claude Haiku on the subscription.
 
-| Form | Characters per minute |
-|---|---:|
-| JSON | 2,136 |
-| Words only | 961 |
-| Compact lines ("A 754 words", start second only) | 1,090 |
-
-The format overhead is about 360 tokens a minute: 18 segments a minute, each carrying a JSON key set, a speaker
-label and two MM:SS timestamps.
-
-**Projection:**
-
-| Form | Output tokens per minute | Transcription, standard | Transcription, Flex | Full Lean pipeline on Flex |
+| Format | Output tokens (6 calls) | Character error | Speaker accuracy | Critical facts kept |
 |---|---:|---:|---:|---:|
-| Today's JSON | about 1,120 | ₹0.24 | ₹0.12 | about ₹0.15 |
-| Compact lines | about 800 | about ₹0.20 | about ₹0.10 | about ₹0.13 |
-| Compact, Hindi and Marathi in Latin letters (34% of the characters are Devanagari) | perhaps 500 | | | about ₹0.11 |
+| Today: JSON segments (speaker, start, end, text) | 36,370 | 13.2% | 91.1% | 94.8% |
+| `A 754 words` (start second) | 16,458 (−55%) | 16.5% | 64.8% | 92.6%* |
+| same, Hindi/Marathi in Latin letters | 16,397 (−55%) | 17.2% | 71.3% | 95.4% |
+| **`[MM:SS] S1: words`** | **18,747 (−48%)** | **13.0%** | **86.8%** | **92.5%** |
 
-- The romanised form needs a fidelity check before use.
-- The runner is ready (`harness/compact_asr.py`, styles `json`, `compact` and `compact_roman`, direct Gemini only).
-  The bench Gemini key still answers 403, and OpenRouter use has stopped.
+\* one call's judgement failed; 135 of 174 facts judged.
+
+**What the variants showed:**
+- **The saving is the format, not the script.** The words take the same characters in every form, and romanising
+  Hindi/Marathi saved nothing. Flash-Lite even ignored the instruction on one Devanagari call.
+- **Bare `A 754` lines fail in two ways:**
+  - Asked for "seconds", Flash-Lite wrote minutes and seconds without the colon (7:29 came out as "729").
+  - Without a labelled field it stopped switching speakers after a few lines.
+  - One call looped (86 repeated lines).
+- **`[MM:SS] S1: words`** with "start a new line with the other label every time the voice changes" and "never
+  repeat a line" fixed all three problems.
+  - Character error is the same as JSON.
+  - Speaker accuracy is 4 points lower and critical facts 2 points lower, both within judge noise.
+- **Flex:** all 30 Gemini Flex requests were answered at once (4–22 s), at half price.
+
+**Effect on cost (per audio minute):**
+
+| | Today's JSON | Compact |
+|---|---:|---:|
+| Fictional, transcription on Flex | ₹0.072 | about ₹0.055 |
+| Fictional, Lean full-format pipeline on Flex, 13.8-minute call | ₹0.108 | about ₹0.09 |
+| Real, transcription, standard | ₹0.24 | about ₹0.16 |
+| Real, transcription, Flex | ₹0.12 | about ₹0.08 |
+| Real, Lean pipeline on Flex | about ₹0.15 | about ₹0.12 |
+
+- The real-call compact figures are projected from the measured −48%. They were not re-measured, because real calls
+  are outside this key's approval.
+- The audio input (about ₹0.04 a minute on Flex) is now about half of transcription and cannot shrink with format.
+- Below ₹0.10 on dense real calls needs Luna's share to fall or a cheaper transcriber.
+
+**Spend:** $0.224 at list, $0.112 on Flex. The runner is `harness/compact_asr.py`, style `compact2`.

@@ -4,6 +4,7 @@
 |---|---:|---:|
 | assemblyai | 42 | 2.02 |
 | deepgram | 23 | 1.71 |
+| gemini-direct | 18 | 0.22 |
 | gemini-free | 3 | 0.00 |
 | groq | 66 | 1.17 |
 | openai | 124 | 0.69 |
