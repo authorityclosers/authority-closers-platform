@@ -99,7 +99,7 @@ footer { max-width: 1040px; margin: 56px auto 0; font-size: 13px; color: var(--m
 </style>
 
 <header>
-  <div class="eyebrow">Research paper · v2.0 · 21 Oct 2026 · Authority Closers · 16 fictional calls + 7 real calls annotated by the coaching lead · reviewed by Codex and Gemini</div>
+  <div class="eyebrow">Research paper · v2.1 · 21 Oct 2026 · Authority Closers · 16 fictional calls + 7 real calls annotated by the coaching lead · reviewed by Codex and Gemini</div>
   <h1>Sales X-Ray call analysis: from ₹1.50 to ₹0.15–0.29 a minute</h1>
   <p class="lede">Today's pipeline transcribes with Scribe and reads the transcript six times with Gemini 3.8 Flash:
   ₹1.19 a minute on staging receipts, ₹1.50 on seven real calls. One analysis pass on a Gemini 3.1 Flash-Lite
@@ -142,6 +142,17 @@ transcript + measurements ──► ONE analysis pass ──► facts for the CR
   Hindi/Marathi speech (about 196 words a minute), so the transcript's output tokens dominate. Facts come from 16
   fictional calls judged by Claude Haiku 5.5; coaching from the real calls, mean of the Haiku and GPT-6 Luna judges.
   "Both" is inferred from its two measured parts.</p>
+  <div class="answer">
+    <h3>The ₹0.10 configuration, in the product's full formats</h3>
+    <p>Gemini 3.1 Flash-Lite transcribes on Gemini's Flex tier; GPT-6 Luna answers the one-pass build's two requests
+    (facts with call data and the 27-pointer review; the C5 report, with a report-depth instruction) on OpenAI's Flex
+    tier. Measured on the fictional calls: <b>₹0.108 a minute at 13.8 minutes, ₹0.083 at 60, ₹0.18 at 4.5</b>, ready
+    in about 5–10 minutes, every C5 report and pointer review valid with the report-depth prompt, facts above today's
+    and coaching within noise of it (section 6). With Gemini writing the report instead, coaching is 4 points above
+    today for ₹0.155. Real calls are denser (₹0.12 a minute for transcription on Flex), so the same set-up costs about
+    ₹0.15 there until the transcript output is made compact. Cap Luna's output at about 20k tokens with one retry: one
+    request in 36 ran away.</p>
+  </div>
   <div class="answer">
     <h3>Why Lean, and what it gives up</h3>
     <p>It finds the most facts (the CRM, the prospect profile and the call data all hang on them) with the fewest
@@ -320,8 +331,31 @@ transcript + measurements ──► ONE analysis pass ──► facts for the CR
   more are clear of noise; three pipelines are clearly below today, none is clearly above.</p>
 </section>
 
+<section id="fullformats">
+  <div class="eyebrow">6 · Results · the product's full formats, fictional calls</div>
+  <h2>GPT-6 Luna writing everything the product stores</h2>
+  <div class="prose">
+  <p>The rounds above scored a research-shaped answer. Here GPT-6 Luna answers the one-pass build's own two requests
+  (facts: call data, notes and the 27-pointer review; report: the C5 coaching-v5 report), and every answer goes through
+  the product's own validators for the C4 fact packet, the C5 report, the pointer review and the call objects. Luna ran
+  on OpenAI's API directly (bench project, fictional calls only, nothing stored). Every arm is judged by the same judge,
+  Claude Haiku through the Claude subscription, and compared with today's six stages on the same Flash-Lite transcripts.</p>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>Pipeline</th><th class="n">Fact recall (vs today)</th><th class="n">Critical facts</th><th class="n">Unsupported</th><th class="n">Coaching truths (vs today)</th><th class="n">C5 / pointers valid</th><th class="n">₹/min, 4.5 / 13.8 / 60 min</th><th class="n">Time</th></tr></thead>
+    <tbody id="r8Table"></tbody>
+  </table></div>
+  <p class="note" id="r8Note">Differences are percentage points against today on the same transcripts, 95% interval
+  from 20,000 paired resamples of the 16 calls. ₹/min is standard tier, transcription included (₹0.143/min on these
+  calls). The one-pass build's Gemini row read its own Flash-Lite transcripts, so it is not paired as tightly; 7 of its
+  16 reports failed validation and count as zero. <b>Read the fact columns with care:</b> the four Luna rows share one
+  facts answer, which the subscription judge scored between 62% and 79% (mean 70.6%), so fact differences under about
+  10 points are judge noise. OpenAI Flex (not judged; same model and prompts) answered all 32 requests on the Flex
+  tier in about 4.4 minutes a call, at half price: ₹0.18 / 0.11 / 0.08 a minute with Flash-Lite on Flex.</p>
+</section>
+
 <section id="cost">
-  <div class="eyebrow">6 · Results · cost</div>
+  <div class="eyebrow">7 · Results · cost</div>
   <h2>Measured rupees per audio minute, by call length</h2>
   <div class="chart" id="costChart" role="img" aria-label="Measured cost per audio minute for each pipeline at a 13.8-minute call"></div>
   <div class="scroll"><table>
@@ -334,7 +368,7 @@ transcript + measurements ──► ONE analysis pass ──► facts for the CR
 </section>
 
 <section id="market">
-  <div class="eyebrow">7 · Market · read live 20 Oct 2026</div>
+  <div class="eyebrow">8 · Market · read live 20 Oct 2026</div>
   <h2>Prices behind the numbers</h2>
   <div class="scroll"><table>
     <thead><tr><th>Text model</th><th>$ per M in / out</th><th>Flex / batch</th><th>Notes</th></tr></thead>
@@ -353,7 +387,7 @@ transcript + measurements ──► ONE analysis pass ──► facts for the CR
 </section>
 
 <section id="method">
-  <div class="eyebrow">8 · Method</div>
+  <div class="eyebrow">9 · Method</div>
   <h2>How the benchmark was built</h2>
   <div class="prose"><ul>
     <li><b>Calls:</b> 16 fictional calls, 2–48 minutes (264 audio minutes), all eight call types, Indian English,
@@ -374,14 +408,14 @@ transcript + measurements ──► ONE analysis pass ──► facts for the CR
 </section>
 
 <section id="review">
-  <div class="eyebrow">9 · Independent review</div>
+  <div class="eyebrow">10 · Independent review</div>
   <h2>What Codex and Gemini said about these conclusions</h2>
   <div class="prose" id="reviewBox"><p><span class="pill pending">in progress</span> Codex (GPT-6.1 Sol) and Gemini
   3.8 Flash (agy) are reviewing the paper, scores, ledger and harness independently.</p></div>
 </section>
 
 <section id="limits">
-  <div class="eyebrow">10 · Limits</div>
+  <div class="eyebrow">11 · Limits</div>
   <h2>What this round cannot show</h2>
   <div class="prose"><ul>
     <li><b>Scribe was not measured</b> (no bench key; the production key was not used without approval), so the
@@ -589,6 +623,17 @@ transcript + measurements ──► ONE analysis pass ──► facts for the CR
     const f = (v) => (v >= 0 ? "+" : "−") + Math.abs(100 * v).toFixed(1); const cls = r.hi < 0 ? "bad" : r.lo > 0 ? "good" : "";
     return `<tr><td>${RCL[r.arm]}</td><td class="n">${pct(r.arm_cov, 1)}</td><td class="n">${pct(r.today_cov, 1)}</td><td class="n ${cls}">${f(r.diff)} <span style="opacity:.7">[${f(r.lo)}, ${f(r.hi)}]</span></td></tr>`;
   }).join("");
+  // ---- round 8: full production formats
+  { const R8 = D.round8 || [];
+    const f = (v) => (v >= 0 ? "+" : "−") + Math.abs(100 * v).toFixed(1);
+    const cell = (x, upBad) => { if (!x) return `<td class="n">—</td>`; let c = "";
+      if (x.diff != null) { const good = upBad ? x.hi < 0 : x.lo > 0, bad = upBad ? x.lo > 0 : x.hi < 0; c = good ? "good" : bad ? "bad" : ""; }
+      return `<td class="n ${c}">${pct(x.value, 1)}${x.diff != null ? `<br><span class="dim">${f(x.diff)} [${f(x.lo)}, ${f(x.hi)}]</span>` : ""}</td>`; };
+    const coach = (r) => { const base = cell(r.metrics.coaching); const v = r.metrics.coaching_valid; if (!v) return base;
+      return base.replace("</td>", `<br><span class="dim">reports present (${v.calls} calls): ${pct(v.value, 1)} vs ${pct(v.today, 1)}</span></td>`); };
+    const money = (c) => c ? `${inr(c["4.5"], 2)} / ${inr(c["13.8"], 2)} / ${inr(c["60.0"], 2)}` : "—";
+    document.getElementById("r8Table").innerHTML = R8.length ? R8.map(r => `<tr${r.arm.startsWith("Today") ? ' class="ref"' : ""}><td>${r.arm}</td>${cell(r.metrics.recall)}${cell(r.metrics.critical)}${cell(r.metrics.unsupported, true)}${coach(r)}<td class="n">${pct(r.contracts.c5)} / ${pct(r.contracts.pointer_review)}</td><td class="n">${money(r.cost)}</td><td class="n">${r.latency && r.latency.median_s ? Math.round(r.latency.median_s) + " s" : "—"}</td></tr>`).join("") : `<tr><td colspan="8"><span class="pill pending">running</span> full-format runs and judging</td></tr>`;
+  }
   // ---- consistency
   (D.consistency || []).forEach(c => {
     if (c.arm.includes("onepass2/google_gemini-3.8-flash")) document.getElementById("consG").textContent = pct(c.pointer_agreement);

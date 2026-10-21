@@ -19,6 +19,12 @@ scoring.
     measured from the audio, not heard by a model. Premium models (Sonnet 5.5, GPT-6.1 Sol) were not better.
   - Before production: approval of the data flows (AC-GOV-AUD-001), a staging shadow week, AC-SVAL before any Brain
     4.0 score is official. Scribe was never measured (no bench key).
+- **The ₹0.10 configuration (round 8, `paper/11-full-formats.md`):** Flash-Lite on Gemini Flex + GPT-6 Luna on
+  OpenAI Flex answering the one-pass build's own two requests in the product's full formats (C4, C5 coaching-v5,
+  pointer review, call data): ₹0.108/min at 13.8 min, ₹0.083 at 60, ₹0.18 at 4.5 (fictional calls). All C5
+  reports and pointer reviews valid with the report-depth prompt. Facts above today's; coaching within noise (−2.5).
+  A Gemini report on Luna's facts: +4.2 coaching, ₹0.155 on Flex. Real calls ≈ ₹0.15 until the transcript output
+  is compact. Judged on the Claude subscription (`claude-sub/haiku`); that judge varies ±8 points on facts.
 - **Reviews:** Codex (GPT-6.1 Sol) *disagree*, Gemini 3.8 Flash (agy) *agree with changes* on v1.0; see
   `paper/09-review.md`. The real-call rounds (section 10) came after the reviews.
 
@@ -26,7 +32,7 @@ scoring.
 
 | Path | What |
 |---|---|
-| `paper/0*.md`, `paper/10-real-calls.md` | sections: cost anatomy, market, benchmark design, pipeline shapes, method, results, recommendation, next steps, cross-review, real calls and Brain 4.0 |
+| `paper/0*.md`, `paper/10-real-calls.md`, `paper/11-full-formats.md` | sections: cost anatomy, market, benchmark design, pipeline shapes, method, results, recommendation, next steps, cross-review, real calls and Brain 4.0 |
 | `brain4/` | full-text digests of the coaching lead's "Accuracy Brain 4.0" rubric (dimensions 1–10 and 11–18); the compact prompt is `harness/brain4_rubric.txt` |
 | `results/realcalls/` | real-call scores (ids rc-01…07 only), the paired bootstrap and durations; audio, transcripts, notes and names stay on ac |
 | `paper/costmodel.py`, `paper/scenarios.json` | the cost model (fixed per call + per minute) and its scenarios |
