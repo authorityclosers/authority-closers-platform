@@ -86,13 +86,16 @@ def remember_forms(config: Mapping[str, Any], forms: list[dict[str, str]]) -> di
 async def file_lead(
     desk: LeadDesk, source: LeadSource, lead: Mapping[str, Any], *, page_name: str
 ) -> str:
-    """One Meta lead into the CRM, like the webhook and the pull; returns the outcome."""
+    """One Meta lead into the CRM, like the webhook and the pull; returns the outcome.
+    A lead Meta's testing tools made is test data, so it stays out of partner sends,
+    SLA reports and lead stages sent back to the ad platforms like any test lead."""
     _, outcome = await desk.ingest(
         meta.lead_record(lead, page_name=page_name),
         source="meta",
         source_label=source.label,
         source_ref=str(lead.get("id") or "")[:200] or None,
         actor=None,
+        test_data=meta.is_test_lead(lead),
     )
     if outcome in {"created", "repeat"}:
         source.received = int(source.received or 0) + 1

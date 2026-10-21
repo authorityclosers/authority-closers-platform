@@ -136,7 +136,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "default_country": "91",
 }
 IST = ZoneInfo("Asia/Kolkata")
-# Meta's Lead Ads Testing Tool fills every answer with "<test lead: dummy data for …>".
+# Meta's Lead Ads Testing Tool fills the answers with "<test lead: dummy data for …>".
+# Since 21 Oct 2026 capture files such leads as test data (connectors.meta.is_test_lead);
+# leads captured before that came in with test_data false, and the Test data filter
+# still finds them by this name.
 META_TEST_LEAD = "<test lead:%"
 
 
