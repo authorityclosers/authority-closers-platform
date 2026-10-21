@@ -197,6 +197,16 @@ function answers(now: number, path: string): unknown {
       waiting_first_call: 1,
       first_call_minutes: 6,
     };
+  if (path === "/v1/lead-desk/journey/templates") return [];
+  if (path === "/v1/lead-desk/journey/suggestions") return [];
+  if (path === "/v1/lead-desk/journey/ads")
+    return {
+      version: 1,
+      providers: [],
+      recent: [],
+      settling: 0,
+      sendsAt: null,
+    };
   if (path === "/v1/lead-desk/sources")
     return { sources: [], meta: "not_configured" };
   return null;

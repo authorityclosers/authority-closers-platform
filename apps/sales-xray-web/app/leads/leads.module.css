@@ -4687,3 +4687,48 @@ a.repName {
     transform: none;
   }
 }
+
+/* How lead stages work: three plain steps, folded to one line once read. */
+.explainer {
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.explainer > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--sx-ink);
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+
+.explainer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.explainer > summary > svg {
+  color: var(--lx-teal);
+}
+
+.explainer > summary:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.explainerSteps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0 16px 14px 34px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.explainerSteps strong {
+  color: var(--sx-ink);
+}

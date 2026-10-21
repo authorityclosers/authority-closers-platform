@@ -117,12 +117,13 @@ const onHashChange = (change: () => void) => {
   return () => window.removeEventListener("hashchange", listener);
 };
 
-/** The address of a view: the desk, a stage, or a settings page. */
+/** The address of a view on this page: the desk, a stage, or a settings page. */
 function viewHref(view: string): string {
-  if (view === "desk") return LEADS_PATH;
+  const path = window.location.pathname || LEADS_PATH;
+  if (view === "desk") return path;
   if (view === "team" || view === "sources" || view === "stages")
-    return `${LEADS_PATH}?tab=${view}`;
-  return `${LEADS_PATH}?tab=all&stage=${encodeURIComponent(view)}`;
+    return `${path}?tab=${view}`;
+  return `${path}?tab=all&stage=${encodeURIComponent(view)}`;
 }
 
 export { LeadsSkeleton };
@@ -474,7 +475,7 @@ export function LeadsRoute() {
     if (pushedSettings.current) {
       pushedSettings.current = false;
       window.history.back();
-    } else window.history.replaceState(null, "", LEADS_PATH);
+    } else window.history.replaceState(null, "", viewHref("desk"));
   };
   const tabs = [
     { key: "desk", label: "To call", count: toCall },
@@ -790,7 +791,7 @@ export function LeadsRoute() {
           />
         ) : null}
         <CallingLoop
-          key={rounds.calling}
+          key={`calling-${rounds.calling}`}
           open={calling}
           me={desk.me}
           onClose={() => {
@@ -830,7 +831,7 @@ export function LeadsRoute() {
           />
         ) : null}
         <AddLeadDialog
-          key={rounds.adding}
+          key={`adding-${rounds.adding}`}
           open={adding}
           canManage={can}
           onClose={() => setAdding(false)}
@@ -877,7 +878,7 @@ export function LeadsRoute() {
           onDone={refresh}
         />
         <ImportDialog
-          key={rounds.importing}
+          key={`importing-${rounds.importing}`}
           open={importing}
           canManage={can}
           onClose={() => setImporting(false)}
