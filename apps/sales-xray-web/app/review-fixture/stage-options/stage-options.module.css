@@ -1,0 +1,104 @@
+/* Lead stage options (a proposal fixture, 22 Oct 2026). Tokens only. */
+
+.page {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.option {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.option header {
+  display: grid;
+  gap: 4px;
+}
+
+.option h2 {
+  margin: 0;
+  font: var(--sx-text-panel);
+}
+
+.option p {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.pick {
+  justify-self: start;
+  padding: 2px 10px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-teal-soft);
+  color: var(--lx-strength-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.path {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.path li {
+  padding: 4px 10px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.path li[data-kind="new"] {
+  background: var(--lx-teal-soft);
+}
+
+.path li[data-kind="follow_up"] {
+  background: var(--lx-focus-soft);
+}
+
+.path li[data-kind="interested"] {
+  background: var(--lx-missed-soft);
+}
+
+.path li[data-kind="won"] {
+  background: var(--lx-strength-soft);
+  color: var(--lx-strength-ink);
+}
+
+.path li[data-kind="lost"],
+.path li[data-kind="not_connected"] {
+  background: var(--sx-fill-strong);
+  color: var(--sx-ink-2);
+}
+
+.outcomes {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 18px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}

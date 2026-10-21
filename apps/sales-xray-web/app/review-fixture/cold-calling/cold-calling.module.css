@@ -1,0 +1,218 @@
+/* Cold-calling mode (a proposal mock, 22 Oct 2026). Tokens only. */
+
+.page {
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 16px 96px;
+}
+
+.queue {
+  display: grid;
+  gap: 2px;
+}
+
+.queue strong {
+  font: var(--sx-text-headline);
+}
+
+.queue span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.lead,
+.script,
+.objections {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.leadTop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lx-teal-soft);
+  color: var(--lx-strength-ink);
+  font-weight: 700;
+}
+
+.leadWords {
+  display: grid;
+  gap: 2px;
+}
+
+.leadWords strong {
+  font: var(--sx-text-panel);
+}
+
+.leadWords small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips span {
+  padding: 3px 10px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.script h2,
+.objections h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.script p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  line-height: 1.5;
+}
+
+.objection {
+  display: grid;
+  gap: 6px;
+}
+
+.objection button {
+  justify-self: start;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.objection button[aria-expanded="true"] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+}
+
+.objection p {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.callBar {
+  position: fixed;
+  z-index: 29;
+  right: 16px;
+  bottom: calc(var(--lx-bottom-nav-h) + 8px + env(safe-area-inset-bottom, 0px));
+  left: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+@media (min-width: 900px) {
+  .callBar {
+    position: static;
+  }
+}
+
+.call {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  box-shadow: var(--sx-shadow-float);
+  cursor: pointer;
+}
+
+.outcomes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outcomes button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.outcomes button > span {
+  color: var(--lx-teal);
+}
+
+.outcomes button[data-tone="good"] {
+  border-color: var(--lx-strength-edge);
+  background: var(--lx-strength-soft);
+}
+
+.outcomes button[data-tone="bad"] > span {
+  color: var(--sx-bad);
+}
+
+.outcomes small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.example {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-focus-soft);
+  color: var(--lx-focus-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
