@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -60,6 +60,10 @@ from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 FIXTURE_SHA256 = "78cb1194e987db6b8d06d0aa2a4d2e66d21bbdf0c3de6960e4e26da36ed207af"
 # Worst-case plan reservation the canary may accept (CEO decision, AUT-605).
 MAX_QUOTE_PAISE = 45_000
+# The route a plan uses when no provider configuration is active.
+DEFAULT_TRANSCRIPTION_ROUTE = "elevenlabs/scribe_v2"
+# How long the canary waits for one pass to read and publish its own call (one_pass mode).
+ONE_PASS_WAIT_SECONDS = 300
 
 
 def check_report_coaching(content: dict[str, Any]) -> bool:
@@ -78,6 +82,91 @@ def check_report_coaching(content: dict[str, Any]) -> bool:
     if bool(improvements) != mission:
         raise ValueError("canary_coaching_mission_unavailable")
     return mission
+
+
+async def transcription_route(db: AsyncSession, recording_id: UUID) -> str | None:
+    """Which provider and model transcribed this call (the C2 job's provider receipt)."""
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT j.provider_receipt ->> 'provider' AS provider,
+                       j.provider_receipt ->> 'model' AS model
+                FROM conversation_inference_tasks t JOIN jobs j ON j.id = t.job_id
+                WHERE t.recording_id = :recording AND t.stage = 'C2' AND t.state = 'completed'
+                ORDER BY t.created_at DESC LIMIT 1
+                """
+            ),
+            {"recording": recording_id},
+        )
+    ).first()
+    if row is None or not row.provider or not row.model:
+        return None
+    return f"{row.provider}/{row.model}"
+
+
+async def check_one_pass(
+    sessions: async_sessionmaker[AsyncSession],
+    environment: str,
+    recording_id: UUID,
+    result: dict[str, Any],
+) -> None:
+    """In ``one_pass`` mode (development, staging): one pass reads the canary's own call and
+    publishes its pointer review; any contract or publishing miss fails the canary."""
+    from ac_platform.one_pass import settings as pipeline
+    from ac_platform.one_pass.publish import AUTOMATIC
+
+    async with sessions() as db:
+        config, _ = await db.run_sync(lambda sync: pipeline.read(sync.connection(), environment))
+    result["analysis_pipeline"] = config["mode"]
+    if config["mode"] != "one_pass":
+        return
+    waited = 0.0
+    while True:
+        async with sessions() as db:
+            run = (
+                await db.execute(
+                    text(
+                        """
+                        SELECT state, reason_code, checks FROM one_pass_runs
+                        WHERE recording_id = :recording AND source = 'call'
+                          AND state <> 'running'
+                        ORDER BY created_at DESC LIMIT 1
+                        """
+                    ),
+                    {"recording": recording_id},
+                )
+            ).first()
+            published = await db.scalar(
+                text(
+                    "SELECT count(*) FROM conversation_pointer_reviews"
+                    " WHERE recording_id = :recording AND created_by = :by"
+                ),
+                {"recording": recording_id, "by": AUTOMATIC},
+            )
+        if run is not None:
+            checks = run.checks if isinstance(run.checks, dict) else {}
+            result["one_pass"] = {
+                "state": run.state,
+                "contracts_ok": sum(1 for value in checks.values() if value == "ok"),
+                "review_published": bool(published),
+            }
+            if run.state != "succeeded":
+                result["failure_code"] = f"one_pass_{run.state}"
+                return
+            for key in ("call_objects", "pointer_review"):
+                if checks.get(key) != "ok":
+                    result["failure_code"] = f"one_pass_{key}_invalid"
+                    return
+            if published:
+                return
+        if waited >= ONE_PASS_WAIT_SECONDS:
+            result["failure_code"] = (
+                "one_pass_not_read" if run is None else "one_pass_review_unpublished"
+            )
+            return
+        await asyncio.sleep(5)
+        waited += 5
 
 
 def ownership(db: AsyncSession, settings: Settings) -> GuestOwnership:
@@ -175,6 +264,14 @@ async def poll(
                     result["failure_code"] = "coaching_contract_invalid"
                     return
                 result["coaching_contract_valid"] = True
+                # The call was transcribed by the route active when it was quoted (Scribe,
+                # or Gemini 3.1 Flash-Lite once the owner switched it).
+                used = await transcription_route(db, UUID(progress["recording_id"]))
+                result["transcription_route"] = used
+                expected = result.get("active_transcription_route")
+                if expected is not None and used != expected:
+                    result["failure_code"] = "c2_route_mismatch"
+                    return
                 result.update(ok=True, stage_reached="C6")
                 return
             if (
@@ -193,6 +290,10 @@ async def poll(
                     reports.application, runtime.authority, runtime.storage
                 )
                 recording_id = UUID(progress["recording_id"])
+                active = await runtime.authority.selected_asr_route(reports.application)
+                result["active_transcription_route"] = (
+                    DEFAULT_TRANSCRIPTION_ROUTE if active is None else "/".join(active)
+                )
                 quote = await plans.quote(actor, recording_id, key=f"canary-quote:{submission_id}")
                 result["cost_paise"] = quote["max_cost_paise"]
                 if result["cost_paise"] > MAX_QUOTE_PAISE:
@@ -211,6 +312,19 @@ async def poll(
                 )
                 accepted = True
         await asyncio.sleep(1)
+
+
+async def _recording_of(
+    sessions: async_sessionmaker[AsyncSession],
+    settings: Settings,
+    submission_id: UUID,
+    token: str,
+) -> UUID:
+    async with sessions() as db, db.begin():
+        progress = await AcquisitionReports(ownership(db, settings)).progress(
+            submission_id, token=token
+        )
+    return UUID(progress["recording_id"])
 
 
 def retention_allowed(environment: str, retention_days: int, retention_ref: str) -> bool:
@@ -245,6 +359,10 @@ async def canary(args: argparse.Namespace) -> dict[str, Any]:
         coaching_contract_valid=False,
         coaching_mission_present=False,
         retention_ref=None,
+        active_transcription_route=None,
+        transcription_route=None,
+        analysis_pipeline=None,
+        one_pass=None,
     )
     try:
         bundle = load_pinned_approval(settings)
@@ -305,6 +423,11 @@ async def canary(args: argparse.Namespace) -> dict[str, Any]:
                                 ownership(db, settings), runtime, upload, path, environment
                             )
                 await poll(sessions, settings, runtime, submission_id, token, result)
+                if result["ok"]:
+                    recording = await _recording_of(sessions, settings, submission_id, token)
+                    await check_one_pass(sessions, environment, recording, result)
+                    if result["failure_code"] is not None:
+                        result["ok"] = False
         finally:
             await engine.dispose()
     except TimeoutError:

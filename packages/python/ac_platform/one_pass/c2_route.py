@@ -8,7 +8,7 @@ approval bundle, so:
 - ``derive_configuration``: today's provider configuration with one change: the asr route
   goes to ``gemini / gemini-3.1-flash-lite`` (a provider entry with Gemini's own credential,
   terms, privacy and permission references, the Flash-Lite pricing reference and a
-  ₹24 per-request ceiling); C4, C5 and everything else stay as they are;
+  ₹40 per-request ceiling); C4, C5 and everything else stay as they are;
 - ``seal``: the bundle with every classic route kept and, in each acquisition policy, one
   more finite profile (``gemini-flash-lite-c2``) for that configuration: C2 on Flash-Lite,
   C4 and C5 copied from the classic templates with the new digest.
@@ -40,9 +40,9 @@ PROFILE_ID: Final = "gemini-flash-lite-c2"
 PROVIDER: Final = "gemini"
 MODEL: Final = gemini_audio.MODEL
 ENDPOINT: Final = gemini_audio.URL.format(model=MODEL)
-# One request is at most two hours of audio and 60,000 output tokens: USD 0.2052, ₹20.52
-# (docs/ops/pricing-evidence/gemini-3.1-flash-lite-audio-20261020.md).
-MAX_COST_PAISE: Final = 2_400
+# Two hours of audio at the measured planning rate, its parts heard 30 seconds into each
+# other: about USD 0.38 (docs/ops/pricing-evidence/gemini-3.1-flash-lite-audio-20261021.md).
+MAX_COST_PAISE: Final = 4_000
 MAX_SOURCE_DURATION_MS: Final = 7_200_000
 
 

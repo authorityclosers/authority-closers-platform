@@ -61,6 +61,7 @@ def test_refusal_is_generic(monkeypatch, capsys, args) -> None:
         ("no_authority", 2, None, None),
         ("bad_config", 2, None, None),
         ("cleanup", 1, "C6", "canary_failed"),
+        ("route_mismatch", 1, "C5", "c2_route_mismatch"),
     ],
 )
 def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, stage, failure):
@@ -79,9 +80,15 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         sessions=SimpleNamespace(tenant_id=identifier),
         resolve_processing_actor=AsyncMock(return_value=object()),
     )
+    # The route active at the quote; the C2 receipt says what actually transcribed it.
+    active = ("gemini", "gemini-3.1-flash-lite") if scenario == "route_mismatch" else None
+    authority = SimpleNamespace(selected_asr_route=AsyncMock(return_value=active))
+    receipt = SimpleNamespace(provider="elevenlabs", model="scribe_v2")
+    db.execute = AsyncMock(return_value=SimpleNamespace(first=lambda: receipt))
+    db.run_sync = AsyncMock(return_value=({"mode": "classic"}, None))
     runtime = SimpleNamespace(
         policy=SimpleNamespace(retention_days=7, retention_ref="ref:retention:standard"),
-        authority=None if scenario == "no_authority" else object(),
+        authority=None if scenario == "no_authority" else authority,
         storage=SimpleNamespace(root=tmp_path),
         scratch=SimpleNamespace(root=tmp_path),
     )
@@ -181,14 +188,27 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         "coaching_contract_valid",
         "coaching_mission_present",
         "retention_ref",
+        "active_transcription_route",
+        "transcription_route",
+        "analysis_pipeline",
+        "one_pass",
     }
     assert result["retention_ref"] == "ref:retention:standard"
     assert result["ok"] == (scenario == "success")
     assert (result["stage_reached"], result["failure_code"]) == (stage, failure)
     assert result["report_present"] == (
-        scenario in {"success", "invalid_report", "missing_coaching", "cleanup"}
+        scenario in {"success", "invalid_report", "missing_coaching", "cleanup", "route_mismatch"}
     )
-    assert result["coaching_contract_valid"] == (scenario in {"success", "cleanup"})
+    assert result["coaching_contract_valid"] == (
+        scenario in {"success", "cleanup", "route_mismatch"}
+    )
+    if scenario == "success":
+        assert result["active_transcription_route"] == "elevenlabs/scribe_v2"
+        assert result["transcription_route"] == "elevenlabs/scribe_v2"
+        assert result["analysis_pipeline"] == "classic" and result["one_pass"] is None
+    if scenario == "route_mismatch":
+        assert result["active_transcription_route"] == "gemini/gemini-3.1-flash-lite"
+        assert result["transcription_route"] == "elevenlabs/scribe_v2"
     assert result["cost_paise"] == quote["max_cost_paise"]
     assert result["total_seconds"] >= 0
     assert all(seconds >= 0 for seconds in result["seconds_per_stage"].values())
@@ -294,3 +314,50 @@ def test_retention_by_environment(monkeypatch, capsys, environment, days, ref, a
         "canary_refused_retention",
     )
     assert result["retention_ref"] == ref
+
+
+@pytest.mark.parametrize(
+    ("mode", "run", "published", "failure", "summary"),
+    [
+        ("classic", None, 0, None, None),
+        (
+            "one_pass",
+            ("succeeded", {"call_objects": "ok", "pointer_review": "ok", "deep_run": "saved"}),
+            1,
+            None,
+            {"state": "succeeded", "contracts_ok": 2, "review_published": True},
+        ),
+        ("one_pass", ("failed", {}), 0, "one_pass_failed", None),
+        ("one_pass", ("succeeded", {"call_objects": "none_valid"}), 0, None, None),
+        ("one_pass", None, 0, "one_pass_not_read", None),
+        ("one_pass", ("succeeded", {"call_objects": "ok", "pointer_review": "ok"}), 0, None, None),
+    ],
+)
+def test_one_pass_mode_makes_the_canary_wait_for_its_own_read(
+    monkeypatch, mode, run, published, failure, summary
+) -> None:
+    """In one_pass mode one pass must read the canary's call and publish its review."""
+    monkeypatch.setattr(cli, "ONE_PASS_WAIT_SECONDS", 0)
+    row = None if run is None else SimpleNamespace(state=run[0], reason_code=None, checks=run[1])
+    db = SimpleNamespace(
+        run_sync=AsyncMock(return_value=({"mode": mode}, 1)),
+        execute=AsyncMock(return_value=SimpleNamespace(first=lambda: row)),
+        scalar=AsyncMock(return_value=published),
+    )
+
+    @asynccontextmanager
+    async def sessions():
+        yield db
+
+    result: dict = {"failure_code": None}
+    asyncio.run(cli.check_one_pass(sessions, "staging", uuid4(), result))
+    assert result["analysis_pipeline"] == mode
+    if run is not None and run[1].get("call_objects") == "none_valid":
+        assert result["failure_code"] == "one_pass_call_objects_invalid"
+        return
+    if run is not None and run[0] == "succeeded" and not published:
+        assert result["failure_code"] == "one_pass_review_unpublished"
+        return
+    assert result["failure_code"] == failure
+    if summary is not None:
+        assert result["one_pass"] == summary
