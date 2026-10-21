@@ -131,7 +131,8 @@ def score(
         tuple[str, str, str, bool | None]
     ] = []  # call, dimension, label, agreed (None: not rated)
     for call, dimensions in labels.items():
-        for read in reads.get(call, []):
+        # A call with no read (a failed request) counts as not rated, never as missing.
+        for read in reads.get(call) or [{}]:
             for dimension, label in dimensions.items():
                 polarity, value = read.get(dimension, (None, None))
                 agreed = (
@@ -156,8 +157,21 @@ def score(
             "by_call_ci": bootstrap(clusters, lambda s: sum(s) / len(s) if s else None),
         }
 
+    # Repeatability where a call was read more than once: the same rating in every read,
+    # on every labelled dimension that each read rated.
+    same: list[bool] = []
+    for call, dimensions in labels.items():
+        call_reads = reads.get(call, [])
+        if len(call_reads) < 2:
+            continue
+        for dimension in dimensions:
+            values = [read.get(dimension, (None, None))[1] for read in call_reads]
+            if all(value is not None for value in values):
+                same.append(len(set(values)) == 1)
     return {
         "scorer": name,
+        "repeat_same": round(sum(same) / len(same), 3) if same else None,
+        "repeat_pairs": len(same),
         "reads_per_call": round(mean(len(v) for v in reads.values()), 2) if reads else 0,
         "overall": rate(items),
         "by_label": {

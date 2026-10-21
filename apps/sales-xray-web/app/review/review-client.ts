@@ -64,6 +64,53 @@ export const SKIP_WORDS: Record<SkipReason, string> = {
   come_back: "Come back later",
 };
 
+/**
+ * Blind Brain 4.0 mode (orchestrator, 21 Oct): the reviewer rates the 18 dimensions
+ * 1-5 before Brain 4.0's ratings are shown; "-" says why there is no rating.
+ */
+export type Mode = "lines" | "brain4_blind";
+export type DimensionSkip = "not_applicable" | "not_sure" | "audio_unclear";
+export const DIMENSION_SKIP_WORDS: Record<DimensionSkip, string> = {
+  not_applicable: "Didn't come up",
+  not_sure: "Can't tell",
+  audio_unclear: "Audio unclear",
+};
+export type MomentKind = "criticism" | "praise";
+export type Caught = "yes" | "partly" | "no";
+export type MomentValue = {
+  at_ms: number;
+  kind: MomentKind;
+  dimension?: string | null;
+  caught?: Caught | null;
+  removed?: boolean;
+};
+export type Dimension = {
+  id: string;
+  number: number;
+  label: string;
+  category: string;
+  category_label: string;
+  about: string;
+  scale: string | null;
+};
+export type Brain4Dimension = {
+  id: string;
+  rating: number | null;
+  applicability?: string;
+  confidence?: string;
+  observed?: string | null;
+  coaching?: string | null;
+  evidence?: Evidence[];
+  ethics_gate?: string | null;
+};
+export type Brain4Reveal = {
+  status: "read" | "not_read_yet";
+  label?: string;
+  version?: string;
+  call_type?: string;
+  dimensions: Brain4Dimension[];
+};
+
 export type Badge = {
   reviewer: boolean;
   metrics: boolean;
@@ -77,6 +124,7 @@ export type QueueItem = {
   assigned_at: string;
   recorded_at: string;
   expires_at: string;
+  mode?: Mode | null;
   handled: number;
   total: number;
   state: "new" | "in_progress" | "done";
@@ -107,13 +155,17 @@ export type Pointer = {
 };
 export type Line = { target: string; label: string; ai: unknown };
 export type SavedValue = {
-  verdict: Verdict | null;
-  score: number | null;
-  opinion: string;
+  verdict?: Verdict | null;
+  score?: number | null;
+  opinion?: string;
   status?: AiStatus;
   reasons?: Reason[];
   skip?: SkipReason;
   seconds?: number;
+  // Blind Brain 4.0 mode.
+  rating?: number;
+  moment?: MomentValue;
+  blind?: boolean;
 };
 export type SavedRow = {
   id: string;
@@ -132,6 +184,10 @@ export type Segment = {
 export type Workspace = {
   review_id: string;
   review_status: string;
+  mode?: Mode;
+  dimensions?: Dimension[];
+  revealed?: boolean;
+  brain4?: Brain4Reveal | null;
   lines: Line[];
   saved: SavedRow[];
   audio_source_url: string;
@@ -277,6 +333,8 @@ export type LineSave = {
   reasons?: Reason[];
   skip?: SkipReason | null;
   seconds?: number;
+  rating?: number | null;
+  moment?: MomentValue | null;
 };
 
 export function saveLine(

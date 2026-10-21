@@ -277,9 +277,10 @@ def publish(
     published = analysis.map_publish(answer, transcript, withheld=frozenset(withheld))
     review = published.outputs.get("pointer_review")
     if review is not None:
-        # One pass reads 4-5 points kinder than today's review: calibrated, and shown as
-        # a beta (one_pass.calibration; owner, 21 Oct 2026).
-        review = calibration.calibrate(review)
+        # One pass reads 4-5 points kinder than today's review on Gemini (and harsher on
+        # Luna): calibrated by the model that answered, and shown as a beta
+        # (one_pass.calibration; owner, 21 Oct 2026).
+        review = calibration.calibrate(review, model=read.model)
     if _reviewed(connection, report):
         line["review"] = "already_saved"
     elif review is None:

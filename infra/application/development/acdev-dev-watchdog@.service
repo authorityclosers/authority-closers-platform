@@ -1,0 +1,8 @@
+[Unit]
+Description=Restart %i when its pages fail for two minutes (acdev user unit)
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/acdev-dev-watchdog/%i.env
+ExecStart=%h/.local/bin/acdev-dev-watchdog %i.service ${PROBE_URL} ${PROBE_HOST}
+Nice=10

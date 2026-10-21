@@ -128,13 +128,20 @@ Scored offline (`gold_v1.py`, aggregates in `checkpoint-gold-v1.json`) against e
 same calls, all on the same Gemini 3.1 Flash-Lite transcripts. Brain 4.0 rating 4-5 reads as praise and 1-3 as
 criticism; pointer scores 70+ read as praise; a mixed label agrees with a middle reading.
 
-| Pipeline                                          | Agrees with the coach (95% CI) | Praise kept | Criticism caught | Mixed | Rated |
-| ------------------------------------------------- | ------------------------------ | ----------- | ---------------- | ----- | ----- |
-| Today's pointer review (Gemini 3.8 Flash)         | 64% (49–77%)                   | 19/26       | 2/9              | 6/7   | 42/43 |
-| One pass (research build, Gemini 3.8 Flash)       | 72% (57–83%)                   | 22/27       | 2/9              | 7/7   | 43/43 |
-| Brain 4.0, research prompt (Gemini 3.8 Flash)     | 60% (44–73%)                   | 16/26       | 2/9              | 7/7   | 42/43 |
-| Brain 4.0, research prompt (GPT-6 Luna)           | 40% (26–56%)                   | 3/23        | 6/7              | 5/5   | 35/43 |
-| Brain 4.0 + coach-notes prompt (Gemini 3.8 Flash) | 59% (43–72%)                   | 16/26       | 1/8              | 7/7   | 41/43 |
+| Pipeline                                                 | Agrees with the coach (95% CI) | Praise kept | Criticism caught | Mixed | Rated | Same on re-read |
+| -------------------------------------------------------- | ------------------------------ | ----------- | ---------------- | ----- | ----- | --------------- |
+| Today's pointer review (Gemini 3.8 Flash)                | 64% (49–77%)                   | 19/26       | 2/9              | 6/7   | 42/43 |                 |
+| One pass (research build, Gemini 3.8 Flash)              | 72% (57–83%)                   | 22/27       | 2/9              | 7/7   | 43/43 |                 |
+| **Brain 4.0, product prompt (Gemini 3.8 Flash Flex)**    | 55% (38–70%)                   | 11/19       | 1/8              | 6/6   | 33/43 |                 |
+| **Brain 4.0, product prompt (GPT-6 Luna Flex), 2 reads** | 39% (28–50%)                   | 7/46        | 10/14            | 10/10 | 70/86 | 69%             |
+| Brain 4.0, research prompt (Gemini 3.8 Flash)            | 60% (44–73%)                   | 16/26       | 2/9              | 7/7   | 42/43 |                 |
+| Brain 4.0, research prompt (GPT-6 Luna)                  | 40% (26–56%)                   | 3/23        | 6/7              | 5/5   | 35/43 |                 |
+
+The product prompt is exactly what the shadow read sends (`brain4_shadow.system_prompt`, `brain4.response_schema`,
+answers checked by `brain4.parse`), run 21 Oct 2026 on the dev app keys under the owner's ₹300 Brain 4.0 budget:
+Luna Flex 2 reads of all 7 calls (₹0.09–0.18 a read, store:false), Gemini 3.8 Flash Flex 1 read of 6 calls (₹0.44–0.96 a
+read; the 7th call got "busy" twice on Flex and was not sent on the standard tier), **₹6.71 in all**. All 21 answers
+passed the contract.
 
 **What it says:**
 
@@ -143,8 +150,25 @@ criticism; pointer scores 70+ read as praise; a mixed label agrees with a middle
   criticisms (6 of 7) but agrees with his praise only 3 times in 23: it rates low across the board. Each model
   leans its own way, so a per-model display calibration (`brain4.Calibration`) is the lever once labels allow.
 - Per dimension there are 1–6 labelled calls: no dimension can be graded, let alone made official.
-- Not yet in the table: the product's own Brain 4.0 prompt (as the shadow read sends it; same rubric digest),
-  pending the approved key route for these real calls.
+- The product prompt behaves like the research prompt on the same model: Gemini keeps the coach's praise and misses
+  his criticisms; Luna catches his criticisms and misses his praise, and repeats its own rating on re-read 69% of the
+  time. Neither is closer to the coach than today's pointer review on these 6 calls.
+
+**Can Gemini be made to catch the coach's criticisms?** (orchestrator, 21 Oct; same approved routes, ₹1.93 more,
+₹8.64 of ₹10 in all)
+
+| Variant                                                                            | Calls | Agrees with the coach (95% CI) | Praise kept | Criticism caught |
+| ---------------------------------------------------------------------------------- | ----- | ------------------------------ | ----------- | ---------------- |
+| Ensemble, mean of Gemini and Luna ratings (rule fixed before scoring; no new read) | 7     | 49% (33–64%)                   | 11/23       | 1/8              |
+| Ensemble, Gemini capped at 3 where Luna's mean is 2.5 or lower (no new read)       | 6     | 55% (38–70%)                   | 11/19       | 1/8              |
+| Gemini, product prompt (same 2 calls)                                              | 2     | 67% (39–86%)                   | 5/6         | 1/4              |
+| Gemini, product prompt + a "find what went wrong" critic step                      | 2     | 55% (28–79%)                   | 4/6         | 0/3              |
+
+The critic step ran on the 3 calls with the most criticisms; Gemini's Flex tier was busy twice on one of them, so the
+paired comparison has 2 calls. Neither change helps: the coach's criticisms are mostly single moments inside a skill he
+otherwise praises, while the rubric rates the whole pattern ("one small miss can still be 4"). Whether Brain 4.0 catches
+his criticisms is better measured on its coaching words, moment by moment, than on its 1–5 rating, and the fair test
+needs his own blind ratings of the dimensions (section 6).
 
 Shown in Admin → Gold set → Brain 4.0 evaluation as checkpoint "gold-v1/2026-10-21". From here on, new judgements
 come from fresh `/review` assignments and pair with Brain 4.0 automatically.

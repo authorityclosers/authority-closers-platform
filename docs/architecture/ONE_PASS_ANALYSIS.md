@@ -75,7 +75,9 @@ after the transcript while it has not started. Switching to `classic` ends every
 
    Lean output: per-segment labels are not asked for; in the trial the prospect
    profile's facts come from the call data facts. The instructions come first and are
-   the same for every call, so Gemini's implicit cache can reuse that prefix.
+   the same for every call, so Gemini's implicit cache can reuse that prefix. Every
+   request asks for compact JSON, and the trial's pointer text and report have word
+   limits (see "Output trim" below).
 3. **Tiers.** Standard or Flex per stage (Admin). Flex is half price, best effort, may
    queue for minutes; after three busy answers a request falls back to standard once,
    and the run records `flex_fell_back`. Staging and production: standard only for now.
@@ -175,3 +177,60 @@ through Google AI Studio by OpenRouter. Classic is the research's run of today's
 - Gemini 3.1 Flash-Lite cut four long calls (22–46 min) short or broke their JSON once; each passed on a retry.
 - Spend: about $1.84 of the research's OpenRouter credit, logged in its ledger (`devlive:onepass:*`, judges
   `judge:*`).
+
+## Output trim (21 Oct 2026, `one-pass-analysis/3`)
+
+Output is most of the analysis cost: Gemini 3.8 Flash charges $3.75 per million output tokens and $0.75 per
+million input tokens. The trim was measured on 6 fictional calls (fx-04, 07, 11, 12, 13, 14; 69 audio minutes),
+reading each call's stored 21 Oct Flash-Lite transcript. Requests went to Google AI Studio through OpenRouter with
+strict schemas, priced at the standard list price with that call's own transcription cost added. Judges were the
+research's Haiku judges on the Claude subscription. Spend was $0.75 of the orchestrator's $1.20, logged in the
+research ledger as `devlive:onepass-trim:*`. Results: `results/onepass-trim/` in the research folder.
+
+**Where the tokens went** (the previous prompt, two strict requests):
+- The facts request wrote about 7.7k tokens a call and the report about 2.9k.
+- Gemini indents its JSON unless told otherwise. It did so on every facts answer (370–890 lines) and on 2 of the 6
+  reports. That indentation was about a third of the facts request's output tokens.
+- In the content itself, the 27 pointers take about two thirds of the review (what happened 15 words on average,
+  why it matters 10). JSON keys are 25–45% of each part's characters.
+
+**What changed:**
+- **Every one-pass request** (the trial, publishing and the plan's C4 request) asks for compact JSON on one line.
+  This changes no content.
+- **The trial's review** keeps the pointer review's own instructions, with lower limits:
+  - what happened in at most 12 words, and why it matters in at most 10;
+  - tips at most 10 words each, and none for an excellent pointer;
+  - reasons, objections, next steps and insights get word limits too.
+- **Call data and notes** are told the limits never apply to them. A first version without this lost 27% of the
+  notes text, and fact recall fell to 71%.
+- **Training topic:** the trial no longer asks for it. Each pointer's own label fills it, and the Report shows it
+  as the training name.
+- **The trial's report** keeps the coaching-v5 instructions whole and adds word limits after them. Coaching-v5 sets
+  no lower bound.
+- **Publishing and the plan's C4 request** keep the review's own text. The B3 calibration was fitted on that text.
+
+| 6 fictional calls | previous prompt | trimmed |
+|---|---|---|
+| output tokens a call (facts + report) | 10,578 (7,708 + 2,870) | 6,272 (4,589 + 1,683) |
+| ₹ per audio minute, all 6 (standard) | 0.566 | 0.428 |
+| a 13.8-minute call, fit over the 6 (standard / Flex) | ₹0.50 / ₹0.25 | ₹0.39 / ₹0.19 |
+| fx-13 alone (14.1 min, dense) | ₹0.541 | ₹0.438 |
+| contracts passed | 36 of 36 | 36 of 36 |
+| fact recall (Haiku judge) | 76.9% | 76.4% |
+| coaching truths covered (pooled) | 17.5 of 23 | 18 of 23 |
+| unsupported facts a call | 1.5 | 2.7 |
+| call objects; C4 observations | 165; 236 | 180; 250 |
+| pointer status the same as the other prompt's read | 75% (two reads of one prompt: about 80%) | |
+| C5 dimension status the same | 98% | |
+| mean overall score, trimmed minus previous | −0.2 points | |
+
+- **Where the saving came from:** about 70% of it is the indentation. The rest is shorter text, mostly in the
+  report, whose content fell by about a quarter.
+- **The target is met on the fit, not on every call.** The ₹0.39 comes from a straight line through 6 calls. The
+  one dense 14-minute call measured ₹0.44.
+- **Transcription is now the largest single cost,** about ₹0.13–0.16 a minute (40% of the total).
+- **Implicit caching is not counted.** Every bench request read 0 cached tokens. In steady traffic, the roughly
+  10k shared instruction tokens of the two requests could save about ₹0.05 a minute.
+- **Noise:** a single read of a call's coaching is noisy, because each call has only 2–6 coaching truths.
+- **Check judge files for errors before comparing.** One judge answer was unreadable JSON and scored a call 0 of 4
+  until it was re-judged.

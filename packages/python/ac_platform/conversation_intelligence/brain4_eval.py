@@ -18,6 +18,13 @@ band), judging pointers rather than Brain 4.0's dimensions. It can show Brain 4.
 reasonable beta and where it disagrees; it cannot make a dimension official. ``readiness``
 says what each dimension still needs.
 
+Since 21 Oct the blind mode of ``/review`` adds what section 8.1 asks for: the reviewer
+rates each of the 18 dimensions 1-5 (or "-") before Brain 4.0's ratings are shown, so a
+dimension is compared rating for rating (``blind``). After the reveal he marks which of his
+own correction moments Brain 4.0's coaching caught (``moments``), and two reviewers on the
+same calls give Gate 0's rater agreement (``between_raters``). D03 stays undecidable until
+Brain 4.0 is given audio measures.
+
 Pure functions, plus one read-only loader (``load``) for the Admin view; nothing is
 written. Counts, labels and scores only: never the reviewer's note or transcript text.
 """
@@ -36,6 +43,10 @@ from pathlib import Path
 from typing import Any, Final
 
 from ac_platform.conversation_intelligence import brain4
+from ac_platform.conversation_intelligence.gold_review_contracts import (
+    DIMENSION_PREFIX,
+    target_kind,
+)
 
 EVALUATION_VERSION: Final = "brain4-eval/1"
 ORDER: Final = ("needs_improvement", "average", "good", "excellent")
@@ -54,6 +65,13 @@ DROP_POINTS: Final = 0.10
 WINDOW: Final = 60
 BOOTSTRAP_RUNS: Final = 1000
 SEED: Final = 20261021
+# Gate 0 (AC-SVAL-01): two blind raters agree before a dimension's gold labels are trusted.
+GATE0_KAPPA: Final = 0.70
+RATINGS: Final = 5
+# Dimensions no gold set can decide yet, and why.
+UNDECIDABLE: Final = {
+    "D03": "Brain 4.0 reads the transcript only; tone, pace and pauses wait for audio measures.",
+}
 
 
 def band(score: int) -> str:
@@ -265,6 +283,194 @@ def agreement(items: Sequence[Pair]) -> dict[str, Any]:
     }
 
 
+# ---------- blind ratings (AC-SVAL-01 section 8.1) ----------
+
+
+@dataclass(frozen=True)
+class BlindRating:
+    """One current blind save of one dimension of one call: 1-5, or None for "-"."""
+
+    recording_id: str
+    review_id: str
+    reviewer_id: str
+    dimension: str
+    created_at: datetime
+    rating: int | None
+    skip: str | None
+
+
+@dataclass(frozen=True)
+class Moment:
+    """One correction (or praise) moment of the reviewer's, and whether Brain 4.0's
+    coaching caught it (marked after the reveal; None until then)."""
+
+    recording_id: str
+    reviewer_id: str
+    created_at: datetime
+    kind: str
+    dimension: str | None
+    caught: str | None
+    blind: bool
+
+
+@dataclass(frozen=True)
+class RatingPair:
+    recording_id: str
+    created_at: datetime
+    gold: int | None  # the reviewer's blind rating; None: "-" (did not come up)
+    predicted: int | None  # Brain 4.0's rating; None: "-"
+
+
+def _both(items: Iterable[RatingPair]) -> list[tuple[int, int]]:
+    return [
+        (p.predicted - 1, p.gold - 1)
+        for p in items
+        if p.gold is not None and p.predicted is not None
+    ]
+
+
+def _share(items: Sequence[RatingPair], test: Callable[[int, int], bool]) -> float | None:
+    rated = _both(items)
+    return round(sum(1 for a, b in rated if test(a, b)) / len(rated), 4) if rated else None
+
+
+def _same_applicability(items: Sequence[RatingPair]) -> float | None:
+    if not items:
+        return None
+    same = sum(1 for p in items if (p.gold is None) == (p.predicted is None))
+    return round(same / len(items), 4)
+
+
+def rating_agreement(items: Sequence[RatingPair]) -> dict[str, Any]:
+    """Brain 4.0's rating against the blind rating, on the 1-5 scale; intervals by calls."""
+    rated = [p for p in items if p.gold is not None and p.predicted is not None]
+    calls: dict[str, list[RatingPair]] = defaultdict(list)
+    for item in rated:
+        calls[item.recording_id].append(item)
+    errors = [a - b for a, b in _both(rated)]
+
+    def exact(sample: list[RatingPair]) -> float | None:
+        return _share(sample, lambda a, b: a == b)
+
+    def within(sample: list[RatingPair]) -> float | None:
+        return _share(sample, lambda a, b: abs(a - b) <= 1)
+
+    return {
+        "lines": len(items),
+        "calls": len(calls),
+        "rated": len(rated),
+        "exact": exact(rated),
+        "exact_ci": bootstrap(calls, exact),
+        "within_one": within(rated),
+        "within_one_ci": bootstrap(calls, within),
+        "kappa": weighted_kappa(_both(rated), RATINGS),
+        "kappa_ci": bootstrap(calls, lambda sample: weighted_kappa(_both(sample), RATINGS)),
+        "band_error": round(sum(abs(e) for e in errors) / len(errors), 3) if errors else None,
+        "lean": round(sum(errors) / len(errors), 3) if errors else None,
+        "judgeable_agree": _same_applicability(items),
+    }
+
+
+def blind_pairs(
+    blind: Sequence[BlindRating], runs: Mapping[str, Sequence[Mapping[str, Any]]]
+) -> dict[str, list[RatingPair]]:
+    """Per dimension, each blind rating with Brain 4.0's first run on the same call. A "-"
+    counts only when it means the dimension did not come up (not "not sure")."""
+    found: dict[str, list[RatingPair]] = defaultdict(list)
+    for item in blind:
+        if item.rating is None and item.skip != "not_applicable":
+            continue
+        reads = runs.get(item.review_id) or ()
+        entry = next(
+            (
+                d
+                for d in (reads[0].get("dimensions") or [] if reads else [])
+                if isinstance(d, Mapping) and d.get("id") == item.dimension
+            ),
+            None,
+        )
+        if entry is None:
+            continue
+        rating = entry.get("rating")
+        found[item.dimension].append(
+            RatingPair(
+                item.recording_id,
+                item.created_at,
+                item.rating,
+                rating if type(rating) is int and 1 <= rating <= RATINGS else None,
+            )
+        )
+    return found
+
+
+def between_raters(blind: Sequence[BlindRating]) -> dict[str, Any]:
+    """Gate 0: two reviewers' blind ratings of the same dimension of the same call."""
+    by: dict[tuple[str, str], dict[str, int | None]] = defaultdict(dict)
+    for item in blind:
+        if item.rating is None and item.skip != "not_applicable":
+            continue
+        by[(item.recording_id, item.dimension)][item.reviewer_id] = item.rating
+    both = [
+        (recording, ratings[first], ratings[second])
+        for (recording, _), ratings in by.items()
+        if len(ratings) >= 2
+        for first, second in [sorted(ratings)[:2]]
+    ]
+    rated = [(a - 1, b - 1) for _, a, b in both if a is not None and b is not None]
+    kappa = weighted_kappa(rated, RATINGS)
+    return {
+        "calls": len({recording for recording, _, _ in both}),
+        "pairs": len(both),
+        "rated": len(rated),
+        "exact": round(sum(1 for a, b in rated if a == b) / len(rated), 4) if rated else None,
+        "kappa": kappa,
+        "gate0": kappa is not None and kappa >= GATE0_KAPPA,
+    }
+
+
+def coverage(moments: Sequence[Moment]) -> dict[str, Any]:
+    """How many of the reviewer's criticisms Brain 4.0's coaching caught, moment by moment
+    (yes 1, partly 1/2), with an interval resampling whole calls."""
+    criticisms = [m for m in moments if m.kind == "criticism"]
+    marked = [m for m in criticisms if m.caught in ("yes", "partly", "no")]
+
+    def rate(sample: list[Moment]) -> float | None:
+        if not sample:
+            return None
+        score = sum(
+            1.0 if m.caught == "yes" else 0.5 if m.caught == "partly" else 0.0 for m in sample
+        )
+        return round(score / len(sample), 4)
+
+    calls: dict[str, list[Moment]] = defaultdict(list)
+    for item in marked:
+        calls[item.recording_id].append(item)
+    by_dimension = []
+    for dimension in brain4.DIMENSION_IDS:
+        mine = [m for m in criticisms if m.dimension == dimension]
+        if mine:
+            done = [m for m in mine if m.caught is not None]
+            by_dimension.append(
+                {
+                    "id": dimension,
+                    "criticisms": len(mine),
+                    "marked": len(done),
+                    "caught_rate": rate(done),
+                }
+            )
+    return {
+        "moments": len(moments),
+        "criticisms": len(criticisms),
+        "praise": sum(1 for m in moments if m.kind == "praise"),
+        "written_blind": sum(1 for m in moments if m.blind),
+        "marked": len(marked),
+        "caught": {v: sum(1 for m in marked if m.caught == v) for v in ("yes", "partly", "no")},
+        "caught_rate": rate(marked),
+        "caught_ci": bootstrap(calls, rate),
+        "by_dimension": by_dimension,
+    }
+
+
 # ---------- the evaluation ----------
 
 
@@ -273,6 +479,8 @@ class Dataset:
     lines: tuple[GoldLine, ...]
     # Brain 4.0 reviews of the gold-judged calls: review id judged -> its Brain 4.0 runs.
     brain4: Mapping[str, Sequence[Mapping[str, Any]]]
+    blind: tuple[BlindRating, ...] = ()
+    moments: tuple[Moment, ...] = ()
 
 
 def acceptance(lines: Sequence[GoldLine]) -> dict[str, Any]:
@@ -440,7 +648,32 @@ def evaluate(dataset: Dataset, *, now: datetime) -> dict[str, Any]:
                 "pointers": [p for p, kind in brain4.POINTER_MAP[dimension] if kind == "primary"],
                 "brain4": stats,
                 "classic": agreement(theirs),
-                "readiness": readiness(stats),
+                "readiness": _ready(dimension, stats),
+                "undecidable": UNDECIDABLE.get(dimension),
+                "drop": drop,
+            }
+        )
+    rated_blind = blind_pairs(dataset.blind, dataset.brain4)
+    blind_dimensions = []
+    for dimension in brain4.DIMENSION_IDS:
+        mine_blind = rated_blind.get(dimension, [])
+        stats = rating_agreement(mine_blind)
+        drop = drops(
+            (p.created_at, abs(p.predicted - p.gold) <= 1)
+            for p in mine_blind
+            if p.gold is not None and p.predicted is not None
+        )
+        if drop and drop["alert"]:
+            alerts.append({"scorer": "brain4_blind", "dimension": dimension, **drop})
+        blind_dimensions.append(
+            {
+                "id": dimension,
+                "label": brain4.LABELS[dimension],
+                "category": brain4.CATEGORY_OF[dimension],
+                "ratings": sum(1 for b in dataset.blind if b.dimension == dimension),
+                "brain4": stats,
+                "readiness": _ready(dimension, stats),
+                "undecidable": UNDECIDABLE.get(dimension),
                 "drop": drop,
             }
         )
@@ -476,16 +709,35 @@ def evaluate(dataset: Dataset, *, now: datetime) -> dict[str, Any]:
         "pointers": per_pointer,
         "dimensions": dimensions,
         "stability": stability(dataset.brain4),
+        "blind": {
+            "ratings": len(dataset.blind),
+            "calls": len({b.recording_id for b in dataset.blind}),
+            "calls_with_brain4": len(
+                {b.recording_id for b in dataset.blind if dataset.brain4.get(b.review_id)}
+            ),
+            "reviewers": len({b.reviewer_id for b in dataset.blind}),
+            "dimensions": blind_dimensions,
+            "between_raters": between_raters(dataset.blind),
+            "moments": coverage(dataset.moments),
+        },
         "alerts": alerts,
         "checkpoints": list(checkpoints()),
         "limits": [
-            "One reviewer, who saw today's AI answer before judging: an agreement makes "
-            "today's band the gold band, which favours today's review.",
-            "The gold set judges the 27 pointers, not Brain 4.0's dimensions; a dimension "
+            "Line review: one reviewer, who saw today's AI answer before judging; an "
+            "agreement makes today's band the gold band, which favours today's review.",
+            "Line review judges the 27 pointers, not Brain 4.0's dimensions; a dimension "
             "is compared through the pointers that ask its question.",
-            "No dimension can be official from this set (AC-SVAL-01 Gates 0 and 4).",
+            "Blind ratings meet AC-SVAL-01 section 8.1 (rated before Brain 4.0's are "
+            "shown); Gate 0 needs a second blind reviewer on the same calls.",
+            "No dimension can be official from these sets (AC-SVAL-01 Gates 0 and 4).",
         ],
     }
+
+
+def _ready(dimension: str, stats: Mapping[str, Any]) -> dict[str, Any]:
+    if dimension in UNDECIDABLE:
+        return {"state": "undecidable", "needs": [UNDECIDABLE[dimension]]}
+    return readiness(stats)
 
 
 # ---------- calibration from the gold set (display only) ----------
@@ -554,10 +806,45 @@ async def load(database: Any) -> Dataset:
     ).all()
     superseded = {row.supersedes_id for row in rows if row.supersedes_id}
     lines: list[GoldLine] = []
+    blind: list[BlindRating] = []
+    moments: list[Moment] = []
     for row in rows:
         if row.id in superseded or not isinstance(row.payload, dict):
             continue
         value: dict[str, Any] = row.payload
+        kind = target_kind(row.target)
+        if kind == "dimension":
+            rating = value.get("rating")
+            skip = value.get("skip")
+            blind.append(
+                BlindRating(
+                    recording_id=str(row.recording_id),
+                    review_id=str(row.review_id),
+                    reviewer_id=str(row.reviewer_id),
+                    dimension=row.target[len(DIMENSION_PREFIX) :],
+                    created_at=row.created_at,
+                    rating=rating if type(rating) is int else None,
+                    skip=skip if isinstance(skip, str) else None,
+                )
+            )
+            continue
+        if kind == "moment":
+            moment = value.get("moment")
+            if isinstance(moment, dict) and not moment.get("removed"):
+                caught = moment.get("caught")
+                dimension = moment.get("dimension")
+                moments.append(
+                    Moment(
+                        recording_id=str(row.recording_id),
+                        reviewer_id=str(row.reviewer_id),
+                        created_at=row.created_at,
+                        kind=str(moment.get("kind")),
+                        dimension=dimension if isinstance(dimension, str) else None,
+                        caught=caught if isinstance(caught, str) else None,
+                        blind=value.get("blind") is True,
+                    )
+                )
+            continue
         ai: dict[str, Any] = value["ai"] if isinstance(value.get("ai"), dict) else {}
         score = value.get("score")
         ai_score = ai.get("score")
@@ -620,28 +907,35 @@ async def load(database: Any) -> Dataset:
     for shadow in shadows:
         if isinstance(shadow.payload, dict):
             blocks[key(shadow)].append(shadow.payload)
-    judged = {line.review_id for line in lines}
+    judged = {line.review_id for line in lines} | {item.review_id for item in blind}
     runs = {
         str(row.id): blocks[key(row)]
         for row in reviews
         if str(row.id) in judged and blocks.get(key(row))
     }
-    return Dataset(tuple(lines), runs)
+    return Dataset(tuple(lines), runs, tuple(blind), tuple(moments))
 
 
 __all__ = [
     "EVALUATION_VERSION",
+    "BlindRating",
     "Dataset",
     "GoldLine",
     "Label",
+    "Moment",
     "Pair",
+    "RatingPair",
     "acceptance",
     "agreement",
+    "between_raters",
+    "blind_pairs",
     "bootstrap",
+    "coverage",
     "evaluate",
     "fit_calibration",
     "label",
     "load",
+    "rating_agreement",
     "readiness",
     "stability",
     "weighted_kappa",

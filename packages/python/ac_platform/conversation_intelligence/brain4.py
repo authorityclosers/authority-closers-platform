@@ -166,6 +166,37 @@ def rubric() -> str:
     return data.decode("utf-8")
 
 
+@functools.cache
+def guide() -> tuple[dict[str, Any], ...]:
+    """Each dimension in the rubric's own words, for a reviewer rating it blind: what to
+    look at (``about``) and what each rating means (``scale``), unedited from the
+    compact rubric; never Brain 4.0's answer."""
+    lines = [line.strip() for line in rubric().splitlines()]
+    names = {key: name for key, name, _ in CATEGORIES}
+    items = []
+    for number, dimension in enumerate(DIMENSION_IDS, 1):
+        at = next((i for i, line in enumerate(lines) if line.startswith(f"{dimension} ")), None)
+        about, scale = "", None
+        if at is not None:
+            about = lines[at][len(dimension) + 1 :]
+            if about.startswith(LABELS[dimension]):
+                about = about[len(LABELS[dimension]) :]
+            about = about.lstrip(" .+")
+            scale = next((line for line in lines[at + 1 : at + 4] if line.startswith("5 ")), None)
+        items.append(
+            {
+                "id": dimension,
+                "number": number,
+                "label": LABELS[dimension],
+                "category": CATEGORY_OF[dimension],
+                "category_label": names[CATEGORY_OF[dimension]],
+                "about": about,
+                "scale": scale,
+            }
+        )
+    return tuple(items)
+
+
 def part_instructions() -> str:
     """The Brain 4.0 part of a review request (one-pass ``PART brain4``)."""
     return f"""{VERSION} ({RUBRIC_REVISION}, beta).
@@ -440,6 +471,7 @@ __all__ = [
     "Brain4Error",
     "Calibration",
     "calibrate",
+    "guide",
     "parse",
     "part_instructions",
     "payload_sha256",

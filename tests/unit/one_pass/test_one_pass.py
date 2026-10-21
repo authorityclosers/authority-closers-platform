@@ -286,6 +286,73 @@ def test_two_strict_requests_carry_each_stages_own_instructions_and_schema() -> 
     assert other["facts"].system == facts.system and other["report"].system == report.system
 
 
+def test_the_trial_asks_compact_json_and_lean_text() -> None:
+    requests = analysis.requests(_transcript(), call_date="Tuesday 20 October 2026")
+    facts, report = requests["facts"], requests["report"]
+    compact = "Write the JSON compact, on one line"
+    assert compact in facts.system and compact in report.system
+    # Shorter pointer text; no tip for an excellent pointer; the topic is the label.
+    assert "one short sentence, at most 12 words, on what you did" in facts.system
+    assert "one or two sentences on what you did" not in facts.system
+    assert "([] when excellent, when not judged" in facts.system
+    # The limits never reach the facts: call data and notes are written whole.
+    assert "word limits never apply to call_data or notes" in facts.system
+    assert "next step and note at most" not in facts.system
+    assert "training_topic" not in facts.system
+    assert facts.schema is not None
+    entry = facts.schema["properties"]["review"]["properties"]["pointers"]["items"]
+    assert "training_topic" not in entry["properties"]
+    assert "training_topic" not in entry["required"]
+    assert set(entry["required"]) == set(entry["properties"])
+    # The C5 instructions stay whole; the length limits come after them.
+    assert report.system.index(COACHING_PROMPT_V5_MARKER) < report.system.index("LENGTH (one pass)")
+    # Publishing and the plan's C4 request keep the review's own text, compact.
+    published = analysis.requests(_transcript(), call_date="Tuesday 20 October 2026", publish=True)[
+        "facts"
+    ]
+    for system in (published.system, analysis.stage_system_prompt()):
+        assert compact in system
+        assert "training_topic: a short lesson title" in system
+        assert "LENGTH (one pass)" not in system
+        assert "word limits never apply" not in system
+
+
+def test_the_lean_review_refuses_a_changed_pointer_review_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = pointer_review._system_prompt
+
+    def changed(roles: dict[str, str]) -> str:
+        return original(roles).replace("one or two sentences", "two sentences")
+
+    analysis.review_instructions.cache_clear()
+    monkeypatch.setattr(pointer_review, "_system_prompt", changed)
+    try:
+        with pytest.raises(analysis.AnalysisError, match="pointer_review_prompt_changed"):
+            analysis.review_instructions()
+    finally:
+        analysis.review_instructions.cache_clear()
+
+
+def test_a_lean_review_takes_each_pointers_label_as_its_training_topic() -> None:
+    transcript = _transcript()
+    answer = _answer()
+    for entry in answer["review"]["pointers"]:
+        entry.pop("training_topic")
+    outputs, checks = analysis.map_outputs(answer, transcript)
+    assert analysis.contracts_ok(checks) == 6
+    pointers = outputs["pointer_review"]["pointers"]
+    judged = [p for p in pointers if p["score"] is not None]
+    assert judged and all(p["training_topic"] == p["label"] for p in judged)
+    assert all(p["training_topic"] is None for p in pointers if p["score"] is None)
+    # A review that writes its own topic (publishing, the plan) keeps it.
+    outputs, _ = analysis.map_outputs(_answer(), transcript)
+    assert {p["training_topic"] for p in outputs["pointer_review"]["pointers"]} == {
+        "Openings",
+        None,
+    }
+
+
 def test_publishing_asks_one_strict_request_with_the_reviews_own_profile() -> None:
     requests = analysis.requests(_transcript(), call_date="Tuesday 20 October 2026", publish=True)
     assert set(requests) == {"facts"}

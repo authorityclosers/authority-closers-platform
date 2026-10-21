@@ -440,23 +440,113 @@ specifies Root installation, the immutable API executable, dev network and
 input boundaries, access-manager prerequisites, preview/apply and rollback.
 Actual fixture application stays on [AUT-959](/AUT/issues/AUT-959).
 
-## Admin dev server watchdog (acdev user units)
+## Dev server watchdog (acdev user units)
 
-`acdev-admin-dev-watchdog.sh` probes `http://127.0.0.1:3028/login` (Host
-`admin-dev.authorityclosers.com`) every 30 seconds from acdev's user timer. A
-5xx, no answer or a 20-second timeout starts a "bad since" clock in
-`~/.local/state/acdev-admin-dev-watchdog/`; a good answer clears it. Two minutes
-bad restarts `acdev-admin-dev.service`, at most once every five minutes, with
-one journal line. It was added after Turbopack hung compiling a new route on
-20 Oct 2026 and every page failed until a manual restart. These are acdev's own
-user units, not system services: no Root step.
+`acdev-dev-watchdog.sh <unit> <url> [host]` probes one dev server's page every
+30 seconds from acdev's templated user timer `acdev-dev-watchdog@<unit>.timer`.
+A 5xx, no answer or a 20-second timeout starts a "bad since" clock in
+`~/.local/state/acdev-dev-watchdog/<unit>/`; a good answer clears it. Two
+minutes bad restarts the unit, at most once every five minutes, with one journal
+line naming the URL, the answer and the unit's memory. A unit that is not active
+(stopped on purpose, or failed) is left alone. Each instance reads its probe
+(`PROBE_URL`, `PROBE_HOST`) from `~/.config/acdev-dev-watchdog/<unit>.env`,
+installed from `acdev-dev-watchdog/`:
+
+- `acdev-admin-dev`: `http://127.0.0.1:3028/login`, Host `admin-dev.authorityclosers.com`
+- `acdev-xray-dev`: `http://127.0.0.1:3026/login`, Host `salesxray-dev.authorityclosers.com`
+
+Both login pages render without server-side API reads, so a down back end never
+restarts a web server. These are acdev's own user units, not system services: no
+Root step.
+
+Why: on 20 Oct 2026 Turbopack hung compiling a new Admin route, and on 21 Oct
+the Sales Xray dev server sat at its 3 GB `MemoryHigh` with its 512 MB swap full,
+less than two hours after the nightly restart. At `MemoryHigh` the kernel
+throttles a service instead of killing it, so `Restart=on-failure` never fired
+and every page timed out until a manual restart. Its Turbopack file-system cache
+(`apps/sales-xray-web/.next/dev/cache/turbopack`) had grown to 9.6 GB since
+11 Oct; restoring and compacting it is what fills the server's memory.
 
 Install or update, as acdev:
 
 ```bash
-install -m 755 infra/application/development/acdev-admin-dev-watchdog.sh ~/.local/bin/acdev-admin-dev-watchdog
-install -m 644 infra/application/development/acdev-admin-dev-watchdog.service infra/application/development/acdev-admin-dev-watchdog.timer ~/.config/systemd/user/
-systemctl --user daemon-reload && systemctl --user enable --now acdev-admin-dev-watchdog.timer
+install -m 755 infra/application/development/acdev-dev-watchdog.sh ~/.local/bin/acdev-dev-watchdog
+mkdir -p ~/.config/acdev-dev-watchdog
+install -m 644 infra/application/development/acdev-dev-watchdog/*.env ~/.config/acdev-dev-watchdog/
+install -m 644 infra/application/development/acdev-dev-watchdog@.service infra/application/development/acdev-dev-watchdog@.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now acdev-dev-watchdog@acdev-admin-dev.timer acdev-dev-watchdog@acdev-xray-dev.timer
 ```
 
-Watch it with `journalctl --user -u acdev-admin-dev-watchdog.service`.
+The `acdev-admin-dev` instance replaces the Admin-only watchdog of 20 Oct
+(`acdev-admin-dev-watchdog.*`). Remove that one once:
+
+```bash
+systemctl --user disable --now acdev-admin-dev-watchdog.timer
+rm -f ~/.config/systemd/user/acdev-admin-dev-watchdog.service ~/.config/systemd/user/acdev-admin-dev-watchdog.timer ~/.local/bin/acdev-admin-dev-watchdog
+rm -rf ~/.local/state/acdev-admin-dev-watchdog
+systemctl --user daemon-reload
+```
+
+Watch it with `journalctl --user -u 'acdev-dev-watchdog@*'`.
+
+## Sales Xray dev server units and its nightly cache cap (acdev user units)
+
+`acdev-xray-dev/` records the Sales Xray dev server (`next dev --turbopack` on
+`127.0.0.1:3026`) as installed in acdev's `~/.config/systemd/user/`:
+
+- `acdev-xray-dev.service` and its drop-ins in `acdev-xray-dev.service.d/`:
+  `30-asset-version.conf` (`NEXT_DEPLOYMENT_ID`), `50-CPUQuota.conf` (75 % of one
+  core, the same value as the 29 Sep `set-property` drop-in in
+  `~/.config/systemd/user.control/`, which takes precedence), `80-memory.conf`
+  (`MemoryHigh` 3G, `MemoryMax` 3584M, swap 512M; 1700M throttled it into
+  Cloudflare 524s on 11 Oct), `85-api-origin.conf` (server reads through the dev
+  edge on :3016) and `zz-dev-live.conf` (it runs from the shared workbench).
+- `acdev-xray-dev-restart.timer` (22:30 UTC, 04:00 IST) starts
+  `acdev-xray-dev-restart.service`, which runs
+  `acdev-dev-restart.sh <unit> <cache-dir> <cap-MiB> [<url> [<host>]]`. It notes
+  the unit's memory peak, pauses its watchdog
+  (`acdev-dev-watchdog@acdev-xray-dev.timer`) so a slow first compile is never
+  restarted halfway, stops the unit, moves its Turbopack cache
+  (`apps/sales-xray-web/.next/dev/cache/turbopack`) aside when the cache is above
+  2048 MiB, starts it, waits for the watchdog's probe page (the first compile),
+  resumes the watchdog, then deletes the old cache at idle IO priority. A unit
+  stopped on purpose stays stopped; a failed one is started; a watchdog that was
+  off stays off. The script only ever moves or deletes a directory named
+  `.../.next/dev/cache/turbopack`, never a symlink, and nothing else under
+  `.next`. The cache is a build cache: next dev rebuilds it (orchestrator, 21 Oct:
+  compiler output with no customer data or audit history, so deleting it needs no
+  owner approval).
+
+Why: next dev 16.3.8 keeps a Turbopack file-system cache that nothing prunes.
+Between 11 and 21 Oct it grew to 9.6 GB, about 2 GB on a busy day. As it grew,
+a run's memory peak went from 1.4-1.9 GB (12-15 Oct) to 2.8-3.3 GB (16-20 Oct)
+with a JS heap under 0.6 GB, and HMR went from 0.5 s (p50, 11 Oct) to 13-38 s
+(p50, 18-20 Oct). Restoring and compacting the cache does it: on 21 Oct at 11:34
+UTC, with no page requests, one compaction (740 MB written) took the unit over
+`MemoryHigh` 462 times, 1.6 GB of it cache file pages. On 20 Oct the 22:30
+restart read about 4.5 GB in ten minutes, filled the swap and hung at
+`MemoryHigh` until a manual restart. With
+the cap the cache stays under about 4.5 GB and is reset every one or two busy
+days. Next's default `experimental.turbopackMemoryEviction: 'auto'` does not see
+the unit's 3 GB limit (the host has about 8 GB free), so it rarely evicts. If daily
+peaks stay above about 2 GB with the cap, the next lever is `'full'` for dev in
+`apps/sales-xray-web/next.config.ts`, which trades memory for re-reads on every
+HMR.
+
+Install or update, as acdev (`XDG_RUNTIME_DIR=/run/user/1002`):
+
+```bash
+D=infra/application/development
+install -m 755 $D/acdev-dev-restart.sh ~/.local/bin/acdev-dev-restart
+install -m 644 $D/acdev-xray-dev/acdev-xray-dev.service $D/acdev-xray-dev/acdev-xray-dev-restart.service $D/acdev-xray-dev/acdev-xray-dev-restart.timer ~/.config/systemd/user/
+mkdir -p ~/.config/systemd/user/acdev-xray-dev.service.d
+install -m 644 $D/acdev-xray-dev/acdev-xray-dev.service.d/*.conf ~/.config/systemd/user/acdev-xray-dev.service.d/
+systemctl --user daemon-reload
+systemctl --user enable acdev-xray-dev-restart.timer
+```
+
+A changed drop-in reaches the running server at its next restart, the nightly one
+at the latest. Watch it with `journalctl --user -u acdev-xray-dev-restart.service`:
+one line a night with the memory peak since the last start, the cache size, whether
+it was cleared and how long the first compile took.

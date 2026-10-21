@@ -236,6 +236,45 @@ on OpenAI's Flex tier.
   OpenAI is one click. The owner confirmed the DPA on 21 Oct 2026 (relayed by the
   orchestrator); the privacy page names OpenAI since v0.71.
 
+## Slice L2: Luna on production, the hybrid (no owner clicks)
+
+The orchestrator chose the hybrid on 21 Oct 2026, after the real-call trial. On those calls, Luna's own
+coaching read worse than Gemini's, while its one-pass facts request held up. So only the one-pass C4
+request (call data, notes, the pointer review) goes to GPT-6 Luna. C5 stays on Gemini 3.8 Flash, on
+Flex with the Flex tier.
+
+- **Configuration:**
+  - `c2_route.derive_configuration(classic, one_pass=True, luna=True, luna_report=False,
+    openai=<entry>)`, with Root profiles `luna-c4-one-pass` and `luna-c4-one-pass-flex`.
+  - Whole Luna (`luna_report=True`, profiles `luna-one-pass`/`-flex`) stays available.
+- **Where the OpenAI entry lives:**
+  - It is built from existing records and saved inside the Luna configuration only.
+  - Today's classic (Scribe) configuration keeps its digest. Its sealed Gemini profiles and the `back`
+    fallback stay valid, and Root's existing seals don't need redoing.
+  - The seal script takes that entry from `--configuration` when the classic configuration has none, and
+    prints its references for Root to check.
+- **Production data change:** `scripts/data-changes/one-pass-flex-production.py --tier standard
+  --one-pass --luna --openai-credential-ref R --openai-permission-ref P`, then `prepare`, `export target`
+  and `switch`.
+  - The terms, privacy and endpoint-approval references default to the ones the OpenAI C5 adapter's
+    entry already carries (25 Sep 2026).
+  - A fictional-benchmark permission is refused.
+  - Onto OpenAI, the script gives Admin's word `openai_dpa_signed` (the owner confirmed the DPA).
+  - `status --one-pass --luna ...` prints a draft of Root's `--openai-governance` JSON from the pinned
+    approval's own classic C4 stage, and whether its notice names OpenAI.
+- **Luna's own calibration (beta):**
+  - Version `one-pass-pointer-calibration-luna/1`.
+  - Fitted on production's own Luna C4 request over the 15 AC trial calls (13 with a usable review, 301
+    pointer pairs). Luna scored 8.2 points per pointer lower than today's review.
+  - Leaving one call out at a time, the overall lean goes from -8.5 to -0.4. The overall gap goes from
+    8.5 to 3.0 points, and per pointer from 10.1 to 7.2 (Gemini v1: 7.1).
+  - `plan_publish` picks the table by the model that answered C4.
+- **A missing review is covered:**
+  - Luna's schema is not strict, and on 2 of 15 calls it left out the review part
+    (`pointer_review_missing`).
+  - The pointer review job then runs today's review for that call, so no report goes without one; it
+    costs one more Gemini review call.
+
 ## A good first production analysis (after the C2 switch)
 
 Read-only checks, on the first real call after the switch:

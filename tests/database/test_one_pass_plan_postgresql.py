@@ -353,9 +353,17 @@ def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
                 )
                 assert review is not None and review.created_by == plan_publish.PUBLISHER
                 assert review.prompt_sha256 == read.input_sha256
-                # Calibrated to today's review and labelled beta (B3).
-                assert review.payload["calibration"]["version"] == calibration.VERSION
-                assert review.payload["calibration"]["label"] == "beta"
+                # Calibrated to today's review and labelled beta (B3), by the model that
+                # answered: Luna's own calibration for a Luna read.
+                assert review.payload["calibration"] == (
+                    {
+                        "version": calibration.LUNA_VERSION,
+                        "label": "beta",
+                        "basis": "one_pass_c4_luna",
+                    }
+                    if provider == "openai"
+                    else {"version": calibration.VERSION, "label": "beta", "basis": "one_pass_c4"}
+                )
                 deep = (
                     await db.scalars(
                         select(CallDataRun).where(
