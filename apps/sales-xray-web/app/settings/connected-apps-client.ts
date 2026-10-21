@@ -36,6 +36,14 @@ export type TestOffer = {
   needs: string[];
   confirm: boolean;
 };
+/** Where the platform's own review of Sales Xray stands (Meta App Review). */
+export type Review = {
+  state: "pending" | "approved";
+  /** The day it was sent, or approved (YYYY-MM-DD). */
+  since: string;
+  worksNow: string;
+  after: string | null;
+};
 export type AppHealth = {
   app: AppKey;
   name: string;
@@ -51,6 +59,8 @@ export type AppHealth = {
   /** A page in this app where the card's setup lives (lead stages). */
   page: string | null;
   tests: TestOffer[];
+  /** Meta lead ads: the review of Sales Xray, and what works before it ends. */
+  review: Review | null;
 };
 export type StepState = "done" | "waiting" | "failed" | "skipped";
 export type TestResult = {
@@ -62,6 +72,18 @@ export type TestResult = {
   draft?: string | null;
 };
 export type MetaForm = { id: string; name: string; status: string };
+/** A Facebook Page shared with Sales Xray (lead_desk/connectors, /meta/status). */
+export type MetaPage = {
+  pageId: string;
+  name: string;
+  active: boolean;
+  received: number;
+  lastPulledAt: string | null;
+  /** "all" takes every form on the Page, ones made later too. */
+  forms: "all" | string[];
+  formsCovered: MetaForm[];
+  problem: { kind: string; text: string } | null;
+};
 
 export class AppsError extends Error {
   constructor(
@@ -127,6 +149,7 @@ function parseApp(value: unknown): AppHealth | null {
     return null;
   const event = isRecord(value.lastEvent) ? value.lastEvent : null;
   const error = isRecord(value.lastError) ? value.lastError : null;
+  const review = isRecord(value.review) ? value.review : null;
   return {
     app: value.app as AppKey,
     name: text(value.name) ?? value.app,
@@ -170,6 +193,15 @@ function parseApp(value: unknown): AppHealth | null {
           : [],
         confirm: item.confirm === true,
       })),
+    review:
+      review && text(review.since) && text(review.worksNow)
+        ? {
+            state: review.state === "approved" ? "approved" : "pending",
+            since: review.since as string,
+            worksNow: review.worksNow as string,
+            after: text(review.after),
+          }
+        : null,
   };
 }
 
@@ -328,13 +360,95 @@ export async function readForms(
     { signal },
   );
   return (Array.isArray(body) ? body : [])
-    .filter(isRecord)
-    .filter((form) => text(form.id) && text(form.name))
-    .map((form) => ({
-      id: form.id as string,
-      name: form.name as string,
-      status: text(form.status) ?? "",
-    }));
+    .map(parseForm)
+    .filter((form): form is MetaForm => form !== null);
+}
+
+/** "5 min ago", "in 8 min", "just now"; null for no time. */
+export function ago(value: string | null): string | null {
+  if (!value) return null;
+  const at = new Date(value).getTime();
+  if (Number.isNaN(at)) return null;
+  const seconds = Math.round((Date.now() - at) / 1000);
+  const ahead = seconds < 0;
+  const size = Math.abs(seconds);
+  const words =
+    size < 60
+      ? "a moment"
+      : size < 3600
+        ? `${Math.round(size / 60)} min`
+        : size < 86_400
+          ? `${Math.round(size / 3600)} h`
+          : `${Math.round(size / 86_400)} d`;
+  if (size < 60) return ahead ? "in a moment" : "just now";
+  return ahead ? `in ${words}` : `${words} ago`;
+}
+
+function parseForm(value: unknown): MetaForm | null {
+  if (!isRecord(value) || !text(value.id) || !text(value.name)) return null;
+  return {
+    id: value.id as string,
+    name: value.name as string,
+    status: text(value.status) ?? "",
+  };
+}
+
+function parsePage(value: unknown): MetaPage | null {
+  if (!isRecord(value) || !text(value.pageId) || !text(value.name)) return null;
+  const problem = isRecord(value.problem) ? value.problem : null;
+  return {
+    pageId: value.pageId as string,
+    name: value.name as string,
+    active: value.active === true,
+    received: typeof value.received === "number" ? value.received : 0,
+    lastPulledAt: text(value.lastPulledAt),
+    forms: Array.isArray(value.forms)
+      ? value.forms.filter((id): id is string => typeof id === "string")
+      : "all",
+    formsCovered: (Array.isArray(value.formsCovered) ? value.formsCovered : [])
+      .map(parseForm)
+      .filter((form): form is MetaForm => form !== null),
+    problem:
+      problem && text(problem.text)
+        ? {
+            kind: String(problem.kind ?? "other"),
+            text: problem.text as string,
+          }
+        : null,
+  };
+}
+
+/** The Facebook Pages shared with Sales Xray, on or off. */
+export async function readMetaPages(signal?: AbortSignal): Promise<MetaPage[]> {
+  const body = await send(`${BASE}/meta/status`, { signal });
+  return (isRecord(body) && Array.isArray(body.pages) ? body.pages : [])
+    .map(parsePage)
+    .filter((page): page is MetaPage => page !== null);
+}
+
+/** Turn a Page on with the forms picked (or change them); the last week's leads come in now. */
+export async function turnOnPage(
+  pageId: string,
+  forms: "all" | string[],
+): Promise<number> {
+  const body = await send(`${BASE}/meta/pages/${encodeURIComponent(pageId)}`, {
+    method: "POST",
+    body: JSON.stringify({ forms }),
+  });
+  return isRecord(body) && typeof body.imported === "number"
+    ? body.imported
+    : 0;
+}
+
+/** Ask Meta for a Page's new leads now; how many came in. */
+export async function checkPage(pageId: string): Promise<number> {
+  const body = await send(
+    `${BASE}/meta/pages/${encodeURIComponent(pageId)}/pull`,
+    { method: "POST" },
+  );
+  if (!isRecord(body)) return 0;
+  const count = (value: unknown) => (typeof value === "number" ? value : 0);
+  return count(body.created) + count(body.repeat);
 }
 
 export async function disconnect(target: Link) {

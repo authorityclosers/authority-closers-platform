@@ -358,9 +358,8 @@ def meta_review() -> Review:
         state=state,
         since=since,
         works_now=(
-            "Meta is still reviewing Sales Xray. Until it approves, only Pages run by people"
-            " added to our Meta app as testers can connect. Ask us to add you; it takes a"
-            " minute."
+            "Until Meta approves Sales Xray, only Pages run by people added to our Meta app"
+            " as testers can connect. Ask us to add you as a tester."
         ),
         after="Once Meta approves it, any business can connect its own Pages here.",
     )
