@@ -6,6 +6,10 @@
 .root {
   container-type: inline-size;
   display: grid;
+  /* One column exactly as wide as the page: a wide child (the tab strip, a
+     search box) scrolls or shrinks inside it instead of pushing the page
+     sideways (owner, 22 Oct: All leads ran off the right edge). */
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: var(--sx-gap);
   box-sizing: border-box;
@@ -262,7 +266,8 @@
 }
 
 .search input {
-  width: min(240px, 46vw);
+  width: min(240px, 40cqi);
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--sx-ink);

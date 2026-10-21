@@ -20,6 +20,7 @@ import {
   type SpeakerRole,
 } from "./speaker-profiles";
 import styles from "./speaker.module.css";
+import { useBackClose } from "./ui/back-close";
 
 const ROLES = [
   { key: "you", label: "You", Icon: CircleUser },
@@ -86,6 +87,10 @@ export function SpeakerEditor({
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);
   const icons = searchSpeakerIcons(query);
+  // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
+  useBackClose(true, () => {
+    if (!pending.current) onClose();
+  });
 
   useLayoutEffect(() => {
     const element = box.current;
