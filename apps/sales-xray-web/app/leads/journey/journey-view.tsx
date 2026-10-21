@@ -174,6 +174,7 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
           current={view.industry}
           first={view.version === 0}
           onCancel={view.version === 0 ? undefined : () => setChoosing(false)}
+          leads={view.stages.reduce((sum, stage) => sum + stage.leads, 0)}
           onUse={async (template) => {
             try {
               const next = await applyTemplate(view.version, template);
@@ -197,6 +198,11 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
   const profile = templates?.find((item) => item.id === view.industry);
   return (
     <div className={styles.root}>
+      <BusinessCard
+        profile={profile ?? null}
+        loading={templates === null}
+        onChange={() => setChoosing(true)}
+      />
       <StagesExplainer />
       <div className={styles.phoneOnly}>
         <Segmented<Pane>
@@ -211,13 +217,7 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
       </div>
       <div className={styles.columns} data-pane={pane}>
         <section className={styles.stagesPane} aria-label="Your lead stages">
-          <StageBuilder
-            key={view.version}
-            view={view}
-            profile={profile?.name ?? null}
-            onChoose={() => setChoosing(true)}
-            onSaved={setView}
-          />
+          <StageBuilder key={view.version} view={view} onSaved={setView} />
         </section>
         <section className={styles.adsPane} aria-label="Ad platforms">
           <AdPlatforms version={view.version} />
@@ -227,18 +227,61 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
   );
 }
 
+/* ---------- the kind of business, up front ---------- */
+
+/**
+ * Owner, 22 Oct 2026: the kind of business picked at setup decides the
+ * stages, and it was hard to see or change. One card says which it is,
+ * what it gives, and changes it in one tap.
+ */
+function BusinessCard({
+  profile,
+  loading,
+  onChange,
+}: {
+  profile: TemplateView | null;
+  loading: boolean;
+  onChange: () => void;
+}) {
+  const Icon = (profile && ICONS[profile.icon]) || Sparkles;
+  return (
+    <section className={styles.business} aria-label="Your kind of business">
+      <span className={styles.businessIcon} aria-hidden="true">
+        <Icon size={20} strokeWidth={1.9} />
+      </span>
+      <span className={styles.businessText}>
+        <small>Your kind of business</small>
+        {loading ? (
+          <Skeleton width="50%" height={16} />
+        ) : (
+          <strong>{profile ? profile.name : "Not chosen yet"}</strong>
+        )}
+        <span>
+          {profile
+            ? `Gives ${profile.stages.length} stages that fit it. Change it any time; your leads stay where they are.`
+            : "Pick the closest one to get stages that fit how you sell."}
+        </span>
+      </span>
+      <Button onClick={onChange}>Change</Button>
+    </section>
+  );
+}
+
 /* ---------- picking a kind of business ---------- */
 
 function TemplatePicker({
   templates,
   current,
   first,
+  leads,
   onUse,
   onCancel,
 }: {
   templates: TemplateView[] | null;
   current: string | null;
   first: boolean;
+  /** Leads on the stages now: changing kind keeps them where they are. */
+  leads: number;
   onUse: (template: string) => Promise<void>;
   onCancel?: () => void;
 }) {
@@ -287,6 +330,9 @@ function TemplatePicker({
                       <strong>{item.name}</strong>
                       <small>{item.blurb}</small>
                     </span>
+                    {item.id === current && !first ? (
+                      <span className={styles.templateNow}>Now</span>
+                    ) : null}
                     {on ? (
                       <span className={styles.templateCheck} aria-hidden="true">
                         <Check size={13} strokeWidth={2.6} />
@@ -308,6 +354,11 @@ function TemplatePicker({
               </li>
             ))}
       </ul>
+      {!first && leads ? (
+        <p className={styles.pickerNote}>
+          {`Your ${leads} ${leads === 1 ? "lead stays" : "leads stay"} where ${leads === 1 ? "it is" : "they are"}. Your old stages are kept, hidden, so nothing is lost; leads move to the new stages as your team calls them.`}
+        </p>
+      ) : null}
       <div className={styles.pickerFoot}>
         <ol className={styles.preview} aria-label="Stages you get">
           {chosen ? (
@@ -471,13 +522,9 @@ function StageText({ item, kind }: { item: Draft; kind: Kind }) {
 
 function StageBuilder({
   view,
-  profile,
-  onChoose,
   onSaved,
 }: {
   view: JourneyView;
-  profile: string | null;
-  onChoose: () => void;
   onSaved: (next: JourneyView) => void;
 }) {
   const [list, setList] = useState<Draft[]>(() => drafts(view));
@@ -576,15 +623,6 @@ function StageBuilder({
             call.
           </p>
         </div>
-        <button
-          type="button"
-          className={styles.profileButton}
-          onClick={onChoose}
-          aria-label={`Kind of business: ${profile ?? "Any business"}. Change it`}
-        >
-          <span>{profile ?? "Any business"}</span>
-          <small>Change</small>
-        </button>
       </header>
 
       <ol className={styles.path} aria-label="From enquiry to sale">

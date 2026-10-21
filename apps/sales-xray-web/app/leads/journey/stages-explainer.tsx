@@ -44,14 +44,16 @@ export function StagesExplainer() {
       </summary>
       <ol className={styles.explainerSteps}>
         <li>
-          <strong>Your steps, your words.</strong> Stages are the steps a lead
-          goes through, from first enquiry to sale. Name them the way your team
-          talks, like &ldquo;Site visit booked&rdquo;.
+          <strong>Pick your kind of business.</strong> It gives you stages that
+          fit how you sell, from first enquiry to sale. Change it any time with
+          Change above; your leads stay where they are.
         </li>
         <li>
-          <strong>Each stage has a kind.</strong> There are six:{" "}
-          {Object.values(KIND_WORDS).join(", ")}. The kind puts the stage under
-          the right tab on Leads and tells the desk who to call next.
+          <strong>Make them yours.</strong> Rename, add or move stages so they
+          say what your team says, like &ldquo;Site visit booked&rdquo;. Each
+          stage is one of six kinds ({Object.values(KIND_WORDS).join(", ")}),
+          which puts it under the right tab on Leads and tells the desk who to
+          call next.
         </li>
         <li>
           <strong>Your ads learn from them (optional).</strong> Connect

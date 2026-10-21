@@ -2288,7 +2288,6 @@ a.repName {
   font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .reasonGrid {
@@ -3166,7 +3165,6 @@ a.repName {
   font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .sectionTitle small {
@@ -3226,23 +3224,27 @@ a.repName {
   font-size: var(--sx-text-sm);
 }
 
+/* The icon over one short word, near the edge it comes from, so both fit
+   before the row slides far (Redmi D2, 22 Oct 2026). */
 .swipeBack > span {
   display: none;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
   height: 100%;
-  padding: 0 20px;
+  padding: 0 14px;
   flex: 1;
+  font-size: var(--sx-text-xs);
 }
 
 .swipeBack > [data-side="right"] {
-  justify-content: flex-start;
+  align-items: flex-start;
   background: var(--lx-teal);
   color: var(--lx-on-teal);
 }
 
 .swipeBack > [data-side="left"] {
-  justify-content: flex-end;
+  align-items: flex-end;
   background: var(--lx-success);
   color: var(--lx-on-teal);
 }
