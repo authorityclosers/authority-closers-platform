@@ -1,0 +1,2 @@
+#!/bin/bash
+/home/acdev/research/analysis-cost-20261020/harness/fpw.sh base fx-16 fx-15 fx-14 fx-13 fx-12 fx-11 fx-10 fx-09; /home/acdev/research/analysis-cost-20261020/harness/fpw.sh strong fx-16 fx-15 fx-14 fx-13 fx-12 fx-11 fx-10 fx-09; /home/acdev/research/analysis-cost-20261020/harness/fpw.sh hybrid fx-16 fx-15 fx-14 fx-13 fx-12 fx-11 fx-10 fx-09; /home/acdev/research/analysis-cost-20261020/harness/fpw.sh stronghigh fx-16 fx-15 fx-14 fx-13 fx-12 fx-11 fx-10 fx-09

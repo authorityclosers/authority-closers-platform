@@ -12,6 +12,7 @@ import math
 import re
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -397,12 +398,57 @@ class BoundedProviders:
         raise ProviderError("provider_model_not_supported")
 
     def _gemini_audio(self, reservation: Reservation, model: str, audio: bytes) -> ProviderResult:
-        """C2 on Gemini audio: the admitted source as speech MP3, inline when it fits, else
-        through the Files API (removed again at once); one generateContent request."""
+        """C2 on Gemini audio: the admitted source as speech MP3. Up to 15 minutes it is one
+        request (inline when it fits, else through the Files API, removed at once); longer
+        calls go as overlapping 10-minute parts sent at once, their responses kept together
+        as one receipt (``gemini_audio.PARTS_SCHEMA``)."""
         try:
             speech = gemini_audio.speech_mp3(audio)
+            plan = gemini_audio.plan_parts(gemini_audio.speech_ms(speech))
+            pieces = (
+                [(0, speech)]
+                if len(plan) == 1
+                else [(offset, gemini_audio.cut(speech, offset, length)) for offset, length in plan]
+            )
         except gemini_audio.GeminiAudioError as error:
             raise ProviderError(str(error)) from None
+        if len(pieces) == 1:
+            return self._gemini_request(reservation, model, speech)
+        with ThreadPoolExecutor(
+            max_workers=min(gemini_audio.PARALLEL, len(pieces)), thread_name_prefix="c2-gemini"
+        ) as pool:
+            results = list(
+                pool.map(lambda piece: self._gemini_request(reservation, model, piece[1]), pieces)
+            )
+        data = {
+            "schema": gemini_audio.PARTS_SCHEMA,
+            "parts": [
+                {"offset_ms": offset, "response": result.data}
+                for (offset, _), result in zip(pieces, results, strict=True)
+            ],
+        }
+        raw = canonical(data)
+        if len(raw) > MAX_JSON_BYTES:
+            raise ProviderError("provider_response_too_large")
+        usage: dict[str, int] = {}
+        for result in results:
+            for key, value in result.usage.items():
+                usage[key] = usage.get(key, 0) + value
+        return ProviderResult(
+            "gemini",
+            model,
+            results[0].request_id,
+            hashlib.sha256(raw).hexdigest(),
+            raw,
+            json.loads(raw),
+            usage,
+            reservation.quote.input_sha256,
+        )
+
+    def _gemini_request(
+        self, reservation: Reservation, model: str, speech: bytes
+    ) -> ProviderResult:
+        """One generateContent request for one piece of speech MP3."""
         key = self._credentials.get("gemini", "")
         uploaded: str | None = None
         try:

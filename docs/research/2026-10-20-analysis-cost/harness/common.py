@@ -22,7 +22,7 @@ from typing import Any
 
 ROOT = Path(os.environ.get("BENCH_ROOT", "/home/acdev/research/analysis-cost-20261020"))
 LEDGER = ROOT / "results" / "ledger.jsonl"
-BUDGET_OPENROUTER_USD = float(os.environ.get("BENCH_OPENROUTER_BUDGET", "29.0"))  # key limit raised to $30 by the owner (21 Oct), $1 margin
+BUDGET_OPENROUTER_USD = float(os.environ.get("BENCH_OPENROUTER_BUDGET", "0"))  # 21 Oct, orchestrator: no more OpenRouter use (approved credit was $20)
 
 # List prices, USD per 1M tokens (in, out, audio-in) or per audio minute; read live 20 Oct 2026 (paper section 2).
 PRICES = {

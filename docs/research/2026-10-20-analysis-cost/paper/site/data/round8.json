@@ -1,0 +1,335 @@
+[
+ {
+  "arm": "Today: six Gemini 3.8 Flash stages (same transcripts)",
+  "dir": "text/today/google_gemini-3.8-flash/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "calls": 16,
+  "metrics": {
+   "recall": {
+    "value": 0.6069
+   },
+   "critical": {
+    "value": 0.6393
+   },
+   "needles": {
+    "value": 0.5
+   },
+   "traps": {
+    "value": 0.7738
+   },
+   "unsupported": {
+    "value": 0.0287
+   },
+   "coaching": {
+    "value": 0.8136
+   }
+  },
+  "cost": {
+   "4.5": 1.98,
+   "13.8": 1.026,
+   "60.0": 0.671
+  },
+  "contracts": {},
+  "latency": {}
+ },
+ {
+  "arm": "Gemini 3.8 Flash one pass, full formats (one-pass build; its own Flash-Lite transcripts)",
+  "dir": "text/devlive_onepass/google_gemini-3.8-flash/asr_gemini-3.1-flash-lite/run1",
+  "calls": 16,
+  "metrics": {
+   "recall": {
+    "value": 0.7364,
+    "diff": 0.1295,
+    "lo": 0.0498,
+    "hi": 0.2044
+   },
+   "critical": {
+    "value": 0.7607,
+    "diff": 0.1215,
+    "lo": 0.034,
+    "hi": 0.2024
+   },
+   "needles": {
+    "value": 0.7083,
+    "diff": 0.2083,
+    "lo": 0.0476,
+    "hi": 0.3889
+   },
+   "traps": {
+    "value": 0.7976,
+    "diff": 0.0238,
+    "lo": -0.1111,
+    "hi": 0.1625
+   },
+   "unsupported": {
+    "value": 0.0299,
+    "diff": 0.0012,
+    "lo": -0.0145,
+    "hi": 0.0167
+   },
+   "coaching": {
+    "value": 0.3729,
+    "diff": -0.4407,
+    "lo": -0.6569,
+    "hi": -0.2143
+   },
+   "coaching_valid": {
+    "value": 0.7333,
+    "today": 0.7667,
+    "calls": 9,
+    "diff": -0.0333
+   }
+  },
+  "cost": {
+   "4.5": 1.381,
+   "13.8": 0.568,
+   "60.0": 0.265
+  },
+  "contracts": {
+   "c4": 1.0,
+   "c5": 0.562,
+   "pointer_review": 1.0,
+   "call_objects": 1.0
+  },
+  "latency": {
+   "median_s": 83.9,
+   "max_s": 94.8,
+   "out_tokens_per_call": 12720
+  }
+ },
+ {
+  "arm": "GPT-6 Luna, full formats",
+  "dir": "text/full_base/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "calls": 14,
+  "metrics": {
+   "recall": {
+    "value": 0.6205,
+    "diff": -0.0052,
+    "lo": -0.1307,
+    "hi": 0.1274
+   },
+   "critical": {
+    "value": 0.6321,
+    "diff": -0.0211,
+    "lo": -0.1432,
+    "hi": 0.1061
+   },
+   "needles": {
+    "value": 0.619,
+    "diff": 0.1429,
+    "lo": 0.0,
+    "hi": 0.2778
+   },
+   "traps": {
+    "value": 0.6389,
+    "diff": -0.1528,
+    "lo": -0.3158,
+    "hi": 0.027
+   },
+   "unsupported": {
+    "value": 0.0187,
+    "diff": -0.009,
+    "lo": -0.0211,
+    "hi": 0.0027
+   },
+   "coaching": {
+    "value": 0.7857,
+    "diff": -0.0408,
+    "lo": -0.1795,
+    "hi": 0.0978
+   }
+  },
+  "cost": {
+   "4.5": 0.363,
+   "13.8": 0.218,
+   "60.0": 0.164
+  },
+  "contracts": {
+   "c4": 1.0,
+   "c5": 0.938,
+   "pointer_review": 1.0,
+   "call_objects": 1.0
+  },
+  "latency": {
+   "median_s": 95.6,
+   "max_s": 362.7,
+   "out_tokens_per_call": 23923
+  }
+ },
+ {
+  "arm": "GPT-6 Luna, full formats, report-depth prompt",
+  "dir": "text/full_strong/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "calls": 16,
+  "metrics": {
+   "recall": {
+    "value": 0.7259,
+    "diff": 0.119,
+    "lo": 0.0,
+    "hi": 0.2273
+   },
+   "critical": {
+    "value": 0.7533,
+    "diff": 0.114,
+    "lo": 0.0163,
+    "hi": 0.2
+   },
+   "needles": {
+    "value": 0.7917,
+    "diff": 0.2917,
+    "lo": 0.0556,
+    "hi": 0.5
+   },
+   "traps": {
+    "value": 0.7262,
+    "diff": -0.0476,
+    "lo": -0.1882,
+    "hi": 0.1111
+   },
+   "unsupported": {
+    "value": 0.0166,
+    "diff": -0.0122,
+    "lo": -0.0291,
+    "hi": 0.0018
+   },
+   "coaching": {
+    "value": 0.7881,
+    "diff": -0.0254,
+    "lo": -0.1161,
+    "hi": 0.0455
+   }
+  },
+  "cost": {
+   "4.5": 0.357,
+   "13.8": 0.218,
+   "60.0": 0.167
+  },
+  "contracts": {
+   "c4": 1.0,
+   "c5": 1.0,
+   "pointer_review": 1.0,
+   "call_objects": 1.0
+  },
+  "latency": {
+   "median_s": 64.5,
+   "max_s": 86.2,
+   "out_tokens_per_call": 7330
+  }
+ },
+ {
+  "arm": "GPT-6 Luna, full formats, report-depth prompt, reasoning high",
+  "dir": "text/full_stronghigh/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "calls": 16,
+  "metrics": {
+   "recall": {
+    "value": 0.6928,
+    "diff": 0.0858,
+    "lo": -0.0253,
+    "hi": 0.1935
+   },
+   "critical": {
+    "value": 0.7215,
+    "diff": 0.0822,
+    "lo": -0.0205,
+    "hi": 0.189
+   },
+   "needles": {
+    "value": 0.625,
+    "diff": 0.125,
+    "lo": -0.0952,
+    "hi": 0.4167
+   },
+   "traps": {
+    "value": 0.7381,
+    "diff": -0.0357,
+    "lo": -0.1789,
+    "hi": 0.1184
+   },
+   "unsupported": {
+    "value": 0.0242,
+    "diff": -0.0045,
+    "lo": -0.0194,
+    "hi": 0.0114
+   },
+   "coaching": {
+    "value": 0.7712,
+    "diff": -0.0424,
+    "lo": -0.1321,
+    "hi": 0.0403
+   }
+  },
+  "cost": {
+   "4.5": 0.433,
+   "13.8": 0.242,
+   "60.0": 0.171
+  },
+  "contracts": {
+   "c4": 1.0,
+   "c5": 0.875,
+   "pointer_review": 1.0,
+   "call_objects": 1.0
+  },
+  "latency": {
+   "median_s": 164.2,
+   "max_s": 273.4,
+   "out_tokens_per_call": 15341
+  }
+ },
+ {
+  "arm": "Hybrid: Luna facts + Gemini 3.8 Flash report",
+  "dir": "text/full_hybrid/openai_gpt-6-luna/asr_openrouter_google_gemini-3.1-flash-lite_phone_8k/run1",
+  "calls": 16,
+  "metrics": {
+   "recall": {
+    "value": 0.7846,
+    "diff": 0.1777,
+    "lo": 0.0805,
+    "hi": 0.2679
+   },
+   "critical": {
+    "value": 0.7963,
+    "diff": 0.157,
+    "lo": 0.0662,
+    "hi": 0.2444
+   },
+   "needles": {
+    "value": 0.7917,
+    "diff": 0.2917,
+    "lo": 0.1111,
+    "hi": 0.4815
+   },
+   "traps": {
+    "value": 0.7857,
+    "diff": 0.0119,
+    "lo": -0.1111,
+    "hi": 0.1429
+   },
+   "unsupported": {
+    "value": 0.0266,
+    "diff": -0.0021,
+    "lo": -0.0225,
+    "hi": 0.0181
+   },
+   "coaching": {
+    "value": 0.8559,
+    "diff": 0.0424,
+    "lo": -0.0417,
+    "hi": 0.1228
+   }
+  },
+  "cost": {
+   "4.5": 0.585,
+   "13.8": 0.309,
+   "60.0": 0.206
+  },
+  "contracts": {
+   "c4": 1.0,
+   "c5": 0.938,
+   "pointer_review": 1.0,
+   "call_objects": 1.0
+  },
+  "latency": {
+   "median_s": 20.6,
+   "max_s": 34.8,
+   "out_tokens_per_call": 2802
+  }
+ }
+]

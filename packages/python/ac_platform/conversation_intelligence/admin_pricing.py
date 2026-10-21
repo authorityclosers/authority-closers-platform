@@ -153,18 +153,19 @@ PRICING_SNAPSHOTS: dict[tuple[str, str], PricingSnapshot] = {
         source_date="2026-09-15",
         usd_per_minute=Decimal("0.0052"),
     ),
-    # C2 on Gemini audio (owner, 21 Oct 2026). Evidence and the planning rate's arithmetic:
-    # docs/ops/pricing-evidence/gemini-3.1-flash-lite-audio-20261020.md (its sha256 here).
+    # C2 on Gemini audio (owner, 21 Oct 2026), measured on 16 real calls. Evidence and the
+    # planning rate's arithmetic: docs/ops/pricing-evidence/gemini-3.1-flash-lite-audio-
+    # 20261021.md (its sha256 here).
     ("gemini", "gemini-3.1-flash-lite"): PricingSnapshot(
         provider_id="gemini",
         model_id="gemini-3.1-flash-lite",
-        pricing_ref="ref:pricing/gemini-31-flash-lite-audio-20261020",
-        evidence_sha256="3d36c4beb1eda970ded45a361aaa1b2a4e5bc9b963ba836a10b22bf51023bca1",
+        pricing_ref="ref:pricing/gemini-31-flash-lite-audio-20261021",
+        evidence_sha256="2982c200979ec7a528a47ce26ca673276d4b53f94a1a0e111dccf83b297301e0",
         source_url="https://ai.google.dev/gemini-api/docs/pricing",
         rate_basis="per_minute",
         evidence_release_sha=None,
-        source_date="2026-10-20",
-        usd_per_minute=Decimal("0.0020"),
+        source_date="2026-10-21",
+        usd_per_minute=Decimal("0.0030"),
     ),
     ("gemini", "gemini-3.8-flash"): PricingSnapshot(
         provider_id="gemini",
