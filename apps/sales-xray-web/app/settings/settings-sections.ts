@@ -13,6 +13,7 @@ import {
   Code,
   LifeBuoy,
   Route,
+  Sparkles,
   ShieldCheck,
   Smartphone,
   UsersRound,
@@ -25,6 +26,7 @@ export type SettingsSectionId =
   | "plan"
   | "organisation"
   | "team"
+  | "call-ai"
   | "apps"
   | "ai-replies"
   | "notifications"
@@ -78,6 +80,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "Members, invites and who can do what",
     icon: UsersRound,
     group: "Organisation",
+  },
+  {
+    id: "call-ai",
+    label: "AI on calls",
+    hint: "How much AI reads each seller's recorded calls",
+    icon: Sparkles,
+    group: "Organisation",
+    managers: true,
   },
   {
     id: "apps",

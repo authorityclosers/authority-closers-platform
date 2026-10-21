@@ -32,6 +32,16 @@ import {
   type RepView,
   type Team,
 } from "./leads-client";
+import {
+  CallAiError,
+  LEVEL_NAMES,
+  levelFor,
+  readCallAi,
+  saveCallAiPerson,
+  type CallAiLevel,
+  type CallAiSettings,
+} from "../call-ai/call-ai-client";
+import { notify } from "../notice-center";
 import { CallsReport } from "./calls-report";
 import { AdSpendPanel } from "./ad-spend";
 import { SlaPanel } from "./sla-panel";
@@ -214,14 +224,22 @@ export function WorkHoursPanel({
 
 function RulesDialog({
   rep,
+  callAi,
   onClose,
   onSaved,
+  onCallAiSaved,
 }: {
   rep: RepView | null;
+  /** AI on calls (owner, 21 Oct): this seller's level; null when it didn't load. */
+  callAi: CallAiSettings | null;
   onClose: () => void;
   onSaved: (team: Team) => void;
+  onCallAiSaved: (settings: CallAiSettings) => void;
 }) {
   // TeamView gives each opening a new key, so these start from this seller.
+  const own = rep && callAi ? levelFor(callAi, rep.person_id) : null;
+  const startLevel: CallAiLevel | "" = own?.own ? own.level : "";
+  const [aiLevel, setAiLevel] = useState<CallAiLevel | "">(startLevel);
   const [available, setAvailable] = useState(rep?.available ?? true);
   const [cap, setCap] = useState(String(rep?.max_open ?? 50));
   const [languages, setLanguages] = useState(rep?.languages.join(", ") ?? "");
@@ -239,6 +257,29 @@ function RulesDialog({
     }
     setSaving(true);
     setError(null);
+    if (callAi?.can_edit && aiLevel !== startLevel) {
+      try {
+        onCallAiSaved(
+          await saveCallAiPerson(
+            callAi.revision,
+            rep.person_id,
+            aiLevel || null,
+          ),
+        );
+      } catch (reason) {
+        notify({
+          id: `call-ai-${rep.person_id}`,
+          tone: "error",
+          title: "AI on calls not saved",
+          message:
+            reason instanceof CallAiError
+              ? reason.message
+              : "Not saved. Try again.",
+        });
+        setSaving(false);
+        return;
+      }
+    }
     try {
       onSaved(
         await saveRep(rep, {
@@ -310,6 +351,32 @@ function RulesDialog({
             onChange={(event) => setInterests(event.target.value)}
           />
         </Field>
+        {callAi?.can_edit ? (
+          <Field
+            label="AI on this seller's calls"
+            hint={
+              callAi.levels.find(
+                (level) => level.id === (aiLevel || callAi.default),
+              )?.hint
+            }
+          >
+            <select
+              value={aiLevel}
+              onChange={(event) =>
+                setAiLevel(event.target.value as CallAiLevel | "")
+              }
+            >
+              <option value="">
+                Organisation default ({LEVEL_NAMES[callAi.default]})
+              </option>
+              {callAi.levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
         {error ? (
           <p className={styles.error} role="alert">
             {error}
@@ -317,6 +384,21 @@ function RulesDialog({
         ) : null}
       </div>
     </Dialog>
+  );
+}
+
+/** The seller's AI on calls level; "default" when it is the organisation's. */
+function AiCell({ callAi, rep }: { callAi: CallAiSettings; rep: RepView }) {
+  const { level, own } = levelFor(callAi, rep.person_id);
+  return (
+    <td>
+      <Badge
+        tone={level === "full" ? "good" : level === "off" ? "warn" : "neutral"}
+      >
+        {LEVEL_NAMES[level]}
+      </Badge>
+      {own ? null : <small className={styles.hint}> default</small>}
+    </td>
   );
 }
 
@@ -328,6 +410,7 @@ export function TeamView({
   onOpen: (leadId: string) => void;
 }) {
   const [team, setTeam] = useState<Team | null>(null);
+  const [callAi, setCallAi] = useState<CallAiSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<RepView | null>(null);
   const [editRound, setEditRound] = useState(0);
@@ -353,6 +436,10 @@ export function TeamView({
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
+    // AI on calls is its own read: if it fails, the team still shows without it.
+    readCallAi(controller.signal)
+      .then(setCallAi)
+      .catch(() => undefined);
     return () => controller.abort();
   }, []);
 
@@ -454,6 +541,7 @@ export function TeamView({
                 <th>Seller</th>
                 <th>Takes leads</th>
                 <th>Phone</th>
+                {callAi ? <th>AI on calls</th> : null}
                 <th data-num>Open</th>
                 <th data-num>Due now</th>
                 <th data-num>Calls today</th>
@@ -490,6 +578,7 @@ export function TeamView({
                   <td>
                     <PhoneCell rep={rep} />
                   </td>
+                  {callAi ? <AiCell callAi={callAi} rep={rep} /> : null}
                   <td data-num>
                     {rep.open_leads}
                     <small>/{rep.max_open}</small>
@@ -612,6 +701,8 @@ export function TeamView({
       <RulesDialog
         key={editRound}
         rep={editing}
+        callAi={callAi}
+        onCallAiSaved={setCallAi}
         onClose={() => setEditing(null)}
         onSaved={(next) => {
           setTeam(next);

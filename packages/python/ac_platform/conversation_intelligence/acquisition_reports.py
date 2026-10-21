@@ -14,6 +14,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from ac_platform.call_ai import policy as call_ai_policy
 from ac_platform.conversation_intelligence.alignment import (
     AlignmentError,
     project_transcript_for_playback,
@@ -111,6 +112,8 @@ _PLAN_FAILURE_CODES = frozenset(
         "needs_new_acceptance",
         "processing_coordinator_timeout",
         "processing_coordinator_failed",
+        # AI on calls: the seller's level stopped the call (Off, Data only).
+        *call_ai_policy.FAILURE_CODES,
     }
 )
 _FAILURE_CODE_PATTERN = re.compile(r"^conversation_[a-z][a-z0-9_]{0,127}$")
@@ -627,8 +630,26 @@ class AcquisitionReports:
             local_state=None if local_run is None else local_run.state,
             jobs=held_jobs,
         )
+        # AI on calls: a call its seller's level stopped (Off, Data only) says so, and
+        # offers "Get full report" to the organisation's owners and admins instead of
+        # a retry (a retry would stop at the same level again).
+        ai_skip: dict[str, Any] | None = None
+        if (
+            not has_report
+            and plan is not None
+            and plan.state == "held"
+            and plan.generation == recording.generation
+            and plan.progress.get("failure_code") in call_ai_policy.FAILURE_CODES
+        ):
+            level = plan.progress.get("ai_level")
+            ai_skip = {
+                "level": level if level in call_ai_policy.LEVELS else None,
+                "stopped_before": plan.progress.get("current_stage"),
+                "can_upgrade": actor is not None
+                and await self.ownership.organisation_call_reader(actor),
+            }
         retry_available = False
-        if run_state == "failed" and scope.claimed_account:
+        if run_state == "failed" and scope.claimed_account and ai_skip is None:
             try:
                 # Organisation read permission never grants owner retry. Use
                 # the existing ownership port, without its optional read grant.
@@ -690,4 +711,5 @@ class AcquisitionReports:
             "run_state": run_state,
             "minute_state": None if minute_event is None else minute_event.kind,
             "retry_available": retry_available,
+            "ai_skip": ai_skip,
         }

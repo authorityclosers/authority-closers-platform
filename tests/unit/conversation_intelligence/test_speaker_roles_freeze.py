@@ -159,6 +159,14 @@ async def test_advance_carries_frozen_roles_and_marker_across_polls(case, monkey
 
     service._enqueue = enqueue
     service._account_profile_hold_stage = AsyncMock(return_value=hold)
+    # AI on calls reads the seller's level from the database; this fake has none.
+    monkeypatch.setattr(
+        processing_plan.call_ai_store,
+        "level_for_call",
+        AsyncMock(
+            return_value=processing_plan.call_ai_store.CallLevel("full", "organisation", None, None)
+        ),
+    )
     await service.advance(Mock(), row)
     await service.advance(Mock(), row)
     assert requests[0]["speaker_roles"] == requests[1]["speaker_roles"] == row.speaker_roles

@@ -409,6 +409,16 @@ def run_pass(
                 skipped = spend_guard.skipped_tenants(connection, spend_environment)
                 calls = [call for call in calls if call.tenant_id not in skipped]
             if calls and pipeline == "deep" and not arguments.recording:
+                # AI on calls (owner, 21 Oct 2026): a call whose seller's level stops at its
+                # transcript (Off, Data only) gets the fast facts only, never a deep read.
+                from ac_platform.call_ai import store as call_ai
+
+                calls = [
+                    call
+                    for call in calls
+                    if call_ai.runs_beyond_transcript(connection, call.tenant_id, call.recording_id)
+                ]
+            if calls and pipeline == "deep" and not arguments.recording:
                 # A call whose plan runs C4 as the one-pass request gets its deep call data
                 # from that read (one_pass.plan_publish), never another engine read.
                 from ac_platform.one_pass import plan_publish

@@ -108,6 +108,32 @@ export function ProcessingStatusCopy({
   /** No caps label above the title (the calm progress screen, Strike A). */
   quiet?: boolean;
 }) {
+  if (progress?.run_state === "failed" && progress.ai_skip) {
+    // AI on calls (owner, 21 Oct 2026): the seller's level, not a failure.
+    const off = progress.ai_skip.level === "off";
+    return (
+      <div className={styles.copy} data-ai-skip={progress.ai_skip.level ?? ""}>
+        {quiet ? null : <p className={styles.kicker}>SAVED CALL</p>}
+        <h3>{off ? "AI is off for these calls" : "Data only: no report"}</h3>
+        <p>
+          {off
+            ? "This call is saved and logged on its lead. No AI has read it."
+            : "The transcript and lead facts are saved for the CRM. Coaching and the report are off for this seller’s calls."}
+        </p>
+        {progress.ai_skip.can_upgrade && progress.recording_id ? (
+          <AnalysisRetryAction
+            key={submissionId}
+            submissionId={submissionId}
+            recordingId={progress.recording_id}
+            label="Get full report"
+            fullReport
+          />
+        ) : (
+          <p>An owner or admin can get the full report for this call.</p>
+        )}
+      </div>
+    );
+  }
   if (progress?.run_state === "failed") {
     // The accepted plan's 24 hours ran out, or a new release needs the person's OK
     // (orchestrator, 19 Oct 2026): no price, no time limit, only one tap.

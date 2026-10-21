@@ -543,8 +543,18 @@ def _report_columns() -> tuple[Any, Any]:
         )
         .exists(),
     )
+    # AI on calls: a call its seller's level stopped reads as that level (data_only,
+    # ai_off), not as a held call that needs attention.
+    failure = plan.progress["failure_code"].as_string()
+    held = plan.state == "held"
     latest_plan = (
-        select(plan.state)
+        select(
+            case(
+                (held & (failure == "ai_data_only"), "data_only"),
+                (held & (failure == "ai_off"), "ai_off"),
+                else_=plan.state,
+            )
+        )
         .where(
             plan.recording_id == recording.id,
             plan.tenant_id == recording.tenant_id,
