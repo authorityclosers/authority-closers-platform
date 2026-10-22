@@ -1,0 +1,24 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "b0358f202703dfacd69a0527275bddbd3d7cc369",
+  "full": false,
+  "checks": [
+    "e2e"
+  ],
+  "changed_files": [
+    "db/migrations/versions/20261022_0122_lead_desk_call_submission_index.py",
+    "infra/application/scripts/restore-drill.py",
+    "infra/vps-foundation/scripts/ac-postgres-backup.py",
+    "infra/vps-foundation/scripts/ac-restic-postgres-restore-proof.py",
+    "packages/python/ac_platform/conversation_intelligence/acquisition_library.py",
+    "packages/python/ac_platform/lead_desk/models.py",
+    "tests/database/test_conversation_library_call_leads_postgresql.py",
+    "tests/database/test_lead_desk_call_submission_index_migration_postgresql.py",
+    "tests/infra/test_lead_desk_call_submission_backup_parity.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
