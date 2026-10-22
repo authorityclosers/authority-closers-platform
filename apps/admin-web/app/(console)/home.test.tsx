@@ -7,7 +7,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import type { ApiResult } from "@/app/lib/server-api";
 
-const reads = vi.hoisted(() => ({ health: true }));
+const reads = vi.hoisted(() => ({ health: true, meter: true }));
 
 vi.mock("@/app/lib/server-api", async (original) => {
   const actual = await original<typeof import("@/app/lib/server-api")>();
@@ -17,6 +17,18 @@ vi.mock("@/app/lib/server-api", async (original) => {
       path: string,
       normalize: (raw: unknown) => T,
     ): Promise<ApiResult<T>> => {
+      if (path.startsWith("/v1/admin/conversation/meter")) {
+        if (!reads.meter)
+          return { ok: false, status: 403, error: "Not for this account." };
+        const { meterFixture } = await import(
+          "@/app/review-fixture/meter/meter-fixture"
+        );
+        return {
+          ok: true,
+          status: 200,
+          data: normalize(meterFixture(new Date())),
+        };
+      }
       if (path.startsWith("/v1/admin/conversation/calls"))
         return {
           ok: true,
@@ -59,6 +71,7 @@ vi.mock("@/app/components/admin-dashboard", () => ({
 
 beforeEach(() => {
   reads.health = true;
+  reads.meter = true;
 });
 
 const markup = async () => {
@@ -82,4 +95,15 @@ it("keeps the call tiles when the health read fails", async () => {
   const html = await markup();
   expect(html).toContain("Needs review");
   expect(html).not.toContain("Reports, last 24 h");
+});
+
+it("shows production's cost per minute now, and is whole without it", async () => {
+  const html = await markup();
+  expect(html).toContain("₹/min now · production");
+  expect(html).toContain("Last 7 days: ₹1.07/min");
+  expect(html).toContain('href="/health#cost-meter"');
+  reads.meter = false;
+  const without = await markup();
+  expect(without).not.toContain("₹/min now");
+  expect(without).toContain("Needs review");
 });

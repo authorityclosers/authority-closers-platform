@@ -1,0 +1,150 @@
+/* ₹/min now: three windows side by side on computers, stacked on phones. */
+.windows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.window {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.value {
+  font-size: var(--sx-text-kpi, 28px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.value[data-tone="good"],
+.rate[data-tone="good"] {
+  color: var(--sx-good);
+}
+
+.value[data-tone="warn"],
+.rate[data-tone="warn"] {
+  color: var(--sx-warn);
+}
+
+.value[data-tone="bad"],
+.rate[data-tone="bad"] {
+  color: var(--sx-bad);
+}
+
+/* The scale: the value's bar, with the two targets marked and named underneath. */
+.scale {
+  position: relative;
+  display: block;
+  height: 8px;
+  margin: 2px 0 16px;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--sx-muted);
+}
+
+.fill[data-tone="good"] {
+  background: var(--sx-good);
+}
+
+.fill[data-tone="warn"] {
+  background: var(--sx-warn);
+}
+
+.fill[data-tone="bad"] {
+  background: var(--sx-bad);
+}
+
+.mark {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  background: var(--sx-ink-2);
+}
+
+.mark span {
+  position: absolute;
+  top: 15px;
+  transform: translateX(-50%);
+  color: var(--sx-muted);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.line,
+.note,
+.more {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.note {
+  margin: 0 0 10px;
+}
+
+.note[data-tone="warn"] {
+  color: var(--sx-warn);
+}
+
+.split {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.split div {
+  display: grid;
+  gap: 1px;
+}
+
+.split dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.split dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.split small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.version {
+  font-size: var(--sx-text-xs);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.rate {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.more {
+  display: inline-block;
+  margin-top: 10px;
+}
