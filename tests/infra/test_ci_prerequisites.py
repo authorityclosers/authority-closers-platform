@@ -470,6 +470,26 @@ def test_shared_action_uses_exact_cache_and_saves_before_downstream_tests() -> N
             assert "${{ inputs." not in step["run"]
 
 
+def test_workbench_routes_action_changes_and_overlays_action_for_historical_sources() -> None:
+    spec = importlib.util.spec_from_file_location("wb_checks", ROOT / "scripts/ci/wb_checks.py")
+    assert spec and spec.loader
+    checks = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checks)
+    families, full = checks.families(
+        {
+            "full": False,
+            "checks": [],
+            "changed_files": [".github/actions/ci-prerequisites/action.yml"],
+        }
+    )
+    assert families == {"py", "web", "visual"} and full
+    script = (ROOT / "scripts/ci/wb-ci").read_text()
+    # Read only the shell array, not incidental mentions elsewhere in the tool.
+    overlays = script.split("CI_FILES=(", 1)[1].split(")", 1)[0].split()
+    assert ".github/actions/ci-prerequisites/action.yml" in overlays
+    assert "scripts/ci/ci_prerequisites.py" in overlays
+
+
 def test_workbench_jobs_use_cached_proofs_and_foreground_dependency_failures() -> None:
     jobs = yaml.safe_load((ROOT / ".github/workflows/workbench-checks.yml").read_text())["jobs"]
     for name in ("py-tests", "visual", "e2e"):
