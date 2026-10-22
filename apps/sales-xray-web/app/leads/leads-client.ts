@@ -733,6 +733,65 @@ export function bulkLeads(
   );
 }
 
+/** An approved WhatsApp template, as Meta last said (Settings → Connected apps). */
+export type WaTemplate = {
+  name: string;
+  language: string;
+  status: string;
+  text: string;
+  /** How many {{n}} parts it asks for. */
+  parts: number;
+};
+
+/** The organisation's approved WhatsApp templates; none when WhatsApp isn't set up. */
+export async function readApprovedTemplates(
+  signal?: AbortSignal,
+): Promise<WaTemplate[]> {
+  // Read as sent: a template's name is Meta's id ("welcome_lead"), not a person's.
+  const response = await fetch(`${API}/whatsapp/status`, {
+    credentials: "same-origin",
+    cache: "no-store",
+    signal,
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) return [];
+  const status = (await response.json()) as {
+    numbers?: unknown[];
+    templates?: WaTemplate[];
+  };
+  if (!status.numbers?.length) return [];
+  return (status.templates ?? []).filter((item) => item.status === "APPROVED");
+}
+
+export type BulkWhatsApp = {
+  ready: number;
+  skipped: { reason: string; words: string; count: number }[];
+  sent: number;
+  failed: number;
+  /** The template as a lead reads it ({name} stays as written). */
+  text: string;
+  limit: number;
+};
+
+/**
+ * One approved template to many leads (owners and admins). Without `confirm` it only
+ * says who would get it; a send must quote the count that check showed.
+ */
+export function bulkWhatsApp(
+  body: {
+    leadIds: string[];
+    template: string;
+    language: string;
+    values: string[];
+  },
+  send: { commandId: string; confirm: number } | null = null,
+) {
+  return request<BulkWhatsApp>(
+    send ? "/leads/bulk-whatsapp" : "/leads/bulk-whatsapp/preview",
+    json("POST", send ? { ...body, ...send } : body),
+  );
+}
+
 /** Move a lead to another of the organisation's pipelines (owners and admins). */
 export function movePipeline(
   lead: Pick<LeadRow, "lead_id" | "revision">,

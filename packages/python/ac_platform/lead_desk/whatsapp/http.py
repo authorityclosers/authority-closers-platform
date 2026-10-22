@@ -19,7 +19,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid5
 
 import structlog
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
@@ -169,6 +169,35 @@ class SendCommand(_Command):
     template: str | None = Field(default=None, max_length=512)
     language: str | None = Field(default=None, max_length=16)
     values: list[str] = Field(default_factory=list, max_length=10)
+
+
+class BulkWhatsAppCommand(_Command):
+    """One approved template to many leads (owners and admins). `confirm` is the count the
+    preview showed: a send never goes to more people than the person agreed to."""
+
+    command_id: UUID | None = Field(default=None, alias="commandId")
+    lead_ids: list[UUID] = Field(alias="leadIds", min_length=1, max_length=500)
+    number_id: UUID | None = Field(default=None, alias="numberId")
+    template: str = Field(min_length=1, max_length=512)
+    language: str = Field(min_length=1, max_length=16)
+    values: list[str] = Field(default_factory=list, max_length=10)
+    confirm: int | None = Field(default=None, ge=0)
+
+
+class SkipView(BaseModel):
+    reason: str
+    words: str
+    count: int
+
+
+class BulkWhatsAppView(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    ready: int
+    skipped: list[SkipView]
+    sent: int = 0
+    failed: int = 0
+    text: str
+    limit: int
 
 
 class OptInCommand(_Command):
@@ -753,6 +782,85 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
             if message.status == "failed":
                 response.headers["X-WhatsApp-Error"] = "1"
             return view
+
+    async def bulk_whatsapp(
+        desk: LeadDesk, command: BulkWhatsAppCommand, *, send: bool
+    ) -> BulkWhatsAppView:
+        desk._require_manager()
+        cfg = whatsapp_config()
+        rows = await inbox.numbers(desk.db, desk.tenant_id)
+        row = next((r for r in rows if command.number_id in (None, r.id)), None)
+        if row is None:
+            raise DeskError(409, "Connect a WhatsApp number in Settings → Integrations first.")
+        approved = {(t.name, t.language): t for t in await inbox.approved_templates(desk.db, row)}
+        chosen = approved.get((command.template, command.language))
+        if chosen is None:
+            raise DeskError(422, "Pick an approved template.")
+        text = cloud.template_text(chosen.components)
+        needed = cloud.placeholders(text)
+        if len([value for value in command.values if value.strip()]) < needed:
+            raise DeskError(422, f"Fill in all {needed} parts of the template.")
+        ready, skipped = await inbox.bulk_plan(desk, row, command.lead_ids)
+        view = BulkWhatsAppView(
+            ready=len(ready),
+            skipped=[
+                SkipView(reason=key, words=inbox.SKIP_WORDS[key], count=count)
+                for key, count in skipped.items()
+            ],
+            text=cloud.fill(text, command.values[:needed]),
+            limit=inbox.BULK_LIMIT,
+        )
+        if not send:
+            return view
+        if command.command_id is None:
+            raise DeskError(422, "That send can't be told apart from another. Try again.")
+        if len(ready) > inbox.BULK_LIMIT:
+            raise DeskError(422, f"Send to {inbox.BULK_LIMIT} leads or fewer at a time.")
+        if command.confirm != len(ready):
+            raise DeskError(409, "Who gets it changed since you checked. Check again.")
+        api = cloud.Cloud(cfg)
+        sent = failed = 0
+        for lead in ready:
+            message = await inbox.send(
+                desk,
+                cfg,
+                api,
+                lead.id,
+                command_id=uuid5(command.command_id, str(lead.id)),
+                number_id=row.id,
+                body=None,
+                template=command.template,
+                language=command.language,
+                values=inbox.bulk_values(command.values[:needed], lead),
+            )
+            if message.status == "failed":
+                failed += 1
+            else:
+                sent += 1
+        await desk.db.flush()
+        return view.model_copy(update={"sent": sent, "failed": failed})
+
+    @router.post(
+        "/leads/bulk-whatsapp/preview",
+        response_model=BulkWhatsAppView,
+        response_model_by_alias=True,
+    )
+    async def bulk_whatsapp_preview(
+        command: BulkWhatsAppCommand, request: Request, response: Response
+    ) -> BulkWhatsAppView:
+        """Who one template would reach, and who is skipped and why. Sends nothing."""
+        async with desk_for(request, response) as desk:
+            return await bulk_whatsapp(desk, command, send=False)
+
+    @router.post(
+        "/leads/bulk-whatsapp", response_model=BulkWhatsAppView, response_model_by_alias=True
+    )
+    async def bulk_whatsapp_send(
+        command: BulkWhatsAppCommand, request: Request, response: Response
+    ) -> BulkWhatsAppView:
+        """Send one approved template to every lead who said yes to WhatsApp."""
+        async with desk_for(request, response, write=True) as desk:
+            return await bulk_whatsapp(desk, command, send=True)
 
     @router.post(
         "/leads/{lead_id}/whatsapp/opt-in",

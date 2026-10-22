@@ -18,11 +18,13 @@ import { BulkSheet } from "./bulk-sheet";
 let host: HTMLDivElement;
 let root: Root;
 let sent: { url: string; body: Record<string, unknown> | undefined }[];
+let templatesAt: "some" | "none" = "some";
 const SELLER = "00000000-0000-4000-8000-000000000002";
 
 beforeEach(() => {
   notices.length = 0;
   sent = [];
+  templatesAt = "some";
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -58,6 +60,54 @@ beforeEach(() => {
               archived: false,
             },
           ],
+        });
+      if (url === "/v1/lead-desk/whatsapp/status")
+        return Response.json(
+          templatesAt === "none"
+            ? { numbers: [], templates: [] }
+            : {
+                numbers: [{ id: "n-1" }],
+                templates: [
+                  {
+                    name: "welcome_lead",
+                    language: "en",
+                    status: "APPROVED",
+                    text: "Hi {{1}}, thanks for your enquiry.",
+                    parts: 1,
+                  },
+                  {
+                    name: "site_visit",
+                    language: "en",
+                    status: "PENDING",
+                    text: "Your visit is booked.",
+                    parts: 0,
+                  },
+                ],
+              },
+        );
+      if (url === "/v1/lead-desk/leads/bulk-whatsapp/preview")
+        return Response.json({
+          ready: 2,
+          skipped: [
+            {
+              reason: "no_yes",
+              words: "haven't said yes to WhatsApp",
+              count: 1,
+            },
+          ],
+          sent: 0,
+          failed: 0,
+          text: "Hi {name}, thanks for your enquiry.",
+          limit: 100,
+        });
+      if (url === "/v1/lead-desk/leads/bulk-whatsapp")
+        return Response.json({
+          ready: 2,
+          skipped: [],
+          sent: 2,
+          failed: 0,
+          text: "",
+          limit: 100,
         });
       if (url === "/v1/lead-desk/leads/bulk")
         return Response.json({
@@ -150,4 +200,64 @@ it("moves them to one of the stages, never to Couldn't reach", async () => {
       title: "2 leads moved to Counselled.",
     }),
   ]);
+});
+
+async function open() {
+  await act(async () =>
+    root.render(
+      <BulkSheet
+        open
+        leadIds={["a", "b", "c"]}
+        pipeline={null}
+        onClose={() => undefined}
+        onDone={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  await act(async () => press("Send a WhatsApp template").click());
+  await flush();
+  return document.querySelector("dialog")!;
+}
+
+// Orchestrator, 22 Oct 2026: WhatsApp's rules for a template to many leads.
+it("sends an approved template only after saying who gets it and who is skipped", async () => {
+  const dialog = await open();
+  expect(dialog.textContent).toContain("welcome lead");
+  expect(dialog.textContent).not.toContain("site visit"); // not approved
+  await act(async () => press("welcome lead").click());
+  expect(dialog.querySelector("input")?.value).toBe("{name}");
+  await act(async () => press("Check who gets it").click());
+  await flush();
+  expect(dialog.textContent).toContain(
+    "Goes to 2 leads who said yes to WhatsApp.",
+  );
+  expect(dialog.textContent).toContain(
+    "1 lead skipped: haven't said yes to WhatsApp.",
+  );
+  expect(
+    sent.some((item) => item.url === "/v1/lead-desk/leads/bulk-whatsapp"),
+  ).toBe(false);
+  await act(async () => press("Send to 2 leads").click());
+  await flush();
+  const send = sent.find(
+    (item) => item.url === "/v1/lead-desk/leads/bulk-whatsapp",
+  );
+  expect(send?.body).toMatchObject({
+    leadIds: ["a", "b", "c"],
+    template: "welcome_lead",
+    language: "en",
+    values: ["{name}"],
+    confirm: 2,
+  });
+  expect(typeof send?.body?.commandId).toBe("string");
+  expect(notices).toEqual([
+    expect.objectContaining({ tone: "success", title: "Sent to 2 leads" }),
+  ]);
+});
+
+it("says how to start when no template is approved", async () => {
+  templatesAt = "none";
+  const dialog = await open();
+  expect(dialog.textContent).toContain("No approved WhatsApp templates yet.");
 });

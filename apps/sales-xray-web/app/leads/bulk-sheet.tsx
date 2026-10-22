@@ -5,40 +5,56 @@
  * the ticked leads to a person (or the lead rules), move them to a stage, or to another
  * pipeline, in one go. Each lead changes as its own action would (POST /leads/bulk);
  * one that is already there is skipped and counted.
+ *
+ * A WhatsApp template goes only within WhatsApp's rules (orchestrator, 22 Oct 2026):
+ * approved templates only, only to leads with a recorded yes, never to one who asked to
+ * stop; who gets it is checked first, and the send names that count.
  */
 
 import {
   ChevronLeft,
   ChevronRight,
+  MessageCircle,
   Route,
   Shuffle,
   UsersRound,
   Workflow,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { displayName } from "../display-name";
 import { notify } from "../notice-center";
 import { Sheet } from "../ui/sheet";
 import { readJourney, type StageView } from "./journey/journey-client";
+import { Button, Field } from "../ui/kit";
 import {
   bulkLeads,
+  bulkWhatsApp,
+  commandId,
   LeadsError,
+  readApprovedTemplates,
   readTeam,
   type BulkAction,
+  type BulkWhatsApp,
   type RepView,
+  type WaTemplate,
 } from "./leads-client";
 import { KIND_WORDS } from "./stage-tabs";
 import { several, usePipelines } from "./use-pipelines";
 import styles from "./leads.module.css";
 
-type Step = "menu" | BulkAction;
+type Step = "menu" | BulkAction | "whatsapp";
 
-const TITLES: Record<BulkAction, string> = {
+const TITLES: Record<Exclude<Step, "menu">, string> = {
   assign: "Give to a person",
   stage: "Move to a stage",
   pipeline: "Move to a pipeline",
+  whatsapp: "Send a WhatsApp",
 };
+
+const plural = (count: number, one: string, many = `${one}s`) =>
+  `${count} ${count === 1 ? one : many}`;
 
 function Row({
   icon,
@@ -92,6 +108,10 @@ export function BulkSheet({
   const [team, setTeam] = useState<RepView[] | null>(null);
   const [stages, setStages] = useState<StageView[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [templates, setTemplates] = useState<WaTemplate[] | null>(null);
+  const [template, setTemplate] = useState<WaTemplate | null>(null);
+  const [values, setValues] = useState<string[]>([]);
+  const [plan, setPlan] = useState<BulkWhatsApp | null>(null);
   const pipes = usePipelines(open);
   const n = leadIds.length;
   const leads = `${n} lead${n === 1 ? "" : "s"}`;
@@ -130,6 +150,84 @@ export function BulkSheet({
       live = false;
     };
   }, [step, stages, stagesFrom]);
+
+  useEffect(() => {
+    if (step !== "whatsapp" || templates !== null) return;
+    const controller = new AbortController();
+    readApprovedTemplates(controller.signal).then(setTemplates, () => {
+      if (!controller.signal.aborted) setTemplates([]);
+    });
+    return () => controller.abort();
+  }, [step, templates]);
+
+  const pick = (item: WaTemplate) => {
+    setTemplate(item);
+    setPlan(null);
+    // The first part is usually who it's to: each lead's own first name.
+    setValues(
+      Array.from({ length: item.parts }, (_, index) =>
+        index === 0 ? "{name}" : "",
+      ),
+    );
+  };
+  const ask = template && {
+    leadIds,
+    template: template.name,
+    language: template.language,
+    values,
+  };
+
+  async function check() {
+    if (!ask) return;
+    setBusy(true);
+    try {
+      setPlan(await bulkWhatsApp(ask));
+    } catch (reason) {
+      notify({
+        id: "bulk-leads",
+        tone: "error",
+        title: "Couldn't check who gets it",
+        message:
+          reason instanceof LeadsError
+            ? reason.message
+            : "Check your connection and try again.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function send() {
+    if (!ask || !plan) return;
+    setBusy(true);
+    try {
+      const done = await bulkWhatsApp(ask, {
+        commandId: commandId(),
+        confirm: plan.ready,
+      });
+      notify({
+        id: "bulk-leads",
+        tone: done.failed ? "info" : "success",
+        title: `Sent to ${plural(done.sent, "lead")}`,
+        message: done.failed
+          ? `${plural(done.failed, "message")} didn't go. Their chats say why.`
+          : undefined,
+        timeout: 6000,
+      });
+      onDone();
+    } catch (reason) {
+      notify({
+        id: "bulk-leads",
+        tone: "error",
+        title: "Nothing was sent",
+        message:
+          reason instanceof LeadsError
+            ? reason.message
+            : "Check your connection and try again.",
+      });
+      setBusy(false);
+    }
+  }
 
   async function run(body: {
     action: BulkAction;
@@ -201,7 +299,111 @@ export function BulkSheet({
                 onPick={() => setStep("pipeline")}
               />
             ) : null}
+            <Row
+              icon={<MessageCircle size={20} />}
+              label="Send a WhatsApp template"
+              note="Only to leads who said yes to WhatsApp"
+              onPick={() => setStep("whatsapp")}
+            />
           </ul>
+        ) : null}
+        {step === "whatsapp" ? (
+          templates === null ? (
+            <p className={styles.hint}>Loading your WhatsApp templates…</p>
+          ) : !templates.length ? (
+            <p className={styles.hint}>
+              No approved WhatsApp templates yet. Connect WhatsApp and get a
+              template approved in{" "}
+              <Link href="/settings/apps">Settings → Connected apps</Link>.
+            </p>
+          ) : !template ? (
+            <ul className={styles.menuList}>
+              {templates.map((item) => (
+                <Row
+                  key={`${item.name}-${item.language}`}
+                  icon={<MessageCircle size={20} />}
+                  label={item.name.replaceAll("_", " ")}
+                  note={item.text}
+                  onPick={() => pick(item)}
+                />
+              ))}
+            </ul>
+          ) : (
+            <div className={styles.bulkSend}>
+              <p className={styles.bulkText}>{plan?.text ?? template.text}</p>
+              {values.map((value, index) => (
+                <Field
+                  key={index}
+                  label={`Part ${index + 1}`}
+                  hint={
+                    index === 0
+                      ? "{name} becomes each lead's first name."
+                      : undefined
+                  }
+                >
+                  <input
+                    value={value}
+                    maxLength={200}
+                    onChange={(event) => {
+                      const next = [...values];
+                      next[index] = event.target.value;
+                      setValues(next);
+                      setPlan(null);
+                    }}
+                  />
+                </Field>
+              ))}
+              {plan ? (
+                <div className={styles.bulkPlan} role="status">
+                  <strong>
+                    {plan.ready
+                      ? `Goes to ${plural(plan.ready, "lead")} who said yes to WhatsApp.`
+                      : "Nobody here said yes to WhatsApp yet, so nothing would go."}
+                  </strong>
+                  {plan.skipped.map((item) => (
+                    <span key={item.reason}>
+                      {plural(item.count, "lead")} skipped: {item.words}.
+                    </span>
+                  ))}
+                  {plan.ready > plan.limit ? (
+                    <span>
+                      {`That's more than ${plan.limit} at once. Select fewer leads.`}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className={styles.bulkActions}>
+                {plan ? (
+                  <Button
+                    variant="primary"
+                    disabled={busy || !plan.ready || plan.ready > plan.limit}
+                    onClick={() => void send()}
+                  >
+                    {busy
+                      ? "Sending…"
+                      : `Send to ${plural(plan.ready, "lead")}`}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    disabled={busy || values.some((value) => !value.trim())}
+                    onClick={() => void check()}
+                  >
+                    {busy ? "Checking…" : "Check who gets it"}
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setTemplate(null);
+                    setPlan(null);
+                  }}
+                >
+                  Another template
+                </Button>
+              </div>
+            </div>
+          )
         ) : null}
         {step === "assign" ? (
           team === null ? (

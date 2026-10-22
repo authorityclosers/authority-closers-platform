@@ -630,6 +630,50 @@ async def send(
     return message
 
 
+# ----- one template to many leads (owners and admins; 22 Oct 2026) ----------------------
+
+BULK_LIMIT: Final[int] = 100
+SKIP_WORDS: Final[dict[str, str]] = {
+    "not_here": "not on your desk",
+    "no_whatsapp": "no WhatsApp number",
+    "said_stop": "asked not to be messaged",
+    "no_yes": "haven't said yes to WhatsApp",
+}
+
+
+async def bulk_plan(
+    desk: LeadDesk, row: LeadWhatsAppNumber, lead_ids: Sequence[UUID]
+) -> tuple[list[Lead], dict[str, int]]:
+    """Who a bulk template goes to, and who is skipped and why. Stricter than one message:
+    every lead needs a recorded yes (a lead form's yes, a message from them, or a seller's
+    record of it), whatever the 24-hour window; a recorded no is never messaged."""
+    rules = number_config(row)["first_reply"]
+    ready: list[Lead] = []
+    skipped: dict[str, int] = {}
+    for lead_id in dict.fromkeys(lead_ids):
+        try:
+            lead = await desk._lead(lead_id)
+        except DeskError:
+            skipped["not_here"] = skipped.get("not_here", 0) + 1
+            continue
+        if cloud.wa_id(lead.phone) is None:
+            reason = "no_whatsapp"
+        else:
+            agreed, how = await opt_in_state(desk.db, lead, rules)
+            reason = "" if agreed else "said_stop" if how else "no_yes"
+        if reason:
+            skipped[reason] = skipped.get(reason, 0) + 1
+        else:
+            ready.append(lead)
+    return ready, skipped
+
+
+def bulk_values(values: Sequence[str], lead: Lead) -> list[str]:
+    """A template's values for one lead: {name} becomes their first name."""
+    first = (lead.name or "").split(" ")[0] or "there"
+    return [str(value).replace("{name}", first) for value in values]
+
+
 async def _last_inbound(db: AsyncSession, lead: Lead) -> datetime | None:
     at: datetime | None = await db.scalar(
         select(
