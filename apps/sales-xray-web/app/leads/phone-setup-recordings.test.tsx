@@ -11,13 +11,11 @@ import {
   ALL_FILES_EXPLAINER,
   HIDDEN_TODO,
   recorderGuide,
-  TEST_RESULT_LINE,
 } from "./phone-setup-words";
 
 /**
- * Xiaomi's hidden recordings folder (Redmi audit #49), the setup test call
- * that checks both people are recorded (#60), and a dialer call's recording
- * joining its own row on the lead (#55).
+ * Xiaomi's hidden recordings folder (Redmi audit #49), Truecaller's note
+ * (#48), and a dialer call's recording joining its own row on the lead (#55).
  */
 
 (
@@ -75,7 +73,6 @@ const HYPEROS = {
   device: "5c0de5a7-0000-4000-8000-00000000d5c6",
   needsAllFiles: true,
   allFilesSupported: true,
-  testResult: "none",
   truecaller: true,
   recorderProfile: {
     kind: "folder",
@@ -128,20 +125,13 @@ it("reads the new setup fields, and an older app sends none", () => {
   expect(status).toMatchObject({
     needsAllFiles: true,
     allFilesSupported: true,
-    testResult: "none",
     truecaller: true,
-    canTest: true,
   });
   const old = parseSetup({ checks: CHECKS, family: "xiaomi" })!;
   expect(old).toMatchObject({
     needsAllFiles: false,
-    testResult: "none",
-    canTest: false,
   });
   expect(lineTodo("recordings", status)).toBe(HIDDEN_TODO);
-  expect(lineTodo("testCall", { ...status, testResult: "only_you" })).toBe(
-    TEST_RESULT_LINE.only_you,
-  );
 });
 
 it("says the recorder folder is hidden, not empty", () => {
@@ -171,39 +161,6 @@ it("asks a Xiaomi phone for All files access on the Call recordings line", async
   // Truecaller is on this phone: the checklist says how to get past its screen.
   await act(async () => button("Not now")!.click());
   expect(document.body.textContent).toContain("Truecaller");
-});
-
-it("runs the test call to a colleague and shows what the phone heard", async () => {
-  let result = "none";
-  const sent = fakePhone((message) => {
-    if (message.method === "testCall") {
-      result = "only_you";
-      return { started: true, mode: "direct" };
-    }
-    return { ...HYPEROS, testResult: result };
-  });
-  await act(async () => root.render(<PhoneSetupBar />));
-  await act(async () => button("Phone setup")!.click());
-  const test = lines().find((line) =>
-    line.textContent?.includes("Test call recorded"),
-  )!;
-  await act(async () => test.querySelector("button")!.click());
-  const call = button("Call")!;
-  expect(call.disabled).toBe(true);
-  const number = document.querySelector<HTMLInputElement>('input[type="tel"]')!;
-  await act(async () => {
-    const setValue = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!;
-    setValue.call(number, "98765 43210");
-    number.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => button("Call")!.click());
-  expect(
-    sent.filter((item) => item.method === "testCall").map((item) => item.args),
-  ).toEqual([{ number: "98765 43210" }]);
-  expect(document.body.textContent).toContain("checks the recording");
 });
 
 const phoneCall = (extra: Partial<LeadEvent>): LeadEvent => ({

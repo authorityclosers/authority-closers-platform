@@ -5,7 +5,7 @@
  * and the dot a manager sees for each seller's phone on Team.
  */
 
-import type { RecorderProfile, TestCallResult } from "./native-phone";
+import type { RecorderProfile } from "./native-phone";
 import { ago, type PhoneHealth } from "./leads-client";
 
 export type PhoneCheck =
@@ -53,7 +53,7 @@ export const CHECK_TODO: Record<PhoneCheck, string> = {
   battery: "Your phone lets Sales Xray run in the background.",
   autostart: "Your phone lets Sales Xray start by itself.",
   testCall:
-    "Call a colleague and check your phone records both of you. The recording stays on your phone.",
+    "Call any lead from Sales Xray and talk for a few seconds. Ticks when the recording is found.",
   callLog: "Calls with your leads from the phone dialer show on the lead.",
 };
 
@@ -118,40 +118,6 @@ export const ALL_FILES_EXPLAINER: Explainer = {
 /** The line under Call recordings while the folder is hidden. */
 export const HIDDEN_TODO =
   "Your phone hides its call recordings. Allow All files access.";
-
-/** The setup test call: what to do, before the seller dials. */
-export const TEST_CALL_STEPS = [
-  "Call a colleague or a friend who is in another room, not next to you.",
-  "When they answer, stay quiet while they count to ten.",
-  "Then say a few words yourself, and hang up.",
-];
-
-/** What the test call found (#60: on some phones only your own voice is recorded). */
-export const TEST_RESULT_WORDS: Record<TestCallResult, string | null> = {
-  both: "Both of you were recorded. Recording works.",
-  only_you:
-    "Only your voice was recorded; the other person came out silent. Check they weren't muted or on a Bluetooth headset and spoke near their phone, then try again.",
-  only_them:
-    "Only the other person was recorded. Check your phone's microphone, then try again.",
-  silent:
-    "The recording is silent. Check that Record calls automatically is on, then try again.",
-  not_found:
-    "No recording was found for the test call. Turn on call recording in your Phone app, then try again.",
-  unknown:
-    "The recording was too short to check. Talk a little longer, then try again.",
-  none: null,
-};
-
-/** The checklist line after a test call that didn't pass: short; the line's view has the rest. */
-export const TEST_RESULT_LINE: Record<TestCallResult, string | null> = {
-  both: null,
-  only_you: "Only your voice was heard. Try the test again.",
-  only_them: "Only the other person was recorded.",
-  silent: "The test recording was silent.",
-  not_found: "No recording was found for the test call.",
-  unknown: "Too short to check. Try again.",
-  none: null,
-};
 
 /** Truecaller's after-call screen covers "How did it go?" (Redmi audit #48). */
 export const TRUECALLER_NOTE =
