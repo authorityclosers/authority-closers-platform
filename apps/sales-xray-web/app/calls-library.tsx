@@ -42,7 +42,7 @@ import {
   acquisition,
   parseSubmissionLibraryPage,
   rememberSubmission,
-  type CallLead,
+  CALL_LEAD_STAGE_WORDS,
   type LibrarySubmission,
   type SubmissionLibraryPage,
 } from "./acquisition-client";
@@ -278,16 +278,6 @@ function lengthWords(ms: number) {
   const rest = minutes % 60;
   return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ""}`;
 }
-
-/** A lead's stage in the words Leads uses for it. */
-const LEAD_STAGE_WORDS: Record<CallLead["stage"], string> = {
-  new: "New",
-  not_connected: "Not contacted",
-  follow_up: "Follow up",
-  interested: "Interested",
-  won: "Won",
-  lost: "Lost",
-};
 
 /** A saved call whose analysis never started (the server orders these last). */
 function notAnalysed(submission: LibrarySubmission) {
@@ -1121,7 +1111,7 @@ function CallsLibraryContent({
   const leadMark = (submission: LibrarySubmission, title: string) => {
     if (!submission.lead) return null;
     const name = displayName(submission.lead.name);
-    const stage = LEAD_STAGE_WORDS[submission.lead.stage];
+    const stage = CALL_LEAD_STAGE_WORDS[submission.lead.stage];
     const named = !title.toLowerCase().includes(name.toLowerCase());
     return { text: named ? `${name} · ${stage}` : stage, named, name, stage };
   };
@@ -2112,7 +2102,7 @@ function CallsLibraryContent({
                 ? {
                     href: leadLink(shownPreview.lead.leadId),
                     name: displayName(shownPreview.lead.name),
-                    stage: LEAD_STAGE_WORDS[shownPreview.lead.stage],
+                    stage: CALL_LEAD_STAGE_WORDS[shownPreview.lead.stage],
                   }
                 : null
             }
