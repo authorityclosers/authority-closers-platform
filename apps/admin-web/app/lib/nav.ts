@@ -58,7 +58,9 @@ export type NavIcon =
   | "studio"
   | "releases"
   | "updates"
-  | "safety";
+  | "safety"
+  | "catalogue"
+  | "offers";
 
 type Need =
   | { kind: "console" }
@@ -220,6 +222,27 @@ export const NAVIGATION: readonly NavGroup[] = [
         label: "Synthetic data",
         icon: "synthetic",
         need: { kind: "salesXray" },
+      },
+    ],
+  },
+  {
+    // The platform's feature catalogue and the Offer Studio built on it (owner, 23 Oct
+    // 2026); control accounts only.
+    label: "Offers",
+    items: [
+      {
+        href: "/catalogue",
+        label: "Feature catalogue",
+        icon: "catalogue",
+        need: { kind: "salesXray" },
+      },
+      {
+        href: "/offers",
+        label: "Offer Studio",
+        icon: "offers",
+        need: { kind: "salesXray" },
+        // Listed once /offers is built (the Offer Studio session removes this line).
+        soon: true,
       },
     ],
   },

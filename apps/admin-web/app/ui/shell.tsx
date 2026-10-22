@@ -24,6 +24,7 @@ import {
   GraduationCap,
   Handshake,
   Home,
+  LayoutGrid,
   LogOut,
   Megaphone,
   Menu,
@@ -34,6 +35,7 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Star,
   Timer,
   UserCheck,
@@ -86,6 +88,8 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   releases: Rocket,
   updates: Megaphone,
   safety: ShieldCheck,
+  catalogue: LayoutGrid,
+  offers: Sparkles,
 };
 
 export function AcMark({ size = 20 }: { size?: number }) {
