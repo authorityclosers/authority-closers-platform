@@ -13,6 +13,7 @@ import {
   type CallOutcomeKind,
   type HumanCallOutcome,
 } from "./report-call-outcome-contract";
+import { track } from "./telemetry";
 import styles from "./report-call-outcome.module.css";
 
 type Props = {
@@ -74,6 +75,7 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
     setError(null);
     try {
       await onSave(next);
+      track("sx.outcome_set", { outcome: kind });
       // No optimistic outcome/stage or success label: the parent must read back.
       setChoice(null);
     } catch {

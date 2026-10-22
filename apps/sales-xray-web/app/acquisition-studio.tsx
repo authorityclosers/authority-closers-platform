@@ -143,6 +143,7 @@ import {
   type ContextualSourcePlayback,
   type SourcePlaybackRange,
 } from "./source-playback-context";
+import { track } from "./telemetry";
 import styles from "./acquisition-studio.module.css";
 import { formatAnalysisTime } from "./analysis-time";
 
@@ -2577,7 +2578,13 @@ export function AcquisitionStudio({
               <button
                 className="primary-button"
                 type="button"
-                onClick={() => chooseEarlierReport("analyse")}
+                onClick={() => {
+                  track("sx.reanalyse_requested", {
+                    call_id: earlierReportSubmissionId,
+                    surface: "report",
+                  });
+                  chooseEarlierReport("analyse");
+                }}
               >
                 Analyse again
               </button>

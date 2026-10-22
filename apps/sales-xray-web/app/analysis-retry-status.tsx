@@ -11,6 +11,7 @@ import {
   parseProcessingPlan,
   type ProcessingPlan,
 } from "./processing-plan-contract";
+import { track, type AiLevel, type CallSurface } from "./telemetry";
 import styles from "./analysis-retry-status.module.css";
 
 function acceptedPlan(plan: ProcessingPlan): boolean {
@@ -52,6 +53,8 @@ export function AnalysisRetryAction({
   recordingId,
   label,
   fullReport = false,
+  surface = "report",
+  level,
 }: {
   submissionId: string;
   recordingId: string;
@@ -62,6 +65,9 @@ export function AnalysisRetryAction({
    * (POST …/full-report), then accepts the fresh plan exactly as a retry.
    */
   fullReport?: boolean;
+  /** Where "Get full report" was tapped, and the call's AI level then (telemetry). */
+  surface?: CallSurface;
+  level?: AiLevel | null;
 }) {
   const [plan, setPlan] = useState<ProcessingPlan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -71,6 +77,12 @@ export function AnalysisRetryAction({
 
   const retry = async () => {
     if (flight.current) return;
+    if (fullReport && !plan)
+      track("sx.full_report_requested", {
+        call_id: submissionId,
+        surface,
+        ...(level ? { level } : {}),
+      });
     const controller = new AbortController();
     flight.current = controller;
     setBusy(true);
