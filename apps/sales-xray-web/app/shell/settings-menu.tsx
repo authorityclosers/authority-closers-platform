@@ -457,7 +457,7 @@ export function SettingsMenu({
       </div>
 
       {phone ? (
-        <section className={styles.section} aria-label="Your settings">
+        <section className={styles.group} aria-label="Your settings">
           <h3 className={styles.heading}>You</h3>
           <ActionList label="Your settings">
             {yours.map((item) => (
@@ -475,7 +475,7 @@ export function SettingsMenu({
       ) : null}
 
       {phone && organisation && insights ? (
-        <section className={styles.section} aria-label="Organisation settings">
+        <section className={styles.group} aria-label="Organisation settings">
           <h3 className={styles.heading}>Organisation</h3>
           <ActionList label="Organisation settings">
             {theirs.map((item) => (

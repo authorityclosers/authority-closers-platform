@@ -1263,8 +1263,13 @@ a.rowTitle:focus-visible::after {
 }
 
 .actionWords small {
+  display: -webkit-box;
+  overflow: hidden;
   color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
+  font-size: var(--sx-text-xs);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .actionEnd {
