@@ -1563,7 +1563,10 @@ function LightboxShellFrame({
                         key={profile?.email ?? ""}
                         photoUrl={profile?.photo_url}
                       >
-                        {accountInitials(profileName, profile?.email ?? null)}
+                        {accountInitials(
+                          profileName,
+                          profile?.email ?? null,
+                        ) || <UserRound size={16} />}
                       </AccountAvatarImage>
                     )}
                   </span>

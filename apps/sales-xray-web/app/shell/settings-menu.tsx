@@ -95,7 +95,8 @@ export function accountInitials(name: string | null, email: string | null) {
   const parts = source.split(/\s+/).filter(Boolean);
   const letters =
     parts.length > 1 ? parts[0][0] + parts[1][0] : source.slice(0, 2);
-  return letters.toUpperCase() || "·";
+  // Nothing to take initials from: the caller shows a person instead.
+  return letters.toUpperCase();
 }
 
 const noSubscription = () => () => {};
@@ -460,7 +461,7 @@ export function SettingsMenu({
       <div className={styles.who}>
         <span className={styles.avatar} aria-hidden="true">
           <AccountAvatarImage key={email} photoUrl={photoUrl}>
-            {accountInitials(name, email)}
+            {accountInitials(name, email) || <UserRound size={20} />}
           </AccountAvatarImage>
         </span>
         <span className={styles.whoText}>

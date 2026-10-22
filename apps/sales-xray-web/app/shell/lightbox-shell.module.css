@@ -1584,6 +1584,12 @@
   .panelSearch {
     height: auto;
   }
+
+  /* Icon only (below 1100 px) it is round like its neighbours (shell
+     sweep, 23 Oct 2026); with its words the label sets the width. */
+  .newAnalysisButton {
+    min-width: var(--lx-row-min-h, 44px);
+  }
 }
 @keyframes edge-in {
   from {
@@ -2086,13 +2092,16 @@
     padding: 12px 12px 10px;
   }
 
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .collapseBtn {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
+  /* A mouse gets the 28 px button and the name the room; touch keeps 44 px. */
+  @media (pointer: fine) {
+    :global(html:not([data-sx-sidebar="collapsed"]))
+      .shell:not(.collapsed)
+      .collapseBtn {
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      min-height: 28px;
+    }
   }
 
   :global(html:not([data-sx-sidebar="collapsed"]))
