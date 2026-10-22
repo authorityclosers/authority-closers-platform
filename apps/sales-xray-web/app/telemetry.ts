@@ -9,16 +9,79 @@
  *   disposable, consented analytics.
  * - No call content and nothing personal: no names, emails, transcripts,
  *   call titles, ids or free text. Payloads are short enums and numbers; the
- *   server rejects anything else.
+ *   server rejects anything else. A report event's call goes in its own
+ *   `call_id` field, never the payload; the server keeps only a keyed hash.
+ * - Each event also says the page (its route template, ids left out), the
+ *   device class and web or the Android app (owner, 22 Oct 2026: optimise on
+ *   how people use the app).
  * - Fail closed and stay quiet: the server publishes the events it accepts
  *   (GET /v1/telemetry/taxonomy); events it does not list are dropped here,
  *   and a refused batch (no consent policy, no retention policy) switches
  *   telemetry off for the page. A failure never reaches the person.
  */
 
+import { IN_APP_ATTRIBUTE } from "./in-app";
+
 export const TELEMETRY_SCHEMA = "telemetry/1";
 
 type Empty = Record<string, never>;
+
+/** The Report's parts as xray-report/panels.tsx names them, and the call's other tabs. */
+export type TelemetrySection =
+  | "overview"
+  | "analysis"
+  | "outcome"
+  | "prospect-information"
+  | "coaching"
+  | "transcript";
+
+/** Brain 4.0's 18 skills, lower case ("D07" is sent as "d07"). */
+export const SKILL_KEYS = [
+  "d01",
+  "d02",
+  "d03",
+  "d04",
+  "d05",
+  "d06",
+  "d07",
+  "d08",
+  "d09",
+  "d10",
+  "d11",
+  "d12",
+  "d13",
+  "d14",
+  "d15",
+  "d16",
+  "d17",
+  "d18",
+] as const;
+export type SkillKey = (typeof SKILL_KEYS)[number];
+
+/** Which Report the call showed: the Brain 4.0 coaching score or the pointers. */
+export type ReportLookName = "brain4" | "pointers";
+export type ReadBand = "under_5s" | "5_30s" | "30_120s" | "over_120s";
+export type SectionAction =
+  | "expand"
+  | "collapse"
+  | "copy"
+  | "clip"
+  | "helpful"
+  | "not_helpful";
+/** The call's AI-on-calls level when the person tapped. */
+export type AiLevel = "off" | "data_only" | "auto" | "full";
+export type CallSurface = "call" | "report" | "lead" | "calls";
+export type ReportSource =
+  | "calls"
+  | "lead"
+  | "prospect"
+  | "notification"
+  | "link"
+  | "upload"
+  | "other";
+
+/** The call a report event is about (its report's id); sent apart from the payload. */
+type AboutCall = { call_id: string };
 
 /** Every event and its payload. Add here first; the server lists what it takes. */
 export type TelemetryEvents = {
@@ -30,8 +93,35 @@ export type TelemetryEvents = {
     seconds: number;
   };
   "sx.analysis_seen_done": { wait_band: WaitBand };
-  "sx.report_opened": { view: ReportView };
-  "sx.pillar_read": { pillar: string; read_ms: number };
+  "sx.report_opened": AboutCall & {
+    view: ReportView;
+    /** brief: the one-pass read; full: the full report. */
+    level?: "brief" | "full";
+    source?: ReportSource;
+  };
+  /** One section read; useSectionDwell (telemetry-dwell.ts) sends it. */
+  "sx.section_read": AboutCall & {
+    section: TelemetrySection;
+    skill?: SkillKey;
+    look?: ReportLookName;
+    read_band: ReadBand;
+    dwell_ms?: number;
+  };
+  "sx.section_action": AboutCall & {
+    section: TelemetrySection;
+    skill?: SkillKey;
+    action: SectionAction;
+  };
+  "sx.on_demand_requested": AboutCall & {
+    section: TelemetrySection;
+    level: AiLevel;
+  };
+  /** "Get full report" for the whole call. */
+  "sx.full_report_requested": AboutCall & {
+    surface: CallSurface;
+    level?: AiLevel;
+  };
+  "sx.reanalyse_requested": AboutCall & { surface: CallSurface };
   "sx.coaching_opened": { scope: "call" | "mine" | "team" };
   "sx.clip_played": { kind: "preview" | "full" };
   "sx.paywall_seen": { surface: string };
@@ -39,7 +129,7 @@ export type TelemetryEvents = {
   "sx.mission_started": Empty;
   "sx.mission_completed": Empty;
   "sx.prospect_edited": { field: string };
-  "sx.outcome_set": { outcome: string };
+  "sx.outcome_set": Partial<AboutCall> & { outcome: string };
   "sx.error_shown": { surface: string; code: string };
 };
 
@@ -53,7 +143,11 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.upload_finished",
   "sx.analysis_seen_done",
   "sx.report_opened",
-  "sx.pillar_read",
+  "sx.section_read",
+  "sx.section_action",
+  "sx.on_demand_requested",
+  "sx.full_report_requested",
+  "sx.reanalyse_requested",
   "sx.coaching_opened",
   "sx.clip_played",
   "sx.paywall_seen",
@@ -73,7 +167,14 @@ export type WaitBand =
   | "5_to_15m"
   | "over_15m"
   | "unknown";
-export type ReportView = "report" | "coaching" | "transcript" | "document";
+export type ReportView =
+  | "report"
+  | "coaching"
+  | "transcript"
+  | "document"
+  | "share";
+export type DeviceClass = "phone" | "tablet" | "desktop";
+export type AppKind = "web" | "android";
 
 export const sizeBand = (bytes: number): SizeBand =>
   bytes < 5 * 1024 ** 2
@@ -106,6 +207,61 @@ export const waitBand = (milliseconds: number): WaitBand =>
           ? "5_to_15m"
           : "over_15m";
 
+/** How long a section was read, in the bands the cost optimiser reads. */
+export const readBand = (milliseconds: number): ReadBand =>
+  milliseconds < 5_000
+    ? "under_5s"
+    : milliseconds < 30_000
+      ? "5_30s"
+      : milliseconds < 120_000
+        ? "30_120s"
+        : "over_120s";
+
+/** Phone, tablet or computer, by the window's width in CSS pixels. */
+export const deviceClass = (width: number): DeviceClass =>
+  width < 600 ? "phone" : width < 1024 ? "tablet" : "desktop";
+
+/** The server's route templates (ingest.py): ids become their names in brackets. */
+const STATIC_ROUTES = new Set([
+  "/",
+  "/dashboard",
+  "/analysis",
+  "/analysis/new",
+  "/analysis/calls",
+  "/calls",
+  "/leads",
+  "/chats",
+  "/coaching",
+  "/prospects",
+  "/organisation",
+  "/organisation/insights",
+  "/organisation/invites",
+  "/settings",
+  "/account",
+  "/account/billing",
+  "/billing",
+  "/plans",
+  "/apps",
+  "/developers",
+  "/review",
+]);
+const ROUTE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^\/analysis\/calls\/[^/]+$/, "/analysis/calls/[callId]"],
+  [/^\/prospects\/[^/]+$/, "/prospects/[prospectId]"],
+  [/^\/organisation\/people\/[^/]+$/, "/organisation/people/[personId]"],
+  [/^\/settings\/[^/]+$/, "/settings/[section]"],
+];
+
+/** The page's route template, or null for a page the server does not list. */
+export function routeTemplate(pathname: string): string | null {
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (STATIC_ROUTES.has(path)) return path;
+  return ROUTE_PATTERNS.find(([pattern]) => pattern.test(path))?.[1] ?? null;
+}
+
+const CALL_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /** Payload keys and values the server accepts (and nothing that could carry a person). */
 const KEY = /^[a-z][a-z0-9_]{0,48}$/;
 const PERSONAL_KEY =
@@ -134,17 +290,27 @@ type Queued = {
   event_version: "1.0";
   occurred_at: string;
   session_id: string | null;
-  route: null;
+  route: string | null;
   payload: Record<string, string | number | boolean>;
+  call_id?: string;
 };
 
 const BATCH = 20;
 const DELAY_MS = 2_000;
 
+/** Where an event happened: the page's template, the device class and the app. */
+export type EventContext = Readonly<{
+  route: string | null;
+  device: DeviceClass;
+  app: AppKind;
+}>;
+
 type Sender = Readonly<{
   fetch: typeof fetch;
   now: () => Date;
   id: () => string;
+  /** Read at each event; absent under test (no route, device or app). */
+  context?: () => EventContext;
 }>;
 
 /**
@@ -181,7 +347,19 @@ export class TelemetryClient {
 
   track<N extends TelemetryEventName>(name: N, payload: TelemetryEvents[N]) {
     if (!this.enabled || this.off) return;
-    const values = payload as Record<string, string | number | boolean>;
+    // The call travels in its own field; the server swaps it for a keyed hash.
+    const { call_id: callId, ...rest } = payload as Record<
+      string,
+      string | number | boolean | undefined
+    >;
+    const context = this.sender.context?.();
+    const values: Record<string, string | number | boolean> = {};
+    for (const [key, value] of Object.entries(rest))
+      if (value !== undefined) values[key] = value;
+    if (context) {
+      values.device = context.device;
+      values.app = context.app;
+    }
     if (!safePayload(values)) return;
     this.queue.push({
       event_id: this.sender.id(),
@@ -189,8 +367,11 @@ export class TelemetryClient {
       event_version: "1.0",
       occurred_at: this.sender.now().toISOString(),
       session_id: this.session,
-      route: null,
-      payload: { ...values },
+      route: context?.route ?? null,
+      payload: values,
+      ...(typeof callId === "string" && CALL_ID.test(callId)
+        ? { call_id: callId.toLowerCase() }
+        : {}),
     });
     if (this.queue.length > 200) this.queue.splice(0, this.queue.length - 200);
     this.schedule(this.queue.length >= BATCH ? 0 : DELAY_MS);
@@ -297,6 +478,17 @@ export class TelemetryClient {
 
 const browser = typeof window !== "undefined";
 
+/** This page: its route template, the window's device class, web or the app. */
+function browserContext(): EventContext {
+  return {
+    route: routeTemplate(window.location.pathname),
+    device: deviceClass(window.innerWidth),
+    app: document.documentElement.hasAttribute(IN_APP_ATTRIBUTE)
+      ? "android"
+      : "web",
+  };
+}
+
 /** The page's client (off on the server and under test). */
 export const telemetry = new TelemetryClient(
   {
@@ -306,6 +498,7 @@ export const telemetry = new TelemetryClient(
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : "00000000-0000-4000-8000-000000000000",
+    context: browserContext,
   },
   browser && process.env.NODE_ENV !== "test",
 );
