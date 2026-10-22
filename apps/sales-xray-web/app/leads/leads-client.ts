@@ -1301,6 +1301,11 @@ export function linkedLead(
   return { leadId, call: params.get("call") === "1" };
 }
 
+/** A lead's own link: Leads opens with its sheet up, on a phone or a computer. */
+export function leadLink(leadId: string, origin = ""): string {
+  return `${origin}${LEADS_PATH}?lead=${encodeURIComponent(leadId)}`;
+}
+
 /** Logs a call the seller placed from their own phone, with the time they were away. */
 export function logPhoneCall(
   leadId: string,

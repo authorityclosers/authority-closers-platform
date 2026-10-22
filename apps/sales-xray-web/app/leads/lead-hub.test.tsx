@@ -11,7 +11,7 @@ vi.mock("next/link", () => ({
 
 import { chatDays, chatDayTitle } from "./lead-chats";
 import { History } from "./lead-sheet";
-import type { LeadEvent } from "./leads-client";
+import { leadLink, type LeadEvent } from "./leads-client";
 import type { SocialConversation } from "./social-client";
 import type { WaConversation } from "./whatsapp-client";
 
@@ -148,4 +148,11 @@ it("puts chats among calls and notes by time, and the summary under the newest c
   expect(chat.textContent).toContain("1 WhatsApp message");
   expect(chat.textContent).toContain("See you Sunday");
   expect(chat.querySelector("a")?.getAttribute("href")).toContain(LEAD);
+});
+
+it("gives a lead its own link, the same on a phone and a computer", () => {
+  expect(leadLink(LEAD)).toBe(`/leads?lead=${LEAD}`);
+  expect(leadLink(LEAD, "https://example.test")).toBe(
+    `https://example.test/leads?lead=${LEAD}`,
+  );
 });

@@ -15,6 +15,7 @@ import {
   MessageSquareText,
   Mic,
   Pencil,
+  Link2,
   Phone,
   PhoneMissed,
   PhoneOff,
@@ -37,9 +38,11 @@ import {
 } from "react";
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
+import { notify } from "../notice-center";
 import { CallFacts } from "../call-engine/call-facts";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
 import {
+  leadLink,
   addNote,
   ago,
   dispose,
@@ -2028,6 +2031,7 @@ export function LeadCard({
               {lead.stage_label}
             </Badge>
             <Badge>{sourceText(lead)}</Badge>
+            <CopyLeadLink leadId={lead.lead_id} />
           </div>
         </div>
       </header>
@@ -2385,6 +2389,40 @@ export function LeadCard({
         <PipelinePanel detail={detail} onChanged={onChanged} />
       ) : null}
     </div>
+  );
+}
+
+/** This lead's own link, to send a teammate or keep (Liquid Glass, 22 Oct 2026). */
+function CopyLeadLink({ leadId }: { leadId: string }) {
+  const copy = async () => {
+    const link = leadLink(leadId, window.location.origin);
+    try {
+      await navigator.clipboard.writeText(link);
+      notify({
+        id: "lead-link",
+        tone: "success",
+        title: "Link copied",
+        message: "It opens this lead for anyone in your organisation.",
+        timeout: 4000,
+      });
+    } catch {
+      notify({
+        id: "lead-link",
+        tone: "error",
+        title: "This browser didn't copy it",
+        message: link,
+      });
+    }
+  };
+  return (
+    <button
+      type="button"
+      className={styles.copyLink}
+      onClick={() => void copy()}
+    >
+      <Link2 size={13} aria-hidden="true" />
+      Copy link
+    </button>
   );
 }
 

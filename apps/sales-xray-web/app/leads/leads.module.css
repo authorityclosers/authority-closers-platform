@@ -426,7 +426,35 @@
 .cardBadges {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+
+/* The lead's own link, beside its stage and source. */
+.copyLink {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.copyLink:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.copyLink:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }
 
 .contact {
@@ -5319,4 +5347,11 @@ a.repName {
 
 .history li.historyBrief:empty {
   display: none;
+}
+
+/* A big screen gives the lead more room beside the list (Liquid Glass). */
+@media (min-width: 1280px) {
+  .sheet {
+    --sx-sheet-width: 640px;
+  }
 }

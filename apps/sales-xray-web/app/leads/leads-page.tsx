@@ -178,6 +178,11 @@ export function LeadsRoute() {
   const shared = sharedLead(new URLSearchParams(hash.replace(/^#/, "")));
   const linked = linkedLead(hash);
   const [linkDone, setLinkDone] = useState<string | null>(null);
+  // A lead's own link, /leads?lead=<id> (Liquid Glass, 22 Oct 2026): its sheet
+  // opens on arrival and a refresh keeps it; closing it takes the id away.
+  // #lead= stays the same for phone alerts and older links.
+  const addressLead = linkedLead(`lead=${params.get("lead") ?? ""}`);
+  const [addressLeadDone, setAddressLeadDone] = useState<string | null>(null);
   useEffect(() => {
     if (/(^|[#&])(add=lead|lead=)/.test(window.location.hash))
       window.history.replaceState(
@@ -609,7 +614,31 @@ export function LeadsRoute() {
 
   // A phone alert's lead opens once; closing it leaves the desk.
   const fromLink = linked && linkDone !== hash ? linked : null;
-  const shownLead = openLead ?? fromLink?.leadId ?? null;
+  const addressOpen =
+    addressLead && addressLeadDone !== addressLead.leadId ? addressLead : null;
+  const shownLead = openLead ?? fromLink?.leadId ?? addressOpen?.leadId ?? null;
+  // Done with the address's lead: it neither comes back nor stays in the bar.
+  // The sheet may close by stepping Back, which lands after this; the id goes
+  // again once it has.
+  const leaveAddressLead = () => {
+    if (!addressLead) return;
+    setAddressLeadDone(addressLead.leadId);
+    const strip = () => {
+      const next = new URLSearchParams(window.location.search);
+      if (!next.has("lead")) return;
+      next.delete("lead");
+      const query = next.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+      );
+    };
+    strip();
+    window.addEventListener("popstate", () => window.setTimeout(strip, 0), {
+      once: true,
+    });
+  };
   const shownIntent: LeadIntent | null = openLead
     ? intent
     : fromLink?.call
@@ -617,6 +646,7 @@ export function LeadsRoute() {
       : null;
   const open = (leadId: string, next: LeadIntent | null = null) => {
     setLinkDone(hash);
+    leaveAddressLead();
     setHolding(null);
     setIntent(next);
     setOpenLead(leadId);
@@ -993,6 +1023,7 @@ export function LeadsRoute() {
           intent={shownIntent}
           onClose={() => {
             setLinkDone(hash);
+            leaveAddressLead();
             setOpenLead(null);
             setIntent(null);
           }}
