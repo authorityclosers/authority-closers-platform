@@ -1235,6 +1235,7 @@ function LightboxShellFrame({
                 className={`${styles.stripBtn} ${styles.stripSub}`}
                 href={ALL_LEADS_HREF}
               >
+                <Rows3 size={16} strokeWidth={1.75} aria-hidden="true" />
                 All leads
               </ScreenLink>
             ) : null}

@@ -12,8 +12,8 @@
   width: 100%;
   min-height: max(var(--lx-control-compact-h, 32px), 40px);
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px 6px 6px;
+  gap: 8px;
+  padding: 6px;
   border: 0;
   border-radius: var(--sx-radius-md);
   background: transparent;
@@ -83,13 +83,18 @@ a.trigger {
   line-height: 1.25;
 }
 
+/* A long name takes a second line rather than ending in "…" (owner, 23 Oct
+   2026: the organisation's name was cut off too early). */
 .copy b {
+  display: -webkit-box;
   overflow: hidden;
   color: var(--sx-ink);
-  font-size: var(--sx-text-md);
+  font-size: var(--sx-text-sm);
   font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .copy small {
