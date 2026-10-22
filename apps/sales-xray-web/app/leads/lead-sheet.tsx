@@ -14,6 +14,7 @@ import {
   MessageCircle,
   MessageSquareText,
   Mic,
+  NotebookPen,
   Pencil,
   Link2,
   Phone,
@@ -84,6 +85,7 @@ import { sourceText, whyLine } from "./desk-view";
 import { firstCallWords, ownerNote } from "./owner-words";
 import { phoneCallText } from "./phone-call-text";
 import { several, usePipelines } from "./use-pipelines";
+import { afterCall } from "./after-call";
 import {
   MessageSetup,
   MessageSheet,
@@ -748,6 +750,32 @@ export function CallOutcome({
         </button>
       ) : null}
     </section>
+  );
+}
+
+/* ---------- Log this ---------- */
+
+/**
+ * The light way in to the call's question (owner, 23 Oct 2026: "progressive
+ * rather than in your face"): after a WhatsApp, an email, a missed call or a
+ * call whose end the page couldn't see, and on any lead at any time.
+ */
+export function LogThis({
+  hint,
+  onOpen,
+}: {
+  /** What just happened, when something did: then the chip says "Log this". */
+  hint: string | null;
+  onOpen: () => void;
+}) {
+  return (
+    <div className={styles.logThis}>
+      <button type="button" className={styles.helperChip} onClick={onOpen}>
+        <NotebookPen size={15} aria-hidden="true" />
+        {hint ? "Log this" : "Log a call"}
+      </button>
+      {hint ? <span className={styles.logThisHint}>{hint}</span> : null}
+    </div>
   );
 }
 
@@ -2543,6 +2571,8 @@ export function LeadSheet({
   const [heard, setHeard] = useState<NativeCall | null>(null);
   const logged = useRef("");
   const [answered, setAnswered] = useState(0);
+  // "Log this" tapped: the question opens for that lead.
+  const [logging, setLogging] = useState<string | null>(null);
   // Owners and admins: Delete lead, confirmed in its own sheet (21 Oct 2026).
   const [removing, setRemoving] = useState<{
     round: number;
@@ -2556,6 +2586,18 @@ export function LeadSheet({
   // Only the open lead's own detail (or error) shows; anything else is stale.
   const detail = loaded?.lead.lead_id === leadId ? loaded : null;
   const error = failed?.leadId === leadId ? failed.message : null;
+  // "How did it go?" only after a real call (owner, 23 Oct 2026).
+  const after = detail
+    ? afterCall({
+        leadId: detail.lead.lead_id,
+        name: detail.lead.name.split(" ")[0],
+        phoneCall: asked,
+        back: backFrom === leadId,
+        events: detail.events,
+      })
+    : null;
+  const asking = after?.ask === true;
+  const questionOpen = asking || intent === "log" || logging === leadId;
 
   useEffect(() => {
     if (!leadId) return;
@@ -2635,32 +2677,38 @@ export function LeadSheet({
               phoneCall={phoneCall}
               intent={intent}
               afterCall={
-                backFrom === leadId || asked || intent === "log"
-                  ? { step: "outcome" }
-                  : null
+                asking || intent === "log" ? { step: "outcome" } : null
               }
               outcome={
-                <CallOutcome
-                  key={`${formKey}-${asked?.startedMs ?? 0}`}
-                  detail={detail}
-                  submitLabel="Save"
-                  heard={asked}
-                  attention={backFrom === leadId}
-                  ask={intent === "log"}
-                  beforeSave={() => logWaitingCall(detail)}
-                  onSaved={(next) => {
-                    setBackFrom(null);
-                    if (asked) setAnswered(asked.startedMs);
-                    update(next);
-                    if (onNext && leadId) {
-                      const after = leadId;
-                      readNext(after, undefined, pipeline).then(
-                        (lead) => setNextUp({ after, lead }),
-                        () => undefined,
-                      );
-                    }
-                  }}
-                />
+                questionOpen ? (
+                  <CallOutcome
+                    key={`${formKey}-${after?.heard?.startedMs ?? 0}`}
+                    detail={detail}
+                    submitLabel="Save"
+                    heard={after?.heard ?? null}
+                    attention={asking}
+                    ask={intent === "log" || logging === leadId}
+                    beforeSave={() => logWaitingCall(detail)}
+                    onSaved={(next) => {
+                      setBackFrom(null);
+                      setLogging(null);
+                      if (asked) setAnswered(asked.startedMs);
+                      update(next);
+                      if (onNext && leadId) {
+                        const saved = leadId;
+                        readNext(saved, undefined, pipeline).then(
+                          (lead) => setNextUp({ after: saved, lead }),
+                          () => undefined,
+                        );
+                      }
+                    }}
+                  />
+                ) : (
+                  <LogThis
+                    hint={after?.ask === false ? after.hint : null}
+                    onOpen={() => setLogging(leadId)}
+                  />
+                )
               }
             />
             {detail.can_assign ? (
@@ -2886,7 +2934,10 @@ export function CallingLoop({
                       : "Save and next lead"
               }
               heard={phoneCall}
-              attention={backFrom === detail.lead.lead_id}
+              attention={
+                backFrom === detail.lead.lead_id &&
+                phoneCall?.connected !== false
+              }
               beforeSave={() => logWaitingCall(detail)}
               upNext={
                 following ? (

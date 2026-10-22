@@ -829,6 +829,20 @@
   box-shadow: var(--sx-focus-ring);
 }
 
+/* "Log this" (owner, 23 Oct 2026): the light way in to the call's question. */
+.logThis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.logThisHint {
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
 .formWide {
   grid-column: 1 / -1;
 }
