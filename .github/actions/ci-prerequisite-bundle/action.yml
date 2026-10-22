@@ -31,6 +31,12 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: .venv/bin/python scripts/ci/ci_prerequisite_bundle.py prepare --directory "$RUNNER_TEMP/ci-prerequisite-producer"
+    - name: Recheck storage admission immediately before upload
+      if: steps.prepare.outputs.built == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: python3 scripts/ci/ci_prerequisite_bundle.py admit --directory "$RUNNER_TEMP/ci-prerequisite-producer"
     - name: Publish the proved bundle before consumers start
       id: upload
       if: steps.prepare.outputs.built == 'true'

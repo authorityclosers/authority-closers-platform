@@ -19,6 +19,13 @@ concurrency:
 
 jobs:
   ci-prerequisites:
+    # Shared by release and workbench jobs, independent of branch/identity.
+    # prepare rechecks availability only after this publication lock is acquired.
+    concurrency:
+      group: ci-prerequisite-publication-v3
+      cancel-in-progress: false
+    env:
+      PREREQ_PUBLICATION_OWNER: ci-prerequisite-publication-v3
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     outputs:

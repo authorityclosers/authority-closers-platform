@@ -1,0 +1,12 @@
+[
+  {
+    "artifact_id": 12452071131,
+    "digest": "8f1e02fa0191f5e0e718e0ba88eda11959baf1a88fdb2d70ffbe38e0d43f463c",
+    "identity": "f2f6966933d5e6ec94e1a7feeb383042af56a49258bc6f1c23887ccb04b8e38c",
+    "repository": "authorityclosers/authority-closers-platform",
+    "run_id": 39837257389,
+    "source_sha": "adfc31e64dd539f37f4a4af507b433e00ad82cc1",
+    "reviewed_source_sha": "c2ade062061f09ffdd4c7269d8d5858072000e2a",
+    "review": "AUT-2197 CTO source review and parent cold source proof"
+  }
+]

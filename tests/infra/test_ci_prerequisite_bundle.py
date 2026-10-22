@@ -220,6 +220,7 @@ def test_producer_recovery_is_bounded_and_never_accepts_corruption(tmp_path, mon
     monkeypatch.setattr(sys, "argv", ["bundle", "prepare", "--directory", str(tmp_path)])
     monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    monkeypatch.setenv("PREREQ_PUBLICATION_OWNER", bundle.PUBLICATION_OWNER)
     monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "outputs"))
     monkeypatch.setattr(bundle, "identity", lambda _: KEY)
     monkeypatch.setattr(bundle, "require_runner", lambda: None)
@@ -243,6 +244,7 @@ def test_producer_recovery_is_bounded_and_never_accepts_corruption(tmp_path, mon
     monkeypatch.setattr(bundle, "consume", consume)
     monkeypatch.setattr(bundle, "prove", lambda *args: None)
     monkeypatch.setattr(bundle, "build", lambda *args: builds.append(args))
+    monkeypatch.setattr(bundle, "admit_publication", lambda *args: None)
     assert bundle.main() == (1 if reuse in ("corrupt", "auth") else 0)
     assert bool(builds) == (reuse in ("missing", "unavailable", "incompatible"))
 
@@ -360,3 +362,309 @@ def test_real_local_repository_solves_complete_closure_without_network(tmp_path)
     (tmp_path / "local-lists/partial").mkdir(parents=True)
     assert apt("update").returncode == 0
     assert apt("install", "--simulate", "--no-download", "ac-bundle-main").returncode != 0
+
+
+def publication_artifact(*, artifact_id=34, key=KEY, age=1, expires=24, size=452_074_312):
+    now = datetime.now(UTC)
+    return {
+        "id": artifact_id,
+        "name": f"ci-prerequisites-v2-{key}-1",
+        "digest": "sha256:" + "d" * 64,
+        "workflow_run": {"id": 12, "head_sha": SHA},
+        "size_in_bytes": size,
+        "expired": False,
+        "created_at": (now - timedelta(hours=age)).isoformat(),
+        "expires_at": (now + timedelta(hours=expires)).isoformat(),
+    }
+
+
+def pinned_bootstrap(tmp_path, monkeypatch):
+    pin = {
+        "identity": KEY,
+        "repository": REPO,
+        "artifact_id": 34,
+        "digest": "d" * 64,
+        "run_id": 12,
+        "source_sha": SHA,
+        "reviewed_source_sha": "e" * 40,
+    }
+    path = tmp_path / "bootstrap.json"
+    path.write_text(json.dumps([pin]))
+    monkeypatch.setattr(bundle, "BOOTSTRAP_FILE", path)
+    run = {
+        "id": 12,
+        "head_sha": SHA,
+        "event": "push",
+        "path": ".github/workflows/workbench-checks.yml",
+        "conclusion": "success",
+        "repository": {"full_name": REPO},
+        "head_repository": {"full_name": REPO},
+    }
+    artifact = publication_artifact()
+    calls = []
+
+    def github(path):
+        calls.append(path)
+        if "workflows/application.yml/runs?" in path:
+            return {"workflow_runs": []}
+        if "/actions/runs/" in path:
+            return run
+        if "/commits/" in path:
+            return {
+                "sha": SHA,
+                "parents": [{"sha": "e" * 40}],
+                "files": [{"filename": ".wb-ci/request.json"}],
+            }
+        return artifact
+
+    monkeypatch.setattr(bundle, "github", github)
+    return pin, run, artifact, calls
+
+
+def test_no_main_reuses_only_exact_reviewed_bootstrap(tmp_path, monkeypatch):
+    pin, _, _, calls = pinned_bootstrap(tmp_path, monkeypatch)
+    assert bundle.find_published(KEY, REPO) == pin
+    assert calls[-3:] == [
+        f"repos/{REPO}/actions/runs/12",
+        f"repos/{REPO}/commits/{SHA}?per_page=2",
+        f"repos/{REPO}/actions/artifacts/34",
+    ]
+    assert bundle.find_published("c" * 64, REPO) is None
+    assert bundle.find_published(KEY, "foreign/project") is None
+
+
+@pytest.mark.parametrize(
+    "damage", ["source", "run", "foreign", "pr", "workflow", "digest", "artifact", "review"]
+)
+def test_bootstrap_rejects_foreign_or_corrupt_pinned_producer(tmp_path, monkeypatch, damage):
+    pin, run, artifact, _ = pinned_bootstrap(tmp_path, monkeypatch)
+    if damage == "source":
+        run["head_sha"] = "f" * 40
+    elif damage == "run":
+        run["id"] = 99
+    elif damage == "foreign":
+        run["head_repository"]["full_name"] = "foreign/project"
+    elif damage == "pr":
+        run["event"] = "pull_request"
+    elif damage == "workflow":
+        run["path"] = ".github/workflows/foreign.yml"
+    elif damage == "digest":
+        artifact["digest"] = "f" * 64
+    elif damage == "artifact":
+        artifact["workflow_run"]["head_sha"] = "f" * 40
+    else:
+        pin["reviewed_source_sha"] = "unreviewed"
+        bundle.BOOTSTRAP_FILE.write_text(json.dumps([pin]))
+    with pytest.raises(bundle.IntegrityError):
+        bundle.find_published(KEY, REPO)
+
+
+@pytest.mark.parametrize("case", ["expired", "near-expiry", "old"])
+def test_bootstrap_expiry_allows_bounded_recovery(tmp_path, monkeypatch, case):
+    _, _, artifact, _ = pinned_bootstrap(tmp_path, monkeypatch)
+    artifact.update(
+        publication_artifact(
+            age=37 if case == "old" else 1, expires=1 if case == "near-expiry" else 24
+        )
+    )
+    artifact["expired"] = case == "expired"
+    assert bundle.find_published(KEY, REPO) is None
+    monkeypatch.setenv("PREREQ_PUBLICATION_OWNER", bundle.PUBLICATION_OWNER)
+    monkeypatch.setattr(bundle, "github", lambda _: {"total_count": 1, "artifacts": [artifact]})
+    assert bundle.admit_publication(KEY, REPO)["retained_identity_publications"] == (
+        case != "expired"
+    )
+
+
+def test_simultaneous_no_main_publishers_recheck_after_shared_ownership(monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    monkeypatch.setenv("PREREQ_PUBLICATION_OWNER", bundle.PUBLICATION_OWNER)
+    artifacts = []
+    monkeypatch.setattr(
+        bundle, "github", lambda _: {"total_count": len(artifacts), "artifacts": list(artifacts)}
+    )
+    barrier = threading.Barrier(2)
+    ownership = threading.Lock()  # repository-wide job concurrency, asserted below
+
+    def request():
+        barrier.wait(timeout=5)
+        with ownership:
+            try:
+                bundle.admit_publication(KEY, REPO)
+            except bundle.PublicationDeclined as error:
+                assert "duplicate publication declined" in str(error)
+                return "declined"
+            artifacts.append(publication_artifact())
+            return "published"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(lambda _: request(), range(2)))
+    assert sorted(outcomes) == ["declined", "published"]
+    assert len(artifacts) == 1
+
+
+@pytest.mark.parametrize(
+    "case", ["diagnostics", "bundles", "identity", "ownership", "inventory", "pagination", "auth"]
+)
+def test_storage_admission_declines_without_acquisition_or_upload(monkeypatch, case):
+    monkeypatch.setenv("PREREQ_PUBLICATION_OWNER", bundle.PUBLICATION_OWNER)
+    artifacts = []
+    total = 0
+    if case == "diagnostics":
+        artifacts = [
+            {
+                **publication_artifact(size=bundle.MAX_RETAINED_ARTIFACT_BYTES),
+                "name": "release-evidence",
+            }
+        ]
+    elif case == "bundles":
+        artifacts = [publication_artifact(key="f" * 64, size=bundle.MAX_RETAINED_BUNDLE_BYTES)]
+    elif case == "identity":
+        artifacts = [publication_artifact(artifact_id=i, age=40, size=1) for i in (34, 35)]
+    elif case == "ownership":
+        monkeypatch.delenv("PREREQ_PUBLICATION_OWNER")
+    elif case == "pagination":
+        total = 10001
+    calls = []
+
+    def github(path):
+        calls.append(path)
+        if case == "inventory":
+            raise bundle.PublisherUnavailable("inventory unavailable")
+        if case == "auth":
+            raise bundle.BundleError("authentication failed")
+        return {"total_count": max(total, len(artifacts)), "artifacts": artifacts}
+
+    monkeypatch.setattr(bundle, "github", github)
+    with pytest.raises(bundle.BundleError):
+        bundle.admit_publication(KEY, REPO)
+    assert len(calls) <= 100
+    if case == "ownership":
+        assert calls == []
+
+
+def test_inventory_is_complete_before_admission_and_rechecked_before_upload(tmp_path, monkeypatch):
+    monkeypatch.setenv("PREREQ_PUBLICATION_OWNER", bundle.PUBLICATION_OWNER)
+    calls = []
+    diagnostics = {**publication_artifact(size=1), "name": "fictional diagnostic"}
+
+    def github(path):
+        calls.append(path)
+        return {
+            "total_count": 101,
+            "artifacts": [diagnostics] * (100 if path.endswith("&page=1") else 1),
+        }
+
+    monkeypatch.setattr(bundle, "github", github)
+    assert bundle.admit_publication(KEY, REPO)["retained_artifact_bytes"] == 101
+    assert len(calls) == 2
+    (tmp_path / "publication.json").write_text(json.dumps({"identity": KEY, "recovery": None}))
+    (tmp_path / "publish").mkdir()
+    (tmp_path / "publish/bundle.tar.gz").write_bytes(b"fixture")
+    monkeypatch.setattr(bundle, "identity", lambda _: KEY)
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+    monkeypatch.setattr(sys, "argv", ["bundle", "admit", "--directory", str(tmp_path)])
+    monkeypatch.setattr(
+        bundle, "github", lambda _: {"total_count": 1, "artifacts": [publication_artifact()]}
+    )
+    assert bundle.main() == 1  # a publisher appeared during acquisition: no upload
+
+
+def test_baseline_recovery_is_limited_to_one_replacement(monkeypatch):
+    monkeypatch.setenv("PREREQ_PUBLICATION_OWNER", bundle.PUBLICATION_OWNER)
+    artifacts = [publication_artifact(size=1)]
+    monkeypatch.setattr(
+        bundle, "github", lambda _: {"total_count": len(artifacts), "artifacts": artifacts}
+    )
+    assert (
+        bundle.admit_publication(KEY, REPO, {"artifact_id": 34})["retained_identity_publications"]
+        == 1
+    )
+    artifacts.append(publication_artifact(artifact_id=35, size=1))
+    with pytest.raises(bundle.PublicationDeclined, match="identity publication bound"):
+        bundle.admit_publication(KEY, REPO, {"artifact_id": 35})
+
+
+def test_oversize_bundle_is_declined_before_upload(tmp_path, monkeypatch):
+    monkeypatch.setattr(bundle, "identity", lambda _: KEY)
+    monkeypatch.setattr(bundle, "MAX_PUBLICATION_BYTES", 65540)
+    (tmp_path / "publication.json").write_text(json.dumps({"identity": KEY, "recovery": None}))
+    (tmp_path / "publish").mkdir()
+    (tmp_path / "publish/bundle.tar.gz").write_bytes(b"too big")
+    monkeypatch.setattr(sys, "argv", ["bundle", "admit", "--directory", str(tmp_path)])
+    assert bundle.main() == 1
+
+
+def test_publication_lock_spans_prepare_admission_upload_and_reference_in_both_workflows():
+    for filename in ("application.yml", "workbench-checks.yml"):
+        job = yaml.safe_load((ROOT / ".github/workflows" / filename).read_text())["jobs"][
+            "ci-prerequisites"
+        ]
+        assert job["concurrency"] == {
+            "group": bundle.PUBLICATION_OWNER,
+            "cancel-in-progress": False,
+        }
+        assert job["env"]["PREREQ_PUBLICATION_OWNER"] == bundle.PUBLICATION_OWNER
+        assert any(
+            s.get("uses") == "./.github/actions/ci-prerequisite-bundle" for s in job["steps"]
+        )
+    steps = yaml.safe_load(
+        (ROOT / ".github/actions/ci-prerequisite-bundle/action.yml").read_text()
+    )["runs"]["steps"]
+    prepare = next(i for i, s in enumerate(steps) if s.get("id") == "prepare")
+    admit = next(i for i, s in enumerate(steps) if " admit --directory" in s.get("run", ""))
+    upload = next(i for i, s in enumerate(steps) if s.get("id") == "upload")
+    reference = next(i for i, s in enumerate(steps) if s.get("id") == "reference")
+    assert prepare < admit < upload < reference
+    assert steps[admit]["if"] == steps[upload]["if"]
+    assert not steps[admit].get("continue-on-error")
+    assert (
+        "scripts/ci/ci-prerequisite-bootstrap.json"
+        in (ROOT / "scripts/ci/wb-ci").read_text().split("CI_FILES=(")[1].split(")")[0]
+    )
+    assert "scripts/ci/ci-prerequisite-bootstrap.json" not in bundle.IDENTITY_FILES
+
+
+@pytest.mark.parametrize("damage", ["parent", "overlay"])
+def test_bootstrap_producer_must_be_exact_reviewed_source_plus_request(
+    tmp_path, monkeypatch, damage
+):
+    pinned_bootstrap(tmp_path, monkeypatch)
+    original = bundle.github
+
+    def github(path):
+        result = original(path)
+        if "/commits/" in path:
+            if damage == "parent":
+                result["parents"] = [{"sha": "f" * 40}]
+            else:
+                result["files"].append({"filename": "scripts/ci/ci_prerequisite_bundle.py"})
+        return result
+
+    monkeypatch.setattr(bundle, "github", github)
+    with pytest.raises(bundle.IntegrityError, match="differs from the reviewed source"):
+        bundle.find_published(KEY, REPO)
+
+
+def test_no_main_existing_unreviewed_bundle_prevents_another_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["bundle", "prepare", "--directory", str(tmp_path)])
+    monkeypatch.setattr(bundle, "require_runner", lambda: None)
+    monkeypatch.setattr(bundle, "identity", lambda _: KEY)
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+    monkeypatch.setenv("PREREQ_PUBLICATION_OWNER", bundle.PUBLICATION_OWNER)
+    calls = []
+
+    def github(path):
+        calls.append(path)
+        if "/workflows/" in path:
+            return {"workflow_runs": []}
+        return {"total_count": 1, "artifacts": [publication_artifact()]}
+
+    monkeypatch.setattr(bundle, "github", github)
+    builds = []
+    monkeypatch.setattr(bundle, "build", lambda *args: builds.append(args))
+    assert bundle.main() == 1
+    assert builds == []
+    assert not (tmp_path / "publication.json").exists()

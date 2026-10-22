@@ -103,6 +103,13 @@ jobs:
         run: python3 scripts/ci/wb_checks.py web --task ${{ matrix.task }}
 
   ci-prerequisites:
+    # Shared by release and workbench jobs, independent of branch/identity.
+    # prepare rechecks availability only after this publication lock is acquired.
+    concurrency:
+      group: ci-prerequisite-publication-v3
+      cancel-in-progress: false
+    env:
+      PREREQ_PUBLICATION_OWNER: ci-prerequisite-publication-v3
     needs: plan
     if: needs.plan.outputs.py == 'true' || needs.plan.outputs.visual == 'true' || needs.plan.outputs.e2e == 'true'
     runs-on: ubuntu-24.04

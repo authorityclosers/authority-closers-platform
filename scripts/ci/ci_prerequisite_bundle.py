@@ -34,6 +34,14 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 DEB = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.+_:%~-]*\.deb$")
 MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024
+# Conservative admission, not a claim about GitHub's delayed billing quota.
+# Reserve a full upload before acquisition; leave 512 MiB of a 2 GiB pool for releases.
+MAX_PUBLICATION_BYTES = 512 * 1024 * 1024
+MAX_RETAINED_BUNDLE_BYTES = 1024 * 1024 * 1024
+MAX_RETAINED_ARTIFACT_BYTES = 1536 * 1024 * 1024
+MAX_IDENTITY_PUBLICATIONS = 2  # bootstrap plus one baseline/age recovery
+BOOTSTRAP_FILE = Path(__file__).with_name("ci-prerequisite-bootstrap.json")
+PUBLICATION_OWNER = "ci-prerequisite-publication-v3"
 IDENTITY_FILES = (
     "uv.lock",
     "pnpm-lock.yaml",
@@ -60,6 +68,10 @@ class IntegrityError(BundleError):
 
 class PublisherUnavailable(BundleError):
     """Missing/expired/transient publisher data can be rebuilt by the producer."""
+
+
+class PublicationDeclined(BundleError):
+    """Publication cannot proceed within the retained byte/duplicate bounds."""
 
 
 def digest(path: Path) -> str:
@@ -191,7 +203,130 @@ def find_published(key: str, repository: str, now: datetime | None = None) -> di
                 "run_id": run["id"],
                 "source_sha": run["head_sha"],
             }
+    return find_bootstrap(key, repository, now)
+
+
+def fresh(artifact: dict, now: datetime) -> bool:
+    created = datetime.fromisoformat(artifact["created_at"].replace("Z", "+00:00"))
+    expires = datetime.fromisoformat(artifact["expires_at"].replace("Z", "+00:00"))
+    return (
+        not artifact.get("expired")
+        and expires >= now + timedelta(hours=2)
+        and timedelta(0) <= now - created <= timedelta(hours=36)
+    )
+
+
+def find_bootstrap(key: str, repository: str, now: datetime) -> dict | None:
+    """Pins are reviewed source data, never inferred from sibling artifact names.
+
+    The pin file is outside the identity inputs: recording a reviewed run/digest
+    must not change the locked identity it pins. Producer code/locks stay bound.
+    """
+    pins = json.loads(BOOTSTRAP_FILE.read_text())
+    if not isinstance(pins, list) or len(pins) > 10:
+        raise IntegrityError("invalid reviewed bootstrap references")
+    for pin in pins:
+        if not isinstance(pin, dict):
+            raise IntegrityError("invalid reviewed bootstrap reference")
+        if pin.get("identity") != key or pin.get("repository") != repository:
+            continue
+        validate_reference(pin, key, repository)
+        if not COMMIT.fullmatch(str(pin.get("reviewed_source_sha", ""))):
+            raise IntegrityError("bootstrap reference lacks reviewed source")
+        run = github(f"repos/{repository}/actions/runs/{pin['run_id']}")
+        if (
+            run.get("id") != pin["run_id"]
+            or run.get("head_sha") != pin["source_sha"]
+            or run.get("repository", {}).get("full_name") != repository
+            or run.get("head_repository", {}).get("full_name") != repository
+            or run.get("event") != "push"
+            or run.get("path") != ".github/workflows/workbench-checks.yml"
+            or run.get("conclusion") != "success"
+        ):
+            raise IntegrityError("bootstrap run does not match reviewed producer")
+        # wb-ci creates exactly one request commit on the reviewed source. Check
+        # that relationship instead of trusting a source label inside the request.
+        commit = github(f"repos/{repository}/commits/{pin['source_sha']}?per_page=2")
+        if (
+            commit.get("sha") != pin["source_sha"]
+            or [p.get("sha") for p in commit.get("parents", [])] != [pin["reviewed_source_sha"]]
+            or [f.get("filename") for f in commit.get("files", [])] != [".wb-ci/request.json"]
+        ):
+            raise IntegrityError("bootstrap producer differs from the reviewed source")
+        artifact = github(f"repos/{repository}/actions/artifacts/{pin['artifact_id']}")
+        validate_artifact(artifact, pin)
+        if fresh(artifact, now):
+            return pin
     return None
+
+
+def validate_artifact(artifact: dict, ref: dict) -> None:
+    if (
+        artifact.get("id") != ref["artifact_id"]
+        or artifact.get("workflow_run", {}).get("id") != ref["run_id"]
+        or artifact.get("workflow_run", {}).get("head_sha") != ref["source_sha"]
+        or normalized_digest(artifact.get("digest", "")) != ref["digest"]
+    ):
+        raise IntegrityError("GitHub artifact does not match the pinned producer")
+
+
+def admit_publication(key: str, repository: str, recovery: dict | None = None) -> dict:
+    """Read fresh inventory under the shared job lock; never delete to make room.
+
+    Pagination is bounded and complete before allowing publication. Stop early
+    when the cap is already exceeded. All live artifacts count, not just bundles.
+    """
+    if os.environ.get("PREREQ_PUBLICATION_OWNER") != PUBLICATION_OWNER:
+        raise PublicationDeclined("publication ownership missing; use the serialized producer job")
+    retained = bundle_bytes = 0
+    same = []
+    now = datetime.now(UTC)
+    for page in range(1, 101):
+        data = github(f"repos/{repository}/actions/artifacts?per_page=100&page={page}")
+        artifacts = data["artifacts"]
+        for artifact in artifacts:
+            if artifact.get("expired"):
+                continue
+            size = artifact.get("size_in_bytes")
+            if type(size) is not int or size < 0:
+                raise IntegrityError("invalid artifact inventory size")
+            retained += size
+            name = artifact.get("name", "")
+            if name.startswith("ci-prerequisites-v2-"):
+                bundle_bytes += size
+            if name.startswith(f"ci-prerequisites-v2-{key}-"):
+                same.append(artifact)
+        if (
+            retained + MAX_PUBLICATION_BYTES > MAX_RETAINED_ARTIFACT_BYTES
+            or bundle_bytes + MAX_PUBLICATION_BYTES > MAX_RETAINED_BUNDLE_BYTES
+        ):
+            raise PublicationDeclined(
+                f"storage admission declined: retained_artifact_bytes={retained}, "
+                f"retained_bundle_bytes={bundle_bytes}, reserve_bytes={MAX_PUBLICATION_BYTES}; "
+                "wait for expiry or use the approved storage path; no upload or deletion"
+            )
+        if page * 100 >= data["total_count"]:
+            break
+    else:
+        raise PublicationDeclined("artifact inventory exceeds 100 pages; publication declined")
+    if len(same) >= MAX_IDENTITY_PUBLICATIONS:
+        raise PublicationDeclined("identity publication bound reached; wait for expiry")
+    for artifact in same:
+        if fresh(artifact, now) and (recovery is None or artifact["id"] != recovery["artifact_id"]):
+            raise PublicationDeclined(
+                f"duplicate publication declined: artifact {artifact['id']} already exists; "
+                "pin its reviewed producer/run/identity/digest for bootstrap reuse"
+            )
+    result = {
+        "retained_artifact_bytes": retained,
+        "retained_bundle_bytes": bundle_bytes,
+        "reserved_upload_bytes": MAX_PUBLICATION_BYTES,
+        "artifact_byte_ceiling": MAX_RETAINED_ARTIFACT_BYTES,
+        "bundle_byte_ceiling": MAX_RETAINED_BUNDLE_BYTES,
+        "retained_identity_publications": len(same),
+    }
+    print("Publication admission: " + json.dumps(result, sort_keys=True), flush=True)
+    return result
 
 
 def validate_manifest(manifest: dict, ref: dict, host: dict[str, str]) -> None:
@@ -270,14 +405,9 @@ def download(ref: dict, key: str, directory: Path) -> tuple[Path, dict]:
     repository = os.environ["GITHUB_REPOSITORY"]
     validate_reference(ref, key, repository)
     artifact = github(f"repos/{repository}/actions/artifacts/{ref['artifact_id']}")
-    if (
-        artifact.get("id") != ref["artifact_id"]
-        or artifact.get("expired")
-        or artifact.get("workflow_run", {}).get("id") != ref["run_id"]
-        or artifact.get("workflow_run", {}).get("head_sha") != ref["source_sha"]
-        or normalized_digest(artifact.get("digest", "")) != ref["digest"]
-    ):
-        raise IntegrityError("GitHub artifact does not match the pinned producer")
+    validate_artifact(artifact, ref)
+    if artifact.get("expired"):
+        raise PublisherUnavailable("pinned prerequisite artifact expired")
     directory.mkdir(parents=True, exist_ok=False)
     path = directory / "artifact.zip"
     github(f"repos/{repository}/actions/artifacts/{ref['artifact_id']}/zip", output=path)
@@ -484,7 +614,7 @@ def build(directory: Path, key: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "reference", "consume"))
+    parser.add_argument("command", choices=("prepare", "admit", "reference", "consume"))
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--components", nargs="+", choices=COMPONENTS, default=list(COMPONENTS))
     parser.add_argument("--node-browser", action="store_true")
@@ -505,8 +635,25 @@ def main() -> int:
                 args.components,
                 args.node_browser,
             )
+        elif args.command == "admit":
+            state = json.loads((args.directory / "publication.json").read_text())
+            if state["identity"] != key:
+                raise IntegrityError("publication identity changed during acquisition")
+            # upload-artifact uses compression=0; reserve 64 KiB for ZIP headers.
+            size = sum(p.stat().st_size for p in (args.directory / "publish").iterdir())
+            if size + 65536 > MAX_PUBLICATION_BYTES:
+                raise PublicationDeclined(
+                    "proved bundle exceeds the reserved upload size; no upload"
+                )
+            admit_publication(key, os.environ["GITHUB_REPOSITORY"], state["recovery"])
         else:
             require_runner()
+            if os.environ.get("PREREQ_PUBLICATION_OWNER") != PUBLICATION_OWNER:
+                raise PublicationDeclined(
+                    "publication ownership missing; use the serialized producer job"
+                )
+            print(f"Publication lookup under shared ownership: identity={key}", flush=True)
+            recovery = None
             try:
                 ref = find_published(key, os.environ["GITHUB_REPOSITORY"])
             except PublisherUnavailable:
@@ -527,11 +674,16 @@ def main() -> int:
                         "Published baseline no longer solves offline; rebuilding in producer.",
                         flush=True,
                     )
-                    ref = None
+                    recovery, ref = ref, None
             if ref:
                 emit("built", "false")
                 emit("reference", json.dumps(ref, separators=(",", ":")))
             else:
+                admit_publication(key, os.environ["GITHUB_REPOSITORY"], recovery)
+                args.directory.mkdir(parents=True, exist_ok=True)
+                (args.directory / "publication.json").write_text(
+                    json.dumps({"identity": key, "recovery": recovery})
+                )
                 build(args.directory / "publish", key)
                 emit("built", "true")
                 emit("name", "ci-prerequisites-v2-" + key + "-" + os.environ["GITHUB_RUN_ATTEMPT"])
