@@ -384,7 +384,11 @@ export function CallOutcome({
       : stage === null
         ? "Pick what happens next to save"
         : "Pick when to call next to save";
-  const [nudged, setNudged] = useState(false);
+  // Each Save tap with a step missing lights that step once (Redmi, 22 Oct
+  // 2026: the hint was on screen already; the step itself should say "here").
+  const [nudges, setNudges] = useState(0);
+  const nudged = nudges > 0;
+  const nudge = nudges ? (nudges % 2 ? "odd" : "even") : undefined;
   const stepRef = useRef<HTMLDivElement>(null);
   const autoRetry =
     reason === null
@@ -477,7 +481,11 @@ export function CallOutcome({
       </div>
 
       {talk === "missed" ? (
-        <div ref={stepRef} className={styles.outcomeStep}>
+        <div
+          ref={stepRef}
+          className={styles.outcomeStep}
+          data-nudge={missing ? nudge : undefined}
+        >
           <span className={styles.stepLabel}>What happened?</span>
           <div
             className={styles.reasonGrid}
@@ -523,7 +531,11 @@ export function CallOutcome({
       ) : null}
 
       {talk === "talked" ? (
-        <div ref={stepRef} className={styles.outcomeStep}>
+        <div
+          ref={stepRef}
+          className={styles.outcomeStep}
+          data-nudge={missing ? nudge : undefined}
+        >
           <span className={styles.stepLabel}>What happens next?</span>
           {suggested ? (
             <SuggestionHint
@@ -645,7 +657,7 @@ export function CallOutcome({
                 void submit();
                 return;
               }
-              setNudged(true);
+              setNudges((count) => count + 1);
               stepRef.current?.scrollIntoView?.({
                 block: "center",
                 behavior: "smooth",

@@ -146,6 +146,13 @@ describe("the after-call sheet (UX study item 6)", () => {
     await act(async () => save.click());
     expect(fetchMock).not.toHaveBeenCalled();
     expect(hint()?.getAttribute("data-nudged")).toBe("true");
+    // The missing step lights up, and again on the next tap.
+    const step = () => host.querySelector("[data-nudge]");
+    expect(step()?.getAttribute("data-nudge")).toBe("odd");
+    expect(step()?.textContent).toContain("What happens next?");
+    await act(async () => save.click());
+    expect(step()?.getAttribute("data-nudge")).toBe("even");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("pre-fills No network when the phone had none", async () => {

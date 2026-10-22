@@ -4785,6 +4785,54 @@ a.repName {
   opacity: 0.6;
 }
 
+/* Save with a step missing: that step glows once, each tap (two names, so a
+   second tap plays it again). */
+.outcomeStep[data-nudge] {
+  border-radius: var(--sx-radius-md);
+}
+
+.outcomeStep[data-nudge="odd"] {
+  animation: sx-step-glow-odd 1100ms ease-out 1;
+}
+
+.outcomeStep[data-nudge="even"] {
+  animation: sx-step-glow-even 1100ms ease-out 1;
+}
+
+@keyframes sx-step-glow-odd {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  25% {
+    background: color-mix(in oklab, var(--lx-focus-soft) 70%, transparent);
+    box-shadow: 0 0 0 6px
+      color-mix(in oklab, var(--lx-focus-ink) 30%, transparent);
+  }
+}
+
+@keyframes sx-step-glow-even {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  25% {
+    background: color-mix(in oklab, var(--lx-focus-soft) 70%, transparent);
+    box-shadow: 0 0 0 6px
+      color-mix(in oklab, var(--lx-focus-ink) 30%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outcomeStep[data-nudge] {
+    animation: none;
+    box-shadow: 0 0 0 2px
+      color-mix(in oklab, var(--lx-focus-ink) 45%, transparent);
+  }
+}
+
 @keyframes sx-save-nudge {
   30% {
     transform: translateX(-4px);
