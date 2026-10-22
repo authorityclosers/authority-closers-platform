@@ -1,0 +1,17 @@
+{
+  "about": "How the voice says product terms. Captions and scripts keep the written form on the left; the voice reads the 'say' form. Checked by a speech-to-text pass on every render (tts.py qa).",
+  "terms": {
+    "Brain 4.0": {
+      "say": {
+        "default": "Brain four point oh"
+      },
+      "listen_for": ["brain 4.0", "brain four point oh", "brain 4 point o", "brain four point o", "brain 4.o", "ब्रेन"]
+    },
+    "Sales X-Ray": {
+      "say": {
+        "default": "Sales X-Ray"
+      },
+      "listen_for": ["sales x-ray", "sales xray", "sales x ray", "sales x-rays", "सेल्स एक्स-रे", "सेल्स एक्सरे", "सेल्स एक्स रे"]
+    }
+  }
+}

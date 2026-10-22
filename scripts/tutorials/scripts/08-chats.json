@@ -1,0 +1,91 @@
+{
+  "id": "08-chats",
+  "number": "08",
+  "title": "Chats: WhatsApp, Messenger and Instagram in one inbox",
+  "kicker": "Sales X-Ray tutorial",
+  "end_headline": "Every message, one inbox.",
+  "next": "Your team and organisation",
+  "segments": [
+    {
+      "id": "card",
+      "device": "card",
+      "en": {"say": ["All your lead messages, in one place."]},
+      "hi": {
+        "say": ["Leads के सारे messages, एक ही जगह."],
+        "caption": ["Leads ke saare messages, ek hi jagah."]
+      },
+      "mr": {
+        "say": ["Leads चे सगळे messages, एकाच ठिकाणी."],
+        "caption": ["Leads che sagle messages, ekach thikani."]
+      }
+    },
+    {
+      "id": "s1-inbox",
+      "device": "phone",
+      "label": "Open Chats",
+      "setup": [{"do": "goto", "url": "/review-fixture/chats"}],
+      "actions": [
+        {"do": "wait", "ms": 700},
+        {"do": "highlight", "target": {"role": "link", "name": "Chats"}, "ms": 1400},
+        {"do": "unhighlight"},
+        {"do": "highlight", "target": {"role": "button", "name": "AF Asha Fictional"}, "ms": 1400},
+        {"do": "unhighlight"},
+        {"do": "still", "label": "chats-inbox"}
+      ],
+      "en": {"say": ["Tap Chats.", "WhatsApp, Messenger and Instagram messages from your leads, all in one inbox."]},
+      "hi": {
+        "say": ["Chats पे tap कीजिए.", "आपके leads के WhatsApp, Messenger और Instagram messages, सब एक ही inbox में."],
+        "caption": ["Chats pe tap kijiye.", "Aapke leads ke WhatsApp, Messenger aur Instagram messages, sab ek hi inbox mein."]
+      },
+      "mr": {
+        "say": ["Chats वर tap करा.", "तुमच्या leads चे WhatsApp, Messenger आणि Instagram messages, सगळे एकाच inbox मध्ये."],
+        "caption": ["Chats var tap kara.", "Tumchya leads che WhatsApp, Messenger aani Instagram messages, sagle ekach inbox madhye."]
+      }
+    },
+    {
+      "id": "s2-waiting",
+      "device": "phone",
+      "label": "Who's waiting",
+      "setup": [{"do": "goto", "url": "/review-fixture/chats"}],
+      "actions": [
+        {"do": "wait", "ms": 500},
+        {"do": "highlight", "target": {"role": "button", "name": "Waiting"}, "ms": 1600},
+        {"do": "unhighlight"},
+        {"do": "tap", "target": {"role": "button", "name": "Waiting"}, "ms": 1400},
+        {"do": "still", "label": "chats-waiting"}
+      ],
+      "en": {"say": ["Waiting shows who's still waiting for your reply, and for how long.", "Reply to the oldest first."]},
+      "hi": {
+        "say": ["Waiting में दिखता है कौन आपके reply का wait कर रहा है, और कब से.", "सबसे पुराने वाले को पहले reply कीजिए."],
+        "caption": ["Waiting mein dikhta hai kaun aapke reply ka wait kar raha hai, aur kab se.", "Sabse puraane waale ko pehle reply kijiye."]
+      },
+      "mr": {
+        "say": ["Waiting मध्ये दिसतं कोण तुमच्या reply ची वाट बघतंय, आणि कधीपासून.", "सगळ्यात जुन्या वाल्याला आधी reply करा."],
+        "caption": ["Waiting madhye distat kon tumchya reply chi vaat baghtay, aani kadhipasun.", "Saglyat junya walyala aadhi reply kara."]
+      }
+    },
+    {
+      "id": "s3-thread",
+      "device": "phone",
+      "label": "Open and reply",
+      "setup": [{"do": "goto", "url": "/review-fixture/chats"}],
+      "actions": [
+        {"do": "wait", "ms": 500},
+        {"do": "tap", "target": {"role": "button", "name": "AF Asha Fictional"}, "ms": 1800},
+        {"do": "still", "label": "chat-thread"},
+        {"do": "highlight", "target": {"css": "textarea"}, "ms": 1600, "optional": true},
+        {"do": "unhighlight"},
+        {"do": "wait", "ms": 600}
+      ],
+      "en": {"say": ["Tap a chat to read it and reply, right here.", "Every message is saved on the lead's page, next to their calls and notes."]},
+      "hi": {
+        "say": ["Chat पे tap कीजिए, पढ़िए और यहीं से reply कीजिए.", "हर message lead के page पे save होता है, उसके calls और notes के साथ."],
+        "caption": ["Chat pe tap kijiye, padhiye aur yahin se reply kijiye.", "Har message lead ke page pe save hota hai, uske calls aur notes ke saath."]
+      },
+      "mr": {
+        "say": ["Chat वर tap करा, वाचा आणि इथूनच reply करा.", "प्रत्येक message lead च्या page वर save होतो, त्याच्या calls आणि notes सोबत."],
+        "caption": ["Chat var tap kara, vacha aani ithunach reply kara.", "Pratyek message lead chya page var save hoto, tyachya calls aani notes sobat."]
+      }
+    }
+  ]
+}

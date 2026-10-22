@@ -1,0 +1,149 @@
+{
+  "about": "The Sales X-Ray tutorial list, derived from the AC Feature catalogue (scripts/catalogue/feature_seed.json). Each tutorial names the catalogue features it teaches; tests check those ids still exist. Screens come from dev review fixtures (fictional data only). 'native' marks steps that need the real Android phone (ask the orchestrator for the phone slot first). 'batch' 1 renders first.",
+  "tutorials": [
+    {
+      "id": "00-overview",
+      "title": "Sales X-Ray: the full tour",
+      "for": ["Sellers", "Sales managers", "Business owners"],
+      "seconds": [180, 300],
+      "devices": ["phone", "desktop"],
+      "features": ["sales-home", "leads-stage-tabs", "add-sheet", "start-calling", "after-call-sheet", "the-report", "brain-4", "chats-inbox", "lead-pipelines", "organisations"],
+      "screens": ["/review-fixture/home", "/review-fixture/leads", "/review-fixture/add-sheet", "/review-fixture/cold-calling", "/review-fixture/report", "/review-fixture/chats", "/review-fixture/stage-options"],
+      "native": false,
+      "batch": 1
+    },
+    {
+      "id": "01-install-app",
+      "title": "Install the Android app",
+      "for": ["Sellers"],
+      "seconds": [40, 60],
+      "devices": ["phone"],
+      "features": ["android-app", "play-store", "app-updates"],
+      "screens": ["Google Play listing", "first open"],
+      "native": true,
+      "batch": 2
+    },
+    {
+      "id": "02-sign-in-setup",
+      "title": "Sign in and set up your phone",
+      "for": ["Sellers"],
+      "seconds": [50, 75],
+      "devices": ["phone"],
+      "features": ["sign-in", "app-sign-in", "phone-setup", "organisations"],
+      "screens": ["sign-in", "/review-fixture/settings"],
+      "native": true,
+      "batch": 2
+    },
+    {
+      "id": "03-add-leads",
+      "title": "Add leads: quick add, paste a list, table view",
+      "for": ["Sellers", "Sales managers"],
+      "seconds": [60, 90],
+      "devices": ["phone", "desktop"],
+      "features": ["add-sheet", "leads-stage-tabs", "lead-hub"],
+      "screens": ["/review-fixture/add-sheet", "/review-fixture/leads"],
+      "native": false,
+      "batch": 1,
+      "ui_changing": "Leads table view and quick add (session sx-mobile-ux)"
+    },
+    {
+      "id": "04-call-a-lead",
+      "title": "Call a lead and log what happened",
+      "for": ["Sellers"],
+      "seconds": [50, 75],
+      "devices": ["phone"],
+      "features": ["start-calling", "lead-hub", "after-call-sheet", "ready-messages"],
+      "screens": ["/review-fixture/leads", "/review-fixture/cold-calling"],
+      "native": false,
+      "batch": 1
+    },
+    {
+      "id": "05-dialler-recordings",
+      "title": "Dialler and incoming calls, recorded and filed",
+      "for": ["Sellers", "Sales managers"],
+      "seconds": [40, 60],
+      "devices": ["phone"],
+      "features": ["dialler-recordings", "phone-setup", "mark-private"],
+      "screens": ["/review-fixture/recorded-calls", "phone dialler"],
+      "native": true,
+      "batch": 2
+    },
+    {
+      "id": "06-call-report",
+      "title": "Read your call Report and Brain 4.0 score",
+      "for": ["Sellers", "Sales managers"],
+      "seconds": [70, 90],
+      "devices": ["phone", "desktop"],
+      "features": ["the-report", "brain-4", "prospect-profile", "calls-library"],
+      "screens": ["/review-fixture/calls", "/review-fixture/report", "/review-fixture/report/pillars", "/review-fixture/prospects"],
+      "native": false,
+      "batch": 1
+    },
+    {
+      "id": "07-stages-pipelines",
+      "title": "Lead stages and your two pipelines",
+      "for": ["Business owners", "Sales managers"],
+      "seconds": [45, 75],
+      "devices": ["desktop", "phone"],
+      "features": ["lead-stages", "lead-pipelines", "leads-stage-tabs"],
+      "screens": ["/review-fixture/lead-stages", "/review-fixture/stage-options", "/review-fixture/leads"],
+      "native": false,
+      "batch": 1
+    },
+    {
+      "id": "08-chats",
+      "title": "Chats: WhatsApp, Messenger and Instagram in one inbox",
+      "for": ["Sellers"],
+      "seconds": [40, 60],
+      "devices": ["phone"],
+      "features": ["chats-inbox", "whatsapp", "ready-messages"],
+      "screens": ["/review-fixture/chats"],
+      "native": false,
+      "batch": 1
+    },
+    {
+      "id": "09-team-organisation",
+      "title": "Your team and organisation: invite, roles, workspaces",
+      "for": ["Business owners"],
+      "seconds": [50, 75],
+      "devices": ["desktop"],
+      "features": ["organisations", "invites-domains", "people-pages"],
+      "screens": ["/review-fixture/settings"],
+      "native": false,
+      "batch": 2
+    },
+    {
+      "id": "10-taking-leads",
+      "title": "The Taking leads switch",
+      "for": ["Sellers", "Business owners"],
+      "seconds": [30, 45],
+      "devices": ["phone"],
+      "features": ["lead-rules"],
+      "screens": ["/review-fixture/leads", "/review-fixture/switches"],
+      "native": false,
+      "batch": 1
+    },
+    {
+      "id": "11-my-coaching",
+      "title": "My coaching: one thing to get better at",
+      "for": ["Sellers", "Sales managers"],
+      "seconds": [40, 60],
+      "devices": ["phone"],
+      "features": ["my-coaching", "team-coaching"],
+      "screens": ["/review-fixture/coaching"],
+      "native": false,
+      "batch": 2
+    },
+    {
+      "id": "12-upload-recording",
+      "title": "Upload a recording you already have",
+      "for": ["Sellers", "Sales managers"],
+      "seconds": [35, 50],
+      "devices": ["desktop"],
+      "features": ["upload-any-recording", "add-sheet"],
+      "screens": ["/review-fixture/add-sheet"],
+      "native": false,
+      "batch": 2
+    }
+  ]
+}

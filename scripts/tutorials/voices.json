@@ -1,0 +1,30 @@
+{
+  "about": "Voice casting per language. All voices are ElevenLabs library voices already saved on the AC account (no cloning of real people). 'pick' is the voice used for renders; 'alt' is the other option sent to the owner with the samples. Change 'pick' after the owner chooses.",
+  "model_id": "eleven_v4",
+  "output_format": "mp3_44100_192",
+  "voice_settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.8,
+    "speed": 1.0
+  },
+  "languages": {
+    "en": {
+      "label": "English (Indian)",
+      "language_code": "en",
+      "pick": {"voice_id": "7GhmeknbcNhutRszXc2f", "name": "Masuk - Tutorials and Explainers", "gender": "male"},
+      "alt": {"voice_id": "W0IijAYaBOZmQK7SbmS5", "name": "Palak M - Polished & Pleasant Assistant", "gender": "female"}
+    },
+    "hi": {
+      "label": "Hinglish",
+      "language_code": "hi",
+      "pick": {"voice_id": "Y7OrrtPkQBWZvc1sOCQ4", "name": "Amol P - Warm, Natural Customer Care", "gender": "male"},
+      "alt": {"voice_id": "oR3MB6ZZsjdV90ztz1xE", "name": "Paaro - Real, Warm and Interactive", "gender": "female"}
+    },
+    "mr": {
+      "label": "Marathi-English",
+      "language_code": "mr",
+      "pick": {"voice_id": "HtGnESBO7Tz9pSmUZ6wA", "name": "Amol P - Engaging Marathi Podcast Host", "gender": "male"},
+      "alt": {"voice_id": "es0ipzX1rWO9Y2E2TbgY", "name": "Sanika - Cheerful Puneri Creator", "gender": "female"}
+    }
+  }
+}

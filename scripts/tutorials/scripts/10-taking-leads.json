@@ -1,0 +1,88 @@
+{
+  "id": "10-taking-leads",
+  "number": "10",
+  "title": "The Taking leads switch",
+  "kicker": "Sales X-Ray tutorial",
+  "end_headline": "On when you're in. Off when you're out.",
+  "next": "My coaching",
+  "segments": [
+    {
+      "id": "card",
+      "device": "card",
+      "en": {"say": ["Busy, or on leave? Here's how to pause new leads."]},
+      "hi": {
+        "say": ["Busy हैं, या छुट्टी पे? New leads ऐसे pause कीजिए."],
+        "caption": ["Busy hain, ya chhutti pe? New leads aise pause kijiye."]
+      },
+      "mr": {
+        "say": ["Busy आहात, किंवा सुट्टीवर? New leads असे pause करा."],
+        "caption": ["Busy aahat, kinva suttivar? New leads ase pause kara."]
+      }
+    },
+    {
+      "id": "s1-chip",
+      "device": "phone",
+      "label": "Taking leads",
+      "setup": [{"do": "goto", "url": "/review-fixture/leads"}, {"do": "tap", "target": {"role": "button", "name": "Got it"}, "ms": 400, "optional": true}],
+      "actions": [
+        {"do": "wait", "ms": 600},
+        {"do": "highlight", "target": {"role": "button", "name": "Taking new leads"}, "ms": 2000},
+        {"do": "unhighlight"},
+        {"do": "still", "label": "taking-leads-chip"}
+      ],
+      "en": {"say": ["On Leads, this green chip says Taking leads.", "While it's on, new leads can come to you."]},
+      "hi": {
+        "say": ["Leads पे ये green chip दिखता है, Taking leads.", "जब तक ये on है, new leads आपके पास आ सकते हैं."],
+        "caption": ["Leads pe yeh green chip dikhta hai, Taking leads.", "Jab tak yeh on hai, new leads aapke paas aa sakte hain."]
+      },
+      "mr": {
+        "say": ["Leads वर हा green chip दिसतो, Taking leads.", "हा on असेपर्यंत, new leads तुमच्याकडे येऊ शकतात."],
+        "caption": ["Leads var ha green chip disto, Taking leads.", "Ha on asepparyant, new leads tumchyakade yeu shaktat."]
+      }
+    },
+    {
+      "id": "s2-pause",
+      "device": "phone",
+      "label": "Tap to pause",
+      "setup": [{"do": "goto", "url": "/review-fixture/leads"}, {"do": "tap", "target": {"role": "button", "name": "Got it"}, "ms": 400, "optional": true}],
+      "actions": [
+        {"do": "wait", "ms": 400},
+        {"do": "tap", "target": {"role": "button", "name": "Taking new leads"}, "ms": 1600},
+        {"do": "still", "label": "pause-confirm"},
+        {"do": "highlight", "target": {"role": "button", "name": "Stop taking leads"}, "ms": 1500, "optional": true},
+        {"do": "unhighlight"},
+        {"do": "wait", "ms": 900}
+      ],
+      "en": {"say": ["Tap it to pause.", "New leads go to other sellers, and your open leads and follow-ups stay with you."]},
+      "hi": {
+        "say": ["Pause करने के लिए इसपे tap कीजिए.", "New leads बाकी sellers को जाते हैं, और आपके open leads और follow-ups आपके पास ही रहते हैं."],
+        "caption": ["Pause karne ke liye ispe tap kijiye.", "New leads baaki sellers ko jaate hain, aur aapke open leads aur follow-ups aapke paas hi rehte hain."]
+      },
+      "mr": {
+        "say": ["Pause करायला यावर tap करा.", "New leads बाकीच्या sellers कडे जातात, आणि तुमचे open leads आणि follow-ups तुमच्याकडेच राहतात."],
+        "caption": ["Pause karayla yavar tap kara.", "New leads baakichya sellers kade jaatat, aani tumche open leads aani follow-ups tumchyakadech rahtat."]
+      }
+    },
+    {
+      "id": "s3-back-on",
+      "device": "phone",
+      "label": "Back on, any time",
+      "setup": [{"do": "goto", "url": "/review-fixture/switches"}],
+      "actions": [
+        {"do": "wait", "ms": 600},
+        {"do": "highlight", "target": {"role": "switch", "name": "Taking new leads"}, "ms": 2000},
+        {"do": "unhighlight"},
+        {"do": "still", "label": "selling-switch"}
+      ],
+      "en": {"say": ["Back at work? Turn it on again, from Leads or from Settings, Selling."]},
+      "hi": {
+        "say": ["वापस काम पे? Leads से या Settings, Selling से, फिर से on कर दीजिए."],
+        "caption": ["Waapas kaam pe? Leads se ya Settings, Selling se, phir se on kar dijiye."]
+      },
+      "mr": {
+        "say": ["परत कामावर? Leads मधून किंवा Settings, Selling मधून, परत on करा."],
+        "caption": ["Parat kamavar? Leads madhun kinva Settings, Selling madhun, parat on kara."]
+      }
+    }
+  ]
+}
