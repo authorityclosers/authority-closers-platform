@@ -130,7 +130,7 @@ export const TEST_CALL_STEPS = [
 export const TEST_RESULT_WORDS: Record<TestCallResult, string | null> = {
   both: "Both of you were recorded. Recording works.",
   only_you:
-    "Only your voice was recorded: the other person is silent. Your phone's recorder misses the other side, so Reports from this phone will be one-sided.",
+    "Only your voice was recorded; the other person came out silent. Check they weren't muted or on a Bluetooth headset and spoke near their phone, then try again.",
   only_them:
     "Only the other person was recorded. Check your phone's microphone, then try again.",
   silent:
@@ -145,7 +145,7 @@ export const TEST_RESULT_WORDS: Record<TestCallResult, string | null> = {
 /** The checklist line after a test call that didn't pass: short; the line's view has the rest. */
 export const TEST_RESULT_LINE: Record<TestCallResult, string | null> = {
   both: null,
-  only_you: "Only your voice was recorded. The other side is missing.",
+  only_you: "Only your voice was heard. Try the test again.",
   only_them: "Only the other person was recorded.",
   silent: "The test recording was silent.",
   not_found: "No recording was found for the test call.",

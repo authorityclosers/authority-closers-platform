@@ -203,7 +203,7 @@ export function checkWarning(recording: NativeRecording | null): string | null {
     case "silent":
       return "This recording is silent. Check your phone's call recording: Phone setup, Test call.";
     case "one_sided":
-      return "Only one voice may be in this recording. Your phone may not record the other side.";
+      return "Only one voice may be in this recording. Listen to it before you analyse it.";
     default:
       return null;
   }
