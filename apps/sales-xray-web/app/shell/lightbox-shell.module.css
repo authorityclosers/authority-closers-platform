@@ -2092,15 +2092,25 @@
     padding: 12px 12px 10px;
   }
 
-  /* A mouse gets the 28 px button and the name the room; touch keeps 44 px. */
-  @media (pointer: fine) {
+  /* Drawn at 28 px so the name has the room; on a touch screen an unseen
+     edge makes the target 44 px. */
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .collapseBtn {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+  }
+
+  @media (pointer: coarse) {
     :global(html:not([data-sx-sidebar="collapsed"]))
       .shell:not(.collapsed)
-      .collapseBtn {
-      width: 28px;
-      height: 28px;
-      min-width: 28px;
-      min-height: 28px;
+      .collapseBtn::before {
+      position: absolute;
+      inset: -8px;
+      content: "";
     }
   }
 
