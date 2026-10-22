@@ -71,14 +71,25 @@ approved stages. Initial external identity directories are:
 OpenAI is an opt-in worker identity. When the release-owned service manifest
 contains an `openai` provider, the activation descriptor must select
 `compose.sales-xray-hosted-openai.yaml`, and the compose environment must add
-`AC_XRAY_OPENAI_IDENTITY_DIR` pointing to the separately provisioned
-`/etc/authority-closers/secrets/sales-xray/identities/openai` directory. The
-directory contains only that environment's Infisical service token, owned by
+`AC_XRAY_OPENAI_IDENTITY_DIR` pointing to the separately provisioned directory
+for the activation descriptor's environment:
+
+| Activation environment | Required host directory |
+| --- | --- |
+| `staging` | `/etc/authority-closers/secrets/sales-xray/identities/staging/openai` |
+| `production` | `/etc/authority-closers/secrets/sales-xray/identities/production/openai` |
+
+The directory contains only that environment's Infisical service token, owned by
 UID10001 and mode0400. The OpenAI overlay mounts only this provider directory,
 read-only, at `/run/ac-sales-xray/identities/openai`; its service manifest must
 use the matching `/run/ac-sales-xray/identities/openai/token` file reference.
-Both hosted validators require this exact dedicated leaf and reject broader
-`identities` or `secrets` parent directories.
+Both validators bind this exact dedicated leaf to the descriptor's environment.
+They reject the other environment, the historical shared `identities/openai`
+leaf, arbitrary paths, broader parents, traversal and symbolic links. Offline
+preparation checks existing host components without requiring provisioning;
+the installer requires the complete token-only tree, root-owned non-writable
+parents, a worker-traversable leaf and a nonempty singly-linked token with the
+ownership and mode above. Neither check reads token contents.
 The ordinary overlay does not request or mount an OpenAI identity, so existing
 activations remain on the original four-identity contract.
 
@@ -93,11 +104,10 @@ returns metadata HTTP404. Separate read-only token provisioning is the required
 output of [AUT-2180](/AUT/issues/AUT-2180).
 
 Do not add staging/prod scopes to the shared Gemini token or copy a broad root
-identity into a container. The current validators require a single fixed
-OpenAI host directory shared by the hosted overlays. Supporting separate
-staging/production OpenAI credentials therefore needs an environment-specific
-directory contract in the release-owned source before activation. The
-container-visible leaf stays `/run/ac-sales-xray/identities/openai/token`.
+identity into a container. The environment-specific directory contract above
+must ship through the authorized release path before separate staging/production
+OpenAI credentials can be activated. The container-visible leaf stays
+`/run/ac-sales-xray/identities/openai/token`.
 Keep existing providers and their approval references intact; use the normal
 release path for manifest/mount changes. Worker acceptance requires
 `infisical run` under each actual worker identity to produce the expected
@@ -151,8 +161,11 @@ Only when the service manifest includes an approved OpenAI launcher, the
 separate OpenAI overlay also requires:
 
 ```text
-AC_XRAY_OPENAI_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/openai
+AC_XRAY_OPENAI_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/staging/openai
 ```
+
+For production, use the exact `identities/production/openai` counterpart from
+the table above. There is no fallback to the historical shared OpenAI directory.
 
 For production, use the corresponding `production/challenge-secret` path. The
 challenge file is provisioned out-of-band by the approved Cloudflare secret
