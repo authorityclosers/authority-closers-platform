@@ -127,6 +127,10 @@ export function TodaySkeleton() {
         </div>
         <RowsSkeleton rows={4} kind="lead" />
         <Skeleton height={52} radius="pill" />
+        {/* "See all N for today" */}
+        <span className={`${styles.more} ${styles.line}`} aria-hidden="true">
+          <Skeleton width={136} height={12} />
+        </span>
       </section>
       <dl className={styles.dayStrip} aria-hidden="true">
         {["Calls", "Connected", "Follow-ups done"].map((label) => (
@@ -157,6 +161,10 @@ export function SalesHomeSkeleton({ manager }: { manager: boolean }) {
               <Skeleton width={101} height={38} radius="pill" />
             </div>
             <OutcomesSkeleton />
+            {/* "N for you to call today" */}
+            <div className={styles.chips} aria-hidden="true">
+              <Skeleton width={190} height={38} radius="pill" />
+            </div>
           </section>
           <section className={styles.block}>
             <div className={styles.head}>
