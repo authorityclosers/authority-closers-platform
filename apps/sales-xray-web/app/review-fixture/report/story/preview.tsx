@@ -262,6 +262,7 @@ export function StoryShellPreview({
                       />
                       <ReportModes
                         fixture
+                        fixtureLook={coach ? COACH_LOOK : undefined}
                         illustration={example ? exampleView(example) : null}
                         documentData={{
                           report: amitReport,

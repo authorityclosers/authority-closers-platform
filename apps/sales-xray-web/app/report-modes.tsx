@@ -41,6 +41,7 @@ import {
   applyReportSettings,
   reportLook,
   useReportSettings,
+  type ReportLook,
 } from "./report-settings";
 import styles from "./report-modes.module.css";
 import { TargetArrow } from "./xray-report/icons";
@@ -620,6 +621,7 @@ export function ReportModes({
   onSelectContextualPlayback,
   structure = "custom",
   fixture = false,
+  fixtureLook,
   illustration = null,
   onViewChange,
 }: {
@@ -642,6 +644,8 @@ export function ReportModes({
   prospectControls?: ReactNode;
   /** A fictional fixture: the Report shows its data but reads nothing live. */
   fixture?: boolean;
+  /** A fixture's report settings look (a fixture reads no settings); ignored otherwise. */
+  fixtureLook?: ReportLook;
   /** The doc's illustrative example (review fixture only): every number fictional. */
   illustration?: XrayView | null;
   /** Told which view shows, so the page header can follow it (owner, 19 Oct). */
@@ -650,7 +654,7 @@ export function ReportModes({
   // This workspace's report settings version (Admin, 19 Oct 2026), read once
   // per workspace; version 1, an older server or any failure is today's look.
   const reportSettings = useReportSettings(!fixture);
-  const look = reportLook(reportSettings);
+  const look = (fixture && fixtureLook) || reportLook(reportSettings);
   const allStoryPanels =
     // A guest preview gets the Report too when the caller asks for pillars;
     // its locked items show as "more after you sign in".
