@@ -10,7 +10,7 @@ import { Bookmark, BookmarkCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { notify } from "../notice-center";
-import { Button, Field } from "../ui/kit";
+import { ActionList, ActionRow, Badge, Button, Field } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import {
   findView,
@@ -176,41 +176,40 @@ function ViewsSheet({
     >
       <div className={styles.views}>
         {views.length ? (
-          <ul className={styles.menuList} aria-label="Your saved views">
+          <ActionList label="Your saved views">
             {views.map((view) => (
-              <li key={view.id} className={styles.viewLine}>
-                <button
-                  type="button"
-                  className={styles.menuRow}
-                  aria-current={view.id === active?.id ? "true" : undefined}
-                  onClick={() => onApply(view)}
-                >
-                  <span className={styles.menuIcon} aria-hidden="true">
-                    {view.id === active?.id ? (
-                      <BookmarkCheck size={20} />
-                    ) : (
-                      <Bookmark size={20} />
-                    )}
-                  </span>
-                  <span className={styles.menuWords}>
-                    <strong>{view.name}</strong>
-                    {/* A view named as it reads says it once. */}
-                    {describe(view) === view.name ? null : (
-                      <small>{describe(view)}</small>
-                    )}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={styles.viewRemove}
-                  aria-label={`Remove ${view.name}`}
-                  onClick={() => remove(view)}
-                >
-                  <Trash2 size={18} aria-hidden="true" />
-                </button>
-              </li>
+              <ActionRow
+                key={view.id}
+                icon={
+                  view.id === active?.id ? (
+                    <BookmarkCheck size={20} />
+                  ) : (
+                    <Bookmark size={20} />
+                  )
+                }
+                title={view.name}
+                // A view named as it reads says it once.
+                note={describe(view) === view.name ? undefined : describe(view)}
+                end={
+                  view.id === active?.id ? (
+                    <Badge tone="good">In use</Badge>
+                  ) : undefined
+                }
+                chevron={false}
+                onClick={() => onApply(view)}
+                trailing={
+                  <button
+                    type="button"
+                    className={styles.viewRemove}
+                    aria-label={`Remove ${view.name}`}
+                    onClick={() => remove(view)}
+                  >
+                    <Trash2 size={18} aria-hidden="true" />
+                  </button>
+                }
+              />
             ))}
-          </ul>
+          </ActionList>
         ) : (
           <p className={styles.hint}>
             Save the stage, pipeline, owner and search you use most. It comes

@@ -20,17 +20,27 @@
  * /leads#lead=<id> (ids only, after "#"); pull down to refresh.
  */
 
-import { ArrowLeft, Building2, Ellipsis, PhoneCall, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  Ellipsis,
+  Phone,
+  PhoneCall,
+  Plus,
+  UserRound,
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
+import { useCommandSource, type CommandSource } from "../ui/command-registry";
 import { DeskChats } from "../chats/desk-chats";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { leavingOverlay } from "../ui/back-close";
@@ -456,6 +466,79 @@ export function LeadsRoute() {
       viewHref(view, pipeline, { who: can ? scopeChoice : null, q: query }),
     );
   }, [stageView, query, addressQuery, view, pipeline, can, scopeChoice]);
+
+  // The command bar (Ctrl K, the header's search) while Leads is open: Start
+  // calling, Add lead, and each lead found to open or to call. A call asks
+  // first, as a swipe does; nothing dials from the bar.
+  const canStart = current && !!desk && desk.counts.open > 0;
+  const commands = useMemo<CommandSource | null>(() => {
+    if (!authenticated) return null;
+    const openLead = (leadId: string, next: LeadIntent | null = null) => {
+      setHolding(null);
+      setIntent(next);
+      setOpenLead(leadId);
+    };
+    const round = (which: "calling" | "adding") =>
+      setRounds((value) => ({ ...value, [which]: value[which] + 1 }));
+    return {
+      commands: [
+        ...(canStart
+          ? [
+              {
+                id: "leads:start-calling",
+                group: "Actions",
+                label: "Start calling",
+                hint: "One due lead at a time",
+                icon: <PhoneCall size={16} aria-hidden="true" />,
+                run: () => {
+                  round("calling");
+                  setCalling(true);
+                },
+              },
+            ]
+          : []),
+        {
+          id: "leads:add-lead",
+          group: "Actions",
+          label: "Add lead",
+          icon: <Plus size={16} aria-hidden="true" />,
+          run: () => {
+            round("adding");
+            setAdding(true);
+          },
+        },
+      ],
+      search: async (text, signal) => {
+        const page = await readLeads(
+          { scope: can ? "team" : "mine", search: text },
+          signal,
+        );
+        return page.leads.slice(0, 6).flatMap((row) => [
+          {
+            id: `leads:open:${row.lead_id}`,
+            group: "Leads",
+            label: row.name,
+            hint: [row.stage_label, row.city].filter(Boolean).join(" · "),
+            icon: <UserRound size={16} aria-hidden="true" />,
+            run: () => openLead(row.lead_id),
+          },
+          ...(row.phone_last4
+            ? [
+                {
+                  id: `leads:call:${row.lead_id}`,
+                  group: "Leads",
+                  label: `Call ${row.name}`,
+                  hint: `Ends in ${row.phone_last4}`,
+                  icon: <Phone size={16} aria-hidden="true" />,
+                  run: () => setDialling(row),
+                },
+              ]
+            : []),
+        ]);
+      },
+    };
+  }, [authenticated, can, canStart]);
+  useCommandSource("leads", commands);
 
   if (!authenticated) {
     const loading =
