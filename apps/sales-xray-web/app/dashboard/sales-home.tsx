@@ -45,7 +45,11 @@ import {
   type Performance,
   type Period,
 } from "../leads/leads-client";
-import { readJourney, type Kind } from "../leads/journey/journey-client";
+import {
+  MAIN_PIPELINE,
+  readJourney,
+  type Kind,
+} from "../leads/journey/journey-client";
 import { KIND_WORDS } from "../leads/stage-tabs";
 import { several, usePipelines } from "../leads/use-pipelines";
 import { Avatar, Delta, Segmented } from "../ui/kit";
@@ -192,6 +196,20 @@ function TeamHome({ desk }: { desk: Desk | null }) {
   const now = shown?.current;
   const before = shown?.previous;
   const late = shown?.sellers.reduce((sum, seller) => sum + seller.late, 0);
+  // Several pipelines: the funnel shows one at a time, in its own stages.
+  const pipes = usePipelines();
+  const [picked, setPicked] = useState<string | null>(null);
+  const inPipeline = several(pipes)
+    ? (
+        pipes.pipelines.find((item) => item.key === picked) ??
+        pipes.pipelines[0]
+      ).key
+    : null;
+  const open = shown
+    ? inPipeline
+      ? (shown.pipelines?.[inPipeline] ?? {})
+      : shown.pipeline
+    : null;
   const mineDue = desk ? desk.queue.length : 0;
 
   return (
@@ -334,14 +352,25 @@ function TeamHome({ desk }: { desk: Desk | null }) {
       <section className={styles.block} aria-labelledby="pipeline-title">
         <div className={styles.head}>
           <h2 id="pipeline-title">Open leads by stage</h2>
-          {shown ? (
+          {open ? (
             <span className={styles.meta}>
-              {`${OPEN_KINDS.reduce((sum, kind) => sum + (shown.pipeline[kind] ?? 0), 0)} open now`}
+              {`${OPEN_KINDS.reduce((sum, kind) => sum + (open[kind] ?? 0), 0)} open now`}
             </span>
           ) : null}
         </div>
-        {shown ? (
-          <Funnel pipeline={shown.pipeline} />
+        {several(pipes) && inPipeline ? (
+          <Segmented
+            label="Pipeline"
+            value={inPipeline}
+            onChange={setPicked}
+            items={pipes.pipelines.map((item) => ({
+              key: item.key,
+              label: item.name,
+            }))}
+          />
+        ) : null}
+        {open ? (
+          <Funnel pipeline={open} inPipeline={inPipeline} />
         ) : (
           <div className={styles.listSkeleton} aria-busy="true">
             {[0, 1, 2, 3].map((index) => (
@@ -355,16 +384,18 @@ function TeamHome({ desk }: { desk: Desk | null }) {
 }
 
 /**
- * The organisation's own name for each kind of stage, where it has one stage of
- * that kind (Redmi, 22 Oct 2026: Home read "New / Not contacted" while Leads
- * read "New enquiry / Couldn't reach"). Across several pipelines, the kinds.
+ * A pipeline's own name for each kind of stage, where it has one stage of that
+ * kind (Redmi, 22 Oct 2026: Home read "New / Not contacted" while Leads read
+ * "New enquiry / Couldn't reach").
  */
-function useStageNames(): Partial<Record<Kind, string>> {
-  const pipes = usePipelines();
-  const [names, setNames] = useState<Partial<Record<Kind, string>>>({});
+function useStageNames(pipeline: string): Partial<Record<Kind, string>> {
+  const [names, setNames] = useState<{
+    key: string;
+    value: Partial<Record<Kind, string>>;
+  } | null>(null);
   useEffect(() => {
     let live = true;
-    readJourney().then(
+    readJourney(pipeline).then(
       (view) => {
         if (!live) return;
         const found: Partial<Record<Kind, string>> = {};
@@ -374,19 +405,27 @@ function useStageNames(): Partial<Record<Kind, string>> {
           );
           if (own.length === 1) found[kind] = own[0].label;
         }
-        setNames(found);
+        setNames({ key: pipeline, value: found });
       },
       () => undefined,
     );
     return () => {
       live = false;
     };
-  }, []);
-  return several(pipes) ? {} : names;
+  }, [pipeline]);
+  return names?.key === pipeline ? names.value : {};
 }
 
-function Funnel({ pipeline }: { pipeline: Record<string, number> }) {
-  const names = useStageNames();
+function Funnel({
+  pipeline,
+  inPipeline = null,
+}: {
+  pipeline: Record<string, number>;
+  /** The pipeline shown, when the organisation runs several. */
+  inPipeline?: string | null;
+}) {
+  const names = useStageNames(inPipeline ?? MAIN_PIPELINE);
+  const where = inPipeline ? `&pipeline=${encodeURIComponent(inPipeline)}` : "";
   const most = Math.max(1, ...OPEN_KINDS.map((kind) => pipeline[kind] ?? 0));
   return (
     <ul className={styles.funnel}>
@@ -394,7 +433,7 @@ function Funnel({ pipeline }: { pipeline: Record<string, number> }) {
         const count = pipeline[kind] ?? 0;
         return (
           <li key={kind} data-kind={kind}>
-            <Link href={`/leads?tab=all&stage=${kind}`}>
+            <Link href={`/leads?tab=all&stage=${kind}${where}`}>
               <span className={styles.funnelLabel}>
                 {names[kind] ?? KIND_WORDS[kind]}
               </span>

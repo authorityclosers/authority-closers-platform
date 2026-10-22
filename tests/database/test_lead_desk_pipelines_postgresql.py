@@ -123,6 +123,13 @@ def test_pipelines_each_with_their_own_stages_and_sources(
                 assert (
                     await client.get(f"{BASE}/leads?scope=team&pipeline=nope")
                 ).status_code == 422
+                # Home's open leads by stage, per pipeline.
+                performance = (await client.get(f"{BASE}/reports/performance?days=7")).json()
+                assert performance["pipeline"] == {"new": 2}
+                assert performance["pipelines"] == {
+                    "main": {"new": 1},
+                    "partner_outreach": {"new": 1},
+                }
 
                 detail = (await client.get(f"{BASE}/leads/{lead['lead_id']}")).json()
                 labels = [choice["label"] for choice in detail["stage_choices"]]

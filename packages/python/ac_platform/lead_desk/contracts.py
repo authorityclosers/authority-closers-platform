@@ -369,6 +369,8 @@ class Performance(Model):
     previous: Outcomes
     sellers: tuple[SellerOutcome, ...]
     pipeline: dict[str, int]
+    # The same open leads by stage, per pipeline (key: the pipeline's key).
+    pipelines: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 class ImportPreview(Model):

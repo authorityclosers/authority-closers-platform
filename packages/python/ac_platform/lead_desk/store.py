@@ -2568,16 +2568,18 @@ class LeadDesk:
                 seller.name.lower(),
             )
         )
-        pipeline = {
-            str(stage): int(count)
-            for stage, count in (
-                await self.db.execute(
-                    select(Lead.stage, func.count())
-                    .where(Lead.tenant_id == self.tenant_id, Lead.stage.in_(OPEN_STAGES))
-                    .group_by(Lead.stage)
-                )
-            ).all()
-        }
+        key = func.coalesce(Lead.pipeline_key, journeys.MAIN_PIPELINE)
+        pipeline: dict[str, int] = {}
+        pipelines: dict[str, dict[str, int]] = {}
+        for owner_pipeline, stage, count in (
+            await self.db.execute(
+                select(key, Lead.stage, func.count())
+                .where(Lead.tenant_id == self.tenant_id, Lead.stage.in_(OPEN_STAGES))
+                .group_by(key, Lead.stage)
+            )
+        ).all():
+            pipeline[str(stage)] = pipeline.get(str(stage), 0) + int(count)
+            pipelines.setdefault(str(owner_pipeline), {})[str(stage)] = int(count)
         return Performance(
             days=days,
             start=start,
@@ -2586,6 +2588,7 @@ class LeadDesk:
             previous=outcomes(previous, await arrived(before, begin)),
             sellers=tuple(sellers),
             pipeline=pipeline,
+            pipelines=pipelines,
         )
 
     async def save_rep(self, person_id: UUID, command: RepRules) -> Team:

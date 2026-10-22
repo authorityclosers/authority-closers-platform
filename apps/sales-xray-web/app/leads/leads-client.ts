@@ -782,6 +782,8 @@ export type Performance = {
   previous: Outcomes;
   sellers: SellerOutcome[];
   pipeline: Record<string, number>;
+  /** The same open leads by stage, per pipeline (by the pipeline's key). */
+  pipelines?: Record<string, Record<string, number>>;
 };
 
 export type Period = 1 | 7 | 30;
