@@ -215,6 +215,14 @@
   content: "";
 }
 
+/* Paused by something else while switched on (work hours): the track turns
+   amber with the icon and the dot, so nothing on the row reads "on" (Redmi
+   check, 23 Oct 2026). The knob stays right: it is still the person's own
+   choice, and it takes over again when the pause ends. */
+.row[data-tone="held"] .switch[aria-checked="true"] > span {
+  background: var(--sx-warn);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .icon,
   .switch > span,
