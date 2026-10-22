@@ -713,6 +713,26 @@ export function forgetDevice(token: string) {
   );
 }
 
+export type BulkAction = "assign" | "stage" | "pipeline";
+export type BulkDone = { done: number; skipped: number; words: string };
+
+/** Many leads at once (owners and admins): give, re-stage or move them. */
+export function bulkLeads(
+  body: {
+    action: BulkAction;
+    lead_ids: string[];
+    person_id?: string | null;
+    step?: string;
+    pipeline?: string;
+  },
+  command = commandId(),
+) {
+  return request<BulkDone>(
+    "/leads/bulk",
+    json("POST", { command_id: command, ...body }),
+  );
+}
+
 /** Move a lead to another of the organisation's pipelines (owners and admins). */
 export function movePipeline(
   lead: Pick<LeadRow, "lead_id" | "revision">,

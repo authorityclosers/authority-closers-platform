@@ -27,6 +27,7 @@ import {
   type LeadRow,
   type LeadsDeleted,
 } from "./leads-client";
+import { BulkSheet } from "./bulk-sheet";
 import styles from "./leads.module.css";
 
 export type Scope = "mine" | "team" | "unassigned";
@@ -84,6 +85,10 @@ export function ListView({
     leads: ReadonlyMap<string, string>;
   } | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
+  // Actions on the ticked leads: a fresh sheet each time.
+  const [bulk, setBulk] = useState<{ round: number; open: boolean } | null>(
+    null,
+  );
   const [confirm, setConfirm] = useState<{
     round: number;
     open: boolean;
@@ -346,6 +351,29 @@ export function ListView({
               leads: [...chosen].map(([lead_id, name]) => ({ lead_id, name })),
             }))
           }
+          onActions={() =>
+            setBulk((current) => ({
+              round: (current?.round ?? 0) + 1,
+              open: true,
+            }))
+          }
+        />
+      ) : null}
+      {bulk ? (
+        <BulkSheet
+          key={bulk.round}
+          open={bulk.open}
+          leadIds={[...chosen.keys()]}
+          pipeline={pipeline}
+          onClose={() =>
+            setBulk((current) => current && { ...current, open: false })
+          }
+          onDone={() => {
+            setBulk((current) => current && { ...current, open: false });
+            setPicked(null);
+            setSelecting(false);
+            onChanged?.();
+          }}
         />
       ) : null}
       {confirm ? (

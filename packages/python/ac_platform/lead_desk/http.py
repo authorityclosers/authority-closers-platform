@@ -35,6 +35,8 @@ from ac_platform.lead_desk import push, simulation
 from ac_platform.lead_desk.contracts import (
     AlertText,
     Badge,
+    BulkDone,
+    BulkLeads,
     CallPrivacy,
     CallRecord,
     CallReport,
@@ -242,6 +244,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
             raise HTTPException(422, "Enter a phone number.", headers=PRIVATE)
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.match(phone)
+
+    @router.post("/leads/bulk", response_model=BulkDone, response_model_by_alias=True)
+    async def bulk_leads(command: BulkLeads, request: Request, response: Response) -> BulkDone:
+        """Owners and admins give, move or re-stage many leads at once."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.bulk(command)
 
     @router.post("/leads/delete", response_model=LeadsDeleted, response_model_by_alias=True)
     async def delete_leads(

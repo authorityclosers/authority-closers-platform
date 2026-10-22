@@ -39,6 +39,8 @@ from ac_platform.lead_desk.contracts import (
     PHONE_CHECKS,
     AlertText,
     Badge,
+    BulkDone,
+    BulkLeads,
     CallPrivacy,
     CallReport,
     Counts,
@@ -1234,9 +1236,18 @@ class LeadDesk:
         if lead.revision != expected_revision:
             raise DeskError(409, "This lead changed. Check it and try again.")
         target = await self._pipeline(pipeline)
-        previous = journeys.pipeline_of(lead)
-        if previous == target.key:
+        if journeys.pipeline_of(lead) == target.key:
             raise DeskError(409, f"This lead is already in {target.name}.")
+        await self._to_pipeline(lead, target, command_id=command_id)
+        await self.db.flush()
+        return await self.detail(lead_id)
+
+    async def _to_pipeline(
+        self, lead: Lead, target: pipelines.Pipeline, *, command_id: UUID
+    ) -> None:
+        """Move a lead into another pipeline: its desk stage stays, its step becomes the new
+        pipeline's stage for it, and its history says so."""
+        previous = journeys.pipeline_of(lead)
         before = (await self._labels(previous)).resolve(lead.stage, lead.step)
         after = (await self._labels(target.key)).resolve(lead.stage, None)
         landed = after.label if after else STAGE_LABELS[lead.stage]
@@ -1259,8 +1270,125 @@ class LeadDesk:
             actor=self.viewer.person_id,
             command_id=command_id,
         )
+
+    def to_stage(
+        self,
+        lead: Lead,
+        journey: journeys.Journey,
+        stage: journeys.Stage,
+        *,
+        note: str | None,
+        command_id: UUID,
+    ) -> None:
+        """Move a lead to one of its pipeline's stages without a call ("Site visit done")."""
+        before = journey.resolve(lead.stage, lead.step)
+        previous_kind, previous_step = lead.stage, lead.step
+        lead.stage = stage.kind
+        lead.step = stage.key
+        if stage.kind in ("won", "lost"):
+            lead.next_action_at = None
+            lead.next_action_note = None
+        lead.revision += 1
+        lead.updated_at = self.now
+        self._event(
+            lead,
+            "stage",
+            {
+                "stage": stage.kind,
+                "from_stage": previous_kind,
+                "step": stage.key,
+                "from_step": before.key if before else previous_step,
+                "step_label": stage.label,
+                "remark": note,
+            },
+            actor=self.viewer.person_id,
+            command_id=command_id,
+        )
+
+    async def bulk(self, command: BulkLeads) -> BulkDone:
+        """Many leads at once (owners and admins; 22 Oct 2026). Each lead changes as its own
+        action would change it, with its own history line; one that is gone, already there,
+        or whose pipeline has no such stage is skipped and counted."""
+        self._require_manager()
+        target: pipelines.Pipeline | None = None
+        if command.action == "assign" and command.person_id is not None:
+            await self._require_seller(command.person_id)
+        elif command.action == "pipeline":
+            if not command.pipeline:
+                raise DeskError(422, "Pick a pipeline.")
+            target = await self._pipeline(command.pipeline)
+        elif command.action == "stage" and not command.step:
+            raise DeskError(422, "Pick a stage.")
+        done = skipped = 0
+        label = ""
+        for lead_id in dict.fromkeys(command.lead_ids):
+            one = uuid5(command.command_id, str(lead_id))
+            if await self._command_seen(one) is not None:
+                done += 1  # Done by this request already (a retry).
+                continue
+            try:
+                lead = await self._lead(lead_id, lock=True)
+            except DeskError:
+                skipped += 1
+                continue
+            if command.action == "assign":
+                if command.person_id is None:
+                    exclude = (
+                        frozenset({lead.owner_person_id}) if lead.owner_person_id else frozenset()
+                    )
+                    await self._allocate(
+                        lead,
+                        exclude=exclude,
+                        kind="reassigned",
+                        actor=self.viewer.person_id,
+                        command_id=one,
+                    )
+                elif command.person_id == lead.owner_person_id:
+                    skipped += 1
+                    continue
+                else:
+                    await self._set_owner(
+                        lead,
+                        command.person_id,
+                        f"Moved by {self.viewer.name}",
+                        "manual",
+                        actor=self.viewer.person_id,
+                        kind="reassigned",
+                        command_id=one,
+                    )
+            elif command.action == "pipeline" and target is not None:
+                if journeys.pipeline_of(lead) == target.key:
+                    skipped += 1
+                    continue
+                await self._to_pipeline(lead, target, command_id=one)
+                label = target.name
+            else:
+                journey = await self._labels(journeys.pipeline_of(lead))
+                stage = journey.by_key.get(command.step or "")
+                now = journey.resolve(lead.stage, lead.step)
+                if (
+                    stage is None
+                    or stage.archived
+                    or stage.kind == "not_connected"
+                    or (now is not None and now.key == stage.key)
+                ):
+                    skipped += 1
+                    continue
+                self.to_stage(lead, journey, stage, note=None, command_id=one)
+                label = stage.label
+            done += 1
         await self.db.flush()
-        return await self.detail(lead_id)
+        leads = f"{done} lead{'' if done == 1 else 's'}"
+        if command.action == "assign":
+            if command.person_id is None:
+                words = f"{leads} given out by the lead rules"
+            else:
+                words = f"{leads} given to {await self._name(command.person_id)}"
+        else:
+            words = f"{leads} moved to {label}" if done else "Nothing moved"
+        if skipped:
+            words += f"; {skipped} skipped (already there, or not on this desk)"
+        return BulkDone(done=done, skipped=skipped, words=words + ".")
 
     async def match(self, phone: str) -> LeadMatch:
         """Whether this number is already a lead, said before Add lead (a repeat joins

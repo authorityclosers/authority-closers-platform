@@ -2498,6 +2498,33 @@ a.repName {
   overflow-wrap: anywhere;
 }
 
+/* Select → Actions: give, re-stage or move many leads (22 Oct 2026). */
+.bulk {
+  display: grid;
+  gap: 10px;
+}
+
+.bulkBack {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menuRow:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 /* Add lead: a number that is already a lead, and the ask before discarding. */
 .matchNote {
   display: inline-flex;
