@@ -1,0 +1,18 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "db99a5bb471ff328aa527b1668459da0b3cb8b39",
+  "full": false,
+  "checks": [
+    "e2e"
+  ],
+  "changed_files": [
+    "packages/python/ac_platform/conversation_intelligence/acquisition_library.py",
+    "packages/python/ac_platform/http/conversation_submissions.py",
+    "tests/database/test_conversation_library_call_leads_postgresql.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
