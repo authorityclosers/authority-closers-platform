@@ -179,6 +179,36 @@ async function act(page, a, device, stills) {
       await loc.fill(a.text);
       await page.waitForTimeout(a.ms ?? 600);
       break;
+    case "scrollto":
+      // Brings a heading to the top of the screen, leaving room above it (sticky bars included).
+      await loc.evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -96);
+      });
+      await page.waitForTimeout(a.ms ?? 600);
+      break;
+    case "select":
+      // Native <select> menus do not open in headless Chromium; pick the option directly.
+      await loc.selectOption({ label: a.option });
+      await page.waitForTimeout(a.ms ?? 1200);
+      break;
+    case "paste": {
+      // A real paste event with rows on the clipboard, as when a seller pastes from Sheets.
+      await loc.click();
+      await page.waitForTimeout(a.before ?? 300);
+      await page.evaluate((text) => {
+        const data = new DataTransfer();
+        data.setData("text/plain", text);
+        const paste = new ClipboardEvent("paste", {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true,
+        });
+        document.activeElement?.dispatchEvent(paste);
+      }, a.text);
+      await page.waitForTimeout(a.ms ?? 1400);
+      break;
+    }
     case "press":
       await page.keyboard.press(a.key);
       await page.waitForTimeout(a.ms ?? 700);

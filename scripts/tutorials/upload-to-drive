@@ -9,7 +9,7 @@ DEST="acdrive:Sales X-Ray Tutorials/$DAY"
 R=(sudo -n rclone --config /root/ac-drive/rclone.conf)
 for part in "A-narrated:A Narrated videos" "B-voiceover-kit:B Voice-over kit" "C-editor-pack:C Editor pack"; do
   src="${part%%:*}" dst="${part#*:}"
-  [ -d "$SRC/$src" ] || continue
+  sudo -n test -d "$SRC/$src" || continue  # outputs live under acdev, readable through sudo
   nice -n 19 ionice -c3 "${R[@]}" copy "$SRC/$src" "$DEST/$dst" --transfers 2 --exclude "*.part" --exclude "*.key" 2>&1 | grep -v client_id || true
 done
 "${R[@]}" lsjson "$DEST" --dirs-only 2>/dev/null | python3 -c '

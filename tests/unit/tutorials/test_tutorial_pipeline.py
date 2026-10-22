@@ -194,3 +194,21 @@ def test_editor_timelines_are_valid_xml_with_one_audio_role_per_language(tmp_pat
     xm = ET.fromstring(xm_text)  # noqa: S314
     assert len(xm.findall(".//audio/track")) == 3
     assert [c.findtext("start") for c in xm.findall(".//video/track/clipitem")] == ["0", "75"]
+
+
+def test_long_captions_break_at_commas_into_even_lines() -> None:
+    line = (
+        "Computer pe owners aur managers ko poori team dikhti hai: kaun call kar raha hai, "
+        "kaun late chal raha hai, aur leads stages mein kaise aage badh rahe hain."
+    )
+    cues = timing.chunk(line, 0.0, 9.0, "desktop")
+    assert len(cues) == 3
+    assert not any(c.text.split()[-1] in ("aur", "and", "ya", "or") for c in cues)
+    assert (
+        timing.two_lines("Brain 4.0 turns it into a Report.") == "Brain 4.0 turns it into a Report."
+    )
+    two = timing.two_lines(
+        "Sales X-Ray agla lead saamne la deta hai, opener aur jawaab ready ke saath."
+    )
+    top, bottom = two.split("\n")
+    assert abs(len(top) - len(bottom)) <= 12

@@ -116,23 +116,52 @@ def sentences(text: str) -> list[str]:
     return out
 
 
+def _split_points(words: list[str], parts: int) -> list[int]:
+    """Word counts after which to break a sentence into `parts` near-equal pieces, at a comma when
+    one is close to the even split (so a caption never ends on "aur" or "and")."""
+    ends = [len(" ".join(words[: i + 1])) for i in range(len(words))]
+    total = ends[-1]
+    cuts: list[int] = []
+    for k in range(1, parts):
+        target = total * k / parts
+        options = [i for i in range(len(words) - 1) if not cuts or i + 1 > cuts[-1]]
+        near = min(options, key=lambda i: abs(ends[i] - target))
+        commas = [i for i in options if words[i].endswith(",")]
+        best = min(commas, key=lambda i: abs(ends[i] - target), default=None)
+        if best is not None and abs(ends[best] - target) <= 0.3 * total / parts:
+            near = best
+        cuts.append(near + 1)
+    return cuts
+
+
 def balanced(text: str) -> list[str]:
     """Pieces of at most two caption lines: split at sentence ends, then into near-equal parts."""
     pieces = []
     for sent in sentences(text):
-        n = math.ceil(len(wrap(sent)) / MAX_LINES)
-        if n <= 1:
+        parts = math.ceil(len(wrap(sent)) / MAX_LINES)
+        words = sent.split()
+        if parts <= 1 or len(words) < 2:
             pieces.append(sent)
             continue
-        words, target = sent.split(), len(sent) / n
-        cur: list[str] = []
-        for w in words:
-            if cur and len(" ".join(cur)) >= target and len(pieces) % n != n - 1:
-                pieces.append(" ".join(cur))
-                cur = []
-            cur.append(w)
-        pieces.append(" ".join(cur))
+        bounds = [0, *_split_points(words, parts), len(words)]
+        pieces += [" ".join(words[a:b]) for a, b in zip(bounds, bounds[1:], strict=False)]
     return pieces
+
+
+def two_lines(text: str) -> str:
+    """One caption: a single line if it fits, else two lines of about equal length (no orphans)."""
+    if len(text) <= MAX_LINE:
+        return text
+    words = text.split()
+    fits = [
+        i
+        for i in range(1, len(words))
+        if max(len(" ".join(words[:i])), len(" ".join(words[i:]))) <= MAX_LINE
+    ]
+    if not fits:
+        return "\n".join(wrap(text))
+    i = min(fits, key=lambda i: abs(len(" ".join(words[:i])) - len(" ".join(words[i:]))))
+    return " ".join(words[:i]) + "\n" + " ".join(words[i:])
 
 
 def chunk(text: str, start: float, end: float, style: str) -> list[Cue]:
@@ -142,7 +171,7 @@ def chunk(text: str, start: float, end: float, style: str) -> list[Cue]:
     cues, t = [], start
     for g in groups:
         d = (end - start) * len(g) / total
-        cues.append(Cue(t, t + d, "\n".join(wrap(g)), style))
+        cues.append(Cue(t, t + d, two_lines(g), style))
         t += d
     return cues
 
