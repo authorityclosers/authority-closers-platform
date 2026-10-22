@@ -2196,7 +2196,7 @@
   }
 
   .shell[data-scrolled] .mobileBar {
-    box-shadow: 0 0.5px 0 var(--sx-hairline);
+    box-shadow: 0 0.5px 0 color-mix(in oklab, var(--lx-ink) 16%, transparent);
   }
 
   .shell[data-scrolled] .mobileWorkspace b {
@@ -2209,6 +2209,25 @@
 
   .bottomLink[aria-current="page"]:not(.bottomNew) svg {
     stroke-width: 2.25;
+  }
+
+  /* Every tab's icon sits in the same 30 px row, the Add drop included, so
+     all five labels share one baseline. The lens is placed absolutely and
+     takes no row. */
+  .bottomLink {
+    display: grid;
+    grid-template-rows: 30px auto;
+    place-items: center;
+    align-content: center;
+    gap: 2px;
+  }
+
+  .bottomLink > svg {
+    margin-block: 0;
+  }
+
+  .newMark {
+    height: 30px;
   }
 }
 
