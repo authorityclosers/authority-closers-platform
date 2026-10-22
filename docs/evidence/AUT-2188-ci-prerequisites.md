@@ -40,3 +40,11 @@ Acceptance requires the authorized release operator to include the reviewed comm
 - [GitHub dependency cache scope and matching](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)
 - [Separate cache restore/save actions](https://github.com/actions/cache)
 - [apt-get download-only and no-download options](https://manpages.ubuntu.com/manpages/noble/en/man8/apt-get.8.html)
+
+## P0 cold-cache report reconciled (22 Oct 2026)
+
+[Failed full run 39777392383](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39777392383) tested request `4e63c0221b77b602621cc647db24b83041615836`. Its hosted helper predates correction `2a90f2cc`: the offline install omitted the download archive directory. Python job `119819799635` and Node visual job `119819799306` both reported a cache miss, completed bounded apt update/download, then failed the local install. This was the previously corrected archive-directory defect, rather than a policy that rejects cache misses. The action passes `--offline` only on an exact hit; misses use bounded package and browser downloads.
+
+The current workbench pin `4643dd63139ffb229872e91d75131cf5a10b97db` includes the correction. Its prerequisite helper/action, workflows, tool and owned tests are unchanged from `2a90f2cc`. The isolated real-apt regression was reproduced on 22 Oct at 12:43 UTC: **1 passed in 0.30 s**, without host package changes or network access.
+
+[Full cache-warming validation 39780623950](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39780623950) runs this current workbench pin with all Python shards, web, visual and release browser proofs (`--full --e2e`). It was launched through the committed source tool to include the corrected action/helper overlay. Request `9aedaffd`, kept branch `wb-ci/slot-1`; hosted helper bytes match the workbench source exactly. Initial state at 12:44 UTC: queued. The run result and actual cache hits must be recorded before claiming validation or successful warming.
