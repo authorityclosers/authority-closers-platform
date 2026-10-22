@@ -1238,6 +1238,7 @@ class LeadDesk:
             raise DeskError(409, f"This lead is already in {target.name}.")
         before = (await self._labels(previous)).resolve(lead.stage, lead.step)
         after = (await self._labels(target.key)).resolve(lead.stage, None)
+        landed = after.label if after else STAGE_LABELS[lead.stage]
         lead.pipeline_key = target.key
         lead.step = None
         lead.revision += 1
@@ -1250,7 +1251,7 @@ class LeadDesk:
                 "from_stage": lead.stage,
                 "step": after.key if after else None,
                 "from_step": before.key if before else None,
-                "step_label": f"{target.name} · {after.label if after else STAGE_LABELS[lead.stage]}",
+                "step_label": f"{target.name} · {landed}",
                 "pipeline": target.key,
                 "from_pipeline": previous,
             },

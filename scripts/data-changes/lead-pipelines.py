@@ -1,4 +1,4 @@
-"""Lay out an organisation's lead pipelines and move chosen leads into one (owner-approved data change).
+"""Lay out an organisation's lead pipelines and move chosen leads into one (approved data change).
 
 Owner decision, 22 Oct 2026 (Suyash Kulkarni, through the orchestrator chat): "Go with A for partner
 leads plus B for enquiries as two pipelines". Pipelines are a product feature (Leads → Lead stages);
@@ -44,6 +44,14 @@ from ac_platform.lead_desk.models import Lead
 from ac_platform.lead_desk.store import LeadDesk, Viewer
 
 
+def _input(path: str) -> dict[str, Any]:
+    """The input, inline JSON or a file (the container's filesystem is read-only)."""
+    if path.lstrip().startswith("{"):
+        return dict(json.loads(path))
+    with open(path, encoding="utf-8") as file:
+        return dict(json.load(file))
+
+
 def _shape(stages: Any) -> list[tuple[str, str, str, bool]]:
     return [(s.key, s.label, s.kind, s.archived) for s in stages]
 
@@ -61,7 +69,7 @@ async def _plan_stages(
 
 
 async def main(path: str, apply: bool) -> int:
-    spec = json.loads(path) if path.lstrip().startswith("{") else json.load(open(path))
+    spec = _input(path)
     command_id = UUID(spec["command_id"])
     tenant_id = UUID(spec["tenant_id"])
     target = spec["pipeline"]

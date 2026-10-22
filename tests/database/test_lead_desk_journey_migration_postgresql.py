@@ -11,6 +11,8 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+import sqlalchemy as sa
+from alembic import op
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -65,6 +67,11 @@ def test_unused_migration_downgrades_reupgrades_and_matches_the_models(
             columns = {c["name"] for c in inspect(connection).get_columns("lead_desk_leads")}
             assert "step" not in columns
             module.upgrade()
+            # 0121 adds this column to the table 0111 makes again here.
+            op.add_column(
+                "lead_desk_journey_versions",
+                sa.Column("pipeline_key", sa.String(40), nullable=True),
+            )
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
 
 
