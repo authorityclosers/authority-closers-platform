@@ -1,9 +1,10 @@
 """Calls name the lead they belong to (approved map, slice 7, 22 Oct 2026).
 
-``include_leads=true`` adds ``lead`` to each listed call a lead names through
-``last_submission_id``: one more statement for the page, the actor's tenant
-only, and without the flag the rows are unchanged. Synthetic one-second WAV
-uploads, no provider.
+``include_leads=true`` adds ``lead`` to each listed call a lead names: through the
+lead's call history (slice 7 B, index 0122), else as the lead's latest call
+(``last_submission_id``). One more statement for the page, the actor's tenant only,
+and without the flag the rows are unchanged. Synthetic one-second WAV uploads, no
+provider.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 
-from ac_platform.lead_desk.models import Lead
+from ac_platform.lead_desk.models import Lead, LeadEvent
 from tests.database.test_conversation_account_library_postgresql import _upload
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
@@ -66,7 +67,9 @@ def test_calls_name_their_lead_only_when_asked_and_only_in_the_tenant(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
                 client.cookies.set("ac_session", setup.token)
-                linked, other, plain = [(await _upload(client))["submission_id"] for _ in range(3)]
+                linked, other, plain, earlier, later = [
+                    (await _upload(client))["submission_id"] for _ in range(5)
+                ]
                 stranger = await seed(setup.engine)
                 now = datetime.now(UTC)
                 async with setup.sessions() as db, db.begin():
@@ -96,6 +99,27 @@ def test_calls_name_their_lead_only_when_asked_and_only_in_the_tenant(
                             ),
                         ]
                     )
+                    # A lead called twice: its latest call names it, and its history
+                    # names the earlier one (slice 7 B).
+                    twice = _lead(
+                        setup.state.tenant_id,
+                        "ravi sample",
+                        submission_id=later,
+                        stage="follow_up",
+                        updated=now,
+                    )
+                    db.add(twice)
+                    await db.flush()
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=setup.state.tenant_id,
+                            lead_id=twice.id,
+                            kind="call",
+                            data={"submission_id": earlier, "simulated": False},
+                            created_at=now - timedelta(hours=2),
+                        )
+                    )
 
                 plain_page = await client.get(PREFIX + "/submissions")
                 assert plain_page.status_code == 200, plain_page.text
@@ -104,7 +128,7 @@ def test_calls_name_their_lead_only_when_asked_and_only_in_the_tenant(
                 page = await client.get(PREFIX + "/submissions?include_leads=true")
                 assert page.status_code == 200, page.text
                 rows = {row["submission_id"]: row for row in page.json()["submissions"]}
-                assert set(rows) == {linked, other, plain}
+                assert set(rows) == {linked, other, plain, earlier, later}
                 lead = rows[linked]["lead"]
                 assert lead["name"] == "meera fictional"
                 assert UUID(lead["lead_id"])
@@ -117,6 +141,9 @@ def test_calls_name_their_lead_only_when_asked_and_only_in_the_tenant(
                 }
                 assert "lead" not in rows[other]
                 assert "lead" not in rows[plain]
+                assert rows[earlier]["lead"]["name"] == "ravi sample"
+                assert rows[earlier]["lead"]["stage"] == "follow_up"
+                assert rows[later]["lead"] == rows[earlier]["lead"]
         finally:
             await setup.engine.dispose()
 

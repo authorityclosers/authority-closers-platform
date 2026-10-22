@@ -6,20 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from sqlalchemy import (
-    DateTime,
-    Select,
-    String,
-    Uuid,
-    and_,
-    case,
-    column,
-    func,
-    or_,
-    select,
-    table,
-    tuple_,
-)
+from sqlalchemy import Select, and_, bindparam, case, func, or_, select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.acquisition_models import (
@@ -51,19 +38,25 @@ from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 
 PAGE_SIZE = 20
-# The Lead Desk's leads, read as a plain table: the call library names a call's
-# lead without depending on the Lead Desk's models (slice 7, 22 Oct 2026).
-_LEADS = table(
-    "lead_desk_leads",
-    column("tenant_id", Uuid),
-    column("id", Uuid),
-    column("name", String),
-    column("stage", String),
-    column("step", String),
-    column("pipeline_key", String),
-    column("last_submission_id", Uuid),
-    column("updated_at", DateTime(timezone=True)),
-)
+# The lead each listed call belongs to, read as plain SQL so the call library does not
+# depend on the Lead Desk's models (slice 7, 22 Oct 2026). First the lead history's call
+# events (index ix_lead_desk_event_call_submission, migration 0122), then each lead's
+# latest call (last_submission_id) for calls the history doesn't name.
+_CALL_LEADS = text(
+    """
+    SELECT e.data ->> 'submission_id' AS submission_id, l.id, l.name, l.stage, l.step,
+           l.pipeline_key, e.created_at AS named_at, 0 AS fallback
+    FROM lead_desk_events e
+    JOIN lead_desk_leads l ON l.tenant_id = e.tenant_id AND l.id = e.lead_id
+    WHERE e.tenant_id = :tenant AND e.kind = 'call'
+      AND e.data ->> 'submission_id' IN :submissions
+    UNION ALL
+    SELECT CAST(l.last_submission_id AS text), l.id, l.name, l.stage, l.step,
+           l.pipeline_key, l.updated_at, 1
+    FROM lead_desk_leads l
+    WHERE l.tenant_id = :tenant AND l.last_submission_id IN :ids
+    """
+).bindparams(bindparam("submissions", expanding=True), bindparam("ids", expanding=True))
 # How the Report's Overview says the call ended (report_overview.ObservedOutcome).
 _OUTCOMES = frozenset({"closed", "follow_up", "no_sale", "future_date", "disqualified", "unclear"})
 
@@ -333,31 +326,29 @@ async def _call_leads(
 ) -> dict[UUID, dict[str, Any]]:
     """The lead each listed call belongs to, in one statement (slice 7, 22 Oct 2026).
 
-    A lead names its latest call (``last_submission_id``, set when a call or its
-    recording is put on the lead), so that call shows the lead's name and where the
-    lead stands now: its stage, the business's own step and its pipeline. A call no
-    lead names has none; if two leads name one call, the one changed last wins.
-    Only the actor's tenant is read, so another organisation's lead never shows.
+    A call belongs to the lead whose history recorded it (a ``call`` event naming its
+    submission, newest first), else to the lead whose latest call it is
+    (``last_submission_id``). The call shows that lead's name and where the lead stands
+    now: its stage, the business's own step and its pipeline. A call no lead names has
+    none. Only the actor's tenant is read, so another organisation's lead never shows.
     """
     if tenant_id is None or not submission_ids:
         return {}
-    leads = _LEADS.c
-    found: dict[UUID, Any] = {}
-    for row in await database.execute(
-        select(
-            leads.last_submission_id,
-            leads.id,
-            leads.name,
-            leads.stage,
-            leads.step,
-            leads.pipeline_key,
+    rows = (
+        await database.execute(
+            _CALL_LEADS,
+            {
+                "tenant": tenant_id,
+                "submissions": [str(submission_id) for submission_id in submission_ids],
+                "ids": submission_ids,
+            },
         )
-        .where(leads.tenant_id == tenant_id, leads.last_submission_id.in_(submission_ids))
-        .order_by(leads.updated_at.desc(), leads.id)
-    ):
-        found.setdefault(row.last_submission_id, row)
+    ).all()
+    found: dict[str, Any] = {}
+    for row in sorted(rows, key=lambda row: (row.fallback, -row.named_at.timestamp())):
+        found.setdefault(row.submission_id, row)
     return {
-        submission_id: {
+        UUID(submission_id): {
             "lead_id": str(row.id),
             "name": row.name,
             "stage": row.stage,
