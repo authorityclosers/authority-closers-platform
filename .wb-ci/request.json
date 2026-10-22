@@ -1,0 +1,17 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "f969b3d0b1f91fecbf3dadb33f723cfff6d8205f",
+  "full": false,
+  "checks": [
+    "e2e"
+  ],
+  "changed_files": [
+    "packages/python/ac_platform/conversation_intelligence/openai_tasks.py",
+    "tests/unit/one_pass/test_stage_luna.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
