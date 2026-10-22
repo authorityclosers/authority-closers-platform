@@ -79,7 +79,7 @@ it needs and whether it is **precomputed** or **on demand**. For example, today'
 |---|---|---|
 | classic: overview, coaching | `report.c5` | yes |
 | classic: 27 pointers | `review.pointers` | yes |
-| brain4_beta: Coach view (18 skills) | `brain4.review` | yes |
+| brain4_beta: Coach view (18 skills; the Report from v0.84) | `brain4.review` | yes |
 | brain4_beta: detailed review (collapsed) | `review.pointers` | yes (it comes free with one-pass C4) |
 | coaching report (C5) under brain4_beta | `report.c5` | **on demand** (owner decision) |
 | lead card, prospect | `call_objects`, `lead_facts.fast` | yes |
@@ -224,6 +224,10 @@ No new processor, no seal change, one small migration (number from Align).
    - The cost meter (`cost_meter.py`) shows expected against actual by plan.
 3. **Report-section telemetry.** Add the three events to the server taxonomy and to `apps/sales-xray-web/app/telemetry.ts`.
    The Report and Coach view emit them, with the consent and retention rules unchanged.
+   - Storage and reading go through the **event store and daily export the Admin session (local_b3c9427a) is
+     building**: the engine reads that export and keeps no event store of its own.
+   - The section ids are the Brain 4.0 Report's (v0.84), so its 18 skills, the collapsed 27-point review and the
+     on-demand coaching report each carry their own id.
 4. **Depth policy v0**, with owner-approved knobs in Report settings:
    - C5 precomputed or on demand for brain4_beta orgs;
    - Flex for background calls once the owner switches (option A is already sealed).
