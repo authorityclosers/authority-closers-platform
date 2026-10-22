@@ -1,0 +1,3492 @@
+{
+  "schema": 1,
+  "source": {
+    "commit": "f5f1bdbf",
+    "date": "2026-10-22T19:27:19+00:00",
+    "main": "origin/main"
+  },
+  "latest_release": {
+    "version": "v0.84.0",
+    "date": "2026-10-22",
+    "title": "OpenAI identities per environment, Brain 4.0 coaching score structure, cost meter, analysis engine page, Liquid Glass look and owner Home/Leads/Settings slices, CI prerequisites cache"
+  },
+  "products": [
+    {
+      "id": "sales-xray",
+      "name": "Sales X-Ray",
+      "line": "The sales CRM that records, analyses and coaches every call"
+    },
+    {
+      "id": "android",
+      "name": "Sales X-Ray for Android",
+      "line": "Calls, recordings and leads on the seller's own phone"
+    },
+    {
+      "id": "admin",
+      "name": "AC Admin",
+      "line": "The back office: quality, cost, accounts and releases"
+    },
+    {
+      "id": "academy",
+      "name": "AC Academy",
+      "line": "Courses, practice and certificates for sales learners"
+    },
+    {
+      "id": "coach",
+      "name": "Coach Studio",
+      "line": "Where coaches build and publish programs"
+    },
+    {
+      "id": "platform",
+      "name": "Platform",
+      "line": "Sign-in, organisations, billing, developers and safety under every app"
+    }
+  ],
+  "categories": [
+    {
+      "id": "calling",
+      "name": "Calling and recording",
+      "line": "Every call made, recorded and filed without effort",
+      "icon": "phone"
+    },
+    {
+      "id": "leads",
+      "name": "Leads CRM and pipelines",
+      "line": "One place for every lead, stage and next step",
+      "icon": "leads"
+    },
+    {
+      "id": "analysis",
+      "name": "Call analysis and Brain 4.0",
+      "line": "AI that reads every call like a top sales coach",
+      "icon": "brain"
+    },
+    {
+      "id": "coaching",
+      "name": "Coaching and team insight",
+      "line": "Turn calls into better sellers, week after week",
+      "icon": "coach"
+    },
+    {
+      "id": "chats",
+      "name": "Chats and WhatsApp",
+      "line": "Every message from every channel in one inbox",
+      "icon": "chat"
+    },
+    {
+      "id": "ads",
+      "name": "Meta, Google and ads",
+      "line": "Leads from ads arrive, get called and report back",
+      "icon": "ads"
+    },
+    {
+      "id": "team",
+      "name": "Teams and organisations",
+      "line": "Owners, managers and sellers each see what they need",
+      "icon": "team"
+    },
+    {
+      "id": "admin",
+      "name": "Admin, quality and cost",
+      "line": "How AC keeps analysis right and cost per minute low",
+      "icon": "admin"
+    },
+    {
+      "id": "developer",
+      "name": "Developer platform",
+      "line": "API keys, webhooks, Connect and MCP for partners and AI",
+      "icon": "code"
+    },
+    {
+      "id": "apps",
+      "name": "Android app",
+      "line": "The phone that sells: dialler, recorder and CRM together",
+      "icon": "android"
+    },
+    {
+      "id": "academy",
+      "name": "Academy and learning",
+      "line": "Programs, practice and proof of skill",
+      "icon": "academy"
+    },
+    {
+      "id": "platform",
+      "name": "Platform, trust and billing",
+      "line": "Sign-in, privacy, backups, releases and plans",
+      "icon": "shield"
+    }
+  ],
+  "audiences": [
+    "Sellers",
+    "Sales managers",
+    "Business owners",
+    "Learners",
+    "Coaches",
+    "Developers",
+    "AC staff"
+  ],
+  "features": [
+    {
+      "id": "start-calling",
+      "name": "Start calling desk",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "One tap calls the next lead in line, with today's late and coming-up counts.",
+      "for": ["Sellers"],
+      "details": [
+        "Queue ordered by who is due first",
+        "Per-pipeline queue on dev (cold outreach apart from enquiries)",
+        "Swipe asks before calling"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.48.0",
+        "date": "2026-10-16",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/leads/desk-view.tsx",
+          "path": "apps/sales-xray-web/app/leads/desk-view.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/lead_desk",
+          "path": "packages/python/ac_platform/lead_desk",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/lead-desk"],
+        "routes": 144
+      },
+      "fixture": "/review-fixture/cold-calling",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/cold-calling",
+      "shots": {
+        "390-light": "/catalogue/shots/cold-calling-390-light.webp",
+        "390-dark": "/catalogue/shots/cold-calling-390-dark.webp",
+        "1440-light": "/catalogue/shots/cold-calling-1440-light.webp",
+        "1440-dark": "/catalogue/shots/cold-calling-1440-dark.webp"
+      }
+    },
+    {
+      "id": "after-call-sheet",
+      "name": "After-call sheet",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "The moment a call ends, log what happened and book the next call in two taps.",
+      "for": ["Sellers"],
+      "details": [
+        "Outcome, stage and next call in one sheet",
+        "Call back and Someday follow-ups",
+        "Work hours respected"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.48.0",
+        "date": "2026-10-16",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/leads/capture-dialogs.tsx",
+          "path": "apps/sales-xray-web/app/leads/capture-dialogs.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/leads",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/leads",
+      "shots": {
+        "390-light": "/catalogue/shots/leads-390-light.webp",
+        "390-dark": "/catalogue/shots/leads-390-dark.webp",
+        "1440-light": "/catalogue/shots/leads-1440-light.webp",
+        "1440-dark": "/catalogue/shots/leads-1440-dark.webp"
+      }
+    },
+    {
+      "id": "dialler-recordings",
+      "name": "Dialler calls recorded and filed",
+      "product": "android",
+      "category": "calling",
+      "value": "Calls from the phone's own dialler are logged to the lead with their recording attached.",
+      "for": ["Sellers", "Sales managers"],
+      "details": [
+        "Works with Xiaomi's built-in recorder",
+        "Incoming and outgoing lead calls",
+        "No manual upload"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.83.0",
+        "date": "2026-10-22",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/review-fixture/recorded-calls",
+          "path": "apps/sales-xray-web/app/review-fixture/recorded-calls/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/recorded-calls",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/recorded-calls",
+      "shots": {
+        "390-light": "/catalogue/shots/recorded-calls-390-light.webp",
+        "390-dark": "/catalogue/shots/recorded-calls-390-dark.webp",
+        "1440-light": "/catalogue/shots/recorded-calls-1440-light.webp",
+        "1440-dark": "/catalogue/shots/recorded-calls-1440-dark.webp"
+      }
+    },
+    {
+      "id": "upload-any-recording",
+      "name": "Upload any recording",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "Drop in any call recording up to 100 MB, from MP3 and MP4 to phone AMR, WMA and CAF.",
+      "for": ["Sellers", "Sales managers"],
+      "details": [
+        "Bulk import of many calls at once",
+        "Details step keeps your answers",
+        "Calls are never left as Untitled call"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/analysis/new",
+          "path": "apps/sales-xray-web/app/analysis/new/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "apps/sales-xray-web/app/bulk-recording-import.tsx",
+          "path": "apps/sales-xray-web/app/bulk-recording-import.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [
+          "/v1/conversation/acquisition",
+          "/v1/conversation/recordings"
+        ],
+        "routes": 38
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "calls-library",
+      "name": "Calls library",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "Every call with its lead, stage and report, listed in about a tenth of a second.",
+      "for": ["Sellers", "Sales managers"],
+      "details": [
+        "Reports first",
+        "Calls say a lead's stage the same way the Report does",
+        "Calls report and CSV export"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/calls",
+          "path": "apps/sales-xray-web/app/calls/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/calls",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/calls",
+      "shots": {
+        "390-light": "/catalogue/shots/calls-390-light.webp",
+        "390-dark": "/catalogue/shots/calls-390-dark.webp",
+        "1440-light": "/catalogue/shots/calls-1440-light.webp",
+        "1440-dark": "/catalogue/shots/calls-1440-dark.webp"
+      }
+    },
+    {
+      "id": "phone-setup",
+      "name": "Phone setup checklist",
+      "product": "android",
+      "category": "calling",
+      "value": "Shows exactly where the phone saves recordings and asks for one permission at a time.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.58.0",
+        "date": "2026-10-18",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/leads/phone-setup.tsx",
+          "path": "apps/sales-xray-web/app/leads/phone-setup.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/settings",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/settings",
+      "shots": {
+        "390-light": "/catalogue/shots/settings-390-light.webp",
+        "390-dark": "/catalogue/shots/settings-390-dark.webp",
+        "1440-light": "/catalogue/shots/settings-1440-light.webp",
+        "1440-dark": "/catalogue/shots/settings-1440-dark.webp"
+      }
+    },
+    {
+      "id": "mark-private",
+      "name": "Mark a call private",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "Personal calls stay personal: one tap keeps a call out of the CRM and analysis.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.58.0",
+        "date": "2026-10-18",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/leads#Mark private",
+          "path": "apps/sales-xray-web/app/leads",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "leads-stage-tabs",
+      "name": "Leads on one page",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "All leads on one page with stage tabs and a Start calling bar on top.",
+      "for": ["Sellers", "Sales managers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.80.0",
+        "date": "2026-10-22",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/leads/stage-tabs.tsx",
+          "path": "apps/sales-xray-web/app/leads/stage-tabs.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/lead-desk"],
+        "routes": 144
+      },
+      "fixture": "/review-fixture/leads",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/leads",
+      "shots": {
+        "390-light": "/catalogue/shots/leads-390-light.webp",
+        "390-dark": "/catalogue/shots/leads-390-dark.webp",
+        "1440-light": "/catalogue/shots/leads-1440-light.webp",
+        "1440-dark": "/catalogue/shots/leads-1440-dark.webp"
+      }
+    },
+    {
+      "id": "lead-stages",
+      "name": "Lead stages for your business",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Stages that match how your kind of business sells, ready on day one and editable.",
+      "for": ["Business owners", "Sales managers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.70.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/review-fixture/lead-stages",
+          "path": "apps/sales-xray-web/app/review-fixture/lead-stages/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/lead-stages",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/lead-stages",
+      "shots": {
+        "390-light": "/catalogue/shots/lead-stages-390-light.webp",
+        "390-dark": "/catalogue/shots/lead-stages-390-dark.webp",
+        "1440-light": "/catalogue/shots/lead-stages-1440-light.webp",
+        "1440-dark": "/catalogue/shots/lead-stages-1440-dark.webp"
+      }
+    },
+    {
+      "id": "lead-pipelines",
+      "name": "Lead pipelines",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Keep partner outreach, enquiries and enrolments in separate pipelines with their own stages.",
+      "for": ["Business owners", "Sales managers"],
+      "details": [
+        "Home funnel per pipeline",
+        "Call one pipeline at a time (on dev)"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.83.0",
+        "date": "2026-10-22",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/leads/use-pipelines.ts",
+          "path": "apps/sales-xray-web/app/leads/use-pipelines.ts",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/lead-desk"],
+        "routes": 144
+      },
+      "fixture": "/review-fixture/stage-options",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/stage-options",
+      "shots": {
+        "390-light": "/catalogue/shots/stage-options-390-light.webp",
+        "390-dark": "/catalogue/shots/stage-options-390-dark.webp",
+        "1440-light": "/catalogue/shots/stage-options-1440-light.webp",
+        "1440-dark": "/catalogue/shots/stage-options-1440-dark.webp"
+      }
+    },
+    {
+      "id": "lead-hub",
+      "name": "Lead page as the hub",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Every call, chat, note and next step for one person on a single page.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.48.0",
+        "date": "2026-10-16",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/leads/lead-sheet.tsx",
+          "path": "apps/sales-xray-web/app/leads/lead-sheet.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/leads",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/leads",
+      "shots": {
+        "390-light": "/catalogue/shots/leads-390-light.webp",
+        "390-dark": "/catalogue/shots/leads-390-dark.webp",
+        "1440-light": "/catalogue/shots/leads-1440-light.webp",
+        "1440-dark": "/catalogue/shots/leads-1440-dark.webp"
+      }
+    },
+    {
+      "id": "lead-rules",
+      "name": "Lead rules and assignment",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Owners decide who gets which lead and when, so no lead waits.",
+      "for": ["Business owners", "Sales managers"],
+      "details": [
+        "Taking new leads switch per seller",
+        "Assign to a person on import"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.56.0",
+        "date": "2026-10-18",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/allocation.py",
+          "path": "packages/python/ac_platform/lead_desk/allocation.py",
+          "exists": true
+        },
+        {
+          "anchor": "apps/sales-xray-web/app/leads/taking-switch.tsx",
+          "path": "apps/sales-xray-web/app/leads/taking-switch.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "lead-delete",
+      "name": "Delete leads safely",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Owners and admins remove a lead with one confirm, and every delete is audited.",
+      "for": ["Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.77.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/review-fixture/lead-delete",
+          "path": "apps/sales-xray-web/app/review-fixture/lead-delete/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/lead-delete",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/lead-delete",
+      "shots": {}
+    },
+    {
+      "id": "ready-messages",
+      "name": "Ready WhatsApp and SMS messages",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Send the right follow-up message from a lead in one tap.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.53.0",
+        "date": "2026-10-17",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/leads/message-sheet.tsx",
+          "path": "apps/sales-xray-web/app/leads/message-sheet.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "sales-home",
+      "name": "Sales home",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Home starts with sales: today's calls, the funnel and who needs a call now.",
+      "for": ["Sellers", "Sales managers", "Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.81.0",
+        "date": "2026-10-22",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/dashboard/sales-home.tsx",
+          "path": "apps/sales-xray-web/app/dashboard/sales-home.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/home",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/home",
+      "shots": {
+        "390-light": "/catalogue/shots/home-390-light.webp",
+        "390-dark": "/catalogue/shots/home-390-dark.webp",
+        "1440-light": "/catalogue/shots/home-1440-light.webp",
+        "1440-dark": "/catalogue/shots/home-1440-dark.webp"
+      }
+    },
+    {
+      "id": "the-report",
+      "name": "The call Report",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Every call becomes a clear Report: what happened, what the buyer needs and what to do next.",
+      "for": ["Sellers", "Sales managers"],
+      "details": [
+        "Report, Prospect and Coaching parts",
+        "Header names the call's lead and opens it",
+        "Plain sales words"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/analysis/calls/[callId]",
+          "path": "apps/sales-xray-web/app/analysis/calls/[callId]/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/report",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/report",
+      "shots": {
+        "390-light": "/catalogue/shots/report-390-light.webp",
+        "390-dark": "/catalogue/shots/report-390-dark.webp",
+        "1440-light": "/catalogue/shots/report-1440-light.webp",
+        "1440-dark": "/catalogue/shots/report-1440-dark.webp"
+      }
+    },
+    {
+      "id": "brain-4",
+      "name": "Brain 4.0 coaching score",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "One AI coaching score per call, built from how top closers sell, with the moments that moved it.",
+      "for": ["Sellers", "Sales managers"],
+      "details": [
+        "Replaced the 27 pointers",
+        "Blind-reviewed against gold calls"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.74.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/conversation_intelligence/brain4.py",
+          "path": "packages/python/ac_platform/conversation_intelligence/brain4.py",
+          "exists": true
+        },
+        {
+          "anchor": "admin:/gold/brain4",
+          "path": "apps/admin-web/app/(console)/gold/brain4/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/report/pillars",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/report/pillars",
+      "shots": {}
+    },
+    {
+      "id": "one-pass",
+      "name": "One-pass analysis",
+      "product": "platform",
+      "category": "analysis",
+      "value": "Transcribes and analyses a call in one AI pass, so reports come fast and cost paise per minute.",
+      "for": ["AC staff", "Business owners"],
+      "details": [
+        "Gemini Flash-Lite with a classic fallback",
+        "Long calls transcribed in parts",
+        "Flex pricing with automatic fallback"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.71.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/one_pass",
+          "path": "packages/python/ac_platform/one_pass",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "call-data-engine",
+      "name": "Call data engine",
+      "product": "platform",
+      "category": "analysis",
+      "value": "Fast and deep pipelines turn each call into facts any screen, report or partner can use.",
+      "for": ["AC staff", "Developers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.66.0",
+        "date": "2026-10-19",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/call_data",
+          "path": "packages/python/ac_platform/call_data",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/call-data", "/v1/conversation"],
+        "routes": 57
+      },
+      "fixture": "/review-fixture/call-facts",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/call-facts",
+      "shots": {
+        "390-light": "/catalogue/shots/call-facts-390-light.webp",
+        "390-dark": "/catalogue/shots/call-facts-390-dark.webp",
+        "1440-light": "/catalogue/shots/call-facts-1440-light.webp",
+        "1440-dark": "/catalogue/shots/call-facts-1440-dark.webp"
+      }
+    },
+    {
+      "id": "prospect-profile",
+      "name": "Prospect profile",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Who the buyer is, with need, budget, authority and timing in their own words.",
+      "for": ["Sellers"],
+      "details": [
+        "What to remember before the next call",
+        "Quotes jump to the moment in the call"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/prospects",
+          "path": "apps/sales-xray-web/app/prospects/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/conversation_intelligence/prospect_profile.py",
+          "path": "packages/python/ac_platform/conversation_intelligence/prospect_profile.py",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/conversation/prospects"],
+        "routes": 12
+      },
+      "fixture": "/review-fixture/prospects",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/prospects",
+      "shots": {
+        "390-light": "/catalogue/shots/prospects-390-light.webp",
+        "390-dark": "/catalogue/shots/prospects-390-dark.webp",
+        "1440-light": "/catalogue/shots/prospects-1440-light.webp",
+        "1440-dark": "/catalogue/shots/prospects-1440-dark.webp"
+      }
+    },
+    {
+      "id": "ai-per-seller",
+      "name": "AI level per seller",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Choose how much AI each seller's calls get, from a quick read to the full report.",
+      "for": ["Business owners"],
+      "details": [
+        "Short calls under a minute get transcript and lead details only",
+        "Get full report on any call"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.77.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/call_ai",
+          "path": "packages/python/ac_platform/call_ai",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/call-ai",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/call-ai",
+      "shots": {
+        "390-light": "/catalogue/shots/call-ai-390-light.webp",
+        "390-dark": "/catalogue/shots/call-ai-390-dark.webp",
+        "1440-light": "/catalogue/shots/call-ai-1440-light.webp",
+        "1440-dark": "/catalogue/shots/call-ai-1440-dark.webp"
+      }
+    },
+    {
+      "id": "seller-profile",
+      "name": "Salesperson profile",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "Each seller's strengths, habits and focus, built from their real calls.",
+      "for": ["Sellers", "Sales managers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.77.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/review-fixture/seller-profile",
+          "path": "apps/sales-xray-web/app/review-fixture/seller-profile/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/seller-profile",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/seller-profile",
+      "shots": {
+        "390-light": "/catalogue/shots/seller-profile-390-light.webp",
+        "390-dark": "/catalogue/shots/seller-profile-390-dark.webp",
+        "1440-light": "/catalogue/shots/seller-profile-1440-light.webp",
+        "1440-dark": "/catalogue/shots/seller-profile-1440-dark.webp"
+      }
+    },
+    {
+      "id": "word-document",
+      "name": "Document view and Word file",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Read or download any Report as a clean document to share with the team.",
+      "for": ["Sales managers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/review-fixture/document",
+          "path": "apps/sales-xray-web/app/review-fixture/document/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/document",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/document",
+      "shots": {
+        "390-light": "/catalogue/shots/document-390-light.webp",
+        "390-dark": "/catalogue/shots/document-390-dark.webp",
+        "1440-light": "/catalogue/shots/document-1440-light.webp",
+        "1440-dark": "/catalogue/shots/document-1440-dark.webp"
+      }
+    },
+    {
+      "id": "analyse-all",
+      "name": "Analyse all",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Analyse a whole batch of calls with one tap; it resumes by itself after a break.",
+      "for": ["Sales managers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.60.0",
+        "date": "2026-10-18",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/analyse-all.ts",
+          "path": "apps/sales-xray-web/app/analyse-all.ts",
+          "exists": true
+        },
+        {
+          "anchor": "apps/sales-xray-web/app/analyse-resume.ts",
+          "path": "apps/sales-xray-web/app/analyse-resume.ts",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "my-coaching",
+      "name": "My coaching",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "One focus at a time, with clips from your own calls that show it working.",
+      "for": ["Sellers"],
+      "details": [
+        "Lessons resume where you left them",
+        "Clips play and pause cleanly"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/coaching",
+          "path": "apps/sales-xray-web/app/coaching/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/coaching",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/coaching",
+      "shots": {
+        "390-light": "/catalogue/shots/coaching-390-light.webp",
+        "390-dark": "/catalogue/shots/coaching-390-dark.webp",
+        "1440-light": "/catalogue/shots/coaching-1440-light.webp",
+        "1440-dark": "/catalogue/shots/coaching-1440-dark.webp"
+      }
+    },
+    {
+      "id": "team-coaching",
+      "name": "Team coaching",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "Every rep's focus and record side by side, sorted by latest call or name.",
+      "for": ["Sales managers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/coaching",
+          "path": "apps/sales-xray-web/app/coaching/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/report/coaching",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/report/coaching",
+      "shots": {
+        "390-light": "/catalogue/shots/report-coaching-390-light.webp",
+        "390-dark": "/catalogue/shots/report-coaching-390-dark.webp",
+        "1440-light": "/catalogue/shots/report-coaching-1440-light.webp",
+        "1440-dark": "/catalogue/shots/report-coaching-1440-dark.webp"
+      }
+    },
+    {
+      "id": "team-insights",
+      "name": "Organisation insights",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "What is winning and losing deals across the team, from every analysed call.",
+      "for": ["Business owners", "Sales managers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/organisation/insights",
+          "path": "apps/sales-xray-web/app/organisation/insights/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/insights",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/insights",
+      "shots": {
+        "390-light": "/catalogue/shots/insights-390-light.webp",
+        "390-dark": "/catalogue/shots/insights-390-dark.webp",
+        "1440-light": "/catalogue/shots/insights-1440-light.webp",
+        "1440-dark": "/catalogue/shots/insights-1440-dark.webp"
+      }
+    },
+    {
+      "id": "call-outcomes",
+      "name": "Call outcomes",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "The complete outcome of each call, and the team's outcomes over time.",
+      "for": ["Sales managers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/review-fixture/report/outcomes",
+          "path": "apps/sales-xray-web/app/review-fixture/report/outcomes/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/report/outcomes",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/report/outcomes",
+      "shots": {}
+    },
+    {
+      "id": "chats-inbox",
+      "name": "Chats inbox",
+      "product": "sales-xray",
+      "category": "chats",
+      "value": "WhatsApp, Messenger and Instagram messages in one inbox, with read marks.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.70.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/chats",
+          "path": "apps/sales-xray-web/app/chats/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/chats",
+          "path": "packages/python/ac_platform/lead_desk/chats",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/chats",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/chats",
+      "shots": {
+        "390-light": "/catalogue/shots/chats-390-light.webp",
+        "390-dark": "/catalogue/shots/chats-390-dark.webp",
+        "1440-light": "/catalogue/shots/chats-1440-light.webp",
+        "1440-dark": "/catalogue/shots/chats-1440-dark.webp"
+      }
+    },
+    {
+      "id": "whatsapp",
+      "name": "WhatsApp Business",
+      "product": "sales-xray",
+      "category": "chats",
+      "value": "Leads' WhatsApp conversations land on their lead and in the inbox.",
+      "for": ["Sellers", "Business owners"],
+      "details": [],
+      "switch": "Off until a workspace connects its number",
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/whatsapp",
+          "path": "packages/python/ac_platform/lead_desk/whatsapp",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "messenger-instagram",
+      "name": "Messenger and Instagram",
+      "product": "sales-xray",
+      "category": "chats",
+      "value": "Facebook and Instagram DMs become leads and chats automatically.",
+      "for": ["Sellers", "Business owners"],
+      "details": [],
+      "switch": "Off until a workspace connects its page",
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/social",
+          "path": "packages/python/ac_platform/lead_desk/social",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "ai-replies",
+      "name": "AI replies",
+      "product": "sales-xray",
+      "category": "chats",
+      "value": "Drafts the next reply to a lead in your voice; you approve before it goes.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": "Off; owners raise it per workspace",
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/ai_replies",
+          "path": "packages/python/ac_platform/lead_desk/ai_replies",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "meta-lead-ads",
+      "name": "Meta lead ads",
+      "product": "sales-xray",
+      "category": "ads",
+      "value": "Facebook and Instagram lead-form leads arrive in seconds, ready to call.",
+      "for": ["Business owners", "Sellers"],
+      "details": [
+        "Guided setup with Meta's review status",
+        "Lead pull for missed leads"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.48.0",
+        "date": "2026-10-16",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/connectors",
+          "path": "packages/python/ac_platform/lead_desk/connectors",
+          "exists": true
+        },
+        {
+          "anchor": "apps/sales-xray-web/app/leads/sources-view.tsx",
+          "path": "apps/sales-xray-web/app/leads/sources-view.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/meta-connect",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/meta-connect",
+      "shots": {
+        "390-light": "/catalogue/shots/meta-connect-390-light.webp",
+        "390-dark": "/catalogue/shots/meta-connect-390-dark.webp",
+        "1440-light": "/catalogue/shots/meta-connect-1440-light.webp",
+        "1440-dark": "/catalogue/shots/meta-connect-1440-dark.webp"
+      }
+    },
+    {
+      "id": "meta-conversions",
+      "name": "Meta conversions and ad spend",
+      "product": "sales-xray",
+      "category": "ads",
+      "value": "Tells Meta which leads became sales, so ads find more buyers like them.",
+      "for": ["Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.70.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/journey",
+          "path": "packages/python/ac_platform/lead_desk/journey",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "google-ads",
+      "name": "Google Ads leads",
+      "product": "sales-xray",
+      "category": "ads",
+      "value": "Google lead-form leads join the same queue with Continue with Google.",
+      "for": ["Business owners"],
+      "details": [],
+      "switch": "Off until its settings are added",
+      "status": "live",
+      "since": {
+        "version": "v0.48.0",
+        "date": "2026-10-16",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/connectors#google",
+          "path": "packages/python/ac_platform/lead_desk/connectors",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "organisations",
+      "name": "Organisations and workspaces",
+      "product": "sales-xray",
+      "category": "team",
+      "value": "A personal space for every seller and an organisation for the team, switched in one tap.",
+      "for": ["Business owners", "Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/organisation",
+          "path": "apps/sales-xray-web/app/organisation/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/organisation", "/v1/me/sales-xray-workspaces"],
+        "routes": 21
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "invites-domains",
+      "name": "Invites and verified domains",
+      "product": "sales-xray",
+      "category": "team",
+      "value": "Invite the team by email, or let anyone with your company email join.",
+      "for": ["Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/organisation/invites",
+          "path": "apps/sales-xray-web/app/organisation/invites/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/organisation/domains"],
+        "routes": 2
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "people-pages",
+      "name": "People pages",
+      "product": "sales-xray",
+      "category": "team",
+      "value": "Each member's calls, coaching and record on one page for their manager.",
+      "for": ["Sales managers", "Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/organisation/people/[personId]",
+          "path": "apps/sales-xray-web/app/organisation/people/[personId]/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "admin-calls",
+      "name": "Calls with the analysis map",
+      "product": "admin",
+      "category": "admin",
+      "value": "Every call's pipeline, objects, cost and time on one dense screen and a node map.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.66.0",
+        "date": "2026-10-19",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/calls",
+          "path": "apps/admin-web/app/(console)/calls/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "admin:/calls/[recordingId]/map",
+          "path": "apps/admin-web/app/(console)/calls/[recordingId]/map/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "admin:/review-fixture/call-map",
+      "preview": "https://admin-dev.authorityclosers.com/review-fixture/call-map",
+      "shots": {}
+    },
+    {
+      "id": "gold-set",
+      "name": "Gold set and blind review",
+      "product": "admin",
+      "category": "admin",
+      "value": "Expert-reviewed gold calls keep the AI honest; Brain 4.0 was blind-reviewed against them.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/gold",
+          "path": "apps/admin-web/app/(console)/gold/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "review-2",
+      "name": "Review 2.0",
+      "product": "admin",
+      "category": "admin",
+      "value": "Reviewers judge the AI's facts, moments and coaching, with every verdict audited.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/analysis-review",
+          "path": "apps/admin-web/app/(console)/analysis-review/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "admin:/settings/review-pipelines",
+          "path": "apps/admin-web/app/(console)/settings/review-pipelines/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "phone-review",
+      "name": "Gold review on the phone",
+      "product": "sales-xray",
+      "category": "admin",
+      "value": "Reviewers review calls from their phone, with alerts for new work.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.62.0",
+        "date": "2026-10-19",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/review",
+          "path": "apps/sales-xray-web/app/review/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "admin:/reviewers",
+          "path": "apps/admin-web/app/(console)/reviewers/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "analysis-health",
+      "name": "Analysis health",
+      "product": "admin",
+      "category": "admin",
+      "value": "Live view of every analysis run, stuck job and failed step, with retry.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/health",
+          "path": "apps/admin-web/app/(console)/health/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "cost-meter",
+      "name": "Cost meter and usage",
+      "product": "admin",
+      "category": "admin",
+      "value": "Rupees per audio minute, per stage and per environment, updated live.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/usage",
+          "path": "apps/admin-web/app/(console)/usage/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "admin:/review-fixture/meter",
+      "preview": "https://admin-dev.authorityclosers.com/review-fixture/meter",
+      "shots": {}
+    },
+    {
+      "id": "ai-spend-guard",
+      "name": "AI spend caps and guard",
+      "product": "admin",
+      "category": "admin",
+      "value": "Hard caps and one-click raises so AI spend never runs away.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.70.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/ai-spend",
+          "path": "apps/admin-web/app/(console)/ai-spend/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/ai_spend",
+          "path": "packages/python/ac_platform/ai_spend",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "company-insights",
+      "name": "Company insights",
+      "product": "admin",
+      "category": "admin",
+      "value": "Real objections, needs and skills across every customer's calls.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/company",
+          "path": "apps/admin-web/app/(console)/company/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "deal-outcomes",
+      "name": "Deal outcomes",
+      "product": "admin",
+      "category": "admin",
+      "value": "Which calls became deals, to tie coaching to revenue.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/outcomes",
+          "path": "apps/admin-web/app/(console)/outcomes/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "all-settings",
+      "name": "All settings, one click",
+      "product": "admin",
+      "category": "admin",
+      "value": "Every switch and dial across the platform in one place, each a single click.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/settings",
+          "path": "apps/admin-web/app/(console)/settings/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/admin_settings",
+          "path": "packages/python/ac_platform/admin_settings",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "providers-hub",
+      "name": "Providers hub and keys",
+      "product": "admin",
+      "category": "admin",
+      "value": "Every AI provider, model and key with its cost, tested and switchable from Admin.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/sales-xray/providers",
+          "path": "apps/admin-web/app/(console)/sales-xray/providers/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "admin:/review-fixture/providers",
+      "preview": "https://admin-dev.authorityclosers.com/review-fixture/providers",
+      "shots": {}
+    },
+    {
+      "id": "engine-page",
+      "name": "Analysis engine",
+      "product": "admin",
+      "category": "admin",
+      "value": "See and steer the engine's recipes, stages and switches.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.84.0",
+        "date": "2026-10-22",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/sales-xray/engine",
+          "path": "apps/admin-web/app/(console)/sales-xray/engine/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "admin:/review-fixture/engine",
+      "preview": "https://admin-dev.authorityclosers.com/review-fixture/engine",
+      "shots": {}
+    },
+    {
+      "id": "one-pass-compare",
+      "name": "One-pass compare and switch",
+      "product": "admin",
+      "category": "admin",
+      "value": "Compare one-pass and classic analysis on the same calls before switching.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.71.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/sales-xray/one-pass",
+          "path": "apps/admin-web/app/(console)/sales-xray/one-pass/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "admin:/review-fixture/one-pass",
+      "preview": "https://admin-dev.authorityclosers.com/review-fixture/one-pass",
+      "shots": {}
+    },
+    {
+      "id": "report-settings",
+      "name": "Report settings",
+      "product": "admin",
+      "category": "admin",
+      "value": "Choose what each Report shows, versioned, per workspace.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/sales-xray/report-settings",
+          "path": "apps/admin-web/app/(console)/sales-xray/report-settings/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "minutes",
+      "name": "Minutes accounts",
+      "product": "admin",
+      "category": "admin",
+      "value": "Grant and track analysis minutes per workspace; minutes return when a report fails.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/sales-xray/minutes",
+          "path": "apps/admin-web/app/(console)/sales-xray/minutes/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "synthetic",
+      "name": "Synthetic calls",
+      "product": "admin",
+      "category": "admin",
+      "value": "Fictional calls to test the whole pipeline without touching customer data.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/synthetic",
+          "path": "apps/admin-web/app/(console)/synthetic/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "staff-orgs",
+      "name": "Organisations for staff",
+      "product": "admin",
+      "category": "admin",
+      "value": "Every customer, company and personal workspace, sorted by kind.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/platform/organisations",
+          "path": "apps/admin-web/app/(console)/platform/organisations/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/platform"],
+        "routes": 13
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "environment-switch",
+      "name": "Environment switch",
+      "product": "admin",
+      "category": "admin",
+      "value": "Open the same Admin page in production, staging or development.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.66.0",
+        "date": "2026-10-19",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/admin-web/app/ui/environment-switch.tsx",
+          "path": "apps/admin-web/app/ui/environment-switch.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "releases",
+      "name": "Releases and status",
+      "product": "admin",
+      "category": "platform",
+      "value": "One release train: merge, build once, staging, then the same build to production.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/releases",
+          "path": "apps/admin-web/app/(console)/releases/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "product-updates",
+      "name": "What's new notes",
+      "product": "admin",
+      "category": "platform",
+      "value": "Every release tells users what changed, in their words.",
+      "for": ["AC staff", "Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/updates",
+          "path": "apps/admin-web/app/(console)/updates/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/product_updates",
+          "path": "packages/python/ac_platform/product_updates",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "safety",
+      "name": "Content safety",
+      "product": "admin",
+      "category": "platform",
+      "value": "Find and act on sensitive content across the platform.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/safety",
+          "path": "apps/admin-web/app/(console)/safety/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "feature-catalogue",
+      "name": "Feature catalogue and Offer Studio",
+      "product": "admin",
+      "category": "admin",
+      "value": "Everything AC does, from the code, and a studio to turn it into offers.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "dev",
+      "since": null,
+      "anchors": [
+        {
+          "anchor": "admin:/catalogue",
+          "path": "apps/admin-web/app/(console)/catalogue/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "api-keys",
+      "name": "API keys",
+      "product": "platform",
+      "category": "developer",
+      "value": "Workspaces create their own API keys to pull calls, leads and facts.",
+      "for": ["Developers", "Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/developers",
+          "path": "apps/sales-xray-web/app/developers/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "webhooks",
+      "name": "Webhooks",
+      "product": "platform",
+      "category": "developer",
+      "value": "Partners get a signed event the moment a lead, call or report changes.",
+      "for": ["Developers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/developers",
+          "path": "apps/sales-xray-web/app/developers/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/partner_events",
+          "path": "packages/python/ac_platform/partner_events",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "connect-mcp",
+      "name": "Connect and MCP server",
+      "product": "platform",
+      "category": "developer",
+      "value": "AI assistants like Claude sign in and read calls, facts and leads through MCP.",
+      "for": ["Developers", "Business owners"],
+      "details": [
+        "OAuth discovery for sign-in",
+        "Tools: list calls, get a call, call facts, list and get leads"
+      ],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/connect",
+          "path": "apps/sales-xray-web/app/connect/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "connected-apps",
+      "name": "Connected apps",
+      "product": "platform",
+      "category": "developer",
+      "value": "Owners see and disconnect every app that can reach their workspace.",
+      "for": ["Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "admin:/integrations",
+          "path": "apps/admin-web/app/(console)/integrations/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/integrations",
+          "path": "packages/python/ac_platform/integrations",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "staff-keys",
+      "name": "Admin CLI, API and MCP",
+      "product": "admin",
+      "category": "developer",
+      "value": "Staff keys let AI agents read and set Admin settings safely, rate-limited and audited.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.69.0",
+        "date": "2026-10-20",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/admin-web/public/tools/ac-admin.py",
+          "path": "apps/admin-web/public/tools/ac-admin.py",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "android-app",
+      "name": "Android app",
+      "product": "android",
+      "category": "apps",
+      "value": "Sales X-Ray on the seller's own Android phone, with a download page, QR and checksum.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.61.0",
+        "date": "2026-10-19",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/apps",
+          "path": "apps/sales-xray-web/app/apps/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "app-sign-in",
+      "name": "Google sign-in on the phone",
+      "product": "android",
+      "category": "apps",
+      "value": "Sign in with Google inside the app; no passwords to remember.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/login",
+          "path": "apps/sales-xray-web/app/login/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/auth/google"],
+        "routes": 4
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "app-updates",
+      "name": "In-app updates",
+      "product": "android",
+      "category": "apps",
+      "value": "The app tells sellers when a new version is ready.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/app_updates",
+          "path": "packages/python/ac_platform/app_updates",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/me/app-updates"],
+        "routes": 2
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "phone-alerts",
+      "name": "Phone alerts",
+      "product": "android",
+      "category": "apps",
+      "value": "Alerts for new leads and new review work reach the phone.",
+      "for": ["Sellers", "AC staff"],
+      "details": [],
+      "switch": "Lead push alerts stay off for now",
+      "status": "live",
+      "since": {
+        "version": "v0.65.0",
+        "date": "2026-10-19",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/push.py",
+          "path": "packages/python/ac_platform/lead_desk/push.py",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/lead_desk/review_push.py",
+          "path": "packages/python/ac_platform/lead_desk/review_push.py",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/native/devices"],
+        "routes": 2
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "add-sheet",
+      "name": "Add anything from +",
+      "product": "sales-xray",
+      "category": "apps",
+      "value": "The + button adds a lead or a call from any screen.",
+      "for": ["Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.79.0",
+        "date": "2026-10-22",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/review-fixture/add-sheet",
+          "path": "apps/sales-xray-web/app/review-fixture/add-sheet/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/add-sheet",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/add-sheet",
+      "shots": {
+        "390-light": "/catalogue/shots/add-sheet-390-light.webp",
+        "390-dark": "/catalogue/shots/add-sheet-390-dark.webp",
+        "1440-light": "/catalogue/shots/add-sheet-1440-light.webp",
+        "1440-dark": "/catalogue/shots/add-sheet-1440-dark.webp"
+      }
+    },
+    {
+      "id": "liquid-glass",
+      "name": "Liquid Glass design",
+      "product": "sales-xray",
+      "category": "apps",
+      "value": "An iPhone-grade look on every phone, with a lighter mode for low-memory phones.",
+      "for": ["Sellers", "Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.70.0",
+        "date": "2026-10-21",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "apps/sales-xray-web/app/ui/sx-tokens.css#glass",
+          "path": "apps/sales-xray-web/app/ui/sx-tokens.css",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/shell",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/shell",
+      "shots": {}
+    },
+    {
+      "id": "programs",
+      "name": "Programs and lessons",
+      "product": "academy",
+      "category": "academy",
+      "value": "Structured sales programs with modules, video and progress that resumes.",
+      "for": ["Learners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.1",
+        "date": "2026-09-03",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "learner:/learn/[programSlug]",
+          "path": "apps/learner-web/app/learn/[programSlug]/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "learner:/programs/[slug]",
+          "path": "apps/learner-web/app/programs/[slug]/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "practice",
+      "name": "Practice arcade",
+      "product": "academy",
+      "category": "academy",
+      "value": "Practise real sales moments with characters before trying them on buyers.",
+      "for": ["Learners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "learner:/practice",
+          "path": "apps/learner-web/app/practice/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/practice",
+          "path": "packages/python/ac_platform/practice",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "certificates",
+      "name": "Certificates",
+      "product": "academy",
+      "category": "academy",
+      "value": "Verifiable certificates when a learner completes a program.",
+      "for": ["Learners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.1",
+        "date": "2026-09-03",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "learner:/certificates/[certificateId]",
+          "path": "apps/learner-web/app/certificates/[certificateId]/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/certificates",
+          "path": "packages/python/ac_platform/certificates",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "leaderboard",
+      "name": "Leaderboard and progress",
+      "product": "academy",
+      "category": "academy",
+      "value": "Progress, streaks and a leaderboard that keep learners coming back.",
+      "for": ["Learners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "learner:/leaderboard",
+          "path": "apps/learner-web/app/leaderboard/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "learner:/progress",
+          "path": "apps/learner-web/app/progress/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "academy-calendar",
+      "name": "Calendar and notifications",
+      "product": "academy",
+      "category": "academy",
+      "value": "Sessions and reminders so learners never miss a class.",
+      "for": ["Learners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.1",
+        "date": "2026-09-03",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "learner:/calendar",
+          "path": "apps/learner-web/app/calendar/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "learner:/notifications",
+          "path": "apps/learner-web/app/notifications/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "community",
+      "name": "Community",
+      "product": "academy",
+      "category": "academy",
+      "value": "Learners discuss, share wins and help each other.",
+      "for": ["Learners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/community",
+          "path": "packages/python/ac_platform/community",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/community"],
+        "routes": 15
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "academy-sales-xray",
+      "name": "Sales X-Ray inside the Academy",
+      "product": "academy",
+      "category": "academy",
+      "value": "Learners upload real calls and get them reviewed inside their course.",
+      "for": ["Learners", "Coaches"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "learner:/sales-xray",
+          "path": "apps/learner-web/app/sales-xray/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "learner:/sales-xray/recordings",
+          "path": "apps/learner-web/app/sales-xray/recordings/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "coach-studio",
+      "name": "Coach Studio",
+      "product": "coach",
+      "category": "academy",
+      "value": "Coaches build programs, upload video and publish when ready.",
+      "for": ["Coaches"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "coach:/studio/programs",
+          "path": "apps/coach-web/app/studio/programs/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "coach:/studio/publication",
+          "path": "apps/coach-web/app/studio/publication/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "sign-in",
+      "name": "Sign-in and account linking",
+      "product": "platform",
+      "category": "platform",
+      "value": "Google or email sign-in, with safe linking when one person has both.",
+      "for": ["Sellers", "Learners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/login",
+          "path": "apps/sales-xray-web/app/login/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/identity",
+          "path": "packages/python/ac_platform/identity",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": ["/v1/auth", "/v1/me/sign-in-methods"],
+        "routes": 20
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "privacy",
+      "name": "Privacy and data deletion",
+      "product": "platform",
+      "category": "platform",
+      "value": "Clear privacy terms, named AI providers and a self-serve data deletion page.",
+      "for": ["Business owners", "Sellers"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.50.0",
+        "date": "2026-10-17",
+        "or_earlier": false
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/privacy",
+          "path": "apps/sales-xray-web/app/privacy/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "sx:/data-deletion",
+          "path": "apps/sales-xray-web/app/data-deletion/page.tsx",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "plans",
+      "name": "Plans and checkout",
+      "product": "platform",
+      "category": "platform",
+      "value": "Plans, checkout and refunds, with access never tied directly to the payment provider.",
+      "for": ["Business owners"],
+      "details": [],
+      "switch": "Billing back end off by default",
+      "status": "live",
+      "since": {
+        "version": "v0.40.0",
+        "date": "2026-10-11",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "sx:/plans",
+          "path": "apps/sales-xray-web/app/plans/page.tsx",
+          "exists": true
+        },
+        {
+          "anchor": "packages/python/ac_platform/billing",
+          "path": "packages/python/ac_platform/billing",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": "/review-fixture/plans",
+      "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/plans",
+      "shots": {
+        "390-light": "/catalogue/shots/plans-390-light.webp",
+        "390-dark": "/catalogue/shots/plans-390-dark.webp",
+        "1440-light": "/catalogue/shots/plans-1440-light.webp",
+        "1440-dark": "/catalogue/shots/plans-1440-dark.webp"
+      }
+    },
+    {
+      "id": "backups",
+      "name": "Backups and restore drills",
+      "product": "platform",
+      "category": "platform",
+      "value": "Hourly production snapshots, copied off-site and restore-tested.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.1",
+        "date": "2026-09-03",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "tests/infra/test_restore_drill.py",
+          "path": "tests/infra/test_restore_drill.py",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "audit-trail",
+      "name": "Audit trail",
+      "product": "platform",
+      "category": "platform",
+      "value": "Every sensitive change is recorded and never overwritten.",
+      "for": ["AC staff", "Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "live",
+      "since": {
+        "version": "v0.1",
+        "date": "2026-09-03",
+        "or_earlier": true
+      },
+      "anchors": [
+        {
+          "anchor": "packages/python/ac_platform/audit",
+          "path": "packages/python/ac_platform/audit",
+          "exists": true
+        }
+      ],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "chrome-extension",
+      "name": "Chrome extension",
+      "product": "sales-xray",
+      "category": "apps",
+      "value": "Sales X-Ray beside the seller's browser calls and CRM.",
+      "for": ["Sellers"],
+      "details": ["Owner order: Android first, then Chrome"],
+      "switch": null,
+      "status": "planned",
+      "since": null,
+      "anchors": [],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "play-store",
+      "name": "Google Play listing",
+      "product": "android",
+      "category": "apps",
+      "value": "Install Sales X-Ray from Google Play like any other app.",
+      "for": ["Sellers", "Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "planned",
+      "since": null,
+      "anchors": [],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "adaptive-analysis",
+      "name": "Adaptive analysis",
+      "product": "platform",
+      "category": "analysis",
+      "value": "Each call gets just enough AI for its value, cutting cost per minute further.",
+      "for": ["AC staff", "Business owners"],
+      "details": [],
+      "switch": null,
+      "status": "planned",
+      "since": null,
+      "anchors": [],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    },
+    {
+      "id": "model-bench",
+      "name": "Model bench",
+      "product": "admin",
+      "category": "admin",
+      "value": "Test every model from every provider on the same calls before choosing.",
+      "for": ["AC staff"],
+      "details": [],
+      "switch": null,
+      "status": "planned",
+      "since": null,
+      "anchors": [],
+      "api": {
+        "prefixes": [],
+        "routes": 0
+      },
+      "fixture": null,
+      "preview": null,
+      "shots": {}
+    }
+  ],
+  "counts": {
+    "live": 83,
+    "dev": 1,
+    "planned": 4
+  },
+  "pages": [
+    {
+      "app": "Sales X-Ray",
+      "key": "sx",
+      "pages": 38,
+      "fixtures": 39,
+      "named": 18,
+      "unnamed": [
+        "/",
+        "/account",
+        "/account/billing",
+        "/account/billing/return",
+        "/analysis",
+        "/analysis/calls",
+        "/auth/complete",
+        "/billing",
+        "/contact",
+        "/dashboard",
+        "/delivery",
+        "/leads",
+        "/pricing",
+        "/prospects/[prospectId]",
+        "/provider-review",
+        "/refunds",
+        "/review/figures",
+        "/settings",
+        "/settings/[section]",
+        "/terms"
+      ]
+    },
+    {
+      "app": "AC Admin",
+      "key": "admin",
+      "pages": 46,
+      "fixtures": 6,
+      "named": 25,
+      "unnamed": [
+        "/",
+        "/calls/[recordingId]",
+        "/learning-operations",
+        "/login",
+        "/people",
+        "/people/corrections",
+        "/people/grants",
+        "/platform",
+        "/reviewer",
+        "/reviewer/invite",
+        "/reviewer/login",
+        "/reviewer/review",
+        "/reviewer/review/[assignmentId]",
+        "/reviewer/verify",
+        "/sales-xray/analysis",
+        "/sales-xray/call-data",
+        "/sales-xray/execution",
+        "/sales-xray/one-pass/[subject]",
+        "/sales-xray/review/[assignmentId]",
+        "/sales-xray/review/report/[runId]",
+        "/synthetic/[callId]"
+      ]
+    },
+    {
+      "app": "AC Academy",
+      "key": "learner",
+      "pages": 34,
+      "fixtures": 1,
+      "named": 10,
+      "unnamed": [
+        "/",
+        "/activity/[activityId]",
+        "/auth/callback",
+        "/consent/renewal",
+        "/discover",
+        "/forgot-password",
+        "/home",
+        "/learn/[programSlug]/complete",
+        "/learn/[programSlug]/module/[moduleId]",
+        "/learning",
+        "/login",
+        "/offline",
+        "/onboarding",
+        "/privacy",
+        "/profile",
+        "/register",
+        "/reset-password",
+        "/sales-xray/calls",
+        "/sales-xray/review/[assignmentId]",
+        "/sales-xray/review/invite",
+        "/session-expired",
+        "/settings",
+        "/terms",
+        "/verify-email"
+      ]
+    },
+    {
+      "app": "Coach Studio",
+      "key": "coach",
+      "pages": 7,
+      "fixtures": 0,
+      "named": 2,
+      "unnamed": [
+        "/",
+        "/login",
+        "/studio",
+        "/studio/programs/[programId]",
+        "/studio/settings"
+      ]
+    }
+  ],
+  "api": {
+    "routes": 530,
+    "areas": [
+      {
+        "prefix": "/v1/lead-desk",
+        "routes": 144
+      },
+      {
+        "prefix": "/v1/admin",
+        "routes": 82
+      },
+      {
+        "prefix": "/v1/conversation",
+        "routes": 57
+      },
+      {
+        "prefix": "/v1/me",
+        "routes": 43
+      },
+      {
+        "prefix": "/v1/sales-xray",
+        "routes": 30
+      },
+      {
+        "prefix": "/v1/organisation",
+        "routes": 19
+      },
+      {
+        "prefix": "/v1/auth",
+        "routes": 17
+      },
+      {
+        "prefix": "/v1/community",
+        "routes": 15
+      },
+      {
+        "prefix": "/v1/reviewer",
+        "routes": 14
+      },
+      {
+        "prefix": "/v1/platform",
+        "routes": 13
+      },
+      {
+        "prefix": "/v1/media",
+        "routes": 12
+      },
+      {
+        "prefix": "/v1/practice",
+        "routes": 12
+      },
+      {
+        "prefix": "/v1/learning",
+        "routes": 9
+      },
+      {
+        "prefix": "/v1/api",
+        "routes": 8
+      },
+      {
+        "prefix": "/v1/activities",
+        "routes": 6
+      },
+      {
+        "prefix": "/v1/native",
+        "routes": 6
+      },
+      {
+        "prefix": "/v1/payments",
+        "routes": 4
+      },
+      {
+        "prefix": "/v1/notifications",
+        "routes": 3
+      },
+      {
+        "prefix": "/v1/profile",
+        "routes": 3
+      },
+      {
+        "prefix": "/v1/subscriptions",
+        "routes": 3
+      },
+      {
+        "prefix": "/v1/telemetry",
+        "routes": 3
+      },
+      {
+        "prefix": "/v1/analytics",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1/context",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1/credit-notes",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1/invoices",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1/mcp",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1/onboarding",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1/orders",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1/programs",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1/updates",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1",
+        "routes": 1
+      },
+      {
+        "prefix": "/v1/certificates",
+        "routes": 1
+      },
+      {
+        "prefix": "/v1/history",
+        "routes": 1
+      },
+      {
+        "prefix": "/v1/plans",
+        "routes": 1
+      },
+      {
+        "prefix": "/v1/checkout",
+        "routes": 1
+      },
+      {
+        "prefix": "/v1/enrollments",
+        "routes": 1
+      },
+      {
+        "prefix": "/v1/evidence",
+        "routes": 1
+      },
+      {
+        "prefix": "/v1/providers",
+        "routes": 1
+      },
+      {
+        "prefix": "/v1/sessions",
+        "routes": 1
+      }
+    ]
+  },
+  "settings": [
+    {
+      "area": "analysis",
+      "entries": 1
+    },
+    {
+      "area": "analysis-pipeline",
+      "entries": 1
+    },
+    {
+      "area": "call-data",
+      "entries": 1
+    },
+    {
+      "area": "execution",
+      "entries": 3
+    },
+    {
+      "area": "lead-desk-ai",
+      "entries": 1
+    },
+    {
+      "area": "providers",
+      "entries": 1
+    }
+  ],
+  "switches": [
+    "AC_BILLING_ENABLED",
+    "AC_LOCAL_STUDIO_VIDEO_ENABLED",
+    "AC_MEDIA_FILESYSTEM_ENABLED",
+    "AC_MEDIA_PROVIDER_ENABLED",
+    "AC_MEDIA_STORAGE_ENABLED",
+    "AC_MEDIA_STRESS_FIXTURES_ENABLED",
+    "AC_NATIVE_API_ENABLED"
+  ],
+  "releases": [
+    {
+      "version": "v0.84.0",
+      "date": "2026-10-22",
+      "title": "OpenAI identities per environment, Brain 4.0 coaching score structure, cost meter, analysis engine page, Liquid Glass look and owner Home/Leads/Settings slices, CI prerequisites cache"
+    },
+    {
+      "version": "v0.83.0",
+      "date": "2026-10-22",
+      "title": "Lead pipelines (migration 0121), dialler call recordings join their lead call (Xiaomi), Home funnel per pipeline"
+    },
+    {
+      "version": "v0.82.0",
+      "date": "2026-10-22",
+      "title": "Lead stages by kind of business, guided lead ads setup with Meta review status"
+    },
+    {
+      "version": "v0.81.0",
+      "date": "2026-10-22",
+      "title": "Home starts with sales, Chats redesign, Settings Selling, swipe asks before calling, Save says what it needs"
+    },
+    {
+      "version": "v0.80.0",
+      "date": "2026-10-22",
+      "title": "Leads on one page with stage tabs and a Start calling bar, how lead stages work, sales performance API for the new Home"
+    },
+    {
+      "version": "v0.79.0",
+      "date": "2026-10-22",
+      "title": "Phone UX: Back closes every sheet and overlay, Add (lead or call) on the + button, names with capitals, All leads fits the phone"
+    },
+    {
+      "version": "v0.78.0",
+      "date": "2026-10-21",
+      "title": "Production fast call-data runner reads only calls that one pass does not fill (short-call and data-only calls)"
+    },
+    {
+      "version": "v0.77.0",
+      "date": "2026-10-21",
+      "title": "AI on calls per seller with the short-call rule (transcript and lead details for calls under a minute), salesperson profile, CRM lead delete"
+    },
+    {
+      "version": "v0.76.0",
+      "date": "2026-10-21",
+      "title": "Gemini one-pass output trim and calibration, Brain 4.0 blind review and gold checkpoints (migration 0118), Luna hybrid (sealed later, off)"
+    },
+    {
+      "version": "v0.75.0",
+      "date": "2026-10-21",
+      "title": "Brain 4.0 beta shadow reads (migration 0117, off until raised), Luna route for one pass (inert until sealed), AI spend cap and checkpoint reset scripts"
+    },
+    {
+      "version": "v0.74.0",
+      "date": "2026-10-21",
+      "title": "One-pass Flex production switch script (AUT-2177), one pass B1-B3 (inert until sealed), Brain 4.0 beta, Dependabot no longer blocks releases"
+    },
+    {
+      "version": "v0.73.0",
+      "date": "2026-10-21",
+      "title": "Gemini Flex for call analysis (fallback to standard), Next 16.3.8, sharp and shell-quote security bumps"
+    },
+    {
+      "version": "v0.72.0",
+      "date": "2026-10-21",
+      "title": "One-pass transcription for long calls, Pillow 13 and certifi security bumps"
+    },
+    {
+      "version": "v0.71.0",
+      "date": "2026-10-21",
+      "title": "One-pass analysis with Gemini Flash-Lite transcription (owner switch, classic fallback), OpenAI as a call-analysis processor, USD-INR reference rates and pseudonymous usage export, CI runners pinned"
+    },
+    {
+      "version": "v0.70.0",
+      "date": "2026-10-21",
+      "title": "Lead stages, AI spend caps and guard, Chats inbox with read marks, Lead Desk Messenger/Instagram/WhatsApp and AI replies (off), Settings revamp and Developers page, design system v2, faster calls list, MCP sign-in discovery fix"
+    },
+    {
+      "version": "v0.69.0",
+      "date": "2026-10-20",
+      "title": "Report and budget settings, Review 2.0, developer platform (API keys, webhooks, Connect), Lead Desk Meta conversions, WhatsApp, Messenger, Instagram, ad spend and AI replies (off), Admin 2.0 settings and staff keys, sign-in with Google redirect and account linking safeguards, call-data and playback fixes"
+    },
+    {
+      "version": "v0.68.0",
+      "date": "2026-10-19",
+      "title": "Review routes never hold a database connection (fix for the 19 Oct production pool exhaustion)"
+    },
+    {
+      "version": "v0.67.0",
+      "date": "2026-10-19",
+      "title": "Phone fixes for the Android app: signed-out welcome, compact Leads with WhatsApp and SMS, one-step call flow, permissions one at a time, policy pages fixed"
+    },
+    {
+      "version": "v0.66.0",
+      "date": "2026-10-19",
+      "title": "Call data engine (fast and deep pipelines, call facts, Admin call map); Wise Life partner webhooks (off until set up); Prospect reads engine facts; smoother loading; Admin workspaces and environment switch"
+    },
+    {
+      "version": "v0.65.0",
+      "date": "2026-10-19",
+      "title": "Phone alerts for new gold reviews; calls that run out of AI budget wait and continue by themselves; one-click budget raises in Admin; budget alerts"
+    },
+    {
+      "version": "v0.64.0",
+      "date": "2026-10-19",
+      "title": "Admin: usage and cost for every environment; AI budget holds settle automatically; an analysis start survives a brief outage"
+    },
+    {
+      "version": "v0.63.0",
+      "date": "2026-10-19",
+      "title": "Prospect gets its own tab (Report | Prospect | Coaching): who the buyer is, need/budget/authority/timing with quotes, what to remember before the next call; phone setup shows where your phone saves recordings"
+    },
+    {
+      "version": "v0.62.0",
+      "date": "2026-10-19",
+      "title": "Gold review on the phone for reviewers"
+    },
+    {
+      "version": "v0.61.0",
+      "date": "2026-10-19",
+      "title": "Download page for the apps (salesxray.authorityclosers.com/apps: Android button, QR, version and checksum, install help); calls are never left as Untitled call"
+    },
+    {
+      "version": "v0.60.0",
+      "date": "2026-10-18",
+      "title": "Upload and report fixes from the owner test: the details step keeps your answers, clearer pointer wording, no more Untitled call, better speaker guess; Google Ads settings wiring"
+    },
+    {
+      "version": "v0.59.0",
+      "date": "2026-10-18",
+      "title": "Leads: Google Ads lead connector (Continue with Google; stays off until its settings are added)"
+    },
+    {
+      "version": "v0.58.0",
+      "date": "2026-10-18",
+      "title": "Leads: log work calls from the phone, after-call sheet, phone setup checklist, work hours, Call back, calls report and CSV, Save as lead, Mark private; phone app download on; updated consent asks once"
+    },
+    {
+      "version": "v0.57.0",
+      "date": "2026-10-18",
+      "title": "Minutes are used only when a report is ready: a call that fails, is cancelled or expires before its report gives its minutes back"
+    },
+    {
+      "version": "v0.56.0",
+      "date": "2026-10-18",
+      "title": "Upload terms name the AI providers and calls are kept until deleted; Leads: Taking new leads switch, Someday follow-up, Last call in short; six UI fixes"
+    },
+    {
+      "version": "v0.55.0",
+      "date": "2026-10-18",
+      "title": "Database backups: the logical Postgres dump may be up to 64 MiB (was 8 MiB), so the scheduled production backups run again"
+    }
+  ]
+}
