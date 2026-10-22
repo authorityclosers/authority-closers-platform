@@ -1,7 +1,8 @@
-"""Timing and captions: one shared picture timeline for every language, and caption cues from voice timings.
+"""Timing and captions: one picture timeline for every language, caption cues from voice timings.
 
-Each segment lasts long enough for its clip and for the longest of its three voice lines, so one silent cut fits
-English, Hinglish and Marathi-English alike (option B) and the editor swaps audio without re-cutting (option C).
+Each segment lasts long enough for its clip and for the longest of its three voice lines, so one
+silent cut fits English, Hinglish and Marathi-English alike (option B) and the editor swaps audio
+without re-cutting (option C).
 """
 
 from __future__ import annotations
@@ -10,9 +11,9 @@ import math
 from dataclasses import dataclass, field
 
 FPS = 30
-LEAD_S = 0.35   # the voice starts this long after its shot does
-TAIL_S = 0.45   # and the shot holds this long after the voice ends
-MAX_LINE = 42   # caption characters per line
+LEAD_S = 0.35  # the voice starts this long after its shot does
+TAIL_S = 0.45  # and the shot holds this long after the voice ends
+MAX_LINE = 42  # caption characters per line
 MAX_LINES = 2
 
 
@@ -67,7 +68,7 @@ def layout(segs: list[Seg], intro_s: float, outro_s: float) -> float:
 
 
 def phrase_spans(phrases: list[str]) -> tuple[str, list[tuple[int, int]]]:
-    """The text sent to the voice (phrases joined by spaces) and each phrase's character span in it."""
+    """The text sent to the voice (phrases joined by spaces) and each phrase's span in it."""
     spans, pos, parts = [], 0, []
     for p in phrases:
         p = p.strip()
@@ -116,7 +117,7 @@ def sentences(text: str) -> list[str]:
 
 
 def balanced(text: str) -> list[str]:
-    """Pieces of at most two caption lines, split at sentence ends first, then into near-equal halves."""
+    """Pieces of at most two caption lines: split at sentence ends, then into near-equal parts."""
     pieces = []
     for sent in sentences(text):
         n = math.ceil(len(wrap(sent)) / MAX_LINES)
@@ -146,41 +147,63 @@ def chunk(text: str, start: float, end: float, style: str) -> list[Cue]:
     return cues
 
 
-def cues_for(seg_start: float, captions: list[str], times: list[tuple[float, float]], style: str) -> list[Cue]:
+def cues_for(
+    seg_start: float, captions: list[str], times: list[tuple[float, float]], style: str
+) -> list[Cue]:
     out: list[Cue] = []
-    for text, (a, b) in zip(captions, times):
+    for text, (a, b) in zip(captions, times, strict=True):
         out += chunk(text, seg_start + LEAD_S + a, seg_start + LEAD_S + b, style)
     # Close tiny gaps so captions do not flicker between phrases of one line.
-    for x, y in zip(out, out[1:]):
+    for x, y in zip(out, out[1:], strict=False):
         if 0 < y.start - x.end < 0.35:
             x.end = y.start
     return out
 
 
 def srt(cues: list[Cue]) -> str:
-    return "".join(f"{i}\n{tc(c.start)} --> {tc(c.end)}\n{c.text}\n\n" for i, c in enumerate(cues, 1))
+    return "".join(
+        f"{i}\n{tc(c.start)} --> {tc(c.end)}\n{c.text}\n\n" for i, c in enumerate(cues, 1)
+    )
+
+
+# White bold text on a dark teal box (BorderStyle 3). Margins: phone captions sit in the panel right
+# of the phone (MarginL 1010); desktop captions in the strip under the window; card captions low.
+ASS_COLOURS = "&H00FFFFFF,&H00FFFFFF,&H00382A12,&H8C2A1A0F"
+ASS_STYLES = {
+    "phone": (46, 14, 1010, 110, 120),
+    "desktop": (40, 12, 120, 120, 22),
+    "card": (44, 14, 120, 120, 90),
+}
 
 
 def ass(cues: list[Cue], font: str, width: int = 1920, height: int = 1080) -> str:
-    """Burn-in captions. Phone shots: centred in the right-hand panel; desktop shots: the strip under the window."""
-    head = f"""[Script Info]
-ScriptType: v4.00+
-PlayResX: {width}
-PlayResY: {height}
-WrapStyle: 2
-ScaledBorderAndShadow: yes
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: phone,{font},46,&H00FFFFFF,&H00FFFFFF,&H00382A12,&H8C2A1A0F,1,0,0,0,100,100,0,0,3,14,0,2,1010,110,120,1
-Style: desktop,{font},40,&H00FFFFFF,&H00FFFFFF,&H00382A12,&H8C2A1A0F,1,0,0,0,100,100,0,0,3,12,0,2,120,120,22,1
-Style: card,{font},44,&H00FFFFFF,&H00FFFFFF,&H00382A12,&H8C2A1A0F,1,0,0,0,100,100,0,0,3,14,0,2,120,120,90,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
-    body = "".join(
-        f"Dialogue: 0,{ass_tc(c.start)},{ass_tc(c.end)},{c.style},,0,0,0,,{c.text.replace(chr(10), chr(92) + 'N')}\n"
-        for c in cues
+    """Burn-in captions for libass (ffmpeg's ass filter)."""
+    fmt = (
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+        "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
+        "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding"
     )
-    return head + body
+    styles = [
+        f"Style: {name},{font},{size},{ASS_COLOURS},1,0,0,0,100,100,0,0,3,{pad},0,2,"
+        f"{left},{right},{bottom},1"
+        for name, (size, pad, left, right, bottom) in ASS_STYLES.items()
+    ]
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        f"PlayResX: {width}",
+        f"PlayResY: {height}",
+        "WrapStyle: 2",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        fmt,
+        *styles,
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    for c in cues:
+        text = c.text.replace("\n", "\\N")
+        lines.append(f"Dialogue: 0,{ass_tc(c.start)},{ass_tc(c.end)},{c.style},,0,0,0,,{text}")
+    return "\n".join(lines) + "\n"

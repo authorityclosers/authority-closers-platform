@@ -7,8 +7,27 @@
       "for": ["Sellers", "Sales managers", "Business owners"],
       "seconds": [180, 300],
       "devices": ["phone", "desktop"],
-      "features": ["sales-home", "leads-stage-tabs", "add-sheet", "start-calling", "after-call-sheet", "the-report", "brain-4", "chats-inbox", "lead-pipelines", "organisations"],
-      "screens": ["/review-fixture/home", "/review-fixture/leads", "/review-fixture/add-sheet", "/review-fixture/cold-calling", "/review-fixture/report", "/review-fixture/chats", "/review-fixture/stage-options"],
+      "features": [
+        "sales-home",
+        "leads-stage-tabs",
+        "add-sheet",
+        "start-calling",
+        "after-call-sheet",
+        "the-report",
+        "brain-4",
+        "chats-inbox",
+        "lead-pipelines",
+        "organisations"
+      ],
+      "screens": [
+        "/review-fixture/home",
+        "/review-fixture/leads",
+        "/review-fixture/add-sheet",
+        "/review-fixture/cold-calling",
+        "/review-fixture/report",
+        "/review-fixture/chats",
+        "/review-fixture/stage-options"
+      ],
       "native": false,
       "batch": 1
     },
@@ -52,7 +71,12 @@
       "for": ["Sellers"],
       "seconds": [50, 75],
       "devices": ["phone"],
-      "features": ["start-calling", "lead-hub", "after-call-sheet", "ready-messages"],
+      "features": [
+        "start-calling",
+        "lead-hub",
+        "after-call-sheet",
+        "ready-messages"
+      ],
       "screens": ["/review-fixture/leads", "/review-fixture/cold-calling"],
       "native": false,
       "batch": 1
@@ -74,8 +98,18 @@
       "for": ["Sellers", "Sales managers"],
       "seconds": [70, 90],
       "devices": ["phone", "desktop"],
-      "features": ["the-report", "brain-4", "prospect-profile", "calls-library"],
-      "screens": ["/review-fixture/calls", "/review-fixture/report", "/review-fixture/report/pillars", "/review-fixture/prospects"],
+      "features": [
+        "the-report",
+        "brain-4",
+        "prospect-profile",
+        "calls-library"
+      ],
+      "screens": [
+        "/review-fixture/calls",
+        "/review-fixture/report",
+        "/review-fixture/report/pillars",
+        "/review-fixture/prospects"
+      ],
       "native": false,
       "batch": 1
     },
@@ -86,7 +120,11 @@
       "seconds": [45, 75],
       "devices": ["desktop", "phone"],
       "features": ["lead-stages", "lead-pipelines", "leads-stage-tabs"],
-      "screens": ["/review-fixture/lead-stages", "/review-fixture/stage-options", "/review-fixture/leads"],
+      "screens": [
+        "/review-fixture/lead-stages",
+        "/review-fixture/stage-options",
+        "/review-fixture/leads"
+      ],
       "native": false,
       "batch": 1
     },

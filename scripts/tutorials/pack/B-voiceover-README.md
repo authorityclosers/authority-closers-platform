@@ -4,12 +4,12 @@ For recording your own voice over each tutorial (Dipak, Suyash, or anyone on the
 
 ## In each tutorial folder
 
-| File | What it is |
-| --- | --- |
-| `<id>-silent.mp4` | The finished picture with no sound and no captions. Record over this. |
+| File                                    | What it is                                                                                                                                                              |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<id>-silent.mp4`                       | The finished picture with no sound and no captions. Record over this.                                                                                                   |
 | `<id>-script-en.md`, `-hi.md`, `-mr.md` | The script with a start time for every line, what is on screen, and how long the AI voice took. Hinglish and Marathi lines are given in Roman script and in Devanagari. |
-| `<id>-cue-sheet.csv` | The same as a spreadsheet: one row per shot, all three languages side by side. |
-| `<id>-en.srt`, `-hi.srt`, `-mr.srt` | Captions with timings. Load one in VLC next to the silent video to see where each line falls. |
+| `<id>-cue-sheet.csv`                    | The same as a spreadsheet: one row per shot, all three languages side by side.                                                                                          |
+| `<id>-en.srt`, `-hi.srt`, `-mr.srt`     | Captions with timings. Load one in VLC next to the silent video to see where each line falls.                                                                           |
 
 ## How to record
 

@@ -11,20 +11,44 @@
     "en": {
       "label": "English (Indian)",
       "language_code": "en",
-      "pick": {"voice_id": "7GhmeknbcNhutRszXc2f", "name": "Masuk - Tutorials and Explainers", "gender": "male"},
-      "alt": {"voice_id": "W0IijAYaBOZmQK7SbmS5", "name": "Palak M - Polished & Pleasant Assistant", "gender": "female"}
+      "pick": {
+        "voice_id": "7GhmeknbcNhutRszXc2f",
+        "name": "Masuk - Tutorials and Explainers",
+        "gender": "male"
+      },
+      "alt": {
+        "voice_id": "W0IijAYaBOZmQK7SbmS5",
+        "name": "Palak M - Polished & Pleasant Assistant",
+        "gender": "female"
+      }
     },
     "hi": {
       "label": "Hinglish",
       "language_code": "hi",
-      "pick": {"voice_id": "Y7OrrtPkQBWZvc1sOCQ4", "name": "Amol P - Warm, Natural Customer Care", "gender": "male"},
-      "alt": {"voice_id": "oR3MB6ZZsjdV90ztz1xE", "name": "Paaro - Real, Warm and Interactive", "gender": "female"}
+      "pick": {
+        "voice_id": "Y7OrrtPkQBWZvc1sOCQ4",
+        "name": "Amol P - Warm, Natural Customer Care",
+        "gender": "male"
+      },
+      "alt": {
+        "voice_id": "oR3MB6ZZsjdV90ztz1xE",
+        "name": "Paaro - Real, Warm and Interactive",
+        "gender": "female"
+      }
     },
     "mr": {
       "label": "Marathi-English",
       "language_code": "mr",
-      "pick": {"voice_id": "HtGnESBO7Tz9pSmUZ6wA", "name": "Amol P - Engaging Marathi Podcast Host", "gender": "male"},
-      "alt": {"voice_id": "es0ipzX1rWO9Y2E2TbgY", "name": "Sanika - Cheerful Puneri Creator", "gender": "female"}
+      "pick": {
+        "voice_id": "HtGnESBO7Tz9pSmUZ6wA",
+        "name": "Amol P - Engaging Marathi Podcast Host",
+        "gender": "male"
+      },
+      "alt": {
+        "voice_id": "es0ipzX1rWO9Y2E2TbgY",
+        "name": "Sanika - Cheerful Puneri Creator",
+        "gender": "female"
+      }
     }
   }
 }

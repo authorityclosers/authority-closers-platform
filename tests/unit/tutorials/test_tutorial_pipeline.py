@@ -1,4 +1,4 @@
-"""Sales X-Ray tutorial pipeline (scripts/tutorials): list, scripts, captions, timing and editor timelines.
+"""Sales X-Ray tutorial pipeline: list, scripts, captions, timing and editor timelines.
 
 No network, no browser, no ffmpeg: these check the parts that decide what a tutorial says and when.
 """
@@ -20,7 +20,9 @@ LANGS = ("en", "hi", "mr")
 
 
 def boards():
-    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted((TUT / "scripts").glob("*.json"))]
+    return [
+        json.loads(p.read_text(encoding="utf-8")) for p in sorted((TUT / "scripts").glob("*.json"))
+    ]
 
 
 def test_every_tutorial_teaches_features_that_are_in_the_catalogue() -> None:
@@ -35,13 +37,23 @@ def test_every_tutorial_teaches_features_that_are_in_the_catalogue() -> None:
 
 
 def test_every_storyboard_is_in_the_list_and_uses_fictional_fixture_screens() -> None:
-    listed = {t["id"] for t in json.loads((TUT / "tutorials.json").read_text(encoding="utf-8"))["tutorials"]}
+    listed = {
+        t["id"]
+        for t in json.loads((TUT / "tutorials.json").read_text(encoding="utf-8"))["tutorials"]
+    }
     for b in boards():
         assert b["id"] in listed
         for seg in b["segments"]:
             if seg["device"] in ("phone", "desktop"):
-                gotos = [a["url"] for a in seg.get("setup", []) + seg.get("actions", []) if a["do"] == "goto"]
-                assert gotos and all(u.startswith("/review-fixture/") for u in gotos), (b["id"], seg["id"])
+                gotos = [
+                    a["url"]
+                    for a in seg.get("setup", []) + seg.get("actions", [])
+                    if a["do"] == "goto"
+                ]
+                assert gotos and all(u.startswith("/review-fixture/") for u in gotos), (
+                    b["id"],
+                    seg["id"],
+                )
 
 
 def test_every_line_follows_the_owner_rules_and_hindi_marathi_lines_have_captions() -> None:
@@ -56,22 +68,35 @@ def test_every_line_follows_the_owner_rules_and_hindi_marathi_lines_have_caption
                     assert textprep.lint(line) == [], (b["id"], seg["id"], lang, line)
                 if lang != "en" and block:
                     assert len(block["say"]) == len(block["caption"]), (b["id"], seg["id"], lang)
-                    assert all(c.isascii() for c in "".join(block["caption"]).replace("·", "")), "captions are Roman"
+                    assert all(c.isascii() for c in "".join(block["caption"]).replace("·", "")), (
+                        "captions are Roman"
+                    )
 
 
 @pytest.mark.parametrize(
     "line",
-    ["Plans start at ₹999", "It costs nothing", "Save 20 minutes a day", "Call 98765 43210", "Mail sam@example.com",
-     "बस 5 मिनट"],
+    [
+        "Plans start at ₹999",
+        "It costs nothing",
+        "Save 20 minutes a day",
+        "Call 98765 43210",
+        "Mail sam@example.com",
+        "बस 5 मिनट",
+    ],
 )
 def test_lint_refuses_prices_minutes_numbers_and_emails(line: str) -> None:
     assert textprep.lint(line)
 
 
-def test_product_names_are_spoken_as_the_team_says_them_but_captions_keep_the_written_form() -> None:
+def test_product_names_are_spoken_as_the_team_says_them_but_captions_keep_the_written_form() -> (
+    None
+):
     rules = textprep.load_pronounce()
     assert textprep.spoken("Brain 4.0 scores it", "en", rules) == "Brain four point oh scores it"
-    assert textprep.spoken("Sales X-Ray में Brain 4.0", "hi", rules) == "Sales X-Ray में Brain four point oh"
+    assert (
+        textprep.spoken("Sales X-Ray में Brain 4.0", "hi", rules)
+        == "Sales X-Ray में Brain four point oh"
+    )
 
 
 def test_the_hearing_check_accepts_how_speech_to_text_spells_the_product() -> None:
@@ -99,14 +124,25 @@ def test_phrase_times_come_from_character_alignment() -> None:
     assert text == "Open Leads. Tap Call."
     assert spans == [(0, 11), (12, 21)]
     starts = [i * 0.1 for i in range(len(text))]
-    align = {"character_start_times_seconds": starts, "character_end_times_seconds": [s + 0.1 for s in starts]}
-    assert timing.span_times(align, spans) == [(0.0, pytest.approx(1.1)), (pytest.approx(1.2), pytest.approx(2.1))]
+    align = {
+        "character_start_times_seconds": starts,
+        "character_end_times_seconds": [s + 0.1 for s in starts],
+    }
+    assert timing.span_times(align, spans) == [
+        (0.0, pytest.approx(1.1)),
+        (pytest.approx(1.2), pytest.approx(2.1)),
+    ]
 
 
 def test_one_picture_timeline_fits_the_longest_language() -> None:
-    segs = [timing.Seg("a", "phone", 3.0, {"en": 2.0, "hi": 4.2, "mr": 3.9}), timing.Seg("b", "phone", 5.0, {"en": 1.0})]
+    segs = [
+        timing.Seg("a", "phone", 3.0, {"en": 2.0, "hi": 4.2, "mr": 3.9}),
+        timing.Seg("b", "phone", 5.0, {"en": 1.0}),
+    ]
     total = timing.layout(segs, 0.0, 0.0)
-    assert segs[0].dur == pytest.approx(timing.frames(timing.LEAD_S + 4.2 + timing.TAIL_S) / timing.FPS)
+    assert segs[0].dur == pytest.approx(
+        timing.frames(timing.LEAD_S + 4.2 + timing.TAIL_S) / timing.FPS
+    )
     assert segs[1].dur == pytest.approx(5.0)
     assert segs[1].start == pytest.approx(segs[0].dur)
     assert total == pytest.approx(segs[0].dur + segs[1].dur)
@@ -115,12 +151,15 @@ def test_one_picture_timeline_fits_the_longest_language() -> None:
 
 
 def test_captions_are_two_short_lines_at_most_and_srt_is_well_formed() -> None:
-    long = "Sales X-Ray agla lead saamne la deta hai, opener aur jawaab ready ke saath, aur aapka poora din set."
+    long = (
+        "Sales X-Ray agla lead saamne la deta hai, opener aur jawaab ready ke saath, "
+        "aur aapka poora din set."
+    )
     cues = timing.cues_for(10.0, [long, "Bas itna hi."], [(0.0, 6.0), (6.2, 7.0)], "phone")
     assert all(len(c.text.split("\n")) <= timing.MAX_LINES for c in cues)
     assert all(len(line) <= timing.MAX_LINE for c in cues for line in c.text.split("\n"))
     assert cues[0].start == pytest.approx(10.0 + timing.LEAD_S)
-    assert all(a.end <= b.start + 1e-9 for a, b in zip(cues, cues[1:]))
+    assert all(a.end <= b.start + 1e-9 for a, b in zip(cues, cues[1:], strict=False))
     srt = timing.srt(cues)
     assert srt.startswith("1\n00:00:10,350 --> ")
     assert timing.tc(3723.5) == "01:02:03,500"
@@ -134,14 +173,24 @@ def test_editor_timelines_are_valid_xml_with_one_audio_role_per_language(tmp_pat
         timeline.Item("still", media / "title.png", 0.0, 2.5, 2.5, name="title"),
         timeline.Item("video", media / "clip a.mp4", 2.5, 4.0, 4.0, 1170, 2532, name="s1"),
     ]
-    items += [timeline.Item("audio", media / f"s1-{lang}.mp3", 2.85, 3.0, 3.0, lane=lang, name=f"s1 {lang}")
-              for lang in LANGS]
-    fcp = ET.fromstring(timeline.fcpxml("04 Call a lead", items, 6.5, tmp_path).split("\n", 2)[2])
+    items += [
+        timeline.Item(
+            "audio", media / f"s1-{lang}.mp3", 2.85, 3.0, 3.0, lane=lang, name=f"s1 {lang}"
+        )
+        for lang in LANGS
+    ]
+    # Parsing XML this test just generated, not outside input.
+    fcp_text = timeline.fcpxml("04 Call a lead", items, 6.5, tmp_path).split("\n", 2)[2]
+    fcp = ET.fromstring(fcp_text)  # noqa: S314
     roles = {c.get("audioRole") for c in fcp.iter("asset-clip") if c.get("audioRole")}
     assert roles == {"dialogue.en", "dialogue.hi", "dialogue.mr"}
-    assert {r.get("src") for r in fcp.iter("media-rep")} >= {"media/clip%20a.mp4", "media/title.png"}
+    assert {r.get("src") for r in fcp.iter("media-rep")} >= {
+        "media/clip%20a.mp4",
+        "media/title.png",
+    }
     seq = fcp.find(".//sequence")
     assert seq is not None and seq.get("duration") == "195/30s"
-    xm = ET.fromstring(timeline.xmeml("04 Call a lead", items, 6.5, tmp_path).split("\n", 2)[2])
+    xm_text = timeline.xmeml("04 Call a lead", items, 6.5, tmp_path).split("\n", 2)[2]
+    xm = ET.fromstring(xm_text)  # noqa: S314
     assert len(xm.findall(".//audio/track")) == 3
     assert [c.findtext("start") for c in xm.findall(".//video/track/clipitem")] == ["0", "75"]

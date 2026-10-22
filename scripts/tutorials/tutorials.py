@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Sales X-Ray tutorial pipeline (see README.md in this folder).
 
-    tutorials.py lint                         check every script line and title against the owner rules
-    tutorials.py quota                        ElevenLabs plan and characters left (needs the key)
-    tutorials.py samples                      voice samples: every language x both cast voices, with a hearing check
-    tutorials.py voice   <id|batch1|all>      voice lines (cached; only new lines cost characters; needs the key)
-    tutorials.py capture <id|batch1|all>      screen clips and stills from the dev review fixtures
-    tutorials.py build   <id|batch1|all>      A (narrated), B (voice-over kit) and C (editor pack) for each tutorial
-    tutorials.py fonts                        caption font for burned-in subtitles (once per output folder)
-    tutorials.py pack                         READMEs into the A, B and C folders; then scripts/tutorials/upload-to-drive
+    tutorials.py lint             check every script line and title against the owner rules
+    tutorials.py quota            ElevenLabs plan and characters left (needs the key)
+    tutorials.py samples          voice samples: each language x both cast voices, hearing check
+    tutorials.py voice   <which>  voice lines (cached; only new lines cost characters; needs key)
+    tutorials.py capture <which>  screen clips and stills from the dev review fixtures
+    tutorials.py build   <which>  A (narrated), B (voice-over kit) and C (editor pack)
+    tutorials.py fonts            caption font for burned-in subtitles (once per output folder)
+    tutorials.py pack             READMEs into the A, B and C folders (then upload-to-drive)
 
-`--langs en,hi,mr` limits languages. Outputs go to $SXTUT_OUT (default ~/sx-tutorials)/<date>. Only quota,
-samples and voice call ElevenLabs; run those through scripts/tutorials/with-elevenlabs.
+<which> is a tutorial id, a comma-separated list, batch1, batch2 or all. `--langs en,hi,mr` limits
+languages. Outputs go to $SXTUT_OUT (default ~/sx-tutorials)/<date>. Only quota, samples and voice
+call ElevenLabs; run those through scripts/tutorials/with-elevenlabs.
 """
 
 from __future__ import annotations
@@ -77,7 +78,9 @@ def cmd_samples(args: argparse.Namespace) -> int:
     out = OUT / "voice-samples"
     out.mkdir(parents=True, exist_ok=True)
     q = tts.quota()
-    need = sum(len(textprep.spoken(samples[lang]["say"], lang, rules)) for lang in args.langs) * len(args.voices)
+    need = sum(
+        len(textprep.spoken(samples[lang]["say"], lang, rules)) for lang in args.langs
+    ) * len(args.voices)
     print(f"characters needed ~{need}; left {q['left']}")
     if need > q["left"]:
         print("not enough characters left; stopping (never buy credits without the owner)")
@@ -94,12 +97,26 @@ def cmd_samples(args: argparse.Namespace) -> int:
             dest.write_bytes(audio.read_bytes())
             hearing = tts.transcribe(audio, cast["languages"][lang]["language_code"])
             got = tts.heard(hearing.get("text", ""), pronounce)
-            dur = info["alignment"]["character_end_times_seconds"][-1] if info.get("alignment") else None
-            report.append({"file": dest.name, "lang": lang, "voice": name, "model": line.model_id,
-                           "seconds": round(dur, 1) if dur else None, "heard": got,
-                           "transcript": hearing.get("text", "")})
+            dur = (
+                info["alignment"]["character_end_times_seconds"][-1]
+                if info.get("alignment")
+                else None
+            )
+            report.append(
+                {
+                    "file": dest.name,
+                    "lang": lang,
+                    "voice": name,
+                    "model": line.model_id,
+                    "seconds": round(dur, 1) if dur else None,
+                    "heard": got,
+                    "transcript": hearing.get("text", ""),
+                }
+            )
             print(f"{dest.name}: {report[-1]['seconds']} s, heard {got}")
-    (out / "samples-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+    (out / "samples-report.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
     return 0
 
 
@@ -116,14 +133,24 @@ def cmd_lint(_: argparse.Namespace) -> int:
         for key in ("title", "end_headline", "next"):
             problems += [f"{path.stem}.{key}: {p}" for p in textprep.lint(t.get(key, ""))]
         for seg in t["segments"]:
-            problems += [f"{path.stem}.{seg['id']}.label: {p}" for p in textprep.lint(seg.get("label", ""))]
+            problems += [
+                f"{path.stem}.{seg['id']}.label: {p}" for p in textprep.lint(seg.get("label", ""))
+            ]
             for lang in LANGS:
                 block = seg.get(lang) or {}
                 for field in ("say", "caption"):
                     for text in block.get(field, []):
-                        problems += [f"{path.stem}.{seg['id']}.{lang}.{field}: {p}" for p in textprep.lint(text)]
-                if lang != "en" and block and len(block.get("say", [])) != len(block.get("caption", [])):
-                    problems.append(f"{path.stem}.{seg['id']}.{lang}: say and caption need the same number of phrases")
+                        problems += [
+                            f"{path.stem}.{seg['id']}.{lang}.{field}: {p}"
+                            for p in textprep.lint(text)
+                        ]
+                if (
+                    lang != "en"
+                    and block
+                    and len(block.get("say", [])) != len(block.get("caption", []))
+                ):
+                    where = f"{path.stem}.{seg['id']}.{lang}"
+                    problems.append(f"{where}: say and caption need the same number of phrases")
     for p in problems:
         print(p)
     print("lint:", "clean" if not problems else f"{len(problems)} problem(s)")
@@ -150,13 +177,14 @@ def cmd_voice(args: argparse.Namespace) -> int:
 def cmd_capture(args: argparse.Namespace) -> int:
     from sxtut import build
 
-    for f, b in boards(args.which):
-        build.capture(REPO, f, day_dir(args) / "capture", args.device)
+    for f, _ in boards(args.which):
+        build.capture(REPO, f, day_dir(args) / "capture", args.device, args.only)
     return 0
 
 
 def cmd_fonts(args: argparse.Namespace) -> int:
-    """A static bold TTF of the brand face for libass (the app ships it only as a variable woff2)."""
+    """A static bold TTF of the brand face for libass (the app ships it only as a variable
+    woff2)."""
     import glob
 
     fonts = OUT / "fonts"
@@ -165,16 +193,41 @@ def cmd_fonts(args: argparse.Namespace) -> int:
     if target.exists():
         print(f"fonts: {target} already there")
         return 0
-    hits = sorted(glob.glob(str(REPO / "apps/sales-xray-web/.next/**/media/plus-jakarta-sans-latin-wght-normal*.woff2"),
-                        recursive=True))
+    hits = sorted(
+        glob.glob(
+            str(
+                REPO
+                / "apps/sales-xray-web/.next/**/media/plus-jakarta-sans-latin-wght-normal*.woff2"
+            ),
+            recursive=True,
+        )
+    )
     if not hits:
         print("fonts: brand woff2 not found in the dev build; captions fall back to DejaVu Sans")
         return 1
-    code = ("import sys;from fontTools.ttLib import TTFont;from fontTools.varLib import instancer;"
-            "f=TTFont(sys.argv[1]);f=instancer.instantiateVariableFont(f,{'wght':700});f.flavor=None;f.save(sys.argv[2])")
+    code = (
+        "import sys;from fontTools.ttLib import TTFont;from fontTools.varLib import instancer;"
+        "f=TTFont(sys.argv[1]);f=instancer.instantiateVariableFont(f,{'wght':700});"
+        "f.flavor=None;f.save(sys.argv[2])"
+    )
     uv = str(Path.home() / ".local/bin/uv")
-    subprocess.run([uv, "run", "--no-project", "--with", "fonttools", "--with", "brotli", "python", "-c", code,
-                    hits[0], str(target)], check=True)
+    subprocess.run(  # noqa: S603 - fixed uv/fontTools argument list
+        [
+            uv,
+            "run",
+            "--no-project",
+            "--with",
+            "fonttools",
+            "--with",
+            "brotli",
+            "python",
+            "-c",
+            code,
+            hits[0],
+            str(target),
+        ],
+        check=True,
+    )
     print(f"fonts: wrote {target}")
     return 0
 
@@ -197,8 +250,11 @@ def cmd_pack(args: argparse.Namespace) -> int:
     import shutil
 
     out = day_dir(args)
-    for part, readme in (("A-narrated", "A-narrated-README.md"), ("B-voiceover-kit", "B-voiceover-README.md"),
-                         ("C-editor-pack", "C-editor-README.md")):
+    for part, readme in (
+        ("A-narrated", "A-narrated-README.md"),
+        ("B-voiceover-kit", "B-voiceover-README.md"),
+        ("C-editor-pack", "C-editor-README.md"),
+    ):
         if (out / part).is_dir():
             shutil.copyfile(HERE / "pack" / readme, out / part / "README.md")
     listed = {t["id"]: t for t in load("tutorials.json")["tutorials"]}
@@ -211,7 +267,9 @@ def cmd_pack(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("quota").set_defaults(fn=cmd_quota)
     sub.add_parser("lint").set_defaults(fn=cmd_lint)
@@ -224,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("which")
         c.add_argument("--langs", type=lambda v: v.split(","), default=list(LANGS))
         c.add_argument("--device", choices=["phone", "desktop"])
+        c.add_argument("--only", help="capture: comma-separated segment ids to re-shoot")
         c.add_argument("--date")
         c.set_defaults(fn=fn)
     f = sub.add_parser("fonts")

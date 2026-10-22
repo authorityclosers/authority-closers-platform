@@ -1,11 +1,13 @@
-"""One tutorial end to end: voice lines, capture, stitched picture, and the three deliverables (A, B, C).
+"""One tutorial end to end: voice lines, capture, stitched picture, and deliverables A, B and C.
 
 Storyboard (scripts/tutorials/scripts/<id>.json):
   {"id", "number", "title", "kicker", "end_headline", "next",
-   "segments": [{"id", "device": "phone"|"desktop"|"card"|"end", "label", "setup": [...], "actions": [...],
+   "segments": [{"id", "device": "phone"|"desktop"|"card"|"end", "label",
+                 "setup": [...], "actions": [...],
                  "en": {"say": [phrases]}, "hi": {"say": [...], "caption": [...]}, "mr": {...}}]}
-"card" shows the title card and "end" the end card; both may carry a voice line. If a board has no "card" segment,
-a silent 2.5 s title card opens it; without an "end" segment a silent 3 s end card closes it.
+"card" shows the title card and "end" the end card; both may carry a voice line. Without a "card"
+segment a silent 2.5 s title card opens the tutorial; without an "end" segment a silent 3 s end
+card closes it.
 """
 
 from __future__ import annotations
@@ -59,21 +61,41 @@ def voice(board: dict, cast: dict, langs: list[str], cache: Path) -> dict:
 
 def characters(board: dict, langs: list[str]) -> int:
     rules = textprep.load_pronounce()
-    return sum(len(" ".join(textprep.spoken(p, lang, rules) for p in (s.get(lang) or {}).get("say", [])))
-               for s in with_cards(board) for lang in langs)
+    return sum(
+        len(" ".join(textprep.spoken(p, lang, rules) for p in (s.get(lang) or {}).get("say", [])))
+        for s in with_cards(board)
+        for lang in langs
+    )
 
 
-def capture(repo: Path, board_file: Path, out: Path, device: str | None = None) -> None:
+def capture(
+    repo: Path, board_file: Path, out: Path, device: str | None = None, only: str | None = None
+) -> None:
     args = ["node", str(repo / "scripts/tutorials/capture.mjs"), "shoot", str(board_file), str(out)]
     if device:
         args += ["--device", device]
+    if only:
+        args += ["--only", only]
     render.wait_for_headroom()
-    subprocess.run(["nice", "-n", "19", "ionice", "-c3", *args], check=True, cwd=repo, stdin=subprocess.DEVNULL,
-                   env=render.safe_env())
+    subprocess.run(  # noqa: S603 - fixed node argument list
+        [*render.NICE, *args],
+        check=True,
+        cwd=repo,
+        stdin=subprocess.DEVNULL,
+        env=render.safe_env(),
+    )
 
 
-def build(repo: Path, board: dict, cast: dict, langs: list[str], cap_dir: Path, out: Path, fonts: Path,
-          voices: dict) -> dict:
+def build(
+    repo: Path,
+    board: dict,
+    cast: dict,
+    langs: list[str],
+    cap_dir: Path,
+    out: Path,
+    fonts: Path,
+    voices: dict,
+) -> dict:
     tid = board["id"]
     work = out / "work" / tid
     work.mkdir(parents=True, exist_ok=True)
@@ -87,25 +109,55 @@ def build(repo: Path, board: dict, cast: dict, langs: list[str], cap_dir: Path, 
         clip_s = clips[s["id"]]["seconds"] if s["id"] in clips else float(s.get("hold_s", 0))
         if s["device"] not in CARD_KINDS and s["id"] in clips:
             clip_s = render.probe_seconds(cap_dir / clips[s["id"]]["clip"])
-        segs.append(timing.Seg(s["id"], s["device"], clip_s,
-                               {lang: voices[s["id"]][lang]["dur"] for lang in langs if lang in voices.get(s["id"], {})}))
+        segs.append(
+            timing.Seg(
+                s["id"],
+                s["device"],
+                clip_s,
+                {
+                    lang: voices[s["id"]][lang]["dur"]
+                    for lang in langs
+                    if lang in voices.get(s["id"], {})
+                },
+            )
+        )
     total = timing.layout(segs, 0.0, 0.0)
 
     # 2. Stage art.
     font_css = render.brand_font_css(repo)
     steps = [s for s in segs_spec if s["device"] not in CARD_KINDS]
-    cards = [{"name": "title", "html": render.title_html(font_css, board["number"], board["title"],
-                                                           board.get("kicker", "Sales X-Ray tutorial"))},
-             {"name": "end", "html": render.end_html(font_css, board.get("end_headline", "That's it!"),
-                                                     board.get("next", ""))}]
+    cards = [
+        {
+            "name": "title",
+            "html": render.title_html(
+                font_css,
+                board["number"],
+                board["title"],
+                board.get("kicker", "Sales X-Ray tutorial"),
+            ),
+        },
+        {
+            "name": "end",
+            "html": render.end_html(
+                font_css, board.get("end_headline", "That's it!"), board.get("next", "")
+            ),
+        },
+    ]
     for i, s in enumerate(steps, 1):
-        cards.append({"name": f"frame-{s['id']}", "transparent": True,
-                      "html": render.frame_html(font_css, s["device"], s.get("label", ""), f"Step {i} of {len(steps)}")})
+        cards.append(
+            {
+                "name": f"frame-{s['id']}",
+                "transparent": True,
+                "html": render.frame_html(
+                    font_css, s["device"], s.get("label", ""), f"Step {i} of {len(steps)}"
+                ),
+            }
+        )
     render.render_cards(repo, cards, work / "cards")
 
     # 3. Picture (silent cut, no captions).
     parts = []
-    for spec, seg in zip(segs_spec, segs):
+    for seg in segs:
         part = work / f"seg-{seg.id}.mp4"
         if seg.device in CARD_KINDS:
             card = work / "cards" / ("title.png" if seg.device == "card" else "end.png")
@@ -126,14 +178,18 @@ def build(repo: Path, board: dict, cast: dict, langs: list[str], cap_dir: Path, 
         render.stamp(silent, key)
 
     # 4. Captions and voice per language.
-    a_dir, b_dir, c_dir = out / "A-narrated" / tid, out / "B-voiceover-kit" / tid, out / "C-editor-pack" / tid
+    a_dir, b_dir, c_dir = (
+        out / "A-narrated" / tid,
+        out / "B-voiceover-kit" / tid,
+        out / "C-editor-pack" / tid,
+    )
     for d in (a_dir, b_dir, c_dir / "captions", c_dir / "media"):
         d.mkdir(parents=True, exist_ok=True)
     result = {"id": tid, "seconds": round(total, 2), "langs": {}}
     cue_rows = []
     for lang in langs:
         cues, deva, lines = [], [], []
-        for spec, seg in zip(segs_spec, segs):
+        for spec, seg in zip(segs_spec, segs, strict=True):
             v = voices.get(seg.id, {}).get(lang)
             if not v:
                 continue
@@ -159,7 +215,8 @@ def build(repo: Path, board: dict, cast: dict, langs: list[str], cap_dir: Path, 
             render.voice_mix(lines, total, wav)
             render.stamp(wav, mix_key)
         final = a_dir / f"{tid}-{lang}.mp4"
-        final_key = f"{render.mtime(silent)}|{render.mtime(wav)}|{hashlib.sha256(ass_text.encode()).hexdigest()}"
+        ass_hash = hashlib.sha256(ass_text.encode()).hexdigest()
+        final_key = f"{render.mtime(silent)}|{render.mtime(wav)}|{ass_hash}"
         if not render.fresh(final, final_key):
             render.narrated(silent, wav, ass_file, fonts, final)
             render.stamp(final, final_key)
@@ -167,10 +224,18 @@ def build(repo: Path, board: dict, cast: dict, langs: list[str], cap_dir: Path, 
 
     # 5. Option B: silent cut, scripts with timecodes, cue sheet.
     shutil.copyfile(silent, b_dir / f"{tid}-silent.mp4")
-    for spec, seg in zip(segs_spec, segs):
-        row = {"segment": seg.id, "in": timing.tc(seg.start, "."), "out": timing.tc(seg.start + seg.dur, "."),
-               "voice_in": timing.tc(seg.start + timing.LEAD_S, "."), "device": seg.device,
-               "on_screen": spec.get("label", "title card" if seg.device == "card" else "end card" if seg.device == "end" else "")}
+    for spec, seg in zip(segs_spec, segs, strict=True):
+        row = {
+            "segment": seg.id,
+            "in": timing.tc(seg.start, "."),
+            "out": timing.tc(seg.start + seg.dur, "."),
+            "voice_in": timing.tc(seg.start + timing.LEAD_S, "."),
+            "device": seg.device,
+            "on_screen": spec.get(
+                "label",
+                "title card" if seg.device == "card" else "end card" if seg.device == "end" else "",
+            ),
+        }
         for lang in langs:
             row[f"line_{lang}"] = " ".join(caption_phrases(spec, lang))
             row[f"seconds_{lang}"] = round(seg.voice_s.get(lang, 0.0), 1)
@@ -180,16 +245,26 @@ def build(repo: Path, board: dict, cast: dict, langs: list[str], cap_dir: Path, 
         w.writeheader()
         w.writerows(cue_rows)
     for lang in langs:
-        md = [f"# {board['number']} {board['title']}: voice-over script, {LANG_NAMES[lang]}", "",
-              f"Picture: `{tid}-silent.mp4` ({timing.tc(total, '.')}). Start each line at its time; the space after it "
-              "is the longest of the three languages, so there is room to breathe. Keep UI words in English as on screen.",
-              ""]
-        for spec, seg, row in zip(segs_spec, segs, cue_rows):
+        md = [
+            f"# {board['number']} {board['title']}: voice-over script, {LANG_NAMES[lang]}",
+            "",
+            f"Picture: `{tid}-silent.mp4` ({timing.tc(total, '.')}). Start each line at its "
+            "time; the space after it is the longest of the three languages, so there is room "
+            "to breathe. Keep UI words in English as on screen.",
+            "",
+        ]
+        for spec, row in zip(segs_spec, cue_rows, strict=True):
             text = " ".join(caption_phrases(spec, lang))
             if not text:
                 continue
-            md += [f"**{row['voice_in']}** to {row['out']}  ·  _{row['on_screen']}_  ·  AI voice took {row[f'seconds_{lang}']} s", "",
-                   f"> {text}", ""]
+            took = row[f"seconds_{lang}"]
+            md += [
+                f"**{row['voice_in']}** to {row['out']}  ·  _{row['on_screen']}_  ·  "
+                f"AI voice took {took} s",
+                "",
+                f"> {text}",
+                "",
+            ]
             if lang != "en":
                 md += [f"> {' '.join(spec[lang]['say'])}", ""]
         (b_dir / f"{tid}-script-{lang}.md").write_text("\n".join(md), encoding="utf-8")
@@ -202,7 +277,7 @@ def build(repo: Path, board: dict, cast: dict, langs: list[str], cap_dir: Path, 
     for name in ("title", "end"):
         shutil.copyfile(work / "cards" / f"{name}.png", media / "cards" / f"{tid}-{name}-card.png")
     shots = []
-    for spec, seg in zip(segs_spec, segs):
+    for spec, seg in zip(segs_spec, segs, strict=True):
         if seg.device in CARD_KINDS:
             png = media / "cards" / f"{tid}-{'title' if seg.device == 'card' else 'end'}-card.png"
             items.append(timeline.Item("still", png, seg.start, seg.dur, seg.dur, name=png.stem))
@@ -211,8 +286,18 @@ def build(repo: Path, board: dict, cast: dict, langs: list[str], cap_dir: Path, 
             dst = media / "clips" / src.name
             shutil.copyfile(src, dst)
             wpx, hpx = (1170, 2532) if seg.device == "phone" else (2880, 1800)
-            items.append(timeline.Item("video", dst, seg.start, min(seg.dur, seg.clip_s), seg.clip_s, wpx, hpx,
-                                       name=f"{seg.id} {spec.get('label', '')}".strip()))
+            items.append(
+                timeline.Item(
+                    "video",
+                    dst,
+                    seg.start,
+                    min(seg.dur, seg.clip_s),
+                    seg.clip_s,
+                    wpx,
+                    hpx,
+                    name=f"{seg.id} {spec.get('label', '')}".strip(),
+                )
+            )
             for st in clips[seg.id].get("stills", []):
                 s_src = cap_dir / st["file"]
                 shutil.copyfile(s_src, media / "stills" / s_src.name)
@@ -223,20 +308,44 @@ def build(repo: Path, board: dict, cast: dict, langs: list[str], cap_dir: Path, 
                 vdir.mkdir(parents=True, exist_ok=True)
                 dst = vdir / f"{tid}--{seg.id}--{lang}.mp3"
                 shutil.copyfile(v["audio"], dst)
-                items.append(timeline.Item("audio", dst, seg.start + timing.LEAD_S, v["dur"], v["dur"], lane=lang,
-                                           name=f"{seg.id} {lang}"))
-        shots.append({"shot": seg.id, "in": timing.tc(seg.start, "."), "seconds": round(seg.dur, 2),
-                      "device": seg.device, "on_screen": spec.get("label", ""),
-                      "screen": next((a.get("url") for a in spec.get("setup", []) if a.get("do") == "goto"), ""),
-                      "clip": f"media/clips/{Path(clips[seg.id]['clip']).name}" if seg.id in clips else "",
-                      "line_en": " ".join(caption_phrases(spec, "en"))})
+                items.append(
+                    timeline.Item(
+                        "audio",
+                        dst,
+                        seg.start + timing.LEAD_S,
+                        v["dur"],
+                        v["dur"],
+                        lane=lang,
+                        name=f"{seg.id} {lang}",
+                    )
+                )
+        shots.append(
+            {
+                "shot": seg.id,
+                "in": timing.tc(seg.start, "."),
+                "seconds": round(seg.dur, 2),
+                "device": seg.device,
+                "on_screen": spec.get("label", ""),
+                "screen": next(
+                    (a.get("url") for a in spec.get("setup", []) if a.get("do") == "goto"), ""
+                ),
+                "clip": f"media/clips/{Path(clips[seg.id]['clip']).name}"
+                if seg.id in clips
+                else "",
+                "line_en": " ".join(caption_phrases(spec, "en")),
+            }
+        )
     with (c_dir / f"{tid}-shot-list.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(shots[0].keys()))
         w.writeheader()
         w.writerows(shots)
     title = f"{board['number']} {board['title']}"
-    (c_dir / f"{tid}.fcpxml").write_text(timeline.fcpxml(title, items, total, c_dir), encoding="utf-8")
-    (c_dir / f"{tid}-premiere.xml").write_text(timeline.xmeml(title, items, total, c_dir), encoding="utf-8")
+    (c_dir / f"{tid}.fcpxml").write_text(
+        timeline.fcpxml(title, items, total, c_dir), encoding="utf-8"
+    )
+    (c_dir / f"{tid}-premiere.xml").write_text(
+        timeline.xmeml(title, items, total, c_dir), encoding="utf-8"
+    )
     shutil.copyfile(silent, c_dir / f"{tid}-reference-silent.mp4")
     (work / "result.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     return result

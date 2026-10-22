@@ -1,9 +1,9 @@
-"""Script text rules: what the voice says versus what the captions show, and the words a tutorial may not use.
+"""Script text rules: what the voice says, what captions show, and words a tutorial may not use.
 
-- `spoken(text, lang)` applies scripts/tutorials/pronounce.json so product names are read the way the team says them
-  ("Brain 4.0" -> "Brain four point oh") while captions keep the written form.
-- `lint(text)` refuses prices, costs, minutes, phone numbers and e-mail addresses (owner rules: never show prices,
-  costs or minutes; no real customer names or numbers in tutorials).
+- `spoken(text, lang)` applies scripts/tutorials/pronounce.json so product names are read the way
+  the team says them ("Brain 4.0" -> "Brain four point oh") while captions keep the written form.
+- `lint(text)` refuses prices, costs, minutes, phone numbers and e-mail addresses (owner rules:
+  never show prices, costs or minutes; no real customer names or numbers in tutorials).
 """
 
 from __future__ import annotations
@@ -15,9 +15,15 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent.parent
 PRONOUNCE = HERE / "pronounce.json"
 
-# Owner rules, 23 Oct 2026: tutorials never mention prices, costs or minutes, and never carry a real number.
+# Owner rules, 23 Oct 2026: tutorials never mention prices, costs or minutes, and never carry a real
+# number.
 BANNED = [
-    (re.compile(r"[₹$€£]|\b(?:rs\.?|inr|rupees?|paise|price|pricing|cost|costs|credits?)\b", re.I), "price or cost"),
+    (
+        re.compile(
+            r"[₹$€£]|\b(?:rs\.?|inr|rupees?|paise|price|pricing|cost|costs|credits?)\b", re.I
+        ),
+        "price or cost",
+    ),
     (re.compile(r"\b(?:minutes?|mins?)\b|मिनिट|मिनट", re.I), "minutes"),
     (re.compile(r"(?:\+?91[\s-]?)?\b[6-9]\d{4}[\s-]?\d{5}\b"), "phone number"),
     (re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.]+\b"), "e-mail address"),

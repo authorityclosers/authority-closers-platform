@@ -4,11 +4,11 @@ Short how-to videos for Sales X-Ray (Android app and web, phone and desktop) in 
 Marathi-English. One run produces all three delivery options, and re-running after a UI change re-captures the
 screens and reuses every voice line that did not change.
 
-| Option | What | Who uses it |
-| --- | --- | --- |
-| A, narrated | MP4 per tutorial per language, ElevenLabs voice, captions burned in and as SRT | publish as is |
-| B, voice-over kit | silent cut of each video, per-language script with timecodes, cue sheet | Dipak or the owner records their own voice |
-| C, editor pack | raw phone and desktop clips, labelled stills, SRTs, FCPXML and Premiere XML timelines, shot list, README | a video editor |
+| Option            | What                                                                                                     | Who uses it                                |
+| ----------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| A, narrated       | MP4 per tutorial per language, ElevenLabs voice, captions burned in and as SRT                           | publish as is                              |
+| B, voice-over kit | silent cut of each video, per-language script with timecodes, cue sheet                                  | Dipak or the owner records their own voice |
+| C, editor pack    | raw phone and desktop clips, labelled stills, SRTs, FCPXML and Premiere XML timelines, shot list, README | a video editor                             |
 
 ## Steps
 
