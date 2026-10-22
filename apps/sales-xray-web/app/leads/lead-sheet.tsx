@@ -944,10 +944,18 @@ export function storyLines(
   now: Date = new Date(),
 ): string[] {
   const lead = detail.lead;
-  const source = lead.source_label.startsWith("File:")
-    ? "a file import"
-    : lead.source_label;
-  const lines = [`Came in ${ago(lead.created_at, now)} from ${source}.`];
+  const when_ = ago(lead.created_at, now);
+  const lines = [
+    lead.source === "manual"
+      ? `Added by hand ${when_}.`
+      : lead.source === "referral"
+        ? `Came in ${when_} as a referral.`
+        : `Came in ${when_} from ${
+            lead.source_label.startsWith("File:")
+              ? "a file import"
+              : lead.source_label
+          }.`,
+  ];
   const results = detail.events.filter((event) => event.kind === "result");
   const talks = results.filter((event) => event.connected).length;
   if (!lead.attempts) lines.push("Not called yet.");

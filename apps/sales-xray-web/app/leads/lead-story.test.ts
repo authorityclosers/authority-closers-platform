@@ -74,8 +74,12 @@ describe("the story so far", () => {
     expect(lines[3]).toMatch(/^Now: Site visit booked, next call tomorrow /);
   });
 
-  it("says plainly when nobody has called yet", () => {
-    const lines = storyLines(detail([], 0), NOW);
+  it("says plainly when nobody has called yet, and who added the lead", () => {
+    const added = detail([], 0);
+    added.lead.source = "manual";
+    added.lead.source_label = "Added by hand";
+    const lines = storyLines(added, NOW);
+    expect(lines[0]).toBe("Added by hand 3 days ago.");
     expect(lines).toContain("Not called yet.");
     expect(lines.some((line) => line.startsWith("Last"))).toBe(false);
   });
