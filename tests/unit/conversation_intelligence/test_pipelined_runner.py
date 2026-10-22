@@ -7,7 +7,10 @@ from datetime import timedelta
 
 import pytest
 
-from ac_platform.conversation_intelligence.runner import PipelinedConversationWorkerRunner
+from ac_platform.conversation_intelligence.runner import (
+    MAX_PROVIDER_CONSUMERS,
+    PipelinedConversationWorkerRunner,
+)
 
 from .test_runner import _FakeComponent
 
@@ -161,3 +164,54 @@ async def test_cancel_drains_both_accepted_workers_and_cleans_waiters() -> None:
     with pytest.raises(asyncio.CancelledError):
         await asyncio.wait_for(task, 1)
     assert offline.calls == inference.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_provider_consumers_wait_on_providers_side_by_side() -> None:
+    log: list[str] = []
+    stop = asyncio.Event()
+    in_flight = 0
+    all_in = asyncio.Event()
+    release = asyncio.Event()
+
+    class Provider(_FakeComponent):
+        async def run_once(self) -> bool:
+            nonlocal in_flight
+            self.calls += 1
+            in_flight += 1
+            if in_flight == 3:
+                all_in.set()
+            await release.wait()
+            stop.set()
+            return True
+
+    inference = Provider("inference", log)
+    consumer = PipelinedConversationWorkerRunner(
+        _FakeComponent("retention", log),
+        _FakeComponent("offline", log),
+        _FakeComponent("plan", log),
+        inference,
+        idle_min=timedelta(seconds=5),
+        idle_max=timedelta(seconds=5),
+        provider_consumers=3,
+    )
+    task = asyncio.create_task(consumer.run(stop))
+    # Three provider stages are in flight at once; none waits for another.
+    await asyncio.wait_for(all_in.wait(), 1)
+    release.set()
+    summary = await asyncio.wait_for(task, 1)
+    assert inference.calls == 3
+    assert summary.inference_work == 3
+
+
+@pytest.mark.parametrize("value", [0, MAX_PROVIDER_CONSUMERS + 1, True, 2.0, "2"])
+def test_provider_consumers_are_bounded(value: object) -> None:
+    log: list[str] = []
+    with pytest.raises(ValueError, match="provider consumers"):
+        PipelinedConversationWorkerRunner(
+            _FakeComponent("retention", log),
+            _FakeComponent("offline", log),
+            _FakeComponent("plan", log),
+            _FakeComponent("inference", log),
+            provider_consumers=value,  # type: ignore[arg-type]
+        )

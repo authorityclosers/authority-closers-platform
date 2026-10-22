@@ -113,6 +113,18 @@ def test_rejects_modified_or_ambiguous_configuration(tmp_path: Path, change: str
         load_service_config(path, digest)
 
 
+def test_provider_consumers_default_to_one_and_stay_bounded(tmp_path: Path) -> None:
+    # Manifests sealed before 23 Oct 2026 carry no count: one provider consumer.
+    assert load_service_config(*write_config(tmp_path, manifest(tmp_path))).provider_consumers == 1
+    value = manifest(tmp_path)
+    value["provider_consumers"] = 3
+    assert load_service_config(*write_config(tmp_path, value)).provider_consumers == 3
+    for refused in (0, 9, "3", 2.5, True):
+        value["provider_consumers"] = refused
+        with pytest.raises(ValueError, match="^worker_config_invalid$"):
+            load_service_config(*write_config(tmp_path, value))
+
+
 @pytest.mark.parametrize("field", ["sales_xray_storage_root", "sales_xray_scratch_root"])
 def test_rejects_credentials_inside_audio_storage(tmp_path: Path, field: str) -> None:
     value = manifest(tmp_path)
