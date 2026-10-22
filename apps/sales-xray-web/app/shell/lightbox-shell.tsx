@@ -66,7 +66,7 @@ import { notify } from "../notice-center";
 import { opensInPlace } from "../settings-open";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
-import { phoneTabFor, shellActiveFor } from "./phone-nav";
+import { phoneTabFor, shellActiveFor, type PhoneTab } from "./phone-nav";
 import { RailTip } from "./rail-tip";
 import { usePlacePrefetch, useHoverPrefetch } from "./route-prefetch";
 import { ScreenLink } from "./screen-link";
@@ -126,6 +126,7 @@ import { CommandBar, type Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
 import { leavingOverlay } from "../ui/back-close";
+import { tick } from "../ui/haptics";
 import { LeadsTabIcon } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import styles from "./lightbox-shell.module.css";
@@ -403,6 +404,10 @@ function LightboxShellFrame({
     pageName ?? (inSettings(shownPath) ? "Settings" : undefined),
   );
   const phoneTab = phoneTabFor(shownPath, active);
+  // A light tap in the hand when the phone's tab changes, as iOS does.
+  const tapTab = (tab: PhoneTab) => () => {
+    if (tab !== phoneTab) tick();
+  };
   // Phones call the dashboard Home, as its tab does (owner, 17 Oct).
   const barTitle = place === "dashboard" && !pageName ? "Home" : pageTitle;
   // The selected capsule glides to the new place, on the rail and the tabs.
@@ -1656,6 +1661,7 @@ function LightboxShellFrame({
         <ScreenLink
           className={styles.bottomLink}
           href="/dashboard"
+          onClick={tapTab("dashboard")}
           aria-current={phoneTab === "dashboard" ? "page" : undefined}
         >
           <LayoutGrid size={20} aria-hidden="true" />
@@ -1667,6 +1673,7 @@ function LightboxShellFrame({
           <ScreenLink
             className={styles.bottomLink}
             href="/leads"
+            onClick={tapTab("leads")}
             aria-current={phoneTab === "leads" ? "page" : undefined}
           >
             <LeadsTabIcon size={20} live={leadsBadgeLive} />
@@ -1694,7 +1701,10 @@ function LightboxShellFrame({
           <button
             type="button"
             className={`${styles.bottomLink} ${styles.bottomNew}`}
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              tick();
+              setAddOpen(true);
+            }}
             aria-label="Add a lead or a call"
             aria-haspopup="dialog"
             aria-expanded={addOpen}
@@ -1712,6 +1722,7 @@ function LightboxShellFrame({
           <ScreenLink
             className={styles.bottomLink}
             href="/chats"
+            onClick={tapTab("chats")}
             aria-current={phoneTab === "chats" ? "page" : undefined}
           >
             <ChatsTabIcon size={20} live={leadsBadgeLive} />
@@ -1723,6 +1734,7 @@ function LightboxShellFrame({
           <ScreenLink
             className={styles.bottomLink}
             href="/analysis/calls"
+            onClick={tapTab("calls")}
             aria-current={phoneTab === "calls" ? "page" : undefined}
           >
             <FolderOpen size={20} aria-hidden="true" />
