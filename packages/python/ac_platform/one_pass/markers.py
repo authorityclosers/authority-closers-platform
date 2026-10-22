@@ -14,6 +14,14 @@ MARKER: Final = "FACT_OUTPUT: one-pass-facts-v1."
 # Output bound of the one request (call data, notes and the review: 6.5-9.1k tokens on
 # the 16 real calls, 21 Oct 2026; thinking counts inside it).
 MAX_COMPLETION_TOKENS: Final = 20_000
+# v2 (22 Oct 2026, built with the cost research session): the same request plus the Brain
+# 4.0 18-skill part (one_pass.brain4_part). Its own recipe and marker, so the v1 prompt,
+# schema and every sealed v1 configuration stay byte-identical; a v2 configuration needs
+# its own Root seal (profiles gemini-one-pass-v2, -flex).
+RECIPE_V2: Final = "one-pass-facts-v2"
+PROMPT_REVISION_V2: Final = "one-pass-v2"
+MARKER_V2: Final = "FACT_OUTPUT: one-pass-facts-v2."
+RECIPES: Final = frozenset({RECIPE, RECIPE_V2})
 # Input bound: the whole call's transcript envelope, its instructions and schema.
 MAX_INPUT_BYTES: Final = 512 * 1024
 # The routes the request is implemented for: Gemini 3.8 Flash and GPT-6 Luna (the
