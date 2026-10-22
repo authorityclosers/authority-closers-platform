@@ -22,6 +22,7 @@ import {
   PhoneCall,
   Trophy,
   UserPlus,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -52,7 +53,7 @@ import {
 } from "../leads/journey/journey-client";
 import { KIND_WORDS } from "../leads/stage-tabs";
 import { several, usePipelines } from "../leads/use-pipelines";
-import { Avatar, Delta, Segmented } from "../ui/kit";
+import { ActionList, ActionRow, Avatar, Delta, Segmented } from "../ui/kit";
 import { NeedsYou } from "./needs-you";
 import {
   FunnelSkeleton,
@@ -340,6 +341,16 @@ function TeamHome({ desk }: { desk: Desk | null }) {
         ) : (
           <RowsSkeleton rows={3} kind="seller" />
         )}
+        {/* Owner, 23 Oct 2026: team and organisation were "too hidden". */}
+        <ActionList label="Team">
+          <ActionRow
+            icon={<UsersRound size={20} />}
+            tone="neutral"
+            title="Team & organisation"
+            note="Members, invites, roles and company details"
+            href="/organisation"
+          />
+        </ActionList>
       </section>
 
       <section className={styles.block} aria-labelledby="pipeline-title">
