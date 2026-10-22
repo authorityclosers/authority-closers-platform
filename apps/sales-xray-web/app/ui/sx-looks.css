@@ -1,0 +1,265 @@
+/*
+ * Two design directions for the owner to pick between (22 Oct 2026, owner:
+ * "the design looks and feel of the app can be made better using top UX UI
+ * skills and GitHub repos and things like Apple's Liquid Glass").
+ *
+ * Inert unless <html data-sx-look="glass|pro">, which only the dev server
+ * sets, from ?look= (ui/look.ts). Raw colours are in lightbox/tokens.css;
+ * this file derives the rest. The primitives carry their own look blocks
+ * (ui/kit, ui/sheet, the shell's bars). When the owner picks, the chosen
+ * look becomes the default values and the other one goes.
+ *
+ * A, "glass": Apple's iOS 26. Grouped grey ground, borderless white cards,
+ *   larger type on phones, floating glass bars with a lit rim, sheets that
+ *   float in rounded, springy motion, true black in dark.
+ * B, "pro": Linear and Superhuman. Neutral ground, crisp hairlines, compact
+ *   type with tabular figures, 8 px chips, docked solid bars (cheap on
+ *   mid-range Android), quick motion that never overshoots, graphite dark.
+ */
+
+/* ---------- A: Liquid Glass ---------- */
+
+:root[data-sx-look="glass"] {
+  --sx-elevated: var(--lx-elevated);
+  --lx-radius-sm: 12px;
+  --lx-radius-md: 16px;
+  --lx-radius-lg: 22px;
+  --lx-radius-xl: 30px;
+  --sx-radius-xl: 32px;
+  --sx-gap: 20px;
+  --lx-bottom-nav-h: 78px; /* a 62 px capsule floating 16 px up */
+
+  --sx-text-xs: 12.5px;
+  --sx-text-sm: 14px;
+  --sx-text-md: 15px;
+  --sx-text-panel: 650 16px / 1.3 var(--lx-font-ui);
+  --sx-text-headline: 700 17px / 1.3 var(--lx-font-ui);
+  --sx-text-title: 750 22px / 1.2 var(--lx-font-ui);
+  --sx-text-kpi: 750 30px / 1.05 var(--lx-font-ui);
+  --sx-text-large: 800 32px / 1.1 var(--lx-font-ui);
+  --sx-tracking-title: -0.022em;
+  --sx-row-h: 48px;
+  --sx-badge-h: 22px;
+
+  --sx-press-scale: 0.96;
+  --sx-dur-sheet: 520ms;
+  /* A livelier spring for presses and pills: about 7% overshoot. */
+  --sx-spring: linear(
+    0,
+    0.054,
+    0.18,
+    0.338,
+    0.5,
+    0.645,
+    0.767,
+    0.862,
+    0.931,
+    0.977,
+    1.006,
+    1.022,
+    1.03,
+    1.031,
+    1.028,
+    1.022,
+    1.016,
+    1.01,
+    1.005,
+    1.002,
+    1,
+    0.999,
+    1
+  );
+}
+
+/* Phones: Apple's text sizes, so rows read outdoors at arm's length. */
+@media (pointer: coarse) {
+  :root[data-sx-look="glass"] {
+    --sx-text-xs: 13px;
+    --sx-text-sm: 15px;
+    --sx-text-md: 16.5px;
+  }
+}
+
+:root[data-sx-look="glass"]:not([data-theme="dark"]) {
+  --sx-hairline: color-mix(in oklab, var(--lx-ink) 7%, transparent);
+  --sx-fill-soft: color-mix(in oklab, var(--lx-ink-3) 5%, transparent);
+  --sx-fill: color-mix(in oklab, var(--lx-ink-3) 9%, transparent);
+  --sx-fill-strong: color-mix(in oklab, var(--lx-ink-3) 14%, transparent);
+  --sx-shadow-1:
+    0 1px 2px color-mix(in oklab, var(--lx-ink) 5%, transparent),
+    0 0 0 0.5px color-mix(in oklab, var(--lx-ink) 4%, transparent);
+  --sx-shadow-2:
+    0 12px 32px -16px color-mix(in oklab, var(--lx-ink) 26%, transparent),
+    0 0 0 0.5px color-mix(in oklab, var(--lx-ink) 6%, transparent);
+  --sx-shadow-float:
+    0 18px 44px -12px color-mix(in oklab, var(--lx-ink) 26%, transparent),
+    0 0 0 0.5px color-mix(in oklab, var(--lx-ink) 8%, transparent);
+  --sx-scrim: color-mix(in oklab, var(--lx-ink) 26%, transparent);
+  /* Liquid Glass, approximated: a light tint over a strong blur, a lit
+     rim (bright top edge, faint lower edge) and a hairline so it reads on
+     white. */
+  --sx-glass: color-mix(in oklab, white 60%, transparent);
+  --sx-glass-thick: color-mix(in oklab, white 84%, transparent);
+  --sx-glass-blur: blur(24px) saturate(190%);
+  --sx-glass-edge: color-mix(in oklab, white 70%, transparent);
+  --sx-glass-shine:
+    inset 0 1px 0.5px color-mix(in oklab, white 95%, transparent),
+    inset 0 -0.5px 0 color-mix(in oklab, white 50%, transparent);
+  --sx-glass-shadow:
+    0 0 0 0.5px color-mix(in oklab, var(--lx-ink) 10%, transparent),
+    0 14px 34px -12px color-mix(in oklab, var(--lx-ink) 24%, transparent),
+    0 2px 6px color-mix(in oklab, var(--lx-ink) 5%, transparent);
+  --sx-glass-lens: color-mix(in oklab, white 92%, transparent);
+}
+
+:root[data-sx-look="glass"][data-theme="dark"] {
+  --sx-hairline: color-mix(in oklab, white 9%, transparent);
+  --sx-fill-soft: color-mix(in oklab, white 5%, transparent);
+  --sx-fill: color-mix(in oklab, white 9%, transparent);
+  --sx-fill-strong: color-mix(in oklab, white 14%, transparent);
+  --sx-shadow-1: 0 0 0 0.5px var(--sx-hairline);
+  --sx-shadow-2:
+    0 14px 34px -14px color-mix(in oklab, black 80%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
+  --sx-scrim: color-mix(in oklab, black 55%, transparent);
+  --sx-glass: color-mix(in oklab, var(--lx-elevated) 58%, transparent);
+  --sx-glass-thick: color-mix(in oklab, var(--lx-elevated) 84%, transparent);
+  --sx-glass-blur: blur(24px) saturate(170%);
+  --sx-glass-edge: color-mix(in oklab, white 13%, transparent);
+  --sx-glass-shine:
+    inset 0 1px 0.5px color-mix(in oklab, white 18%, transparent),
+    inset 0 -0.5px 0 color-mix(in oklab, white 6%, transparent);
+  --sx-glass-shadow:
+    0 0 0 0.5px color-mix(in oklab, black 70%, transparent),
+    0 16px 40px -12px color-mix(in oklab, black 85%, transparent);
+  --sx-glass-lens: color-mix(in oklab, white 15%, transparent);
+}
+
+/* ---------- B: Precision ---------- */
+
+:root[data-sx-look="pro"] {
+  --sx-elevated: var(--lx-elevated);
+  --lx-radius-xs: 4px;
+  --lx-radius-sm: 8px;
+  --lx-radius-md: 10px;
+  --lx-radius-lg: 12px;
+  --lx-radius-xl: 14px;
+  --lx-radius-pill: 8px;
+  --sx-radius-pill: 8px;
+  --sx-radius-xl: 16px;
+  --lx-bottom-nav-h: 58px; /* docked to the edge, no float */
+
+  --sx-text-panel: 600 14px / 1.35 var(--lx-font-ui);
+  --sx-text-headline: 650 16px / 1.3 var(--lx-font-ui);
+  --sx-text-title: 680 19px / 1.25 var(--lx-font-ui);
+  --sx-text-kpi: 650 24px / 1.1 var(--lx-font-ui);
+  --sx-text-large: 700 24px / 1.15 var(--lx-font-ui);
+  --sx-tracking-title: -0.02em;
+  --sx-badge-h: 20px;
+
+  --sx-press-scale: 0.98;
+  --sx-dur-fast: 110ms;
+  --sx-dur-base: 160ms;
+  --sx-dur-page: 200ms;
+  --sx-dur-sheet: 300ms;
+  /* Quick and exact: no overshoot anywhere. */
+  --sx-spring: cubic-bezier(0.2, 0.9, 0.1, 1);
+  --sx-spring-calm: cubic-bezier(0.32, 0.72, 0, 1);
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-sx-look="pro"]:not([data-theme="dark"]) {
+  --sx-hairline: var(--lx-line);
+  --sx-fill-soft: color-mix(in oklab, var(--lx-ink) 3%, transparent);
+  --sx-fill: color-mix(in oklab, var(--lx-ink) 5%, transparent);
+  --sx-fill-strong: color-mix(in oklab, var(--lx-ink) 8%, transparent);
+  --sx-shadow-1: 0 0 0 1px var(--lx-line);
+  --sx-shadow-2:
+    0 1px 2px color-mix(in oklab, var(--lx-ink) 4%, transparent),
+    0 0 0 1px var(--lx-line);
+  --sx-shadow-float:
+    0 16px 36px -16px color-mix(in oklab, var(--lx-ink) 26%, transparent),
+    0 0 0 1px var(--lx-line);
+  --sx-scrim: color-mix(in oklab, var(--lx-ink) 36%, transparent);
+  /* Thick, nearly solid bars: a light blur, so scrolling stays smooth on a
+     mid-range phone. */
+  --sx-glass: color-mix(in oklab, var(--lx-paper) 90%, transparent);
+  --sx-glass-thick: color-mix(in oklab, var(--lx-surface) 95%, transparent);
+  --sx-glass-blur: blur(10px) saturate(140%);
+  --sx-glass-edge: var(--lx-line);
+  --sx-glass-shine: 0 0 0 0 transparent;
+  --sx-glass-shadow:
+    0 16px 36px -18px color-mix(in oklab, var(--lx-ink) 28%, transparent),
+    0 1px 2px color-mix(in oklab, var(--lx-ink) 4%, transparent);
+  --sx-glass-lens: var(--sx-fill);
+}
+
+:root[data-sx-look="pro"][data-theme="dark"] {
+  --sx-hairline: var(--lx-line);
+  --sx-fill-soft: color-mix(in oklab, white 3%, transparent);
+  --sx-fill: color-mix(in oklab, white 6%, transparent);
+  --sx-fill-strong: color-mix(in oklab, white 10%, transparent);
+  --sx-shadow-1: 0 0 0 1px var(--lx-line);
+  --sx-shadow-2:
+    0 12px 28px -14px color-mix(in oklab, black 80%, transparent),
+    0 0 0 1px var(--lx-line);
+  --sx-shadow-float:
+    0 18px 40px -14px color-mix(in oklab, black 85%, transparent),
+    0 0 0 1px var(--lx-line-strong);
+  --sx-scrim: color-mix(in oklab, black 60%, transparent);
+  --sx-glass: color-mix(in oklab, var(--lx-paper) 90%, transparent);
+  --sx-glass-thick: color-mix(in oklab, var(--lx-elevated) 96%, transparent);
+  --sx-glass-blur: blur(10px) saturate(140%);
+  --sx-glass-edge: var(--lx-line);
+  --sx-glass-shine: 0 0 0 0 transparent;
+  --sx-glass-shadow: 0 16px 36px -16px
+    color-mix(in oklab, black 85%, transparent);
+  --sx-glass-lens: var(--sx-fill);
+}
+
+/* ---------- Fallbacks, for both looks ----------
+   Glass is solid where the browser can't blur, where the person asks for
+   less transparency or more contrast, and on low-memory phones
+   (data-sx-glass="lite", set by ui/look.ts), where a big blur drops frames
+   while scrolling. The doubled attribute outranks the look blocks above. */
+
+:root[data-sx-look][data-sx-look][data-sx-glass="lite"] {
+  --sx-glass: color-mix(in oklab, var(--lx-elevated) 92%, transparent);
+  --sx-glass-thick: color-mix(in oklab, var(--lx-elevated) 96%, transparent);
+  --sx-glass-blur: blur(8px);
+}
+
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  :root[data-sx-look][data-sx-look][data-sx-look] {
+    --sx-glass: var(--sx-elevated);
+    --sx-glass-thick: var(--sx-elevated);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-sx-look][data-sx-look][data-sx-look] {
+    --sx-glass: var(--sx-elevated);
+    --sx-glass-thick: var(--sx-elevated);
+    --sx-glass-blur: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root[data-sx-look][data-sx-look][data-sx-look] {
+    --sx-glass: var(--sx-elevated);
+    --sx-glass-thick: var(--sx-elevated);
+    --sx-glass-blur: none;
+    --sx-glass-edge: var(--lx-line-strong);
+    --sx-hairline: var(--lx-line-strong);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-sx-look][data-sx-look] {
+    --sx-spring: var(--sx-ease-out);
+    --sx-spring-calm: var(--sx-ease-out);
+    --sx-dur-sheet: 200ms;
+  }
+}

@@ -484,3 +484,111 @@
   --xr-solid-text: #ffffff;
   --xr-on-mark: #ffffff;
 }
+
+/* ---------- Design directions (dev preview, 22 Oct 2026) ----------
+ * Two looks for the owner to pick between (owner, 22 Oct: "premium,
+ * Apple-grade, things like Apple's Liquid Glass"). Inert unless
+ * <html data-sx-look="glass|pro">, which only the dev server sets, from
+ * ?look= (ui/look.ts). The derived tokens, type and motion are in
+ * ui/sx-looks.css. Text pairs: 4.5:1 or more on paper, surface and sunken
+ * (glass light muted-2 4.5 on sunken; it never sits there).
+ *
+ * Glass (A): iOS 26. Grouped grey ground, white cards, true black in dark. */
+:root[data-sx-look="glass"]:not([data-theme="dark"]) {
+  --lx-ink: #0a0c10;
+  --lx-ink-2: #1d212a;
+  --lx-ink-3: #3a404c;
+  --lx-muted: #5b626e;
+  --lx-muted-2: #646b77;
+  --lx-line: #e4e6eb;
+  --lx-line-soft: #eceef2;
+  --lx-line-strong: #cdd1d8;
+  --lx-paper: #f2f3f7;
+  --lx-paper-2: #f7f8fa;
+  --lx-surface: #ffffff;
+  --lx-sunken: #ebedf1;
+  --lx-elevated: #ffffff;
+  --lx-teal: #07746b;
+  --lx-teal-hover: #05625a;
+  --lx-teal-2: #12a594;
+  --lx-teal-soft: #ddf4ef;
+  --lx-teal-tint: #eef9f6;
+  --lx-teal-edge: #b4e6da;
+  --lx-danger: #c4262e;
+  --lx-danger-soft: #fdecec;
+  --lx-warning: #a84f06;
+  --lx-warning-soft: #fff3e3;
+  --lx-focus-ink: #8f3f05;
+  --lx-avatar-top: #a3a9b4;
+  --lx-avatar-bottom: #7d838e;
+}
+
+:root[data-sx-look="glass"][data-theme="dark"] {
+  --lx-ink: #f5f5f7;
+  --lx-ink-2: #e5e5ea;
+  --lx-ink-3: #c7c7cc;
+  --lx-muted: #a1a1a8;
+  --lx-muted-2: #98989f;
+  --lx-line: #2a2a2d;
+  --lx-line-soft: #222225;
+  --lx-line-strong: #3a3a3e;
+  --lx-paper: #000000;
+  --lx-paper-2: #0b0b0c;
+  --lx-surface: #1c1c1e;
+  --lx-sunken: #151517;
+  --lx-elevated: #2c2c2e;
+  --lx-film: #000000;
+  --lx-teal: #2dd4bf;
+  --lx-teal-hover: #5eead4;
+  --lx-teal-2: #5eead4;
+  --lx-danger: #ff6b61;
+  --lx-warning: #f5a524;
+  --lx-focus-ink: #fbbf24;
+  --lx-avatar-top: #6e727b;
+  --lx-avatar-bottom: #4f535b;
+}
+
+/* Precision (B): Linear and Superhuman. Neutral ground, hairlines, graphite
+   in dark. */
+:root[data-sx-look="pro"]:not([data-theme="dark"]) {
+  --lx-ink: #111214;
+  --lx-ink-2: #232428;
+  --lx-ink-3: #3c3e44;
+  --lx-muted: #5d606a;
+  --lx-muted-2: #676a74;
+  --lx-line: #e6e6e9;
+  --lx-line-soft: #eeeef0;
+  --lx-line-strong: #d4d4d8;
+  --lx-paper: #f7f7f8;
+  --lx-paper-2: #fbfbfc;
+  --lx-surface: #ffffff;
+  --lx-sunken: #f0f0f2;
+  --lx-elevated: #ffffff;
+  --lx-teal: #0a7369;
+  --lx-teal-hover: #075f57;
+  --lx-teal-soft: #e0f2ef;
+  --lx-teal-tint: #f0f8f6;
+  --lx-teal-edge: #b9e0d9;
+  --lx-danger: #c0261b;
+  --lx-warning: #a54d05;
+  --lx-focus-ink: #8f3f05;
+}
+
+:root[data-sx-look="pro"][data-theme="dark"] {
+  --lx-ink: #ededef;
+  --lx-ink-2: #d9d9dd;
+  --lx-ink-3: #b4b5bb;
+  --lx-muted: #8f919a;
+  --lx-muted-2: #878992;
+  --lx-line: #242428;
+  --lx-line-soft: #1c1c1f;
+  --lx-line-strong: #303035;
+  --lx-paper: #0b0b0c;
+  --lx-paper-2: #101012;
+  --lx-surface: #141416;
+  --lx-sunken: #0f0f11;
+  --lx-elevated: #1b1b1e;
+  --lx-film: #050506;
+  --lx-teal: #2dd4bf;
+  --lx-teal-hover: #5eead4;
+}

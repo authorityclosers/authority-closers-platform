@@ -224,3 +224,116 @@
     padding: 14px 24px;
   }
 }
+
+/* ---------- Design directions (dev preview, ui/sx-looks.css) ----------
+   A "glass": on phones the sheet floats in from the bottom, rounded on all
+   corners and inset from the edges, as iOS 26's sheets do; on computers a
+   floating glass panel. B "pro": attached to the edge, solid, hairline
+   edged; on computers a full-height side panel. */
+
+:global(:root[data-sx-look="glass"]) .panel {
+  border: 0.5px solid var(--sx-glass-edge);
+}
+
+@media (max-width: 899.98px) {
+  :global(:root[data-sx-look="glass"]) .panel {
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    max-height: calc(
+      100dvh - max(env(safe-area-inset-top, 0px), 12px) - 36px -
+        env(safe-area-inset-bottom, 0px)
+    );
+    padding-bottom: 0;
+    border-radius: 34px;
+  }
+
+  :global(:root[data-sx-look="pro"]) .panel {
+    border-radius: 16px 16px 0 0;
+  }
+}
+
+:global(:root[data-sx-look="glass"]) .grabber {
+  width: 40px;
+  margin-top: 7px;
+}
+
+:global(:root[data-sx-look="glass"]) .head {
+  padding: 12px 12px 10px 22px;
+}
+
+:global(:root[data-sx-look="glass"]) .title {
+  font: var(--sx-text-headline);
+}
+
+:global(:root[data-sx-look="glass"]) .close {
+  width: 34px;
+  height: 34px;
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+}
+
+:global(:root[data-sx-look="glass"]) .footer {
+  border-top: 0;
+  padding: 10px 16px 16px;
+}
+
+:global(:root[data-sx-look="pro"]) .panel {
+  border: 0;
+  border-top: 1px solid var(--lx-line);
+  background: var(--sx-elevated);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--sx-shadow-float);
+}
+
+:global(:root[data-sx-look="pro"]) .grabber {
+  width: 32px;
+  height: 4px;
+}
+
+:global(:root[data-sx-look="pro"]) .close {
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sx-muted);
+}
+
+:global(:root[data-sx-look="pro"]) .close:hover {
+  background: var(--sx-fill);
+}
+
+:global(:root[data-sx-look="pro"]) .footer {
+  border-top-color: var(--lx-line);
+}
+
+@media (min-width: 900px) {
+  :global(:root[data-sx-look="glass"]) .panel {
+    border-radius: 28px;
+  }
+
+  :global(:root[data-sx-look="pro"]) .panel {
+    border: 1px solid var(--lx-line);
+    border-radius: 12px;
+  }
+
+  :global(:root[data-sx-look="glass"]) .sheet[data-wide="right"] .panel {
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    left: auto;
+  }
+
+  :global(:root[data-sx-look="pro"]) .sheet[data-wide="right"] .panel {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    border: 0;
+    border-left: 1px solid var(--lx-line);
+    border-radius: 0;
+  }
+
+  :global(:root[data-sx-look="pro"]) .sheet[data-wide="center"] .panel {
+    border: 1px solid var(--lx-line);
+    border-radius: 12px;
+  }
+}

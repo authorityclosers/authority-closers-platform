@@ -8,6 +8,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Inbox } from "lucide-react";
 
 import {
+  ActionList,
+  ActionRow,
   Avatar,
   Delta,
   Dialog,
@@ -285,4 +287,37 @@ it("closes a dialog from its X and from a press on the backdrop, not from inside
     );
   });
   expect(onClose).toHaveBeenCalledTimes(2);
+});
+
+it("makes action rows one tap each: a link to a place, a button for an act", async () => {
+  const onPick = vi.fn();
+  await act(async () =>
+    root.render(
+      <ActionList label="Leads settings">
+        <ActionRow
+          icon={<Inbox size={20} />}
+          title="Team"
+          note="Who takes new leads"
+          href="/leads?tab=team"
+        />
+        <ActionRow title="Import" note="A file of leads" onClick={onPick} />
+        <ActionRow title="Test leads" tone="warn" disabled end="Off" />
+      </ActionList>,
+    ),
+  );
+  const list = host.querySelector('ul[aria-label="Leads settings"]')!;
+  expect(list.querySelectorAll("li")).toHaveLength(3);
+  const link = list.querySelector("a")!;
+  expect(link.getAttribute("href")).toBe("/leads?tab=team");
+  expect(link.textContent).toContain("Who takes new leads");
+  const [importRow, testRow] = [...list.querySelectorAll("button")];
+  expect(importRow.getAttribute("type")).toBe("button");
+  await act(async () => importRow.click());
+  expect(onPick).toHaveBeenCalledTimes(1);
+  expect(testRow.disabled).toBe(true);
+  expect(testRow.textContent).toContain("Off");
+  // The icon tile is decoration; the words carry the meaning.
+  expect(
+    link.querySelector('[data-tone="accent"]')?.getAttribute("aria-hidden"),
+  ).toBe("true");
 });

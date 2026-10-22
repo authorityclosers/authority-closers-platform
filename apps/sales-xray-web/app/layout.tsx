@@ -6,12 +6,14 @@ import "@fontsource-variable/noto-sans-devanagari/wght.css";
 import "@fontsource-variable/noto-serif-devanagari/wght.css";
 import "./lightbox/tokens.css";
 import "./styles.css";
+import "./ui/sx-looks.css";
 import { UploadSessionProvider } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
 import { themeControlEnabled, themeInitScript } from "./lightbox/theme";
 import { earlyReadsScript } from "./early-reads";
 import { sidebarInitScript } from "./shell/shell-store";
 import { inAppInitScript } from "./in-app";
+import { lookInitScript, lookPreviewEnabled } from "./ui/look";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
 import { AppSession } from "./app-session";
@@ -60,6 +62,14 @@ export default async function Layout({
     // The pre-paint script may change the theme attributes before hydration.
     <html lang="en" data-lx-root="" data-theme="light" suppressHydrationWarning>
       <body className="sales-xray-document">
+        {/* Dev only: ?look= previews a design direction and ?theme= a theme
+            (ui/look.ts); before the theme script, which reads it. */}
+        {lookPreviewEnabled({ NODE_ENV: process.env.NODE_ENV }) ? (
+          <script
+            id="sales-xray-look-init"
+            dangerouslySetInnerHTML={{ __html: lookInitScript() }}
+          />
+        ) : null}
         {themeControl ? (
           <script
             id="sales-xray-theme-init"

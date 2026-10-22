@@ -584,6 +584,94 @@ export function Row({
 }
 
 /**
+ * A list of things to do or open: menus, settings lists, action sheets
+ * (design system, 22 Oct 2026). Each row is one tap target at least 56 px
+ * tall: an icon tile in a tone, a title with one line of note, an optional
+ * end (a count, a value) and a chevron.
+ *
+ *   <ActionList label="Leads settings">
+ *     <ActionRow icon={<Users size={20} />} title="Team" note="Who takes leads" href="/leads?tab=team" />
+ *     <ActionRow icon={<Upload size={20} />} title="Import" note="A file of leads" onClick={openImport} />
+ *   </ActionList>
+ */
+export function ActionList({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label?: string;
+}) {
+  return (
+    <ul className={styles.actionList} aria-label={label}>
+      {children}
+    </ul>
+  );
+}
+
+export function ActionRow({
+  icon,
+  title,
+  note,
+  href,
+  onClick,
+  tone = "accent",
+  end,
+  disabled = false,
+  chevron = true,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  note?: ReactNode;
+  /** A place to go: the row is a link. Otherwise it is a button. */
+  href?: string;
+  onClick?: () => void;
+  tone?: Tone;
+  end?: ReactNode;
+  disabled?: boolean;
+  chevron?: boolean;
+}) {
+  const inside = (
+    <>
+      {icon ? (
+        <span className={styles.actionIcon} data-tone={tone} aria-hidden="true">
+          {icon}
+        </span>
+      ) : null}
+      <span className={styles.actionWords}>
+        <strong>{title}</strong>
+        {note ? <small>{note}</small> : null}
+      </span>
+      {end ? <span className={styles.actionEnd}>{end}</span> : null}
+      {chevron ? (
+        <ChevronRight
+          className={styles.actionChevron}
+          size={18}
+          aria-hidden="true"
+        />
+      ) : null}
+    </>
+  );
+  return (
+    <li className={styles.actionItem}>
+      {href && !disabled ? (
+        <Link href={href} className={styles.actionRow} onClick={onClick}>
+          {inside}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          className={styles.actionRow}
+          onClick={onClick}
+          disabled={disabled}
+        >
+          {inside}
+        </button>
+      )}
+    </li>
+  );
+}
+
+/**
  * A Linear-style table on wide screens. Pass `cards` to show the same rows
  * as cards on phones (below 760 px) instead of a sideways-scrolling table.
  */

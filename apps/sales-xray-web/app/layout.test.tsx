@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import Layout from "./layout";
 import { themeInitScript } from "./lightbox/theme";
+import { lookInitScript } from "./ui/look";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -13,12 +14,12 @@ async function markup() {
   return renderToStaticMarkup(await Layout({ children: <p>Workspace</p> }));
 }
 
-it("marks the standalone document, starts light and runs the theme script first", async () => {
+it("marks the standalone document, starts light and runs the look switch, then the theme script, first", async () => {
   vi.stubEnv("NODE_ENV", "development");
   const html = await markup();
   expect(html).toMatch(/^<html lang="en" data-lx-root="" data-theme="light">/);
   expect(html).toContain(
-    `<body class="sales-xray-document"><script id="sales-xray-theme-init">${themeInitScript()}</script>`,
+    `<body class="sales-xray-document"><script id="sales-xray-look-init">${lookInitScript()}</script><script id="sales-xray-theme-init">${themeInitScript()}</script>`,
   );
   expect(html).toContain("<p>Workspace</p>");
 });
@@ -29,6 +30,8 @@ it("keeps production light, with no theme script, until the theme is released", 
   const production = await markup();
   expect(production).toContain('data-theme="light"');
   expect(production).not.toContain("sales-xray-theme-init");
+  // The design-direction switch (?look=, ?theme=) is the dev server's only.
+  expect(production).not.toContain("sales-xray-look-init");
 
   vi.stubEnv("AC_SALES_XRAY_THEME_PREVIEW", "1");
   expect(await markup()).toContain('<script id="sales-xray-theme-init">');
