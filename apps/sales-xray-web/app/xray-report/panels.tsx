@@ -26,7 +26,7 @@ import {
 } from "./model";
 import { OverviewScore } from "./overview";
 import { readStructure } from "./structure";
-import { Brain4Analysis } from "./brain4-view";
+import { Brain4Analysis, Brain4Pending } from "./brain4-view";
 import { FinalOutcome } from "./outcome";
 import { CallAnalysis, PointerProgress } from "./pointers";
 import { ProspectPart } from "./prospect";
@@ -175,23 +175,32 @@ function OverviewPart(props: PartProps) {
   return <OverviewScore view={view} onSelect={props.onSelect} />;
 }
 
+/**
+ * The Analysis. With Report settings scoring "brain4_beta" (owner, 22 Oct 2026: the
+ * coaching lead's report structure "to be live only") the 18 skills are the Analysis;
+ * the 27-point review shows only for a call that has no Brain 4.0 read.
+ */
 function AnalysisPart(props: PartProps) {
   const view = useXrayView(props.data, props.callId, props.illustration);
   const look = useReportLook();
-  return (
-    <>
-      {look.scoring === "brain4_beta" && view.brain4 ? (
-        <Brain4Analysis view={view.brain4} onSelect={props.onSelect} />
-      ) : null}
-      <CallAnalysis
-        pointers={view.pointers}
-        illustrative={view.illustrative}
-        aiDraft={view.aiDraft}
-        scoring={view.scoring}
-        onSelect={props.onSelect}
-      />
-    </>
+  const pointers = (
+    <CallAnalysis
+      pointers={view.pointers}
+      illustrative={view.illustrative}
+      aiDraft={view.aiDraft}
+      scoring={view.scoring}
+      onSelect={props.onSelect}
+    />
   );
+  if (look.scoring !== "brain4_beta" || view.illustrative) return pointers;
+  if (!view.brain4)
+    return (
+      <>
+        {view.pointers.length ? <Brain4Pending /> : null}
+        {pointers}
+      </>
+    );
+  return <Brain4Analysis view={view.brain4} onSelect={props.onSelect} />;
 }
 
 function ProspectSection(props: PartProps) {
@@ -209,6 +218,8 @@ function ProspectSection(props: PartProps) {
 function AnalysisProgress(props: PartProps) {
   const view = useXrayView(props.data, props.callId, props.illustration);
   const look = useReportLook();
+  if (look.scoring === "brain4_beta" && view.brain4 && !view.illustrative)
+    return null;
   return <PointerProgress pointers={lookPointers(view.pointers, look)} />;
 }
 
@@ -290,9 +301,16 @@ export function xrayReportPanels(
     },
     {
       id: "analysis",
-      label: "Detailed Call Analysis",
-      compactLabel: "Analysis",
-      summary: `Analysis based on ${lookPointers(unscoredPointers(), look).length} key sales conversation pointers. Expand each one to see detailed feedback, examples, and recommendations.`,
+      label:
+        look.scoring === "brain4_beta"
+          ? "AI Coaching Score"
+          : "Detailed Call Analysis",
+      compactLabel:
+        look.scoring === "brain4_beta" ? "Coaching score" : "Analysis",
+      summary:
+        look.scoring === "brain4_beta"
+          ? "18 sales skills in 3 areas, each rated 1 to 5 by AI on the coaching lead's Brain 4.0 rubric. Open a skill to see what happened, the moment in the call and what to do next time."
+          : `Analysis based on ${lookPointers(unscoredPointers(), look).length} key sales conversation pointers. Expand each one to see detailed feedback, examples, and recommendations.`,
       icon: <ListChecks />,
       aside: <AnalysisProgress {...props} />,
       content: (

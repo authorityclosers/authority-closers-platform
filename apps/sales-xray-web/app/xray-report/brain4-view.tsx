@@ -28,6 +28,30 @@ const CATEGORY: Record<string, string> = {
   moving_the_sale_forward: "Moving the Sale Forward",
 };
 
+const CONFIDENCE = { high: "High", medium: "Medium", low: "Low" } as const;
+
+const CALL_TYPES: Record<string, string> = {
+  inbound: "Inbound call",
+  cold: "Cold call",
+  scheduled: "Scheduled call",
+  follow_up: "Follow-up call",
+  referral: "Referral call",
+  existing_client: "Existing client",
+  re_engagement: "Re-engagement call",
+  operational: "Operational call",
+};
+
+// The rubric's scale, as every skill's locked scoring table words it.
+const LEGEND =
+  "5 clearly helped the call · 4 worked, small gaps only · 3 ordinary or mixed · " +
+  "2 weak, caused friction · 1 damaging · – not enough to judge";
+
+function span(source: { start_ms: number; end_ms: number }) {
+  return source.end_ms > source.start_ms
+    ? `${clock(source.start_ms)}–${clock(source.end_ms)}`
+    : clock(source.start_ms);
+}
+
 function Chip({ dimension }: { dimension: Brain4Dimension }) {
   const band = brain4Band(dimension.rating);
   if (!band)
@@ -75,7 +99,7 @@ function Detail({
             <ul className={styles.bullets}>
               {dimension.evidence.map((source) => (
                 <li key={source.segment_id}>
-                  {clock(source.start_ms)} “{source.quote}”{" "}
+                  {span(source)} “{source.quote}”{" "}
                   <PlayChip
                     source={source}
                     title={dimension.label}
@@ -84,6 +108,11 @@ function Detail({
                 </li>
               ))}
             </ul>
+          ) : null}
+          {dimension.confidence ? (
+            <p className={`${styles.body} ${styles.muted}`}>
+              Confidence: {CONFIDENCE[dimension.confidence]}
+            </p>
           ) : null}
         </div>
       </div>
@@ -123,8 +152,12 @@ function Detail({
 }
 
 /**
- * Brain 4.0's 18 skills for this call (Report settings: "Brain 4.0 beta"),
- * above the 27 pointers. A beta read by AI, never an official score.
+ * The AI coaching score (owner, 22 Oct 2026: "get that out a beta and the new brain live";
+ * "the report structure given by dipak to be live only"): the coaching lead's Brain 4.0
+ * report for this call, his 18 skills in 3 categories, each with its 1-5 rating, what
+ * happened, the timed evidence, confidence and the next-call coaching (the rubric's own
+ * analyser output). It is the Report's scoring wherever the call has a Brain 4.0 read.
+ * Rated by AI: never called certified or official; the AC-SVAL gold checks continue.
  */
 export function Brain4Analysis({
   view,
@@ -145,16 +178,15 @@ export function Brain4Analysis({
     <section
       className={styles.xr}
       data-xray-part="brain4"
-      aria-label="Brain 4.0 skills (beta)"
+      aria-label="AI coaching score"
     >
       <div className={styles.filters}>
-        <strong>Brain 4.0 · 18 skills</strong>
-        <span
-          className={`${styles.illustrative} ${styles.beta}`}
-          title={`Brain 4.0 beta (${view.calibration ?? view.version}): an AI read, not an official score`}
-        >
-          Beta
-        </span>
+        <strong>AI coaching score · 18 skills</strong>
+        {view.callType ? (
+          <span className={styles.filter}>
+            {CALL_TYPES[view.callType] ?? view.callType}
+          </span>
+        ) : null}
         {view.categories.map((category) => (
           <span key={category.id} className={styles.filter}>
             {CATEGORY[category.id] ?? category.label}
@@ -167,6 +199,11 @@ export function Brain4Analysis({
           </span>
         ))}
       </div>
+      <p className={`${styles.coachNote} ${styles.muted}`}>
+        {view.rated
+          ? `Rated by AI on the coaching lead's Brain 4.0 rubric: ${view.rated} of 18 skills had enough in this call to judge. ${LEGEND}.`
+          : "This call was too short, or had too little conversation, to judge the 18 skills. Every skill shows – until a longer call."}
+      </p>
       <div className={`${styles.card} ${styles.table}`}>
         <div className={styles.tableHead} aria-hidden="true">
           <span>#</span>
@@ -195,7 +232,7 @@ export function Brain4Analysis({
                   aria-controls={`xray-brain4-${dimension.id}`}
                   aria-label={`${dimension.number}. ${dimension.label}: ${
                     dimension.rating !== null
-                      ? `${dimension.rating} out of 5, beta`
+                      ? `${dimension.rating} out of 5`
                       : "not rated"
                   }. ${isOpen ? "Hide details" : "View more"}`}
                   onClick={() => toggle(dimension.id)}
@@ -228,6 +265,26 @@ export function Brain4Analysis({
           })}
         </ol>
       </div>
+    </section>
+  );
+}
+
+/** An analysed call without a Brain 4.0 read yet: new calls get one within minutes. */
+export function Brain4Pending() {
+  return (
+    <section
+      className={styles.xr}
+      data-xray-part="brain4-pending"
+      aria-label="AI coaching score"
+    >
+      <div className={styles.filters}>
+        <strong>AI coaching score · 18 skills</strong>
+      </div>
+      <p className={`${styles.card} ${styles.empty}`}>
+        <Clock3 aria-hidden="true" /> The AI coaching score isn&apos;t ready for
+        this call yet. New calls get it within a few minutes of their report;
+        until then the earlier analysis is shown below.
+      </p>
     </section>
   );
 }

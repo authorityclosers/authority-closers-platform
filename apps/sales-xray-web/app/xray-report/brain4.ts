@@ -1,4 +1,5 @@
 import type { ReportEvidence } from "../report-contract";
+import type { Line } from "../report-story-model";
 
 /**
  * Brain 4.0 (the coaching lead's 18-skill rubric, brain4.py) as the API saves it
@@ -16,6 +17,8 @@ export type Brain4Dimension = {
   applicability: "applicable" | "not_applicable" | "not_enough_evidence";
   observed: string | null;
   coaching: string | null;
+  /** How sure the read is; it never changes the rating (rubric). */
+  confidence: "high" | "medium" | "low" | null;
   /** D07 only: PASS, WARN or FAIL. */
   ethicsGate: "PASS" | "WARN" | "FAIL" | null;
   evidence: ReportEvidence[];
@@ -33,6 +36,9 @@ export type Brain4Category = {
 export type Brain4View = {
   version: string;
   calibration: string | null;
+  /** How many of the 18 skills the call gave enough to rate. */
+  rated: number;
+  callType: string | null;
   ethicsGate: Brain4Dimension["ethicsGate"];
   categories: Brain4Category[];
   dimensions: Brain4Dimension[];
@@ -45,6 +51,7 @@ const isObject = (value: unknown): value is Json =>
 const text = (value: unknown, max = 600) =>
   typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
 const GATES = ["PASS", "WARN", "FAIL"] as const;
+const CONFIDENCE = ["high", "medium", "low"] as const;
 const gate = (value: unknown) =>
   (GATES as readonly unknown[]).includes(value)
     ? (value as Brain4Dimension["ethicsGate"])
@@ -92,6 +99,11 @@ export function readBrain4(
         applicability,
         observed: text(item.observed, 400),
         coaching: rating !== null ? text(item.coaching, 300) : null,
+        confidence:
+          rating !== null &&
+          (CONFIDENCE as readonly unknown[]).includes(item.confidence)
+            ? (item.confidence as Brain4Dimension["confidence"])
+            : null,
         ethicsGate: rating !== null ? gate(item.ethics_gate) : null,
         evidence: evidence(item.evidence).slice(0, 2),
       };
@@ -117,9 +129,12 @@ export function readBrain4(
   const calibration = isObject(value.calibration)
     ? text(value.calibration.revision, 80)
     : null;
+  const callType = text(value.call_type, 40);
   return {
     version: value.version,
     calibration,
+    rated: dimensions.filter((d) => d.rating !== null).length,
+    callType: callType && callType !== "unknown" ? callType : null,
     ethicsGate: dimensions.find((d) => d.id === "D07")?.ethicsGate ?? null,
     categories: categories.filter((c) => c.id && c.label),
     dimensions,
@@ -135,4 +150,36 @@ export function brain4Band(
   if (rating === 4) return "good";
   if (rating === 3) return "average";
   return "needs_improvement";
+}
+
+/**
+ * The Overview's two highlights from the 18 skills: the best-rated skill and what
+ * happened in it, and the lowest-rated skill with its next-call coaching. Ties go to
+ * the earlier skill. None when no skill qualifies.
+ */
+export function brain4Highlights(view: Brain4View): {
+  strength: Line | null;
+  improvement: Line | null;
+} {
+  const rated = view.dimensions.filter(
+    (d): d is Brain4Dimension & { rating: number } => d.rating !== null,
+  );
+  const best = rated
+    .filter((d) => d.rating >= 4 && d.observed)
+    .reduce<
+      (typeof rated)[number] | null
+    >((top, d) => (top === null || d.rating > top.rating ? d : top), null);
+  const worst = rated
+    .filter((d) => d.rating <= 3 && d.coaching)
+    .reduce<
+      (typeof rated)[number] | null
+    >((low, d) => (low === null || d.rating < low.rating ? d : low), null);
+  return {
+    strength: best
+      ? { text: `${best.label}: ${best.observed}`, sources: best.evidence }
+      : null,
+    improvement: worst
+      ? { text: `${worst.label}: ${worst.coaching}`, sources: worst.evidence }
+      : null,
+  };
 }
