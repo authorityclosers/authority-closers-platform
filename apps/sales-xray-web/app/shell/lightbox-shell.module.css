@@ -1765,10 +1765,15 @@
   gap: 3px;
 }
 
+/* A long organisation name stays on its line instead of pushing the title
+   down (shell sweep, 23 Oct 2026). */
 .mobileWorkspace small {
+  overflow: hidden;
   color: var(--lx-muted);
   font-size: 12px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobileWorkspace b {
