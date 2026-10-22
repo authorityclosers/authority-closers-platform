@@ -20,18 +20,7 @@
  * /leads#lead=<id> (ids only, after "#"); pull down to refresh.
  */
 
-import {
-  ArrowLeft,
-  Building2,
-  ChevronDown,
-  Ellipsis,
-  PhoneCall,
-  Plus,
-  Search,
-  UsersRound,
-  Workflow,
-  X,
-} from "lucide-react";
+import { ArrowLeft, Building2, Ellipsis, PhoneCall, Plus } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import {
   useCallback,
@@ -103,6 +92,13 @@ import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
 import { several, usePipelines } from "./use-pipelines";
 import { ViewsChip } from "./views-sheet";
+import {
+  ActiveFilters,
+  FilterChip,
+  FilterSheet,
+  filtersOn as countFilters,
+  type LeadFilters,
+} from "./lead-filters";
 import styles from "./leads.module.css";
 
 type Manage = "team" | "sources" | "stages";
@@ -216,7 +212,11 @@ export function LeadsRoute() {
   const [scopeChoice, setScopeChoice] = useState<Scope | null>(() =>
     asScope(params.get("who")),
   );
-  const [searching, setSearching] = useState(false);
+  // Leads → Filter: a fresh sheet each opening.
+  const [filtering, setFiltering] = useState<{
+    round: number;
+    open: boolean;
+  } | null>(null);
   const [search, setSearch] = useState(() => params.get("q") ?? "");
   const [query, setQuery] = useState(() => (params.get("q") ?? "").trim());
   // Counts answer a question (who, search, pipeline); a refresh asks it again
@@ -567,11 +567,6 @@ export function LeadsRoute() {
       window.history.back();
     } else window.history.replaceState(null, "", viewHref("desk"));
   };
-  // One pipeline, or all of them, for the stage views (in place, like the tabs).
-  const choosePipeline = (next: string | null) => {
-    setPicked({ view, at: addressKey, pipeline: next });
-    window.history.replaceState(null, "", viewHref(view, next, filters));
-  };
   // An empty list's "Clear filters": everyone's (or your own) leads, no search.
   const filtersOn =
     !!query || (can && scopeChoice !== null && scopeChoice !== "team");
@@ -579,16 +574,7 @@ export function LeadsRoute() {
     setScopeChoice(null);
     setSearch("");
     setQuery("");
-    setSearching(false);
     window.history.replaceState(null, "", viewHref(view, pipeline));
-  };
-  const chooseScope = (next: Scope) => {
-    setScopeChoice(next);
-    window.history.replaceState(
-      null,
-      "",
-      viewHref(view, pipeline, { ...filters, who: next }),
-    );
   };
   const tabs = [
     { key: "desk", label: "To call", count: toCall },
@@ -601,6 +587,11 @@ export function LeadsRoute() {
   const stageLabel =
     tabs.find((tab) => tab.key === view)?.label ??
     (view === "open" ? "Open" : "this stage");
+
+  // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
+  const filterable = stageView && view !== TEST;
+  const defaultWho: Scope = can ? "team" : "mine";
+  const shownFilters: LeadFilters = { who: scope, pipeline, q: query };
 
   // Saved views: what the list shows now, in words, and back in one tap.
   const shown: ViewSpec = { stage: view, pipeline, who: scope, q: query };
@@ -617,6 +608,13 @@ export function LeadsRoute() {
     ]
       .filter(Boolean)
       .join(" · ");
+  const applyFilters = (next: LeadFilters) =>
+    applyView({
+      stage: view,
+      pipeline: next.pipeline,
+      who: next.who,
+      q: next.q,
+    });
   const applyView = (spec: ViewSpec) => {
     const stage = stageKeys.has(spec.stage) ? spec.stage : "open";
     const inPipeline = several(pipes) ? spec.pipeline : null;
@@ -624,7 +622,6 @@ export function LeadsRoute() {
     setScopeChoice(who);
     setSearch(spec.q);
     setQuery(spec.q);
-    setSearching(false);
     setPicked({ view: stage, at: addressKey, pipeline: inPipeline });
     window.history.replaceState(
       null,
@@ -762,20 +759,25 @@ export function LeadsRoute() {
           ) : (
             <>
               <div className={styles.toolbar}>
-                {/* First in the toolbar so phones keep it at the first line's
-                    end; computers draw it last (orchestrator, 22 Oct 2026: the
-                    ⋯ stood alone on a line at 375 px). */}
+                <TakingSwitch
+                  key={`taking-${desk.me.taking_leads !== false}`}
+                  initial={desk.me.taking_leads !== false}
+                  place="chip"
+                  pausedUntil={desk.me.paused_until ?? null}
+                  onChanged={refresh}
+                />
+                <PhoneLogCard as="chip" />
                 <span className={styles.toolbarEnd}>
-                  {stageView ? (
-                    <button
-                      type="button"
-                      className={styles.toolButton}
-                      aria-label="Search leads"
-                      aria-pressed={searching || !!search}
-                      onClick={() => setSearching((value) => !value)}
-                    >
-                      <Search size={18} aria-hidden="true" />
-                    </button>
+                  {filterable ? (
+                    <FilterChip
+                      count={countFilters(shownFilters, defaultWho)}
+                      onOpen={() =>
+                        setFiltering((current) => ({
+                          round: (current?.round ?? 0) + 1,
+                          open: true,
+                        }))
+                      }
+                    />
                   ) : null}
                   <button
                     type="button"
@@ -787,78 +789,16 @@ export function LeadsRoute() {
                     <Ellipsis size={18} aria-hidden="true" />
                   </button>
                 </span>
-                {can && stageView && view !== TEST ? (
-                  <label className={styles.ownerPicker}>
-                    <UsersRound size={14} aria-hidden="true" />
-                    <select
-                      aria-label="Whose leads"
-                      value={scope}
-                      onChange={(event) =>
-                        chooseScope(event.target.value as Scope)
-                      }
-                    >
-                      <option value="team">Everyone</option>
-                      <option value="mine">Mine</option>
-                      <option value="unassigned">No owner</option>
-                    </select>
-                    <ChevronDown size={14} aria-hidden="true" />
-                  </label>
-                ) : null}
-                {stageView && view !== TEST && several(pipes) ? (
-                  <label className={styles.ownerPicker}>
-                    <Workflow size={14} aria-hidden="true" />
-                    <select
-                      aria-label="Pipeline"
-                      value={pipeline ?? ""}
-                      onChange={(event) =>
-                        choosePipeline(event.target.value || null)
-                      }
-                    >
-                      <option value="">All pipelines</option>
-                      {pipes.pipelines.map((item) => (
-                        <option key={item.key} value={item.key}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} aria-hidden="true" />
-                  </label>
-                ) : null}
-                <TakingSwitch
-                  key={`taking-${desk.me.taking_leads !== false}`}
-                  initial={desk.me.taking_leads !== false}
-                  place="chip"
-                  pausedUntil={desk.me.paused_until ?? null}
-                  onChanged={refresh}
-                />
-                <PhoneLogCard as="chip" />
               </div>
-              <StageTabs tabs={tabs} current={view} onChange={go} />
-              {stageView && (searching || search) ? (
-                <label className={styles.searchRow}>
-                  <Search size={16} aria-hidden="true" />
-                  <input
-                    type="search"
-                    value={search}
-                    placeholder="Name, company, city or phone"
-                    aria-label="Search leads"
-                    maxLength={80}
-                    autoFocus={!search}
-                    onChange={(event) => setSearch(event.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className={styles.searchClear}
-                    aria-label="Close search"
-                    onClick={() => {
-                      setSearch("");
-                      setSearching(false);
-                    }}
-                  >
-                    <X size={16} aria-hidden="true" />
-                  </button>
-                </label>
+              {filterable ? (
+                <ActiveFilters
+                  filters={shownFilters}
+                  defaultWho={defaultWho}
+                  pipes={pipes?.pipelines ?? []}
+                  onChange={applyFilters}
+                />
               ) : null}
+              <StageTabs tabs={tabs} current={view} onChange={go} />
             </>
           )}
           {error ? (
@@ -945,6 +885,20 @@ export function LeadsRoute() {
             </div>
           ) : null}
         </div>
+        {filtering ? (
+          <FilterSheet
+            key={filtering.round}
+            open={filtering.open}
+            onClose={() =>
+              setFiltering((current) => current && { ...current, open: false })
+            }
+            filters={shownFilters}
+            defaultWho={defaultWho}
+            canPickWho={can}
+            pipes={several(pipes) ? pipes.pipelines : []}
+            onApply={applyFilters}
+          />
+        ) : null}
         <LeadsMenu
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}

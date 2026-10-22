@@ -4500,32 +4500,81 @@ a.repName {
   min-width: 0;
 }
 
-/* Search and the ⋯ menu: last on a computer; on a phone they keep the first
-   line's right end and the chips flow beside and under them, so the ⋯ never
-   stands alone on a line (orchestrator, 22 Oct 2026). */
+/* The header row's end: Filter and the ⋯ menu (Leads header, 22 Oct 2026). */
 .toolbarEnd {
   display: inline-flex;
   flex: none;
-  order: 1;
+  align-items: center;
   gap: 6px;
   margin-left: auto;
 }
 
-@media (max-width: 899.98px) {
-  .toolbar {
-    display: flow-root;
-    margin-bottom: -3px;
-  }
+/* Leads → Filter: the count on the chip, the filters that are on, the sheet. */
+.filterCount {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
 
-  .toolbar > * {
-    margin: 3px 6px 3px 0;
-    vertical-align: middle;
-  }
+.activeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 
-  .toolbar > .toolbarEnd {
-    float: right;
-    margin: 0 0 0 6px;
-  }
+.activeFilter {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activeFilter > span {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activeFilter:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.filterForm {
+  display: grid;
+  gap: 16px;
+}
+
+.filterGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.filterActions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
 }
 
 .toolbarTitle {

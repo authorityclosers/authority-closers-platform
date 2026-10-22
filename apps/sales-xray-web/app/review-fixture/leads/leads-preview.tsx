@@ -16,6 +16,8 @@
  * `tap=bulkwa` goes on to a WhatsApp template and who gets it.
  * `?loop=1&tap=loop` opens Start calling just back from a call and taps No answer:
  * Call mode's "Save and call <name>", "Save and stop here" and who is next.
+ * `?tab=all&stage=open&tap=filter` opens Filter (name or number, whose leads,
+ * pipeline); add `&who=mine&q=pune` to see the filters that are on as chips.
  * `&views=1` keeps three saved views on this browser, one of them the view in use
  * (Open, Everyone); `&tap=views` then opens Views. `&q=` searches by name or city;
  * `?tab=all&stage=open&q=nagpurx` shows an empty list's "Clear filters".
@@ -508,6 +510,11 @@ function useTap() {
       Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
         .find((button) => button.textContent?.trim().startsWith(text))
         ?.click();
+    // `?tab=all&stage=open&tap=filter`: the Filter sheet (Leads header).
+    if (tap === "filter") {
+      const timer = window.setTimeout(() => press("Filter"), 900);
+      return () => window.clearTimeout(timer);
+    }
     // `&tap=loop` (with `?loop=1`): Start calling, then No answer.
     if (tap === "loop") {
       const timers = [

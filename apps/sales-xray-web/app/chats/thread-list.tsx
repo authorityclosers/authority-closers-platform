@@ -12,7 +12,7 @@ import {
   ChevronDown,
   Hourglass,
   Inbox,
-  Search,
+  ListFilter,
   UserRound,
   X,
 } from "lucide-react";
@@ -71,12 +71,12 @@ export function ThreadFilters({
     return (
       <div className={styles.filters}>
         <label className={styles.search}>
-          <Search size={14} aria-hidden="true" />
+          <ListFilter size={14} aria-hidden="true" />
           <input
             type="search"
             value={filter.search}
-            placeholder="Search names"
-            aria-label="Search chats by name"
+            placeholder="Filter by name"
+            aria-label="Filter chats by name"
             autoFocus={!filter.search}
             onChange={(event) =>
               onChange({ ...filter, search: event.target.value })
@@ -85,7 +85,7 @@ export function ThreadFilters({
           <button
             type="button"
             className={styles.searchClose}
-            aria-label="Close search"
+            aria-label="Clear the name filter"
             onClick={() => {
               onChange({ ...filter, search: "" });
               setSearching(false);
@@ -99,13 +99,16 @@ export function ThreadFilters({
   return (
     <div className={styles.filters}>
       <div className={styles.filterRow} role="group" aria-label="Show">
+        {/* A filter in words, not a second magnifier: the header's search is
+            the app's search (Liquid Glass, 22 Oct 2026). */}
         <button
           type="button"
-          className={styles.iconChip}
-          aria-label="Search chats by name"
+          className={styles.chip}
+          aria-label="Filter chats by name"
           onClick={() => setSearching(true)}
         >
-          <Search size={16} aria-hidden="true" />
+          <ListFilter size={12} aria-hidden="true" />
+          Name
         </button>
         {showScopes ? (
           <label className={styles.pickChip}>
