@@ -345,7 +345,7 @@ Reviewed script checksums for this handoff:
 | --- | --- |
 | `reseal-dev-sales-xray-approval.py` | `44cfd752f5c57d937ffffb42de312916de9d903b7d202808ed4c717af121f391` |
 | `refresh-dev-sales-xray-backend.py` | `951c82dcb3390ba1e0ffe836d2032deb9aee86c1232d2d8452674da5a6b8feb3` |
-| `prepare-sales-xray-native-activation.py` | `0e553343b07e24e7d998085753f36d061591f2990c42761c5824a1926ef41f35` |
+| `prepare-sales-xray-native-activation.py` | `d026c11d2fee8671bf6418c46571d4c9209704f78a89cb5f11ecdcb6652728df` |
 
 The tool also enforces the two helper digests before it imports their code.
 The helper bytes and constants are unchanged from this task's latest-main base
