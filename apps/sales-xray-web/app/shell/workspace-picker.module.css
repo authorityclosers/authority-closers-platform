@@ -8,6 +8,7 @@
 /* The current workspace: first, larger, marked. */
 .current {
   display: flex;
+  box-sizing: border-box;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -26,6 +27,7 @@
 
 .item {
   display: flex;
+  box-sizing: border-box;
   align-items: center;
   gap: 12px;
   width: 100%;

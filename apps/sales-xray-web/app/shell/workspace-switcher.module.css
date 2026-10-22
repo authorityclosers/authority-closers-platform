@@ -9,6 +9,7 @@
 
 .trigger {
   display: flex;
+  box-sizing: border-box;
   width: 100%;
   min-height: max(var(--lx-control-compact-h, 32px), 40px);
   align-items: center;
