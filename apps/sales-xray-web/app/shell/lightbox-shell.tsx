@@ -123,6 +123,7 @@ import { ChatsTabIcon } from "../chats/chats-badge";
 import { AddLeadDialog } from "../leads/capture-dialogs";
 import { readLeads } from "../leads/leads-client";
 import { CommandBar, type Command } from "../ui/command-bar";
+import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
 import { leavingOverlay } from "../ui/back-close";
 import { LeadsTabIcon } from "../leads/leads-badge";
@@ -937,8 +938,17 @@ function LightboxShellFrame({
       ),
     ];
   }, [go, inOrganisation, newAnalysisHref, openLeadForm, orgAdmin]);
+  // Screens add their own commands and searches while they are on screen
+  // (ui/command-registry.ts).
+  const registered = useRegisteredCommands();
+  const allCommands = useMemo(
+    () => [...commands, ...registered.commands],
+    [commands, registered.commands],
+  );
+  const leadsSearchedElsewhere = registered.keys.includes("leads");
   // Leads that match (the team's for owners and admins, your own for
-  // sellers), recent calls by name, and a step that searches every call.
+  // sellers), recent calls by name, and a step that searches every call;
+  // then whatever the screens on show find.
   const searchEverything = useCallback(
     async (text: string, signal: AbortSignal): Promise<Command[]> => {
       const lower = text.toLocaleLowerCase();
@@ -961,7 +971,7 @@ function LightboxShellFrame({
         run: () => go(`${CALLS_PATH}?q=${encodeURIComponent(text)}`),
       };
       let leads: Command[] = [];
-      if (inOrganisation)
+      if (inOrganisation && !leadsSearchedElsewhere)
         try {
           const page = await readLeads(
             { scope: orgAdmin ? "team" : "mine", search: text },
@@ -983,9 +993,22 @@ function LightboxShellFrame({
         } catch {
           // A failed read shows the calls only.
         }
-      return [...leads, ...calls, everyCall];
+      const found = await Promise.allSettled(
+        registered.searches.map((search) => search(text, signal)),
+      );
+      const theirs = found.flatMap((result) =>
+        result.status === "fulfilled" ? result.value : [],
+      );
+      return [...leads, ...theirs, ...calls, everyCall];
     },
-    [go, inOrganisation, orgAdmin, visibleRecentCalls],
+    [
+      go,
+      inOrganisation,
+      leadsSearchedElsewhere,
+      orgAdmin,
+      registered.searches,
+      visibleRecentCalls,
+    ],
   );
   const viewerId = access?.context?.personId ?? null;
   // A list with owners can mix people: then every row says whose it is.
@@ -1261,7 +1284,8 @@ function LightboxShellFrame({
           </div>
         </div>
 
-        <RailTip rail={railRef} />
+        {/* Open, the sidebar names every place: no hover labels then. */}
+        <RailTip rail={railRef} off={!collapsed} />
 
         {/* 248px Panel */}
         <div
@@ -1804,7 +1828,7 @@ function LightboxShellFrame({
         <CommandBar
           open={commandOpen}
           onClose={() => setCommandOpen(false)}
-          commands={commands}
+          commands={allCommands}
           search={searchEverything}
         />
       )}
