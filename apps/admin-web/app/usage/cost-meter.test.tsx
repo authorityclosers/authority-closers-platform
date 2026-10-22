@@ -57,9 +57,11 @@ it("shows Home's three numbers with their tone, freshness, rate and a way to the
   const host = render(meterFixture(NOW));
   const text = host.textContent ?? "";
   expect(text).toContain("₹/min now · production");
-  expect(text).toContain("updated 3 min ago · rupees at each day's ECB rate");
-  const tiles = [...host.querySelectorAll("section[aria-label]")].map((tile) =>
-    tile.getAttribute("aria-label"),
+  expect(text).toContain("updated 3 min ago");
+  expect(text).toContain("Rupees at each day's ECB rate (latest ₹94.93 per $1");
+  // The panel is a labelled section too; the three windows sit inside it.
+  const tiles = [...host.querySelectorAll("section section[aria-label]")].map(
+    (tile) => tile.getAttribute("aria-label"),
   );
   expect(tiles).toEqual([
     "Today: ₹0.09/min",
@@ -83,6 +85,10 @@ it("shows Health's split and versions, and says when the numbers are old", () =>
   expect(text).toContain("Short or data-only₹0.44/min 6 calls · 31.5 min");
   expect(text).toContain("46 calls · 191.1 min · no cost");
   expect(text).toContain("from 3 h ago: the collector may");
+  // Phones get one card per version (the same rows).
+  expect(host.querySelectorAll('[role="list"] [role="listitem"]')).toHaveLength(
+    2,
+  );
   const rows = [...host.querySelectorAll("tbody tr")].map(
     (row) => row.querySelector("code")?.textContent,
   );

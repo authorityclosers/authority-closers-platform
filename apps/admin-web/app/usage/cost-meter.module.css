@@ -148,3 +148,9 @@
   display: inline-block;
   margin-top: 10px;
 }
+
+.rateLine {
+  margin: 10px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

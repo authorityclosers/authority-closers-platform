@@ -6,7 +6,7 @@
  */
 import Link from "next/link";
 
-import { Panel, Table, Why } from "../ui/kit";
+import { Card, Panel, Table, Why } from "../ui/kit";
 import { rateWords } from "./cost-data";
 import {
   ageWords,
@@ -138,7 +138,7 @@ export function CostMeter({
   return (
     <Panel
       title={`₹/min now · ${where}`}
-      sub={`${ageWords(meter.ageSeconds)} · rupees at ${rateWords(meter.fx)}`}
+      sub={ageWords(meter.ageSeconds)}
       tools={
         <Why
           detail={`Each call's whole cost (transcription, facts, report, pointer review, call data and any re-runs) over its audio minutes, counted by when it was first transcribed; canary, QA and synthetic calls never count. All-in is full reports and short calls together. Calls only recorded and audio-checked cost nothing and are counted apart. Targets: ₹${targets.join(" and ₹")}/min. List-price estimates from the ${where} export, refreshed every 5 minutes; not a bill.`}
@@ -169,8 +169,31 @@ export function CostMeter({
               />
             ))}
           </div>
+          <p className={styles.rateLine}>Rupees at {rateWords(meter.fx)}.</p>
           {detail && meter.byVersion.length ? (
-            <Table label="Cost per minute by pipeline version, last 7 days">
+            <Table
+              label="Cost per minute by pipeline version, last 7 days"
+              cards={meter.byVersion.map((row) => (
+                <Card key={row.id}>
+                  <strong>
+                    <code className={styles.version}>{row.label}</code>
+                  </strong>
+                  <span>
+                    <span
+                      data-tone={meterTone(row.perMinute, targets)}
+                      className={styles.rate}
+                    >
+                      {perMinuteWords(row.perMinute)}
+                    </span>{" "}
+                    · {row.calls} {row.calls === 1 ? "call" : "calls"} ·{" "}
+                    {row.fullReports} full · {row.audioMinutes} min
+                  </span>
+                  <span>
+                    {when(row.firstAt)} → {when(row.lastAt)}
+                  </span>
+                </Card>
+              ))}
+            >
               <thead>
                 <tr>
                   <th scope="col">Pipeline version</th>
