@@ -8,7 +8,8 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--lx-line);
-  border-radius: 10px;
+  /* Round like the + and the avatar beside it (shell sweep, 23 Oct 2026). */
+  border-radius: 50%;
   background: var(--lx-surface);
   color: var(--lx-muted);
   box-shadow: var(--lx-shadow-1);
