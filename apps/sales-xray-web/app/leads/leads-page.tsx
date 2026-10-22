@@ -1036,6 +1036,7 @@ export function LeadsRoute() {
               onShowOpen={() => go("open")}
               layoutOwner={contextKey}
               pipelineNames={pipelineNames}
+              me={current && desk ? desk.me.person_id : null}
               tools={
                 view === TEST ? null : (
                   <ViewsChip

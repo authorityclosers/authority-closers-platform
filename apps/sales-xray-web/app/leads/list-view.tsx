@@ -79,6 +79,7 @@ export function ListView({
   onShowOpen,
   layoutOwner,
   pipelineNames = null,
+  me = null,
 }: {
   canManage: boolean;
   /** "open", a stage kind, or "test". */
@@ -109,6 +110,8 @@ export function ListView({
   layoutOwner?: string;
   /** Several pipelines: each one's name, for the table's Pipeline column. */
   pipelineNames?: ReadonlyMap<string, string> | null;
+  /** The viewer: the table lets a seller change their own leads in place. */
+  me?: string | null;
 }) {
   // Table on a computer (owner P0, 23 Oct 2026); phones keep the list.
   const wide = useWideScreen();
@@ -437,6 +440,11 @@ export function ListView({
                 onToggle={toggle}
                 keysRef={tableKeys}
                 quickAdd={selecting ? null : quickAdd}
+                edit={{
+                  canManage,
+                  me,
+                  onSaved: () => onChanged?.(),
+                }}
               />
             ) : (
               <ul className={styles.leadList} aria-label="Leads" ref={list}>

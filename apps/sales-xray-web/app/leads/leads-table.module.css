@@ -277,3 +277,109 @@
     flex-basis: 100%;
   }
 }
+
+/* Editing in place (owner P0, 23 Oct 2026): a cell that can change is a quiet
+   button until clicked; its editor fills the cell. */
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nameCell .name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.rename {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: var(--sx-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.table tbody tr:hover .rename,
+.rename:focus-visible {
+  opacity: 1;
+}
+
+.rename:hover {
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+}
+
+.rename:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.cell {
+  display: block;
+  width: calc(100% + 16px);
+  min-height: 36px;
+  margin: 0 -8px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cell:hover {
+    box-shadow: inset 0 0 0 1px var(--sx-line-strong);
+  }
+}
+
+.cell:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.table td[data-editing] {
+  padding: 0 6px;
+  overflow: visible;
+}
+
+.cellInput {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid var(--sx-accent);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  box-shadow: var(--sx-focus-ring);
+}
+
+.cellInput:focus {
+  outline: none;
+}
+
+/* Touch screens wide enough for the table: the pencil shows, and is larger. */
+@media (hover: none) {
+  .rename {
+    width: 40px;
+    height: 40px;
+    opacity: 1;
+  }
+}

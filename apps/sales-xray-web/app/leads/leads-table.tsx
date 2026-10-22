@@ -5,14 +5,31 @@
  * one lead per line with its stage, pipeline, owner, source, next step and last
  * call, sortable by any column. The list's own rows, paging, Select and row keys
  * (J/K, Enter) carry over. Phones keep the two-line rows: nothing scrolls sideways.
+ * Cells change in place (table-edit.tsx); arrow keys move between them.
  */
 
-import { ArrowDown, ArrowUp } from "lucide-react";
-import { useMemo, useState, useSyncExternalStore, type RefObject } from "react";
+import { ArrowDown, ArrowUp, Pencil } from "lucide-react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
 
 import { displayName } from "../display-name";
 import { when, type LeadRow } from "./leads-client";
 import { QuickAddRow } from "./quick-add";
+import {
+  EDIT_COLUMNS,
+  PickEditor,
+  TextEditor,
+  useLeadEdits,
+  type EditColumn,
+  type EditRights,
+  type Move,
+} from "./table-edit";
 import styles from "./leads-table.module.css";
 
 const WIDE = "(min-width: 900px)";
@@ -109,6 +126,7 @@ export function LeadsTable({
   onToggle,
   keysRef,
   quickAdd = null,
+  edit = null,
 }: {
   rows: LeadRow[];
   onOpen: (leadId: string) => void;
@@ -124,8 +142,12 @@ export function LeadsTable({
   keysRef?: RefObject<HTMLDivElement | null>;
   /** Quick add as the last line: the pipeline it adds to, and after adding. */
   quickAdd?: { pipeline: string | null; onAdded: () => void } | null;
+  /** Who may change what in place; none while selecting. */
+  edit?: EditRights | null;
 }) {
   const [sort, setSort] = useState<{ by: Column; down: boolean } | null>(null);
+  const grid = useRef<HTMLTableElement>(null);
+  const edits = useLeadEdits(rows, selecting ? null : edit, pipelineNames);
   const columns: Column[] = [
     "name",
     "phone",
@@ -137,36 +159,147 @@ export function LeadsTable({
     "last",
   ];
   const shown = useMemo(() => {
-    if (!sort) return rows;
+    if (!sort) return edits.shown;
     const sign = sort.down ? -1 : 1;
-    return [...rows].sort((a, b) => {
+    return [...edits.shown].sort((a, b) => {
       const x = sortKey(a, sort.by);
       const y = sortKey(b, sort.by);
       if (x === y) return 0;
       return (x < y ? -1 : 1) * sign;
     });
-  }, [rows, sort]);
+  }, [edits.shown, sort]);
   const now = new Date();
+  const editColumns = columns.filter((column): column is EditColumn =>
+    EDIT_COLUMNS.has(column),
+  );
+  const cellKey = (leadId: string, column: Column) => `${leadId}:${column}`;
+  const focusCell = (leadId: string, column: Column) =>
+    window.setTimeout(() =>
+      grid.current
+        ?.querySelector<HTMLElement>(`[data-cell="${cellKey(leadId, column)}"]`)
+        ?.focus(),
+    );
+
+  /** The next cell to edit: down the column, or along the row and on. */
+  const after = (leadId: string, column: EditColumn, move: Move) => {
+    const at = shown.findIndex((row) => row.lead_id === leadId);
+    if (move === "down") {
+      const row = shown.slice(at + 1).find((next) => edits.can(next, column));
+      return row ? { row, column } : null;
+    }
+    const step = move === "next" ? 1 : -1;
+    let index = editColumns.indexOf(column) + step;
+    for (let line = at; line >= 0 && line < shown.length; line += step) {
+      for (; index >= 0 && index < editColumns.length; index += step)
+        if (edits.can(shown[line], editColumns[index]))
+          return { row: shown[line], column: editColumns[index] };
+      index = step > 0 ? 0 : editColumns.length - 1;
+    }
+    return null;
+  };
+
+  const done =
+    (row: LeadRow, column: EditColumn) =>
+    (value: string | null, move: Move, refocus: boolean) => {
+      if (value !== null) edits.commit(row, column, value);
+      const next = move ? after(row.lead_id, column, move) : null;
+      if (next) edits.start(next.row, next.column);
+      else {
+        edits.stop();
+        if (refocus) focusCell(row.lead_id, column);
+      }
+    };
+
+  const editor = (row: LeadRow, column: EditColumn) => {
+    const label = `${LABELS[column]} of ${displayName(row.name)}`;
+    if (column === "name" || column === "phone")
+      return (
+        <TextEditor
+          initial={column === "name" ? row.name : ""}
+          phoneOf={column === "phone" ? row.lead_id : undefined}
+          label={label}
+          onDone={done(row, column)}
+        />
+      );
+    return (
+      <PickEditor
+        value={edits.current(row, column)}
+        options={edits.choices(row, column)}
+        open={edits.editing?.open ?? false}
+        label={label}
+        onDone={done(row, column)}
+      />
+    );
+  };
+
+  /** Arrow keys between cells (not while typing in one). */
+  const onGridKey = (event: KeyboardEvent<HTMLTableElement>) => {
+    if (!event.key.startsWith("Arrow")) return;
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+      return;
+    const target = event.target as HTMLElement;
+    if (target.closest("input, select, textarea")) return;
+    const here = target.closest<HTMLElement>("[data-cell]")?.dataset.cell;
+    if (!here) return;
+    const [leadId, from] = here.split(":");
+    let line = shown.findIndex((row) => row.lead_id === leadId);
+    let index = columns.indexOf(from as Column);
+    const down =
+      event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+    const across =
+      event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    event.preventDefault();
+    for (;;) {
+      line += down;
+      index += across;
+      if (line < 0 || line >= shown.length) return;
+      if (index < 0 || index >= columns.length) return;
+      const next = grid.current?.querySelector<HTMLElement>(
+        `[data-cell="${cellKey(shown[line].lead_id, columns[index])}"]`,
+      );
+      if (next) {
+        next.focus();
+        next.scrollIntoView?.({ block: "nearest" });
+        return;
+      }
+    }
+  };
 
   const cell = (row: LeadRow, column: Column) => {
     switch (column) {
       case "name":
         return (
-          <button
-            type="button"
-            className={styles.name}
-            data-row-key={row.lead_id}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (selecting) onToggle?.(row);
-              else onOpen(row.lead_id);
-            }}
-          >
-            <strong>{displayName(row.name)}</strong>
-            {row.company || row.city ? (
-              <small>{row.company ?? row.city}</small>
+          <span className={styles.nameCell}>
+            <button
+              type="button"
+              className={styles.name}
+              data-row-key={row.lead_id}
+              data-cell={cellKey(row.lead_id, "name")}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (selecting) onToggle?.(row);
+                else onOpen(row.lead_id);
+              }}
+            >
+              <strong>{displayName(row.name)}</strong>
+              {row.company || row.city ? (
+                <small>{row.company ?? row.city}</small>
+              ) : null}
+            </button>
+            {edits.can(row, "name") ? (
+              <button
+                type="button"
+                className={styles.rename}
+                aria-label={`Rename ${displayName(row.name)}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  edits.start(row, "name");
+                }}
+              >
+                <Pencil size={13} aria-hidden="true" />
+              </button>
             ) : null}
-          </button>
+          </span>
         );
       case "phone":
         return row.phone_last4 ? (
@@ -201,7 +334,12 @@ export function LeadsTable({
 
   return (
     <div className={styles.wrap} ref={keysRef}>
-      <table className={styles.table} aria-label="Leads">
+      <table
+        ref={grid}
+        className={styles.table}
+        aria-label="Leads"
+        onKeyDown={onGridKey}
+      >
         <thead>
           <tr>
             {selecting ? (
@@ -267,11 +405,48 @@ export function LeadsTable({
                   />
                 </td>
               ) : null}
-              {columns.map((column) => (
-                <td key={column} data-column={column}>
-                  {cell(row, column)}
-                </td>
-              ))}
+              {columns.map((column) => {
+                const editable =
+                  EDIT_COLUMNS.has(column) &&
+                  edits.can(row, column as EditColumn);
+                if (
+                  editable &&
+                  edits.editing?.leadId === row.lead_id &&
+                  edits.editing.column === column
+                )
+                  return (
+                    <td
+                      key={column}
+                      data-column={column}
+                      data-editing=""
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {editor(row, column as EditColumn)}
+                    </td>
+                  );
+                return (
+                  <td key={column} data-column={column}>
+                    {editable && column !== "name" ? (
+                      <button
+                        type="button"
+                        className={styles.cell}
+                        data-cell={cellKey(row.lead_id, column)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          edits.start(row, column as EditColumn, true);
+                        }}
+                      >
+                        {cell(row, column)}
+                        <span className={styles.srOnly}>
+                          {`, change ${LABELS[column].toLowerCase()}`}
+                        </span>
+                      </button>
+                    ) : (
+                      cell(row, column)
+                    )}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
